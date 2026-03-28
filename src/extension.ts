@@ -7,6 +7,8 @@ import { KotlinDocumentSymbolProvider } from './providers/DocumentSymbolProvider
 import { KotlinHoverProvider } from './providers/HoverProvider';
 import { KotlinReferenceProvider } from './providers/ReferenceProvider';
 import { KotlinFileProvider } from './providers/FileProvider';
+import { KotlinImplementationProvider } from './providers/ImplementationProvider';
+import { FindUsagesPanel } from './providers/FindUsagesPanel';
 import { Logger } from './util/logger';
 import { resolveAll as resolveModules } from './gradle/ModuleResolver';
 import { resolve as resolveImports } from './util/ImportResolver';
@@ -34,14 +36,117 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   const KT_JAVA = [{ language: 'kotlin' }, { language: 'java' }];
 
+  // ── Find Usages panel (tree view in the bottom panel area) ───────────────
+  const usagesPanel = new FindUsagesPanel(index);
+  const usagesView  = vscode.window.createTreeView('kotlinNav.findUsages', {
+    treeDataProvider: usagesPanel,
+    showCollapseAll:  true,
+  });
+  usagesPanel.attachTreeView(usagesView);
+
+  // Initialise context keys so the toolbar icons show the correct state on first load
+  vscode.commands.executeCommand('setContext', 'kotlinNav.findUsages.showTests', true);
+  vscode.commands.executeCommand('setContext', 'kotlinNav.findUsages.showPreviews', true);
+
   context.subscriptions.push(
     log,
     statusBar,
+    usagesPanel,
+    usagesView,
     vscode.languages.registerDefinitionProvider(KT_JAVA, new KotlinDefinitionProvider(index)),
     vscode.languages.registerDocumentSymbolProvider(KT_JAVA, new KotlinDocumentSymbolProvider(index)),
     vscode.languages.registerHoverProvider(KT_JAVA, new KotlinHoverProvider(index)),
     vscode.languages.registerReferenceProvider(KT_JAVA, new KotlinReferenceProvider(index)),
+    vscode.languages.registerImplementationProvider(KT_JAVA, new KotlinImplementationProvider(index)),
     vscode.languages.registerWorkspaceSymbolProvider(new KotlinFileProvider(index)),
+
+    vscode.commands.registerCommand('kotlin-nav.findUsages', async (args?: { excludeUri?: string; excludeLine?: number }) => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) return;
+      const lang = editor.document.languageId;
+      if (lang !== 'kotlin' && lang !== 'java') return;
+      const smartNav = vscode.workspace.getConfiguration('kotlinNav').get<boolean>('smartNavigation', true);
+      if (!smartNav && !args) {
+        await vscode.commands.executeCommand('editor.action.goToReferences');
+        return;
+      }
+      // Reveal the panel immediately so the user sees it open while the search runs
+      await vscode.commands.executeCommand('kotlinNav.findUsages.focus');
+      const navigated = await usagesPanel.search(editor.document, editor.selection.active, args);
+      if (navigated) {
+        // Single result — panel not needed, refocus the editor
+        await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
+      }
+    }),
+
+    vscode.commands.registerCommand('kotlin-nav.findUsages.toggleTests', () => {
+      usagesPanel.toggleTests();
+    }),
+    vscode.commands.registerCommand('kotlin-nav.findUsages.showTests', () => {
+      usagesPanel.toggleTests();
+    }),
+
+    vscode.commands.registerCommand('kotlin-nav.findUsages.togglePreviews', () => {
+      usagesPanel.togglePreviews();
+    }),
+    vscode.commands.registerCommand('kotlin-nav.findUsages.showPreviews', () => {
+      usagesPanel.togglePreviews();
+    }),
+
+    vscode.commands.registerCommand('kotlin-nav.goToTest', async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) return;
+      const uri = editor.document.uri;
+      const path = uri.path;
+      const basename = path.split('/').pop() ?? '';
+      const ext = basename.endsWith('.java') ? '.java' : '.kt';
+      const nameNoExt = basename.replace(/\.(kt|java)$/, '');
+
+      // Determine direction: test → implementation or implementation → test
+      const isTest = nameNoExt.endsWith('Test');
+      const targetName = isTest
+        ? nameNoExt.slice(0, -4) + ext           // FooTest.kt → Foo.kt
+        : nameNoExt + 'Test' + ext;               // Foo.kt → FooTest.kt
+
+      // Also check cross-language: .kt ↔ .java
+      const altExt = ext === '.kt' ? '.java' : '.kt';
+      const altTargetName = isTest
+        ? nameNoExt.slice(0, -4) + altExt
+        : nameNoExt + 'Test' + altExt;
+
+      const candidates: vscode.Uri[] = [];
+      for (const uriStr of index.fileUriStrings()) {
+        const file = uriStr.split('/').pop() ?? '';
+        if (file === targetName || file === altTargetName) {
+          candidates.push(vscode.Uri.parse(uriStr));
+        }
+      }
+
+      if (candidates.length === 0) {
+        const direction = isTest ? 'implementation' : 'test';
+        vscode.window.showInformationMessage(`No ${direction} file found for ${nameNoExt}`);
+        return;
+      }
+
+      let target: vscode.Uri;
+      if (candidates.length === 1) {
+        target = candidates[0];
+      } else {
+        // Multiple matches — let user pick
+        const items = candidates.map(u => ({
+          label: u.path.split('/').pop() ?? '',
+          description: u.path,
+          uri: u,
+        }));
+        const picked = await vscode.window.showQuickPick(items, {
+          placeHolder: `Multiple matches — pick ${isTest ? 'implementation' : 'test'} file`,
+        });
+        if (!picked) return;
+        target = picked.uri;
+      }
+
+      await vscode.commands.executeCommand('vscode.open', target);
+    }),
   );
 
   // ── Resolve Gradle modules and find all .kt files ─────────────────────────

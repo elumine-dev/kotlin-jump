@@ -16,14 +16,16 @@ export interface SymbolEntry {
   depth: number;
   moduleName?: string;
   aliasTarget?: string; // raw rhs of typealias — used for follow-through navigation
+  supertypes?: string[]; // simple names of superclasses/interfaces
 }
 
 export class SymbolIndex {
   // ── Three maps for O(1) on every hot-path operation ──────────────────────
   // Set gives O(1) Set.delete() on remove — was O(n) indexOf+splice with Array
-  private readonly byName = new Map<string, Set<SymbolEntry>>();
-  private readonly byFqn  = new Map<string, SymbolEntry>();
-  private readonly byFile = new Map<string, SymbolEntry[]>();
+  private readonly byName  = new Map<string, Set<SymbolEntry>>();
+  private readonly byFqn   = new Map<string, SymbolEntry>();
+  private readonly byFile  = new Map<string, SymbolEntry[]>();
+  private readonly bySuper = new Map<string, Set<SymbolEntry>>();
 
   // ── Sorted-names for O(log N) binary-search prefix matching ──────────────
   private sortedLower: string[] = [];
@@ -73,6 +75,7 @@ export class SymbolIndex {
         depth: sym.depth,
         moduleName,
         aliasTarget: sym.aliasTarget,
+        supertypes: sym.supertypes,
       };
 
       fileEntries.push(entry);
@@ -82,6 +85,14 @@ export class SymbolIndex {
       set.add(entry);
 
       this.byFqn.set(fqn, entry);
+
+      if (sym.supertypes) {
+        for (const st of sym.supertypes) {
+          let sset = this.bySuper.get(st);
+          if (!sset) { sset = new Set(); this.bySuper.set(st, sset); }
+          sset.add(entry);
+        }
+      }
     }
 
     this.byFile.set(key, fileEntries);
@@ -101,6 +112,49 @@ export class SymbolIndex {
   // O(1) — hot path for FQN import resolution
   lookupFqn(fqn: string): SymbolEntry | undefined {
     return this.byFqn.get(fqn);
+  }
+
+  // O(1) — returns all classes/interfaces that extend/implement the given name
+  lookupImplementations(name: string): SymbolEntry[] {
+    const s = this.bySuper.get(name);
+    return s ? [...s] : EMPTY;
+  }
+
+  // For an interface method, find the corresponding override methods in implementing classes
+  lookupMethodImplementations(methodName: string, uriString: string, methodLine: number): SymbolEntry[] {
+    // Find the containing class/interface by scanning the file's symbols backward
+    const fileSymbols = this.getFileSymbols(uriString);
+    let container: SymbolEntry | undefined;
+    for (const s of fileSymbols) {
+      if (s.line > methodLine) break;
+      if (CLASS_LIKE.has(s.kind)) container = s;
+    }
+    if (!container) return EMPTY;
+
+    // Find all classes that implement the container
+    const impls = this.lookupImplementations(container.name);
+    if (impls.length === 0) return EMPTY;
+
+    // Find methods with the same name inside implementing classes (not the interface itself)
+    const results: SymbolEntry[] = [];
+    for (const impl of impls) {
+      const implSymbols = this.getFileSymbols(impl.uri.toString());
+      // Find the end boundary: next class-level symbol at same depth after the impl
+      let implEnd = Infinity;
+      for (const s of implSymbols) {
+        if (s.line > impl.line && s.depth <= impl.depth && CLASS_LIKE.has(s.kind)) {
+          implEnd = s.line;
+          break;
+        }
+      }
+      for (const s of implSymbols) {
+        if (s.name === methodName && s.line > impl.line && s.line < implEnd
+            && (s.kind === 'fun' || s.kind === 'composable')) {
+          results.push(s);
+        }
+      }
+    }
+    return results;
   }
 
   // O(log N) prefix match + O(N) fuzzy fallback
@@ -193,6 +247,7 @@ export class SymbolIndex {
     this.byName.clear();
     this.byFqn.clear();
     this.byFile.clear();
+    this.bySuper.clear();
     this.sortedLower = [];
     this.sortedOrig  = [];
     this.dirty = true;
@@ -213,6 +268,13 @@ export class SymbolIndex {
       if (!set) { set = new Set(); this.byName.set(e.name, set); }
       set.add(e);
       this.byFqn.set(e.fqn, e);
+      if (e.supertypes) {
+        for (const st of e.supertypes) {
+          let sset = this.bySuper.get(st);
+          if (!sset) { sset = new Set(); this.bySuper.set(st, sset); }
+          sset.add(e);
+        }
+      }
     }
     this.dirty = true;
   }
@@ -230,6 +292,15 @@ export class SymbolIndex {
         if (set.size === 0) this.byName.delete(entry.name);
       }
       this.byFqn.delete(entry.fqn);
+      if (entry.supertypes) {
+        for (const st of entry.supertypes) {
+          const sset = this.bySuper.get(st);
+          if (sset) {
+            sset.delete(entry);
+            if (sset.size === 0) this.bySuper.delete(st);
+          }
+        }
+      }
     }
     this.byFile.delete(key);
     this.dirty = true;

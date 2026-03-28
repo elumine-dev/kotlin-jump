@@ -19,10 +19,43 @@
   ],
   "activationEvents": [
     "onLanguage:kotlin",
-    "workspaceContains:**/*.kt"
+    "workspaceContains:**/*.kt",
+    "onView:kotlinNav.findUsages"
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "kotlinNavPanel",
+          "title": "Find Usages",
+          "icon": "media/find-usages.svg"
+        }
+      ]
+    },
+    "views": {
+      "kotlinNavPanel": [
+        {
+          "id": "kotlinNav.findUsages",
+          "name": "Find Usages",
+          "type": "tree"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "kotlin-nav.findUsages",
+        "key": "alt+f7",
+        "mac": "alt+f7",
+        "when": "editorTextFocus && (editorLangId == kotlin || editorLangId == java)"
+      },
+      {
+        "command": "kotlin-nav.goToTest",
+        "key": "alt+shift+t",
+        "mac": "alt+shift+t",
+        "when": "editorTextFocus && (editorLangId == kotlin || editorLangId == java)"
+      }
+    ],
     "commands": [
       {
         "command": "kotlin-nav.reindex",
@@ -33,14 +66,81 @@
         "command": "kotlin-nav.copyFqn",
         "title": "Kotlin Nav: Copy FQN",
         "category": "Kotlin Nav"
+      },
+      {
+        "command": "kotlin-nav.findUsages",
+        "title": "Find Usages",
+        "category": "Kotlin Nav",
+        "icon": "$(search)"
+      },
+      {
+        "command": "kotlin-nav.findUsages.toggleTests",
+        "title": "Tests: Showing — click to hide",
+        "category": "Kotlin Nav",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "kotlin-nav.findUsages.showTests",
+        "title": "Tests: Hidden — click to show",
+        "category": "Kotlin Nav",
+        "icon": "$(circle-slash)"
+      },
+      {
+        "command": "kotlin-nav.findUsages.togglePreviews",
+        "title": "Previews: Showing — click to hide",
+        "category": "Kotlin Nav",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "kotlin-nav.findUsages.showPreviews",
+        "title": "Previews: Hidden — click to show",
+        "category": "Kotlin Nav",
+        "icon": "$(eye-closed)"
+      },
+      {
+        "command": "kotlin-nav.goToTest",
+        "title": "Go to Test/Implementation",
+        "category": "Kotlin Nav"
       }
     ],
     "menus": {
+      "view/title": [
+        {
+          "command": "kotlin-nav.findUsages.toggleTests",
+          "when": "view == kotlinNav.findUsages && kotlinNav.findUsages.showTests",
+          "group": "navigation@1"
+        },
+        {
+          "command": "kotlin-nav.findUsages.showTests",
+          "when": "view == kotlinNav.findUsages && !kotlinNav.findUsages.showTests",
+          "group": "navigation@1"
+        },
+        {
+          "command": "kotlin-nav.findUsages.togglePreviews",
+          "when": "view == kotlinNav.findUsages && kotlinNav.findUsages.showPreviews",
+          "group": "navigation@2"
+        },
+        {
+          "command": "kotlin-nav.findUsages.showPreviews",
+          "when": "view == kotlinNav.findUsages && !kotlinNav.findUsages.showPreviews",
+          "group": "navigation@2"
+        }
+      ],
       "editor/context": [
+        {
+          "command": "kotlin-nav.findUsages",
+          "when": "editorTextFocus && (editorLangId == kotlin || editorLangId == java)",
+          "group": "navigation@8"
+        },
+        {
+          "command": "kotlin-nav.goToTest",
+          "when": "editorTextFocus && (editorLangId == kotlin || editorLangId == java)",
+          "group": "navigation@9"
+        },
         {
           "command": "kotlin-nav.copyFqn",
           "when": "editorLangId == kotlin",
-          "group": "navigation@9"
+          "group": "navigation@10"
         }
       ]
     },
@@ -99,16 +199,7 @@
         "kotlinNav.testSourceSets": {
           "type": "array",
           "items": { "type": "string" },
-          "default": [
-            "/src/test/",
-            "/src/androidTest/",
-            "/src/testDebug/",
-            "/src/testRelease/",
-            "/src/testReplica/",
-            "/src/testAdPreflight/",
-            "/src/savedAndroidTest/",
-            "/src/sharedTest/"
-          ],
+          "default": [],
           "markdownDescription": "Path segments identifying test source sets. **Go to Definition** skips results inside these paths when navigating from main source, preventing accidental jumps into mock or test-only files."
         },
         "kotlinNav.smartNavigation": {

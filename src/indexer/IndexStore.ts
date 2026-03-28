@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { SymbolIndex } from './SymbolIndex';
 import { SymbolKind } from './KotlinParser';
 
-const SNAPSHOT_VERSION = 4;
+const SNAPSHOT_VERSION = 5;
 const SNAPSHOT_FILENAME = 'kotlin-nav-index.json';
 
 // Compact per-file format — FQN is reconstructed as pkg+"."+name on restore
@@ -19,6 +19,7 @@ interface SnapshotFile {
   i: number[];  // isComposable (0/1)
   d: number[];  // depth (brace nesting level)
   at?: Record<number, string>; // alias targets — sparse map: index → rhs string (typealias only)
+  st?: Record<number, string[]>; // supertypes — sparse map: index → supertype names
 }
 
 interface Snapshot {
@@ -66,6 +67,7 @@ export async function save(
       sf.i.push(e.isComposable ? 1 : 0);
       sf.d.push(e.depth);
       if (e.aliasTarget) { sf.at = sf.at ?? {}; sf.at[idx] = e.aliasTarget; }
+      if (e.supertypes) { sf.st = sf.st ?? {}; sf.st[idx] = e.supertypes; }
     });
 
     snap.files[uriStr] = sf;
@@ -175,6 +177,7 @@ export function restore(snapshot: Snapshot, index: SymbolIndex): void {
         depth,
         moduleName:   sf.m,
         aliasTarget:  sf.at?.[i],
+        supertypes:   sf.st?.[i],
       };
     });
 

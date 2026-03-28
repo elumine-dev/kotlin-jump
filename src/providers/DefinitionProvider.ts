@@ -8,16 +8,7 @@ const ALIAS_TYPE_RE = /\b([A-Z]\w+)\b/g;
 
 // Fallback used when kotlinNav.testSourceSets is not configured.
 // Covers standard Gradle source set layouts for unit tests and instrumented tests.
-const DEFAULT_TEST_SEGMENTS: string[] = [
-  '/src/test/',
-  '/src/androidTest/',
-  '/src/testDebug/',
-  '/src/testRelease/',
-  '/src/testReplica/',
-  '/src/testAdPreflight/',
-  '/src/savedAndroidTest/',
-  '/src/sharedTest/',
-];
+const DEFAULT_TEST_SEGMENTS: string[] = [];
 
 export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
   constructor(private readonly index: SymbolIndex) {}
@@ -35,6 +26,9 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
     const cfg = vscode.workspace.getConfiguration('kotlinNav');
     const testSegments = cfg.get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS);
     const smartNav     = cfg.get<boolean>('smartNavigation', true);
+    // true  → custom Find Usages panel (with filter buttons)
+    // false → built-in References panel (editor.action.goToReferences)
+    const usagesCmd = smartNav ? 'kotlin-nav.findUsages' : 'editor.action.goToReferences';
 
     // When navigating from main source, never resolve into test paths.
     // Prevents constructor parameter names matching mock fields in test files.
@@ -46,8 +40,12 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
     for (const fqn of candidates) {
       const entry = this.index.lookupFqn(fqn);
       if (entry && allow(entry.uri.path)) {
-        if (smartNav && isAtDeclaration(entry, document.uri, position)) {
-          setTimeout(() => vscode.commands.executeCommand('editor.action.goToReferences'), 0);
+        if (isAtDeclaration(entry, document.uri, position)) {
+          let impls = this.implLocations(word, allow);
+          if (impls.length === 0) impls = this.methodImplLocations(entry, allow);
+          if (impls.length > 0) return impls;
+          const excl = { excludeUri: entry.uri.toString(), excludeLine: entry.line };
+          setTimeout(() => vscode.commands.executeCommand('kotlin-nav.findUsages', excl), 0);
           return null;
         }
         return withAliasTargets(entry, this.index, allow);
@@ -58,8 +56,13 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
     const filtered = this.index.lookup(word).filter(e => allow(e.uri.path));
     if (filtered.length === 0) return null;
 
-    if (smartNav && filtered.some(e => isAtDeclaration(e, document.uri, position))) {
-      setTimeout(() => vscode.commands.executeCommand('editor.action.goToReferences'), 0);
+    const declEntry = filtered.find(e => isAtDeclaration(e, document.uri, position));
+    if (declEntry) {
+      let impls = this.implLocations(word, allow);
+      if (impls.length === 0) impls = this.methodImplLocations(declEntry, allow);
+      if (impls.length > 0) return impls;
+      const excl = { excludeUri: declEntry.uri.toString(), excludeLine: declEntry.line };
+      setTimeout(() => vscode.commands.executeCommand('kotlin-nav.findUsages', excl), 0);
       return null;
     }
 
@@ -67,6 +70,22 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
 
     // Multiple definitions — return all so VS Code shows the Peek list
     return filtered.map(toLocation);
+  }
+
+  private implLocations(word: string, allow: (path: string) => boolean): vscode.Location[] {
+    return this.index.lookupImplementations(word)
+      .filter(e => allow(e.uri.path))
+      .map(toLocation);
+  }
+
+  private methodImplLocations(
+    entry: { name: string; uri: vscode.Uri; line: number; kind: string },
+    allow: (path: string) => boolean,
+  ): vscode.Location[] {
+    if (entry.kind !== 'fun' && entry.kind !== 'composable') return [];
+    return this.index.lookupMethodImplementations(entry.name, entry.uri.toString(), entry.line)
+      .filter(e => allow(e.uri.path))
+      .map(toLocation);
   }
 }
 

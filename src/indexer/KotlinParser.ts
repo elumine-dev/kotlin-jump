@@ -15,6 +15,7 @@ export interface RawSymbol {
   isComposable: boolean;
   depth: number;       // braceDepth at declaration — used for outline hierarchy
   aliasTarget?: string; // raw rhs of typealias, e.g. "List<KioskEdition>"
+  supertypes?: string[]; // simple names of superclasses/interfaces, e.g. ["Bar", "Baz"]
 }
 
 export interface ParsedFile {
@@ -124,8 +125,15 @@ export function parse(uriString: string, text: string): ParsedFile {
       const keyword = cm[1].replace(/\s+/g, ' ');
       const name    = cm[2];
       const kind    = toClassKind(keyword);
+      const nameEnd = raw.indexOf(name, cm.index) + name.length;
 
-      symbols.push({ name, kind, line: lineNum, character: raw.indexOf(name, cm.index), isComposable: false, depth: braceDepth });
+      let supertypes = extractSupertypes(raw, nameEnd);
+      // Only look ahead for `) : Types` if the line has an unclosed paren (multi-line constructor)
+      if (supertypes.length === 0 && hasUnclosedParen(raw, nameEnd)) {
+        supertypes = lookAheadSupertypes(text, nl + 1);
+      }
+
+      symbols.push({ name, kind, line: lineNum, character: raw.indexOf(name, cm.index), isComposable: false, depth: braceDepth, supertypes: supertypes.length > 0 ? supertypes : undefined });
 
       if (kind === 'enum') enumBraceDepth = braceDepth;
 
@@ -229,6 +237,58 @@ function countDepth(
 const DECL_START: Record<string, boolean> = Object.fromEntries(
   '@acdefilopstv'.split('').map(c => [c, true])
 );
+
+// True if line has more '(' than ')' after the given position (multi-line constructor)
+function hasUnclosedParen(line: string, from: number): boolean {
+  let depth = 0;
+  for (let i = from; i < line.length; i++) {
+    if (line.charAt(i) === '(') depth++;
+    else if (line.charAt(i) === ')') depth--;
+  }
+  return depth > 0;
+}
+
+// Scan the line after the class name for `: SuperType, Interface`
+// Skips balanced <> and () blocks so constructor params and generics are ignored
+function extractSupertypes(line: string, nameEnd: number): string[] {
+  let depth = 0;
+  for (let i = nameEnd; i < line.length; i++) {
+    const ch = line.charAt(i);
+    if (ch === '<' || ch === '(') { depth++; }
+    else if (ch === '>' || ch === ')') { depth--; }
+    else if (depth === 0 && ch === '{') return [];
+    else if (depth === 0 && ch === ':') {
+      return parseTypeNames(line.substring(i + 1));
+    }
+  }
+  return [];
+}
+
+// For multi-line constructors: scan forward for `) : Types` on subsequent lines
+function lookAheadSupertypes(text: string, start: number): string[] {
+  let p = start;
+  for (let i = 0; i < 20 && p < text.length; i++) {
+    let nl = text.indexOf('\n', p);
+    if (nl === -1) nl = text.length;
+    const line = text.slice(p, nl).trimStart();
+    const m = /^\)\s*:\s*(.+)/.exec(line);
+    if (m) return parseTypeNames(m[1]);
+    if (line.startsWith('{')) return [];
+    p = nl + 1;
+  }
+  return [];
+}
+
+const RE_TYPE_NAME = /\b([A-Z]\w+)\b/g;
+
+function parseTypeNames(s: string): string[] {
+  const clean = s.split(/\bwhere\b/)[0].split('{')[0];
+  const types: string[] = [];
+  RE_TYPE_NAME.lastIndex = 0;
+  let m;
+  while ((m = RE_TYPE_NAME.exec(clean))) types.push(m[1]);
+  return types;
+}
 
 function toClassKind(keyword: string): SymbolKind {
   switch (keyword) {

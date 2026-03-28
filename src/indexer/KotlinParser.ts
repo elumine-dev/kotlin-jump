@@ -13,7 +13,8 @@ export interface RawSymbol {
   line: number;
   character: number;
   isComposable: boolean;
-  depth: number;  // braceDepth at declaration — used for outline hierarchy
+  depth: number;       // braceDepth at declaration — used for outline hierarchy
+  aliasTarget?: string; // raw rhs of typealias, e.g. "List<KioskEdition>"
 }
 
 export interface ParsedFile {
@@ -33,7 +34,7 @@ const RE_CLASS      = /^\s*(?:(?:public|private|internal|protected|open|abstract
 // Handles: simple (Modifier.), nullable (Modifier?.), generic (List<T>.), qualified (Modifier.Companion.)
 const RE_FUN        = /^\s*(?:(?:public|private|protected|internal|override|actual|expect|suspend|inline|noinline|crossinline|infix|operator|tailrec|external)\s+)*fun\s+(?:<[^>]*>\s+)?(?:(?:\w+(?:<[^<>]*>)?[?]?\.)+)?(\w+)\s*[(<]/;
 const RE_PROP       = /^\s*(?:(?:public|private|protected|internal|override|open|abstract|actual|expect|lateinit|const)\s+)*(val|var)\s+(\w+)\s*[=:(<]/;
-const RE_TYPEALIAS  = /^\s*(?:(?:public|private|internal|actual)\s+)?typealias\s+(\w+)/;
+const RE_TYPEALIAS  = /^\s*(?:(?:public|private|internal|actual)\s+)?typealias\s+(\w+)(?:<[^>]*>)?\s*=\s*(.+)/;
 const RE_ENUM_ENTRY = /^\s*([A-Z][A-Z0-9_]*)(?:\s*[,(;({]|$)/;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -183,7 +184,7 @@ export function parse(uriString: string, text: string): ParsedFile {
     // ── Typealias ──────────────────────────────────────────────────────────
     const ta = RE_TYPEALIAS.exec(raw);
     if (ta) {
-      symbols.push({ name: ta[1], kind: 'typealias', line: lineNum, character: raw.indexOf(ta[1], ta.index), isComposable: false, depth: braceDepth });
+      symbols.push({ name: ta[1], kind: 'typealias', line: lineNum, character: raw.indexOf(ta[1], ta.index), isComposable: false, depth: braceDepth, aliasTarget: ta[2]?.trim() });
       [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
       if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
       annotationWindow.length = 0;

@@ -12,9 +12,11 @@ Works by scanning your `.kt` and `.java` files with regex patterns and building 
 |---|---|---|
 | **Go to Definition** | `F12` or `Cmd+Click` | Jump to where a class, function, property, or object is declared |
 | **Peek Definition** | `Alt+F12` | View the declaration inline without leaving your current file |
-| **Go to Symbol in Workspace** | `Cmd+T` | Search all indexed symbols by name across the whole project |
+| **Find All References** | `Shift+F12` | List every usage of the symbol across the whole project |
+| **Go to Symbol in Workspace** | `Cmd+T` | Search all indexed symbols — fuzzy search + kind filter |
 | **Go to Symbol in File** | `Cmd+Shift+O` | Navigate symbols in the current file via the Outline panel |
 | **Hover** | Hover over any symbol | See the full signature, package, file, module, and KDoc comment |
+| **Copy FQN** | Right-click → *Kotlin Nav: Copy FQN* | Copy the fully qualified name to clipboard |
 | **Re-index** | `Cmd+Shift+P` → *Kotlin Nav: Re-index workspace* | Force a full re-scan after a large git pull or branch switch |
 
 ### What gets indexed
@@ -53,13 +55,63 @@ Place the cursor on any symbol and press `F12`. Same result as Cmd+Click.
 
 Press `Alt+F12` to see the declaration in an inline peek panel without navigating away.
 
+### Shift+F12 (Find All References)
+
+Place the cursor on any symbol and press `Shift+F12`. VS Code opens the References panel listing every file and line where the symbol is used.
+
+```kotlin
+class UserRepository { ... }
+//     ↑ Shift+F12 → lists every call site, type annotation, constructor usage, etc.
+```
+
+Results include usages in both Kotlin and Java files. The declaration itself is included or excluded based on VS Code's *Include Declaration* setting in the References panel.
+
 ### Cmd+T (Go to Symbol in Workspace)
 
-Press `Cmd+T` (or `Ctrl+T`), start typing a class or function name, and pick from the list.
+Press `Cmd+T` (or `Ctrl+T`), start typing, and pick from the list.
+
+#### Fuzzy search
+
+The search is fuzzy — characters don't need to be consecutive:
 
 ```
-Cmd+T → type "UserRep" → select UserRepository → jumps to declaration
+KS   → KioskScreen
+UC   → UseCase
+VM   → ViewModel
 ```
+
+Prefix matches always rank first, then fuzzy matches sorted by score.
+
+#### Kind filter
+
+Prefix your query with `@tag:` to restrict results to a specific symbol kind:
+
+```
+@class:kiosk        → classes/data classes/sealed classes containing "kiosk"
+@fun:connect        → functions containing "connect"
+@compose:Screen     → @Composable functions containing "Screen"
+@enum:              → list every enum in the project (no name needed)
+@object:repo        → object singletons containing "repo"
+@val:config         → val/const val containing "config"
+@type:edition       → all class-like types + typealiases containing "edition"
+```
+
+**All supported tags:**
+
+| Tag | Matches |
+|---|---|
+| `@class` | `class`, `data class`, `sealed class`, `annotation class` |
+| `@interface` | `interface` |
+| `@object` | `object` singletons |
+| `@enum` | `enum class` |
+| `@fun` | `fun` + `@Composable fun` |
+| `@compose` | `@Composable fun` only |
+| `@val` | `val` / `const val` |
+| `@var` | `var` |
+| `@typealias` | `typealias` |
+| `@type` | all class-like types + `typealias` |
+
+The name part is optional — `@enum:` alone lists all enums. An unrecognised tag falls back to normal search, so nothing breaks.
 
 ### Cmd+Shift+O (Outline / Go to Symbol in File)
 
@@ -131,6 +183,18 @@ Entries (3)
 
 KDoc comments (`/** ... */` and `//` blocks) are extracted and displayed with formatted `@param`, `@return`, `@throws`, `@see`, and `@deprecated` tags.
 
+### Copy FQN
+
+Right-click any symbol in a Kotlin file and choose **Kotlin Nav: Copy FQN**, or use `Cmd+Shift+P` → *Kotlin Nav: Copy FQN*.
+
+The fully qualified name is copied to your clipboard and shown in a notification:
+
+```
+Copied: ca.lapresse.android.lapresseplus.mainV2.ui.kiosk.KioskViewModel
+```
+
+Useful when writing import statements by hand or referencing a class in documentation.
+
 ### Import resolution
 
 The extension reads your import statements to disambiguate symbols that exist in multiple packages.
@@ -139,6 +203,12 @@ The extension reads your import statements to disambiguate symbols that exist in
 import com.example.ui.Button  // ← extension uses this to pick the right "Button"
 
 val b = Button()  // Cmd+Click → goes to com.example.ui.Button, not any other Button
+```
+
+Explicit imports of nested classes are also resolved correctly:
+
+```kotlin
+import com.example.OuterClass.InnerClass  // ← resolves to InnerClass inside OuterClass
 ```
 
 ### Multi-module projects
@@ -153,6 +223,8 @@ Works automatically with Gradle multi-module projects. The extension reads `sett
 @Composable
 fun HomeScreen() { ... }  // ← indexed, navigable, hover shows @Composable
 ```
+
+Use `@compose:` in `Cmd+T` to list only Composable functions.
 
 ### Test file isolation
 
@@ -274,8 +346,7 @@ These are inherent to a regex-based approach (no full compiler):
 - **Overloaded functions** — if two classes both define `fun save()`, Cmd+Click shows both in a peek list for you to choose
 - **Type inference** — `val x = SomeClass()` navigates to `SomeClass` by name, not by inferring the type of `x`
 - **Extension functions** — receiver types are not tracked; `String.myExt()` is indexed as `myExt`, not as a member of `String`
-- **Nested class FQN** — `OuterClass.InnerClass` is stored as `pkg.InnerClass`; explicit imports of the nested form may not resolve
-- **Companion object members** — members inside `companion object` are indexed at class level, not as `MyClass.Companion.member`
+- **Find All References noise** — results include occurrences in comments and strings (no AST to filter them out)
 - **Generated code** — files inside `build/` are excluded by default
 
 ---
@@ -284,7 +355,7 @@ These are inherent to a regex-based approach (no full compiler):
 
 ```
 Activation
-  ├─ Register providers immediately (Cmd+Click, Hover, Outline ready)
+  ├─ Register providers immediately (Cmd+Click, Hover, Outline, References ready)
   ├─ Load index snapshot from disk (if exists)
   │    ├─ stat() each .kt / .java file → re-parse only changed ones
   │    └─ Restore symbol table from snapshot (no regex, no I/O)
@@ -295,9 +366,21 @@ Activation
 
 Cmd+Click
   ├─ Extract word at cursor
-  ├─ Resolve imports → FQN candidates (filtered: no test paths from main source)
+  ├─ Resolve imports → FQN candidates (pkg.Outer.Inner, filtered: no test paths)
   ├─ Map.get(fqn) → O(1) lookup
   └─ Return vscode.Location → jump
+
+Find All References
+  ├─ Confirm symbol is indexed (name lookup)
+  ├─ 20 concurrent file reads across all indexed files
+  ├─ \bsymbolName\b regex scan per line
+  └─ Return vscode.Location[] → References panel
+
+Cmd+T
+  ├─ Parse @tag:name prefix (kind filter)
+  ├─ Prefix match → binary search O(log N)
+  ├─ Fuzzy match → sequential char scan O(N), scored + sorted
+  └─ Filter by kind if @tag was present
 
 Hover
   ├─ Resolve symbol entry (FQN → name fallback)

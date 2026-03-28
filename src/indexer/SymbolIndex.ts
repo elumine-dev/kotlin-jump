@@ -1,6 +1,9 @@
 import * as vscode from 'vscode';
 import { ParsedFile, SymbolKind } from './KotlinParser';
 
+// Kinds that contribute to the FQN chain (nested classes get pkg.Outer.Inner)
+const CLASS_LIKE = new Set<SymbolKind>(['class', 'dataClass', 'sealedClass', 'enum', 'object', 'interface', 'annotation']);
+
 export interface SymbolEntry {
   name: string;
   fqn: string;
@@ -12,6 +15,7 @@ export interface SymbolEntry {
   isComposable: boolean;
   depth: number;
   moduleName?: string;
+  aliasTarget?: string; // raw rhs of typealias — used for follow-through navigation
 }
 
 export class SymbolIndex {
@@ -38,9 +42,25 @@ export class SymbolIndex {
 
     const pkg = this.intern(file.packageName);
     const fileEntries: SymbolEntry[] = [];
+    // Stack tracks enclosing class names so nested symbols get pkg.Outer.Inner FQN
+    const classStack: { name: string; depth: number }[] = [];
 
     for (const sym of file.symbols) {
-      const fqn   = pkg ? `${pkg}.${sym.name}` : sym.name;
+      // Pop entries that are no longer enclosing this symbol
+      while (classStack.length > 0 && classStack[classStack.length - 1].depth >= sym.depth) {
+        classStack.pop();
+      }
+
+      // Build FQN: pkg.Outer.Inner.symbol  (handles nested classes + companion members)
+      const qualifiers = classStack.map(s => s.name);
+      const parts = pkg ? [pkg, ...qualifiers, sym.name] : [...qualifiers, sym.name];
+      const fqn = parts.join('.');
+
+      // Class-like symbols join the chain so their nested members can reference them
+      if (CLASS_LIKE.has(sym.kind)) {
+        classStack.push({ name: sym.name, depth: sym.depth });
+      }
+
       const entry: SymbolEntry = {
         name: sym.name,
         fqn,
@@ -52,6 +72,7 @@ export class SymbolIndex {
         isComposable: sym.isComposable,
         depth: sym.depth,
         moduleName,
+        aliasTarget: sym.aliasTarget,
       };
 
       fileEntries.push(entry);
@@ -82,26 +103,28 @@ export class SymbolIndex {
     return this.byFqn.get(fqn);
   }
 
-  // O(log N + results) — was O(N) full scan
+  // O(log N) prefix match + O(N) fuzzy fallback
   search(query: string): SymbolEntry[] {
     if (!query) return EMPTY;
 
     if (this.dirty) this.rebuildSorted();
 
-    const lower   = query.toLowerCase();
+    const lower = query.toLowerCase();
     const results: SymbolEntry[] = [];
 
-    // Binary search: find first sorted name >= query
+    // ── 1. Prefix matches (fast, binary search) ──────────────────────────────
     let lo = 0, hi = this.sortedLower.length;
     while (lo < hi) {
       const mid = (lo + hi) >>> 1;
       if (this.sortedLower[mid] < lower) lo = mid + 1;
       else hi = mid;
     }
-
+    const prefixNames = new Set<string>();
     for (let i = lo; i < this.sortedLower.length; i++) {
       if (!this.sortedLower[i].startsWith(lower)) break;
-      const set = this.byName.get(this.sortedOrig[i]);
+      const orig = this.sortedOrig[i];
+      prefixNames.add(orig);
+      const set = this.byName.get(orig);
       if (set) {
         for (const e of set) {
           results.push(e);
@@ -109,6 +132,28 @@ export class SymbolIndex {
         }
       }
     }
+
+    // ── 2. Fuzzy matches (sequential char match, scored) ─────────────────────
+    if (lower.length >= 2) {
+      const scored: { entries: SymbolEntry[]; score: number }[] = [];
+      for (let i = 0; i < this.sortedOrig.length; i++) {
+        const name = this.sortedOrig[i];
+        if (prefixNames.has(name)) continue;
+        const score = fuzzyScore(lower, this.sortedLower[i]);
+        if (score > 0) {
+          const set = this.byName.get(name);
+          if (set) scored.push({ entries: [...set], score });
+        }
+      }
+      scored.sort((a, b) => b.score - a.score);
+      for (const { entries } of scored) {
+        for (const e of entries) {
+          results.push(e);
+          if (results.length >= 200) return results;
+        }
+      }
+    }
+
     return results;
   }
 
@@ -120,6 +165,24 @@ export class SymbolIndex {
 
   getFileSymbols(uriString: string): SymbolEntry[] {
     return this.byFile.get(uriString) ?? EMPTY;
+  }
+
+  fileUriStrings(): string[] {
+    return [...this.byFile.keys()];
+  }
+
+  // Returns up to `limit` entries whose kind is in the given set — used for "@class:" queries
+  filterByKind(kinds: Set<string>, limit = 200): SymbolEntry[] {
+    const results: SymbolEntry[] = [];
+    for (const entries of this.byFile.values()) {
+      for (const e of entries) {
+        if (kinds.has(e.kind)) {
+          results.push(e);
+          if (results.length >= limit) return results;
+        }
+      }
+    }
+    return results;
   }
 
   stats(): { files: number; symbols: number } {
@@ -193,3 +256,19 @@ export class SymbolIndex {
 }
 
 const EMPTY: SymbolEntry[] = [];
+
+// Sequential character match: "KS" matches "KioskScreen".
+// Bonuses for consecutive chars and word-boundary starts.
+function fuzzyScore(queryLower: string, nameLower: string): number {
+  let qi = 0, score = 0, prevMatch = -2;
+  for (let ni = 0; ni < nameLower.length && qi < queryLower.length; ni++) {
+    if (nameLower[ni] === queryLower[qi]) {
+      const consecutive   = ni === prevMatch + 1 ? 3 : 0;
+      const wordBoundary  = ni === 0 || !/[a-z0-9]/.test(nameLower[ni - 1]) ? 5 : 0;
+      score += 1 + consecutive + wordBoundary;
+      prevMatch = ni;
+      qi++;
+    }
+  }
+  return qi === queryLower.length ? score : 0;
+}

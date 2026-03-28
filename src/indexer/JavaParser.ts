@@ -55,6 +55,7 @@ export function parseJava(uriString: string, text: string): ParsedFile {
     const cm = RE_CLASS.exec(raw);
     if (cm) {
       const name = cm[2];
+      const supertypes = extractJavaSupertypes(raw);
       symbols.push({
         name,
         kind: toJavaKind(cm[1]),
@@ -62,6 +63,7 @@ export function parseJava(uriString: string, text: string): ParsedFile {
         character: raw.indexOf(name, cm.index),
         isComposable: false,
         depth: 0,
+        supertypes: supertypes.length > 0 ? supertypes : undefined,
       });
     }
 
@@ -75,6 +77,26 @@ export function parseJava(uriString: string, text: string): ParsedFile {
 const JAVA_DECL_START: Record<string, boolean> = Object.fromEntries(
   '@abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(c => [c, true])
 );
+
+const RE_JAVA_TYPE_NAME = /\b([A-Z]\w+)\b/g;
+
+function extractJavaSupertypes(line: string): string[] {
+  const types: string[] = [];
+  // Match extends and implements clauses
+  const extendsMatch = /\bextends\s+(.+?)(?:\bimplements\b|\{|$)/.exec(line);
+  if (extendsMatch) {
+    RE_JAVA_TYPE_NAME.lastIndex = 0;
+    let m;
+    while ((m = RE_JAVA_TYPE_NAME.exec(extendsMatch[1]))) types.push(m[1]);
+  }
+  const implMatch = /\bimplements\s+(.+?)(?:\{|$)/.exec(line);
+  if (implMatch) {
+    RE_JAVA_TYPE_NAME.lastIndex = 0;
+    let m;
+    while ((m = RE_JAVA_TYPE_NAME.exec(implMatch[1]))) types.push(m[1]);
+  }
+  return types;
+}
 
 function toJavaKind(keyword: string): SymbolKind {
   switch (keyword) {

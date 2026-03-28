@@ -12,6 +12,9 @@ const IO_CONCURRENCY_DEFAULT = 20;
 export class FileScanner {
   private readonly decoder = new TextDecoder();
   private readonly pool: WorkerPool;
+  // Each scan gets its own token; cancel() flags the current one so workers stop
+  // between files without killing the process or requiring complex coordination.
+  private cancelToken: { cancelled: boolean } = { cancelled: false };
 
   constructor(
     private readonly index: SymbolIndex,
@@ -31,7 +34,14 @@ export class FileScanner {
     }
   }
 
+  // Invalidates any in-flight scan — workers stop after their current file.
+  cancel(): void {
+    this.cancelToken.cancelled = true;
+  }
+
   async scanAll(): Promise<void> {
+    const token = this.freshToken();
+
     const cfg         = vscode.workspace.getConfiguration('kotlinNav');
     const excludeList = cfg.get<string[]>('excludePatterns') ?? ['**/build/**', '**/.gradle/**'];
     const maxFiles    = cfg.get<number>('maxIndexedFiles') ?? 10000;
@@ -41,15 +51,16 @@ export class FileScanner {
     const uris = await vscode.workspace.findFiles('**/*.{kt,kts,java}', excludeGlob, maxFiles);
     this.log.info(`Scanning ${uris.length} files (io=${ioConcurrency}, workers=${this.pool.available ? 'yes' : 'no'})…`);
 
-    await this.pipeline(uris, ioConcurrency);
-    this.index.finalize(); // build sorted names once after bulk load
+    await this.pipeline(uris, ioConcurrency, token);
+    if (!token.cancelled) this.index.finalize();
   }
 
   // Re-scan a specific subset of files (used after snapshot load for stale files)
   async rescan(uris: vscode.Uri[]): Promise<void> {
+    const token = this.freshToken();
     const cfg = vscode.workspace.getConfiguration('kotlinNav');
-    await this.pipeline(uris, cfg.get<number>('concurrency') ?? IO_CONCURRENCY_DEFAULT);
-    this.index.finalize();
+    await this.pipeline(uris, cfg.get<number>('concurrency') ?? IO_CONCURRENCY_DEFAULT, token);
+    if (!token.cancelled) this.index.finalize();
   }
 
   async scanFile(uri: vscode.Uri): Promise<void> {
@@ -69,11 +80,16 @@ export class FileScanner {
 
   // ── I/O pipeline: read files concurrently, offload CPU to worker pool ─────
 
-  private async pipeline(uris: vscode.Uri[], concurrency: number): Promise<void> {
+  private async pipeline(
+    uris: vscode.Uri[],
+    concurrency: number,
+    token: { cancelled: boolean },
+  ): Promise<void> {
     let cursor = 0;
 
     const ioWorker = async (): Promise<void> => {
       while (cursor < uris.length) {
+        if (token.cancelled) return; // another scan started — bail out
         // cursor++ is synchronous — safe in single-threaded JS event loop
         const uri = uris[cursor++];
         try {
@@ -81,7 +97,7 @@ export class FileScanner {
           if (bytes.byteLength > MAX_FILE_BYTES) continue;
           const text   = this.decoder.decode(bytes);
           const parsed = await this.parseText(uri.toString(), text, uri.fsPath.endsWith('.java'));
-          this.index.add(parsed, this.moduleFor(uri));
+          if (!token.cancelled) this.index.add(parsed, this.moduleFor(uri));
         } catch { /* skip unreadable / deleted files */ }
       }
     };
@@ -89,6 +105,12 @@ export class FileScanner {
     // `concurrency` async workers share cursor — each grabs the next URI
     // As soon as a file is read it's immediately sent to a parser worker
     await Promise.all(Array.from({ length: concurrency }, ioWorker));
+  }
+
+  private freshToken(): { cancelled: boolean } {
+    this.cancelToken.cancelled = true; // invalidate any previous scan
+    this.cancelToken = { cancelled: false };
+    return this.cancelToken;
   }
 
   private async parseText(uriString: string, text: string, isJava: boolean) {

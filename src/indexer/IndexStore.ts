@@ -8,6 +8,7 @@ const SNAPSHOT_FILENAME = 'kotlin-nav-index.json';
 // Compact per-file format — FQN is reconstructed as pkg+"."+name on restore
 interface SnapshotFile {
   t: number;    // mtime (ms)
+  s?: number;   // file size (bytes) — used alongside mtime to catch clock-skew false-negatives
   p: string;    // packageName
   m?: string;   // moduleName
   // Parallel arrays — much smaller JSON than array-of-objects
@@ -26,16 +27,17 @@ interface Snapshot {
 }
 
 export interface StaleReport {
-  toScan:   vscode.Uri[]; // new or mtime-changed files
+  toScan:   vscode.Uri[]; // new or changed files (mtime or size differs)
   toRemove: string[];     // uris in snapshot no longer found on disk
   snapshot: Snapshot;
+  stats:    Map<string, { mtime: number; size: number }>; // current on-disk stats (reuse for save)
 }
 
 // ── Save ──────────────────────────────────────────────────────────────────────
 
 export async function save(
   index: SymbolIndex,
-  mtimes: Map<string, number>,
+  stats: Map<string, { mtime: number; size: number }>,
   context: vscode.ExtensionContext,
 ): Promise<void> {
   const snapshotUri = storageUri(context);
@@ -45,11 +47,12 @@ export async function save(
 
   for (const [uriStr, entries] of index.fileEntries()) {
     if (entries.length === 0) continue;
-    const mtime = mtimes.get(uriStr);
-    if (mtime === undefined) continue; // file no longer on disk
+    const stat = stats.get(uriStr);
+    if (stat === undefined) continue; // file no longer on disk
 
     const sf: SnapshotFile = {
-      t: mtime,
+      t: stat.mtime,
+      s: stat.size,
       p: entries[0].packageName,
       m: entries[0].moduleName,
       n: [], k: [], l: [], c: [], i: [], d: [],
@@ -98,10 +101,9 @@ export async function checkStaleness(
   snapshot: Snapshot,
   allUris: vscode.Uri[],
 ): Promise<StaleReport> {
-  // Build current mtime map with 50-concurrent stat() calls
-  const currentMtimes = new Map<string, number>();
-  const toScan: vscode.Uri[]  = [];
-  const toRemove: string[]    = [];
+  const stats    = new Map<string, { mtime: number; size: number }>();
+  const toScan: vscode.Uri[] = [];
+  const toRemove: string[]   = [];
 
   // Stat all files in parallel (capped at 50 concurrent)
   let cursor = 0;
@@ -109,21 +111,22 @@ export async function checkStaleness(
     while (cursor < allUris.length) {
       const uri = allUris[cursor++];
       try {
-        const stat = await vscode.workspace.fs.stat(uri);
-        currentMtimes.set(uri.toString(), stat.mtime);
+        const s = await vscode.workspace.fs.stat(uri);
+        stats.set(uri.toString(), { mtime: s.mtime, size: s.size });
       } catch { /* deleted between findFiles and stat — skip */ }
     }
   };
   await Promise.all(Array.from({ length: 50 }, statWorker));
 
-  // Files on disk: new or mtime-changed → need re-scan
+  // Files on disk: stale if mtime changed OR size changed (catches clock-skew edge cases)
   for (const uri of allUris) {
-    const key          = uri.toString();
-    const currentMtime = currentMtimes.get(key);
-    const snapMtime    = snapshot.files[key]?.t;
-    if (currentMtime !== undefined && currentMtime !== snapMtime) {
-      toScan.push(uri);
-    }
+    const key     = uri.toString();
+    const current = stats.get(key);
+    const snap    = snapshot.files[key];
+    if (!current) continue; // stat failed — skip
+    const mtimeChanged = current.mtime !== snap?.t;
+    const sizeChanged  = snap?.s !== undefined && current.size !== snap.s;
+    if (mtimeChanged || sizeChanged) toScan.push(uri);
   }
 
   // Files in snapshot not on disk → remove from index
@@ -132,7 +135,7 @@ export async function checkStaleness(
     if (!onDisk.has(uriStr)) toRemove.push(uriStr);
   }
 
-  return { toScan, toRemove, snapshot };
+  return { toScan, toRemove, snapshot, stats };
 }
 
 // ── Restore (no I/O — just populate the index from snapshot data) ─────────────

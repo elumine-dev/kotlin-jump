@@ -1,0 +1,73 @@
+{
+  "name": "kotlin-nav",
+  "displayName": "Kotlin Nav",
+  "description": "Instant Go to Definition for Kotlin — regex-based, zero LSP overhead",
+  "version": "0.1.0",
+  "publisher": "kotlin-nav",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Programming Languages"],
+  "keywords": ["kotlin", "navigation", "go to definition", "android", "compose"],
+  "activationEvents": [
+    "onLanguage:kotlin",
+    "workspaceContains:**/*.kt"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "kotlin-nav.reindex",
+        "title": "Kotlin Nav: Re-index workspace",
+        "category": "Kotlin Nav"
+      }
+    ],
+    "languages": [
+      {
+        "id": "kotlin",
+        "extensions": [".kt", ".kts"],
+        "aliases": ["Kotlin", "kotlin"]
+      }
+    ],
+    "configuration": {
+      "title": "Kotlin Nav",
+      "properties": {
+        "kotlinNav.excludePatterns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["**/build/**", "**/.gradle/**", "**/generated/**", "**/.idea/**"],
+          "description": "Glob patterns excluded from indexing."
+        },
+        "kotlinNav.maxIndexedFiles": {
+          "type": "number",
+          "default": 10000,
+          "description": "Hard cap on the number of .kt files indexed."
+        },
+        "kotlinNav.concurrency": {
+          "type": "number",
+          "default": 20,
+          "description": "Number of files read in parallel during initial scan."
+        },
+        "kotlinNav.parserWorkers": {
+          "type": "number",
+          "default": 4,
+          "minimum": 1,
+          "maximum": 8,
+          "description": "Number of Node.js worker threads used for parallel Kotlin parsing."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "vscode:prepublish": "node esbuild.js --production",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/test-cli": "^0.0.9",
+    "@vscode/test-electron": "^2.3.8",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.3.3"
+  }
+}

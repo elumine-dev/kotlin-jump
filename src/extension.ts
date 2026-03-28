@@ -17,7 +17,7 @@ const WORD_RE = /[A-Za-z_]\w*/;
 // Module-level refs so deactivate() can save the snapshot
 let _index:   SymbolIndex | undefined;
 let _context: vscode.ExtensionContext | undefined;
-let _mtimes:  Map<string, number> = new Map();
+let _stats:   Map<string, { mtime: number; size: number }> = new Map();
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   _context = context;
@@ -90,12 +90,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('kotlin-nav.reindex', async () => {
       statusBar.text    = '$(sync~spin) Kotlin Nav: re-indexing…';
       statusBar.tooltip = 'Kotlin Nav is rebuilding the symbol index';
+      scanner.cancel(); // stop any in-flight scan before clearing the index
       index.clear();
       await scanner.scanAll();
       const freshUris = await vscode.workspace.findFiles(
         '**/*.{kt,kts,java}', `{${excludeList.join(',')}}`, maxFiles,
       );
-      await collectMtimes(freshUris);
+      await collectStats(freshUris);
       const { files, symbols } = index.stats();
       statusBar.text    = `$(symbol-class) Kotlin Nav: ${symbols.toLocaleString()} symbols`;
       statusBar.tooltip = `${symbols.toLocaleString()} symbols in ${files} files`;
@@ -118,6 +119,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Check staleness and re-scan only changed files in background
     const report = await IndexStore.checkStaleness(snapshot, allUris);
 
+    // Reuse the stats already collected during staleness check
+    _stats = report.stats;
+
     report.toRemove.forEach(uriStr => index.remove(vscode.Uri.parse(uriStr)));
 
     if (report.toScan.length > 0) {
@@ -125,15 +129,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await scanner.rescan(report.toScan);
     }
 
-    // Update mtime cache for save on deactivate
-    await collectMtimes(report.toScan);
-
   } else {
     // No snapshot — full scan
     await scanner.scanAll();
 
-    // Collect mtimes for snapshot save
-    await collectMtimes(allUris);
+    // Collect stats (mtime + size) for snapshot save on deactivate
+    await collectStats(allUris);
   }
 
   const elapsed = Date.now() - t0;
@@ -144,19 +145,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 export async function deactivate(): Promise<void> {
-  if (_index && _context && _mtimes.size > 0) {
-    await IndexStore.save(_index, _mtimes, _context);
+  if (_index && _context && _stats.size > 0) {
+    await IndexStore.save(_index, _stats, _context);
   }
 }
 
-async function collectMtimes(uris: vscode.Uri[]): Promise<void> {
+async function collectStats(uris: vscode.Uri[]): Promise<void> {
   let cursor = 0;
   const worker = async () => {
     while (cursor < uris.length) {
       const uri = uris[cursor++];
       try {
         const s = await vscode.workspace.fs.stat(uri);
-        _mtimes.set(uri.toString(), s.mtime);
+        _stats.set(uri.toString(), { mtime: s.mtime, size: s.size });
       } catch {}
     }
   };

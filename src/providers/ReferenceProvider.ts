@@ -1,8 +1,39 @@
 import * as vscode from 'vscode';
-import { SymbolIndex } from '../indexer/SymbolIndex';
+import picomatch from 'picomatch';
+import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
+import { resolve as resolveImports } from '../util/ImportResolver';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 const CONCURRENCY = 20;
+
+// ── Picomatch cache ───────────────────────────────────────────────────────────
+// Patterns are compiled once and reused until the config changes.
+// Key = patterns joined with \0 (cheap sentinel, one allocation on change only).
+let _matcherKey = '';
+let _matchers: ((path: string) => boolean)[] = [];
+
+function getExcludeMatchers(): ((path: string) => boolean)[] {
+  const patterns = vscode.workspace
+    .getConfiguration('kotlinNav')
+    .get<string[]>('excludeFromReferences', []);
+
+  const key = patterns.join('\0');
+  if (key !== _matcherKey) {
+    _matcherKey = key;
+    // dot:true — required for patterns like **/.gradle/**, **/.idea/**
+    _matchers = patterns.map(p => picomatch(p, { dot: true }));
+  }
+  return _matchers;
+}
+
+// Filters before any I/O — pure CPU work, eliminates files from the scan list.
+function isExcluded(uriString: string): boolean {
+  const matchers = getExcludeMatchers();
+  if (matchers.length === 0) return false;
+  // vscode.Uri.path always uses forward slashes — correct for picomatch (POSIX semantics)
+  const path = vscode.Uri.parse(uriString).path;
+  return matchers.some(m => m(path));
+}
 
 export class KotlinReferenceProvider implements vscode.ReferenceProvider {
   constructor(private readonly index: SymbolIndex) {}
@@ -19,16 +50,31 @@ export class KotlinReferenceProvider implements vscode.ReferenceProvider {
     const word = document.getText(wordRange);
     if (word.length < 2) return null;
 
-    // Only proceed if this symbol is in the index
     const decls = this.index.lookup(word);
     if (decls.length === 0) return null;
 
+    // Resolve the specific FQN from the current document's import context.
+    // This disambiguates same-name symbols from different packages
+    // (e.g. two different ConnectivityState classes in the same project).
+    let targetEntry: SymbolEntry | undefined;
+    for (const fqn of resolveImports(word, document)) {
+      const entry = this.index.lookupFqn(fqn);
+      if (entry) { targetEntry = entry; break; }
+    }
+    if (!targetEntry && decls.length === 1) targetEntry = decls[0];
+
     // Declaration positions — used to optionally exclude them from results
-    const declKeys = new Set(decls.map(e => `${e.uri.toString()}:${e.line}:${e.character}`));
+    const declKeys = new Set(
+      (targetEntry ? [targetEntry] : decls).map(e => `${e.uri.toString()}:${e.line}:${e.character}`)
+    );
 
     const results: vscode.Location[] = [];
     const wordRe = new RegExp(`\\b${escapeRegex(word)}\\b`, 'g');
-    const uriStrings = this.index.fileUriStrings();
+
+    // ── Pre-filter URI list (before any I/O) ─────────────────────────────────
+    // 1. Apply kotlinNav.excludeFromReferences glob patterns (picomatch, pre-compiled)
+    // 2. Package/import filter narrows to files that could actually reference the symbol
+    const uriStrings = this.index.fileUriStrings().filter(u => !isExcluded(u));
 
     let cursor = 0;
     const worker = async () => {
@@ -38,23 +84,26 @@ export class KotlinReferenceProvider implements vscode.ReferenceProvider {
         const uri = vscode.Uri.parse(uriStr);
         try {
           const bytes = await vscode.workspace.fs.readFile(uri);
-          const lines = Buffer.from(bytes).toString('utf8').split('\n');
-          let inBlockComment = false;
+          const text = Buffer.from(bytes).toString('utf8');
+
+          // Quick pre-filter: skip files that don't mention the symbol at all
+          if (!text.includes(word)) continue;
+
+          // When we have a specific target FQN, skip files that can't possibly
+          // reference it (wrong package and no matching import)
+          if (targetEntry && !fileCouldReference(text, targetEntry)) continue;
+
+          const lines = text.split('\n');
           for (let i = 0; i < lines.length; i++) {
             const trimmed = lines[i].trimStart();
 
-            // Track block comment boundaries
-            if (inBlockComment) {
-              if (trimmed.includes('*/')) inBlockComment = false;
-              continue;
-            }
-            if (trimmed.startsWith('/*') || trimmed.startsWith('/**')) {
-              if (!trimmed.includes('*/')) inBlockComment = true;
-              continue;
-            }
-
-            // Skip single-line comments and import statements
-            if (trimmed.startsWith('//') || trimmed.startsWith('import ')) continue;
+            // Skip import lines, single-line comments, and block comment lines
+            if (
+              trimmed.startsWith('import ') ||
+              trimmed.startsWith('//') ||
+              trimmed.startsWith('*') ||
+              trimmed.startsWith('/*')
+            ) continue;
 
             wordRe.lastIndex = 0;
             let m: RegExpExecArray | null;
@@ -71,6 +120,31 @@ export class KotlinReferenceProvider implements vscode.ReferenceProvider {
 
     return results.length > 0 ? results : null;
   }
+}
+
+/**
+ * Returns true if a file could plausibly reference a symbol from the given entry.
+ * Checks three conditions (any one is sufficient):
+ *  1. Same package — no import required
+ *  2. Explicit import of the FQN
+ *  3. Wildcard import of the symbol's package
+ */
+function fileCouldReference(text: string, target: SymbolEntry): boolean {
+  const { fqn, packageName: pkg } = target;
+
+  // 1. Same package (exact match, not a sub-package)
+  if (pkg) {
+    const header = text.slice(0, 512);
+    if (new RegExp(`\\bpackage\\s+${escapeRegex(pkg)}(?:[\\s;]|$)`).test(header)) return true;
+  }
+
+  // 2. Explicit import of the FQN (Kotlin or Java — semicolon optional)
+  if (text.includes(`import ${fqn}`)) return true;
+
+  // 3. Wildcard import of the package
+  if (pkg && text.includes(`import ${pkg}.*`)) return true;
+
+  return false;
 }
 
 function escapeRegex(s: string): string {

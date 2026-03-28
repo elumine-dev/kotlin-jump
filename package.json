@@ -4,9 +4,19 @@
   "description": "Instant Go to Definition for Kotlin — regex-based, zero LSP overhead",
   "version": "0.1.0",
   "publisher": "kotlin-nav",
-  "engines": { "vscode": "^1.85.0" },
-  "categories": ["Programming Languages"],
-  "keywords": ["kotlin", "navigation", "go to definition", "android", "compose"],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "kotlin",
+    "navigation",
+    "go to definition",
+    "android",
+    "compose"
+  ],
   "activationEvents": [
     "onLanguage:kotlin",
     "workspaceContains:**/*.kt"
@@ -37,8 +47,14 @@
     "languages": [
       {
         "id": "kotlin",
-        "extensions": [".kt", ".kts"],
-        "aliases": ["Kotlin", "kotlin"]
+        "extensions": [
+          ".kt",
+          ".kts"
+        ],
+        "aliases": [
+          "Kotlin",
+          "kotlin"
+        ]
       }
     ],
     "configuration": {
@@ -46,8 +62,15 @@
       "properties": {
         "kotlinNav.excludePatterns": {
           "type": "array",
-          "items": { "type": "string" },
-          "default": ["**/build/**", "**/.gradle/**", "**/generated/**", "**/.idea/**"],
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/build/**",
+            "**/.gradle/**",
+            "**/generated/**",
+            "**/.idea/**"
+          ],
           "description": "Glob patterns excluded from indexing."
         },
         "kotlinNav.maxIndexedFiles": {
@@ -66,6 +89,32 @@
           "minimum": 1,
           "maximum": 8,
           "description": "Number of Node.js worker threads used for parallel Kotlin parsing."
+        },
+        "kotlinNav.excludeFromReferences": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "markdownDescription": "Glob patterns excluded from **Find All References** results. Matched files are still indexed (Go to Definition still works inside them) but are hidden from reference results.\n\nExample:\n```json\n[\n  \"**/src/test*/**\",\n  \"**/src/savedAndroidTest*/**\",\n  \"**/src/sharedTest*/**\",\n  \"**/src/debug/**/*Preview.kt\"\n]\n```"
+        },
+        "kotlinNav.testSourceSets": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [
+            "/src/test/",
+            "/src/androidTest/",
+            "/src/testDebug/",
+            "/src/testRelease/",
+            "/src/testReplica/",
+            "/src/testAdPreflight/",
+            "/src/savedAndroidTest/",
+            "/src/sharedTest/"
+          ],
+          "markdownDescription": "Path segments identifying test source sets. **Go to Definition** skips results inside these paths when navigating from main source, preventing accidental jumps into mock or test-only files."
+        },
+        "kotlinNav.smartNavigation": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "When **Cmd+Click** (or F12) lands on a declaration site, redirect to **Find All References** instead of navigating to self. Disable if you find this behaviour unexpected."
         }
       }
     }
@@ -78,10 +127,14 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "@types/picomatch": "^4.0.2",
     "@types/vscode": "^1.85.0",
     "@vscode/test-cli": "^0.0.9",
     "@vscode/test-electron": "^2.3.8",
     "esbuild": "^0.20.0",
     "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "picomatch": "^4.0.4"
   }
 }

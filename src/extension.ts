@@ -5,10 +5,14 @@ import { FileWatcher } from './watcher/FileWatcher';
 import { KotlinDefinitionProvider } from './providers/DefinitionProvider';
 import { KotlinDocumentSymbolProvider } from './providers/DocumentSymbolProvider';
 import { KotlinHoverProvider } from './providers/HoverProvider';
+import { KotlinReferenceProvider } from './providers/ReferenceProvider';
 import { KotlinFileProvider } from './providers/FileProvider';
 import { Logger } from './util/logger';
 import { resolveAll as resolveModules } from './gradle/ModuleResolver';
+import { resolve as resolveImports } from './util/ImportResolver';
 import * as IndexStore from './indexer/IndexStore';
+
+const WORD_RE = /[A-Za-z_]\w*/;
 
 // Module-level refs so deactivate() can save the snapshot
 let _index:   SymbolIndex | undefined;
@@ -28,12 +32,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   statusBar.tooltip = 'Kotlin Nav is building the symbol index';
   statusBar.show();
 
+  const KT_JAVA = [{ language: 'kotlin' }, { language: 'java' }];
+
   context.subscriptions.push(
     log,
     statusBar,
-    vscode.languages.registerDefinitionProvider({ language: 'kotlin' }, new KotlinDefinitionProvider(index)),
-    vscode.languages.registerDocumentSymbolProvider({ language: 'kotlin' }, new KotlinDocumentSymbolProvider(index)),
-    vscode.languages.registerHoverProvider({ language: 'kotlin' }, new KotlinHoverProvider(index)),
+    vscode.languages.registerDefinitionProvider(KT_JAVA, new KotlinDefinitionProvider(index)),
+    vscode.languages.registerDocumentSymbolProvider(KT_JAVA, new KotlinDocumentSymbolProvider(index)),
+    vscode.languages.registerHoverProvider(KT_JAVA, new KotlinHoverProvider(index)),
+    vscode.languages.registerReferenceProvider(KT_JAVA, new KotlinReferenceProvider(index)),
     vscode.languages.registerWorkspaceSymbolProvider(new KotlinFileProvider(index)),
   );
 
@@ -53,6 +60,33 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(watcher, { dispose: () => scanner.destroy() });
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('kotlin-nav.copyFqn', async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor || editor.document.languageId !== 'kotlin') return;
+
+      const doc = editor.document;
+      const wordRange = doc.getWordRangeAtPosition(editor.selection.active, WORD_RE);
+      if (!wordRange) { vscode.window.showInformationMessage('No symbol at cursor.'); return; }
+
+      const word = doc.getText(wordRange);
+
+      // FQN via import resolution first, then name fallback
+      let fqn: string | undefined;
+      for (const candidate of resolveImports(word, doc)) {
+        const entry = index.lookupFqn(candidate);
+        if (entry) { fqn = entry.fqn; break; }
+      }
+      if (!fqn) {
+        const hits = index.lookup(word);
+        if (hits.length > 0) fqn = hits[0].fqn;
+      }
+
+      if (!fqn) { vscode.window.showInformationMessage(`No indexed symbol: ${word}`); return; }
+
+      await vscode.env.clipboard.writeText(fqn);
+      vscode.window.showInformationMessage(`Copied: ${fqn}`);
+    }),
+
     vscode.commands.registerCommand('kotlin-nav.reindex', async () => {
       statusBar.text    = '$(sync~spin) Kotlin Nav: re-indexing…';
       statusBar.tooltip = 'Kotlin Nav is rebuilding the symbol index';

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { SymbolIndex } from './SymbolIndex';
 import { SymbolKind } from './KotlinParser';
 
-const SNAPSHOT_VERSION = 2;
+const SNAPSHOT_VERSION = 4;
 const SNAPSHOT_FILENAME = 'kotlin-nav-index.json';
 
 // Compact per-file format — FQN is reconstructed as pkg+"."+name on restore
@@ -17,6 +17,7 @@ interface SnapshotFile {
   c: number[];  // characters
   i: number[];  // isComposable (0/1)
   d: number[];  // depth (brace nesting level)
+  at?: Record<number, string>; // alias targets — sparse map: index → rhs string (typealias only)
 }
 
 interface Snapshot {
@@ -54,14 +55,15 @@ export async function save(
       n: [], k: [], l: [], c: [], i: [], d: [],
     };
 
-    for (const e of entries) {
+    entries.forEach((e, idx) => {
       sf.n.push(e.name);
       sf.k.push(e.kind);
       sf.l.push(e.line);
       sf.c.push(e.character);
       sf.i.push(e.isComposable ? 1 : 0);
       sf.d.push(e.depth);
-    }
+      if (e.aliasTarget) { sf.at = sf.at ?? {}; sf.at[idx] = e.aliasTarget; }
+    });
 
     snap.files[uriStr] = sf;
   }
@@ -135,21 +137,43 @@ export async function checkStaleness(
 
 // ── Restore (no I/O — just populate the index from snapshot data) ─────────────
 
+// Class-like kinds that form the FQN chain (must match SymbolIndex.CLASS_LIKE)
+const RESTORE_CLASS_LIKE = new Set([
+  'class', 'dataClass', 'sealedClass', 'enum', 'object', 'interface', 'annotation',
+]);
+
 export function restore(snapshot: Snapshot, index: SymbolIndex): void {
   for (const [uriStr, sf] of Object.entries(snapshot.files)) {
     const uri = vscode.Uri.parse(uriStr);
-    const symbols = sf.n.map((name, i) => ({
-      name,
-      fqn:          sf.p ? `${sf.p}.${name}` : name,
-      kind:         sf.k[i] as SymbolKind,
-      uri,
-      line:         sf.l[i],
-      character:    sf.c[i],
-      packageName:  sf.p,
-      isComposable: sf.i[i] === 1,
-      depth:        sf.d[i] ?? 0,
-      moduleName:   sf.m,
-    }));
+    const classStack: { name: string; depth: number }[] = [];
+
+    const symbols = sf.n.map((name, i) => {
+      const depth = sf.d[i] ?? 0;
+      const kind  = sf.k[i] as SymbolKind;
+
+      // Mirror the classStack logic in SymbolIndex.add()
+      while (classStack.length > 0 && classStack[classStack.length - 1].depth >= depth) {
+        classStack.pop();
+      }
+      const qualifiers = classStack.map(s => s.name);
+      const parts = sf.p ? [sf.p, ...qualifiers, name] : [...qualifiers, name];
+      const fqn = parts.join('.');
+      if (RESTORE_CLASS_LIKE.has(kind)) classStack.push({ name, depth });
+
+      return {
+        name,
+        fqn,
+        kind,
+        uri,
+        line:         sf.l[i],
+        character:    sf.c[i],
+        packageName:  sf.p,
+        isComposable: sf.i[i] === 1,
+        depth,
+        moduleName:   sf.m,
+        aliasTarget:  sf.at?.[i],
+      };
+    });
 
     index.restoreFile(uriStr, symbols);
   }

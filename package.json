@@ -18,8 +18,22 @@
         "command": "kotlin-nav.reindex",
         "title": "Kotlin Nav: Re-index workspace",
         "category": "Kotlin Nav"
+      },
+      {
+        "command": "kotlin-nav.copyFqn",
+        "title": "Kotlin Nav: Copy FQN",
+        "category": "Kotlin Nav"
       }
     ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "kotlin-nav.copyFqn",
+          "when": "editorLangId == kotlin",
+          "group": "navigation@9"
+        }
+      ]
+    },
     "languages": [
       {
         "id": "kotlin",

@@ -1,0 +1,243 @@
+// No vscode import — this module runs in Node.js worker threads too
+
+export type SymbolKind =
+  | 'class' | 'interface' | 'object' | 'enum'
+  | 'dataClass' | 'sealedClass' | 'annotation'
+  | 'fun' | 'composable'
+  | 'val' | 'var'
+  | 'typealias';
+
+export interface RawSymbol {
+  name: string;
+  kind: SymbolKind;
+  line: number;
+  character: number;
+  isComposable: boolean;
+  depth: number;  // braceDepth at declaration — used for outline hierarchy
+}
+
+export interface ParsedFile {
+  uriString: string;   // vscode.Uri.toString() — no vscode dep needed
+  packageName: string;
+  imports: string[];
+  symbols: RawSymbol[];
+}
+
+// ── All regexes compiled ONCE at module load ─────────────────────────────────
+const RE_PACKAGE    = /^\s*package\s+([\w.]+)/;
+const RE_IMPORT     = /^\s*import\s+([\w.*]+)/;
+const RE_COMPOSABLE = /@Composable\b/;
+const RE_CLASS      = /^\s*(?:(?:public|private|internal|protected|open|abstract|inner|sealed|data|annotation|enum|actual|expect)\s+)*?(data\s+class|sealed\s+class|sealed\s+interface|enum\s+class|annotation\s+class|class|interface|object)\s+(\w+)/;
+// After optional generics, allow an optional `ReceiverType.` prefix so that
+// `fun Modifier.kioskBackground()` captures "kioskBackground", not "Modifier".
+// Handles: simple (Modifier.), nullable (Modifier?.), generic (List<T>.), qualified (Modifier.Companion.)
+const RE_FUN        = /^\s*(?:(?:public|private|protected|internal|override|actual|expect|suspend|inline|noinline|crossinline|infix|operator|tailrec|external)\s+)*fun\s+(?:<[^>]*>\s+)?(?:(?:\w+(?:<[^<>]*>)?[?]?\.)+)?(\w+)\s*[(<]/;
+const RE_PROP       = /^\s*(?:(?:public|private|protected|internal|override|open|abstract|actual|expect|lateinit|const)\s+)*(val|var)\s+(\w+)\s*[=:(<]/;
+const RE_TYPEALIAS  = /^\s*(?:(?:public|private|internal|actual)\s+)?typealias\s+(\w+)/;
+const RE_ENUM_ENTRY = /^\s*([A-Z][A-Z0-9_]*)(?:\s*[,(;({]|$)/;
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function parse(uriString: string, text: string): ParsedFile {
+  const symbols: RawSymbol[] = [];
+  let packageName = '';
+  const imports: string[] = [];
+
+  let inBlockComment = false;
+  let braceDepth     = 0;
+  let parenDepth     = 0; // tracks ( ) so constructor params are not mistaken for class members
+  let enumBraceDepth = -1; // -1 = not inside an enum body
+
+  // 3-line sliding window for @Composable detection before fun
+  const annotationWindow: string[] = [];
+
+  const len = text.length;
+  let pos     = 0;
+  let lineNum = 0;
+
+  while (pos < len) {
+    // ── Find line boundaries without allocating an array ───────────────────
+    let nl = text.indexOf('\n', pos);
+    if (nl === -1) nl = len;
+
+    // ── Fast skip: truly empty line ────────────────────────────────────────
+    if (nl === pos) { pos = nl + 1; lineNum++; continue; }
+
+    // ── Find first non-whitespace offset ──────────────────────────────────
+    let fns = pos;
+    while (fns < nl && (text[fns] === ' ' || text[fns] === '\t')) fns++;
+
+    if (fns >= nl) { pos = nl + 1; lineNum++; continue; } // blank line
+
+    const fc  = text[fns];
+    const fc1 = fns + 1 < nl ? text[fns + 1] : '';
+
+    // ── Fast skip: line comment ────────────────────────────────────────────
+    if (fc === '/' && fc1 === '/') { pos = nl + 1; lineNum++; continue; }
+
+    // ── Block comment open ─────────────────────────────────────────────────
+    if (fc === '/' && fc1 === '*') {
+      if (text.indexOf('*/', fns + 2) === -1) inBlockComment = true;
+      // count braces/parens even in single-line block comment lines
+      [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
+      if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+      pos = nl + 1; lineNum++; continue;
+    }
+
+    // ── Inside block comment ───────────────────────────────────────────────
+    if (inBlockComment) {
+      const close = text.indexOf('*/', pos);
+      if (close !== -1 && close < nl) inBlockComment = false;
+      pos = nl + 1; lineNum++; continue;
+    }
+
+    // ── O(1) first-char pre-filter — skip lines that can't be declarations ─
+    // Exception: when we are exactly at enum-entry depth, uppercase lines must
+    // pass through so RE_ENUM_ENTRY can match CONNECTED, OFFLINE, RED, etc.
+    const atEnumEntryDepth = enumBraceDepth !== -1 && braceDepth === enumBraceDepth + 1;
+    if (!DECL_START[fc] && !atEnumEntryDepth) {
+      [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
+      if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+      if (fc !== '@') annotationWindow.length = 0;
+      pos = nl + 1; lineNum++; continue;
+    }
+
+    // ── Lazy slice — only allocate when we need regex ─────────────────────
+    const raw = text.slice(pos, nl);
+
+    // ── Package ────────────────────────────────────────────────────────────
+    if (!packageName && fc === 'p') {
+      const m = RE_PACKAGE.exec(raw);
+      if (m) { packageName = m[1]; pos = nl + 1; lineNum++; continue; }
+    }
+
+    // ── Imports ────────────────────────────────────────────────────────────
+    if (fc === 'i' && raw.charCodeAt(fns - pos + 1) === 109 /* 'm' */) {
+      const m = RE_IMPORT.exec(raw);
+      if (m) { imports.push(m[1]); pos = nl + 1; lineNum++; continue; }
+    }
+
+    // ── Class-like declarations ────────────────────────────────────────────
+    const cm = RE_CLASS.exec(raw);
+    if (cm) {
+      const keyword = cm[1].replace(/\s+/g, ' ');
+      const name    = cm[2];
+      const kind    = toClassKind(keyword);
+
+      symbols.push({ name, kind, line: lineNum, character: raw.indexOf(name, cm.index), isComposable: false, depth: braceDepth });
+
+      if (kind === 'enum') enumBraceDepth = braceDepth;
+
+      [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
+      if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+      annotationWindow.length = 0;
+      pos = nl + 1; lineNum++; continue;
+    }
+
+    // ── Enum entries ───────────────────────────────────────────────────────
+    if (enumBraceDepth !== -1 && braceDepth === enumBraceDepth + 1) {
+      const em = RE_ENUM_ENTRY.exec(raw);
+      if (em) {
+        symbols.push({ name: em[1], kind: 'enum', line: lineNum, character: raw.indexOf(em[1]), isComposable: false, depth: braceDepth });
+        [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
+        if (braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+        pos = nl + 1; lineNum++; continue;
+      }
+    }
+
+    // ── Functions ──────────────────────────────────────────────────────────
+    const fm = RE_FUN.exec(raw);
+    if (fm) {
+      const isComposable = annotationWindow.some(l => RE_COMPOSABLE.test(l));
+      symbols.push({
+        name: fm[1],
+        kind: isComposable ? 'composable' : 'fun',
+        line: lineNum,
+        character: raw.indexOf(fm[1], fm.index),
+        isComposable,
+        depth: braceDepth,
+      });
+      [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
+      if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+      annotationWindow.length = 0;
+      pos = nl + 1; lineNum++; continue;
+    }
+
+    // ── Properties — skip when inside (...) so constructor params are not indexed ──
+    const pm = RE_PROP.exec(raw);
+    if (pm && parenDepth === 0) {
+      symbols.push({
+        name: pm[2],
+        kind: pm[1] === 'val' ? 'val' : 'var',
+        line: lineNum,
+        character: raw.indexOf(pm[2], pm.index),
+        isComposable: false,
+        depth: braceDepth,
+      });
+      [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
+      if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+      annotationWindow.length = 0;
+      pos = nl + 1; lineNum++; continue;
+    }
+
+    // ── Typealias ──────────────────────────────────────────────────────────
+    const ta = RE_TYPEALIAS.exec(raw);
+    if (ta) {
+      symbols.push({ name: ta[1], kind: 'typealias', line: lineNum, character: raw.indexOf(ta[1], ta.index), isComposable: false, depth: braceDepth });
+      [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
+      if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+      annotationWindow.length = 0;
+      pos = nl + 1; lineNum++; continue;
+    }
+
+    // ── Annotation window update ────────────────────────────────────────────
+    if (fc === '@') {
+      if (annotationWindow.length >= 3) annotationWindow.shift();
+      annotationWindow.push(raw.trimStart());
+    } else {
+      annotationWindow.length = 0;
+    }
+
+    [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
+    if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+    pos = nl + 1;
+    lineNum++;
+  }
+
+  return { uriString, packageName, imports, symbols };
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+// Count { } and ( ) in text[start..end) — operates on original text, no slice
+function countDepth(
+  text: string, start: number, end: number, braces: number, parens: number,
+): [number, number] {
+  for (let i = start; i < end; i++) {
+    const c = text[i];
+    if      (c === '{') braces++;
+    else if (c === '}') braces--;
+    else if (c === '(') parens++;
+    else if (c === ')') parens--;
+  }
+  return [braces, parens];
+}
+
+// O(1) lookup table — true means the character can start a Kotlin declaration
+// Covers: @ a c d e f i l o p s t v (and uppercase for enum entries handled separately)
+const DECL_START: Record<string, boolean> = Object.fromEntries(
+  '@acdefilopstv'.split('').map(c => [c, true])
+);
+
+function toClassKind(keyword: string): SymbolKind {
+  switch (keyword) {
+    case 'data class':       return 'dataClass';
+    case 'sealed class':
+    case 'sealed interface': return 'sealedClass';
+    case 'enum class':       return 'enum';
+    case 'annotation class': return 'annotation';
+    case 'interface':        return 'interface';
+    case 'object':           return 'object';
+    default:                 return 'class';
+  }
+}

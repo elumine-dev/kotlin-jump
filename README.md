@@ -153,7 +153,7 @@ Search **“Kotlin Jump”** in VS Code (`Cmd+Shift+X`)
 ### VSIX
 
 ```bash
-code --install-extension kotlin-jump-0.1.0.vsix
+code --install-extension kotlin-jump-0.2.0.vsix
 ```
 
 ---
@@ -163,8 +163,8 @@ code --install-extension kotlin-jump-0.1.0.vsix
 ```bash
 git clone https://github.com/elumine-dev/kotlin-jump
 cd kotlin-jump && npm install
-node esbuild.js --production && vsce package --no-dependencies
-code --install-extension kotlin-jump-0.1.0.vsix
+node esbuild.js --production && npx @vscode/vsce package --no-dependencies
+code --install-extension kotlin-jump-0.2.0.vsix
 ```
 
 ---

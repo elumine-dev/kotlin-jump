@@ -5,8 +5,13 @@ test/**
 doc/**
 .gitignore
 .vscodeignore
+.publish
+.vscode-test.mjs
 tsconfig.json
+vitest.config.ts
 esbuild.js
+publish.sh
+.husky/**
 **/*.map
 *.vsix
 node_modules/**
@@ -14,6 +19,6 @@ media/logo-*.png
 media/logo.svg
 media/icon-v1.*
 media/icon.svg
-media/find-usages.svg
 media/README.txt
+media/Demo.gif
 media/Demo-original.gif

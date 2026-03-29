@@ -8,14 +8,14 @@
   "icon": "media/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/KevinDoremy/kotlin-nav"
+    "url": "https://github.com/elumine-dev/kotlin-nav"
   },
   "homepage": "https://elumine.ca",
   "bugs": {
-    "url": "https://github.com/KevinDoremy/kotlin-nav/issues"
+    "url": "https://github.com/elumine-dev/kotlin-nav/issues"
   },
   "sponsor": {
-    "url": "https://github.com/sponsors/KevinDoremy"
+    "url": "https://github.com/sponsors/elumine-dev"
   },
   "engines": {
     "vscode": "^1.85.0"

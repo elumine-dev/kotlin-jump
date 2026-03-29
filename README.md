@@ -78,7 +78,7 @@ code --install-extension kotlin-nav-0.1.0.vsix
 
 **Build from source:**
 ```bash
-git clone https://github.com/KevinDoremy/kotlin-nav
+git clone https://github.com/elumine-dev/kotlin-nav
 cd kotlin-nav && npm install
 node esbuild.js --production && vsce package --no-dependencies
 code --install-extension kotlin-nav-0.1.0.vsix
@@ -107,7 +107,7 @@ No language server. No compiler. No JVM. Just fast lookups.
 
 - [Full Guide](doc/full-guide.md) — detailed docs for every feature, shortcut, and configuration
 - [Changelog](CHANGELOG.md)
-- [GitHub Issues](https://github.com/KevinDoremy/kotlin-nav/issues)
+- [GitHub Issues](https://github.com/elumine-dev/kotlin-nav/issues)
 - [elumine.ca](https://elumine.ca)
 
 *Managed by [elumine.ca](https://elumine.ca)*

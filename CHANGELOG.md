@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0
+
+Release polish for the Kotlin Jump rename and packaging flow.
+
+### Packaging and docs
+- Added the Find Usages panel icon asset to the packaged extension
+- Updated README install commands to the current `0.2.0` VSIX name
+- Trimmed non-runtime files from the published VSIX
+- Refreshed launch and marketing docs to use the Kotlin Jump branding and current links
+
 ## 0.1.0
 
 Initial release.

@@ -1,0 +1,507 @@
+#!/bin/bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT_DIR"
+
+VERSION="$(node -p "require('./package.json').version")"
+MODEL="${CLAUDE_PUBLISH_MODEL:-sonnet}"
+MAX_BUDGET_USD="${CLAUDE_PUBLISH_MAX_BUDGET_USD:-1}"
+BASE_REF=""
+VERSION_ARG=""
+DRY_RUN=0
+NOTES_ONLY=0
+SKIP_NOTES=0
+STAGE=0
+COMMIT=0
+TAG=0
+PUSH=0
+
+usage() {
+  cat <<'EOF'
+Usage: ./.publish [options]
+
+Prepare a release with deterministic verification and Claude-assisted changelog drafting.
+
+Options:
+  --version <x.y.z>  Use this version for the release; writes package.json unless --dry-run is used
+  --base <git-ref>   Compare against this ref instead of auto-detecting
+  --dry-run          Print the generated changelog section without writing it
+  --notes-only       Update CHANGELOG.md only; skip tests/build/package
+  --skip-notes       Skip Claude changelog drafting and only run verification/package
+  --stage            Stage current changes with git add -A
+  --commit           Stage current changes if needed, then create the release commit
+  --tag              Create git tag v<version>; implies --commit
+  --push             Push current branch and tags to origin; implies --tag
+  --model <model>    Claude model alias or full model name (default: sonnet)
+  -h, --help         Show this help
+
+Environment:
+  CLAUDE_PUBLISH_MODEL            Override the Claude model
+  CLAUDE_PUBLISH_MAX_BUDGET_USD   Max Claude spend for the drafting step (default: 1)
+
+Most explicit workflow:
+  # 1. Preview release notes only
+  ./.publish --dry-run --notes-only --version 0.2.1
+
+  # 2. Write CHANGELOG.md and set package.json version
+  ./.publish --notes-only --version 0.2.1
+
+  # 3. Run tests, build, and create the VSIX without changing git state
+  ./.publish --skip-notes
+
+  # 4. Review and finish the release manually
+  git status
+  git diff
+  git add -A
+  git commit -m "chore: prepare v0.2.1 release"
+  git tag v0.2.1
+  git push origin <branch> --tags
+
+Fast workflow:
+  ./.publish --version 0.2.1 --tag
+
+Fastest workflow:
+  ./.publish --version 0.2.1 --push
+
+When to use each:
+  --dry-run --notes-only = preview release notes only
+  --notes-only = write release notes only
+  --skip-notes = verify/build/package without rewriting notes
+  --version = set the release version
+  --commit = prepare + commit
+  --tag = prepare + commit + tag
+  --push = prepare + commit + tag + push
+
+Useful examples:
+  ./.publish --base v0.2.0 --dry-run --notes-only
+      Preview notes using a specific release base
+
+  ./.publish --version 0.2.1 --commit
+      Set the version, write notes, verify/package, and create the release commit
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --version)
+      VERSION_ARG="${2:-}"
+      shift 2
+      ;;
+    --base)
+      BASE_REF="${2:-}"
+      shift 2
+      ;;
+    --dry-run)
+      DRY_RUN=1
+      shift
+      ;;
+    --notes-only)
+      NOTES_ONLY=1
+      shift
+      ;;
+    --skip-notes)
+      SKIP_NOTES=1
+      shift
+      ;;
+    --stage)
+      STAGE=1
+      shift
+      ;;
+    --commit)
+      COMMIT=1
+      shift
+      ;;
+    --tag)
+      TAG=1
+      shift
+      ;;
+    --push)
+      PUSH=1
+      shift
+      ;;
+    --model)
+      MODEL="${2:-}"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+done
+
+need_cmd() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "Missing required command: $1" >&2
+    exit 1
+  fi
+}
+
+need_cmd git
+need_cmd node
+
+if [[ "$PUSH" -eq 1 ]]; then
+  TAG=1
+fi
+if [[ "$TAG" -eq 1 ]]; then
+  COMMIT=1
+fi
+if [[ "$COMMIT" -eq 1 ]]; then
+  STAGE=1
+fi
+
+if [[ "$DRY_RUN" -eq 1 && ( "$STAGE" -eq 1 || "$COMMIT" -eq 1 || "$TAG" -eq 1 || "$PUSH" -eq 1 ) ]]; then
+  echo "--dry-run cannot be combined with --stage, --commit, --tag, or --push." >&2
+  exit 1
+fi
+
+if [[ "$SKIP_NOTES" -eq 1 && "$NOTES_ONLY" -eq 1 ]]; then
+  echo "--skip-notes and --notes-only do not make sense together." >&2
+  exit 1
+fi
+
+validate_version() {
+  local version="$1"
+  if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+    echo "Invalid version: $version" >&2
+    exit 1
+  fi
+}
+
+set_package_version() {
+  local next_version="$1"
+  node - "$next_version" <<'NODE'
+const fs = require('fs');
+const path = 'package.json';
+const nextVersion = process.argv[2];
+const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
+pkg.version = nextVersion;
+fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
+NODE
+}
+
+if [[ -n "$VERSION_ARG" ]]; then
+  validate_version "$VERSION_ARG"
+  VERSION="$VERSION_ARG"
+  if [[ "$DRY_RUN" -eq 0 ]]; then
+    set_package_version "$VERSION_ARG"
+  fi
+fi
+
+infer_base_ref() {
+  if [[ -n "$BASE_REF" ]]; then
+    printf '%s\n' "$BASE_REF"
+    return
+  fi
+
+  local tag
+  tag="$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)"
+  if [[ -n "$tag" ]]; then
+    printf '%s\n' "$tag"
+    return
+  fi
+
+  printf '%s\n' "HEAD"
+}
+
+BASE_REF="$(infer_base_ref)"
+
+if ! git rev-parse --verify "$BASE_REF" >/dev/null 2>&1; then
+  echo "Invalid base ref: $BASE_REF" >&2
+  exit 1
+fi
+
+WORK_DIR="$(mktemp -d)"
+trap 'rm -rf "$WORK_DIR"' EXIT
+
+COMMIT_RANGE_FILE="$WORK_DIR/commit-range.txt"
+WORKTREE_FILE="$WORK_DIR/worktree.txt"
+PROMPT_FILE="$WORK_DIR/prompt.txt"
+RAW_AI_FILE="$WORK_DIR/claude-raw.json"
+STRUCTURED_FILE="$WORK_DIR/claude-structured.json"
+SECTION_FILE="$WORK_DIR/changelog-section.md"
+
+build_context() {
+  {
+    echo "Version: $VERSION"
+    echo "Base ref: $BASE_REF"
+    echo
+    if [[ "$BASE_REF" == "HEAD" ]]; then
+      echo "Release scope: working tree changes only."
+      echo "Reason: no prior semver tag was found automatically."
+    else
+      echo "Release scope: committed changes since $BASE_REF plus current worktree changes."
+    fi
+    echo
+    echo "Repository:"
+    node - <<'NODE'
+const pkg = require('./package.json');
+const summary = {
+  name: pkg.name,
+  displayName: pkg.displayName,
+  description: pkg.description,
+  version: pkg.version,
+  commands: (pkg.contributes?.commands ?? []).map(c => c.command),
+  settings: Object.keys(pkg.contributes?.configuration?.properties ?? {}),
+};
+console.log(JSON.stringify(summary, null, 2));
+NODE
+    echo
+    echo "Commits in scope:"
+    if [[ "$BASE_REF" == "HEAD" ]]; then
+      echo "- none (worktree-only mode)"
+    else
+      git log --no-merges --format='- %h %s' "$BASE_REF..HEAD" || true
+    fi
+    echo
+    echo "Committed diff stat in scope:"
+    if [[ "$BASE_REF" == "HEAD" ]]; then
+      echo "(none)"
+    else
+      git diff --stat "$BASE_REF..HEAD" || true
+    fi
+    echo
+    echo "Committed changed files in scope:"
+    if [[ "$BASE_REF" == "HEAD" ]]; then
+      echo "(none)"
+    else
+      git diff --name-status "$BASE_REF..HEAD" || true
+    fi
+    echo
+    echo "Current worktree status:"
+    git status --short --untracked-files=all || true
+    echo
+    echo "Current staged diff stat:"
+    git diff --cached --stat || true
+    echo
+    echo "Current unstaged diff stat:"
+    git diff --stat || true
+    echo
+    echo "Current tracked diff patch:"
+    git diff -- package.json CHANGELOG.md README.md .vscodeignore publish.sh .publish media/find-usages.svg || true
+    echo
+    echo "Current top of CHANGELOG.md:"
+    sed -n '1,80p' CHANGELOG.md
+  } > "$COMMIT_RANGE_FILE"
+}
+
+render_prompt() {
+  cat > "$PROMPT_FILE" <<EOF
+You are writing release notes for a VS Code extension.
+
+Rules:
+- Use only the facts supplied below.
+- Do not invent features, fixes, metrics, files, or links.
+- Prefer the repository's existing changelog style over generic marketing copy.
+- Keep it concise, concrete, and useful to users.
+- Prefer section headings from this set when they fit: Navigation, Editor features, Performance, Packaging and docs, Fixes.
+- Use at most 4 sections.
+- Each bullet must stand on its own and start with a verb in past tense or present tense.
+- Mention only changes that are actually evidenced by the supplied git/context data.
+- If the changes are small, use a single section.
+
+Return structured JSON with:
+- summary: one short sentence
+- sections: array of objects with:
+  - heading: short title case heading
+  - bullets: 1-5 bullets
+
+Context:
+
+$(cat "$COMMIT_RANGE_FILE")
+EOF
+}
+
+extract_structured_output() {
+  node - "$RAW_AI_FILE" "$STRUCTURED_FILE" <<'NODE'
+const fs = require('fs');
+const [rawPath, outPath] = process.argv.slice(2);
+const raw = fs.readFileSync(rawPath, 'utf8').trim();
+let parsed = JSON.parse(raw);
+let structured = parsed?.structured_output;
+if (!structured && Array.isArray(parsed)) {
+  for (let i = parsed.length - 1; i >= 0; i--) {
+    const item = parsed[i];
+    if (item && item.structured_output) {
+      structured = item.structured_output;
+      break;
+    }
+  }
+}
+if (!structured) {
+  throw new Error('Claude output did not contain structured_output');
+}
+fs.writeFileSync(outPath, JSON.stringify(structured, null, 2));
+NODE
+}
+
+render_markdown_section() {
+  node - "$VERSION" "$STRUCTURED_FILE" "$SECTION_FILE" <<'NODE'
+const fs = require('fs');
+const [version, jsonPath, outPath] = process.argv.slice(2);
+const data = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+const lines = [`## ${version}`, '', data.summary.trim(), ''];
+for (const section of data.sections) {
+  if (!section || !section.heading || !Array.isArray(section.bullets) || section.bullets.length === 0) {
+    continue;
+  }
+  lines.push(`### ${section.heading.trim()}`);
+  for (const bullet of section.bullets) {
+    const text = String(bullet).trim();
+    if (text) lines.push(`- ${text}`);
+  }
+  lines.push('');
+}
+fs.writeFileSync(outPath, `${lines.join('\n').trimEnd()}\n`);
+NODE
+}
+
+update_changelog() {
+  node - "$VERSION" "$SECTION_FILE" <<'NODE'
+const fs = require('fs');
+const [version, sectionPath] = process.argv.slice(2);
+const path = 'CHANGELOG.md';
+const section = fs.readFileSync(sectionPath, 'utf8').trimEnd();
+const text = fs.readFileSync(path, 'utf8');
+const heading = `## ${version}`;
+const escaped = version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const re = new RegExp(`## ${escaped}[\\s\\S]*?(?=\\n## \\d+\\.\\d+\\.\\d+|$)`, 'm');
+let next;
+if (re.test(text)) {
+  next = text.replace(re, section);
+} else {
+  next = text.replace(/^# Changelog\s*\n+/m, `# Changelog\n\n${section}\n\n`);
+}
+fs.writeFileSync(path, next.endsWith('\n') ? next : `${next}\n`);
+NODE
+}
+
+draft_notes() {
+  need_cmd claude
+
+  build_context
+  render_prompt
+
+  claude -p \
+    --model "$MODEL" \
+    --max-budget-usd "$MAX_BUDGET_USD" \
+    --output-format json \
+    --json-schema '{"type":"object","properties":{"summary":{"type":"string"},"sections":{"type":"array","items":{"type":"object","properties":{"heading":{"type":"string"},"bullets":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":5}},"required":["heading","bullets"],"additionalProperties":false},"minItems":1,"maxItems":4}},"required":["summary","sections"],"additionalProperties":false}' \
+    < "$PROMPT_FILE" > "$RAW_AI_FILE"
+
+  extract_structured_output
+  render_markdown_section
+
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    cat "$SECTION_FILE"
+    return
+  fi
+
+  update_changelog
+  echo "Updated CHANGELOG.md for $VERSION using Claude ($MODEL)."
+  if [[ "$BASE_REF" == "HEAD" ]]; then
+    echo "No prior semver tag was found, so the draft used worktree changes only."
+    echo "Use ./.publish --base <git-ref> if you want release notes over a wider range."
+  fi
+}
+
+verify_release() {
+  echo "Running tests..."
+  npm test
+
+  echo "Building production..."
+  node esbuild.js --production
+
+  echo "Packaging..."
+  npx @vscode/vsce package --no-dependencies
+}
+
+stage_release_changes() {
+  echo "Staging current repo changes..."
+  git add -A
+}
+
+commit_release() {
+  local commit_message="chore: prepare v$VERSION release"
+  if git diff --cached --quiet; then
+    echo "No staged changes to commit. Skipping commit."
+    return
+  fi
+
+  echo "Creating release commit..."
+  git commit -m "$commit_message"
+}
+
+create_release_tag() {
+  local tag_name="v$VERSION"
+  if git rev-parse -q --verify "refs/tags/$tag_name" >/dev/null 2>&1; then
+    echo "Tag already exists: $tag_name" >&2
+    exit 1
+  fi
+
+  echo "Creating git tag $tag_name..."
+  git tag "$tag_name"
+}
+
+push_release() {
+  local branch
+  branch="$(git branch --show-current)"
+  if [[ -z "$branch" ]]; then
+    echo "Cannot push from detached HEAD." >&2
+    exit 1
+  fi
+
+  echo "Pushing $branch and tags to origin..."
+  git push origin "$branch" --tags
+}
+
+if [[ "$SKIP_NOTES" -eq 0 ]]; then
+  draft_notes
+fi
+
+if [[ "$NOTES_ONLY" -eq 0 && "$DRY_RUN" -eq 0 ]]; then
+  verify_release
+fi
+
+if [[ "$DRY_RUN" -eq 0 && "$STAGE" -eq 1 ]]; then
+  stage_release_changes
+fi
+
+if [[ "$DRY_RUN" -eq 0 && "$COMMIT" -eq 1 ]]; then
+  commit_release
+fi
+
+if [[ "$DRY_RUN" -eq 0 && "$TAG" -eq 1 ]]; then
+  create_release_tag
+fi
+
+if [[ "$DRY_RUN" -eq 0 && "$PUSH" -eq 1 ]]; then
+  push_release
+fi
+
+if [[ "$NOTES_ONLY" -eq 0 && "$DRY_RUN" -eq 0 && "$PUSH" -eq 0 ]]; then
+  current_branch="$(git branch --show-current || true)"
+  echo
+  echo "Release prep complete for v$VERSION."
+  echo "Next:"
+  if [[ "$STAGE" -eq 0 ]]; then
+    echo "  git add -A"
+  fi
+  if [[ "$COMMIT" -eq 0 ]]; then
+    echo "  git commit -m \"chore: prepare v$VERSION release\""
+  fi
+  if [[ "$TAG" -eq 0 ]]; then
+    echo "  git tag v$VERSION"
+  fi
+  if [[ -n "${current_branch:-}" ]]; then
+    echo "  git push origin $current_branch --tags"
+  else
+    echo "  git push origin <branch> --tags"
+  fi
+fi

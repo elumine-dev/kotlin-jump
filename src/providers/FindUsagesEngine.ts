@@ -87,7 +87,7 @@ export function fileCouldReference(text: string, target: SymbolEntry): boolean {
   const { fqn, packageName: pkg } = target;
   if (pkg) {
     // Check only the header (package declaration is always in the first ~512 chars)
-    // Use a word-boundary suffix to avoid matching sub-packages (kiosk vs kiosk.composable)
+    // Use a word-boundary suffix to avoid matching sub-packages (app vs app.feature)
     if (new RegExp(`\\bpackage\\s+${escapeRegex(pkg)}(?:[\\s;]|$)`).test(text.slice(0, 512))) return true;
   }
   if (text.includes(`import ${fqn}`)) return true;

@@ -328,7 +328,7 @@ export class SymbolIndex {
 
 const EMPTY: SymbolEntry[] = [];
 
-// Sequential character match: "KS" matches "KioskScreen".
+// Sequential character match: "UR" matches "UserRepository".
 // Bonuses for consecutive chars and word-boundary starts.
 function fuzzyScore(queryLower: string, nameLower: string): number {
   let qi = 0, score = 0, prevMatch = -2;

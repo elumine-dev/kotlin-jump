@@ -10,7 +10,7 @@ export interface FileNode {
   readonly nodeKind: 'file';
   readonly uri: vscode.Uri;
   readonly fileKind: FileKind;
-  readonly label: string;    // basename e.g. "KioskViewModel.kt"
+  readonly label: string;    // basename e.g. "UserViewModel.kt"
   readonly usages: UsageNode[];
 }
 

@@ -17,7 +17,7 @@ const KIND: Record<KtKind, vscode.SymbolKind> = {
   typealias:   vscode.SymbolKind.TypeParameter,
 };
 
-// ── Kind filter syntax: @tag[:name]  e.g. "@class:kiosk", "@fun:connect", "@enum:" ──
+// ── Kind filter syntax: @tag[:name]  e.g. "@class:user", "@fun:connect", "@enum:" ──
 //
 // Supported tags:
 //   @class      class / data class / sealed class / annotation class

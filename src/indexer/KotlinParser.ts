@@ -14,7 +14,7 @@ export interface RawSymbol {
   character: number;
   isComposable: boolean;
   depth: number;       // braceDepth at declaration — used for outline hierarchy
-  aliasTarget?: string; // raw rhs of typealias, e.g. "List<KioskEdition>"
+  aliasTarget?: string; // raw rhs of typealias, e.g. "List<UserProfile>"
   supertypes?: string[]; // simple names of superclasses/interfaces, e.g. ["Bar", "Baz"]
 }
 
@@ -31,7 +31,7 @@ const RE_IMPORT     = /^\s*import\s+([\w.*]+)/;
 const RE_COMPOSABLE = /@Composable\b/;
 const RE_CLASS      = /^\s*(?:(?:public|private|internal|protected|open|abstract|inner|sealed|data|annotation|enum|actual|expect)\s+)*?(data\s+class|sealed\s+class|sealed\s+interface|enum\s+class|annotation\s+class|class|interface|object)\s+(\w+)/;
 // After optional generics, allow an optional `ReceiverType.` prefix so that
-// `fun Modifier.kioskBackground()` captures "kioskBackground", not "Modifier".
+// `fun Modifier.customBackground()` captures "customBackground", not "Modifier".
 // Handles: simple (Modifier.), nullable (Modifier?.), generic (List<T>.), qualified (Modifier.Companion.)
 const RE_FUN        = /^\s*(?:(?:public|private|protected|internal|override|actual|expect|suspend|inline|noinline|crossinline|infix|operator|tailrec|external)\s+)*fun\s+(?:<[^>]*>\s+)?(?:(?:\w+(?:<[^<>]*>)?[?]?\.)+)?(\w+)\s*[(<]/;
 const RE_PROP       = /^\s*(?:(?:public|private|protected|internal|override|open|abstract|actual|expect|lateinit|const)\s+)*(val|var)\s+(\w+)\s*[=:(<]/;

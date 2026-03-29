@@ -3,7 +3,7 @@ import { SymbolIndex } from '../indexer/SymbolIndex';
 import { resolve as resolveImports } from '../util/ImportResolver';
 
 const WORD_RE = /[A-Za-z_]\w*/;
-// Extracts all capitalised type names from an alias body like "List<KioskEdition>"
+// Extracts all capitalised type names from an alias body like "List<UserProfile>"
 const ALIAS_TYPE_RE = /\b([A-Z]\w+)\b/g;
 
 // Fallback used when kotlinNav.testSourceSets is not configured.

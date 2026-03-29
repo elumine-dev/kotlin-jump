@@ -18,6 +18,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Test
+        run: npm test
+
       - name: Build
         run: node esbuild.js --production
 

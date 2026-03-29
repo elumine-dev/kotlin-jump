@@ -3,12 +3,13 @@ import { SymbolIndex } from '../indexer/SymbolIndex';
 import { resolve as resolveImports } from '../util/ImportResolver';
 
 const WORD_RE = /[A-Za-z_]\w*/;
-// Extracts all capitalised type names from an alias body like "List<UserProfile>"
 const ALIAS_TYPE_RE = /\b([A-Z]\w+)\b/g;
-
-// Fallback used when kotlinJump.testSourceSets is not configured.
-// Covers standard Gradle source set layouts for unit tests and instrumented tests.
 const DEFAULT_TEST_SEGMENTS: string[] = [];
+
+// Shared state: set by provideDefinition, consumed by the selection listener in extension.ts
+let _pendingDeclNav: { uri: string; line: number; word: string } | undefined;
+export function getPendingDeclNav() { return _pendingDeclNav; }
+export function clearPendingDeclNav() { _pendingDeclNav = undefined; }
 
 export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
   constructor(private readonly index: SymbolIndex) {}
@@ -17,6 +18,7 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
     document: vscode.TextDocument,
     position: vscode.Position,
   ): vscode.ProviderResult<vscode.Definition | vscode.LocationLink[]> {
+    _pendingDeclNav = undefined; // clear stale state from previous hover/click
     const wordRange = document.getWordRangeAtPosition(position, WORD_RE);
     if (!wordRange) return null;
 
@@ -25,13 +27,7 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
 
     const cfg = vscode.workspace.getConfiguration('kotlinJump');
     const testSegments = cfg.get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS);
-    const smartNav     = cfg.get<boolean>('smartNavigation', true);
-    // true  → custom Find Usages panel (with filter buttons)
-    // false → built-in References panel (editor.action.goToReferences)
-    const usagesCmd = smartNav ? 'kotlin-jump.findUsages' : 'editor.action.goToReferences';
 
-    // When navigating from main source, never resolve into test paths.
-    // Prevents constructor parameter names matching mock fields in test files.
     const currentIsTest = isTestPath(document.uri.path, testSegments);
     const allow = (path: string) => currentIsTest || !isTestPath(path, testSegments);
 
@@ -44,9 +40,9 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
           let impls = this.implLocations(word, allow);
           if (impls.length === 0) impls = this.methodImplLocations(entry, allow);
           if (impls.length > 0) return impls;
-          const excl = { excludeUri: entry.uri.toString(), excludeLine: entry.line };
-          setTimeout(() => vscode.commands.executeCommand('kotlin-jump.findUsages', excl), 0);
-          return null;
+          // Mark for the selection listener — will fire Find Usages on actual click
+          _pendingDeclNav = { uri: entry.uri.toString(), line: entry.line, word };
+          return toLocation(entry);
         }
         return withAliasTargets(entry, this.index, allow);
       }
@@ -61,14 +57,11 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
       let impls = this.implLocations(word, allow);
       if (impls.length === 0) impls = this.methodImplLocations(declEntry, allow);
       if (impls.length > 0) return impls;
-      const excl = { excludeUri: declEntry.uri.toString(), excludeLine: declEntry.line };
-      setTimeout(() => vscode.commands.executeCommand('kotlin-jump.findUsages', excl), 0);
-      return null;
+      _pendingDeclNav = { uri: declEntry.uri.toString(), line: declEntry.line, word };
+      return toLocation(declEntry);
     }
 
     if (filtered.length === 1) return withAliasTargets(filtered[0], this.index, allow);
-
-    // Multiple definitions — return all so VS Code shows the Peek list
     return filtered.map(toLocation);
   }
 
@@ -90,11 +83,14 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
 }
 
 function isAtDeclaration(
-  entry: { uri: vscode.Uri; line: number },
+  entry: { uri: vscode.Uri; line: number; character: number; name: string },
   docUri: vscode.Uri,
   position: vscode.Position,
 ): boolean {
-  return entry.uri.toString() === docUri.toString() && entry.line === position.line;
+  return entry.uri.toString() === docUri.toString()
+    && entry.line === position.line
+    && position.character >= entry.character
+    && position.character < entry.character + entry.name.length;
 }
 
 function isTestPath(uriPath: string, segments: string[]): boolean {
@@ -105,8 +101,6 @@ function toLocation(e: { uri: vscode.Uri; line: number; character: number }): vs
   return new vscode.Location(e.uri, new vscode.Position(e.line, e.character));
 }
 
-// For a typealias, returns the declaration + all resolved alias-target locations.
-// For any other kind, returns just the declaration location.
 function withAliasTargets(
   entry: { uri: vscode.Uri; line: number; character: number; kind: string; aliasTarget?: string },
   index: import('../indexer/SymbolIndex').SymbolIndex,

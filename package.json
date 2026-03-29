@@ -1,22 +1,45 @@
 {
   "name": "kotlin-nav",
   "displayName": "Kotlin Nav",
-  "description": "Instant Go to Definition for Kotlin — regex-based, zero LSP overhead",
+  "description": "Fast Kotlin & Java navigation — Go to Definition, Find Usages, Go to Implementation. No language server needed.",
   "version": "0.1.0",
-  "publisher": "kotlin-nav",
+  "publisher": "elumine",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/KevinDoremy/kotlin-nav"
+  },
+  "homepage": "https://elumine.ca",
+  "bugs": {
+    "url": "https://github.com/KevinDoremy/kotlin-nav/issues"
+  },
+  "sponsor": {
+    "url": "https://github.com/sponsors/KevinDoremy"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
-    "Programming Languages"
+    "Programming Languages",
+    "Other"
   ],
   "keywords": [
     "kotlin",
+    "android",
     "navigation",
     "go to definition",
-    "android",
-    "compose"
+    "find usages",
+    "go to implementation",
+    "jetpack compose",
+    "java",
+    "gradle",
+    "intellij"
   ],
+  "galleryBanner": {
+    "color": "#7F52FF",
+    "theme": "dark"
+  },
   "activationEvents": [
     "onLanguage:kotlin",
     "workspaceContains:**/*.kt",

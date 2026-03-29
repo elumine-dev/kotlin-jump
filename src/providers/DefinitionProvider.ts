@@ -6,7 +6,7 @@ const WORD_RE = /[A-Za-z_]\w*/;
 // Extracts all capitalised type names from an alias body like "List<UserProfile>"
 const ALIAS_TYPE_RE = /\b([A-Z]\w+)\b/g;
 
-// Fallback used when kotlinNav.testSourceSets is not configured.
+// Fallback used when kotlinJump.testSourceSets is not configured.
 // Covers standard Gradle source set layouts for unit tests and instrumented tests.
 const DEFAULT_TEST_SEGMENTS: string[] = [];
 
@@ -23,12 +23,12 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
     const word = document.getText(wordRange);
     if (word.length < 2) return null;
 
-    const cfg = vscode.workspace.getConfiguration('kotlinNav');
+    const cfg = vscode.workspace.getConfiguration('kotlinJump');
     const testSegments = cfg.get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS);
     const smartNav     = cfg.get<boolean>('smartNavigation', true);
     // true  → custom Find Usages panel (with filter buttons)
     // false → built-in References panel (editor.action.goToReferences)
-    const usagesCmd = smartNav ? 'kotlin-nav.findUsages' : 'editor.action.goToReferences';
+    const usagesCmd = smartNav ? 'kotlin-jump.findUsages' : 'editor.action.goToReferences';
 
     // When navigating from main source, never resolve into test paths.
     // Prevents constructor parameter names matching mock fields in test files.
@@ -45,7 +45,7 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
           if (impls.length === 0) impls = this.methodImplLocations(entry, allow);
           if (impls.length > 0) return impls;
           const excl = { excludeUri: entry.uri.toString(), excludeLine: entry.line };
-          setTimeout(() => vscode.commands.executeCommand('kotlin-nav.findUsages', excl), 0);
+          setTimeout(() => vscode.commands.executeCommand('kotlin-jump.findUsages', excl), 0);
           return null;
         }
         return withAliasTargets(entry, this.index, allow);
@@ -62,7 +62,7 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
       if (impls.length === 0) impls = this.methodImplLocations(declEntry, allow);
       if (impls.length > 0) return impls;
       const excl = { excludeUri: declEntry.uri.toString(), excludeLine: declEntry.line };
-      setTimeout(() => vscode.commands.executeCommand('kotlin-nav.findUsages', excl), 0);
+      setTimeout(() => vscode.commands.executeCommand('kotlin-jump.findUsages', excl), 0);
       return null;
     }
 

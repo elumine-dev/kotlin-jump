@@ -24,29 +24,29 @@ let _stats:   Map<string, { mtime: number; size: number }> = new Map();
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   _context = context;
 
-  const log   = new Logger('Kotlin Nav');
+  const log   = new Logger('Kotlin Jump');
   const index = new SymbolIndex();
   _index = index;
 
   // ── Register providers FIRST — Cmd+Click works even during indexing ───────
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-  statusBar.text    = '$(sync~spin) Kotlin Nav: indexing…';
-  statusBar.tooltip = 'Kotlin Nav is building the symbol index';
+  statusBar.text    = '$(sync~spin) Kotlin Jump: indexing…';
+  statusBar.tooltip = 'Kotlin Jump is building the symbol index';
   statusBar.show();
 
   const KT_JAVA = [{ language: 'kotlin' }, { language: 'java' }];
 
   // ── Find Usages panel (tree view in the bottom panel area) ───────────────
   const usagesPanel = new FindUsagesPanel(index);
-  const usagesView  = vscode.window.createTreeView('kotlinNav.findUsages', {
+  const usagesView  = vscode.window.createTreeView('kotlinJump.findUsages', {
     treeDataProvider: usagesPanel,
     showCollapseAll:  true,
   });
   usagesPanel.attachTreeView(usagesView);
 
   // Initialise context keys so the toolbar icons show the correct state on first load
-  vscode.commands.executeCommand('setContext', 'kotlinNav.findUsages.showTests', true);
-  vscode.commands.executeCommand('setContext', 'kotlinNav.findUsages.showPreviews', true);
+  vscode.commands.executeCommand('setContext', 'kotlinJump.findUsages.showTests', true);
+  vscode.commands.executeCommand('setContext', 'kotlinJump.findUsages.showPreviews', true);
 
   context.subscriptions.push(
     log,
@@ -60,18 +60,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.languages.registerImplementationProvider(KT_JAVA, new KotlinImplementationProvider(index)),
     vscode.languages.registerWorkspaceSymbolProvider(new KotlinFileProvider(index)),
 
-    vscode.commands.registerCommand('kotlin-nav.findUsages', async (args?: { excludeUri?: string; excludeLine?: number }) => {
+    vscode.commands.registerCommand('kotlin-jump.findUsages', async (args?: { excludeUri?: string; excludeLine?: number }) => {
       const editor = vscode.window.activeTextEditor;
       if (!editor) return;
       const lang = editor.document.languageId;
       if (lang !== 'kotlin' && lang !== 'java') return;
-      const smartNav = vscode.workspace.getConfiguration('kotlinNav').get<boolean>('smartNavigation', true);
+      const smartNav = vscode.workspace.getConfiguration('kotlinJump').get<boolean>('smartNavigation', true);
       if (!smartNav && !args) {
         await vscode.commands.executeCommand('editor.action.goToReferences');
         return;
       }
       // Reveal the panel immediately so the user sees it open while the search runs
-      await vscode.commands.executeCommand('kotlinNav.findUsages.focus');
+      await vscode.commands.executeCommand('kotlinJump.findUsages.focus');
       const navigated = await usagesPanel.search(editor.document, editor.selection.active, args);
       if (navigated) {
         // Single result — panel not needed, refocus the editor
@@ -79,21 +79,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
     }),
 
-    vscode.commands.registerCommand('kotlin-nav.findUsages.toggleTests', () => {
+    vscode.commands.registerCommand('kotlin-jump.findUsages.toggleTests', () => {
       usagesPanel.toggleTests();
     }),
-    vscode.commands.registerCommand('kotlin-nav.findUsages.showTests', () => {
+    vscode.commands.registerCommand('kotlin-jump.findUsages.showTests', () => {
       usagesPanel.toggleTests();
     }),
 
-    vscode.commands.registerCommand('kotlin-nav.findUsages.togglePreviews', () => {
+    vscode.commands.registerCommand('kotlin-jump.findUsages.togglePreviews', () => {
       usagesPanel.togglePreviews();
     }),
-    vscode.commands.registerCommand('kotlin-nav.findUsages.showPreviews', () => {
+    vscode.commands.registerCommand('kotlin-jump.findUsages.showPreviews', () => {
       usagesPanel.togglePreviews();
     }),
 
-    vscode.commands.registerCommand('kotlin-nav.goToTest', async () => {
+    vscode.commands.registerCommand('kotlin-jump.goToTest', async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor) return;
       const uri = editor.document.uri;
@@ -150,7 +150,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   // ── Resolve Gradle modules and find all .kt files ─────────────────────────
-  const cfg         = vscode.workspace.getConfiguration('kotlinNav');
+  const cfg         = vscode.workspace.getConfiguration('kotlinJump');
   const excludeList = cfg.get<string[]>('excludePatterns') ?? ['**/build/**', '**/.gradle/**'];
   const maxFiles    = cfg.get<number>('maxIndexedFiles') ?? 10000;
 
@@ -165,7 +165,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(watcher, { dispose: () => scanner.destroy() });
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('kotlin-nav.copyFqn', async () => {
+    vscode.commands.registerCommand('kotlin-jump.copyFqn', async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor || editor.document.languageId !== 'kotlin') return;
 
@@ -192,9 +192,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       vscode.window.showInformationMessage(`Copied: ${fqn}`);
     }),
 
-    vscode.commands.registerCommand('kotlin-nav.reindex', async () => {
-      statusBar.text    = '$(sync~spin) Kotlin Nav: re-indexing…';
-      statusBar.tooltip = 'Kotlin Nav is rebuilding the symbol index';
+    vscode.commands.registerCommand('kotlin-jump.reindex', async () => {
+      statusBar.text    = '$(sync~spin) Kotlin Jump: re-indexing…';
+      statusBar.tooltip = 'Kotlin Jump is rebuilding the symbol index';
       scanner.cancel(); // stop any in-flight scan before clearing the index
       index.clear();
       await scanner.scanAll();
@@ -203,7 +203,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       );
       await collectStats(freshUris);
       const { files, symbols } = index.stats();
-      statusBar.text    = `$(symbol-class) Kotlin Nav: ${symbols.toLocaleString()} symbols`;
+      statusBar.text    = `$(symbol-class) Kotlin Jump: ${symbols.toLocaleString()} symbols`;
       statusBar.tooltip = `${symbols.toLocaleString()} symbols in ${files} files`;
     }),
   );
@@ -218,7 +218,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     IndexStore.restore(snapshot, index);
 
     const { files, symbols } = index.stats();
-    statusBar.text    = `$(symbol-class) Kotlin Nav: ${symbols.toLocaleString()} symbols`;
+    statusBar.text    = `$(symbol-class) Kotlin Jump: ${symbols.toLocaleString()} symbols`;
     statusBar.tooltip = `Restored from snapshot: ${symbols.toLocaleString()} symbols in ${files} files`;
 
     // Check staleness and re-scan only changed files in background
@@ -230,7 +230,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     report.toRemove.forEach(uriStr => index.remove(vscode.Uri.parse(uriStr)));
 
     if (report.toScan.length > 0) {
-      statusBar.text = `$(sync~spin) Kotlin Nav: updating ${report.toScan.length} files…`;
+      statusBar.text = `$(sync~spin) Kotlin Jump: updating ${report.toScan.length} files…`;
       await scanner.rescan(report.toScan);
     }
 
@@ -244,7 +244,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   const elapsed = Date.now() - t0;
   const { files, symbols } = index.stats();
-  statusBar.text    = `$(symbol-class) Kotlin Nav: ${symbols.toLocaleString()} symbols`;
+  statusBar.text    = `$(symbol-class) Kotlin Jump: ${symbols.toLocaleString()} symbols`;
   statusBar.tooltip = `${symbols.toLocaleString()} symbols in ${files} files — ${elapsed}ms`;
   log.info(`Index ready: ${symbols} symbols in ${files} files (${elapsed}ms)`);
 }

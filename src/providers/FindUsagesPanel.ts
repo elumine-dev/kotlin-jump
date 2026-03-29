@@ -109,7 +109,7 @@ export class FindUsagesPanel
       }
     }
 
-    const cfg = vscode.workspace.getConfiguration('kotlinNav');
+    const cfg = vscode.workspace.getConfiguration('kotlinJump');
     const testSegments = cfg.get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS);
 
     this.allFiles = buildFileNodes(raw, word, testSegments);
@@ -123,14 +123,14 @@ export class FindUsagesPanel
 
   toggleTests(): void {
     this.showTests = !this.showTests;
-    vscode.commands.executeCommand('setContext', 'kotlinNav.findUsages.showTests', this.showTests);
+    vscode.commands.executeCommand('setContext', 'kotlinJump.findUsages.showTests', this.showTests);
     this._updateDescription();
     this._onChange.fire();
   }
 
   togglePreviews(): void {
     this.showPreviews = !this.showPreviews;
-    vscode.commands.executeCommand('setContext', 'kotlinNav.findUsages.showPreviews', this.showPreviews);
+    vscode.commands.executeCommand('setContext', 'kotlinJump.findUsages.showPreviews', this.showPreviews);
     this._updateDescription();
     this._onChange.fire();
   }

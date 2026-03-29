@@ -1,11 +1,23 @@
 # 🚀 Kotlin Jump
 
-**Instant Kotlin & Java navigation for VS Code — no language server, no delay.**
+<p align="center">
+  <img src="media/logo-128.png" width="96" />
+</p>
 
-⚡ All lookups resolve in **under 1 ms**
-⚡ Indexes **3,000+ files in <500ms**
+<p align="center">
+  <strong>Instant Kotlin & Java navigation for VS Code</strong><br/>
+  No language server. No delay. Just speed.
+</p>
 
-> Stop scrolling. Start jumping.
+<p align="center">
+  ⚡ <b>&lt; 1 ms lookups</b> • ⚡ <b>3,000+ files in &lt;500ms</b>
+</p>
+
+<p align="center">
+  <a href="https://marketplace.visualstudio.com/items?itemName=elumine.kotlin-jump">
+    <img src="https://img.shields.io/badge/Install-VS_Code-blue?style=for-the-badge&logo=visualstudiocode" />
+  </a>
+</p>
 
 ## ⚡ Why Kotlin Jump?
 

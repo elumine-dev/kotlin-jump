@@ -171,7 +171,5 @@ code --install-extension kotlin-jump-0.1.0.vsix
 
 ## 🔗 Links
 
-* 📘 [Full Guide](doc/full-guide.md)
-* 🧾 [Changelog](CHANGELOG.md)
-* 🐛 [Issues](https://github.com/elumine-dev/kotlin-jump/issues)
-* 🌐 [elumine.ca](https://elumine.ca)
+* [Changelog](CHANGELOG.md)
+* [Issues](https://github.com/elumine-dev/kotlin-jump/issues)

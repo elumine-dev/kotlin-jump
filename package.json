@@ -215,13 +215,17 @@
         },
         "kotlinJump.excludeFromReferences": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "markdownDescription": "Glob patterns excluded from **Find All References** results. Matched files are still indexed (Go to Definition still works inside them) but are hidden from reference results.\n\nExample:\n```json\n[\n  \"**/src/test*/**\",\n  \"**/src/savedAndroidTest*/**\",\n  \"**/src/sharedTest*/**\",\n  \"**/src/debug/**/*Preview.kt\"\n]\n```"
         },
         "kotlinJump.testSourceSets": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "markdownDescription": "Path segments identifying test source sets. **Go to Definition** skips results inside these paths when navigating from main source, preventing accidental jumps into mock or test-only files."
         },
@@ -237,7 +241,10 @@
     "compile": "node esbuild.js",
     "watch": "node esbuild.js --watch",
     "vscode:prepublish": "node esbuild.js --production",
-    "test": "vscode-test"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "vscode-test",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
@@ -246,7 +253,9 @@
     "@vscode/test-cli": "^0.0.9",
     "@vscode/test-electron": "^2.3.8",
     "esbuild": "^0.20.0",
-    "typescript": "^5.3.3"
+    "husky": "^9.1.7",
+    "typescript": "^5.3.3",
+    "vitest": "^4.1.2"
   },
   "dependencies": {
     "picomatch": "^4.0.4"

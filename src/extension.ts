@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { SymbolIndex } from './indexer/SymbolIndex';
 import { FileScanner } from './indexer/FileScanner';
 import { FileWatcher } from './watcher/FileWatcher';
-import { KotlinDefinitionProvider } from './providers/DefinitionProvider';
+import { KotlinDefinitionProvider, getPendingDeclNav, clearPendingDeclNav } from './providers/DefinitionProvider';
 import { KotlinDocumentSymbolProvider } from './providers/DocumentSymbolProvider';
 import { KotlinHoverProvider } from './providers/HoverProvider';
 import { KotlinReferenceProvider } from './providers/ReferenceProvider';
@@ -70,12 +70,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         await vscode.commands.executeCommand('editor.action.goToReferences');
         return;
       }
-      // Reveal the panel immediately so the user sees it open while the search runs
-      await vscode.commands.executeCommand('kotlinJump.findUsages.focus');
+      if (smartNav) {
+        await vscode.commands.executeCommand('kotlinJump.findUsages.focus');
+      }
       const navigated = await usagesPanel.search(editor.document, editor.selection.active, args);
       if (navigated) {
-        // Single result — panel not needed, refocus the editor
         await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
+      } else if (!smartNav) {
+        // Multiple results with smartNav off → fall back to native references
+        await vscode.commands.executeCommand('editor.action.goToReferences');
       }
     }),
 
@@ -146,6 +149,32 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
 
       await vscode.commands.executeCommand('vscode.open', target);
+    }),
+
+    // ── Detect Cmd+Click on declaration → fire Find Usages ────────────────
+    // provideDefinition sets pendingDeclNavigation when at a declaration.
+    // On hover: VS Code shows the link but doesn't navigate → no selection change.
+    // On click: VS Code navigates to self → selection change with kind=Command.
+    vscode.window.onDidChangeTextEditorSelection(e => {
+      const pending = getPendingDeclNav();
+      if (!pending) return;
+      if (e.kind !== vscode.TextEditorSelectionChangeKind.Command) {
+        clearPendingDeclNav();
+        return;
+      }
+      clearPendingDeclNav();
+
+      const pos = e.selections[0]?.active;
+      if (!pos || pos.line !== pending.line) return;
+      if (e.textEditor.document.uri.toString() !== pending.uri) return;
+
+      const smartNav = vscode.workspace.getConfiguration('kotlinJump').get<boolean>('smartNavigation', true);
+      if (smartNav) {
+        const excl = { excludeUri: pending.uri, excludeLine: pending.line };
+        vscode.commands.executeCommand('kotlin-jump.findUsages', excl);
+      } else {
+        vscode.commands.executeCommand('editor.action.goToReferences');
+      }
     }),
   );
 

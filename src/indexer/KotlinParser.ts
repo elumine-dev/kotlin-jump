@@ -79,7 +79,8 @@ export function parse(uriString: string, text: string): ParsedFile {
 
     // ── Block comment open ─────────────────────────────────────────────────
     if (fc === '/' && fc1 === '*') {
-      if (text.indexOf('*/', fns + 2) === -1) inBlockComment = true;
+      const closePos = text.indexOf('*/', fns + 2);
+      if (closePos === -1 || closePos >= nl) inBlockComment = true;
       // count braces/parens even in single-line block comment lines
       [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
       if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
@@ -222,8 +223,18 @@ export function parse(uriString: string, text: string): ParsedFile {
 function countDepth(
   text: string, start: number, end: number, braces: number, parens: number,
 ): [number, number] {
+  let inStr: string | false = false; // tracks ' or " when inside a string
   for (let i = start; i < end; i++) {
     const c = text[i];
+    // Skip string contents
+    if (inStr) {
+      if (c === '\\') { i++; continue; } // skip escaped char
+      if (c === inStr) inStr = false;
+      continue;
+    }
+    if (c === '"' || c === '\'') { inStr = c; continue; }
+    // Stop at trailing line comment
+    if (c === '/' && i + 1 < end && text[i + 1] === '/') break;
     if      (c === '{') braces++;
     else if (c === '}') braces--;
     else if (c === '(') parens++;

@@ -32,7 +32,8 @@ export function parseJava(uriString: string, text: string): ParsedFile {
     if (fc === '/' && fc1 === '/') { pos = nl + 1; lineNum++; continue; }
 
     if (fc === '/' && fc1 === '*') {
-      if (text.indexOf('*/', fns + 2) === -1) inBlockComment = true;
+      const closePos = text.indexOf('*/', fns + 2);
+      if (closePos === -1 || closePos >= nl) inBlockComment = true;
       pos = nl + 1; lineNum++; continue;
     }
 
@@ -80,20 +81,32 @@ const JAVA_DECL_START: Record<string, boolean> = Object.fromEntries(
 
 const RE_JAVA_TYPE_NAME = /\b([A-Z]\w+)\b/g;
 
+// Strip generic params: "ArrayList<String>" → "ArrayList", "Map<K, V>" → "Map"
+function stripGenerics(s: string): string {
+  let result = '', depth = 0;
+  for (const c of s) {
+    if (c === '<') { depth++; continue; }
+    if (c === '>') { depth--; continue; }
+    if (depth === 0) result += c;
+  }
+  return result;
+}
+
 function extractJavaSupertypes(line: string): string[] {
   const types: string[] = [];
-  // Match extends and implements clauses
   const extendsMatch = /\bextends\s+(.+?)(?:\bimplements\b|\{|$)/.exec(line);
   if (extendsMatch) {
+    const clean = stripGenerics(extendsMatch[1]);
     RE_JAVA_TYPE_NAME.lastIndex = 0;
     let m;
-    while ((m = RE_JAVA_TYPE_NAME.exec(extendsMatch[1]))) types.push(m[1]);
+    while ((m = RE_JAVA_TYPE_NAME.exec(clean))) types.push(m[1]);
   }
   const implMatch = /\bimplements\s+(.+?)(?:\{|$)/.exec(line);
   if (implMatch) {
+    const clean = stripGenerics(implMatch[1]);
     RE_JAVA_TYPE_NAME.lastIndex = 0;
     let m;
-    while ((m = RE_JAVA_TYPE_NAME.exec(implMatch[1]))) types.push(m[1]);
+    while ((m = RE_JAVA_TYPE_NAME.exec(clean))) types.push(m[1]);
   }
   return types;
 }

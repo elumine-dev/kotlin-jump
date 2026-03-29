@@ -1,113 +1,161 @@
-# Kotlin Nav
+# 🚀 Kotlin Jump
 
-Fast Kotlin & Java navigation for VS Code — no language server, no delay.
+**Instant Kotlin & Java navigation for VS Code — no language server, no delay.**
 
-All lookups resolve in **under 1 ms**. Indexes 3,000+ files in under 500ms.
+⚡ All lookups resolve in **under 1 ms**
+⚡ Indexes **3,000+ files in <500ms**
 
-<!-- TODO: Replace with actual GIF -->
-<!-- ![Kotlin Nav demo](media/demo.gif) -->
+> Stop scrolling. Start jumping.
 
----
+## ⚡ Why Kotlin Jump?
 
-## Features
+Most navigation tools are:
 
-| Shortcut | Action |
-|---|---|
-| `Cmd+Click` / `F12` | **Go to Definition** — jump to any class, function, property, interface |
-| `Cmd+F12` | **Go to Implementation** — interface → implementing class, method → override |
-| `Alt+F7` | **Find Usages** — custom panel with test/preview filter toggles |
-| `Shift+F12` | **Find All References** — every usage across the whole project |
-| `Alt+Shift+T` | **Go to Test** — toggle between `Foo.kt` ↔ `FooTest.kt` |
-| `Cmd+T` | **Workspace Search** — fuzzy matching + kind filters (`@class:`, `@fun:`, `@compose:`) |
-| `Cmd+Shift+O` | **Outline** — symbol hierarchy with visibility markers |
-| Hover | **Hover** — signature, KDoc, package, module, sealed subtypes, enum entries |
+* slow
+* heavy
+* tied to language servers
 
-### Smart Cmd+Click
+**Kotlin Jump is different.**
 
-Cmd+Click at a declaration does the smart thing:
+👉 No LSP
+👉 No JVM
+👉 No waiting
 
-| You're on... | Cmd+Click does... |
-|---|---|
-| An interface | Jumps to the implementing class |
-| An interface method | Jumps to the override |
-| A method with no override | Navigates directly to the single usage |
-
-### What gets indexed
-
-**Kotlin** — class, data class, sealed class, interface, object, enum, fun, @Composable fun, val, var, typealias
-
-**Java** — class, interface, enum, record, @interface
+Just **instant navigation**.
 
 ---
 
-## Configuration
+## 🚀 Features
 
-Search `Kotlin Nav` in Settings (`Cmd+,`), or add to `settings.json`:
+### 🔎 Core Navigation
+
+| Shortcut            | Action                                                |
+| ------------------- | ----------------------------------------------------- |
+| `Cmd+Click` / `F12` | **Go to Definition** — jump to any symbol instantly   |
+| `Cmd+F12`           | **Go to Implementation** — interface → implementation |
+| `Shift+F12`         | **Find All References** — across entire project       |
+| `Alt+F7`            | **Find Usages** — filtered panel with preview toggles |
+
+---
+
+### ⚡ Smart Navigation (🔥 standout feature)
+
+Cmd+Click adapts intelligently:
+
+| You're on...          | It does...              |
+| --------------------- | ----------------------- |
+| Interface             | Jumps to implementation |
+| Interface method      | Jumps to override       |
+| Method (single usage) | Jumps directly to usage |
+
+👉 No extra steps. Just flow.
+
+---
+
+### 🎯 Developer Productivity
+
+| Shortcut      | Feature                                                     |
+| ------------- | ----------------------------------------------------------- |
+| `Cmd+T`       | **Workspace Search** — fuzzy + filters (`@class:`, `@fun:`) |
+| `Cmd+Shift+O` | **Outline** — symbol hierarchy                              |
+| `Alt+Shift+T` | **Go to Test** — toggle `Foo.kt` ↔ `FooTest.kt`             |
+| Hover         | **Hover Info** — signature, KDoc, package, types            |
+
+---
+
+## 🧠 What gets indexed
+
+### Kotlin
+
+* class, data class, sealed class, interface, object
+* enum, fun, @Composable fun
+* val, var, typealias
+
+### Java
+
+* class, interface, enum, record, @interface
+
+---
+
+## ⚙️ Configuration
+
+Search **“Kotlin Jump”** in Settings (`Cmd+,`) or use:
 
 ```jsonc
 {
-  // Exclude from Find All References (files are still indexed for Go to Definition)
-  "kotlinNav.excludeFromReferences": ["**/src/test*/**", "**/src/debug/**/*Preview.kt"],
-
-  // Test paths — Go to Definition skips these when navigating from main source
-  "kotlinNav.testSourceSets": ["/src/test/", "/src/androidTest/"],
-
-  // false = use VS Code built-in References instead of custom Find Usages panel
-  "kotlinNav.smartNavigation": true,
-
-  // Exclude from indexing entirely
-  "kotlinNav.excludePatterns": ["**/build/**", "**/.gradle/**", "**/generated/**"],
-
-  // Performance tuning
-  "kotlinNav.maxIndexedFiles": 10000,
-  "kotlinNav.concurrency": 20,
-  "kotlinNav.parserWorkers": 4
+  "kotlinJump.excludeFromReferences": ["**/src/test*/**", "**/src/debug/**/*Preview.kt"],
+  "kotlinJump.testSourceSets": ["/src/test/", "/src/androidTest/"],
+  "kotlinJump.smartNavigation": true,
+  "kotlinJump.excludePatterns": ["**/build/**", "**/.gradle/**", "**/generated/**"],
+  "kotlinJump.maxIndexedFiles": 10000,
+  "kotlinJump.concurrency": 20,
+  "kotlinJump.parserWorkers": 4
 }
 ```
 
 ---
 
-## Install
+## ⚡ Performance
 
-**From Marketplace:** Search "Kotlin Nav" in VS Code Extensions (`Cmd+Shift+X`)
+* ⚡ <1 ms lookup time
+* ⚡ <500 ms indexing (3,000+ files)
+* ⚡ O(1) symbol resolution
 
-**From VSIX:**
+> No language server. No compiler. Just speed.
+
+---
+
+## 🛠 How it works
+
+A lightweight regex-based parser builds an in-memory symbol table using optimized maps.
+
+* 4 worker threads
+* incremental indexing
+* disk persistence
+
+👉 Only changed files are re-parsed.
+
+---
+
+## ⚠️ Limitations
+
+* ❌ No code completion (not an LSP)
+* ❌ No refactoring
+* ⚠️ Overloaded functions → selection list
+* ⚠️ Extension functions → indexed by name only
+
+---
+
+## 📦 Install
+
+### Marketplace
+
+Search **“Kotlin Jump”** in VS Code (`Cmd+Shift+X`)
+
+---
+
+### VSIX
+
 ```bash
-code --install-extension kotlin-nav-0.1.0.vsix
+code --install-extension kotlin-jump-0.1.0.vsix
 ```
 
-**Build from source:**
+---
+
+### Build from source
+
 ```bash
-git clone https://github.com/elumine-dev/kotlin-nav
-cd kotlin-nav && npm install
+git clone https://github.com/elumine-dev/kotlin-jump
+cd kotlin-jump && npm install
 node esbuild.js --production && vsce package --no-dependencies
-code --install-extension kotlin-nav-0.1.0.vsix
+code --install-extension kotlin-jump-0.1.0.vsix
 ```
 
 ---
 
-## How it works
+## 🔗 Links
 
-Regex-based parser on 4 worker threads builds an in-memory symbol table with 4 O(1) maps. Index persists to disk — restarts only re-parse changed files.
-
-No language server. No compiler. No JVM. Just fast lookups.
-
----
-
-## Known limitations
-
-- **No code completion** — this is a navigation extension, not an LSP
-- **No refactoring** — use the Kotlin Language Server extension alongside this for rename/extract
-- **Overloaded functions** — same-name functions show a peek list for you to choose
-- **Extension functions** — receiver types not tracked, indexed by function name only
-
----
-
-## Links
-
-- [Full Guide](doc/full-guide.md) — detailed docs for every feature, shortcut, and configuration
-- [Changelog](CHANGELOG.md)
-- [GitHub Issues](https://github.com/elumine-dev/kotlin-nav/issues)
-- [elumine.ca](https://elumine.ca)
-
-*Managed by [elumine.ca](https://elumine.ca)*
+* 📘 [Full Guide](doc/full-guide.md)
+* 🧾 [Changelog](CHANGELOG.md)
+* 🐛 [Issues](https://github.com/elumine-dev/kotlin-jump/issues)
+* 🌐 [elumine.ca](https://elumine.ca)

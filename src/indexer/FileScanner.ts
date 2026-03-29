@@ -21,7 +21,7 @@ export class FileScanner {
     private readonly log: Logger,
     private readonly moduleMap: Map<string, string> = new Map(),
   ) {
-    const cfg         = vscode.workspace.getConfiguration('kotlinNav');
+    const cfg         = vscode.workspace.getConfiguration('kotlinJump');
     const workerCount = cfg.get<number>('parserWorkers') ??
       Math.max(2, Math.min(8, os.cpus().length - 1));
 
@@ -42,7 +42,7 @@ export class FileScanner {
   async scanAll(): Promise<void> {
     const token = this.freshToken();
 
-    const cfg         = vscode.workspace.getConfiguration('kotlinNav');
+    const cfg         = vscode.workspace.getConfiguration('kotlinJump');
     const excludeList = cfg.get<string[]>('excludePatterns') ?? ['**/build/**', '**/.gradle/**'];
     const maxFiles    = cfg.get<number>('maxIndexedFiles') ?? 10000;
     const excludeGlob = `{${excludeList.join(',')}}`;
@@ -58,7 +58,7 @@ export class FileScanner {
   // Re-scan a specific subset of files (used after snapshot load for stale files)
   async rescan(uris: vscode.Uri[]): Promise<void> {
     const token = this.freshToken();
-    const cfg = vscode.workspace.getConfiguration('kotlinNav');
+    const cfg = vscode.workspace.getConfiguration('kotlinJump');
     await this.pipeline(uris, cfg.get<number>('concurrency') ?? IO_CONCURRENCY_DEFAULT, token);
     if (!token.cancelled) this.index.finalize();
   }

@@ -1,6 +1,6 @@
 {
-  "name": "kotlin-nav",
-  "displayName": "Kotlin Nav",
+  "name": "kotlin-jump",
+  "displayName": "Kotlin Jump",
   "description": "Fast Kotlin & Java navigation — Go to Definition, Find Usages, Go to Implementation. No language server needed.",
   "version": "0.1.0",
   "publisher": "elumine",
@@ -8,11 +8,11 @@
   "icon": "media/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/elumine-dev/kotlin-nav"
+    "url": "https://github.com/elumine-dev/kotlin-jump"
   },
   "homepage": "https://elumine.ca",
   "bugs": {
-    "url": "https://github.com/elumine-dev/kotlin-nav/issues"
+    "url": "https://github.com/elumine-dev/kotlin-jump/issues"
   },
   "sponsor": {
     "url": "https://github.com/sponsors/elumine-dev"
@@ -43,23 +43,23 @@
   "activationEvents": [
     "onLanguage:kotlin",
     "workspaceContains:**/*.kt",
-    "onView:kotlinNav.findUsages"
+    "onView:kotlinJump.findUsages"
   ],
   "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
       "panel": [
         {
-          "id": "kotlinNavPanel",
+          "id": "kotlinJumpPanel",
           "title": "Find Usages",
           "icon": "media/find-usages.svg"
         }
       ]
     },
     "views": {
-      "kotlinNavPanel": [
+      "kotlinJumpPanel": [
         {
-          "id": "kotlinNav.findUsages",
+          "id": "kotlinJump.findUsages",
           "name": "Find Usages",
           "type": "tree"
         }
@@ -67,13 +67,13 @@
     },
     "keybindings": [
       {
-        "command": "kotlin-nav.findUsages",
+        "command": "kotlin-jump.findUsages",
         "key": "alt+f7",
         "mac": "alt+f7",
         "when": "editorTextFocus && (editorLangId == kotlin || editorLangId == java)"
       },
       {
-        "command": "kotlin-nav.goToTest",
+        "command": "kotlin-jump.goToTest",
         "key": "alt+shift+t",
         "mac": "alt+shift+t",
         "when": "editorTextFocus && (editorLangId == kotlin || editorLangId == java)"
@@ -81,87 +81,87 @@
     ],
     "commands": [
       {
-        "command": "kotlin-nav.reindex",
-        "title": "Kotlin Nav: Re-index workspace",
-        "category": "Kotlin Nav"
+        "command": "kotlin-jump.reindex",
+        "title": "Kotlin Jump: Re-index workspace",
+        "category": "Kotlin Jump"
       },
       {
-        "command": "kotlin-nav.copyFqn",
-        "title": "Kotlin Nav: Copy FQN",
-        "category": "Kotlin Nav"
+        "command": "kotlin-jump.copyFqn",
+        "title": "Kotlin Jump: Copy FQN",
+        "category": "Kotlin Jump"
       },
       {
-        "command": "kotlin-nav.findUsages",
+        "command": "kotlin-jump.findUsages",
         "title": "Find Usages",
-        "category": "Kotlin Nav",
+        "category": "Kotlin Jump",
         "icon": "$(search)"
       },
       {
-        "command": "kotlin-nav.findUsages.toggleTests",
+        "command": "kotlin-jump.findUsages.toggleTests",
         "title": "Tests: Showing — click to hide",
-        "category": "Kotlin Nav",
+        "category": "Kotlin Jump",
         "icon": "$(beaker)"
       },
       {
-        "command": "kotlin-nav.findUsages.showTests",
+        "command": "kotlin-jump.findUsages.showTests",
         "title": "Tests: Hidden — click to show",
-        "category": "Kotlin Nav",
+        "category": "Kotlin Jump",
         "icon": "$(circle-slash)"
       },
       {
-        "command": "kotlin-nav.findUsages.togglePreviews",
+        "command": "kotlin-jump.findUsages.togglePreviews",
         "title": "Previews: Showing — click to hide",
-        "category": "Kotlin Nav",
+        "category": "Kotlin Jump",
         "icon": "$(eye)"
       },
       {
-        "command": "kotlin-nav.findUsages.showPreviews",
+        "command": "kotlin-jump.findUsages.showPreviews",
         "title": "Previews: Hidden — click to show",
-        "category": "Kotlin Nav",
+        "category": "Kotlin Jump",
         "icon": "$(eye-closed)"
       },
       {
-        "command": "kotlin-nav.goToTest",
+        "command": "kotlin-jump.goToTest",
         "title": "Go to Test/Implementation",
-        "category": "Kotlin Nav"
+        "category": "Kotlin Jump"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "kotlin-nav.findUsages.toggleTests",
-          "when": "view == kotlinNav.findUsages && kotlinNav.findUsages.showTests",
+          "command": "kotlin-jump.findUsages.toggleTests",
+          "when": "view == kotlinJump.findUsages && kotlinJump.findUsages.showTests",
           "group": "navigation@1"
         },
         {
-          "command": "kotlin-nav.findUsages.showTests",
-          "when": "view == kotlinNav.findUsages && !kotlinNav.findUsages.showTests",
+          "command": "kotlin-jump.findUsages.showTests",
+          "when": "view == kotlinJump.findUsages && !kotlinJump.findUsages.showTests",
           "group": "navigation@1"
         },
         {
-          "command": "kotlin-nav.findUsages.togglePreviews",
-          "when": "view == kotlinNav.findUsages && kotlinNav.findUsages.showPreviews",
+          "command": "kotlin-jump.findUsages.togglePreviews",
+          "when": "view == kotlinJump.findUsages && kotlinJump.findUsages.showPreviews",
           "group": "navigation@2"
         },
         {
-          "command": "kotlin-nav.findUsages.showPreviews",
-          "when": "view == kotlinNav.findUsages && !kotlinNav.findUsages.showPreviews",
+          "command": "kotlin-jump.findUsages.showPreviews",
+          "when": "view == kotlinJump.findUsages && !kotlinJump.findUsages.showPreviews",
           "group": "navigation@2"
         }
       ],
       "editor/context": [
         {
-          "command": "kotlin-nav.findUsages",
+          "command": "kotlin-jump.findUsages",
           "when": "editorTextFocus && (editorLangId == kotlin || editorLangId == java)",
           "group": "navigation@8"
         },
         {
-          "command": "kotlin-nav.goToTest",
+          "command": "kotlin-jump.goToTest",
           "when": "editorTextFocus && (editorLangId == kotlin || editorLangId == java)",
           "group": "navigation@9"
         },
         {
-          "command": "kotlin-nav.copyFqn",
+          "command": "kotlin-jump.copyFqn",
           "when": "editorLangId == kotlin",
           "group": "navigation@10"
         }
@@ -181,9 +181,9 @@
       }
     ],
     "configuration": {
-      "title": "Kotlin Nav",
+      "title": "Kotlin Jump",
       "properties": {
-        "kotlinNav.excludePatterns": {
+        "kotlinJump.excludePatterns": {
           "type": "array",
           "items": {
             "type": "string"
@@ -196,36 +196,36 @@
           ],
           "description": "Glob patterns excluded from indexing."
         },
-        "kotlinNav.maxIndexedFiles": {
+        "kotlinJump.maxIndexedFiles": {
           "type": "number",
           "default": 10000,
           "description": "Hard cap on the number of .kt files indexed."
         },
-        "kotlinNav.concurrency": {
+        "kotlinJump.concurrency": {
           "type": "number",
           "default": 20,
           "description": "Number of files read in parallel during initial scan."
         },
-        "kotlinNav.parserWorkers": {
+        "kotlinJump.parserWorkers": {
           "type": "number",
           "default": 4,
           "minimum": 1,
           "maximum": 8,
           "description": "Number of Node.js worker threads used for parallel Kotlin parsing."
         },
-        "kotlinNav.excludeFromReferences": {
+        "kotlinJump.excludeFromReferences": {
           "type": "array",
           "items": { "type": "string" },
           "default": [],
           "markdownDescription": "Glob patterns excluded from **Find All References** results. Matched files are still indexed (Go to Definition still works inside them) but are hidden from reference results.\n\nExample:\n```json\n[\n  \"**/src/test*/**\",\n  \"**/src/savedAndroidTest*/**\",\n  \"**/src/sharedTest*/**\",\n  \"**/src/debug/**/*Preview.kt\"\n]\n```"
         },
-        "kotlinNav.testSourceSets": {
+        "kotlinJump.testSourceSets": {
           "type": "array",
           "items": { "type": "string" },
           "default": [],
           "markdownDescription": "Path segments identifying test source sets. **Go to Definition** skips results inside these paths when navigating from main source, preventing accidental jumps into mock or test-only files."
         },
-        "kotlinNav.smartNavigation": {
+        "kotlinJump.smartNavigation": {
           "type": "boolean",
           "default": true,
           "markdownDescription": "When **Cmd+Click** (or F12) lands on a declaration site, redirect to **Find All References** instead of navigating to self. Disable if you find this behaviour unexpected."

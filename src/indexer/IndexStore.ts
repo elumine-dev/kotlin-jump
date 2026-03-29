@@ -3,7 +3,7 @@ import { SymbolIndex } from './SymbolIndex';
 import { SymbolKind } from './KotlinParser';
 
 const SNAPSHOT_VERSION = 5;
-const SNAPSHOT_FILENAME = 'kotlin-nav-index.json';
+const SNAPSHOT_FILENAME = 'kotlin-jump-index.json';
 
 // Compact per-file format — FQN is reconstructed as pkg+"."+name on restore
 interface SnapshotFile {

@@ -12,7 +12,7 @@ let _matchers: ((path: string) => boolean)[] = [];
 
 function getExcludeMatchers(): ((path: string) => boolean)[] {
   const patterns = vscode.workspace
-    .getConfiguration('kotlinNav')
+    .getConfiguration('kotlinJump')
     .get<string[]>('excludeFromReferences', []);
   const key = patterns.join('\0');
   if (key !== _matcherKey) {

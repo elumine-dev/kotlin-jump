@@ -18,7 +18,7 @@ export interface UsageResult {
  * Scans `uriStrings` for usages of `word`, disambiguating via FQN when possible.
  *
  * Callers are responsible for pre-filtering `uriStrings` (e.g. applying
- * kotlinNav.excludeFromReferences globs) before passing them in.
+ * kotlinJump.excludeFromReferences globs) before passing them in.
  */
 export async function scanForUsages(
   word: string,

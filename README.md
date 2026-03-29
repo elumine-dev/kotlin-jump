@@ -19,6 +19,10 @@
   </a>
 </p>
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/Demo.gif" alt="Kotlin Jump demo" width="720" />
+</p>
+
 ## ⚡ Why Kotlin Jump?
 
 Most navigation tools are:

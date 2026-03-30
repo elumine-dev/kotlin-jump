@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.3
+
+Patch release that fixes the GitHub release workflow so CI can publish releases successfully.
+
+### Packaging and docs
+- Fixed release workflow permissions to allow creating GitHub releases
+- Bumped version to 0.2.3
+
 ## 0.2.2
 
 Patch release that improves publish-script reliability by regenerating the lockfile with a CI-compatible npm version before tagging.

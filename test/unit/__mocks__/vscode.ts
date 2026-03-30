@@ -50,6 +50,26 @@ export enum SymbolKind {
   Object = 18,
 }
 
+export class CallHierarchyItem {
+  data?: any;
+  constructor(
+    public kind: number,
+    public name: string,
+    public detail: string,
+    public uri: any,
+    public range: Range,
+    public selectionRange: Range,
+  ) {}
+}
+
+export class CallHierarchyIncomingCall {
+  constructor(public from: CallHierarchyItem, public fromRanges: Range[]) {}
+}
+
+export class CallHierarchyOutgoingCall {
+  constructor(public to: CallHierarchyItem, public fromRanges: Range[]) {}
+}
+
 export const Uri = {
   parse: (s: string) => ({
     toString: () => s,

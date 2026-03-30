@@ -2,9 +2,33 @@ import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { resolveBest } from '../util/ImportResolver';
 
+import picomatch from 'picomatch';
+
 const CONCURRENCY = 20;
 
 export const DEFAULT_TEST_SEGMENTS: string[] = [];
+
+// ── Shared exclude filter (used by ReferenceProvider + CallHierarchyProvider) ──
+let _matcherKey = '';
+let _matchers: ((path: string) => boolean)[] = [];
+
+export function getExcludeMatchers(): ((path: string) => boolean)[] {
+  const patterns = vscode.workspace
+    .getConfiguration('kotlinJump')
+    .get<string[]>('excludeFromReferences', []);
+  const key = patterns.join('\0');
+  if (key !== _matcherKey) {
+    _matcherKey = key;
+    _matchers = patterns.map(p => picomatch(p, { dot: true }));
+  }
+  return _matchers;
+}
+
+export function isExcluded(uriString: string): boolean {
+  const matchers = getExcludeMatchers();
+  if (matchers.length === 0) return false;
+  return matchers.some(m => m(vscode.Uri.parse(uriString).path));
+}
 
 export interface UsageResult {
   uri: vscode.Uri;
@@ -102,7 +126,7 @@ export function fileCouldReference(text: string, target: SymbolEntry): boolean {
 }
 
 // Returns true if position `pos` in `line` is inside a string literal or trailing // comment
-function isInsideCommentOrString(line: string, pos: number): boolean {
+export function isInsideCommentOrString(line: string, pos: number): boolean {
   let inStr: string | false = false;
   for (let i = 0; i < line.length; i++) {
     if (inStr) {

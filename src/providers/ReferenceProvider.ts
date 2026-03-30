@@ -1,32 +1,8 @@
 import * as vscode from 'vscode';
-import picomatch from 'picomatch';
 import { SymbolIndex } from '../indexer/SymbolIndex';
-import { scanForUsages } from './FindUsagesEngine';
+import { scanForUsages, isExcluded } from './FindUsagesEngine';
 
 const WORD_RE = /[A-Za-z_]\w*/;
-
-// ── Picomatch cache ───────────────────────────────────────────────────────────
-// Patterns compiled once, invalidated when config changes (key = patterns joined by \0).
-let _matcherKey = '';
-let _matchers: ((path: string) => boolean)[] = [];
-
-function getExcludeMatchers(): ((path: string) => boolean)[] {
-  const patterns = vscode.workspace
-    .getConfiguration('kotlinJump')
-    .get<string[]>('excludeFromReferences', []);
-  const key = patterns.join('\0');
-  if (key !== _matcherKey) {
-    _matcherKey = key;
-    _matchers = patterns.map(p => picomatch(p, { dot: true }));
-  }
-  return _matchers;
-}
-
-function isExcluded(uriString: string): boolean {
-  const matchers = getExcludeMatchers();
-  if (matchers.length === 0) return false;
-  return matchers.some(m => m(vscode.Uri.parse(uriString).path));
-}
 
 export class KotlinReferenceProvider implements vscode.ReferenceProvider {
   constructor(private readonly index: SymbolIndex) {}

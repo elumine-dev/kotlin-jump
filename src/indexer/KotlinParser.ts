@@ -290,7 +290,7 @@ function lookAheadSupertypes(text: string, start: number): string[] {
   return [];
 }
 
-const RE_TYPE_NAME = /\b([A-Z]\w+)\b/g;
+const RE_TYPE_NAME = /\b([A-Z]\w*)\b/g;
 
 function parseTypeNames(s: string): string[] {
   const clean = s.split(/\bwhere\b/)[0].split('{')[0];

@@ -66,7 +66,9 @@ export async function scanForUsages(
           wordRe.lastIndex = 0;
           let m: RegExpExecArray | null;
           while ((m = wordRe.exec(lines[i])) !== null) {
-            results.push({ uri, uriString: uriStr, line: i, character: m.index, lineText: lines[i] });
+            if (!isInsideCommentOrString(lines[i], m.index)) {
+              results.push({ uri, uriString: uriStr, line: i, character: m.index, lineText: lines[i] });
+            }
           }
         }
       } catch { /* skip unreadable */ }
@@ -97,6 +99,29 @@ export function fileCouldReference(text: string, target: SymbolEntry): boolean {
   }
   if (pkg && text.includes(`import ${pkg}.*`)) return true;
   return false;
+}
+
+// Returns true if position `pos` in `line` is inside a string literal or trailing // comment
+function isInsideCommentOrString(line: string, pos: number): boolean {
+  let inStr: string | false = false;
+  for (let i = 0; i < line.length; i++) {
+    if (inStr) {
+      if (line[i] === '\\') { i++; continue; }
+      if (line[i] === inStr) { inStr = false; continue; }
+      if (i === pos) return true;
+      continue;
+    }
+    if (line[i] === '"' || line[i] === '\'') {
+      inStr = line[i];
+      if (i === pos) return true;
+      continue;
+    }
+    if (line[i] === '/' && i + 1 < line.length && line[i + 1] === '/') {
+      return pos >= i;
+    }
+    if (i === pos) return false;
+  }
+  return !!inStr;
 }
 
 export function escapeRegex(s: string): string {

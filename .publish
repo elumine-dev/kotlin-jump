@@ -147,6 +147,7 @@ need_cmd() {
 
 need_cmd git
 need_cmd node
+need_cmd npm
 
 if [[ "$PUSH" -eq 1 ]]; then
   TAG=1
@@ -248,6 +249,15 @@ NODE
 sync_lockfile() {
   echo "Refreshing package-lock.json with CI-compatible npm..."
   ${LOCKFILE_NPM} install --package-lock-only --ignore-scripts
+}
+
+ensure_local_dependencies() {
+  if [[ -x "node_modules/.bin/vitest" && -x "node_modules/.bin/vsce" ]]; then
+    return
+  fi
+
+  echo "Installing local dependencies with npm ci..."
+  npm ci
 }
 
 if [[ -n "$VERSION_ARG" ]]; then
@@ -484,6 +494,8 @@ draft_notes() {
 }
 
 verify_release() {
+  ensure_local_dependencies
+
   echo "Running tests..."
   npm test
 

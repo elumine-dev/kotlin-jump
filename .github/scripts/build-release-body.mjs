@@ -17,6 +17,8 @@ const changelogBody = extractChangelogBody(readFileSync('CHANGELOG.md', 'utf8'),
 const previousTag = findPreviousSemverTag(tag);
 
 const sections = [
+  changelogBody,
+  '',
   '## Install',
   '',
   `Marketplace: ${marketplaceUrl}`,
@@ -26,10 +28,6 @@ const sections = [
   '```bash',
   `code --install-extension ${vsixName}`,
   '```',
-  '',
-  '## Changes',
-  '',
-  changelogBody,
   '',
   '## Links',
   '',

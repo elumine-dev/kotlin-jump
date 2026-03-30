@@ -11,6 +11,7 @@ import { KotlinImplementationProvider } from './providers/ImplementationProvider
 import { FindUsagesPanel } from './providers/FindUsagesPanel';
 import { KotlinCodeLensProvider } from './providers/CodeLensProvider';
 import { KotlinTypeHierarchyProvider } from './providers/TypeHierarchyProvider';
+import { KotlinCallHierarchyProvider } from './providers/CallHierarchyProvider';
 import { Logger } from './util/logger';
 import { resolveAll as resolveModules } from './gradle/ModuleResolver';
 import { resolveBest } from './util/ImportResolver';
@@ -61,6 +62,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.languages.registerReferenceProvider(KT_JAVA, new KotlinReferenceProvider(index)),
     vscode.languages.registerImplementationProvider(KT_JAVA, new KotlinImplementationProvider(index)),
     vscode.languages.registerTypeHierarchyProvider(KT_JAVA, new KotlinTypeHierarchyProvider(index)),
+    vscode.languages.registerCallHierarchyProvider(KT_JAVA, new KotlinCallHierarchyProvider(index)),
     vscode.languages.registerWorkspaceSymbolProvider(new KotlinFileProvider(index)),
 
     // ── Code Lens — "N usages | M implementations" above declarations ──────

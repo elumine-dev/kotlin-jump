@@ -92,6 +92,7 @@ export class FileScanner {
         if (token.cancelled) return; // another scan started — bail out
         // cursor++ is synchronous — safe in single-threaded JS event loop
         const uri = uris[cursor++];
+        if (uri.fsPath.includes('.kapt_metadata') || uri.fsPath.includes('_metadata')) continue;
         try {
           const bytes = await vscode.workspace.fs.readFile(uri);
           if (bytes.byteLength > MAX_FILE_BYTES) continue;

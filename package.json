@@ -192,7 +192,8 @@
             "**/build/**",
             "**/.gradle/**",
             "**/generated/**",
-            "**/.idea/**"
+            "**/.idea/**",
+            "**/*.kapt_metadata"
           ],
           "description": "Glob patterns excluded from indexing."
         },

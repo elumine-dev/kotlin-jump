@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.0
+
+Adds native Call Hierarchy and Type Hierarchy navigation, and fixes Find Usages false positives from comments, strings, and generated files.
+
+### Improvements
+- Added Call Hierarchy support — navigate incoming calls (who calls a function) and outgoing calls (what a function calls) using VS Code's native Call Hierarchy panel, with no language server required.
+- Added Type Hierarchy support — explore class supertypes and subtypes with enriched detail in VS Code's native Type Hierarchy panel; also fixes parsing of single-letter supertype names so short class names resolve correctly.
+
+### Fixes
+- Find Usages no longer returns false matches from comments, string literals, or kapt-generated metadata files, reducing noise and improving result accuracy across large codebases.
+
 ## 0.3.0
 
 Adds inline CodeLens counts showing usages and implementations directly above class and function declarations.

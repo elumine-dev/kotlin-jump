@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.4
+
+Internal quality release adding Compose and ViewModel parser test coverage, a minor KotlinParser fix, and CI upgrades — no changes to extension behavior.
+
+### Improvements
+- Added unit tests for Jetpack Compose and ViewModel parsing patterns, improving confidence that these Kotlin code styles are parsed correctly.
+- Upgraded CI pipeline to GitHub Actions v6 and improved release automation, making future updates more consistent to publish.
+
+### Notes
+- No changes to extension commands, settings, or navigation behavior in this release.
+
+### Packaging and Docs
+- Updated README install commands to reference the current 0.2.4 VSIX.
+
 ## 0.2.3
 
 This patch release improves Kotlin Jump's release reliability so future updates publish more consistently.

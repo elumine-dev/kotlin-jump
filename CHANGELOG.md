@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.5
+
+Maintenance release updating build tooling with no changes to extension behavior.
+
+### Notes
+- No changes to extension commands, settings, or navigation behavior in this release.
+
+### Packaging and Docs
+- Updated esbuild from 0.20 to 0.27, keeping the extension built against current bundler improvements.
+- Updated README install commands to reference the 0.2.5 VSIX.
+
 ## 0.2.4
 
 Internal quality release adding Compose and ViewModel parser test coverage, a minor KotlinParser fix, and CI upgrades — no changes to extension behavior.

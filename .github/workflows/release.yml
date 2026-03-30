@@ -12,13 +12,26 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
+          cache: npm
 
       - run: npm ci
+
+      - name: Validate Marketplace token
+        env:
+          MARKETPLACE_TOKEN: ${{ secrets.MARKETPLACE_TOKEN }}
+        run: |
+          if [ -z "$MARKETPLACE_TOKEN" ]; then
+            echo "❌ MARKETPLACE_TOKEN is missing."
+            exit 1
+          fi
+          echo "✅ MARKETPLACE_TOKEN is configured."
 
       - name: Verify tag matches package.json version
         run: |
@@ -30,11 +43,17 @@ jobs:
           fi
           echo "✅ Version $PACKAGE_VERSION matches tag"
 
+      - name: Test
+        run: npm test
+
       - name: Build production
         run: node esbuild.js --production
 
       - name: Package extension
         run: npx @vscode/vsce package --no-dependencies
+
+      - name: Build release body
+        run: node .github/scripts/build-release-body.mjs release-body.md
 
       - name: Publish to VS Code Marketplace
         run: npx @vscode/vsce publish -p ${{ secrets.MARKETPLACE_TOKEN }}
@@ -44,5 +63,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
+          name: ${{ github.ref_name }}
           files: '*.vsix'
-          generate_release_notes: true
+          fail_on_unmatched_files: true
+          body_path: release-body.md

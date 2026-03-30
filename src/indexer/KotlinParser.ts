@@ -34,7 +34,7 @@ const RE_CLASS      = /^\s*(?:(?:public|private|internal|protected|open|abstract
 // `fun Modifier.customBackground()` captures "customBackground", not "Modifier".
 // Handles: simple (Modifier.), nullable (Modifier?.), generic (List<T>.), qualified (Modifier.Companion.)
 const RE_FUN        = /^\s*(?:(?:public|private|protected|internal|override|actual|expect|suspend|inline|noinline|crossinline|infix|operator|tailrec|external)\s+)*fun\s+(?:<[^>]*>\s+)?(?:(?:\w+(?:<[^<>]*>)?[?]?\.)+)?(\w+)\s*[(<]/;
-const RE_PROP       = /^\s*(?:(?:public|private|protected|internal|override|open|abstract|actual|expect|lateinit|const)\s+)*(val|var)\s+(\w+)\s*[=:(<]/;
+const RE_PROP       = /^\s*(?:(?:public|private|protected|internal|override|open|abstract|actual|expect|lateinit|const)\s+)*(val|var)\s+(\w+)\s*(?:[=:(<]|\bby\b)/;
 const RE_TYPEALIAS  = /^\s*(?:(?:public|private|internal|actual)\s+)?typealias\s+(\w+)(?:<[^>]*>)?\s*=\s*(.+)/;
 const RE_ENUM_ENTRY = /^\s*([A-Z][A-Z0-9_]*)(?:\s*[,(;({]|$)/;
 

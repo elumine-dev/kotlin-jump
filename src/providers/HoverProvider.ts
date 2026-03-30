@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { SymbolKind as KtKind } from '../indexer/KotlinParser';
-import { resolve as resolveImports } from '../util/ImportResolver';
+import { resolveBest } from '../util/ImportResolver';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 const MAX_SIG_LINES     = 12;
@@ -21,15 +21,17 @@ export class KotlinHoverProvider implements vscode.HoverProvider {
     const word = document.getText(wordRange);
     if (word.length < 2) return null;
 
-    // Prefer import-resolved entry for precision; fall back to name lookup
+    // Prefer import-resolved entry for precision; fall back only when unambiguous
     let entry: SymbolEntry | undefined;
-    for (const fqn of resolveImports(word, document)) {
-      entry = this.index.lookupFqn(fqn);
-      if (entry) break;
+    const resolved = resolveBest(word, document, fqn => this.index.lookupFqn(fqn));
+    if (resolved.matches.length === 1) {
+      entry = resolved.matches[0];
+    } else if (resolved.matches.length > 1) {
+      return null; // ambiguous wildcard imports — avoid showing the wrong symbol
     }
     if (!entry) {
       const hits = this.index.lookup(word);
-      if (hits.length === 0) return null;
+      if (hits.length !== 1) return null;
       entry = hits[0];
     }
 

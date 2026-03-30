@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.1
+
+Patch release with import resolution fixes and expanded edge-case test coverage across navigation providers.
+
+### Fixes
+- Reworked import resolution logic in ImportResolver — largest change in this release
+- Updated DefinitionProvider, FindUsagesEngine, and HoverProvider with bug fixes
+- Extended edge-case test coverage with 71 new test lines
+
+### Packaging and docs
+- Bumped version to 0.2.1
+
 ## 0.2.0
 
 Release polish for the Kotlin Jump rename and packaging flow.

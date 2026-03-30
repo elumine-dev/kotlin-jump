@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { SymbolIndex } from '../indexer/SymbolIndex';
-import { resolve as resolveImports } from '../util/ImportResolver';
+import { resolveBest } from '../util/ImportResolver';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 const ALIAS_TYPE_RE = /\b([A-Z]\w+)\b/g;
@@ -32,20 +32,21 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
     const allow = (path: string) => currentIsTest || !isTestPath(path, testSegments);
 
     // ── 1. Try FQN match via resolved imports (most precise) ─────────────────
-    const candidates = resolveImports(word, document);
-    for (const fqn of candidates) {
-      const entry = this.index.lookupFqn(fqn);
-      if (entry && allow(entry.uri.path)) {
-        if (isAtDeclaration(entry, document.uri, position)) {
-          let impls = this.implLocations(word, allow);
-          if (impls.length === 0) impls = this.methodImplLocations(entry, allow);
-          if (impls.length > 0) return impls;
-          // Mark for the selection listener — will fire Find Usages on actual click
-          _pendingDeclNav = { uri: entry.uri.toString(), line: entry.line, word };
-          return toLocation(entry);
-        }
-        return withAliasTargets(entry, this.index, allow);
+    const resolved = resolveBest(word, document, fqn => this.index.lookupFqn(fqn));
+    const resolvedEntries = resolved.matches.filter(e => allow(e.uri.path));
+    if (resolvedEntries.length > 0) {
+      const declEntry = resolvedEntries.find(e => isAtDeclaration(e, document.uri, position));
+      if (declEntry && resolvedEntries.length === 1) {
+        let impls = this.implLocations(word, allow);
+        if (impls.length === 0) impls = this.methodImplLocations(declEntry, allow);
+        if (impls.length > 0) return impls;
+        // Mark for the selection listener — will fire Find Usages on actual click
+        _pendingDeclNav = { uri: declEntry.uri.toString(), line: declEntry.line, word };
+        return toLocation(declEntry);
       }
+
+      if (resolvedEntries.length === 1) return withAliasTargets(resolvedEntries[0], this.index, allow);
+      return resolvedEntries.map(toLocation);
     }
 
     // ── 2. Fallback: simple name lookup (same package or stdlib-like names) ──

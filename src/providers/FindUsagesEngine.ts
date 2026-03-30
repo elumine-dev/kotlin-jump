@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
-import { resolve as resolveImports } from '../util/ImportResolver';
+import { resolveBest } from '../util/ImportResolver';
 
 const CONCURRENCY = 20;
 
@@ -31,12 +31,10 @@ export async function scanForUsages(
   if (decls.length === 0) return [];
 
   // Resolve the specific FQN from the current document's import context.
-  // This disambiguates same-name classes from different packages.
+  // If wildcard imports remain ambiguous, avoid narrowing to the wrong target.
   let target: SymbolEntry | undefined;
-  for (const fqn of resolveImports(word, document)) {
-    const entry = index.lookupFqn(fqn);
-    if (entry) { target = entry; break; }
-  }
+  const resolved = resolveBest(word, document, fqn => index.lookupFqn(fqn));
+  if (resolved.matches.length === 1) target = resolved.matches[0];
   if (!target && decls.length === 1) target = decls[0];
 
   const wordRe = new RegExp(`\\b${escapeRegex(word)}\\b`, 'g');

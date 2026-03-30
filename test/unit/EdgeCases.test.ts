@@ -53,6 +53,77 @@ fun render() {
   });
 });
 
+describe('Wildcard import resolution', () => {
+  let index: SymbolIndex;
+  let provider: KotlinDefinitionProvider;
+
+  const BUTTON_UI = `package com.example.ui
+class Button(val label: String)`;
+
+  const BUTTON_DESIGN = `package com.example.design
+class Button(val style: Int)`;
+
+  const BUTTON_APP = `package com.example.app
+class Button(val source: String)`;
+
+  beforeEach(() => {
+    index = new SymbolIndex();
+    addKt(index, 'file:///ui/Button.kt', BUTTON_UI);
+    addKt(index, 'file:///design/Button.kt', BUTTON_DESIGN);
+    addKt(index, 'file:///app/Button.kt', BUTTON_APP);
+    provider = new KotlinDefinitionProvider(index);
+  });
+
+  it('returns both matches when two wildcard imports remain ambiguous', () => {
+    const screen = `package com.example.feature
+import com.example.ui.*
+import com.example.design.*
+
+fun render() {
+    val btn = Button()
+}`;
+    const doc = mockDocument('file:///feature/AmbiguousScreen.kt', screen);
+    const pos = positionOf(screen, 'Button', 1);
+    const result = locs(provider.provideDefinition(doc, pos));
+    const uris = result.map(l => l.uri.toString());
+
+    expect(result).toHaveLength(2);
+    expect(uris).toContain('file:///ui/Button.kt');
+    expect(uris).toContain('file:///design/Button.kt');
+  });
+
+  it('prefers an exact import over wildcard imports', () => {
+    const screen = `package com.example.feature
+import com.example.design.Button
+import com.example.ui.*
+
+fun render() {
+    val btn = Button(1)
+}`;
+    const doc = mockDocument('file:///feature/ExactImportScreen.kt', screen);
+    const pos = positionOf(screen, 'Button', 2);
+    const result = locs(provider.provideDefinition(doc, pos));
+
+    expect(result).toHaveLength(1);
+    expect(result[0].uri.toString()).toBe('file:///design/Button.kt');
+  });
+
+  it('prefers the same-package symbol over wildcard imports', () => {
+    const screen = `package com.example.app
+import com.example.ui.*
+
+fun render() {
+    val btn = Button("local")
+}`;
+    const doc = mockDocument('file:///app/LocalPackageScreen.kt', screen);
+    const pos = positionOf(screen, 'Button', 1);
+    const result = locs(provider.provideDefinition(doc, pos));
+
+    expect(result).toHaveLength(1);
+    expect(result[0].uri.toString()).toBe('file:///app/Button.kt');
+  });
+});
+
 // ── Interface and implementation in the same file ───────────────────────────
 
 describe('Interface + impl in same file', () => {

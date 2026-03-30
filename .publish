@@ -375,18 +375,24 @@ NODE
 
 render_prompt() {
   cat > "$PROMPT_FILE" <<EOF
-You are writing release notes for a VS Code extension.
+You are writing release notes for a public GitHub release of a VS Code extension.
 
 Rules:
 - Use only the facts supplied below.
 - Do not invent features, fixes, metrics, files, or links.
-- Prefer the repository's existing changelog style over generic marketing copy.
-- Keep it concise, concrete, and useful to users.
-- Prefer section headings from this set when they fit: Navigation, Editor features, Performance, Packaging and docs, Fixes.
-- Use at most 4 sections.
-- Each bullet must stand on its own and start with a verb in past tense or present tense.
+- Write for users deciding whether to install or update, not for maintainers reading a commit log.
+- Lead with user value and real impact.
+- Always explain why a change matters to the user.
+- If a change is internal (CI, workflow, packaging, refactor), reframe it as a user benefit when accurate: reliability, stability, consistency, or release quality.
+- If there are no functional changes to extension behavior, say that clearly in a Notes section.
+- Do not include meaningless bullets like "Bumped version" or "Updated package.json".
+- Do not list raw implementation details unless they materially help a user understand the release.
+- Keep the tone concise, credible, and professional. No hype, no emojis, no fluff.
+- Prefer section headings from this set when they fit: Improvements, Fixes, Notes, Packaging and docs.
+- Use at most 3 sections unless the evidence strongly justifies more.
+- Each bullet must stand on its own, mention impact, and start with a verb in past tense or present tense.
 - Mention only changes that are actually evidenced by the supplied git/context data.
-- If the changes are small, use a single section.
+- Before finalizing each bullet, ask yourself: "Would a user care?" If not, rewrite it or omit it.
 
 Return structured JSON with:
 - summary: one short sentence
@@ -428,15 +434,37 @@ render_markdown_section() {
 const fs = require('fs');
 const [version, jsonPath, outPath] = process.argv.slice(2);
 const data = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+const headingOrder = new Map([
+  ['Improvements', 0],
+  ['Fixes', 1],
+  ['Notes', 2],
+  ['Packaging and docs', 3],
+]);
+const noisyBulletPatterns = [
+  /^bumped version\b/i,
+  /^updated package\.json\b/i,
+  /^updated version\b/i,
+  /^prepared release\b/i,
+];
 const lines = [`## ${version}`, '', data.summary.trim(), ''];
-for (const section of data.sections) {
+const sections = [...data.sections].sort((a, b) => {
+  const aRank = headingOrder.get(String(a?.heading ?? '').trim()) ?? 99;
+  const bRank = headingOrder.get(String(b?.heading ?? '').trim()) ?? 99;
+  return aRank - bRank;
+});
+for (const section of sections) {
   if (!section || !section.heading || !Array.isArray(section.bullets) || section.bullets.length === 0) {
     continue;
   }
+  const bullets = section.bullets
+    .map(bullet => String(bullet).trim())
+    .filter(text => text && !noisyBulletPatterns.some(pattern => pattern.test(text)));
+  if (bullets.length === 0) {
+    continue;
+  }
   lines.push(`### ${section.heading.trim()}`);
-  for (const bullet of section.bullets) {
-    const text = String(bullet).trim();
-    if (text) lines.push(`- ${text}`);
+  for (const text of bullets) {
+    lines.push(`- ${text}`);
   }
   lines.push('');
 }

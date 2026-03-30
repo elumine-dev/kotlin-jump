@@ -2,20 +2,23 @@
 
 ## 0.2.3
 
-Patch release that fixes the GitHub release workflow so CI can publish releases successfully.
+This patch release improves Kotlin Jump's release reliability so future updates publish more consistently.
 
-### Packaging and docs
-- Fixed release workflow permissions to allow creating GitHub releases
-- Bumped version to 0.2.3
+### Improvements
+- Improved GitHub release automation so packaged updates and release notes publish more reliably
+
+### Notes
+- No functional changes to extension behavior
 
 ## 0.2.2
 
-Patch release that improves publish-script reliability by regenerating the lockfile with a CI-compatible npm version before tagging.
+This patch release improves release preparation reliability so automated publishes stay aligned with CI.
 
-### Packaging and docs
-- Added `sync_lockfile` step to the publish script so `package-lock.json` is regenerated with a CI-compatible npm version on every release
-- Introduced `CLAUDE_PUBLISH_LOCKFILE_NPM` environment variable to override the npm command used during lockfile refresh (default: `npx -y npm@10`)
-- Bumped version to 0.2.2
+### Improvements
+- Regenerated the release lockfile with a CI-compatible npm version before tagging so local release prep matches GitHub Actions more consistently
+
+### Notes
+- No functional changes to extension behavior
 
 ## 0.2.1
 

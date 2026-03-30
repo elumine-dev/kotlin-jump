@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0
+
+Adds inline CodeLens counts showing usages and implementations directly above class and function declarations.
+
+### Improvements
+- Added inline CodeLens annotations that display usages and implementations counts above class and function declarations, making call-site density and interface coverage visible at a glance without running a search.
+- Introduced a `kotlinJump.codeLens` setting (default: on) to disable inline counts for users who prefer a cleaner editor gutter.
+
 ## 0.2.5
 
 Maintenance release updating build tooling with no changes to extension behavior.

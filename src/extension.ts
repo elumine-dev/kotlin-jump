@@ -9,6 +9,7 @@ import { KotlinReferenceProvider } from './providers/ReferenceProvider';
 import { KotlinFileProvider } from './providers/FileProvider';
 import { KotlinImplementationProvider } from './providers/ImplementationProvider';
 import { FindUsagesPanel } from './providers/FindUsagesPanel';
+import { KotlinCodeLensProvider } from './providers/CodeLensProvider';
 import { Logger } from './util/logger';
 import { resolveAll as resolveModules } from './gradle/ModuleResolver';
 import { resolveBest } from './util/ImportResolver';
@@ -59,6 +60,33 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.languages.registerReferenceProvider(KT_JAVA, new KotlinReferenceProvider(index)),
     vscode.languages.registerImplementationProvider(KT_JAVA, new KotlinImplementationProvider(index)),
     vscode.languages.registerWorkspaceSymbolProvider(new KotlinFileProvider(index)),
+
+    // ── Code Lens — "N usages | M implementations" above declarations ──────
+    (() => {
+      const codeLens = new KotlinCodeLensProvider(index);
+      context.subscriptions.push(
+        vscode.languages.registerCodeLensProvider(KT_JAVA, codeLens),
+        codeLens,
+        vscode.workspace.onDidChangeConfiguration(e => {
+          if (e.affectsConfiguration('kotlinJump.codeLens')) codeLens.refresh();
+        }),
+        vscode.workspace.onDidSaveTextDocument(() => {
+          // Refresh lenses after file save (index updates via FileWatcher)
+          setTimeout(() => codeLens.refresh(), 300);
+        }),
+      );
+      return codeLens;
+    })(),
+
+    vscode.commands.registerCommand('kotlin-jump.codeLensAction',
+      async (uri: vscode.Uri, line: number, character: number) => {
+        const doc = await vscode.workspace.openTextDocument(uri);
+        const editor = await vscode.window.showTextDocument(doc, { preview: false });
+        const pos = new vscode.Position(line, character);
+        editor.selection = new vscode.Selection(pos, pos);
+        await vscode.commands.executeCommand('kotlin-jump.findUsages');
+      }
+    ),
 
     vscode.commands.registerCommand('kotlin-jump.findUsages', async (args?: { excludeUri?: string; excludeLine?: number }) => {
       const editor = vscode.window.activeTextEditor;

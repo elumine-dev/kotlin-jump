@@ -25,7 +25,7 @@ Usage: ./.publish [options]
 Prepare a release with deterministic verification and Claude-assisted changelog drafting.
 
 Options:
-  --version <x.y.z>  Use this version for the release; writes package.json unless --dry-run is used
+  --version <x.y.z>  Use this version for the release; writes package.json and syncs README.md unless --dry-run is used
   --base <git-ref>   Compare against this ref instead of auto-detecting
   --dry-run          Print the generated changelog section without writing it
   --notes-only       Update CHANGELOG.md only; skip tests/build/package
@@ -46,7 +46,7 @@ Most explicit workflow:
   # 1. Preview release notes only
   ./.publish --dry-run --notes-only --version 0.2.1
 
-  # 2. Write CHANGELOG.md and set package.json version
+  # 2. Write CHANGELOG.md, sync README.md, and set package.json version
   ./.publish --notes-only --version 0.2.1
 
   # 3. Run tests, build, and create the VSIX without changing git state
@@ -70,7 +70,7 @@ When to use each:
   --dry-run --notes-only = preview release notes only
   --notes-only = write release notes only
   --skip-notes = verify/build/package without rewriting notes
-  --version = set the release version
+  --version = set the release version + sync README.md + refresh package-lock.json
   --commit = prepare + commit
   --tag = prepare + commit + tag
   --push = prepare + commit + tag + push
@@ -188,6 +188,63 @@ fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
 NODE
 }
 
+sync_readme_version() {
+  local next_version="$1"
+  local status
+  status="$(node - "$next_version" <<'NODE'
+const fs = require('fs');
+const path = 'README.md';
+const version = process.argv[2];
+let text = fs.readFileSync(path, 'utf8');
+const original = text;
+
+syncInstallCommandSection('VSIX');
+syncInstallCommandSection('Build from source');
+
+if (text !== original) {
+  fs.writeFileSync(path, text);
+  process.stdout.write('changed');
+} else {
+  process.stdout.write('unchanged');
+}
+
+function syncInstallCommandSection(title) {
+  const sectionRe = new RegExp(`(### ${escapeRegex(title)}\\s*\\n)([\\s\\S]*?)(?=\\n### |\\n## |$)`);
+  const match = text.match(sectionRe);
+  if (!match) {
+    throw new Error(`Could not find README section "${title}"`);
+  }
+
+  const body = match[2];
+  let replacements = 0;
+  const nextBody = body.replace(
+    /code --install-extension kotlin-jump-(?:<version>|[0-9][0-9A-Za-z.+-]*)\.vsix/g,
+    () => {
+      replacements += 1;
+      return `code --install-extension kotlin-jump-${version}.vsix`;
+    }
+  );
+
+  if (replacements === 0) {
+    throw new Error(`Could not find a VSIX install command in README section "${title}"`);
+  }
+
+  text = text.replace(sectionRe, `$1${nextBody}`);
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+NODE
+)"
+
+  if [[ "$status" == "changed" ]]; then
+    echo "Synced README.md VSIX install commands to $next_version."
+  else
+    echo "README.md VSIX install commands already match $next_version."
+  fi
+}
+
 sync_lockfile() {
   echo "Refreshing package-lock.json with CI-compatible npm..."
   ${LOCKFILE_NPM} install --package-lock-only --ignore-scripts
@@ -196,10 +253,17 @@ sync_lockfile() {
 if [[ -n "$VERSION_ARG" ]]; then
   validate_version "$VERSION_ARG"
   VERSION="$VERSION_ARG"
-  if [[ "$DRY_RUN" -eq 0 ]]; then
+fi
+
+if [[ "$DRY_RUN" -eq 0 ]]; then
+  if [[ -n "$VERSION_ARG" ]]; then
     set_package_version "$VERSION_ARG"
-    sync_lockfile
   fi
+  sync_readme_version "$VERSION"
+fi
+
+if [[ -n "$VERSION_ARG" && "$DRY_RUN" -eq 0 ]]; then
+  sync_lockfile
 fi
 
 infer_base_ref() {

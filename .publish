@@ -7,6 +7,7 @@ cd "$ROOT_DIR"
 VERSION="$(node -p "require('./package.json').version")"
 MODEL="${CLAUDE_PUBLISH_MODEL:-sonnet}"
 MAX_BUDGET_USD="${CLAUDE_PUBLISH_MAX_BUDGET_USD:-1}"
+LOCKFILE_NPM="${CLAUDE_PUBLISH_LOCKFILE_NPM:-npx -y npm@10}"
 BASE_REF=""
 VERSION_ARG=""
 DRY_RUN=0
@@ -39,6 +40,7 @@ Options:
 Environment:
   CLAUDE_PUBLISH_MODEL            Override the Claude model
   CLAUDE_PUBLISH_MAX_BUDGET_USD   Max Claude spend for the drafting step (default: 1)
+  CLAUDE_PUBLISH_LOCKFILE_NPM     Command used to refresh package-lock.json for CI parity (default: npx -y npm@10)
 
 Most explicit workflow:
   # 1. Preview release notes only
@@ -186,11 +188,17 @@ fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
 NODE
 }
 
+sync_lockfile() {
+  echo "Refreshing package-lock.json with CI-compatible npm..."
+  ${LOCKFILE_NPM} install --package-lock-only --ignore-scripts
+}
+
 if [[ -n "$VERSION_ARG" ]]; then
   validate_version "$VERSION_ARG"
   VERSION="$VERSION_ARG"
   if [[ "$DRY_RUN" -eq 0 ]]; then
     set_package_version "$VERSION_ARG"
+    sync_lockfile
   fi
 fi
 

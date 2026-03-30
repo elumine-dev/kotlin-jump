@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.2
+
+Patch release that improves publish-script reliability by regenerating the lockfile with a CI-compatible npm version before tagging.
+
+### Packaging and docs
+- Added `sync_lockfile` step to the publish script so `package-lock.json` is regenerated with a CI-compatible npm version on every release
+- Introduced `CLAUDE_PUBLISH_LOCKFILE_NPM` environment variable to override the npm command used during lockfile refresh (default: `npx -y npm@10`)
+- Bumped version to 0.2.2
+
 ## 0.2.1
 
 Patch release with import resolution fixes and expanded edge-case test coverage across navigation providers.

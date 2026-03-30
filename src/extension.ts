@@ -11,7 +11,7 @@ import { KotlinImplementationProvider } from './providers/ImplementationProvider
 import { FindUsagesPanel } from './providers/FindUsagesPanel';
 import { Logger } from './util/logger';
 import { resolveAll as resolveModules } from './gradle/ModuleResolver';
-import { resolve as resolveImports } from './util/ImportResolver';
+import { resolveBest } from './util/ImportResolver';
 import * as IndexStore from './indexer/IndexStore';
 
 const WORD_RE = /[A-Za-z_]\w*/;
@@ -206,13 +206,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
       // FQN via import resolution first, then name fallback
       let fqn: string | undefined;
-      for (const candidate of resolveImports(word, doc)) {
-        const entry = index.lookupFqn(candidate);
-        if (entry) { fqn = entry.fqn; break; }
+      const resolved = resolveBest(word, doc, candidate => index.lookupFqn(candidate));
+      if (resolved.matches.length === 1) {
+        fqn = resolved.matches[0].fqn;
+      } else if (resolved.matches.length > 1) {
+        const items = resolved.matches.map(entry => ({
+          label: entry.fqn,
+          description: entry.uri.path,
+          fqn: entry.fqn,
+        }));
+        const picked = await vscode.window.showQuickPick(items, {
+          placeHolder: `Multiple matches for ${word} — pick the FQN to copy`,
+        });
+        if (!picked) return;
+        fqn = picked.fqn;
       }
       if (!fqn) {
         const hits = index.lookup(word);
-        if (hits.length > 0) fqn = hits[0].fqn;
+        if (hits.length === 1) fqn = hits[0].fqn;
       }
 
       if (!fqn) { vscode.window.showInformationMessage(`No indexed symbol: ${word}`); return; }

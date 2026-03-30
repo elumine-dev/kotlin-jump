@@ -7,6 +7,13 @@ interface DocCache {
   wildcardPrefixes: string[]; // "com.example" (from "import com.example.*")
 }
 
+export type ResolutionPriority = 'exact' | 'samePackage' | 'wildcard' | 'none';
+
+export interface ResolutionResult<T> {
+  priority: ResolutionPriority;
+  matches: T[];
+}
+
 // Keyed by document URI string; evicted when document version changes
 const cache = new Map<string, DocCache>();
 
@@ -19,20 +26,36 @@ const RE_IMPORT  = /^\s*import\s+([\w.*]+)/gm;
  */
 export function resolve(simpleName: string, document: vscode.TextDocument): string[] {
   const c = getCache(document);
-  const candidates: string[] = [];
+  const candidates = [
+    ...exactCandidates(simpleName, c),
+    ...samePackageCandidates(simpleName, c),
+    ...wildcardCandidates(simpleName, c),
+  ];
+  return [...new Set(candidates)];
+}
 
-  for (const imp of c.exact) {
-    if (imp.endsWith(`.${simpleName}`)) candidates.push(imp);
-  }
+/**
+ * Resolves the highest-priority candidate group for a symbol:
+ * exact import > same package > wildcard imports.
+ * If the chosen group contains multiple matches, the caller can treat it as ambiguous.
+ */
+export function resolveBest<T>(
+  simpleName: string,
+  document: vscode.TextDocument,
+  lookup: (fqn: string) => T | undefined,
+): ResolutionResult<T> {
+  const c = getCache(document);
 
-  for (const prefix of c.wildcardPrefixes) {
-    candidates.push(`${prefix}.${simpleName}`);
-  }
+  const exact = resolveGroup(exactCandidates(simpleName, c), lookup);
+  if (exact.length > 0) return { priority: 'exact', matches: exact };
 
-  // Same-package resolution (no import needed)
-  if (c.packageName) candidates.push(`${c.packageName}.${simpleName}`);
+  const samePackage = resolveGroup(samePackageCandidates(simpleName, c), lookup);
+  if (samePackage.length > 0) return { priority: 'samePackage', matches: samePackage };
 
-  return candidates;
+  const wildcard = resolveGroup(wildcardCandidates(simpleName, c), lookup);
+  if (wildcard.length > 0) return { priority: 'wildcard', matches: wildcard };
+
+  return { priority: 'none', matches: [] };
 }
 
 export function evict(uri: vscode.Uri): void {
@@ -68,4 +91,28 @@ function getCache(document: vscode.TextDocument): DocCache {
   };
   cache.set(key, entry);
   return entry;
+}
+
+function exactCandidates(simpleName: string, cache: DocCache): string[] {
+  return cache.exact.filter(imp => imp.endsWith(`.${simpleName}`));
+}
+
+function samePackageCandidates(simpleName: string, cache: DocCache): string[] {
+  return cache.packageName ? [`${cache.packageName}.${simpleName}`] : [];
+}
+
+function wildcardCandidates(simpleName: string, cache: DocCache): string[] {
+  return cache.wildcardPrefixes.map(prefix => `${prefix}.${simpleName}`);
+}
+
+function resolveGroup<T>(
+  candidates: string[],
+  lookup: (fqn: string) => T | undefined,
+): T[] {
+  const matches = new Set<T>();
+  for (const candidate of candidates) {
+    const hit = lookup(candidate);
+    if (hit !== undefined) matches.add(hit);
+  }
+  return [...matches];
 }

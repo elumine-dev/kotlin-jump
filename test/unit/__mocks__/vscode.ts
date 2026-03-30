@@ -5,7 +5,17 @@ export class Position {
 }
 
 export class Range {
-  constructor(public start: Position, public end: Position) {}
+  public start: Position;
+  public end: Position;
+  constructor(startOrLine: Position | number, endOrChar: Position | number, endLine?: number, endChar?: number) {
+    if (typeof startOrLine === 'number') {
+      this.start = new Position(startOrLine, endOrChar as number);
+      this.end = new Position(endLine ?? startOrLine, endChar ?? (endOrChar as number));
+    } else {
+      this.start = startOrLine;
+      this.end = endOrChar as Position;
+    }
+  }
 }
 
 export class Location {
@@ -20,6 +30,24 @@ export class MarkdownString {
 
 export class Hover {
   constructor(public contents: MarkdownString[], public range?: Range) {}
+}
+
+export class TypeHierarchyItem {
+  constructor(
+    public kind: number,
+    public name: string,
+    public detail: string,
+    public uri: any,
+    public range: Range,
+    public selectionRange: Range,
+  ) {}
+}
+
+export enum SymbolKind {
+  Class = 4,
+  Interface = 10,
+  Enum = 9,
+  Object = 18,
 }
 
 export const Uri = {

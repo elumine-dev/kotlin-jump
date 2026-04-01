@@ -167,6 +167,41 @@
         }
       ]
     },
+    "semanticTokenModifiers": [
+      { "id": "composable", "description": "Jetpack Compose @Composable function or state API (remember, mutableStateOf, etc.)" },
+      { "id": "sealed",     "description": "Kotlin sealed class or sealed interface" },
+      { "id": "extension",  "description": "Kotlin extension function (has receiver type, e.g. fun String.foo())" },
+      { "id": "inline",     "description": "Kotlin inline function" },
+      { "id": "infix",      "description": "Kotlin infix function" },
+      { "id": "lateinit",   "description": "Kotlin lateinit var property" },
+      { "id": "operator",   "description": "Kotlin operator function (e.g. operator fun plus())" },
+      { "id": "override",   "description": "Kotlin override function or property" }
+    ],
+    "semanticTokenScopes": [
+      {
+        "scopes": {
+          "class":       ["entity.name.type.class.kotlin"],
+          "struct":      ["entity.name.type.class.kotlin"],
+          "interface":   ["entity.name.type.interface.kotlin"],
+          "enum":        ["entity.name.type.enum.kotlin"],
+          "enumMember":  ["variable.other.enummember.kotlin"],
+          "function":    ["entity.name.function.kotlin"],
+          "method":      ["entity.name.function.member.kotlin"],
+          "property":    ["variable.other.property.kotlin"],
+          "variable":    ["variable.other.kotlin"],
+          "type":        ["entity.name.type.kotlin"],
+          "decorator":   ["entity.name.type.annotation.kotlin"],
+          "namespace":   ["entity.name.namespace.kotlin"]
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "kotlin",
+        "scopeName": "source.kotlin",
+        "path": "./syntaxes/kotlin.tmLanguage.json"
+      }
+    ],
     "languages": [
       {
         "id": "kotlin",
@@ -177,7 +212,8 @@
         "aliases": [
           "Kotlin",
           "kotlin"
-        ]
+        ],
+        "configuration": "./language-configuration.json"
       }
     ],
     "configuration": {
@@ -239,6 +275,11 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Show **usages** and **implementations** counts inline above class and function declarations."
+        },
+        "kotlinJump.semanticHighlighting": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Enable semantic token highlighting for Kotlin files (classes, functions, suspend, @Composable, etc.)."
         }
       }
     }

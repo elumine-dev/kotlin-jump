@@ -12,6 +12,7 @@ import { FindUsagesPanel } from './providers/FindUsagesPanel';
 import { KotlinCodeLensProvider } from './providers/CodeLensProvider';
 import { KotlinTypeHierarchyProvider } from './providers/TypeHierarchyProvider';
 import { KotlinCallHierarchyProvider } from './providers/CallHierarchyProvider';
+import { KotlinSemanticTokensProvider, TOKEN_TYPES, TOKEN_MODIFIERS } from './providers/SemanticTokensProvider';
 import { Logger } from './util/logger';
 import { resolveAll as resolveModules } from './gradle/ModuleResolver';
 import { resolveBest } from './util/ImportResolver';
@@ -20,9 +21,10 @@ import * as IndexStore from './indexer/IndexStore';
 const WORD_RE = /[A-Za-z_]\w*/;
 
 // Module-level refs so deactivate() can save the snapshot
-let _index:   SymbolIndex | undefined;
-let _context: vscode.ExtensionContext | undefined;
-let _stats:   Map<string, { mtime: number; size: number }> = new Map();
+let _index:           SymbolIndex | undefined;
+let _context:         vscode.ExtensionContext | undefined;
+let _stats:           Map<string, { mtime: number; size: number }> = new Map();
+let _semanticTokens:  KotlinSemanticTokensProvider | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   _context = context;
@@ -64,6 +66,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.languages.registerTypeHierarchyProvider(KT_JAVA, new KotlinTypeHierarchyProvider(index)),
     vscode.languages.registerCallHierarchyProvider(KT_JAVA, new KotlinCallHierarchyProvider(index)),
     vscode.languages.registerWorkspaceSymbolProvider(new KotlinFileProvider(index)),
+
+    // ── Semantic Highlighting ─────────────────────────────────────────────
+    (() => {
+      const enabled = vscode.workspace.getConfiguration('kotlinJump').get<boolean>('semanticHighlighting', true);
+      if (!enabled) return { dispose: () => {} };
+      const legend = new vscode.SemanticTokensLegend(TOKEN_TYPES, TOKEN_MODIFIERS);
+      const sp = new KotlinSemanticTokensProvider(index, legend);
+      _semanticTokens = sp;
+      return vscode.Disposable.from(
+        sp,
+        vscode.languages.registerDocumentSemanticTokensProvider({ language: 'kotlin' }, sp, legend),
+        vscode.languages.registerDocumentRangeSemanticTokensProvider({ language: 'kotlin' }, sp, legend),
+      );
+    })(),
 
     // ── Code Lens — "N usages | M implementations" above declarations ──────
     (() => {
@@ -222,7 +238,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   const scanner = new FileScanner(index, log, moduleMap);
 
-  const watcher = new FileWatcher(scanner, index);
+  const watcher = new FileWatcher(scanner, index, uri => _semanticTokens?.invalidate(uri.toString()));
   context.subscriptions.push(watcher, { dispose: () => scanner.destroy() });
 
   context.subscriptions.push(
@@ -319,6 +335,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   statusBar.text    = `$(symbol-class) Kotlin Jump: ${symbols.toLocaleString()} symbols`;
   statusBar.tooltip = `${symbols.toLocaleString()} symbols in ${files} files — ${elapsed}ms`;
   log.info(`Index ready: ${symbols} symbols in ${files} files (${elapsed}ms)`);
+  _semanticTokens?.invalidate();
 }
 
 export async function deactivate(): Promise<void> {

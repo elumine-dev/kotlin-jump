@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { SymbolKind } from '../indexer/KotlinParser';
-import { scanForUsages, isInsideCommentOrString, isExcluded } from './FindUsagesEngine';
+import { scanForUsages, isExcluded } from './FindUsagesEngine';
+import { isInsideCommentOrString } from '../util/textUtils';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 // Matches: method(, method<T>(, method {, obj.method(

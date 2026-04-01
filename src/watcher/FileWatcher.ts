@@ -13,6 +13,7 @@ export class FileWatcher implements vscode.Disposable {
   constructor(
     private readonly scanner: FileScanner,
     private readonly index: SymbolIndex,
+    private readonly onFileIndexed?: (uri: vscode.Uri) => void,
   ) {
     this.ktWatcher = vscode.workspace.createFileSystemWatcher('**/*.{kt,kts}');
     this.ktWatcher.onDidCreate(uri => this.onCreated(uri));
@@ -26,7 +27,7 @@ export class FileWatcher implements vscode.Disposable {
   }
 
   private onCreated(uri: vscode.Uri): void {
-    this.scanner.scanFile(uri);
+    this.scanner.scanFile(uri).then(() => this.onFileIndexed?.(uri));
   }
 
   private onChanged(uri: vscode.Uri): void {
@@ -38,7 +39,7 @@ export class FileWatcher implements vscode.Disposable {
       this.timers.delete(key);
       evict(uri);
       this.index.remove(uri);
-      this.scanner.scanFile(uri);
+      this.scanner.scanFile(uri).then(() => this.onFileIndexed?.(uri));
     }, DEBOUNCE_MS));
   }
 

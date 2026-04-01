@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0
+
+Adds semantic token highlighting and a TextMate syntax grammar for Kotlin, letting compatible themes color Kotlin-specific constructs like Composable functions, extension functions, and sealed classes.
+
+### Improvements
+- Added semantic token highlighting so compatible VS Code themes can apply distinct colors to Kotlin-specific constructs — including Composable functions, extension functions, sealed classes, and inline, infix, operator, and override members — giving Kotlin code more accurate, expressive coloring than generic token types allow.
+- Added a TextMate grammar for Kotlin, providing consistent baseline syntax highlighting across all themes even without semantic token support.
+- Added Kotlin language configuration, enabling standard editor behaviors such as bracket matching, comment toggling, and auto-closing pairs in Kotlin files.
+
 ## 0.4.0
 
 Adds native Call Hierarchy and Type Hierarchy navigation, and fixes Find Usages false positives from comments, strings, and generated files.

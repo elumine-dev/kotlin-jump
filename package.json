@@ -2,7 +2,7 @@
   "name": "kotlin-jump",
   "displayName": "Kotlin Jump",
   "description": "Fast Kotlin & Java navigation — Go to Definition, Find Usages, Go to Implementation. No language server needed.",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publisher": "elumine",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -168,30 +168,78 @@
       ]
     },
     "semanticTokenModifiers": [
-      { "id": "composable", "description": "Jetpack Compose @Composable function or state API (remember, mutableStateOf, etc.)" },
-      { "id": "sealed",     "description": "Kotlin sealed class or sealed interface" },
-      { "id": "extension",  "description": "Kotlin extension function (has receiver type, e.g. fun String.foo())" },
-      { "id": "inline",     "description": "Kotlin inline function" },
-      { "id": "infix",      "description": "Kotlin infix function" },
-      { "id": "lateinit",   "description": "Kotlin lateinit var property" },
-      { "id": "operator",   "description": "Kotlin operator function (e.g. operator fun plus())" },
-      { "id": "override",   "description": "Kotlin override function or property" }
+      {
+        "id": "composable",
+        "description": "Jetpack Compose @Composable function or state API (remember, mutableStateOf, etc.)"
+      },
+      {
+        "id": "sealed",
+        "description": "Kotlin sealed class or sealed interface"
+      },
+      {
+        "id": "extension",
+        "description": "Kotlin extension function (has receiver type, e.g. fun String.foo())"
+      },
+      {
+        "id": "inline",
+        "description": "Kotlin inline function"
+      },
+      {
+        "id": "infix",
+        "description": "Kotlin infix function"
+      },
+      {
+        "id": "lateinit",
+        "description": "Kotlin lateinit var property"
+      },
+      {
+        "id": "operator",
+        "description": "Kotlin operator function (e.g. operator fun plus())"
+      },
+      {
+        "id": "override",
+        "description": "Kotlin override function or property"
+      }
     ],
     "semanticTokenScopes": [
       {
         "scopes": {
-          "class":       ["entity.name.type.class.kotlin"],
-          "struct":      ["entity.name.type.class.kotlin"],
-          "interface":   ["entity.name.type.interface.kotlin"],
-          "enum":        ["entity.name.type.enum.kotlin"],
-          "enumMember":  ["variable.other.enummember.kotlin"],
-          "function":    ["entity.name.function.kotlin"],
-          "method":      ["entity.name.function.member.kotlin"],
-          "property":    ["variable.other.property.kotlin"],
-          "variable":    ["variable.other.kotlin"],
-          "type":        ["entity.name.type.kotlin"],
-          "decorator":   ["entity.name.type.annotation.kotlin"],
-          "namespace":   ["entity.name.namespace.kotlin"]
+          "class": [
+            "entity.name.type.class.kotlin"
+          ],
+          "struct": [
+            "entity.name.type.class.kotlin"
+          ],
+          "interface": [
+            "entity.name.type.interface.kotlin"
+          ],
+          "enum": [
+            "entity.name.type.enum.kotlin"
+          ],
+          "enumMember": [
+            "variable.other.enummember.kotlin"
+          ],
+          "function": [
+            "entity.name.function.kotlin"
+          ],
+          "method": [
+            "entity.name.function.member.kotlin"
+          ],
+          "property": [
+            "variable.other.property.kotlin"
+          ],
+          "variable": [
+            "variable.other.kotlin"
+          ],
+          "type": [
+            "entity.name.type.kotlin"
+          ],
+          "decorator": [
+            "entity.name.type.annotation.kotlin"
+          ],
+          "namespace": [
+            "entity.name.namespace.kotlin"
+          ]
         }
       }
     ],

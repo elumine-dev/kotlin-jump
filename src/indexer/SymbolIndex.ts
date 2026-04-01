@@ -15,8 +15,18 @@ export interface SymbolEntry {
   isComposable: boolean;
   depth: number;
   moduleName?: string;
-  aliasTarget?: string; // raw rhs of typealias — used for follow-through navigation
-  supertypes?: string[]; // simple names of superclasses/interfaces
+  aliasTarget?: string;   // raw rhs of typealias — used for follow-through navigation
+  supertypes?: string[];  // simple names of superclasses/interfaces
+  isSuspend?:       boolean;
+  isAbstract?:      boolean;
+  isConst?:         boolean;
+  isExtension?:     boolean;
+  isInline?:        boolean;
+  isInfix?:         boolean;
+  isLateinit?:      boolean;
+  isHiltViewModel?: boolean;
+  isOperator?:      boolean;
+  isOverride?:      boolean;
 }
 
 export class SymbolIndex {
@@ -76,6 +86,16 @@ export class SymbolIndex {
         moduleName,
         aliasTarget: sym.aliasTarget,
         supertypes: sym.supertypes,
+        isSuspend:       sym.isSuspend,
+        isAbstract:      sym.isAbstract,
+        isConst:         sym.isConst,
+        isExtension:     sym.isExtension,
+        isInline:        sym.isInline,
+        isInfix:         sym.isInfix,
+        isLateinit:      sym.isLateinit,
+        isHiltViewModel: sym.isHiltViewModel,
+        isOperator:      sym.isOperator,
+        isOverride:      sym.isOverride,
       };
 
       fileEntries.push(entry);

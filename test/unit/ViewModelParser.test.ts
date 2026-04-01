@@ -125,10 +125,11 @@ describe('ViewModel — class and supertypes', () => {
     expect(find('AppViewModel')?.supertypes).toContain('ViewModel');
   });
 
-  it('constructor params are NOT indexed', () => {
-    expect(find('userRepository')).toBeUndefined();
-    expect(find('analyticsService')).toBeUndefined();
-    expect(find('settingsManager')).toBeUndefined();
+  it('constructor val params are indexed as class properties', () => {
+    expect(find('userRepository')?.kind).toBe('val');
+    expect(find('userRepository')?.depth).toBe(1);
+    expect(find('analyticsService')?.kind).toBe('val');
+    expect(find('settingsManager')?.kind).toBe('val');
   });
 });
 

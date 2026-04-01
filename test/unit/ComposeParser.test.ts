@@ -104,21 +104,24 @@ describe('Function parameters — known limitation', () => {
   });
 });
 
-// ── Constructor val params (known limitation) ───────────────────────────────
+// ── Constructor val params ───────────────────────────────────────────────────
 
-describe('Constructor val params — known limitation', () => {
-  it('data class constructor val params are NOT indexed', () => {
+describe('Constructor val params', () => {
+  it('multi-line data class constructor val params are indexed', () => {
     const code = `data class Dimensions(
     val width: Int = 0,
     val height: Int = 0,
 )`;
-    expect(find(code, 'width')).toBeUndefined();
-    expect(find(code, 'height')).toBeUndefined();
+    expect(find(code, 'width')?.kind).toBe('val');
+    expect(find(code, 'width')?.depth).toBe(1);
+    expect(find(code, 'height')?.kind).toBe('val');
   });
 
-  it('data class itself IS indexed', () => {
+  it('inline data class constructor val params are indexed', () => {
     const code = `data class Dimensions(val width: Int)`;
     expect(find(code, 'Dimensions')?.kind).toBe('dataClass');
+    expect(find(code, 'width')?.kind).toBe('val');
+    expect(find(code, 'width')?.depth).toBe(1);
   });
 });
 

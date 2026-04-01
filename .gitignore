@@ -2,3 +2,5 @@ node_modules/
 dist/
 *.vsix
 .vscode-test/
+test/kotlin-lsp-main/*
+test/vscode-kotlin-main/*

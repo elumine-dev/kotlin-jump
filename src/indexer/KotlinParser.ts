@@ -13,9 +13,19 @@ export interface RawSymbol {
   line: number;
   character: number;
   isComposable: boolean;
-  depth: number;       // braceDepth at declaration — used for outline hierarchy
-  aliasTarget?: string; // raw rhs of typealias, e.g. "List<UserProfile>"
-  supertypes?: string[]; // simple names of superclasses/interfaces, e.g. ["Bar", "Baz"]
+  depth: number;          // braceDepth at declaration — used for outline hierarchy
+  aliasTarget?: string;   // raw rhs of typealias, e.g. "List<UserProfile>"
+  supertypes?: string[];  // simple names of superclasses/interfaces, e.g. ["Bar", "Baz"]
+  isSuspend?:       boolean;
+  isAbstract?:      boolean;
+  isConst?:         boolean;
+  isExtension?:     boolean; // fun with receiver type, e.g. fun String.foo()
+  isInline?:        boolean;
+  isInfix?:         boolean;
+  isLateinit?:      boolean;
+  isHiltViewModel?: boolean; // class annotated with @HiltViewModel
+  isOperator?:      boolean; // operator fun (e.g. operator fun plus())
+  isOverride?:      boolean; // override fun / override val
 }
 
 export interface ParsedFile {
@@ -29,7 +39,7 @@ export interface ParsedFile {
 const RE_PACKAGE    = /^\s*package\s+([\w.]+)/;
 const RE_IMPORT     = /^\s*import\s+([\w.*]+)/;
 const RE_COMPOSABLE = /@Composable\b/;
-const RE_CLASS      = /^\s*(?:(?:public|private|internal|protected|open|abstract|inner|sealed|data|annotation|enum|actual|expect)\s+)*?(data\s+class|sealed\s+class|sealed\s+interface|enum\s+class|annotation\s+class|class|interface|object)\s+(\w+)/;
+const RE_CLASS      = /^\s*(?:(?:public|private|internal|protected|open|abstract|inner|sealed|data|annotation|enum|actual|expect)\s+)*?(data\s+class|sealed\s+class|sealed\s+interface|fun\s+interface|enum\s+class|annotation\s+class|class|interface|object)\s+(\w+)/;
 // After optional generics, allow an optional `ReceiverType.` prefix so that
 // `fun Modifier.customBackground()` captures "customBackground", not "Modifier".
 // Handles: simple (Modifier.), nullable (Modifier?.), generic (List<T>.), qualified (Modifier.Companion.)
@@ -134,9 +144,39 @@ export function parse(uriString: string, text: string): ParsedFile {
         supertypes = lookAheadSupertypes(text, nl + 1);
       }
 
-      symbols.push({ name, kind, line: lineNum, character: raw.indexOf(name, cm.index), isComposable: false, depth: braceDepth, supertypes: supertypes.length > 0 ? supertypes : undefined });
+      const isAbstract      = /\babstract\b/.test(raw.slice(0, cm.index)) || undefined;
+      const isHiltViewModel = annotationWindow.some(l => /@HiltViewModel\b/.test(l)) || undefined;
+
+      symbols.push({ name, kind, line: lineNum, character: raw.indexOf(name, cm.index), isComposable: false, depth: braceDepth, supertypes: supertypes.length > 0 ? supertypes : undefined, isAbstract, isHiltViewModel });
 
       if (kind === 'enum') enumBraceDepth = braceDepth;
+
+      // ── Inline primary-constructor val/var (single-line: class Foo(val x: Int)) ──
+      // When class + constructor are on one line, RE_PROP never runs on those params.
+      // Find the balanced () of the primary constructor and extract val/var inside it.
+      const ctorOpen = raw.indexOf('(', nameEnd - name.length);
+      if (ctorOpen !== -1) {
+        let pd = 0, ctorClose = -1;
+        for (let ci = ctorOpen; ci < raw.length; ci++) {
+          if (raw[ci] === '(') pd++;
+          else if (raw[ci] === ')') { pd--; if (pd === 0) { ctorClose = ci; break; } }
+        }
+        if (ctorClose !== -1) {
+          const ctorSlice = raw.slice(ctorOpen + 1, ctorClose);
+          const INLINE_PROP_RE = /\b(val|var)\s+(\w+)/g;
+          let ip: RegExpExecArray | null;
+          while ((ip = INLINE_PROP_RE.exec(ctorSlice)) !== null) {
+            symbols.push({
+              name: ip[2],
+              kind: ip[1] === 'val' ? 'val' : 'var',
+              line: lineNum,
+              character: ctorOpen + 1 + ip.index + (ip[0].length - ip[2].length),
+              isComposable: false,
+              depth: braceDepth + 1,
+            });
+          }
+        }
+      }
 
       [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
       if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
@@ -159,6 +199,14 @@ export function parse(uriString: string, text: string): ParsedFile {
     const fm = RE_FUN.exec(raw);
     if (fm) {
       const isComposable = annotationWindow.some(l => RE_COMPOSABLE.test(l));
+      const preFun       = raw.slice(0, raw.lastIndexOf('fun'));
+      const isSuspend    = /\bsuspend\b/.test(preFun)  || undefined;
+      const isAbstract   = /\babstract\b/.test(preFun)  || undefined;
+      const isInline     = /\binline\b/.test(preFun)    || undefined;
+      const isInfix      = /\binfix\b/.test(preFun)     || undefined;
+      const isExtension  = /fun\s+(?:<[^>]*>\s+)?(?:\w+(?:<[^<>]*>)?[?]?\.)/.test(raw) || undefined;
+      const isOperator   = /\boperator\b/.test(preFun)  || undefined;
+      const isOverride   = /\boverride\b/.test(preFun)  || undefined;
       symbols.push({
         name: fm[1],
         kind: isComposable ? 'composable' : 'fun',
@@ -166,6 +214,13 @@ export function parse(uriString: string, text: string): ParsedFile {
         character: raw.indexOf(fm[1], fm.index),
         isComposable,
         depth: braceDepth,
+        isSuspend,
+        isAbstract,
+        isInline,
+        isInfix,
+        isExtension,
+        isOperator,
+        isOverride,
       });
       [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
       if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
@@ -173,16 +228,31 @@ export function parse(uriString: string, text: string): ParsedFile {
       pos = nl + 1; lineNum++; continue;
     }
 
-    // ── Properties — skip when inside (...) so constructor params are not indexed ──
+    // ── Properties ────────────────────────────────────────────────────────────
+    // parenDepth===1 covers primary-constructor val/var (e.g. data class Foo(val x: Int)).
+    // Kotlin function params cannot be val/var, so parenDepth===1 safely identifies
+    // primary-constructor properties only. Use braceDepth+1 as effective depth so
+    // they are treated as class members, not top-level symbols.
     const pm = RE_PROP.exec(raw);
-    if (pm && parenDepth === 0) {
+    const isPrimaryCtorParam = parenDepth === 1;
+    if (pm && (parenDepth === 0 || isPrimaryCtorParam)) {
+      const propDepth  = isPrimaryCtorParam ? braceDepth + 1 : braceDepth;
+      const propPre    = raw.slice(0, raw.indexOf(pm[1]));
+      const isConst    = /\bconst\b/.test(propPre)    || undefined;
+      const isAbstract = /\babstract\b/.test(propPre) || undefined;
+      const isLateinit = /\blateinit\b/.test(propPre) || undefined;
+      const isOverride = /\boverride\b/.test(propPre) || undefined;
       symbols.push({
         name: pm[2],
         kind: pm[1] === 'val' ? 'val' : 'var',
         line: lineNum,
         character: raw.indexOf(pm[2], pm.index),
         isComposable: false,
-        depth: braceDepth,
+        depth: propDepth,
+        isConst,
+        isAbstract,
+        isLateinit,
+        isOverride,
       });
       [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
       if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
@@ -306,6 +376,7 @@ function toClassKind(keyword: string): SymbolKind {
     case 'data class':       return 'dataClass';
     case 'sealed class':
     case 'sealed interface': return 'sealedClass';
+    case 'fun interface':    return 'interface';
     case 'enum class':       return 'enum';
     case 'annotation class': return 'annotation';
     case 'interface':        return 'interface';

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { SymbolIndex } from './SymbolIndex';
 import { SymbolKind } from './KotlinParser';
 
-const SNAPSHOT_VERSION = 5;
+const SNAPSHOT_VERSION = 9;
 const SNAPSHOT_FILENAME = 'kotlin-jump-index.json';
 
 // Compact per-file format — FQN is reconstructed as pkg+"."+name on restore
@@ -18,8 +18,19 @@ interface SnapshotFile {
   c: number[];  // characters
   i: number[];  // isComposable (0/1)
   d: number[];  // depth (brace nesting level)
-  at?: Record<number, string>; // alias targets — sparse map: index → rhs string (typealias only)
+  at?: Record<number, string>;   // alias targets — sparse map: index → rhs string (typealias only)
   st?: Record<number, string[]>; // supertypes — sparse map: index → supertype names
+  // Sparse boolean flags (only entries where true are stored)
+  su?: Record<number, 1>;  // isSuspend
+  ab?: Record<number, 1>;  // isAbstract
+  co?: Record<number, 1>;  // isConst
+  ex?: Record<number, 1>;  // isExtension
+  il?: Record<number, 1>;  // isInline
+  ix?: Record<number, 1>;  // isInfix
+  li?: Record<number, 1>;  // isLateinit
+  hv?: Record<number, 1>;  // isHiltViewModel
+  io?: Record<number, 1>;  // isOperator
+  or?: Record<number, 1>;  // isOverride
 }
 
 interface Snapshot {
@@ -66,8 +77,18 @@ export async function save(
       sf.c.push(e.character);
       sf.i.push(e.isComposable ? 1 : 0);
       sf.d.push(e.depth);
-      if (e.aliasTarget) { sf.at = sf.at ?? {}; sf.at[idx] = e.aliasTarget; }
-      if (e.supertypes) { sf.st = sf.st ?? {}; sf.st[idx] = e.supertypes; }
+      if (e.aliasTarget)      { sf.at = sf.at ?? {}; sf.at[idx] = e.aliasTarget; }
+      if (e.supertypes)       { sf.st = sf.st ?? {}; sf.st[idx] = e.supertypes; }
+      if (e.isSuspend)        { sf.su = sf.su ?? {}; sf.su[idx] = 1; }
+      if (e.isAbstract)       { sf.ab = sf.ab ?? {}; sf.ab[idx] = 1; }
+      if (e.isConst)          { sf.co = sf.co ?? {}; sf.co[idx] = 1; }
+      if (e.isExtension)      { sf.ex = sf.ex ?? {}; sf.ex[idx] = 1; }
+      if (e.isInline)         { sf.il = sf.il ?? {}; sf.il[idx] = 1; }
+      if (e.isInfix)          { sf.ix = sf.ix ?? {}; sf.ix[idx] = 1; }
+      if (e.isLateinit)       { sf.li = sf.li ?? {}; sf.li[idx] = 1; }
+      if (e.isHiltViewModel)  { sf.hv = sf.hv ?? {}; sf.hv[idx] = 1; }
+      if (e.isOperator)       { sf.io = sf.io ?? {}; sf.io[idx] = 1; }
+      if (e.isOverride)       { sf.or = sf.or ?? {}; sf.or[idx] = 1; }
     });
 
     snap.files[uriStr] = sf;
@@ -170,14 +191,24 @@ export function restore(snapshot: Snapshot, index: SymbolIndex): void {
         fqn,
         kind,
         uri,
-        line:         sf.l[i],
-        character:    sf.c[i],
-        packageName:  sf.p,
-        isComposable: sf.i[i] === 1,
+        line:            sf.l[i],
+        character:       sf.c[i],
+        packageName:     sf.p,
+        isComposable:    sf.i[i] === 1,
         depth,
-        moduleName:   sf.m,
-        aliasTarget:  sf.at?.[i],
-        supertypes:   sf.st?.[i],
+        moduleName:      sf.m,
+        aliasTarget:     sf.at?.[i],
+        supertypes:      sf.st?.[i],
+        isSuspend:       sf.su?.[i] === 1 || undefined,
+        isAbstract:      sf.ab?.[i] === 1 || undefined,
+        isConst:         sf.co?.[i] === 1 || undefined,
+        isExtension:     sf.ex?.[i] === 1 || undefined,
+        isInline:        sf.il?.[i] === 1 || undefined,
+        isInfix:         sf.ix?.[i] === 1 || undefined,
+        isLateinit:      sf.li?.[i] === 1 || undefined,
+        isHiltViewModel: sf.hv?.[i] === 1 || undefined,
+        isOperator:      sf.io?.[i] === 1 || undefined,
+        isOverride:      sf.or?.[i] === 1 || undefined,
       };
     });
 

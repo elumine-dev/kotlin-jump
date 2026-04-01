@@ -65,6 +65,7 @@ describe('functions', () => {
   it('parses an override function', () => {
     const s = findSymbol('override fun onCleared() {}', 'onCleared');
     expect(s!.kind).toBe('fun');
+    expect(s!.isOverride).toBe(true);
   });
 
   it('parses a composable function', () => {
@@ -92,12 +93,14 @@ describe('properties', () => {
     expect(s!.kind).toBe('var');
   });
 
-  it('skips constructor params', () => {
+  it('indexes primary-constructor val/var params', () => {
     const result = symbols('class Foo(\n  private val x: Int,\n  val y: String\n)');
     const names = result.map(s => s.name);
     expect(names).toContain('Foo');
-    expect(names).not.toContain('x');
-    expect(names).not.toContain('y');
+    expect(names).toContain('x');
+    expect(names).toContain('y');
+    expect(result.find(s => s.name === 'x')?.kind).toBe('val');
+    expect(result.find(s => s.name === 'x')?.depth).toBe(1);
   });
 });
 
@@ -241,5 +244,83 @@ describe('comments', () => {
     const result = symbols('/* class NotAClass */\nclass RealClass');
     expect(result).toHaveLength(1);
     expect(result[0].name).toBe('RealClass');
+  });
+});
+
+// ── fun interface ───────────────────────────────────────────────────────────
+
+describe('fun interface', () => {
+  it('indexes fun interface as interface kind', () => {
+    const s = findSymbol('fun interface Callback {\n  fun invoke(x: Int): Boolean\n}', 'Callback');
+    expect(s).toBeDefined();
+    expect(s!.kind).toBe('interface');
+  });
+
+  it('captures correct line and depth for top-level fun interface', () => {
+    const s = findSymbol('fun interface Runnable {\n  fun run()\n}', 'Runnable');
+    expect(s!.depth).toBe(0);
+  });
+
+  it('indexes nested fun interface', () => {
+    const code = 'class Outer {\n  fun interface Handler {\n    fun handle()\n  }\n}';
+    const s = findSymbol(code, 'Handler');
+    expect(s).toBeDefined();
+    expect(s!.kind).toBe('interface');
+    expect(s!.depth).toBe(1);
+  });
+
+  it('does not confuse fun interface with regular fun', () => {
+    const code = 'fun interface Predicate {\n  fun test(): Boolean\n}\nfun regularFun() {}';
+    const predicate = findSymbol(code, 'Predicate');
+    const regular   = findSymbol(code, 'regularFun');
+    expect(predicate!.kind).toBe('interface');
+    expect(regular!.kind).toBe('fun');
+  });
+
+  it('does not confuse fun interface with regular interface', () => {
+    const code = 'fun interface SAM {\n  fun run()\n}\ninterface Regular {\n  fun doIt()\n}';
+    expect(findSymbol(code, 'SAM')!.kind).toBe('interface');
+    expect(findSymbol(code, 'Regular')!.kind).toBe('interface');
+  });
+});
+
+// ── isOverride flag ─────────────────────────────────────────────────────────
+
+describe('isOverride flag', () => {
+  it('sets isOverride on override fun', () => {
+    const s = findSymbol('override fun toString(): String = ""', 'toString');
+    expect(s!.isOverride).toBe(true);
+  });
+
+  it('sets isOverride on override val', () => {
+    const s = findSymbol('override val name: String = "impl"', 'name');
+    expect(s!.isOverride).toBe(true);
+  });
+
+  it('sets isOverride on override var', () => {
+    const s = findSymbol('override var count: Int = 0', 'count');
+    expect(s!.isOverride).toBe(true);
+  });
+
+  it('does not set isOverride on regular fun', () => {
+    const s = findSymbol('fun doWork() {}', 'doWork');
+    expect(s!.isOverride).toBeUndefined();
+  });
+
+  it('does not set isOverride on regular val', () => {
+    const s = findSymbol('val total = 0', 'total');
+    expect(s!.isOverride).toBeUndefined();
+  });
+
+  it('captures both override and suspend', () => {
+    const s = findSymbol('override suspend fun fetch(): String = ""', 'fetch');
+    expect(s!.isOverride).toBe(true);
+    expect(s!.isSuspend).toBe(true);
+  });
+
+  it('captures override inside a class body', () => {
+    const code = 'class Impl : Base() {\n  override fun doWork() {}\n  fun extra() {}\n}';
+    expect(findSymbol(code, 'doWork')!.isOverride).toBe(true);
+    expect(findSymbol(code, 'extra')!.isOverride).toBeUndefined();
   });
 });

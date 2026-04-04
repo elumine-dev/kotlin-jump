@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.2
+
+Fixes incorrect CodeLens counts for same-named symbols, stale zero-counts after cancelled scans, Find Usages false positives from wildcard import collisions, and a WASM parser null-tree crash.
+
+### Fixes
+- Fixed CodeLens usage counts showing incorrect values when multiple classes define a symbol with the same simple name; counts now key on fully-qualified names so symbols in different classes no longer share a cache entry.
+- Fixed CodeLens usage counts permanently displaying 0 after a scan is cancelled mid-flight; the stale result is now evicted so the next scan returns an accurate count.
+- Fixed Find Usages returning false matches in files that use wildcard imports from multiple packages when those packages each export a different symbol with the same simple name; such references are now correctly treated as ambiguous and excluded.
+- Fixed a potential crash in the WASM parser when tree-sitter returns a null parse tree; the error is now surfaced with a clear message instead of propagating as an unhandled exception.
+
 ## 0.7.1
 
 Fixes outgoing Call Hierarchy for expression-body functions with default parameter values.

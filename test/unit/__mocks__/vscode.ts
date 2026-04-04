@@ -28,6 +28,18 @@ export class MarkdownString {
   appendMarkdown(md: string) { this.value += md; return this; }
 }
 
+export class EventEmitter<T> {
+  private _listeners: Array<(e: T) => void> = [];
+  event = (listener: (e: T) => void) => { this._listeners.push(listener); return { dispose: () => {} }; };
+  fire(e: T) { for (const l of this._listeners) l(e); }
+  dispose() { this._listeners = []; }
+}
+
+export class CodeLens {
+  command?: any;
+  constructor(public range: Range) {}
+}
+
 export class Hover {
   constructor(public contents: MarkdownString[], public range?: Range) {}
 }

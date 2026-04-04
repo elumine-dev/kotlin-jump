@@ -77,11 +77,15 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
     // Usage count — async file scan (cached per symbol name)
     let usageCount = 0;
     try {
-      const cacheKey = entry.name;
+      const cacheKey = entry.fqn; // must be FQN — simple name causes cache collisions for same-named symbols in different classes
       if (!this._cache.has(cacheKey)) {
         this._cache.set(cacheKey, this.countUsages(entry, token));
       }
       usageCount = await this._cache.get(cacheKey)!;
+      // Evict cancelled results — scan was aborted early, the count is unreliable.
+      // Without this, a cancelled call permanently caches 0 and future valid calls
+      // return the wrong count even after the token is no longer cancelled.
+      if (token.isCancellationRequested) this._cache.delete(cacheKey);
     } catch {
       usageCount = 0;
     }

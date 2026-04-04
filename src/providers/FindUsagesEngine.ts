@@ -3,6 +3,23 @@ import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { resolveBest } from '../util/ImportResolver';
 import { isInsideCommentOrString } from '../util/textUtils';
 
+// ── Internal: wildcard import extraction ─────────────────────────────────────
+
+/**
+ * Extracts the package prefix of every wildcard import in `text`.
+ * e.g. `import com.example.*` → `"com.example"`.
+ */
+function extractWildcardPrefixes(text: string): string[] {
+  const prefixes: string[] = [];
+  // \r? handles Windows CRLF files: after \n the next char is \r, not 'i'
+  const re = /^\r?import\s+([\w.]+)\.\*/gm;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    prefixes.push(m[1]);
+  }
+  return prefixes;
+}
+
 import picomatch from 'picomatch';
 
 const CONCURRENCY = 20;
@@ -75,7 +92,7 @@ export function resolveSearchTarget(
   // the caller document (same package, explicit import, or wildcard import).
   if (!target && decls.length > 1) {
     const docText = document.getText();
-    const candidates = decls.filter(d => fileCouldReference(docText, d));
+    const candidates = decls.filter(d => fileCouldReference(docText, d, index));
     if (candidates.length === 1) target = candidates[0];
   }
 
@@ -110,7 +127,7 @@ export async function scanForUsages(
         const text  = Buffer.from(bytes).toString('utf8');
 
         if (!text.includes(word)) continue;
-        if (target && !fileCouldReference(text, target)) continue;
+        if (target && !fileCouldReference(text, target, index)) continue;
 
         const lines = text.split('\n');
         for (let i = 0; i < lines.length; i++) {
@@ -192,8 +209,12 @@ export async function scanImports(
 /**
  * Returns true if a file could plausibly reference the target symbol.
  * Checks: same package, explicit FQN import, or wildcard package import.
+ *
+ * When `index` is provided, the wildcard check is tightened: if another
+ * wildcard import in the file covers a symbol with the same simple name from
+ * a different package, the match is considered ambiguous and returns false.
  */
-export function fileCouldReference(text: string, target: SymbolEntry): boolean {
+export function fileCouldReference(text: string, target: SymbolEntry, index?: SymbolIndex): boolean {
   const { fqn, packageName: pkg } = target;
   if (pkg) {
     // Anchor to start of line (multiline ^) so a `// package foo` comment never matches.
@@ -207,7 +228,20 @@ export function fileCouldReference(text: string, target: SymbolEntry): boolean {
     const parentFqn = fqn.substring(0, lastDot);
     if (importedExactly(text, parentFqn)) return true;
   }
-  if (pkg && importedExactly(text, `${pkg}.*`)) return true;
+  if (pkg && importedExactly(text, `${pkg}.*`)) {
+    // With an index we can check whether another wildcard in this file also exports
+    // a symbol with the same simple name, which would make the reference ambiguous.
+    // Only applies to top-level symbols (depth === 0): wildcard imports bring package-level
+    // declarations into scope, not class members — so member symbols are never ambiguous
+    // via wildcards and should not be penalised by a competing top-level function name.
+    if (index && target.depth === 0) {
+      const hasCompeting = extractWildcardPrefixes(text).some(
+        prefix => prefix !== pkg && index.lookupFqn(`${prefix}.${target.name}`) !== undefined,
+      );
+      if (hasCompeting) return false;
+    }
+    return true;
+  }
   return false;
 }
 

@@ -12,6 +12,7 @@ import { FindUsagesPanel } from './providers/FindUsagesPanel';
 import { KotlinCodeLensProvider } from './providers/CodeLensProvider';
 import { KotlinTypeHierarchyProvider } from './providers/TypeHierarchyProvider';
 import { KotlinCallHierarchyProvider } from './providers/CallHierarchyProvider';
+import { KotlinRenameProvider } from './providers/RenameProvider';
 import { KotlinSemanticTokensProvider, TOKEN_TYPES, TOKEN_MODIFIERS } from './providers/SemanticTokensProvider';
 import { Logger } from './util/logger';
 import { resolveAll as resolveModules } from './gradle/ModuleResolver';
@@ -75,6 +76,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.languages.registerImplementationProvider(KT_JAVA, new KotlinImplementationProvider(index)),
     vscode.languages.registerTypeHierarchyProvider(KT_JAVA, new KotlinTypeHierarchyProvider(index)),
     vscode.languages.registerCallHierarchyProvider(KT_JAVA, new KotlinCallHierarchyProvider(index)),
+    vscode.languages.registerRenameProvider(KT_JAVA, new KotlinRenameProvider(index)),
     vscode.languages.registerWorkspaceSymbolProvider(new KotlinFileProvider(index)),
 
     // ── Semantic Highlighting ─────────────────────────────────────────────

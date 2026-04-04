@@ -140,6 +140,56 @@ export async function scanForUsages(
 }
 
 /**
+ * Scans `uriStrings` for import lines containing `word`.
+ * Used by RenameProvider to update import statements, which scanForUsages skips.
+ */
+export async function scanImports(
+  word: string,
+  index: SymbolIndex,
+  uriStrings: string[],
+  token: vscode.CancellationToken,
+): Promise<UsageResult[]> {
+  if (index.lookup(word).length === 0) return [];
+
+  const maxReferences = vscode.workspace
+    .getConfiguration('kotlinJump')
+    .get<number>('maxReferences', 500);
+  const wordRe = new RegExp(`\\b${escapeRegex(word)}\\b`, 'g');
+  const results: UsageResult[] = [];
+  let cursor = 0;
+
+  const worker = async () => {
+    while (cursor < uriStrings.length) {
+      if (token.isCancellationRequested) return;
+      if (results.length >= maxReferences) return;
+      const uriStr = uriStrings[cursor++];
+      const uri = vscode.Uri.parse(uriStr);
+      try {
+        const bytes = await vscode.workspace.fs.readFile(uri);
+        const text  = Buffer.from(bytes).toString('utf8');
+        if (!text.includes(word)) continue;
+
+        const lines = text.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+          if (results.length >= maxReferences) break;
+          if (!lines[i].trimStart().startsWith('import ')) continue;
+
+          wordRe.lastIndex = 0;
+          let m: RegExpExecArray | null;
+          while ((m = wordRe.exec(lines[i])) !== null) {
+            if (results.length >= maxReferences) break;
+            results.push({ uri, uriString: uriStr, line: i, character: m.index, lineText: lines[i] });
+          }
+        }
+      } catch { /* skip unreadable */ }
+    }
+  };
+
+  await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+  return results;
+}
+
+/**
  * Returns true if a file could plausibly reference the target symbol.
  * Checks: same package, explicit FQN import, or wildcard package import.
  */

@@ -41,6 +41,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   _snapshotEnabled = cfg0.get<boolean>('snapshotEnabled', true);
   const statusBarEnabled = cfg0.get<boolean>('statusBarEnabled', true);
 
+  const companionMode = cfg0.get<string>('companionMode', 'auto');
+  const isCompanion = companionMode === 'always'
+    || (companionMode === 'auto' && !!vscode.extensions.getExtension('JetBrains.kotlin-lsp'));
+
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBar.text    = '$(sync~spin) Kotlin Jump: indexing…';
   statusBar.tooltip = 'Kotlin Jump is building the symbol index';
@@ -66,8 +70,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     usagesPanel,
     usagesView,
     vscode.languages.registerDefinitionProvider(KT_JAVA, new KotlinDefinitionProvider(index, log)),
-    vscode.languages.registerDocumentSymbolProvider(KT_JAVA, new KotlinDocumentSymbolProvider(index)),
+    // Outline, hover, rename, and semantic tokens are skipped in companion mode
+    // (the JetBrains Kotlin LSP or another full LSP provides these).
+    ...(!isCompanion ? [
+      vscode.languages.registerDocumentSymbolProvider(KT_JAVA, new KotlinDocumentSymbolProvider(index)),
+    ] : []),
     (() => {
+      if (isCompanion) return { dispose: () => {} };
       const enabled = vscode.workspace.getConfiguration('kotlinJump').get<boolean>('hoverEnabled', true);
       if (!enabled) return { dispose: () => {} };
       return vscode.languages.registerHoverProvider(KT_JAVA, new KotlinHoverProvider(index));
@@ -76,11 +85,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.languages.registerImplementationProvider(KT_JAVA, new KotlinImplementationProvider(index)),
     vscode.languages.registerTypeHierarchyProvider(KT_JAVA, new KotlinTypeHierarchyProvider(index)),
     vscode.languages.registerCallHierarchyProvider(KT_JAVA, new KotlinCallHierarchyProvider(index)),
-    vscode.languages.registerRenameProvider(KT_JAVA, new KotlinRenameProvider(index)),
+    ...(!isCompanion ? [
+      vscode.languages.registerRenameProvider(KT_JAVA, new KotlinRenameProvider(index)),
+    ] : []),
     vscode.languages.registerWorkspaceSymbolProvider(new KotlinFileProvider(index)),
 
     // ── Semantic Highlighting ─────────────────────────────────────────────
     (() => {
+      if (isCompanion) return { dispose: () => {} };
       const enabled = vscode.workspace.getConfiguration('kotlinJump').get<boolean>('semanticHighlighting', true);
       if (!enabled) return { dispose: () => {} };
       const legend = new vscode.SemanticTokensLegend(TOKEN_TYPES, TOKEN_MODIFIERS);

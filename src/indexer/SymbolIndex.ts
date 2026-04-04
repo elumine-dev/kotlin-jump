@@ -28,15 +28,19 @@ export interface SymbolEntry {
   isOperator?:      boolean;
   isOverride?:      boolean;
   isPreview?:       boolean;
+  isPrivate?:       boolean;
 }
 
 export class SymbolIndex {
   // ── Three maps for O(1) on every hot-path operation ──────────────────────
   // Set gives O(1) Set.delete() on remove — was O(n) indexOf+splice with Array
-  private readonly byName  = new Map<string, Set<SymbolEntry>>();
-  private readonly byFqn   = new Map<string, SymbolEntry>();
-  private readonly byFile  = new Map<string, SymbolEntry[]>();
-  private readonly bySuper = new Map<string, Set<SymbolEntry>>();
+  private readonly byName    = new Map<string, Set<SymbolEntry>>();
+  private readonly byFqn     = new Map<string, SymbolEntry>();
+  private readonly byFile    = new Map<string, SymbolEntry[]>();
+  private readonly bySuper   = new Map<string, Set<SymbolEntry>>();
+  // ── Trigram index for O(candidates) fuzzy search ─────────────────────────
+  // trigram (3-char lowercase substring) → set of original symbol names
+  private readonly byTrigram = new Map<string, Set<string>>();
 
   // ── Sorted-names for O(log N) binary-search prefix matching ──────────────
   private sortedLower: string[] = [];
@@ -98,12 +102,13 @@ export class SymbolIndex {
         isOperator:      sym.isOperator,
         isOverride:      sym.isOverride,
         isPreview:       sym.isPreview,
+        isPrivate:       sym.isPrivate,
       };
 
       fileEntries.push(entry);
 
       let set = this.byName.get(sym.name);
-      if (!set) { set = new Set(); this.byName.set(sym.name, set); }
+      if (!set) { set = new Set(); this.byName.set(sym.name, set); this.addToTrigram(sym.name); }
       set.add(entry);
 
       this.byFqn.set(fqn, entry);
@@ -210,8 +215,22 @@ export class SymbolIndex {
     }
 
     // ── 2. Fuzzy matches (sequential char match, scored) ─────────────────────
-    if (lower.length >= 2) {
-      const scored: { entries: SymbolEntry[]; score: number }[] = [];
+    // For queries ≥ 3 chars: trigram prefilter reduces O(N) scan to O(candidates).
+    // For queries of 2 chars: no trigrams available — fall back to linear scan.
+    const scored: { entries: SymbolEntry[]; score: number }[] = [];
+    if (lower.length >= 3) {
+      const candidates = this.trigramCandidates(lower);
+      if (candidates !== null) {
+        for (const name of candidates) {
+          if (prefixNames.has(name)) continue;
+          const score = fuzzyScore(lower, name.toLowerCase());
+          if (score > 0) {
+            const set = this.byName.get(name);
+            if (set) scored.push({ entries: [...set], score });
+          }
+        }
+      }
+    } else if (lower.length === 2) {
       for (let i = 0; i < this.sortedOrig.length; i++) {
         const name = this.sortedOrig[i];
         if (prefixNames.has(name)) continue;
@@ -221,12 +240,12 @@ export class SymbolIndex {
           if (set) scored.push({ entries: [...set], score });
         }
       }
-      scored.sort((a, b) => b.score - a.score);
-      for (const { entries } of scored) {
-        for (const e of entries) {
-          results.push(e);
-          if (results.length >= 200) return results;
-        }
+    }
+    scored.sort((a, b) => b.score - a.score);
+    for (const { entries } of scored) {
+      for (const e of entries) {
+        results.push(e);
+        if (results.length >= 200) return results;
       }
     }
 
@@ -278,6 +297,7 @@ export class SymbolIndex {
     this.byFqn.clear();
     this.byFile.clear();
     this.bySuper.clear();
+    this.byTrigram.clear();
     this.sortedLower = [];
     this.sortedOrig  = [];
     this.dirty = true;
@@ -295,7 +315,7 @@ export class SymbolIndex {
     this.byFile.set(uriString, entries);
     for (const e of entries) {
       let set = this.byName.get(e.name);
-      if (!set) { set = new Set(); this.byName.set(e.name, set); }
+      if (!set) { set = new Set(); this.byName.set(e.name, set); this.addToTrigram(e.name); }
       set.add(e);
       this.byFqn.set(e.fqn, e);
       if (e.supertypes) {
@@ -319,7 +339,7 @@ export class SymbolIndex {
       const set = this.byName.get(entry.name);
       if (set) {
         set.delete(entry); // O(1) — was O(n) indexOf
-        if (set.size === 0) this.byName.delete(entry.name);
+        if (set.size === 0) { this.byName.delete(entry.name); this.removeFromTrigram(entry.name); }
       }
       this.byFqn.delete(entry.fqn);
       if (entry.supertypes) {
@@ -334,6 +354,49 @@ export class SymbolIndex {
     }
     this.byFile.delete(key);
     this.dirty = true;
+  }
+
+  // ── Trigram helpers ───────────────────────────────────────────────────────
+
+  private addToTrigram(name: string): void {
+    const lower = name.toLowerCase();
+    for (let i = 0; i <= lower.length - 3; i++) {
+      const t = lower.slice(i, i + 3);
+      let set = this.byTrigram.get(t);
+      if (!set) { set = new Set(); this.byTrigram.set(t, set); }
+      set.add(name);
+    }
+  }
+
+  private removeFromTrigram(name: string): void {
+    const lower = name.toLowerCase();
+    for (let i = 0; i <= lower.length - 3; i++) {
+      const t = lower.slice(i, i + 3);
+      const set = this.byTrigram.get(t);
+      if (set) {
+        set.delete(name);
+        if (set.size === 0) this.byTrigram.delete(t);
+      }
+    }
+  }
+
+  // Returns names containing ALL trigrams in `lower`. Returns null when any
+  // trigram has no bucket — impossible to find a match, skip scoring entirely.
+  private trigramCandidates(lower: string): Set<string> | null {
+    let candidates: Set<string> | null = null;
+    for (let i = 0; i <= lower.length - 3; i++) {
+      const bucket = this.byTrigram.get(lower.slice(i, i + 3));
+      if (!bucket || bucket.size === 0) return null;
+      if (candidates === null) {
+        candidates = new Set(bucket);
+      } else {
+        for (const name of candidates) {
+          if (!bucket.has(name)) candidates.delete(name);
+        }
+        if (candidates.size === 0) return null;
+      }
+    }
+    return candidates;
   }
 
   private rebuildSorted(): void {

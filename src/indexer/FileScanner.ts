@@ -69,6 +69,7 @@ export class FileScanner {
   }
 
   async scanFile(uri: vscode.Uri): Promise<void> {
+    const t0 = Date.now();
     try {
       const maxFileBytes = vscode.workspace.getConfiguration('kotlinJump').get<number>('fileSizeLimit', 512) * 1024;
       const bytes = await vscode.workspace.fs.readFile(uri);
@@ -77,6 +78,8 @@ export class FileScanner {
       const parsed = await this.parseText(uri.toString(), text, uri.fsPath.endsWith('.java'));
       this.index.add(parsed, this.moduleFor(uri));
       this.index.finalize();
+      const name = uri.path.split('/').pop() ?? uri.path;
+      this.log.debug(`[scan] ${name} → ${parsed.symbols.length} symbols (${Date.now() - t0}ms)`);
     } catch { /* deleted between event and read */ }
   }
 

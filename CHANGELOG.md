@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.3
+
+Fixes Find Usages false positives for private symbols, sharpens Go to Definition when same-named symbols coexist in the same package, and speeds up workspace symbol search with a trigram prefilter.
+
+### Improvements
+- Workspace symbol search (⌘T / Ctrl+T) now uses a trigram prefilter for queries of three or more characters, shrinking the fuzzy-match candidate pool before scoring and making symbol lookup noticeably faster in large projects.
+- Startup phases, per-file scan timings, and search query durations are now written to the "Kotlin Jump" Output channel, making it easier to diagnose slow indexing or unexpected behavior without filing a bug report.
+
+### Fixes
+- Fixed Find Usages returning results from unrelated files when the target symbol is declared `private`; searches are now restricted to the declaring file, eliminating false positives that appeared when multiple classes in the same package each defined a same-named private member (e.g., `private val clickStream` repeated across ViewModels).
+- Fixed Go to Definition presenting multiple ambiguous results when the cursor is inside a file that declares one of several same-package, same-named symbols; the declaration in the current file is now correctly preferred over same-package siblings.
+
 ## 0.7.2
 
 Fixes incorrect CodeLens counts for same-named symbols, stale zero-counts after cancelled scans, Find Usages false positives from wildcard import collisions, and a WASM parser null-tree crash.

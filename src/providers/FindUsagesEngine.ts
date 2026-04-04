@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { resolveBest } from '../util/ImportResolver';
 import { isInsideCommentOrString } from '../util/textUtils';
+import { Logger } from '../util/logger';
 
 // ── Internal: wildcard import extraction ─────────────────────────────────────
 
@@ -93,7 +94,16 @@ export function resolveSearchTarget(
   if (!target && decls.length > 1) {
     const docText = document.getText();
     const candidates = decls.filter(d => fileCouldReference(docText, d, index));
-    if (candidates.length === 1) target = candidates[0];
+    if (candidates.length === 1) {
+      target = candidates[0];
+    } else if (candidates.length > 1) {
+      // Same-file tiebreak: when the search originates from the declaring file
+      // (e.g. Find Usages on `clickStream` inside LoginViewModel.kt), and both
+      // LoginViewModel.clickStream and NavigationViewModelDelegate.clickStream
+      // are in the same package, prefer the one declared in this exact file.
+      const sameFile = candidates.filter(d => d.uri.toString() === document.uri.toString());
+      if (sameFile.length === 1) target = sameFile[0];
+    }
   }
 
   return target;
@@ -105,30 +115,50 @@ export async function scanForUsages(
   index: SymbolIndex,
   uriStrings: string[],
   token: vscode.CancellationToken,
+  log?: Logger,
 ): Promise<UsageResult[]> {
   const decls = index.lookup(word);
   if (decls.length === 0) return [];
 
   const target = resolveSearchTarget(word, document, index);
 
+  // ── Private symbol: only the declaring file can reference it ─────────────
+  // A `private val/var/fun` is invisible outside its declaring file. Scanning
+  // other files would produce false positives when those files happen to have
+  // their own same-named private member (common pattern: `private val clickStream`
+  // repeated across multiple ViewModels in the same package).
+  let effectiveUris = uriStrings;
+  if (target?.isPrivate) {
+    effectiveUris = uriStrings.filter(u => u === target.uri.toString());
+    log?.info(`[findUsages] "${word}" is private → restricted to declaring file only (was ${uriStrings.length} files)`);
+  } else {
+    const targetDesc = target ? `${target.fqn}${target.isPrivate ? ' (private)' : ''}` : 'ambiguous';
+    log?.info(`[findUsages] "${word}" target=${targetDesc} — scanning up to ${uriStrings.length} files`);
+  }
+
   const maxReferences = vscode.workspace.getConfiguration('kotlinJump').get<number>('maxReferences', 500);
   const wordRe = new RegExp(`\\b${escapeRegex(word)}\\b`, 'g');
   const results: UsageResult[] = [];
+  const skipped: string[] = [];
   let cursor = 0;
 
   const worker = async () => {
-    while (cursor < uriStrings.length) {
+    while (cursor < effectiveUris.length) {
       if (token.isCancellationRequested) return;
       if (results.length >= maxReferences) return;
-      const uriStr = uriStrings[cursor++];
+      const uriStr = effectiveUris[cursor++];
       const uri = vscode.Uri.parse(uriStr);
       try {
         const bytes = await vscode.workspace.fs.readFile(uri);
         const text  = Buffer.from(bytes).toString('utf8');
 
         if (!text.includes(word)) continue;
-        if (target && !fileCouldReference(text, target, index)) continue;
+        if (target && !fileCouldReference(text, target, index)) {
+          skipped.push(uriStr);
+          continue;
+        }
 
+        const fileHitsBefore = results.length;
         const lines = text.split('\n');
         for (let i = 0; i < lines.length; i++) {
           const trimmed = lines[i].trimStart();
@@ -148,11 +178,25 @@ export async function scanForUsages(
             }
           }
         }
+        const hitsInFile = results.length - fileHitsBefore;
+        if (hitsInFile > 0 && log) {
+          const name = uri.path.split('/').pop() ?? uri.path;
+          log.info(`[findUsages]   ${name}: ${hitsInFile} hit${hitsInFile === 1 ? '' : 's'}`);
+        }
       } catch { /* skip unreadable */ }
     }
   };
 
   await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+
+  if (log) {
+    const fileCount = results.length === 0 ? 0 : new Set(results.map(r => r.uriString)).size;
+    log.info(`[findUsages] "${word}" → ${results.length} total result${results.length === 1 ? '' : 's'} in ${fileCount} file${fileCount === 1 ? '' : 's'}`);
+    if (skipped.length > 0) {
+      log.info(`[findUsages]   skipped ${skipped.length} file${skipped.length === 1 ? '' : 's'} (fileCouldReference=false): ${skipped.map(u => u.split('/').pop()).join(', ')}`);
+    }
+  }
+
   return results;
 }
 

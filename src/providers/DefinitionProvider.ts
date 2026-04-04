@@ -85,7 +85,15 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
     const visibleByImport = filtered.filter(e => isEnclosingClassVisible(e, document));
     log(`step2 visibleByImport=${visibleByImport.length} → ${visibleByImport.map(e => e.fqn).join(', ') || 'none'}`);
     if (visibleByImport.length === 1) return withAliasTargets(visibleByImport[0], this.index, allow);
-    if (visibleByImport.length > 0) return visibleByImport.map(toLocation);
+    if (visibleByImport.length > 1) {
+      // Tiebreak: when the cursor is inside the file that declares one of the candidates
+      // (e.g. NavigationViewModel.kt defines setFragment, and so does the delegate in the
+      // same package), prefer the declaration in the current file over same-package siblings.
+      const sameFile = visibleByImport.filter(e => e.uri.toString() === document.uri.toString());
+      log(`step2 sameFileTiebreak=${sameFile.length} → ${sameFile.map(e => e.fqn).join(', ') || 'none'}`);
+      if (sameFile.length === 1) return withAliasTargets(sameFile[0], this.index, allow);
+      return visibleByImport.map(toLocation);
+    }
 
     // ── 2b. Same-file fallback (self-references inside the declaring file) ────
     const sameFile = filtered.filter(e => e.uri.toString() === document.uri.toString());

@@ -33,7 +33,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   _context = context;
 
   const log   = new Logger('Kotlin Jump');
-  log.info('Extension activated — v0.5.0-debug');
+  const version = context.extension.packageJSON.version as string ?? '?';
+  log.info(`Extension activated — v${version}`);
   const index = new SymbolIndex();
   _index = index;
 
@@ -84,14 +85,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (!enabled) return { dispose: () => {} };
       return vscode.languages.registerHoverProvider(KT_JAVA, new KotlinHoverProvider(index));
     })(),
-    vscode.languages.registerReferenceProvider(KT_JAVA, new KotlinReferenceProvider(index)),
+    vscode.languages.registerReferenceProvider(KT_JAVA, new KotlinReferenceProvider(index, log)),
     vscode.languages.registerImplementationProvider(KT_JAVA, new KotlinImplementationProvider(index)),
     vscode.languages.registerTypeHierarchyProvider(KT_JAVA, new KotlinTypeHierarchyProvider(index)),
     vscode.languages.registerCallHierarchyProvider(KT_JAVA, new KotlinCallHierarchyProvider(index)),
     ...(!isCompanion ? [
       vscode.languages.registerRenameProvider(KT_JAVA, new KotlinRenameProvider(index)),
     ] : []),
-    vscode.languages.registerWorkspaceSymbolProvider(new KotlinFileProvider(index)),
+    vscode.languages.registerWorkspaceSymbolProvider(new KotlinFileProvider(index, log)),
 
     // ── Semantic Highlighting ─────────────────────────────────────────────
     (() => {
@@ -322,7 +323,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   const scanner = new FileScanner(index, log, moduleMap);
 
-  const watcher = new FileWatcher(scanner, index, uri => _semanticTokens?.invalidate(uri.toString()));
+  const watcher = new FileWatcher(scanner, index, uri => _semanticTokens?.invalidate(uri.toString()), log);
   context.subscriptions.push(watcher, { dispose: () => scanner.destroy() });
 
   context.subscriptions.push(
@@ -390,6 +391,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     IndexStore.restore(snapshot, index);
 
     const { files, symbols } = index.stats();
+    log.info(`[startup] snapshot restored: ${symbols.toLocaleString()} symbols in ${files} files`);
     statusBar.text    = `$(symbol-class) Kotlin Jump: ${symbols.toLocaleString()} symbols`;
     statusBar.tooltip = `Restored from snapshot: ${symbols.toLocaleString()} symbols in ${files} files`;
 
@@ -399,15 +401,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Reuse the stats already collected during staleness check
     _stats = report.stats;
 
-    report.toRemove.forEach(uriStr => index.remove(vscode.Uri.parse(uriStr)));
+    if (report.toRemove.length > 0) {
+      log.info(`[startup] removed ${report.toRemove.length} deleted files from index`);
+      report.toRemove.forEach(uriStr => index.remove(vscode.Uri.parse(uriStr)));
+    }
 
     if (report.toScan.length > 0) {
+      log.info(`[startup] ${report.toScan.length} stale files — rescanning…`);
       statusBar.text = `$(sync~spin) Kotlin Jump: updating ${report.toScan.length} files…`;
       await scanner.rescan(report.toScan);
+    } else {
+      log.info('[startup] snapshot up to date — no rescan needed');
     }
 
   } else {
     // No snapshot — full scan
+    log.info(`[startup] no snapshot — full scan of ${allUris.length} files`);
     await scanner.scanAll();
 
     // Collect stats (mtime + size) for snapshot save on deactivate

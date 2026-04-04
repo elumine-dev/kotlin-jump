@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.1
+
+Fixes outgoing Call Hierarchy for expression-body functions with default parameter values.
+
+### Fixes
+- Fixed outgoing Call Hierarchy for expression-body functions that include default parameter values (e.g., `fun f(x: Int = 0) = call()`). The `=` in a default value was previously mistaken for the expression-body marker, causing all outgoing calls from those functions to be silently dropped from the Call Hierarchy panel.
+
 ## 0.7.0
 
 Adds a standalone LSP server for Neovim, Helix, and Zed; a smarter rename provider with import and file rename support; KMP source set awareness; and companion mode for coexisting with JetBrains Kotlin LSP.

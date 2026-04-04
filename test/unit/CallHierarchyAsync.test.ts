@@ -346,23 +346,67 @@ fun save() {}`;
     expect(names).toContain('save');
   });
 
-  it('LIMITATION — expression body function has no outgoing calls detected', async () => {
-    // fun double(x: Int) = multiply(x, 2)
-    // bodyStart = declLine + 1, bodyEnd = declLine (next symbol is one line below)
-    // bodyStart > bodyEnd → returns []
+  it('expression body: fun f() = call() detects the call', async () => {
     const code = `package com.example
 fun double(x: Int) = multiply(x, 2)
 fun multiply(a: Int, b: Int) = a * b`;
     addKt(index, 'file:///Math.kt', code);
     workspace.openTextDocument = async () => mockDocument('file:///Math.kt', code) as any;
 
-    const doc     = mockDocument('file:///Math.kt', code);
-    const [item]  = provider.prepareCallHierarchy(doc, positionOf(code, 'double'))!;
+    const doc    = mockDocument('file:///Math.kt', code);
+    const [item] = provider.prepareCallHierarchy(doc, positionOf(code, 'double'))!;
     const results = await provider.provideCallHierarchyOutgoingCalls(item, noCancel());
 
-    // This is the known limitation: expression-body functions return empty outgoing calls
-    expect(results).toHaveLength(0);
-    // If this test ever fails, the limitation has been fixed — update accordingly
+    const names = results.map(r => r.to.name);
+    expect(names).toContain('multiply');
+  });
+
+  it('expression body with return type: fun f(): T = call() detects the call', async () => {
+    const code = `package com.example
+fun greetUser(id: String): String = formatName(id)
+fun formatName(s: String): String = s`;
+    addKt(index, 'file:///Greet.kt', code);
+    workspace.openTextDocument = async () => mockDocument('file:///Greet.kt', code) as any;
+
+    const doc    = mockDocument('file:///Greet.kt', code);
+    const [item] = provider.prepareCallHierarchy(doc, positionOf(code, 'greetUser'))!;
+    const results = await provider.provideCallHierarchyOutgoingCalls(item, noCancel());
+
+    expect(results.map(r => r.to.name)).toContain('formatName');
+  });
+
+  it('expression body with default param: fun f(x: Int = 0) = call() detects the call', async () => {
+    const code = `package com.example
+fun compute(x: Int = 0) = process(x)
+fun process(n: Int) = n`;
+    addKt(index, 'file:///Compute.kt', code);
+    workspace.openTextDocument = async () => mockDocument('file:///Compute.kt', code) as any;
+
+    const doc    = mockDocument('file:///Compute.kt', code);
+    const [item] = provider.prepareCallHierarchy(doc, positionOf(code, 'compute'))!;
+    const results = await provider.provideCallHierarchyOutgoingCalls(item, noCancel());
+
+    expect(results.map(r => r.to.name)).toContain('process');
+  });
+
+  it('expression body: call range is on the declaration line', async () => {
+    const code = `package com.example
+fun double(x: Int) = multiply(x, 2)
+fun multiply(a: Int, b: Int) = a * b`;
+    addKt(index, 'file:///Math.kt', code);
+    workspace.openTextDocument = async () => mockDocument('file:///Math.kt', code) as any;
+
+    const doc    = mockDocument('file:///Math.kt', code);
+    const [item] = provider.prepareCallHierarchy(doc, positionOf(code, 'double'))!;
+    const results = await provider.provideCallHierarchyOutgoingCalls(item, noCancel());
+
+    const entry = results.find(r => r.to.name === 'multiply')!;
+    expect(entry).toBeDefined();
+    // The call range must be on the same line as the fun declaration (line 1)
+    const declLine = code.split('\n').findIndex(l => l.includes('fun double'));
+    for (const range of entry.fromRanges) {
+      expect(range.start.line).toBe(declLine);
+    }
   });
 
   it('cancellation → returns empty array', async () => {

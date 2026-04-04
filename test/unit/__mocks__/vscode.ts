@@ -70,6 +70,15 @@ export class CallHierarchyOutgoingCall {
   constructor(public to: CallHierarchyItem, public fromRanges: Range[]) {}
 }
 
+export class SymbolInformation {
+  constructor(
+    public name: string,
+    public kind: number,
+    public containerName: string,
+    public location: any,
+  ) {}
+}
+
 export const Uri = {
   parse: (s: string) => ({
     toString: () => s,

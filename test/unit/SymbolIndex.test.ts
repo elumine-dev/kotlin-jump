@@ -258,6 +258,89 @@ describe('SymbolIndex — search and filter', () => {
   });
 });
 
+describe('SymbolIndex — allEntries() for composable/preview navigation', () => {
+  it('returns all entries across multiple files', () => {
+    const index = new SymbolIndex();
+    addFile(index, 'file:///ui/MyScreen.kt', `
+package com.example.ui
+@Composable
+fun MyScreen() {}
+`);
+    addFile(index, 'file:///ui/MyScreenPreview.kt', `
+package com.example.ui
+@Preview
+@Composable
+fun MyScreenPreview() {}
+`);
+    const all = index.allEntries();
+    const names = all.map(e => e.name);
+    expect(names).toContain('MyScreen');
+    expect(names).toContain('MyScreenPreview');
+  });
+
+  it('allEntries() can be filtered for @Preview functions', () => {
+    const index = new SymbolIndex();
+    addFile(index, 'file:///ui/MyScreen.kt', `
+package com.example.ui
+@Composable
+fun MyScreen() {}
+@Preview
+@Composable
+fun MyScreenPreview() {}
+@Preview
+@Composable
+fun MyScreenDarkPreview() {}
+`);
+    const previews = index.allEntries().filter(e => e.isPreview);
+    const names = previews.map(e => e.name);
+    expect(names).toContain('MyScreenPreview');
+    expect(names).toContain('MyScreenDarkPreview');
+    expect(names).not.toContain('MyScreen');
+  });
+
+  it('allEntries() can find preview candidates by name containment', () => {
+    const index = new SymbolIndex();
+    addFile(index, 'file:///ui/HomeScreen.kt', `
+package com.example.ui
+@Composable
+fun HomeScreen() {}
+`);
+    addFile(index, 'file:///debug/HomeScreenPreview.kt', `
+package com.example.debug
+@Preview
+@Composable
+fun HomeScreenPreview() {}
+@Preview
+@Composable
+fun HomeScreenDarkPreview() {}
+`);
+    const composableName = 'HomeScreen';
+    const candidates = index.allEntries().filter(e => e.isPreview && e.name.includes(composableName));
+    expect(candidates).toHaveLength(2);
+    expect(candidates.map(e => e.name)).toContain('HomeScreenPreview');
+    expect(candidates.map(e => e.name)).toContain('HomeScreenDarkPreview');
+  });
+
+  it('allEntries() can find composable from preview by name containment', () => {
+    const index = new SymbolIndex();
+    addFile(index, 'file:///ui/HomeScreen.kt', `
+package com.example.ui
+@Composable
+fun HomeScreen() {}
+`);
+    addFile(index, 'file:///debug/HomeScreenPreview.kt', `
+package com.example.debug
+@Preview
+@Composable
+fun HomeScreenDarkPreview() {}
+`);
+    const previewName = 'HomeScreenDarkPreview';
+    const candidates = index.allEntries().filter(e => e.isComposable && !e.isPreview && previewName.includes(e.name));
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].name).toBe('HomeScreen');
+  });
+});
+
 describe('SymbolIndex — remove and re-add', () => {
   it('removing a file clears its symbols from all maps', () => {
     const index = new SymbolIndex();
@@ -273,3 +356,4 @@ describe('SymbolIndex — remove and re-add', () => {
     expect(index.lookupImplementations('PokeApiService')).toHaveLength(0);
   });
 });
+

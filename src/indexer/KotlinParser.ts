@@ -26,6 +26,7 @@ export interface RawSymbol {
   isHiltViewModel?: boolean; // class annotated with @HiltViewModel
   isOperator?:      boolean; // operator fun (e.g. operator fun plus())
   isOverride?:      boolean; // override fun / override val
+  isPreview?:       boolean; // function annotated with @Preview
 }
 
 export interface ParsedFile {
@@ -39,6 +40,7 @@ export interface ParsedFile {
 const RE_PACKAGE    = /^\s*package\s+([\w.]+)/;
 const RE_IMPORT     = /^\s*import\s+([\w.*]+)/;
 const RE_COMPOSABLE = /@Composable\b/;
+const RE_PREVIEW    = /@Preview\b/;
 const RE_CLASS      = /^\s*(?:(?:public|private|internal|protected|open|abstract|inner|sealed|data|annotation|enum|actual|expect)\s+)*?(data\s+class|sealed\s+class|sealed\s+interface|fun\s+interface|enum\s+class|annotation\s+class|class|interface|object)\s+(\w+)/;
 // After optional generics, allow an optional `ReceiverType.` prefix so that
 // `fun Modifier.customBackground()` captures "customBackground", not "Modifier".
@@ -199,6 +201,7 @@ export function parse(uriString: string, text: string): ParsedFile {
     const fm = RE_FUN.exec(raw);
     if (fm) {
       const isComposable = annotationWindow.some(l => RE_COMPOSABLE.test(l));
+      const isPreview    = annotationWindow.some(l => RE_PREVIEW.test(l)) || undefined;
       const preFun       = raw.slice(0, raw.lastIndexOf('fun'));
       const isSuspend    = /\bsuspend\b/.test(preFun)  || undefined;
       const isAbstract   = /\babstract\b/.test(preFun)  || undefined;
@@ -221,6 +224,7 @@ export function parse(uriString: string, text: string): ParsedFile {
         isExtension,
         isOperator,
         isOverride,
+        isPreview,
       });
       [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
       if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;

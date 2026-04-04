@@ -3,8 +3,6 @@ import { FileScanner } from '../indexer/FileScanner';
 import { SymbolIndex } from '../indexer/SymbolIndex';
 import { evict } from '../util/ImportResolver';
 
-const DEBOUNCE_MS = 150;
-
 export class FileWatcher implements vscode.Disposable {
   private readonly ktWatcher:   vscode.FileSystemWatcher;
   private readonly javaWatcher: vscode.FileSystemWatcher;
@@ -35,12 +33,13 @@ export class FileWatcher implements vscode.Disposable {
     const existing = this.timers.get(key);
     if (existing) clearTimeout(existing);
 
+    const debounceMs = vscode.workspace.getConfiguration('kotlinJump').get<number>('watcherDebounceMs', 150);
     this.timers.set(key, setTimeout(() => {
       this.timers.delete(key);
       evict(uri);
       this.index.remove(uri);
       this.scanner.scanFile(uri).then(() => this.onFileIndexed?.(uri));
-    }, DEBOUNCE_MS));
+    }, debounceMs));
   }
 
   private onDeleted(uri: vscode.Uri): void {

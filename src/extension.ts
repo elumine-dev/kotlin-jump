@@ -21,23 +21,29 @@ import * as IndexStore from './indexer/IndexStore';
 const WORD_RE = /[A-Za-z_]\w*/;
 
 // Module-level refs so deactivate() can save the snapshot
-let _index:           SymbolIndex | undefined;
-let _context:         vscode.ExtensionContext | undefined;
-let _stats:           Map<string, { mtime: number; size: number }> = new Map();
-let _semanticTokens:  KotlinSemanticTokensProvider | undefined;
+let _index:            SymbolIndex | undefined;
+let _context:          vscode.ExtensionContext | undefined;
+let _stats:            Map<string, { mtime: number; size: number }> = new Map();
+let _semanticTokens:   KotlinSemanticTokensProvider | undefined;
+let _snapshotEnabled:  boolean = true;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   _context = context;
 
   const log   = new Logger('Kotlin Jump');
+  log.info('Extension activated — v0.5.0-debug');
   const index = new SymbolIndex();
   _index = index;
 
   // ── Register providers FIRST — Cmd+Click works even during indexing ───────
+  const cfg0 = vscode.workspace.getConfiguration('kotlinJump');
+  _snapshotEnabled = cfg0.get<boolean>('snapshotEnabled', true);
+  const statusBarEnabled = cfg0.get<boolean>('statusBarEnabled', true);
+
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBar.text    = '$(sync~spin) Kotlin Jump: indexing…';
   statusBar.tooltip = 'Kotlin Jump is building the symbol index';
-  statusBar.show();
+  if (statusBarEnabled) statusBar.show();
 
   const KT_JAVA = [{ language: 'kotlin' }, { language: 'java' }];
 
@@ -58,9 +64,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     statusBar,
     usagesPanel,
     usagesView,
-    vscode.languages.registerDefinitionProvider(KT_JAVA, new KotlinDefinitionProvider(index)),
+    vscode.languages.registerDefinitionProvider(KT_JAVA, new KotlinDefinitionProvider(index, log)),
     vscode.languages.registerDocumentSymbolProvider(KT_JAVA, new KotlinDocumentSymbolProvider(index)),
-    vscode.languages.registerHoverProvider(KT_JAVA, new KotlinHoverProvider(index)),
+    (() => {
+      const enabled = vscode.workspace.getConfiguration('kotlinJump').get<boolean>('hoverEnabled', true);
+      if (!enabled) return { dispose: () => {} };
+      return vscode.languages.registerHoverProvider(KT_JAVA, new KotlinHoverProvider(index));
+    })(),
     vscode.languages.registerReferenceProvider(KT_JAVA, new KotlinReferenceProvider(index)),
     vscode.languages.registerImplementationProvider(KT_JAVA, new KotlinImplementationProvider(index)),
     vscode.languages.registerTypeHierarchyProvider(KT_JAVA, new KotlinTypeHierarchyProvider(index)),
@@ -199,6 +209,63 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await vscode.commands.executeCommand('vscode.open', target);
     }),
 
+    vscode.commands.registerCommand('kotlin-jump.goToComposablePreview', async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) return;
+
+      const wordRange = editor.document.getWordRangeAtPosition(editor.selection.active, WORD_RE);
+      if (!wordRange) return;
+      const word = editor.document.getText(wordRange);
+
+      const fileEntries = index.getFileSymbols(editor.document.uri.toString());
+      const cursorLine  = editor.selection.active.line;
+      const entry = fileEntries.find(e => e.name === word && Math.abs(e.line - cursorLine) <= 1);
+
+      const isComposable = entry?.isComposable ?? false;
+      const isPreview    = entry?.isPreview    ?? false;
+
+      if (!isComposable && !isPreview) {
+        vscode.window.showInformationMessage(`"${word}" is not a @Composable or @Preview function.`);
+        return;
+      }
+
+      const all = index.allEntries();
+      let candidates: typeof all;
+      if (isComposable) {
+        candidates = all.filter(e => e.isPreview && e.name.includes(word));
+      } else {
+        candidates = all.filter(e => e.isComposable && word.includes(e.name));
+      }
+
+      if (candidates.length === 0) {
+        const direction = isComposable ? 'preview' : 'composable';
+        vscode.window.showInformationMessage(`No ${direction} found for "${word}".`);
+        return;
+      }
+
+      let target: (typeof candidates)[0];
+      if (candidates.length === 1) {
+        target = candidates[0];
+      } else {
+        const items = candidates.map(e => ({
+          label: e.name,
+          description: e.uri.path,
+          entry: e,
+        }));
+        const picked = await vscode.window.showQuickPick(items, {
+          placeHolder: `Multiple matches — pick ${isComposable ? 'preview' : 'composable'}`,
+        });
+        if (!picked) return;
+        target = picked.entry;
+      }
+
+      const doc = await vscode.workspace.openTextDocument(target.uri);
+      const ed  = await vscode.window.showTextDocument(doc, { preview: false });
+      const pos = new vscode.Position(target.line, target.character);
+      ed.selection = new vscode.Selection(pos, pos);
+      ed.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+    }),
+
     // ── Detect Cmd+Click on declaration → fire Find Usages ────────────────
     // provideDefinition sets pendingDeclNavigation when at a declaration.
     // On hover: VS Code shows the link but doesn't navigate → no selection change.
@@ -299,7 +366,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const t0 = Date.now();
 
   // ── Try snapshot first (near-zero re-activation cost) ─────────────────────
-  const snapshot = await IndexStore.load(context);
+  const snapshot = _snapshotEnabled ? await IndexStore.load(context) : null;
 
   if (snapshot) {
     // Restore snapshot immediately — no I/O, no regex
@@ -339,7 +406,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 export async function deactivate(): Promise<void> {
-  if (_index && _context && _stats.size > 0) {
+  if (_snapshotEnabled && _index && _context && _stats.size > 0) {
     await IndexStore.save(_index, _stats, _context);
   }
 }

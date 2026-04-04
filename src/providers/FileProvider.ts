@@ -72,6 +72,12 @@ export class KotlinFileProvider implements vscode.WorkspaceSymbolProvider {
       if (kinds) entries = entries.filter(e => kinds.has(e.kind));
     }
 
+    const allowedKinds = vscode.workspace.getConfiguration('kotlinJump').get<string[]>('workspaceSymbolKinds', []);
+    if (allowedKinds.length > 0) {
+      const allowed = new Set(allowedKinds);
+      entries = entries.filter(e => allowed.has(e.kind));
+    }
+
     return entries.map(e =>
       new vscode.SymbolInformation(
         e.name,

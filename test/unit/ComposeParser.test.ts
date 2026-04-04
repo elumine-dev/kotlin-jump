@@ -137,6 +137,57 @@ describe('Computed property', () => {
   });
 });
 
+// ── @Preview function detection ─────────────────────────────────────────────
+
+describe('@Preview function detection', () => {
+  it('bare @Preview fun sets isPreview', () => {
+    const sym = find('@Preview\nfun MyScreenPreview() {}', 'MyScreenPreview');
+    expect(sym?.isPreview).toBe(true);
+  });
+
+  it('@Preview with params sets isPreview', () => {
+    const sym = find('@Preview(showBackground = true)\nfun MyScreenPreview() {}', 'MyScreenPreview');
+    expect(sym?.isPreview).toBe(true);
+  });
+
+  it('@Preview @Composable fun sets both flags', () => {
+    const code = `@Preview\n@Composable\nfun MyScreenPreview() {}`;
+    const sym = find(code, 'MyScreenPreview');
+    expect(sym?.isPreview).toBe(true);
+    expect(sym?.isComposable).toBe(true);
+    expect(sym?.kind).toBe('composable');
+  });
+
+  it('@Composable @Preview fun sets both flags', () => {
+    const code = `@Composable\n@Preview\nfun MyScreenPreview() {}`;
+    const sym = find(code, 'MyScreenPreview');
+    expect(sym?.isPreview).toBe(true);
+    expect(sym?.isComposable).toBe(true);
+  });
+
+  it('@Composable fun without @Preview has no isPreview', () => {
+    const sym = find('@Composable\nfun MyScreen() {}', 'MyScreen');
+    expect(sym?.isPreview).toBeFalsy();
+    expect(sym?.isComposable).toBe(true);
+  });
+
+  it('plain fun has neither flag', () => {
+    const sym = find('fun doSomething() {}', 'doSomething');
+    expect(sym?.isPreview).toBeFalsy();
+    expect(sym?.isComposable).toBeFalsy();
+  });
+
+  it('multiple @Preview annotations before @Composable — all detected', () => {
+    const code = `@Preview(name = "light")
+@Preview(name = "dark", uiMode = 1)
+@Composable
+fun MultiPreview() {}`;
+    const sym = find(code, 'MultiPreview');
+    expect(sym?.isPreview).toBe(true);
+    expect(sym?.isComposable).toBe(true);
+  });
+});
+
 // ── val with = inside with() { block ────────────────────────────────────────
 
 describe('val with block expression', () => {

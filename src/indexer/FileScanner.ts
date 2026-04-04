@@ -6,7 +6,6 @@ import { SymbolIndex } from './SymbolIndex';
 import { WorkerPool } from './WorkerPool';
 import { Logger } from '../util/logger';
 
-const MAX_FILE_BYTES = 512 * 1024; // skip files > 512 KB (generated / huge)
 const IO_CONCURRENCY_DEFAULT = 20;
 
 export class FileScanner {
@@ -48,25 +47,28 @@ export class FileScanner {
     const excludeGlob = `{${excludeList.join(',')}}`;
 
     const ioConcurrency = cfg.get<number>('concurrency') ?? IO_CONCURRENCY_DEFAULT;
+    const maxFileBytes  = (cfg.get<number>('fileSizeLimit', 512)) * 1024;
     const uris = await vscode.workspace.findFiles('**/*.{kt,kts,java}', excludeGlob, maxFiles);
     this.log.info(`Scanning ${uris.length} files (io=${ioConcurrency}, workers=${this.pool.available ? 'yes' : 'no'})…`);
 
-    await this.pipeline(uris, ioConcurrency, token);
+    await this.pipeline(uris, ioConcurrency, token, maxFileBytes);
     if (!token.cancelled) this.index.finalize();
   }
 
   // Re-scan a specific subset of files (used after snapshot load for stale files)
   async rescan(uris: vscode.Uri[]): Promise<void> {
     const token = this.freshToken();
-    const cfg = vscode.workspace.getConfiguration('kotlinJump');
-    await this.pipeline(uris, cfg.get<number>('concurrency') ?? IO_CONCURRENCY_DEFAULT, token);
+    const cfg          = vscode.workspace.getConfiguration('kotlinJump');
+    const maxFileBytes = (cfg.get<number>('fileSizeLimit', 512)) * 1024;
+    await this.pipeline(uris, cfg.get<number>('concurrency') ?? IO_CONCURRENCY_DEFAULT, token, maxFileBytes);
     if (!token.cancelled) this.index.finalize();
   }
 
   async scanFile(uri: vscode.Uri): Promise<void> {
     try {
+      const maxFileBytes = vscode.workspace.getConfiguration('kotlinJump').get<number>('fileSizeLimit', 512) * 1024;
       const bytes = await vscode.workspace.fs.readFile(uri);
-      if (bytes.byteLength > MAX_FILE_BYTES) return;
+      if (bytes.byteLength > maxFileBytes) return;
       const text   = this.decoder.decode(bytes);
       const parsed = await this.parseText(uri.toString(), text, uri.fsPath.endsWith('.java'));
       this.index.add(parsed, this.moduleFor(uri));
@@ -84,6 +86,7 @@ export class FileScanner {
     uris: vscode.Uri[],
     concurrency: number,
     token: { cancelled: boolean },
+    maxFileBytes: number,
   ): Promise<void> {
     let cursor = 0;
 
@@ -95,7 +98,7 @@ export class FileScanner {
         if (uri.fsPath.includes('.kapt_metadata') || uri.fsPath.includes('_metadata')) continue;
         try {
           const bytes = await vscode.workspace.fs.readFile(uri);
-          if (bytes.byteLength > MAX_FILE_BYTES) continue;
+          if (bytes.byteLength > maxFileBytes) continue;
           const text   = this.decoder.decode(bytes);
           const parsed = await this.parseText(uri.toString(), text, uri.fsPath.endsWith('.java'));
           if (!token.cancelled) this.index.add(parsed, this.moduleFor(uri));

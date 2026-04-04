@@ -27,6 +27,7 @@ export interface SymbolEntry {
   isHiltViewModel?: boolean;
   isOperator?:      boolean;
   isOverride?:      boolean;
+  isPreview?:       boolean;
 }
 
 export class SymbolIndex {
@@ -96,6 +97,7 @@ export class SymbolIndex {
         isHiltViewModel: sym.isHiltViewModel,
         isOperator:      sym.isOperator,
         isOverride:      sym.isOverride,
+        isPreview:       sym.isPreview,
       };
 
       fileEntries.push(entry);
@@ -257,6 +259,14 @@ export class SymbolIndex {
       }
     }
     return results;
+  }
+
+  allEntries(): SymbolEntry[] {
+    const out: SymbolEntry[] = [];
+    for (const entries of this.byFile.values()) {
+      for (const e of entries) out.push(e);
+    }
+    return out;
   }
 
   stats(): { files: number; symbols: number } {

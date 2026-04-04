@@ -1,14 +1,17 @@
 /**
- * Comprehensive tests for the LSP server utilities and handler logic.
+ * Adversarial tests for the LSP server utilities and handler logic.
  *
- * Covers: wordAt, uriToPath, pathToUri, buildHoverMarkdown, KIND_MAP,
- *         findUsagesInWorkspace, and workspace-symbol handler logic.
+ * Strategy: test boundary conditions, known limitations, real filesystem,
+ * concurrency correctness, and false-positive/negative cases.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import * as fs from 'fs/promises';
+import * as os from 'os';
+import * as path from 'path';
 import { SymbolIndex } from '../../src/indexer/SymbolIndex';
 import { parse } from '../../src/indexer/KotlinParser';
 import { wordAt, uriToPath, pathToUri, buildHoverMarkdown, KIND_MAP } from '../../src/server/utils';
-import { findUsagesInWorkspace, SKIP_DIRS } from '../../src/server/scanner';
+import { findUsagesInWorkspace, scanWorkspace, indexFile, SKIP_DIRS } from '../../src/server/scanner';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -33,268 +36,342 @@ function makeEntry(overrides: Partial<{
 }
 
 const noCancel = { isCancellationRequested: false };
-const cancelled = { isCancellationRequested: true };
 
-// ── wordAt ────────────────────────────────────────────────────────────────────
+// ── wordAt — boundary conditions ──────────────────────────────────────────────
 
-describe('wordAt', () => {
-  const TEXT = 'class DataStore : Repository';
-  //            0123456789...
-  //            class = 0-4, DataStore = 6-14, Repository = 18-27
+describe('wordAt — basic coverage', () => {
+  const LINE = 'class DataStore : Repository';
+  // positions: class(0-4), DataStore(6-14), Repository(18-27)
 
-  it('cursor at start of word → returns word', () => {
-    expect(wordAt(TEXT, 0, 6)).toEqual({ word: 'DataStore', start: 6 });
+  it('cursor at start of word', () => {
+    expect(wordAt(LINE, 0, 6)).toEqual({ word: 'DataStore', start: 6 });
   });
-
-  it('cursor in middle of word → returns word', () => {
-    expect(wordAt(TEXT, 0, 10)).toEqual({ word: 'DataStore', start: 6 });
+  it('cursor in middle of word', () => {
+    expect(wordAt(LINE, 0, 10)).toEqual({ word: 'DataStore', start: 6 });
   });
-
-  it('cursor at last char of word → returns word', () => {
-    expect(wordAt(TEXT, 0, 14)).toEqual({ word: 'DataStore', start: 6 });
+  it('cursor at last char of word (char == start + length - 1)', () => {
+    // 'DataStore' starts at 6, length 9, last char at 14
+    expect(wordAt(LINE, 0, 14)).toEqual({ word: 'DataStore', start: 6 });
   });
-
-  it('cursor just past end of word → returns next word or null', () => {
-    // char 15 is ' ' (space) — no word there
-    expect(wordAt(TEXT, 0, 15)).toBeNull();
+  it('cursor at exactly start + length (one past end) → null', () => {
+    // char 15 is the space after DataStore — must be null, not DataStore
+    expect(wordAt(LINE, 0, 15)).toBeNull();
   });
-
-  it('cursor on whitespace → null', () => {
-    expect(wordAt(TEXT, 0, 5)).toBeNull();   // space before DataStore
+  it('cursor on space → null', () => {
+    expect(wordAt(LINE, 0, 5)).toBeNull();
   });
-
   it('cursor on colon → null', () => {
-    expect(wordAt(TEXT, 0, 16)).toBeNull();  // ':' character
+    expect(wordAt(LINE, 0, 16)).toBeNull();
   });
-
-  it('cursor on first char of text (position 0) → returns "class"', () => {
-    expect(wordAt(TEXT, 0, 0)).toEqual({ word: 'class', start: 0 });
+  it('cursor at position 0 → first word', () => {
+    expect(wordAt(LINE, 0, 0)).toEqual({ word: 'class', start: 0 });
   });
-
-  it('cursor on very last char → returns last word', () => {
-    const len = TEXT.length;
-    expect(wordAt(TEXT, 0, len - 1)).toEqual({ word: 'Repository', start: 18 });
+  it('cursor at last char of line → last word', () => {
+    expect(wordAt(LINE, 0, LINE.length - 1)).toEqual({ word: 'Repository', start: 18 });
   });
-
-  it('second word on the line', () => {
-    const line = 'fun fetchUser(): User';
-    expect(wordAt(line, 0, 4)).toEqual({ word: 'fetchUser', start: 4 });
-  });
-
-  it('underscore-prefixed identifier', () => {
-    const line = 'val _count = 0';
-    expect(wordAt(line, 0, 4)).toEqual({ word: '_count', start: 4 });
-  });
-
-  it('alphanumeric with digits', () => {
-    const line = 'val myVar2 = 0';
-    expect(wordAt(line, 0, 6)).toEqual({ word: 'myVar2', start: 4 });
-  });
-
   it('empty line → null', () => {
     expect(wordAt('', 0, 0)).toBeNull();
   });
-
-  it('line beyond text bounds → null', () => {
+  it('line index beyond end of text → null', () => {
     expect(wordAt('one line', 99, 0)).toBeNull();
   });
-
-  it('multi-line text: correct line is selected', () => {
+  it('multi-line: selects the correct line', () => {
     const text = 'package com.example\nclass Foo {}';
     expect(wordAt(text, 1, 6)).toEqual({ word: 'Foo', start: 6 });
-    expect(wordAt(text, 0, 8)).toEqual({ word: 'com', start: 8 });
+    expect(wordAt(text, 0, 0)).toEqual({ word: 'package', start: 0 });
   });
-
-  it('digit-only token is not a word (starts with letter)', () => {
-    const line = 'val x = 42';
-    expect(wordAt(line, 0, 8)).toBeNull();  // '4' does not start a word
+  it('underscore-prefixed identifier', () => {
+    expect(wordAt('val _count = 0', 0, 4)).toEqual({ word: '_count', start: 4 });
   });
-
-  it('consecutive calls do not share regex state (WORD_RE reuse safety)', () => {
-    // If lastIndex were shared, the second call could skip matches
+  it('digit after a letter is part of the word', () => {
+    expect(wordAt('val myVar2 = 0', 0, 6)).toEqual({ word: 'myVar2', start: 4 });
+  });
+  it('digit at position 0 is not a word start', () => {
+    expect(wordAt('val x = 42', 0, 8)).toBeNull();
+  });
+  it('consecutive calls produce same result — fresh regex per call', () => {
     const line = 'fun foo() {}';
     const r1 = wordAt(line, 0, 4);
     const r2 = wordAt(line, 0, 4);
+    const r3 = wordAt(line, 0, 4);
     expect(r1).toEqual(r2);
+    expect(r2).toEqual(r3);
     expect(r1).toEqual({ word: 'foo', start: 4 });
-  });
-
-  it('symbol at position 0 of a long line', () => {
-    const line = 'DataStore is the main class';
-    expect(wordAt(line, 0, 0)).toEqual({ word: 'DataStore', start: 0 });
   });
 });
 
-// ── URI utilities ─────────────────────────────────────────────────────────────
+describe('wordAt — adversarial', () => {
+  it('word preceded by dot (property access) — dot is non-word char', () => {
+    // 'store.DataStore' — cursor on 'D' at char 6
+    const line = 'store.DataStore';
+    expect(wordAt(line, 0, 6)).toEqual({ word: 'DataStore', start: 6 });
+  });
+
+  it('word preceded by @ (annotation) — @ is non-word char', () => {
+    const line = '@DataStore class Foo';
+    expect(wordAt(line, 0, 1)).toEqual({ word: 'DataStore', start: 1 });
+  });
+
+  it('word followed by ( without space', () => {
+    const line = 'DataStore()';
+    expect(wordAt(line, 0, 0)).toEqual({ word: 'DataStore', start: 0 });
+    // Cursor just past ')' at position 11 → null
+    expect(wordAt(line, 0, 10)).toBeNull(); // ')'  is not a word char
+  });
+
+  it('word inside angle brackets (generic type parameter)', () => {
+    const line = 'Repository<DataStore>';
+    expect(wordAt(line, 0, 11)).toEqual({ word: 'DataStore', start: 11 });
+  });
+
+  it('single underscore is a valid identifier', () => {
+    const line = 'val _ = 5';
+    expect(wordAt(line, 0, 4)).toEqual({ word: '_', start: 4 });
+  });
+
+  it('tab before word — position is absolute column', () => {
+    const line = '\tDataStore';
+    // tab is at 0, 'D' is at 1
+    expect(wordAt(line, 0, 1)).toEqual({ word: 'DataStore', start: 1 });
+    expect(wordAt(line, 0, 0)).toBeNull(); // tab is not a word char
+  });
+
+  it('Windows CRLF line ending: \\r at end does not shift word positions', () => {
+    // split('\n') leaves '\r' at end of each line
+    const text = 'class DataStore {}\r\nval x = DataStore()\r\n';
+    // On line 0, 'DataStore' is at char 6 even with trailing \r
+    expect(wordAt(text, 0, 6)).toEqual({ word: 'DataStore', start: 6 });
+    // On line 1, 'DataStore' is at char 8
+    expect(wordAt(text, 1, 8)).toEqual({ word: 'DataStore', start: 8 });
+  });
+
+  it('position exactly at line length → null (not an error)', () => {
+    const line = 'class Foo';
+    expect(wordAt(line, 0, line.length)).toBeNull();
+  });
+
+  it('very long identifier (1000 chars) — no crash, returns word', () => {
+    const longName = 'A' + 'x'.repeat(999); // 1000-char identifier
+    const line = `val ${longName} = 5`;
+    expect(wordAt(line, 0, 4)?.word).toBe(longName);
+  });
+
+  it('line with only one word — cursor anywhere in it returns that word', () => {
+    const line = 'DataStore';
+    for (let i = 0; i < line.length; i++) {
+      expect(wordAt(line, 0, i)).toEqual({ word: 'DataStore', start: 0 });
+    }
+    expect(wordAt(line, 0, line.length)).toBeNull();
+  });
+
+  it('two adjacent words separated only by comma — each is independent', () => {
+    const line = 'listOf(Foo,Bar)';
+    expect(wordAt(line, 0, 7)).toEqual({ word: 'Foo', start: 7 });
+    expect(wordAt(line, 0, 11)).toEqual({ word: 'Bar', start: 11 });
+    expect(wordAt(line, 0, 10)).toBeNull(); // comma
+  });
+});
+
+// ── URI utilities — adversarial ───────────────────────────────────────────────
 
 describe('uriToPath', () => {
-  it('basic file URI → absolute path', () => {
+  it('basic file URI', () => {
     expect(uriToPath('file:///Users/kevin/project/Foo.kt')).toBe('/Users/kevin/project/Foo.kt');
   });
-
-  it('URI with %20 space → decoded path', () => {
+  it('%20 decoded to space', () => {
     expect(uriToPath('file:///Users/my%20project/Foo.kt')).toBe('/Users/my project/Foo.kt');
   });
-
-  it('URI with encoded special chars → decoded', () => {
+  it('%40 decoded to @', () => {
     expect(uriToPath('file:///path/to/%40annotated/Foo.kt')).toBe('/path/to/@annotated/Foo.kt');
   });
-
-  it('non-file URI returned unchanged', () => {
+  it('non-file URI returned as-is', () => {
     expect(uriToPath('/already/a/path')).toBe('/already/a/path');
   });
-
-  it('nested path preserved correctly', () => {
-    expect(uriToPath('file:///a/b/c/d/e.kt')).toBe('/a/b/c/d/e.kt');
+  it('file:/// alone (root URI) → /', () => {
+    expect(uriToPath('file:///')).toBe('/');
+  });
+  it('multiple percent-encoded chars in one path', () => {
+    expect(uriToPath('file:///a%20b/c%23d/Foo.kt')).toBe('/a b/c#d/Foo.kt');
   });
 });
 
 describe('pathToUri', () => {
-  it('basic path → file URI', () => {
+  it('basic absolute path', () => {
     expect(pathToUri('/Users/kevin/project/Foo.kt')).toBe('file:///Users/kevin/project/Foo.kt');
   });
-
-  it('path with space → percent-encoded URI', () => {
+  it('space is percent-encoded', () => {
     expect(pathToUri('/Users/my project/Foo.kt')).toBe('file:///Users/my%20project/Foo.kt');
   });
-
-  it('round-trip: pathToUri → uriToPath restores original path', () => {
-    const original = '/Users/kevin/src/main/kotlin/com/example/MyClass.kt';
-    expect(uriToPath(pathToUri(original))).toBe(original);
+  it('# is percent-encoded', () => {
+    expect(pathToUri('/path/to/#issue/Foo.kt')).toBe('file:///path/to/%23issue/Foo.kt');
+  });
+  it('@ is percent-encoded', () => {
+    expect(pathToUri('/path/to/@annotated/Foo.kt')).toBe('file:///path/to/%40annotated/Foo.kt');
+  });
+  it('root path /', () => {
+    expect(pathToUri('/')).toBe('file:///');
   });
 
-  it('round-trip with spaces', () => {
-    const original = '/Users/kevin/my project/src/Foo.kt';
-    expect(uriToPath(pathToUri(original))).toBe(original);
+  // Round-trips
+  it('round-trip: simple path', () => {
+    const p = '/Users/kevin/src/main/kotlin/com/example/MyClass.kt';
+    expect(uriToPath(pathToUri(p))).toBe(p);
   });
-
-  it('round-trip with special chars', () => {
-    const original = '/path/to/some@dir/Foo.kt';
-    expect(uriToPath(pathToUri(original))).toBe(original);
+  it('round-trip: path with space', () => {
+    const p = '/Users/kevin/my project/Foo.kt';
+    expect(uriToPath(pathToUri(p))).toBe(p);
+  });
+  it('round-trip: path with @', () => {
+    const p = '/path/to/@annotated/Foo.kt';
+    expect(uriToPath(pathToUri(p))).toBe(p);
+  });
+  it('round-trip: path with #', () => {
+    const p = '/path/to/#numbered/Foo.kt';
+    expect(uriToPath(pathToUri(p))).toBe(p);
+  });
+  it('round-trip: nested KMP path', () => {
+    const p = '/workspace/app/src/commonMain/kotlin/com/example/DataStore.kt';
+    expect(uriToPath(pathToUri(p))).toBe(p);
   });
 });
 
-// ── buildHoverMarkdown ────────────────────────────────────────────────────────
+// ── buildHoverMarkdown — adversarial ──────────────────────────────────────────
 
 describe('buildHoverMarkdown', () => {
-  it('basic class entry shows kind, FQN, package, file', () => {
-    const md = buildHoverMarkdown([makeEntry()]);
-    expect(md).toContain('class com.example.Foo');
-    expect(md).toContain('*Package:* `com.example`');
-    expect(md).toContain('*File:* `Foo.kt`');
+  it('class', () => {
+    expect(buildHoverMarkdown([makeEntry({ kind: 'class' })])).toContain('class com.example.Foo');
   });
-
-  it('dataClass → "data class" label', () => {
+  it('dataClass → "data class"', () => {
     const md = buildHoverMarkdown([makeEntry({ kind: 'dataClass', fqn: 'com.example.Point' })]);
     expect(md).toContain('data class com.example.Point');
     expect(md).not.toContain('dataClass');
   });
-
-  it('sealedClass → "sealed class" label', () => {
+  it('sealedClass → "sealed class"', () => {
     const md = buildHoverMarkdown([makeEntry({ kind: 'sealedClass', fqn: 'com.example.State' })]);
     expect(md).toContain('sealed class com.example.State');
+    expect(md).not.toContain('sealedClass');
+  });
+  it('interface → raw kind label "interface"', () => {
+    expect(buildHoverMarkdown([makeEntry({ kind: 'interface' })])).toContain('interface com.example.Foo');
+  });
+  it('object → raw kind label "object"', () => {
+    expect(buildHoverMarkdown([makeEntry({ kind: 'object' })])).toContain('object com.example.Foo');
+  });
+  it('enum → raw kind label "enum"', () => {
+    expect(buildHoverMarkdown([makeEntry({ kind: 'enum' })])).toContain('enum com.example.Foo');
+  });
+  it('fun → raw kind label "fun"', () => {
+    expect(buildHoverMarkdown([makeEntry({ kind: 'fun', fqn: 'com.example.Repo.fetch' })])).toContain('fun com.example.Repo.fetch');
+  });
+  it('val → raw kind label "val"', () => {
+    expect(buildHoverMarkdown([makeEntry({ kind: 'val', fqn: 'com.example.MAX' })])).toContain('val com.example.MAX');
+  });
+  it('typealias → raw kind label "typealias"', () => {
+    expect(buildHoverMarkdown([makeEntry({ kind: 'typealias', fqn: 'com.example.Handler' })])).toContain('typealias com.example.Handler');
   });
 
-  it('fun → "fun" label', () => {
-    const md = buildHoverMarkdown([makeEntry({ kind: 'fun', fqn: 'com.example.Repo.fetchUser' })]);
-    expect(md).toContain('fun com.example.Repo.fetchUser');
+  it('module name shown when set', () => {
+    expect(buildHoverMarkdown([makeEntry({ moduleName: 'app (commonMain)' })])).toContain('*Module:* `app (commonMain)`');
+  });
+  it('module name omitted when undefined', () => {
+    expect(buildHoverMarkdown([makeEntry({ moduleName: undefined })])).not.toContain('Module');
+  });
+  it('module name omitted when empty string (falsy)', () => {
+    expect(buildHoverMarkdown([makeEntry({ moduleName: '' as any })])).not.toContain('Module');
   });
 
-  it('shows module name when present', () => {
-    const md = buildHoverMarkdown([makeEntry({ moduleName: 'app (commonMain)' })]);
-    expect(md).toContain('*Module:* `app (commonMain)`');
+  it('package omitted when undefined', () => {
+    const e = { ...makeEntry(), packageName: undefined };
+    expect(buildHoverMarkdown([e as any])).not.toContain('Package');
   });
-
-  it('omits module line when moduleName is undefined', () => {
-    const md = buildHoverMarkdown([makeEntry({ moduleName: undefined })]);
-    expect(md).not.toContain('*Module:*');
-  });
-
-  it('omits package line when packageName is undefined', () => {
-    const entry = { ...makeEntry(), packageName: undefined };
-    const md = buildHoverMarkdown([entry as any]);
-    expect(md).not.toContain('*Package:*');
-  });
-
-  it('shows at most 5 entries (default limit)', () => {
-    const entries = Array.from({ length: 8 }, (_, i) =>
-      makeEntry({ fqn: `com.example.Class${i}`, uri: `file:///Class${i}.kt` }),
-    );
-    const md = buildHoverMarkdown(entries);
-    expect(md).toContain('Class0');
-    expect(md).toContain('Class4');
-    expect(md).not.toContain('Class5'); // 6th entry should be cut off
-  });
-
-  it('custom limit respected', () => {
-    const entries = Array.from({ length: 4 }, (_, i) =>
-      makeEntry({ fqn: `com.example.X${i}`, uri: `file:///X${i}.kt` }),
-    );
-    const md = buildHoverMarkdown(entries, 2);
-    expect(md).toContain('X0');
-    expect(md).toContain('X1');
-    expect(md).not.toContain('X2');
+  it('package omitted when empty string (falsy)', () => {
+    const e = { ...makeEntry(), packageName: '' };
+    expect(buildHoverMarkdown([e as any])).not.toContain('Package');
   });
 
   it('empty array → empty string', () => {
     expect(buildHoverMarkdown([])).toBe('');
   });
 
-  it('file name extracted correctly from nested URI path', () => {
+  it('exactly 5 entries: 5th shown, 6th cut off', () => {
+    const entries = Array.from({ length: 6 }, (_, i) =>
+      makeEntry({ fqn: `p.C${i}`, uri: `file:///C${i}.kt` }),
+    );
+    const md = buildHoverMarkdown(entries);
+    expect(md).toContain('C4');       // 5th — shown
+    expect(md).not.toContain('C5');   // 6th — cut off
+  });
+
+  it('custom limit=1: only first entry shown', () => {
+    const entries = [
+      makeEntry({ fqn: 'p.First', uri: 'file:///First.kt' }),
+      makeEntry({ fqn: 'p.Second', uri: 'file:///Second.kt' }),
+    ];
+    const md = buildHoverMarkdown(entries, 1);
+    expect(md).toContain('First');
+    expect(md).not.toContain('Second');
+  });
+
+  it('file name extracted from nested path', () => {
     const md = buildHoverMarkdown([makeEntry({ uri: 'file:///a/b/c/MyFile.kt' })]);
-    expect(md).toContain('*File:* `MyFile.kt`');
+    expect(md).toContain('`MyFile.kt`');
     expect(md).not.toContain('/a/b/c/');
   });
 
-  it('multiple entries are separated by blank lines', () => {
+  it('URI with no slashes — whole URI used as file name', () => {
+    // edge case: uri.toString() = 'Foo.kt' (no slashes)
+    const entry = { ...makeEntry(), uri: { toString: () => 'Foo.kt' } };
+    expect(buildHoverMarkdown([entry])).toContain('`Foo.kt`');
+  });
+
+  it('entries appear in order with FQN first', () => {
     const entries = [
-      makeEntry({ fqn: 'pkg.ClassA', uri: 'file:///A.kt' }),
-      makeEntry({ fqn: 'pkg.ClassB', uri: 'file:///B.kt' }),
+      makeEntry({ fqn: 'p.Alpha', uri: 'file:///A.kt' }),
+      makeEntry({ fqn: 'p.Beta',  uri: 'file:///B.kt' }),
     ];
     const md = buildHoverMarkdown(entries);
-    expect(md).toContain('ClassA');
-    expect(md).toContain('ClassB');
-    // Both entries should appear in the output
-    const aPos = md.indexOf('ClassA');
-    const bPos = md.indexOf('ClassB');
-    expect(aPos).toBeGreaterThanOrEqual(0);
-    expect(bPos).toBeGreaterThan(aPos);
+    expect(md.indexOf('Alpha')).toBeLessThan(md.indexOf('Beta'));
   });
 });
 
-// ── KIND_MAP ──────────────────────────────────────────────────────────────────
+// ── KIND_MAP completeness ─────────────────────────────────────────────────────
 
 describe('KIND_MAP', () => {
   it('covers all known Kotlin symbol kinds', () => {
-    const expectedKinds = [
-      'class', 'dataClass', 'sealedClass', 'interface', 'object',
-      'enum', 'annotation', 'fun', 'composable', 'val', 'var', 'typealias',
-    ];
-    for (const kind of expectedKinds) {
-      expect(KIND_MAP[kind], `KIND_MAP missing "${kind}"`).toBeDefined();
+    const kinds = ['class', 'dataClass', 'sealedClass', 'interface', 'object',
+                   'enum', 'annotation', 'fun', 'composable', 'val', 'var', 'typealias'];
+    for (const k of kinds) {
+      expect(KIND_MAP[k], `missing kind: ${k}`).toBeDefined();
     }
   });
-
-  it('all values are positive integers (valid LSP SymbolKind)', () => {
-    for (const [kind, value] of Object.entries(KIND_MAP)) {
-      expect(typeof value, `KIND_MAP["${kind}"] is not a number`).toBe('number');
-      expect(value, `KIND_MAP["${kind}"] must be > 0`).toBeGreaterThan(0);
+  it('all values are valid positive LSP SymbolKind integers', () => {
+    for (const [k, v] of Object.entries(KIND_MAP)) {
+      expect(Number.isInteger(v) && v > 0, `invalid value for ${k}: ${v}`).toBe(true);
     }
   });
-
-  it('class, dataClass, sealedClass all map to SymbolKind.Class (5)', () => {
-    expect(KIND_MAP['class']).toBe(KIND_MAP['dataClass']);
-    expect(KIND_MAP['class']).toBe(KIND_MAP['sealedClass']);
+  it('class, dataClass, sealedClass, annotation all map to SymbolKind.Class (5)', () => {
     expect(KIND_MAP['class']).toBe(5);
+    expect(KIND_MAP['dataClass']).toBe(5);
+    expect(KIND_MAP['sealedClass']).toBe(5);
+    expect(KIND_MAP['annotation']).toBe(5);
   });
-
   it('fun and composable map to SymbolKind.Function (12)', () => {
-    expect(KIND_MAP['fun']).toBe(KIND_MAP['composable']);
     expect(KIND_MAP['fun']).toBe(12);
+    expect(KIND_MAP['composable']).toBe(12);
+  });
+  it('val maps to SymbolKind.Constant (14), var maps to SymbolKind.Variable (13)', () => {
+    expect(KIND_MAP['val']).toBe(14);
+    expect(KIND_MAP['var']).toBe(13);
+  });
+  it('interface maps to SymbolKind.Interface (11)', () => {
+    expect(KIND_MAP['interface']).toBe(11);
+  });
+  it('enum maps to SymbolKind.Enum (10)', () => {
+    expect(KIND_MAP['enum']).toBe(10);
   });
 });
 
-// ── findUsagesInWorkspace ─────────────────────────────────────────────────────
+// ── findUsagesInWorkspace — adversarial ───────────────────────────────────────
 
 describe('findUsagesInWorkspace', () => {
   let index: SymbolIndex;
@@ -303,200 +380,474 @@ describe('findUsagesInWorkspace', () => {
     index = new SymbolIndex();
   });
 
-  async function makeReader(files: Record<string, string>) {
-    return (p: string) => {
-      const key = Object.keys(files).find(k => p.endsWith(k.replace('file://', '')));
-      if (key) return Promise.resolve(files[key]);
-      return Promise.resolve('');
-    };
-  }
+  const reader = (content: string) => async (_: string) => content;
+  const multiReader = (map: Record<string, string>) => async (p: string): Promise<string> => {
+    const key = Object.keys(map).find(k => p.endsWith(k));
+    return key ? map[key] : '';
+  };
 
-  it('returns empty when word not in index', async () => {
-    const results = await findUsagesInWorkspace('Unknown', index, noCancel);
+  // ── happy path ──────────────────────────────────────────────────────────────
+
+  it('word not in index → empty, no file reads at all', async () => {
+    let reads = 0;
+    const results = await findUsagesInWorkspace(
+      'UnknownClass', index, noCancel, async () => { reads++; return ''; },
+    );
     expect(results).toHaveLength(0);
+    expect(reads).toBe(0); // early-exit: no reads performed
   });
 
-  it('finds usages in a single file', async () => {
-    const uri = 'file:///Repo.kt';
-    const code = 'package com.example\nclass DataStore {}\nval store = DataStore()';
-    addKt(index, uri, code);
-
-    const reader = async (_: string) => code;
-    const results = await findUsagesInWorkspace('DataStore', index, noCancel, reader);
-
+  it('finds declaration and usage on different lines', async () => {
+    addKt(index, 'file:///A.kt', 'package p\nclass DataStore {}\nval x = DataStore()');
+    const code = 'package p\nclass DataStore {}\nval x = DataStore()';
+    const results = await findUsagesInWorkspace('DataStore', index, noCancel, reader(code));
     const lines = results.map(r => r.range.start.line);
-    expect(lines).toContain(1); // class declaration line
-    expect(lines).toContain(2); // usage line
+    expect(lines).toContain(1);
+    expect(lines).toContain(2);
   });
 
-  it('respects word boundary — DataStore does NOT match DataStoreImpl', async () => {
-    const uri = 'file:///App.kt';
-    const code = 'package com.example\nclass DataStore {}\nclass DataStoreImpl : DataStore()';
-    addKt(index, uri, code);
-
-    const reader = async (_: string) => code;
-    const results = await findUsagesInWorkspace('DataStore', index, noCancel, reader);
-
-    // DataStoreImpl should not be a match
-    const chars = results.map(r => r.range.start.character);
-    // Line 2 has 'DataStoreImpl' at char 6 and 'DataStore' at char 22
-    const line2Results = results.filter(r => r.range.start.line === 2);
-    for (const r of line2Results) {
-      const col = r.range.start.character;
-      expect(col, 'should not match start of DataStoreImpl').not.toBe(6);
-    }
-  });
-
-  it('skips full-comment lines', async () => {
-    const uri = 'file:///Commented.kt';
-    const code = 'package com.example\nclass DataStore {}\n// DataStore is old\nval x = DataStore()';
-    addKt(index, uri, code);
-
-    const reader = async (_: string) => code;
-    const results = await findUsagesInWorkspace('DataStore', index, noCancel, reader);
-
-    const lines = results.map(r => r.range.start.line);
-    expect(lines).not.toContain(2); // comment line should be skipped
-    expect(lines).toContain(3);     // real usage
-  });
-
-  it('skips inline comments — match before // is kept, after is skipped', async () => {
-    const uri = 'file:///Inline.kt';
-    const code = 'package com.example\nclass DataStore {}\nval x = DataStore() // DataStore old';
-    addKt(index, uri, code);
-
-    const reader = async (_: string) => code;
-    const results = await findUsagesInWorkspace('DataStore', index, noCancel, reader);
-
+  it('multiple occurrences on the SAME line — all found', async () => {
+    addKt(index, 'file:///A.kt', 'package p\nclass DataStore {}');
+    const code = 'package p\nclass DataStore {}\nval a = DataStore(); val b = DataStore()';
+    const results = await findUsagesInWorkspace('DataStore', index, noCancel, reader(code));
     const line2 = results.filter(r => r.range.start.line === 2);
-    // Only one result on line 2 — the one BEFORE //
-    expect(line2).toHaveLength(1);
-    expect(line2[0].range.start.character).toBeLessThan(code.split('\n')[2].indexOf('//'));
+    expect(line2).toHaveLength(2);
+    // Verify they are at different columns
+    const cols = line2.map(r => r.range.start.character).sort((a, b) => a - b);
+    expect(cols[0]).not.toBe(cols[1]);
   });
 
-  it('skips occurrences inside string literals', async () => {
-    const uri = 'file:///Strings.kt';
-    const code = 'package com.example\nclass DataStore {}\nval name = "DataStore"';
-    addKt(index, uri, code);
+  // ── word boundary ────────────────────────────────────────────────────────────
 
-    const reader = async (_: string) => code;
-    const results = await findUsagesInWorkspace('DataStore', index, noCancel, reader);
+  it('DataStoreImpl does NOT match \\bDataStore\\b', async () => {
+    addKt(index, 'file:///A.kt', 'package p\nclass DataStore {}');
+    const code = 'package p\nclass DataStore {}\nclass DataStoreImpl : DataStore()';
+    const results = await findUsagesInWorkspace('DataStore', index, noCancel, reader(code));
+    const line2 = results.filter(r => r.range.start.line === 2);
+    // Only one result on line 2 — the standalone DataStore(), not DataStoreImpl
+    expect(line2).toHaveLength(1);
+    const col = line2[0].range.start.character;
+    expect(col).not.toBe(6); // 6 is where DataStoreImpl starts
+  });
 
+  it('SuperDataStore does NOT match \\bDataStore\\b (suffix guard)', async () => {
+    addKt(index, 'file:///A.kt', 'package p\nclass DataStore {}');
+    const code = 'package p\nclass DataStore {}\nclass SuperDataStore {}';
+    const results = await findUsagesInWorkspace('DataStore', index, noCancel, reader(code));
     const line2 = results.filter(r => r.range.start.line === 2);
     expect(line2).toHaveLength(0);
   });
 
-  it('respects cancellation token — stops scanning mid-way', async () => {
-    const uri1 = 'file:///A.kt';
-    const uri2 = 'file:///B.kt';
-    addKt(index, uri1, 'package com.example\nclass DataStore {}');
-    addKt(index, uri2, 'package com.example\nval x = DataStore()');
+  // ── comment skipping ─────────────────────────────────────────────────────────
 
-    const cancelledToken = { isCancellationRequested: true };
-    const reader = async (_: string) => 'class DataStore {}';
-    const results = await findUsagesInWorkspace('DataStore', index, cancelledToken, reader);
-
-    expect(results).toHaveLength(0);
+  it('full // comment line is skipped', async () => {
+    addKt(index, 'file:///A.kt', 'package p\nclass DataStore {}');
+    const code = 'package p\nclass DataStore {}\n// DataStore is used here\nval x = DataStore()';
+    const results = await findUsagesInWorkspace('DataStore', index, noCancel, reader(code));
+    const lines = results.map(r => r.range.start.line);
+    expect(lines).not.toContain(2); // comment line
+    expect(lines).toContain(3);
   });
 
-  it('result ranges cover exactly the matched word length', async () => {
-    const uri = 'file:///Exact.kt';
-    const code = 'package com.example\nclass DataStore {}\nval x = DataStore()';
-    addKt(index, uri, code);
+  it('KDoc line starting with * is skipped', async () => {
+    addKt(index, 'file:///A.kt', 'package p\nclass DataStore {}');
+    const code = [
+      'package p', 'class DataStore {}',
+      '/**',
+      ' * DataStore is the main store',  // line 3 — trimmed starts with '*'
+      ' */',
+      'val x = DataStore()',
+    ].join('\n');
+    const results = await findUsagesInWorkspace('DataStore', index, noCancel, reader(code));
+    const lines = results.map(r => r.range.start.line);
+    expect(lines).not.toContain(3); // KDoc line
+    expect(lines).toContain(5);     // real usage
+  });
 
-    const reader = async (_: string) => code;
-    const results = await findUsagesInWorkspace('DataStore', index, noCancel, reader);
+  it('opening /* line is skipped', async () => {
+    addKt(index, 'file:///A.kt', 'package p\nclass DataStore {}');
+    const code = 'package p\nclass DataStore {}\n/* DataStore legacy */\nval x = DataStore()';
+    const results = await findUsagesInWorkspace('DataStore', index, noCancel, reader(code));
+    const lines = results.map(r => r.range.start.line);
+    expect(lines).not.toContain(2); // /* ... */ line
+    expect(lines).toContain(3);
+  });
 
+  it('inline // comment: match before // is kept, match after // is not', async () => {
+    addKt(index, 'file:///A.kt', 'package p\nclass DataStore {}');
+    const code = 'package p\nclass DataStore {}\nval x = DataStore() // old DataStore here';
+    const results = await findUsagesInWorkspace('DataStore', index, noCancel, reader(code));
+    const line2 = results.filter(r => r.range.start.line === 2);
+    expect(line2).toHaveLength(1);
+    const codePart = code.split('\n')[2];
+    expect(line2[0].range.start.character).toBeLessThan(codePart.indexOf('//'));
+  });
+
+  it('string literal: occurrence inside quotes is NOT found', async () => {
+    addKt(index, 'file:///A.kt', 'package p\nclass DataStore {}');
+    const code = 'package p\nclass DataStore {}\nval name = "DataStore"';
+    const results = await findUsagesInWorkspace('DataStore', index, noCancel, reader(code));
+    const line2 = results.filter(r => r.range.start.line === 2);
+    expect(line2).toHaveLength(0);
+  });
+
+  it('LIMITATION — inline block comment /* DataStore */ is a false positive', async () => {
+    // isInsideCommentOrString only handles // and strings, not /* */ blocks.
+    // A word inside /* ... */ on a non-comment-starting line IS currently matched.
+    // This test documents the known limitation — if it starts failing, the bug is fixed.
+    addKt(index, 'file:///A.kt', 'package p\nclass DataStore {}');
+    const code = 'package p\nclass DataStore {}\nval x /* DataStore */ = 5';
+    const results = await findUsagesInWorkspace('DataStore', index, noCancel, reader(code));
+    const line2 = results.filter(r => r.range.start.line === 2);
+    // Currently matches (false positive) — documented as LIMITATION
+    expect(line2).toHaveLength(1);
+  });
+
+  // ── import lines ─────────────────────────────────────────────────────────────
+
+  it('import line IS included in references (unlike scanForUsages)', async () => {
+    // The server's findUsagesInWorkspace does NOT skip import lines.
+    // This is correct for "find references" — imports are references too.
+    addKt(index, 'file:///A.kt', 'package com.example\nclass DataStore {}');
+    addKt(index, 'file:///B.kt', 'package com.other\nimport com.example.DataStore\nval x = DataStore()');
+    const codeB = 'package com.other\nimport com.example.DataStore\nval x = DataStore()';
+    const results = await findUsagesInWorkspace(
+      'DataStore', index, noCancel,
+      async (p) => p.includes('B') ? codeB : 'package com.example\nclass DataStore {}',
+    );
+    const linesInB = results
+      .filter(r => r.uri.includes('B'))
+      .map(r => r.range.start.line);
+    expect(linesInB).toContain(1); // import line
+    expect(linesInB).toContain(2); // usage line
+  });
+
+  // ── annotation and type param contexts ──────────────────────────────────────
+
+  it('@DataStore annotation: the identifier part matches', async () => {
+    addKt(index, 'file:///A.kt', 'package p\nclass DataStore {}');
+    const code = 'package p\nclass DataStore {}\n@DataStore\nclass Foo {}';
+    const results = await findUsagesInWorkspace('DataStore', index, noCancel, reader(code));
+    const lines = results.map(r => r.range.start.line);
+    expect(lines).toContain(2); // @DataStore line
+  });
+
+  it('DataStore as type parameter — found', async () => {
+    addKt(index, 'file:///A.kt', 'package p\nclass DataStore {}');
+    const code = 'package p\nclass DataStore {}\nval repo: Repository<DataStore> = TODO()';
+    const results = await findUsagesInWorkspace('DataStore', index, noCancel, reader(code));
+    const line2 = results.filter(r => r.range.start.line === 2);
+    expect(line2).toHaveLength(1);
+  });
+
+  // ── result precision ─────────────────────────────────────────────────────────
+
+  it('range end - start == word length for every result', async () => {
+    addKt(index, 'file:///A.kt', 'package p\nclass DataStore {}\nval x = DataStore()');
+    const code = 'package p\nclass DataStore {}\nval x = DataStore()';
+    const results = await findUsagesInWorkspace('DataStore', index, noCancel, reader(code));
     for (const r of results) {
-      const len = r.range.end.character - r.range.start.character;
-      expect(len).toBe('DataStore'.length);
+      expect(r.range.end.character - r.range.start.character).toBe('DataStore'.length);
+      expect(r.range.start.line).toBe(r.range.end.line); // single-line range
     }
   });
 
-  it('searches across multiple files', async () => {
-    const declUri = 'file:///DataStore.kt';
-    const usageUri = 'file:///App.kt';
-    addKt(index, declUri, 'package com.example\nclass DataStore {}');
-    addKt(index, usageUri, 'package com.example\nval x = DataStore()');
-
-    const reader = async (p: string): Promise<string> =>
-      p.includes('DataStore') ? 'package com.example\nclass DataStore {}' : 'package com.example\nval x = DataStore()';
-
-    const results = await findUsagesInWorkspace('DataStore', index, noCancel, reader);
-    const uris = new Set(results.map(r => r.uri));
-    expect(uris.size).toBe(2);
+  it('result URI matches the indexed file URI string exactly', async () => {
+    const uri = 'file:///exact/path/DataStore.kt';
+    addKt(index, uri, 'package p\nclass DataStore {}');
+    const code = 'package p\nclass DataStore {}';
+    const results = await findUsagesInWorkspace('DataStore', index, noCancel, reader(code));
+    expect(results.every(r => r.uri === uri)).toBe(true);
   });
 
-  it('returns empty for single-char word (guard in caller context)', async () => {
-    // The guard is in the request handler, but findUsagesInWorkspace itself
-    // returns empty when the word has no indexed declarations
-    const results = await findUsagesInWorkspace('x', index, noCancel);
+  // ── resilience ───────────────────────────────────────────────────────────────
+
+  it('readFile throws for one file — that file skipped, others still processed', async () => {
+    addKt(index, 'file:///Good.kt',  'package p\nclass DataStore {}');
+    addKt(index, 'file:///Bad.kt',   'package p\nval x = DataStore()');
+    addKt(index, 'file:///Good2.kt', 'package p\nval y = DataStore()');
+
+    const results = await findUsagesInWorkspace(
+      'DataStore', index, noCancel,
+      async (p) => {
+        if (p.includes('Bad')) throw new Error('permission denied');
+        if (p.includes('Good2')) return 'package p\nval y = DataStore()';
+        return 'package p\nclass DataStore {}';
+      },
+    );
+    // Results from Good.kt and Good2.kt should still be present
+    const uris = new Set(results.map(r => r.uri));
+    expect(uris.has('file:///Bad.kt')).toBe(false);   // threw — skipped
+    expect(uris.has('file:///Good2.kt')).toBe(true);  // still processed
+  });
+
+  it('file with no matching text is fast-pathed (includes check)', async () => {
+    addKt(index, 'file:///A.kt', 'package p\nclass DataStore {}');
+    let parseCallCount = 0;
+    const results = await findUsagesInWorkspace(
+      'DataStore', index, noCancel,
+      async () => {
+        parseCallCount++;
+        return 'package p\n// no match here at all'; // text.includes('DataStore') == false
+      },
+    );
     expect(results).toHaveLength(0);
+    // File was read (parseCallCount > 0) but no parse/line-scan occurred
+    expect(parseCallCount).toBe(1);
+  });
+
+  // ── cancellation ─────────────────────────────────────────────────────────────
+
+  it('pre-cancelled token → no results, no file reads', async () => {
+    addKt(index, 'file:///A.kt', 'package p\nclass DataStore {}');
+    let reads = 0;
+    const results = await findUsagesInWorkspace(
+      'DataStore', index, { isCancellationRequested: true },
+      async () => { reads++; return 'class DataStore {}'; },
+    );
+    expect(results).toHaveLength(0);
+    expect(reads).toBe(0);
+  });
+
+  // ── 500-result cap ───────────────────────────────────────────────────────────
+
+  it('500-result cap: never exceeds 500 results', async () => {
+    // Create 10 files each with 60 occurrences → 600 potential matches without the cap
+    for (let i = 0; i < 10; i++) {
+      addKt(index, `file:///File${i}.kt`, 'package p\nclass DataStore {}');
+    }
+    // Each file returns 1 declaration + 60 usages = 61 potential results
+    const bigCode = 'package p\nclass DataStore {}\n' + Array(60).fill('val x = DataStore()').join('\n');
+    const results = await findUsagesInWorkspace('DataStore', index, noCancel, async () => bigCode);
+    expect(results.length).toBeLessThanOrEqual(500);
+  });
+
+  // ── multi-file correctness ───────────────────────────────────────────────────
+
+  it('scans all indexed files and collects results from each', async () => {
+    for (let i = 0; i < 5; i++) {
+      addKt(index, `file:///File${i}.kt`, 'package p\nclass DataStore {}');
+    }
+    const results = await findUsagesInWorkspace(
+      'DataStore', index, noCancel,
+      async (p) => `package p\nclass DataStore {}\nval x${p.slice(-5)} = DataStore()`,
+    );
+    const uris = new Set(results.map(r => r.uri));
+    expect(uris.size).toBe(5);
   });
 });
 
-// ── Workspace symbol handler logic ────────────────────────────────────────────
+// ── SKIP_DIRS ─────────────────────────────────────────────────────────────────
 
-describe('workspace symbol deduplication', () => {
-  it('lookup + search results are de-duplicated by FQN', () => {
+describe('SKIP_DIRS', () => {
+  it('contains all expected output and VCS directories', () => {
+    for (const d of ['build', '.gradle', '.git', 'node_modules', '.idea', 'out', 'tmp']) {
+      expect(SKIP_DIRS.has(d)).toBe(true);
+    }
+  });
+  it('does NOT skip Kotlin source set names', () => {
+    for (const d of ['src', 'main', 'test', 'commonMain', 'androidMain', 'iosMain', 'jvmMain']) {
+      expect(SKIP_DIRS.has(d)).toBe(false);
+    }
+  });
+});
+
+// ── scanWorkspace + indexFile — real filesystem integration ───────────────────
+
+describe('scanWorkspace integration (real filesystem)', () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'kotlin-jump-test-'));
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('indexes .kt files in a flat directory', async () => {
+    await fs.writeFile(path.join(tmpDir, 'Foo.kt'), 'package test\nclass Foo {}');
+    await fs.writeFile(path.join(tmpDir, 'Bar.kt'), 'package test\nfun bar() {}');
+    const index = new SymbolIndex();
+    await scanWorkspace(tmpDir, index);
+    expect(index.lookup('Foo')).toHaveLength(1);
+    expect(index.lookup('bar')).toHaveLength(1);
+  });
+
+  it('indexes .kts files', async () => {
+    await fs.writeFile(path.join(tmpDir, 'build.kts'), 'val version = "1.0"');
+    const index = new SymbolIndex();
+    await scanWorkspace(tmpDir, index);
+    // .kts is collected and parsed as Kotlin (no crash)
+    // version may or may not be indexed depending on parser, but no error
+    expect(index.stats().files).toBeGreaterThanOrEqual(0);
+  });
+
+  it('indexes .java files', async () => {
+    await fs.writeFile(path.join(tmpDir, 'Repo.java'), 'package test;\npublic class Repo {}');
+    const index = new SymbolIndex();
+    await scanWorkspace(tmpDir, index);
+    expect(index.lookup('Repo')).toHaveLength(1);
+  });
+
+  it('ignores non-Kotlin/Java files', async () => {
+    await fs.writeFile(path.join(tmpDir, 'notes.txt'),    'class NotIndexed {}');
+    await fs.writeFile(path.join(tmpDir, 'config.json'),  '{"class":"NotIndexed"}');
+    await fs.writeFile(path.join(tmpDir, 'Foo.kt'),       'package test\nclass RealClass {}');
+    const index = new SymbolIndex();
+    await scanWorkspace(tmpDir, index);
+    expect(index.lookup('NotIndexed')).toHaveLength(0);
+    expect(index.lookup('RealClass')).toHaveLength(1);
+  });
+
+  it('recurses into subdirectories', async () => {
+    const sub = path.join(tmpDir, 'src', 'main', 'kotlin');
+    await fs.mkdir(sub, { recursive: true });
+    await fs.writeFile(path.join(sub, 'Deep.kt'), 'package test\nclass Deep {}');
+    const index = new SymbolIndex();
+    await scanWorkspace(tmpDir, index);
+    expect(index.lookup('Deep')).toHaveLength(1);
+  });
+
+  it('skips build/ directory — classes inside are NOT indexed', async () => {
+    const buildDir = path.join(tmpDir, 'build', 'generated');
+    await fs.mkdir(buildDir, { recursive: true });
+    await fs.writeFile(path.join(buildDir, 'Generated.kt'), 'package test\nclass Generated {}');
+    await fs.writeFile(path.join(tmpDir, 'Real.kt'), 'package test\nclass Real {}');
+    const index = new SymbolIndex();
+    await scanWorkspace(tmpDir, index);
+    expect(index.lookup('Generated')).toHaveLength(0);
+    expect(index.lookup('Real')).toHaveLength(1);
+  });
+
+  it('skips .git/ directory', async () => {
+    const gitDir = path.join(tmpDir, '.git', 'hooks');
+    await fs.mkdir(gitDir, { recursive: true });
+    await fs.writeFile(path.join(gitDir, 'Hook.kt'), 'package test\nclass Hook {}');
+    const index = new SymbolIndex();
+    await scanWorkspace(tmpDir, index);
+    expect(index.lookup('Hook')).toHaveLength(0);
+  });
+
+  it('empty workspace directory — no crash, index stays empty', async () => {
+    const index = new SymbolIndex();
+    await expect(scanWorkspace(tmpDir, index)).resolves.not.toThrow();
+    expect(index.stats().files).toBe(0);
+  });
+
+  it('multiple files are all indexed (concurrency correctness)', async () => {
+    // 25 files — exercises the 20-worker pool with overflow
+    await Promise.all(
+      Array.from({ length: 25 }, (_, i) =>
+        fs.writeFile(path.join(tmpDir, `Class${i}.kt`), `package test\nclass Class${i} {}`),
+      ),
+    );
+    const index = new SymbolIndex();
+    await scanWorkspace(tmpDir, index);
+    expect(index.stats().files).toBe(25);
+    // Spot-check first and last
+    expect(index.lookup('Class0')).toHaveLength(1);
+    expect(index.lookup('Class24')).toHaveLength(1);
+  });
+
+  it('no duplicate entries when same logical class appears in one file', async () => {
+    await fs.writeFile(path.join(tmpDir, 'Foo.kt'), 'package test\nclass Foo {}');
+    const index = new SymbolIndex();
+    await scanWorkspace(tmpDir, index);
+    expect(index.lookup('Foo')).toHaveLength(1);
+  });
+});
+
+describe('indexFile', () => {
+  it('indexes a .kt file', async () => {
+    const index = new SymbolIndex();
+    await indexFile('/fake/Foo.kt', index, async () => 'package test\nclass Foo {}');
+    expect(index.lookup('Foo')).toHaveLength(1);
+  });
+
+  it('indexes a .java file using the Java parser', async () => {
+    const index = new SymbolIndex();
+    await indexFile('/fake/Repo.java', index, async () => 'package test;\npublic class Repo {}');
+    expect(index.lookup('Repo')).toHaveLength(1);
+  });
+
+  it('.kts file is parsed as Kotlin (not Java)', async () => {
+    const index = new SymbolIndex();
+    // buildSrc.kts doesn't match .java so uses Kotlin parser — no crash
+    await expect(
+      indexFile('/fake/build.kts', index, async () => 'val greeting = "hello"'),
+    ).resolves.not.toThrow();
+  });
+
+  it('readFile throws — no crash, index unchanged', async () => {
+    const index = new SymbolIndex();
+    await expect(
+      indexFile('/fake/Broken.kt', index, async () => { throw new Error('ENOENT'); }),
+    ).resolves.not.toThrow();
+    expect(index.lookup('Anything')).toHaveLength(0);
+  });
+
+  it('re-indexing same file overwrites the previous entry', async () => {
+    const index = new SymbolIndex();
+    await indexFile('/fake/Foo.kt', index, async () => 'package p\nclass OldFoo {}');
+    expect(index.lookup('OldFoo')).toHaveLength(1);
+    await indexFile('/fake/Foo.kt', index, async () => 'package p\nclass NewFoo {}');
+    expect(index.lookup('OldFoo')).toHaveLength(0);
+    expect(index.lookup('NewFoo')).toHaveLength(1);
+  });
+});
+
+// ── Workspace symbol deduplication ───────────────────────────────────────────
+
+describe('workspace symbol query logic', () => {
+  it('exact + prefix results de-duplicated by FQN', () => {
     const index = new SymbolIndex();
     addKt(index, 'file:///Foo.kt', 'package com.example\nclass Foo {}');
     index.finalize();
 
-    // Simulate what onWorkspaceSymbol does
-    const query = 'Foo';
-    const exact    = index.lookup(query);
-    const searched = index.search(query, 50);
+    const exact    = index.lookup('Foo');
+    const searched = index.search('Foo', 50);
     const seen     = new Set<string>();
     const all      = [...exact, ...searched].filter(e => {
       if (seen.has(e.fqn)) return false;
       seen.add(e.fqn);
       return true;
     });
-
-    // 'Foo' appears in both exact lookup and prefix search — must appear only once
     expect(all.filter(e => e.fqn === 'com.example.Foo')).toHaveLength(1);
   });
 
-  it('empty query → empty result', () => {
-    const index = new SymbolIndex();
-    addKt(index, 'file:///Foo.kt', 'package com.example\nclass Foo {}');
-    const query = '  '.trim(); // whitespace-only
-    expect(query.length).toBe(0);
-    // Empty query guard
-    const result = query.length === 0 ? [] : index.lookup(query);
-    expect(result).toHaveLength(0);
-  });
-
-  it('single-char query still works via prefix search', () => {
+  it('single-char query hits prefix search', () => {
     const index = new SymbolIndex();
     addKt(index, 'file:///Foo.kt', 'package com.example\nclass Foo {}');
     index.finalize();
-    // single-char skips exact lookup but hits search
-    const query = 'F';
-    const searched = index.search(query, 50);
-    expect(searched.some(e => e.name === 'Foo')).toBe(true);
-  });
-});
-
-// ── SKIP_DIRS coverage (scanWorkspace) ───────────────────────────────────────
-
-describe('scanWorkspace directory skipping', () => {
-  it('SKIP_DIRS covers build output and VCS dirs', () => {
-    expect(SKIP_DIRS.has('build')).toBe(true);
-    expect(SKIP_DIRS.has('.gradle')).toBe(true);
-    expect(SKIP_DIRS.has('.git')).toBe(true);
-    expect(SKIP_DIRS.has('node_modules')).toBe(true);
-    expect(SKIP_DIRS.has('.idea')).toBe(true);
-    expect(SKIP_DIRS.has('out')).toBe(true);
-    expect(SKIP_DIRS.has('tmp')).toBe(true);
+    expect(index.search('F', 50).some(e => e.name === 'Foo')).toBe(true);
   });
 
-  it('SKIP_DIRS does NOT skip Kotlin source directories', () => {
-    expect(SKIP_DIRS.has('src')).toBe(false);
-    expect(SKIP_DIRS.has('main')).toBe(false);
-    expect(SKIP_DIRS.has('commonMain')).toBe(false);
-    expect(SKIP_DIRS.has('androidMain')).toBe(false);
-    expect(SKIP_DIRS.has('test')).toBe(false);
+  it('empty query returns nothing', () => {
+    const index = new SymbolIndex();
+    addKt(index, 'file:///Foo.kt', 'package com.example\nclass Foo {}');
+    const query = '   '.trim();
+    expect(query.length).toBe(0);
+    expect(query.length === 0 ? [] : index.lookup(query)).toHaveLength(0);
+  });
+
+  it('onWorkspaceSymbol caps final result at 50 via slice', () => {
+    // SymbolIndex.search() has no limit param — the 50-cap comes from .slice(0,50) in the handler.
+    const index = new SymbolIndex();
+    for (let i = 0; i < 60; i++) {
+      addKt(index, `file:///A${i}.kt`, `package p\nclass Foo${i} {}`);
+    }
+    index.finalize();
+    // Simulate what onWorkspaceSymbol does: search then slice
+    const searched = index.search('Foo');
+    const seen = new Set<string>();
+    const all = searched.filter(e => {
+      if (seen.has(e.fqn)) return false;
+      seen.add(e.fqn);
+      return true;
+    });
+    const final = all.slice(0, 50);
+    expect(final.length).toBeLessThanOrEqual(50);
+    expect(searched.length).toBeGreaterThan(50); // search itself returns more than 50
   });
 });

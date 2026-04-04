@@ -94,11 +94,13 @@ export async function findUsagesInWorkspace(
         if (!text.includes(word)) continue;
         const lines = text.split('\n');
         for (let i = 0; i < lines.length; i++) {
+          if (results.length >= 500) break;
           const trimmed = lines[i].trimStart();
           if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) continue;
           wordRe.lastIndex = 0;
           let m: RegExpExecArray | null;
           while ((m = wordRe.exec(lines[i])) !== null) {
+            if (results.length >= 500) break;
             if (!isInsideCommentOrString(lines[i], m.index)) {
               results.push(Location.create(
                 uriStr,

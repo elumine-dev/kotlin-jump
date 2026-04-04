@@ -33,6 +33,7 @@ export async function initWasm(distDir: string): Promise<void> {
 export function parseWasm(uriString: string, text: string): ParsedFile {
   if (!tsParser) throw new Error('[kotlin-nav] parseWasm called before successful initWasm()');
   const tree = tsParser.parse(text);
+  if (!tree) throw new Error('[kotlin-nav] tree-sitter parse returned null');
   try {
     return extractFromTree(uriString, text, tree.rootNode);
   } finally {

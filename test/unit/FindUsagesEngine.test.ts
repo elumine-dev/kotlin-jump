@@ -175,6 +175,169 @@ fun onCategory(e: CategoryType) {
   });
 });
 
+// ── fileCouldReference — wildcard disambiguation ─────────────────────────────
+//
+// When multiple wildcard imports are present AND the index contains a symbol
+// with the same simple name in a competing package, the match is ambiguous
+// and must return false. Without a competing indexed symbol (or without an
+// index), the wildcard match should still pass.
+
+describe('fileCouldReference — wildcard disambiguation', () => {
+  let index: SymbolIndex;
+  let fooEntry: ReturnType<typeof makeEntry>;
+
+  beforeEach(() => {
+    index = new SymbolIndex();
+    // Two packages, both define a class named "Foo"
+    index.add(parse('file:///example/Foo.kt', `package com.example\nclass Foo`));
+    index.add(parse('file:///other/Foo.kt',   `package com.other\nclass Foo`));
+    fooEntry = index.lookup('Foo').find(e => e.packageName === 'com.example')!;
+  });
+
+  it('single wildcard, no competition → true', () => {
+    const text = `package com.ui\nimport com.example.*\nval f = Foo()`;
+    expect(fileCouldReference(text, fooEntry, index)).toBe(true);
+  });
+
+  it('two wildcards, competing symbol exists → false (with index)', () => {
+    const text = `package com.ui\nimport com.example.*\nimport com.other.*\nval f = Foo()`;
+    expect(fileCouldReference(text, fooEntry, index)).toBe(false);
+  });
+
+  it('two wildcards, no competing symbol in index → true (cannot disambiguate)', () => {
+    // com.third.Foo is NOT in the index
+    const text = `package com.ui\nimport com.example.*\nimport com.third.*\nval f = Foo()`;
+    expect(fileCouldReference(text, fooEntry, index)).toBe(true);
+  });
+
+  it('two wildcards with index but explicit import for our target → true (exact wins first)', () => {
+    // Exact import resolves before the wildcard ambiguity check is reached
+    const text = `package com.ui\nimport com.example.Foo\nimport com.other.*\nval f = Foo()`;
+    expect(fileCouldReference(text, fooEntry, index)).toBe(true);
+  });
+
+  it('two wildcards without index → true (conservative, no false negatives)', () => {
+    const text = `package com.ui\nimport com.example.*\nimport com.other.*\nval f = Foo()`;
+    // No index passed — cannot check competing symbols, falls back to permissive
+    expect(fileCouldReference(text, fooEntry)).toBe(true);
+  });
+
+  it('three wildcards with two competing symbols → false', () => {
+    index.add(parse('file:///third/Foo.kt', `package com.third\nclass Foo`));
+    const text = `package com.ui\nimport com.example.*\nimport com.other.*\nimport com.third.*\nval f = Foo()`;
+    expect(fileCouldReference(text, fooEntry, index)).toBe(false);
+  });
+
+  it('same-package wildcard is never treated as competition', () => {
+    // A file in com.example that also imports com.example.* should not self-compete
+    const text = `package com.example\nimport com.example.*\nval f = Foo()`;
+    expect(fileCouldReference(text, fooEntry, index)).toBe(true);
+  });
+
+  it('competing symbol is a member (depth > 0), not a top-level class', () => {
+    // com.other.Outer.Foo exists as a nested class — simple name "Foo" is the same
+    // com.other.Foo (already in index from beforeEach) competes
+    const text = `package com.ui\nimport com.example.*\nimport com.other.*\nval f = Foo()`;
+    expect(fileCouldReference(text, fooEntry, index)).toBe(false);
+  });
+
+  it('wildcard in a comment does not count as an import', () => {
+    const text = `package com.ui
+// import com.other.*   ← not a real import
+import com.example.*
+val f = Foo()`;
+    expect(fileCouldReference(text, fooEntry, index)).toBe(true);
+  });
+
+  it('wildcard disambiguation does not affect same-package references', () => {
+    // File is in com.example itself — passes via package check, never reaches wildcard logic
+    const text = `package com.example\nimport com.other.*\nval f = Foo()`;
+    expect(fileCouldReference(text, fooEntry, index)).toBe(true);
+  });
+
+  // ── Bug 1: CRLF line endings ───────────────────────────────────────────────
+
+  it('CRLF — single wildcard is detected (no false negative)', () => {
+    // Windows checkout: \r\n line endings. extractWildcardPrefixes must still work.
+    const text = 'package com.ui\r\nimport com.example.*\r\nval f = Foo()';
+    expect(fileCouldReference(text, fooEntry, index)).toBe(true);
+  });
+
+  it('CRLF — two wildcards with competing symbol → false', () => {
+    const text = 'package com.ui\r\nimport com.example.*\r\nimport com.other.*\r\nval f = Foo()';
+    expect(fileCouldReference(text, fooEntry, index)).toBe(false);
+  });
+
+  it('CRLF — two wildcards, no competition in index → true', () => {
+    const text = 'package com.ui\r\nimport com.example.*\r\nimport com.third.*\r\nval f = Foo()';
+    expect(fileCouldReference(text, fooEntry, index)).toBe(true);
+  });
+
+  // ── Bug 3: Member FQN must not be penalised by competing top-level function ──
+
+  it('member FQN (depth > 0): competing top-level function does NOT cause false negative', () => {
+    // com.other.process is a top-level function; com.example.Repo.process is a method.
+    // import com.other.* does NOT bring the method into scope — should not penalise.
+    index.add(parse('file:///other/Utils.kt', 'package com.other\nfun process() {}'));
+    const methodEntry = index.lookup('process').find(e => e.packageName === 'com.example')
+      ?? (() => {
+        index.add(parse('file:///example/Repo.kt', 'package com.example\nclass Repo {\n    fun process() {}\n}'));
+        return index.lookup('process').find(e => e.packageName === 'com.example')!;
+      })();
+    // methodEntry is com.example.Repo.process — depth > 0
+    expect(methodEntry.depth).toBeGreaterThan(0);
+    const text = 'package com.ui\nimport com.example.*\nimport com.other.*\nval r = Repo()\nr.process()';
+    expect(fileCouldReference(text, methodEntry, index)).toBe(true);
+  });
+
+  it('top-level symbol (depth === 0) IS still disambiguated by wildcard check', () => {
+    // Sanity: the guard only skips disambiguation for depth > 0; depth === 0 still fires.
+    const text = 'package com.ui\nimport com.example.*\nimport com.other.*\nval f = Foo()';
+    expect(fooEntry.depth).toBe(0);
+    expect(fileCouldReference(text, fooEntry, index)).toBe(false);
+  });
+
+  // ── Alias import does not count as wildcard competition ────────────────────
+
+  it('alias import (import com.other.Foo as F) is NOT a wildcard — no competition', () => {
+    // An aliased exact import introduces a different name; it is not a wildcard.
+    // extractWildcardPrefixes only finds `.*` patterns.
+    const text = 'package com.ui\nimport com.example.*\nimport com.other.Foo as OtherFoo\nval f = Foo()';
+    expect(fileCouldReference(text, fooEntry, index)).toBe(true);
+  });
+
+  // ── Competing nested class is not a false positive ─────────────────────────
+
+  it('nested class com.other.Outer.Foo is NOT matched by lookupFqn("com.other.Foo")', () => {
+    // com.other.Outer.Foo exists as a nested class but is not reachable via `import com.other.*`
+    index.add(parse('file:///other/Outer.kt', 'package com.other\nclass Outer {\n    class Foo\n}'));
+    // com.other.Foo does NOT exist; com.other.Outer.Foo does
+    // import com.other.* gives access to Outer, not Outer.Foo
+    const text = 'package com.ui\nimport com.example.*\nimport com.other.*\nval f = Foo()';
+    // com.other.Foo → not in index → hasCompeting = false → true
+    // BUT the beforeEach index already has com.other.Foo from file:///other/Foo.kt!
+    // So this test must remove that or use a fresh index.
+    const freshIndex = new SymbolIndex();
+    freshIndex.add(parse('file:///example/Foo.kt', 'package com.example\nclass Foo'));
+    freshIndex.add(parse('file:///other/Outer.kt', 'package com.other\nclass Outer {\n    class Foo\n}'));
+    const freshFooEntry = freshIndex.lookup('Foo').find(e => e.packageName === 'com.example')!;
+    expect(fileCouldReference(text, freshFooEntry, freshIndex)).toBe(true);
+  });
+
+  // ── extractWildcardPrefixes edge cases ─────────────────────────────────────
+
+  it('import on the very first line (no preceding newline) is extracted', () => {
+    // ^ in multiline mode also matches start-of-string
+    const text = 'import com.example.*\nimport com.other.*\nval f = Foo()';
+    expect(fileCouldReference(text, fooEntry, index)).toBe(false);
+  });
+
+  it('import with trailing comment is still extracted', () => {
+    const text = 'package com.ui\nimport com.example.* // wildcard\nimport com.other.* // another\nval f = Foo()';
+    expect(fileCouldReference(text, fooEntry, index)).toBe(false);
+  });
+});
+
 // ── escapeRegex ─────────────────────────────────────────────────────────────
 
 describe('escapeRegex', () => {

@@ -8,6 +8,10 @@ import { Logger } from '../util/logger';
 
 const IO_CONCURRENCY_DEFAULT = 20;
 
+// Matches KMP source sets: commonMain, androidMain, iosMain, jvmMain, jsMain, etc.
+// Does NOT match plain `main` or `test` (no prefix before Main/Test).
+const KMP_SOURCE_SET_RE = /[/\\]src[/\\]([a-z]\w+(?:Main|Test))[/\\]/;
+
 export class FileScanner {
   private readonly decoder = new TextDecoder();
   private readonly pool: WorkerPool;
@@ -126,8 +130,16 @@ export class FileScanner {
   private moduleFor(uri: vscode.Uri): string | undefined {
     const p = uri.fsPath;
     for (const [name, rootPath] of this.moduleMap) {
-      if (p.startsWith(rootPath)) return name;
+      if (p.startsWith(rootPath)) {
+        const rel = p.slice(rootPath.length);
+        const kmp = KMP_SOURCE_SET_RE.exec(rel);
+        if (kmp) return `${name} (${kmp[1]})`;
+        return name;
+      }
     }
+    // Fallback: detect KMP source set without a module map entry (no settings.gradle)
+    const kmp = KMP_SOURCE_SET_RE.exec(p);
+    if (kmp) return kmp[1];
     return undefined;
   }
 }

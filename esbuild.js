@@ -25,7 +25,7 @@ const sharedOptions = {
 };
 
 async function main() {
-  const [extCtx, workerCtx] = await Promise.all([
+  const [extCtx, workerCtx, serverCtx] = await Promise.all([
     esbuild.context({
       ...sharedOptions,
       entryPoints: ['src/extension.ts'],
@@ -38,14 +38,25 @@ async function main() {
       entryPoints: ['src/indexer/parser-worker.ts'],
       outfile:     'dist/parser-worker.js',
     }),
+    esbuild.context({
+      ...sharedOptions,
+      // Server replaces the `vscode` module with a lightweight Node.js shim
+      external:    [],
+      alias:       { vscode: './src/server/shim.ts' },
+      entryPoints: ['src/server/main.ts'],
+      outfile:     'dist/server.js',
+      banner:      { js: '#!/usr/bin/env node' },
+    }),
   ]);
 
   if (watch) {
-    await Promise.all([extCtx.watch(), workerCtx.watch()]);
+    await Promise.all([extCtx.watch(), workerCtx.watch(), serverCtx.watch()]);
     console.log('[esbuild] watching…');
   } else {
-    await Promise.all([extCtx.rebuild(), workerCtx.rebuild()]);
-    await Promise.all([extCtx.dispose(), workerCtx.dispose()]);
+    await Promise.all([extCtx.rebuild(), workerCtx.rebuild(), serverCtx.rebuild()]);
+    await Promise.all([extCtx.dispose(), workerCtx.dispose(), serverCtx.dispose()]);
+    // Make the server binary executable
+    fs.chmodSync(path.join('dist', 'server.js'), 0o755);
     copyWasmFiles();
   }
 }

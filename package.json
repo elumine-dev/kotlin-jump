@@ -46,6 +46,9 @@
     "onView:kotlinJump.findUsages"
   ],
   "main": "./dist/extension.js",
+  "bin": {
+    "kotlin-jump-server": "./dist/server.js"
+  },
   "contributes": {
     "viewsContainers": {
       "panel": [
@@ -83,6 +86,12 @@
         "key": "alt+shift+p",
         "mac": "alt+shift+p",
         "when": "editorTextFocus && editorLangId == kotlin"
+      },
+      {
+        "command": "editor.action.rename",
+        "key": "ctrl+r",
+        "mac": "cmd+r",
+        "when": "editorTextFocus && (editorLangId == kotlin || editorLangId == java)"
       }
     ],
     "commands": [
@@ -375,6 +384,21 @@
           "default": true,
           "markdownDescription": "Show the Kotlin Jump status bar item (symbol count and indexing progress) in the bottom bar."
         },
+        "kotlinJump.companionMode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "always",
+            "never"
+          ],
+          "enumDescriptions": [
+            "Detect the JetBrains Kotlin LSP automatically and enable companion mode when found.",
+            "Always run as a companion — disable hover, outline, rename, and semantic tokens regardless of other extensions.",
+            "Never enable companion mode — register all providers."
+          ],
+          "default": "auto",
+          "markdownDescription": "Controls how Kotlin Jump coexists with a full Kotlin language server such as the JetBrains Kotlin LSP.\n\nWhen companion mode is active, Kotlin Jump disables overlapping providers (hover, document outline, rename, semantic tokens) and keeps only the fast navigation providers (Go to Definition, Find Usages, Go to Implementation, Type/Call Hierarchy, Code Lens).\n\n- `auto` — detect the JetBrains Kotlin LSP and enable automatically\n- `always` — always enable, useful with other LSPs that provide hover and outline\n- `never` — disable, register all providers"
+        },
         "kotlinJump.workspaceSymbolKinds": {
           "type": "array",
           "items": {
@@ -402,6 +426,7 @@
   },
   "scripts": {
     "compile": "node esbuild.js",
+    "build:server": "node esbuild.js",
     "watch": "node esbuild.js --watch",
     "build:wasm": "npx tree-sitter build --wasm node_modules/tree-sitter-kotlin --output dist/tree-sitter-kotlin.wasm",
     "vscode:prepublish": "npm run build:wasm && node esbuild.js --production",
@@ -426,6 +451,8 @@
   },
   "dependencies": {
     "picomatch": "^4.0.4",
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.12",
     "web-tree-sitter": "^0.26.8"
   }
 }

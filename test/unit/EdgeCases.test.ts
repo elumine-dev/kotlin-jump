@@ -1,13 +1,25 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { existsSync } from 'fs';
+import * as path from 'path';
 import { KotlinDefinitionProvider } from '../../src/providers/DefinitionProvider';
 import { SymbolIndex } from '../../src/indexer/SymbolIndex';
 import { parse } from '../../src/indexer/KotlinParser';
 import { parseJava } from '../../src/indexer/JavaParser';
+import { initWasm, isWasmReady, parseWasm } from '../../src/indexer/WasmKotlinParser';
 import { mockDocument, positionOf } from './helpers';
 import { Location } from './__mocks__/vscode';
 
+const distDir = path.join(__dirname, '../../dist');
+const wasmAvailable =
+  existsSync(path.join(distDir, 'tree-sitter-kotlin.wasm')) &&
+  existsSync(path.join(distDir, 'web-tree-sitter.wasm'));
+
 function addKt(index: SymbolIndex, uri: string, code: string) {
   index.add(parse(uri, code));
+}
+
+async function addKtWasm(index: SymbolIndex, uri: string, code: string) {
+  index.add(parseWasm(uri, code));
 }
 function addJava(index: SymbolIndex, uri: string, code: string) {
   index.add(parseJava(uri, code));
@@ -542,6 +554,204 @@ describe('Supertypes with where clause', () => {
 // ── Enum entries with complex bodies ────────────────────────────────────────
 
 describe('Enum entries edge cases', () => {
+  it('qualified access StatusType.REGULAR → resolves to StatusType, not CategoryType', () => {
+    // Regression: WASM indexes mixed-case enum entries (e.g. Regular, Extra),
+    // which previously were invisible to the regex parser. When two types share
+    // member names (StatusType.REGULAR and CategoryType.REGULAR), cmd+clicking on
+    // the member in "StatusType.REGULAR" must navigate to StatusType's entry, not
+    // CategoryType's.
+    const index = new SymbolIndex();
+    const provider = new KotlinDefinitionProvider(index);
+
+    addKt(index, 'file:///model/StatusType.kt', `
+package com.example.model
+enum class StatusType {
+    REGULAR,
+    EXTRA
+}
+`);
+    addKt(index, 'file:///category/CategoryType.kt', `
+package com.example.edition
+enum class CategoryType {
+    REGULAR,
+    EXTRA
+}
+`);
+
+    const callerCode = `package com.example.ui
+import com.example.model.StatusType
+val x = StatusType.REGULAR`;
+    const doc = mockDocument('file:///ui/Caller.kt', callerCode);
+
+    // cursor on REGULAR in "StatusType.REGULAR" (last line, after the dot)
+    const pos = positionOf(callerCode, 'REGULAR');
+    const result = locs(provider.provideDefinition(doc, pos));
+    expect(result).toHaveLength(1);
+    expect(result[0].uri.path).toContain('StatusType');
+  });
+
+  it('real-world: StatusType.REGULAR (same-line entries) + CategoryType with ctor args', () => {
+    // Scenario:
+    //   StatusType.kt    → `REGULAR, EXTRA` on ONE line, no ctor args
+    //   CategoryType.kt → `REGULAR("ED")` with constructor arg, companion object
+    //   TransportViewModel.kt → `if (status == StatusType.REGULAR)`
+    const index = new SymbolIndex();
+    const provider = new KotlinDefinitionProvider(index);
+
+    addKt(index, 'file:///model/StatusType.kt',
+      `package com.example.app.ui.transport.model\n\nenum class StatusType {\n    REGULAR, EXTRA\n}\n`);
+
+    addKt(index, 'file:///content/CategoryType.kt', `package com.example.app.content
+
+enum class CategoryType(val value: String) {
+    REGULAR("ED"),
+    PROMOTIONAL_SPECIAL_EDITION("SP"),
+    PUBLISHER_SPECIAL_EDITION("SR"),
+    UNKNOWN("UNKNOWN");
+
+    companion object {
+
+        @JvmStatic fun fromCode(code: String): CategoryType {
+            return when (code) {
+                REGULAR.value -> REGULAR
+                PROMOTIONAL_SPECIAL_EDITION.value -> PROMOTIONAL_SPECIAL_EDITION
+                PUBLISHER_SPECIAL_EDITION.value -> PUBLISHER_SPECIAL_EDITION
+                else -> UNKNOWN
+            }
+        }
+    }
+}
+`);
+
+    const callerCode = `package com.example.app.ui.transport
+
+import com.example.app.ui.transport.model.StatusType
+
+private fun onStatusChanged(status: StatusType) {
+    if (status == StatusType.REGULAR) {
+        println("regular")
+    }
+}`;
+    const doc = mockDocument('file:///transport/TransportViewModel.kt', callerCode);
+
+    const pos = positionOf(callerCode, 'REGULAR'); // in StatusType.REGULAR
+    const result = locs(provider.provideDefinition(doc, pos));
+    expect(result).toHaveLength(1);
+    expect(result[0].uri.path).toContain('StatusType');
+  });
+
+  it('qualified access Type.MEMBER → same-package qualifier resolves correctly', () => {
+    // When qualifier is in the same package (no explicit import needed),
+    // samePackage FQN resolution should still find the member.
+    const index = new SymbolIndex();
+    const provider = new KotlinDefinitionProvider(index);
+
+    addKt(index, 'file:///ui/Screen.kt', `
+package com.example.ui
+fun foo() {
+    val x = DisplayType.LARGE
+}
+enum class DisplayType {
+    SMALL,
+    LARGE,
+}
+`);
+    addKt(index, 'file:///category/CategoryType.kt', `
+package com.example.edition
+enum class CategoryType {
+    SMALL,
+    LARGE,
+}
+`);
+
+    const code = `package com.example.ui
+fun foo() {
+    val x = DisplayType.LARGE
+}
+enum class DisplayType {
+    SMALL,
+    LARGE,
+}`;
+    const doc = mockDocument('file:///ui/Screen.kt', code);
+
+    const pos = positionOf(code, 'LARGE');  // first occurrence = in DisplayType.LARGE
+    const result = locs(provider.provideDefinition(doc, pos));
+    expect(result).toHaveLength(1);
+    expect(result[0].uri.path).toContain('Screen');
+  });
+
+  it('qualified access on companion object const — NetworkConfig.TIMEOUT vs DatabaseConfig.TIMEOUT', () => {
+    // Same ambiguity as enum entries but with a companion object const val.
+    // Two classes in different packages both have a companion TIMEOUT constant;
+    // cmd+clicking TIMEOUT in "NetworkConfig.TIMEOUT" must land on NetworkConfig.
+    const index = new SymbolIndex();
+    const provider = new KotlinDefinitionProvider(index);
+
+    addKt(index, 'file:///network/NetworkConfig.kt', `
+package com.example.network
+class NetworkConfig {
+    companion object {
+        const val TIMEOUT = 30
+    }
+}
+`);
+    addKt(index, 'file:///db/DatabaseConfig.kt', `
+package com.example.db
+class DatabaseConfig {
+    companion object {
+        const val TIMEOUT = 60
+    }
+}
+`);
+
+    const callerCode = `package com.example.ui
+import com.example.network.NetworkConfig
+val t = NetworkConfig.TIMEOUT`;
+    const doc = mockDocument('file:///ui/NetworkCaller.kt', callerCode);
+
+    const pos = positionOf(callerCode, 'TIMEOUT');
+    const result = locs(provider.provideDefinition(doc, pos));
+    expect(result).toHaveLength(1);
+    expect(result[0].uri.path).toContain('NetworkConfig');
+  });
+
+  it('unqualified enum entry reference in same file → resolves to same-file declaration', () => {
+    // Inside CategoryType.kt's companion function, `REGULAR` is unqualified.
+    // With two enums both having REGULAR, the navigation must prefer the
+    // declaration in the SAME FILE (CategoryType.REGULAR), not StatusType.REGULAR.
+    const index = new SymbolIndex();
+    const provider = new KotlinDefinitionProvider(index);
+
+    addKt(index, 'file:///model/StatusType.kt', `
+package com.example.model
+enum class StatusType {
+    REGULAR,
+    EXTRA
+}
+`);
+
+    const editionCode = `package com.example.edition
+enum class CategoryType(val value: String) {
+    REGULAR("ED"),
+    UNKNOWN("UNKNOWN");
+
+    companion object {
+        fun fromValue(v: String) = when (v) {
+            REGULAR.value -> REGULAR
+            else -> UNKNOWN
+        }
+    }
+}`;
+    addKt(index, 'file:///category/CategoryType.kt', editionCode);
+
+    const doc = mockDocument('file:///category/CategoryType.kt', editionCode);
+    // cursor on the second REGULAR (the unqualified return value, not the .value access)
+    const pos = positionOf(editionCode, 'REGULAR', 3); // 3rd occurrence: in `-> REGULAR`
+    const result = locs(provider.provideDefinition(doc, pos));
+    expect(result).toHaveLength(1);
+    expect(result[0].uri.path).toContain('CategoryType');
+  });
+
   it('enum entries with constructor args', () => {
     const code = `enum class Planet(val mass: Double) {
     EARTH(5.97),
@@ -555,5 +765,82 @@ describe('Enum entries edge cases', () => {
     expect(names).toContain('EARTH');
     expect(names).toContain('MARS');
     expect(names).toContain('JUPITER');
+  });
+
+  // ── WASM parser end-to-end (mirrors what runs inside the real extension) ────
+  // These tests skip automatically when the WASM files are absent.
+
+  const STATUS_TYPE_KT = `package com.example.app.ui.transport.model
+
+enum class StatusType {
+    REGULAR, EXTRA
+}
+`;
+
+  const CATEGORY_TYPE_KT = `package com.example.app.content
+
+enum class CategoryType(val value: String) {
+    REGULAR("ED"),
+    PROMOTIONAL_SPECIAL_EDITION("SP"),
+    PUBLISHER_SPECIAL_EDITION("SR"),
+    UNKNOWN("UNKNOWN");
+
+    companion object {
+
+        @JvmStatic fun fromCode(code: String): CategoryType {
+            return when (code) {
+                REGULAR.value -> REGULAR
+                PROMOTIONAL_SPECIAL_EDITION.value -> PROMOTIONAL_SPECIAL_EDITION
+                PUBLISHER_SPECIAL_EDITION.value -> PUBLISHER_SPECIAL_EDITION
+                else -> UNKNOWN
+            }
+        }
+    }
+}
+`;
+
+  const TRANSPORT_VM_KT = `package com.example.app.ui.transport
+
+import com.example.app.ui.transport.model.StatusType
+
+private fun onStatusChanged(status: StatusType) {
+    if (status == StatusType.REGULAR) {
+        println("regular")
+    }
+    val targetRail = if (true) StatusType.REGULAR else StatusType.EXTRA
+}
+`;
+
+  it.skipIf(!wasmAvailable)('WASM parser: StatusType.REGULAR resolves to StatusType.kt, not CategoryType.kt', async () => {
+    await initWasm(distDir);
+    if (!isWasmReady()) throw new Error('WASM init failed');
+
+    const index = new SymbolIndex();
+    await addKtWasm(index, 'file:///model/StatusType.kt', STATUS_TYPE_KT);
+    await addKtWasm(index, 'file:///category/CategoryType.kt', CATEGORY_TYPE_KT);
+
+    const doc = mockDocument('file:///transport/TransportViewModel.kt', TRANSPORT_VM_KT);
+    const provider = new KotlinDefinitionProvider(index);
+    const pos = positionOf(TRANSPORT_VM_KT, 'REGULAR'); // first occurrence in StatusType.REGULAR
+    const result = locs(provider.provideDefinition(doc, pos));
+    expect(result).toHaveLength(1);
+    expect(result[0].uri.path).toContain('StatusType');
+  });
+
+  it.skipIf(!wasmAvailable)('WASM parser: unqualified REGULAR inside CategoryType.kt resolves to CategoryType.kt', async () => {
+    await initWasm(distDir);
+    if (!isWasmReady()) throw new Error('WASM init failed');
+
+    const index = new SymbolIndex();
+    await addKtWasm(index, 'file:///model/StatusType.kt', STATUS_TYPE_KT);
+    await addKtWasm(index, 'file:///category/CategoryType.kt', CATEGORY_TYPE_KT);
+
+    const doc = mockDocument('file:///category/CategoryType.kt', CATEGORY_TYPE_KT);
+    const provider = new KotlinDefinitionProvider(index);
+    // 3rd occurrence of REGULAR in the file = the unqualified `-> REGULAR` in fromValue
+    const pos = positionOf(CATEGORY_TYPE_KT, 'REGULAR', 3);
+    const result = locs(provider.provideDefinition(doc, pos));
+    expect(result).toHaveLength(1);
+    expect(result[0].uri.path).toContain('CategoryType');
   });
 });

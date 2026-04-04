@@ -112,6 +112,69 @@ describe('smartNavigation: false — DefinitionProvider command choice', () => {
   });
 });
 
+// ── Enum member / companion const disambiguation ─────────────────────────────
+// Regression: searching for REGULAR from StatusType.kt must NOT include
+// CategoryType.REGULAR occurrences — fileCouldReference must reject files that
+// only import or declare a *different* class with the same member name.
+
+describe('fileCouldReference — enum member disambiguation (StatusType.REGULAR vs CategoryType.REGULAR)', () => {
+  let index: SymbolIndex;
+  let typeAEntry: ReturnType<typeof makeEntry>;
+  let typeBEntry: ReturnType<typeof makeEntry>;
+
+  beforeEach(() => {
+    index = new SymbolIndex();
+    index.add(parse('file:///model/StatusType.kt', `
+package com.example.transport.model
+enum class StatusType {
+    REGULAR,
+    EXTRA
+}
+`));
+    index.add(parse('file:///category/CategoryType.kt', `
+package com.example.content
+enum class CategoryType(val value: String) {
+    REGULAR("ED"),
+    UNKNOWN("UNKNOWN")
+}
+`));
+    typeAEntry    = index.lookup('REGULAR').find(e => e.uri.path.includes('StatusType'))!;
+    typeBEntry = index.lookup('REGULAR').find(e => e.uri.path.includes('CategoryType'))!;
+  });
+
+  it('StatusType.kt (declaration file) can reference StatusType.REGULAR', () => {
+    const text = `package com.example.transport.model\nenum class StatusType {\n    REGULAR, EXTRA\n}\n`;
+    expect(fileCouldReference(text, typeAEntry)).toBe(true);
+  });
+
+  it('CategoryType.kt cannot reference StatusType.REGULAR', () => {
+    const text = `package com.example.content\nenum class CategoryType(val value: String) {\n    REGULAR("ED")\n}\n`;
+    expect(fileCouldReference(text, typeAEntry)).toBe(false);
+  });
+
+  it('caller importing StatusType can reference StatusType.REGULAR but not CategoryType.REGULAR', () => {
+    const callerText = `package com.example.transport.ui
+import com.example.transport.model.StatusType
+
+fun onStatus(r: StatusType) {
+    if (r == StatusType.REGULAR) println("regular")
+}`;
+    expect(fileCouldReference(callerText, typeAEntry)).toBe(true);
+    expect(fileCouldReference(callerText, typeBEntry)).toBe(false);
+  });
+
+  it('caller importing CategoryType can reference CategoryType.REGULAR but not StatusType.REGULAR', () => {
+    const callerText = `package com.example.ui
+import com.example.content.CategoryType
+
+fun onCategory(e: CategoryType) {
+    if (e == CategoryType.REGULAR) println("regular")
+}`;
+    expect(fileCouldReference(callerText, typeBEntry)).toBe(true);
+    expect(fileCouldReference(callerText, typeAEntry)).toBe(false);
+  });
+});
+
 // ── escapeRegex ─────────────────────────────────────────────────────────────
 
 describe('escapeRegex', () => {

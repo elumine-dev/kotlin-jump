@@ -1,7 +1,18 @@
 const esbuild = require('esbuild');
+const fs      = require('fs');
+const path    = require('path');
 
 const production = process.argv.includes('--production');
 const watch      = process.argv.includes('--watch');
+
+function copyWasmFiles() {
+  fs.mkdirSync('dist', { recursive: true });
+  fs.copyFileSync(
+    path.join('node_modules', 'web-tree-sitter', 'web-tree-sitter.wasm'),
+    path.join('dist', 'web-tree-sitter.wasm'),
+  );
+  // tree-sitter-kotlin.wasm is produced by `npm run build:wasm` and already in dist/
+}
 
 const sharedOptions = {
   bundle:    true,
@@ -35,6 +46,7 @@ async function main() {
   } else {
     await Promise.all([extCtx.rebuild(), workerCtx.rebuild()]);
     await Promise.all([extCtx.dispose(), workerCtx.dispose()]);
+    copyWasmFiles();
   }
 }
 

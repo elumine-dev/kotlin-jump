@@ -17,6 +17,29 @@ const KEYWORDS = new Set([
 
 const FUN_KINDS = new Set<SymbolKind>(['fun', 'composable']);
 
+/**
+ * Returns the column offset of the expression body start (after `= `) on a single-line
+ * function declaration, or -1 if the line is a block-body function or has no `=`.
+ * Tracks paren depth so default parameter values (`fun f(x: Int = 0)`) are not confused
+ * with the expression-body `=`.
+ */
+function findExpressionBodyStart(line: string): number {
+  let depth = 0;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '(') { depth++; continue; }
+    if (ch === ')') { depth--; continue; }
+    if (depth > 0) continue;
+    if (ch === '{') return -1;           // block body — no expression body on this line
+    if (ch === '=') {
+      let start = i + 1;
+      while (start < line.length && line[start] === ' ') start++;
+      return start;
+    }
+  }
+  return -1;
+}
+
 function fileName(uri: { toString(): string }): string {
   return uri.toString().split('/').pop() ?? '';
 }
@@ -116,10 +139,36 @@ export class KotlinCallHierarchyProvider implements vscode.CallHierarchyProvider
     const doc = await vscode.workspace.openTextDocument(item.uri);
     const bodyEnd = this.getFunctionBodyEnd(data.uriString, entry);
     const bodyStart = entry.line + 1;
-    if (bodyStart > bodyEnd) return [];
+
+    // Check for expression-body syntax on the declaration line: fun f() = expr
+    const declLineText = doc.lineAt(entry.line).text;
+    const exprBodyOffset = findExpressionBodyStart(declLineText);
+
+    if (bodyStart > bodyEnd && exprBodyOffset === -1) return [];
 
     // Extract outgoing calls from body lines
     const outgoing = new Map<string, { entry: SymbolEntry; ranges: vscode.Range[] }>();
+
+    // Scan declaration line for expression-body calls
+    if (exprBodyOffset !== -1) {
+      RE_CALL.lastIndex = exprBodyOffset;
+      let m;
+      while ((m = RE_CALL.exec(declLineText)) !== null) {
+        if (token.isCancellationRequested) return [];
+        const name = m[2];
+        if (KEYWORDS.has(name)) continue;
+        const matchStart = m[1] ? m.index + m[1].length + 1 : m.index;
+        if (isInsideCommentOrString(declLineText, matchStart)) continue;
+        const targets = this.index.lookup(name).filter(e => FUN_KINDS.has(e.kind));
+        if (targets.length === 0) continue;
+        const target = targets[0];
+        const key = `${target.uri.toString()}:${target.line}`;
+        if (!outgoing.has(key)) outgoing.set(key, { entry: target, ranges: [] });
+        outgoing.get(key)!.ranges.push(
+          new vscode.Range(entry.line, matchStart, entry.line, matchStart + name.length)
+        );
+      }
+    }
 
     for (let i = bodyStart; i <= bodyEnd && i < doc.lineCount; i++) {
       if (token.isCancellationRequested) return [];

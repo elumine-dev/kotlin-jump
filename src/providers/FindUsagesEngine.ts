@@ -45,6 +45,43 @@ export interface UsageResult {
  * Callers are responsible for pre-filtering `uriStrings` (e.g. applying
  * kotlinJump.excludeFromReferences globs) before passing them in.
  */
+/**
+ * Determines which specific declaration of `word` the given document is most
+ * likely referencing. Returns `undefined` when ambiguous.
+ *
+ * Resolution priority:
+ *   1. Exact/wildcard FQN import match via resolveBest
+ *   2. Only one declaration exists globally
+ *   3. Parent-class visibility: for members (enum entries, companion consts)
+ *      whose simple name isn't imported directly, check which declaration's
+ *      enclosing class is imported / in the same package as the caller document.
+ */
+export function resolveSearchTarget(
+  word: string,
+  document: vscode.TextDocument,
+  index: SymbolIndex,
+): SymbolEntry | undefined {
+  const decls = index.lookup(word);
+  if (decls.length === 0) return undefined;
+
+  let target: SymbolEntry | undefined;
+  const resolved = resolveBest(word, document, fqn => index.lookupFqn(fqn));
+  if (resolved.matches.length === 1) target = resolved.matches[0];
+  if (!target && decls.length === 1) target = decls[0];
+
+  // For member symbols (enum entries, companion constants, etc.) whose simple
+  // name isn't directly imported, the word-level resolveBest above fails.
+  // Disambiguate by checking which declaration's parent class is visible in
+  // the caller document (same package, explicit import, or wildcard import).
+  if (!target && decls.length > 1) {
+    const docText = document.getText();
+    const candidates = decls.filter(d => fileCouldReference(docText, d));
+    if (candidates.length === 1) target = candidates[0];
+  }
+
+  return target;
+}
+
 export async function scanForUsages(
   word: string,
   document: vscode.TextDocument,
@@ -55,13 +92,9 @@ export async function scanForUsages(
   const decls = index.lookup(word);
   if (decls.length === 0) return [];
 
-  // Resolve the specific FQN from the current document's import context.
-  // If wildcard imports remain ambiguous, avoid narrowing to the wrong target.
-  let target: SymbolEntry | undefined;
-  const resolved = resolveBest(word, document, fqn => index.lookupFqn(fqn));
-  if (resolved.matches.length === 1) target = resolved.matches[0];
-  if (!target && decls.length === 1) target = decls[0];
+  const target = resolveSearchTarget(word, document, index);
 
+  const maxReferences = vscode.workspace.getConfiguration('kotlinJump').get<number>('maxReferences', 500);
   const wordRe = new RegExp(`\\b${escapeRegex(word)}\\b`, 'g');
   const results: UsageResult[] = [];
   let cursor = 0;
@@ -69,6 +102,7 @@ export async function scanForUsages(
   const worker = async () => {
     while (cursor < uriStrings.length) {
       if (token.isCancellationRequested) return;
+      if (results.length >= maxReferences) return;
       const uriStr = uriStrings[cursor++];
       const uri = vscode.Uri.parse(uriStr);
       try {
@@ -91,6 +125,7 @@ export async function scanForUsages(
           wordRe.lastIndex = 0;
           let m: RegExpExecArray | null;
           while ((m = wordRe.exec(lines[i])) !== null) {
+            if (results.length >= maxReferences) break;
             if (!isInsideCommentOrString(lines[i], m.index)) {
               results.push({ uri, uriString: uriStr, line: i, character: m.index, lineText: lines[i] });
             }
@@ -111,19 +146,36 @@ export async function scanForUsages(
 export function fileCouldReference(text: string, target: SymbolEntry): boolean {
   const { fqn, packageName: pkg } = target;
   if (pkg) {
-    // Check only the header (package declaration is always in the first ~512 chars)
-    // Use a word-boundary suffix to avoid matching sub-packages (app vs app.feature)
-    if (new RegExp(`\\bpackage\\s+${escapeRegex(pkg)}(?:[\\s;]|$)`).test(text.slice(0, 512))) return true;
+    // Anchor to start of line (multiline ^) so a `// package foo` comment never matches.
+    // Check only the first ~512 chars — package declaration is always in the header.
+    if (new RegExp(`^\\s*package\\s+${escapeRegex(pkg)}(?:\\s|;|$)`, 'm').test(text.slice(0, 512))) return true;
   }
-  if (text.includes(`import ${fqn}`)) return true;
+  if (importedExactly(text, fqn)) return true;
   // For member FQNs (pkg.Class.method), also check import of the containing class
   const lastDot = fqn.lastIndexOf('.');
   if (lastDot > 0) {
     const parentFqn = fqn.substring(0, lastDot);
-    if (text.includes(`import ${parentFqn}`)) return true;
+    if (importedExactly(text, parentFqn)) return true;
   }
-  if (pkg && text.includes(`import ${pkg}.*`)) return true;
+  if (pkg && importedExactly(text, `${pkg}.*`)) return true;
   return false;
+}
+
+/**
+ * True when `text` contains `import <path>` where the path is not a prefix of
+ * a longer identifier (e.g. `import pkg.FooBarExtended` must NOT match `pkg.FooBar`).
+ */
+function importedExactly(text: string, importPath: string): boolean {
+  const needle = `import ${importPath}`;
+  let start = 0;
+  while (true) {
+    const idx = text.indexOf(needle, start);
+    if (idx === -1) return false;
+    const after = text[idx + needle.length];
+    // Valid end: end-of-string, whitespace, semicolon — but NOT a word/dot character
+    if (after === undefined || (after !== '.' && !/\w/.test(after))) return true;
+    start = idx + 1;
+  }
 }
 
 export { isInsideCommentOrString } from '../util/textUtils';

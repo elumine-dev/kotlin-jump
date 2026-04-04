@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { FileScanner } from '../indexer/FileScanner';
 import { SymbolIndex } from '../indexer/SymbolIndex';
 import { evict } from '../util/ImportResolver';
+import { Logger } from '../util/logger';
 
 export class FileWatcher implements vscode.Disposable {
   private readonly ktWatcher:   vscode.FileSystemWatcher;
@@ -12,6 +13,7 @@ export class FileWatcher implements vscode.Disposable {
     private readonly scanner: FileScanner,
     private readonly index: SymbolIndex,
     private readonly onFileIndexed?: (uri: vscode.Uri) => void,
+    private readonly log?: Logger,
   ) {
     this.ktWatcher = vscode.workspace.createFileSystemWatcher('**/*.{kt,kts}');
     this.ktWatcher.onDidCreate(uri => this.onCreated(uri));
@@ -25,6 +27,8 @@ export class FileWatcher implements vscode.Disposable {
   }
 
   private onCreated(uri: vscode.Uri): void {
+    const name = fileName(uri);
+    this.log?.info(`[watcher] created: ${name}`);
     this.scanner.scanFile(uri).then(() => this.onFileIndexed?.(uri));
   }
 
@@ -34,6 +38,8 @@ export class FileWatcher implements vscode.Disposable {
     if (existing) clearTimeout(existing);
 
     const debounceMs = vscode.workspace.getConfiguration('kotlinJump').get<number>('watcherDebounceMs', 150);
+    const name = fileName(uri);
+    this.log?.debug(`[watcher] changed: ${name} — re-indexing in ${debounceMs}ms`);
     this.timers.set(key, setTimeout(() => {
       this.timers.delete(key);
       evict(uri);
@@ -43,6 +49,8 @@ export class FileWatcher implements vscode.Disposable {
   }
 
   private onDeleted(uri: vscode.Uri): void {
+    const name = fileName(uri);
+    this.log?.info(`[watcher] deleted: ${name}`);
     evict(uri);
     this.index.remove(uri);
   }
@@ -53,4 +61,8 @@ export class FileWatcher implements vscode.Disposable {
     for (const t of this.timers.values()) clearTimeout(t);
     this.timers.clear();
   }
+}
+
+function fileName(uri: vscode.Uri): string {
+  return uri.path.split('/').pop() ?? uri.path;
 }

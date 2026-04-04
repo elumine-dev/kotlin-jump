@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { SymbolKind as KtKind } from '../indexer/KotlinParser';
+import { Logger } from '../util/logger';
 
 const KIND: Record<KtKind, vscode.SymbolKind> = {
   class:       vscode.SymbolKind.Class,
@@ -56,11 +57,15 @@ function parseQuery(raw: string): { kinds: Set<KtKind> | null; name: string } {
 }
 
 export class KotlinFileProvider implements vscode.WorkspaceSymbolProvider {
-  constructor(private readonly index: SymbolIndex) {}
+  constructor(
+    private readonly index: SymbolIndex,
+    private readonly log?: Logger,
+  ) {}
 
   provideWorkspaceSymbols(query: string): vscode.ProviderResult<vscode.SymbolInformation[]> {
     if (!query) return [];
 
+    const t0 = Date.now();
     const { kinds, name } = parseQuery(query);
 
     let entries: SymbolEntry[];
@@ -77,6 +82,8 @@ export class KotlinFileProvider implements vscode.WorkspaceSymbolProvider {
       const allowed = new Set(allowedKinds);
       entries = entries.filter(e => allowed.has(e.kind));
     }
+
+    this.log?.debug(`[search] "${query}" → ${entries.length} results (${Date.now() - t0}ms)`);
 
     return entries.map(e =>
       new vscode.SymbolInformation(

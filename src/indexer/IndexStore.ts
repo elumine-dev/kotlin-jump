@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { SymbolIndex } from './SymbolIndex';
 import { SymbolKind } from './KotlinParser';
 
-const SNAPSHOT_VERSION = 11; // bumped: WASM parser added; force re-index to get correct enum-entry FQNs
+const SNAPSHOT_VERSION = 12; // bumped: isPrivate added; force re-index to capture private modifiers
 const SNAPSHOT_FILENAME = 'kotlin-jump-index.json';
 
 // Compact per-file format — FQN is reconstructed as pkg+"."+name on restore
@@ -32,6 +32,7 @@ interface SnapshotFile {
   io?: Record<number, 1>;  // isOperator
   or?: Record<number, 1>;  // isOverride
   pr?: Record<number, 1>;  // isPreview
+  pv?: Record<number, 1>;  // isPrivate
 }
 
 interface Snapshot {
@@ -91,6 +92,7 @@ export async function save(
       if (e.isOperator)       { sf.io = sf.io ?? {}; sf.io[idx] = 1; }
       if (e.isOverride)       { sf.or = sf.or ?? {}; sf.or[idx] = 1; }
       if (e.isPreview)        { sf.pr = sf.pr ?? {}; sf.pr[idx] = 1; }
+      if (e.isPrivate)        { sf.pv = sf.pv ?? {}; sf.pv[idx] = 1; }
     });
 
     snap.files[uriStr] = sf;
@@ -212,6 +214,7 @@ export function restore(snapshot: Snapshot, index: SymbolIndex): void {
         isOperator:      sf.io?.[i] === 1 || undefined,
         isOverride:      sf.or?.[i] === 1 || undefined,
         isPreview:       sf.pr?.[i] === 1 || undefined,
+        isPrivate:       sf.pv?.[i] === 1 || undefined,
       };
     });
 

@@ -357,3 +357,165 @@ describe('SymbolIndex — remove and re-add', () => {
   });
 });
 
+// ── Trigram index ────────────────────────────────────────────────────────────
+//
+// The trigram index prefilters fuzzy search candidates so the O(N) sequential
+// scan is replaced by an O(candidates) intersection.  These tests cover:
+//   - Basic fuzzy matching via trigrams
+//   - Prefix results are NOT duplicated in the fuzzy set
+//   - Short names (< 3 chars) never appear in trigram results for 3+ char queries
+//   - Incremental correctness: add/remove/re-add maintains the index
+//   - Queries shorter than 3 chars fall back to linear scan
+//   - clear() wipes the trigram index
+
+describe('SymbolIndex — trigram fuzzy search', () => {
+  let index: SymbolIndex;
+
+  beforeEach(() => {
+    index = new SymbolIndex();
+    addFile(index, 'file:///Repo.kt', `
+package com.example
+class UserRepository {}
+class ProductRepository {}
+class OrderRepository {}
+class UserViewModel {}
+class UserPreferences {}
+`);
+    index.finalize();
+  });
+
+  // ── Basic fuzzy matching ────────────────────────────────────────────────
+
+  it('mid-word substring "Repo" matches all Repository classes', () => {
+    const names = index.search('Repo').map(e => e.name);
+    expect(names).toContain('UserRepository');
+    expect(names).toContain('ProductRepository');
+    expect(names).toContain('OrderRepository');
+  });
+
+  it('"ViewModel" exact substring finds UserViewModel', () => {
+    const names = index.search('ViewModel').map(e => e.name);
+    expect(names).toContain('UserViewModel');
+    expect(names).not.toContain('UserRepository');
+  });
+
+  it('camelCase abbreviation "UR" (2 chars) still finds UserRepository via linear fallback', () => {
+    // 2-char queries cannot use trigrams — must fall back to linear scan
+    const names = index.search('UR').map(e => e.name);
+    expect(names).toContain('UserRepository');
+  });
+
+  it('"Usr" (3 chars, no trigram hit in real names) returns empty fuzzy results', () => {
+    // "Usr" has trigram "usr" — none of the names contain "usr"
+    const results = index.search('Usr');
+    // Prefix search also misses — no name starts with "usr"
+    expect(results.map(e => e.name)).not.toContain('UserRepository');
+  });
+
+  it('prefix match "User" is not duplicated in fuzzy results', () => {
+    const results = index.search('User');
+    const names = results.map(e => e.name);
+    // UserRepository, UserViewModel, UserPreferences all start with "User" — prefix hits
+    // They must not appear twice
+    const uniqueNames = new Set(names);
+    expect(uniqueNames.size).toBe(names.length);
+  });
+
+  it('results are sorted by score — more specific match ranked higher', () => {
+    const results = index.search('UserRepo');
+    const names = results.map(e => e.name);
+    // "UserRepository" should score higher than "ProductRepository" for "UserRepo"
+    const userIdx    = names.indexOf('UserRepository');
+    const productIdx = names.indexOf('ProductRepository');
+    expect(userIdx).toBeGreaterThanOrEqual(0);
+    expect(userIdx).toBeLessThan(productIdx === -1 ? Infinity : productIdx);
+  });
+
+  // ── Incremental correctness ─────────────────────────────────────────────
+
+  it('removing a file evicts its unique names from trigram index', () => {
+    const uri = { toString: () => 'file:///Repo.kt', path: '/Repo.kt', fsPath: '/Repo.kt' } as any;
+    index.remove(uri);
+    index.finalize();
+
+    const results = index.search('Repo');
+    expect(results).toHaveLength(0);
+  });
+
+  it('name shared by two files stays in trigram index after one file is removed', () => {
+    addFile(index, 'file:///Repo2.kt', `package com.other\nclass UserRepository {}`);
+    index.finalize();
+
+    const uri = { toString: () => 'file:///Repo.kt', path: '/Repo.kt', fsPath: '/Repo.kt' } as any;
+    index.remove(uri);
+    index.finalize();
+
+    // UserRepository still exists from Repo2.kt — trigram index must still find it
+    const names = index.search('Repo').map(e => e.name);
+    expect(names).toContain('UserRepository');
+  });
+
+  it('re-adding a file after removal restores trigram results', () => {
+    const uri = { toString: () => 'file:///Repo.kt', path: '/Repo.kt', fsPath: '/Repo.kt' } as any;
+    index.remove(uri);
+    addFile(index, 'file:///Repo.kt', `package com.example\nclass UserRepository {}`);
+    index.finalize();
+
+    const names = index.search('Repo').map(e => e.name);
+    expect(names).toContain('UserRepository');
+  });
+
+  it('clear() wipes trigram index — no results survive', () => {
+    index.clear();
+    expect(index.search('Repo')).toHaveLength(0);
+    expect(index.search('User')).toHaveLength(0);
+  });
+
+  // ── Short names ─────────────────────────────────────────────────────────
+
+  it('symbol with 2-char name "Ok" is found by prefix search for "Ok"', () => {
+    addFile(index, 'file:///Short.kt', `package com.example\nclass Ok {}`);
+    index.finalize();
+    const names = index.search('Ok').map(e => e.name);
+    expect(names).toContain('Ok');
+  });
+
+  it('symbol with 2-char name "Ok" does NOT show up in trigram results for "Okk"', () => {
+    addFile(index, 'file:///Short.kt', `package com.example\nclass Ok {}`);
+    index.finalize();
+    // "Ok" has no trigrams; "Okk" trigram "okk" not in any name → no match
+    const names = index.search('Okk').map(e => e.name);
+    expect(names).not.toContain('Ok');
+  });
+
+  // ── Bug: trigram must not bleed across independent indices ───────────────
+
+  it('two independent SymbolIndex instances do not share trigram state', () => {
+    const index2 = new SymbolIndex();
+    addFile(index2, 'file:///Other.kt', `package com.other\nclass PaymentService {}`);
+    index2.finalize();
+
+    // index1 (from beforeEach) has no PaymentService
+    expect(index.search('Payment').map(e => e.name)).not.toContain('PaymentService');
+    // index2 has PaymentService
+    expect(index2.search('Payment').map(e => e.name)).toContain('PaymentService');
+  });
+
+  // ── Adversarial: trigram intersection must not false-positive ───────────
+
+  it('query "RySe" does not match "UserRepository" (r-y-s-e not all consecutive in any trigram)', () => {
+    // "rys" is not a trigram of "userrepository" → trigramCandidates returns null
+    const names = index.search('RySe').map(e => e.name);
+    // fuzzyScore might still match "UserRepository" via sequential char match if it falls
+    // through to linear scan — but trigram should eliminate it.
+    // Since the query is 4 chars, trigrams are used. "rys" ∉ any name → no results.
+    expect(names).not.toContain('UserRepository');
+  });
+
+  it('query "repo" (lowercase) finds same results as "Repo" (case insensitive)', () => {
+    const lower = index.search('repo').map(e => e.name);
+    const upper = index.search('Repo').map(e => e.name);
+    expect(new Set(lower)).toEqual(new Set(upper));
+  });
+});
+

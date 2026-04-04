@@ -27,6 +27,7 @@ export interface RawSymbol {
   isOperator?:      boolean; // operator fun (e.g. operator fun plus())
   isOverride?:      boolean; // override fun / override val
   isPreview?:       boolean; // function annotated with @Preview
+  isPrivate?:       boolean; // private val/var/fun/class — not visible outside declaring file
 }
 
 export interface ParsedFile {
@@ -146,10 +147,12 @@ export function parse(uriString: string, text: string): ParsedFile {
         supertypes = lookAheadSupertypes(text, nl + 1);
       }
 
-      const isAbstract      = /\babstract\b/.test(raw.slice(0, cm.index)) || undefined;
+      const preClass        = raw.slice(0, cm.index);
+      const isAbstract      = /\babstract\b/.test(preClass) || undefined;
+      const isPrivate       = /\bprivate\b/.test(preClass)  || undefined;
       const isHiltViewModel = annotationWindow.some(l => /@HiltViewModel\b/.test(l)) || undefined;
 
-      symbols.push({ name, kind, line: lineNum, character: raw.indexOf(name, cm.index), isComposable: false, depth: braceDepth, supertypes: supertypes.length > 0 ? supertypes : undefined, isAbstract, isHiltViewModel });
+      symbols.push({ name, kind, line: lineNum, character: raw.indexOf(name, cm.index), isComposable: false, depth: braceDepth, supertypes: supertypes.length > 0 ? supertypes : undefined, isAbstract, isPrivate, isHiltViewModel });
 
       if (kind === 'enum') enumBraceDepth = braceDepth;
 
@@ -210,6 +213,7 @@ export function parse(uriString: string, text: string): ParsedFile {
       const isExtension  = /fun\s+(?:<[^>]*>\s+)?(?:\w+(?:<[^<>]*>)?[?]?\.)/.test(raw) || undefined;
       const isOperator   = /\boperator\b/.test(preFun)  || undefined;
       const isOverride   = /\boverride\b/.test(preFun)  || undefined;
+      const isPrivateFun = /\bprivate\b/.test(preFun)   || undefined;
       symbols.push({
         name: fm[1],
         kind: isComposable ? 'composable' : 'fun',
@@ -225,6 +229,7 @@ export function parse(uriString: string, text: string): ParsedFile {
         isOperator,
         isOverride,
         isPreview,
+        isPrivate: isPrivateFun,
       });
       [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
       if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
@@ -246,6 +251,7 @@ export function parse(uriString: string, text: string): ParsedFile {
       const isAbstract = /\babstract\b/.test(propPre) || undefined;
       const isLateinit = /\blateinit\b/.test(propPre) || undefined;
       const isOverride = /\boverride\b/.test(propPre) || undefined;
+      const isPrivate  = /\bprivate\b/.test(propPre)  || undefined;
       symbols.push({
         name: pm[2],
         kind: pm[1] === 'val' ? 'val' : 'var',
@@ -257,6 +263,7 @@ export function parse(uriString: string, text: string): ParsedFile {
         isAbstract,
         isLateinit,
         isOverride,
+        isPrivate,
       });
       [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
       if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;

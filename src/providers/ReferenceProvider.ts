@@ -1,11 +1,12 @@
 import * as vscode from 'vscode';
 import { SymbolIndex } from '../indexer/SymbolIndex';
 import { scanForUsages, isExcluded } from './FindUsagesEngine';
+import { Logger } from '../util/logger';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 
 export class KotlinReferenceProvider implements vscode.ReferenceProvider {
-  constructor(private readonly index: SymbolIndex) {}
+  constructor(private readonly index: SymbolIndex, private readonly log?: Logger) {}
 
   async provideReferences(
     document: vscode.TextDocument,
@@ -23,7 +24,7 @@ export class KotlinReferenceProvider implements vscode.ReferenceProvider {
     // Pre-filter URI list before any I/O (pure CPU — picomatch pre-compiled)
     const uriStrings = this.index.fileUriStrings().filter(u => !isExcluded(u));
 
-    const raw = await scanForUsages(word, document, this.index, uriStrings, token);
+    const raw = await scanForUsages(word, document, this.index, uriStrings, token, this.log);
     if (raw.length === 0) return null;
 
     // Optionally exclude declaration sites

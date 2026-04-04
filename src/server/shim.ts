@@ -21,7 +21,7 @@ export const Uri = {
     };
   },
   file(fsPath: string) {
-    const encoded = fsPath.replace(/ /g, '%20');
+    const encoded = fsPath.split('/').map(seg => encodeURIComponent(seg)).join('/');
     return Uri.parse(`file://${encoded}`);
   },
 };

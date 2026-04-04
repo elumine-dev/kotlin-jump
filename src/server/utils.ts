@@ -58,7 +58,12 @@ export function uriToPath(uri: string): string {
   // Strip "file://" (and optional host — always empty on localhost)
   const withoutScheme = uri.slice('file://'.length);
   // withoutScheme is either "/absolute/path" or "host/path" (rare)
-  return decodeURIComponent(withoutScheme);
+  try {
+    return decodeURIComponent(withoutScheme);
+  } catch {
+    // Malformed percent-encoding (e.g. %ZZ, bare %) — return raw rather than crash
+    return withoutScheme;
+  }
 }
 
 /**

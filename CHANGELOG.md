@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.0
+
+Adds a standalone LSP server for Neovim, Helix, and Zed; a smarter rename provider with import and file rename support; KMP source set awareness; and companion mode for coexisting with JetBrains Kotlin LSP.
+
+### Improvements
+- Added a standalone LSP server so Neovim, Helix, Zed, and other LSP-compatible editors can use Kotlin Jump's navigation — Go to Definition, Find Usages, and Go to Implementation — without VS Code.
+- Added companion mode: when the JetBrains Kotlin LSP is detected in the workspace, Kotlin Jump automatically disables its overlapping providers so the two extensions coexist without producing duplicate results.
+- Upgraded the rename provider to update import statements across files and rename the file itself when renaming a top-level declaration, making symbol renames more complete and less error-prone.
+- Added Kotlin Multiplatform source set detection so module display names in Find Usages results correctly reflect KMP source sets (e.g., commonMain, androidMain) rather than showing generic module paths.
+
+### Fixes
+- Capped Find Usages results at 500 per inner search loop, preventing runaway queries from stalling the editor in very large workspaces.
+
 ## 0.6.0
 
 Adds a tree-sitter WASM parser for more accurate Kotlin navigation, Go to Composable Preview for Jetpack Compose, and expanded settings for tuning indexing behavior — plus a fix for member symbol disambiguation in Go to Definition and Find Usages.

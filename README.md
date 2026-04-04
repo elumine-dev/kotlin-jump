@@ -155,7 +155,7 @@ Search **“Kotlin Jump”** in VS Code (`Cmd+Shift+X`)
 Download the latest `.vsix` from [GitHub Releases](https://github.com/elumine-dev/kotlin-jump/releases/latest), then run:
 
 ```bash
-code --install-extension kotlin-jump-0.6.0.vsix
+code --install-extension kotlin-jump-0.7.0.vsix
 ```
 
 ---
@@ -166,7 +166,7 @@ code --install-extension kotlin-jump-0.6.0.vsix
 git clone https://github.com/elumine-dev/kotlin-jump
 cd kotlin-jump && npm install
 node esbuild.js --production && npx @vscode/vsce package --no-dependencies
-code --install-extension kotlin-jump-0.6.0.vsix
+code --install-extension kotlin-jump-0.7.0.vsix
 ```
 
 ---

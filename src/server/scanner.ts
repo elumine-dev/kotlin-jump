@@ -100,7 +100,7 @@ export async function findUsagesInWorkspace(
           wordRe.lastIndex = 0;
           let m: RegExpExecArray | null;
           while ((m = wordRe.exec(lines[i])) !== null) {
-            if (results.length >= 500) break;
+            if (results.length >= 500) { wordRe.lastIndex = 0; break; }
             if (!isInsideCommentOrString(lines[i], m.index)) {
               results.push(Location.create(
                 uriStr,

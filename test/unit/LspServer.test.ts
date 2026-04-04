@@ -193,6 +193,23 @@ describe('uriToPath', () => {
   it('multiple percent-encoded chars in one path', () => {
     expect(uriToPath('file:///a%20b/c%23d/Foo.kt')).toBe('/a b/c#d/Foo.kt');
   });
+
+  // ── malformed percent-encoding must not throw ────────────────────────────────
+
+  it('invalid hex digits (%ZZ) — returns raw path, no URIError', () => {
+    expect(() => uriToPath('file:///path/%ZZinvalid/Foo.kt')).not.toThrow();
+    expect(uriToPath('file:///path/%ZZinvalid/Foo.kt')).toBe('/path/%ZZinvalid/Foo.kt');
+  });
+
+  it('bare percent at end of segment — returns raw path, no URIError', () => {
+    expect(() => uriToPath('file:///path/100%/Foo.kt')).not.toThrow();
+    expect(uriToPath('file:///path/100%/Foo.kt')).toBe('/path/100%/Foo.kt');
+  });
+
+  it('truncated sequence (%2 with no second hex digit) — returns raw path, no URIError', () => {
+    expect(() => uriToPath('file:///path/%2/Foo.kt')).not.toThrow();
+    expect(uriToPath('file:///path/%2/Foo.kt')).toBe('/path/%2/Foo.kt');
+  });
 });
 
 describe('pathToUri', () => {
@@ -806,7 +823,7 @@ describe('workspace symbol query logic', () => {
     index.finalize();
 
     const exact    = index.lookup('Foo');
-    const searched = index.search('Foo', 50);
+    const searched = index.search('Foo');
     const seen     = new Set<string>();
     const all      = [...exact, ...searched].filter(e => {
       if (seen.has(e.fqn)) return false;
@@ -820,7 +837,7 @@ describe('workspace symbol query logic', () => {
     const index = new SymbolIndex();
     addKt(index, 'file:///Foo.kt', 'package com.example\nclass Foo {}');
     index.finalize();
-    expect(index.search('F', 50).some(e => e.name === 'Foo')).toBe(true);
+    expect(index.search('F').some(e => e.name === 'Foo')).toBe(true);
   });
 
   it('empty query returns nothing', () => {

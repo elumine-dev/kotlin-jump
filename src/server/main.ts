@@ -126,7 +126,7 @@ connection.onWorkspaceSymbol((params: WorkspaceSymbolParams): SymbolInformation[
   if (query.length === 0) return [];
 
   const exact    = query.length >= 2 ? index.lookup(query) : [];
-  const searched = index.search(query, 50);
+  const searched = index.search(query);
   const seen     = new Set<string>();
   const all      = [...exact, ...searched].filter(e => {
     if (seen.has(e.fqn)) return false;

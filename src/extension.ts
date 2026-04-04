@@ -15,6 +15,7 @@ import { KotlinCallHierarchyProvider } from './providers/CallHierarchyProvider';
 import { KotlinRenameProvider } from './providers/RenameProvider';
 import { KotlinSemanticTokensProvider, TOKEN_TYPES, TOKEN_MODIFIERS } from './providers/SemanticTokensProvider';
 import { Logger } from './util/logger';
+import { resolveCompanionMode } from './util/companionMode';
 import { resolveAll as resolveModules } from './gradle/ModuleResolver';
 import { resolveBest } from './util/ImportResolver';
 import * as IndexStore from './indexer/IndexStore';
@@ -42,8 +43,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const statusBarEnabled = cfg0.get<boolean>('statusBarEnabled', true);
 
   const companionMode = cfg0.get<string>('companionMode', 'auto');
-  const isCompanion = companionMode === 'always'
-    || (companionMode === 'auto' && !!vscode.extensions.getExtension('JetBrains.kotlin-lsp'));
+  const isCompanion = resolveCompanionMode(
+    companionMode,
+    vscode.extensions.getExtension('JetBrains.kotlin-lsp') !== undefined,
+  );
 
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBar.text    = '$(sync~spin) Kotlin Jump: indexing…';

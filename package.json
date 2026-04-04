@@ -77,6 +77,12 @@
         "key": "alt+shift+t",
         "mac": "alt+shift+t",
         "when": "editorTextFocus && (editorLangId == kotlin || editorLangId == java)"
+      },
+      {
+        "command": "kotlin-jump.goToComposablePreview",
+        "key": "alt+shift+p",
+        "mac": "alt+shift+p",
+        "when": "editorTextFocus && editorLangId == kotlin"
       }
     ],
     "commands": [
@@ -124,6 +130,11 @@
         "command": "kotlin-jump.goToTest",
         "title": "Go to Test/Implementation",
         "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.goToComposablePreview",
+        "title": "Go to Composable/Preview",
+        "category": "Kotlin Jump"
       }
     ],
     "menus": {
@@ -158,6 +169,11 @@
         {
           "command": "kotlin-jump.goToTest",
           "when": "editorTextFocus && (editorLangId == kotlin || editorLangId == java)",
+          "group": "navigation@9"
+        },
+        {
+          "command": "kotlin-jump.goToComposablePreview",
+          "when": "editorTextFocus && editorLangId == kotlin",
           "group": "navigation@9"
         },
         {
@@ -328,6 +344,58 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Enable semantic token highlighting for Kotlin files (classes, functions, suspend, @Composable, etc.)."
+        },
+        "kotlinJump.maxReferences": {
+          "type": "number",
+          "default": 500,
+          "markdownDescription": "Maximum number of results returned by **Find Usages** and **Find All References**. Increase for completeness on large repos, decrease to keep scans fast."
+        },
+        "kotlinJump.hoverEnabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show hover tooltips with signature, KDoc, and type info. Disable if another extension (e.g. the JetBrains Kotlin LSP) already provides hover."
+        },
+        "kotlinJump.fileSizeLimit": {
+          "type": "number",
+          "default": 512,
+          "markdownDescription": "Maximum file size in KB before a file is skipped during indexing. Increase to index large generated files; decrease to speed up scanning."
+        },
+        "kotlinJump.snapshotEnabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Persist the symbol index to disk between sessions. Disable if the snapshot becomes stale or causes unexpected navigation results — the index will be rebuilt from scratch on every open."
+        },
+        "kotlinJump.watcherDebounceMs": {
+          "type": "number",
+          "default": 150,
+          "markdownDescription": "Milliseconds to wait after a file change before re-indexing it. Increase on slow machines or network drives to reduce churn; decrease for near-instant updates on fast SSDs."
+        },
+        "kotlinJump.statusBarEnabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show the Kotlin Jump status bar item (symbol count and indexing progress) in the bottom bar."
+        },
+        "kotlinJump.workspaceSymbolKinds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "class",
+              "dataClass",
+              "sealedClass",
+              "interface",
+              "object",
+              "enum",
+              "annotation",
+              "fun",
+              "composable",
+              "val",
+              "var",
+              "typealias"
+            ]
+          },
+          "default": [],
+          "markdownDescription": "Restrict **Go to Symbol in Workspace** (Cmd+T) to specific symbol kinds. Empty array shows all kinds.\n\nExample — classes and functions only:\n```json\n[\"class\", \"dataClass\", \"sealedClass\", \"fun\", \"composable\"]\n```"
         }
       }
     }
@@ -335,10 +403,12 @@
   "scripts": {
     "compile": "node esbuild.js",
     "watch": "node esbuild.js --watch",
-    "vscode:prepublish": "node esbuild.js --production",
+    "build:wasm": "npx tree-sitter build --wasm node_modules/tree-sitter-kotlin --output dist/tree-sitter-kotlin.wasm",
+    "vscode:prepublish": "npm run build:wasm && node esbuild.js --production",
     "release:notes": "./.publish --notes-only",
     "release:prepare": "./.publish",
     "test": "vitest run",
+    "test:wasm": "npm run compile && vitest run test/unit/WasmKotlinParser.test.ts",
     "test:watch": "vitest",
     "test:integration": "vscode-test",
     "prepare": "husky"
@@ -349,10 +419,13 @@
     "@types/vscode": "^1.85.0",
     "esbuild": "^0.27.4",
     "husky": "^9.1.7",
+    "tree-sitter-cli": "^0.26.8",
+    "tree-sitter-kotlin": "^0.3.8",
     "typescript": "^5.3.3",
     "vitest": "^4.1.2"
   },
   "dependencies": {
-    "picomatch": "^4.0.4"
+    "picomatch": "^4.0.4",
+    "web-tree-sitter": "^0.26.8"
   }
 }

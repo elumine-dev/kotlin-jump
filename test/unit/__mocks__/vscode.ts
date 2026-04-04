@@ -79,6 +79,41 @@ export class SymbolInformation {
   ) {}
 }
 
+export class TextEdit {
+  constructor(public range: Range, public newText: string) {}
+  static replace(range: Range, newText: string): TextEdit { return new TextEdit(range, newText); }
+  static insert(position: Position, newText: string): TextEdit { return new TextEdit(new Range(position, position), newText); }
+  static delete(range: Range): TextEdit { return new TextEdit(range, ''); }
+}
+
+export class WorkspaceEdit {
+  private _entries: Array<{ uri: any; range: Range; newText: string }> = [];
+  public _fileRenames: Array<{ oldUri: any; newUri: any; options?: any; metadata?: any }> = [];
+
+  replace(uri: any, range: Range, newText: string, _metadata?: any): void {
+    this._entries.push({ uri, range, newText });
+  }
+
+  set(uri: any, edits: ReadonlyArray<TextEdit | [TextEdit, any]>): void {
+    for (const item of edits) {
+      if (Array.isArray(item)) {
+        const [te] = item as [TextEdit, any];
+        this._entries.push({ uri, range: te.range, newText: te.newText });
+      } else {
+        const te = item as TextEdit;
+        this._entries.push({ uri, range: te.range, newText: te.newText });
+      }
+    }
+  }
+
+  renameFile(oldUri: any, newUri: any, options?: any, metadata?: any): void {
+    this._fileRenames.push({ oldUri, newUri, options, metadata });
+  }
+
+  entries(): Array<{ uri: any; range: Range; newText: string }> { return this._entries; }
+  get size(): number { return this._entries.length; }
+}
+
 export const Uri = {
   parse: (s: string) => ({
     toString: () => s,

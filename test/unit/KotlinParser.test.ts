@@ -203,13 +203,80 @@ class RepoImpl(
 // ── Enum entries ────────────────────────────────────────────────────────────
 
 describe('enum entries', () => {
-  it('parses enum entries', () => {
+  it('parses enum entries (one per line)', () => {
     const result = symbols('enum class Color {\n  RED,\n  GREEN,\n  BLUE\n}');
     const names = result.map(s => s.name);
     expect(names).toContain('Color');
     expect(names).toContain('RED');
     expect(names).toContain('GREEN');
     expect(names).toContain('BLUE');
+  });
+
+  // ── Regression: multiple entries on the same line ───────────────────────────
+  // Before the fix, RE_ENUM_ENTRY only captured the FIRST entry per line.
+  // `REGULAR, EXTRA` on one line → only REGULAR was indexed; EXTRA was invisible.
+
+  it('two entries on same line — both indexed (REGULAR, EXTRA pattern)', () => {
+    const result = symbols('enum class RailType {\n    REGULAR, EXTRA\n}');
+    const names = result.map(s => s.name);
+    expect(names).toContain('REGULAR');
+    expect(names).toContain('EXTRA');
+  });
+
+  it('three entries on same line — all indexed', () => {
+    const result = symbols('enum class Color {\n    RED, GREEN, BLUE\n}');
+    const names = result.map(s => s.name);
+    expect(names).toContain('RED');
+    expect(names).toContain('GREEN');
+    expect(names).toContain('BLUE');
+  });
+
+  it('entries with constructor args on same line — both indexed', () => {
+    const result = symbols('enum class Status(val code: Int) {\n    ACTIVE(1), INACTIVE(0)\n}');
+    const names = result.map(s => s.name);
+    expect(names).toContain('ACTIVE');
+    expect(names).toContain('INACTIVE');
+  });
+
+  it('constructor arg with comma inside parens — not split incorrectly', () => {
+    // `ACTIVE("hello, world"), INACTIVE` — the comma inside the string is at paren
+    // depth 1 and must NOT produce a spurious segment.
+    const result = symbols(`enum class Msg {\n    ACTIVE("hello, world"), INACTIVE\n}`);
+    const names = result.map(s => s.name);
+    expect(names).toContain('ACTIVE');
+    expect(names).toContain('INACTIVE');
+    // Crucially, no garbage entries from inside the string
+    expect(names.filter(n => n !== 'Msg' && n !== 'ACTIVE' && n !== 'INACTIVE')).toHaveLength(0);
+  });
+
+  it('last entry followed by semicolon — indexed and stops before methods', () => {
+    const code = `enum class Side {\n    LEFT, RIGHT;\n    fun flip() = if (this == LEFT) RIGHT else LEFT\n}`;
+    const result = symbols(code);
+    const names = result.map(s => s.name);
+    expect(names).toContain('LEFT');
+    expect(names).toContain('RIGHT');
+    expect(names).toContain('flip'); // method after semicolon is also indexed
+  });
+
+  it('character position of second same-line entry is correct', () => {
+    // `    REGULAR, EXTRA` — EXTRA starts at col 13
+    const result = symbols('enum class RailType {\n    REGULAR, EXTRA\n}');
+    const extra = result.find(s => s.name === 'EXTRA');
+    expect(extra).toBeDefined();
+    expect(extra!.character).toBe(13); // 4 spaces + REGULAR(7) + comma(1) + space(1) = 13
+  });
+
+  it('single entry with no comma — still indexed', () => {
+    const result = symbols('enum class Singleton {\n    ONLY\n}');
+    const names = result.map(s => s.name);
+    expect(names).toContain('ONLY');
+  });
+
+  it('mixed: some entries one-per-line, some grouped', () => {
+    const code = `enum class Mixed {\n    FIRST,\n    SECOND, THIRD,\n    FOURTH\n}`;
+    const result = symbols(code);
+    const names = result.map(s => s.name);
+    ['FIRST', 'SECOND', 'THIRD', 'FOURTH'].forEach(n => expect(names).toContain(n));
   });
 });
 
@@ -322,5 +389,117 @@ describe('isOverride flag', () => {
     const code = 'class Impl : Base() {\n  override fun doWork() {}\n  fun extra() {}\n}';
     expect(findSymbol(code, 'doWork')!.isOverride).toBe(true);
     expect(findSymbol(code, 'extra')!.isOverride).toBeUndefined();
+  });
+});
+
+// ── isPrivate detection ──────────────────────────────────────────────────────
+//
+// Regression suite for the private-symbol fix.
+// The parser must correctly detect the `private` modifier on val, var, fun, and
+// class declarations so that Find Usages can restrict scanning to the declaring
+// file. Each test also has a mirror case proving non-private declarations are NOT
+// flagged — false positives here would incorrectly hide legitimate usages.
+
+describe('isPrivate detection', () => {
+
+  // ── val ──────────────────────────────────────────────────────────────────
+
+  it('private val → isPrivate=true', () => {
+    expect(findSymbol('private val clickStream = Subject.create()', 'clickStream')!.isPrivate).toBe(true);
+  });
+
+  it('public val → isPrivate=undefined', () => {
+    expect(findSymbol('val clickStream = Subject.create()', 'clickStream')!.isPrivate).toBeUndefined();
+  });
+
+  it('internal val → isPrivate=undefined (internal ≠ private)', () => {
+    expect(findSymbol('internal val repo: Repo = Repo()', 'repo')!.isPrivate).toBeUndefined();
+  });
+
+  it('override val without private → isPrivate=undefined', () => {
+    expect(findSymbol('override val count: Int = 0', 'count')!.isPrivate).toBeUndefined();
+  });
+
+  it('private lateinit var → isPrivate=true', () => {
+    expect(findSymbol('private lateinit var adapter: MyAdapter', 'adapter')!.isPrivate).toBe(true);
+  });
+
+  it('lateinit var without private → isPrivate=undefined', () => {
+    expect(findSymbol('lateinit var adapter: MyAdapter', 'adapter')!.isPrivate).toBeUndefined();
+  });
+
+  // ── var ──────────────────────────────────────────────────────────────────
+
+  it('private var → isPrivate=true', () => {
+    expect(findSymbol('private var counter = 0', 'counter')!.isPrivate).toBe(true);
+  });
+
+  it('var without modifier → isPrivate=undefined', () => {
+    expect(findSymbol('var counter = 0', 'counter')!.isPrivate).toBeUndefined();
+  });
+
+  // ── fun ──────────────────────────────────────────────────────────────────
+
+  it('private fun → isPrivate=true', () => {
+    expect(findSymbol('private fun doInternal() {}', 'doInternal')!.isPrivate).toBe(true);
+  });
+
+  it('fun without modifier → isPrivate=undefined', () => {
+    expect(findSymbol('fun doWork() {}', 'doWork')!.isPrivate).toBeUndefined();
+  });
+
+  it('private suspend fun → isPrivate=true (combines with other modifiers)', () => {
+    const s = findSymbol('private suspend fun fetch(): String = ""', 'fetch')!;
+    expect(s.isPrivate).toBe(true);
+    expect(s.isSuspend).toBe(true);
+  });
+
+  it('suspend fun without private → isPrivate=undefined', () => {
+    expect(findSymbol('suspend fun fetch(): String = ""', 'fetch')!.isPrivate).toBeUndefined();
+  });
+
+  it('private inline fun → isPrivate=true', () => {
+    const s = findSymbol('private inline fun <reified T> cast(v: Any): T = v as T', 'cast')!;
+    expect(s.isPrivate).toBe(true);
+    expect(s.isInline).toBe(true);
+  });
+
+  // ── class ─────────────────────────────────────────────────────────────────
+
+  it('private class → isPrivate=true', () => {
+    expect(findSymbol('private class Helper', 'Helper')!.isPrivate).toBe(true);
+  });
+
+  it('class without modifier → isPrivate=undefined', () => {
+    expect(findSymbol('class Helper', 'Helper')!.isPrivate).toBeUndefined();
+  });
+
+  it('private data class → isPrivate=true', () => {
+    expect(findSymbol('private data class State(val x: Int)', 'State')!.isPrivate).toBe(true);
+  });
+
+  // ── Members inside a class body ───────────────────────────────────────────
+
+  it('private val inside a class body → isPrivate=true', () => {
+    const code = 'class ViewModel {\n    private val _state = MutableStateFlow("")\n    val state = _state.asStateFlow()\n}';
+    expect(findSymbol(code, '_state')!.isPrivate).toBe(true);
+    expect(findSymbol(code, 'state')!.isPrivate).toBeUndefined();
+  });
+
+  it('private fun inside a class body → isPrivate=true', () => {
+    const code = 'class Repo {\n    private fun validate(): Boolean = true\n    fun fetch(): String = ""\n}';
+    expect(findSymbol(code, 'validate')!.isPrivate).toBe(true);
+    expect(findSymbol(code, 'fetch')!.isPrivate).toBeUndefined();
+  });
+
+  // ── Primary constructor params are never private through isPrivate ────────
+  // Primary ctor params like `data class Foo(val x: Int)` are never declared
+  // `private` explicitly in typical Kotlin — that would make them inaccessible
+  // as properties. Verify no false positive.
+
+  it('primary ctor val param → isPrivate=undefined', () => {
+    const code = 'data class Point(val x: Int, val y: Int)';
+    expect(findSymbol(code, 'x')!.isPrivate).toBeUndefined();
+    expect(findSymbol(code, 'y')!.isPrivate).toBeUndefined();
   });
 });

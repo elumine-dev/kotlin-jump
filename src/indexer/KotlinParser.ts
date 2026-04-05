@@ -147,7 +147,9 @@ export function parse(uriString: string, text: string): ParsedFile {
         supertypes = lookAheadSupertypes(text, nl + 1);
       }
 
-      const preClass        = raw.slice(0, cm.index);
+      // Slice up to the class NAME (not cm.index which is always 0) so modifiers
+      // before the keyword are captured: "private data class Foo" → "private data class "
+      const preClass        = raw.slice(0, raw.indexOf(name, cm.index));
       const isAbstract      = /\babstract\b/.test(preClass) || undefined;
       const isPrivate       = /\bprivate\b/.test(preClass)  || undefined;
       const isHiltViewModel = annotationWindow.some(l => /@HiltViewModel\b/.test(l)) || undefined;
@@ -193,7 +195,25 @@ export function parse(uriString: string, text: string): ParsedFile {
     if (enumBraceDepth !== -1 && braceDepth === enumBraceDepth + 1) {
       const em = RE_ENUM_ENTRY.exec(raw);
       if (em) {
-        symbols.push({ name: em[1], kind: 'enum', line: lineNum, character: raw.indexOf(em[1]), isComposable: false, depth: braceDepth });
+        // Split the line at depth-0 commas so that `REGULAR, EXTRA` on one line
+        // indexes both entries. Paren depth is tracked so commas inside constructor
+        // args like `ACTIVE(1), INACTIVE(0)` don't create spurious splits.
+        const RE_ENTRY_NAME = /^\s*([A-Z][A-Z0-9_]*)/;
+        let parenD = 0;
+        let segStart = 0;
+        for (let i = 0; i <= raw.length; i++) {
+          const ch = i < raw.length ? raw[i] : '\0';
+          if      (ch === '(' || ch === '[') { parenD++; continue; }
+          else if (ch === ')' || ch === ']') { parenD--; continue; }
+          else if (parenD > 0)               { continue; }
+          if (ch === ',' || ch === ';' || ch === '{' || i === raw.length) {
+            const seg = raw.slice(segStart, i);
+            const sm = RE_ENTRY_NAME.exec(seg);
+            if (sm) symbols.push({ name: sm[1], kind: 'enum', line: lineNum, character: segStart + (sm[0].length - sm[1].length), isComposable: false, depth: braceDepth });
+            if (ch === ';' || ch === '{') break;
+            segStart = i + 1;
+          }
+        }
         [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
         if (braceDepth <= enumBraceDepth) enumBraceDepth = -1;
         pos = nl + 1; lineNum++; continue;

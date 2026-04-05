@@ -272,17 +272,17 @@ fun Screen() { colorResource(0) }`;
   });
 
   it('library import + unrelated member + same-package member → returns ONLY same-package', () => {
-    // LoginVM is foreign; KioskHelper is in the same package as the caller
+    // LoginVM is foreign; WidgetHelper is in the same package as the caller
     const idx = makeIndex(
-      ['file:///vm/LoginVM.kt',   `package com.example.login\nclass LoginVM {\n    val colorResource = 0\n}`],
-      ['file:///kiosk/Helper.kt', `package com.example.kiosk\nclass KioskHelper {\n    val colorResource = 0\n}`],
+      ['file:///vm/LoginVM.kt',     `package com.example.login\nclass LoginVM {\n    val colorResource = 0\n}`],
+      ['file:///widget/Helper.kt',  `package com.example.widget\nclass WidgetHelper {\n    val colorResource = 0\n}`],
     );
-    const callerCode = `package com.example.kiosk
+    const callerCode = `package com.example.widget
 import androidx.compose.ui.res.colorResource
 fun Screen() { colorResource(0) }`;
-    const result = goTo(provider(idx), 'file:///kiosk/Screen.kt', callerCode, 'colorResource', 2);
+    const result = goTo(provider(idx), 'file:///widget/Screen.kt', callerCode, 'colorResource', 2);
     // LoginVM is invisible (different package, not imported).
-    // KioskHelper is visible (same package) → isEnclosingClassVisible = true.
+    // WidgetHelper is visible (same package) → isEnclosingClassVisible = true.
     expect(result).not.toBeNull();
     expect((result as any)?.uri?.path ?? (Array.isArray(result) ? (result as any[])[0]?.uri?.path : '')).toContain('Helper.kt');
   });
@@ -636,7 +636,7 @@ fun Screen() { LazyColumn { } }`;
 
 describe('DefinitionProvider — no false positives for unindexed library symbols', () => {
   const URI_VM   = 'file:///login/LoginEmailViewModel.kt';
-  const URI_KIOSK = 'file:///kiosk/KioskCarousel.kt';
+  const URI_WIDGET = 'file:///widget/WidgetCarousel.kt';
 
   // A ViewModel with a private `colorResource` delegate/property
   const CODE_VM = `package com.example.login
@@ -645,11 +645,11 @@ class LoginEmailViewModel {
 }`;
 
   // A Composable that imports colorResource from Compose (library, not in index)
-  const CODE_KIOSK = `package com.example.kiosk
+  const CODE_WIDGET = `package com.example.widget
 import androidx.compose.ui.res.colorResource
 
 @Composable
-fun KioskCarousel() {
+fun WidgetCarousel() {
     val color = colorResource(R.color.background)
 }`;
 
@@ -659,14 +659,14 @@ fun KioskCarousel() {
   beforeEach(() => {
     index = new SymbolIndex();
     index.add(parse(URI_VM, CODE_VM));
-    // KioskCarousel.kt is NOT added to index (simulating that colorResource only
+    // WidgetCarousel.kt is NOT added to index (simulating that colorResource only
     // appears as a usage, not a declaration — the Compose library is not indexed)
     provider = new KotlinDefinitionProvider(index);
   });
 
   it('colorResource in Composable with Compose import returns null (not VM results)', () => {
-    const doc = mockDocument(URI_KIOSK, CODE_KIOSK);
-    const result = provider.provideDefinition(doc, positionOf(CODE_KIOSK, 'colorResource', 2));
+    const doc = mockDocument(URI_WIDGET, CODE_WIDGET);
+    const result = provider.provideDefinition(doc, positionOf(CODE_WIDGET, 'colorResource', 2));
     // Must NOT return LoginEmailViewModel.colorResource
     expect(result).toBeNull();
   });
@@ -693,8 +693,8 @@ class LoginUseCase {
 class ProfileViewModel {
     private val colorResource = context.resources.getColor(R.color.accent)
 }`));
-    const doc = mockDocument(URI_KIOSK, CODE_KIOSK);
-    const result = provider.provideDefinition(doc, positionOf(CODE_KIOSK, 'colorResource', 2));
+    const doc = mockDocument(URI_WIDGET, CODE_WIDGET);
+    const result = provider.provideDefinition(doc, positionOf(CODE_WIDGET, 'colorResource', 2));
     // With TWO unrelated VM entries for colorResource and an unmatched Compose import → null
     expect(result).toBeNull();
   });

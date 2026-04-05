@@ -5,6 +5,7 @@ import { Logger } from '../util/logger';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 const ALIAS_TYPE_RE = /\b([A-Z]\w+)\b/g;
+const RE_PKG = /^\s*package\s+([\w.]+)/m;
 const DEFAULT_TEST_SEGMENTS: string[] = [];
 
 // Shared state: set by provideDefinition, consumed by the selection listener in extension.ts
@@ -58,6 +59,22 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
       }
 
       if (resolvedEntries.length === 1) return withAliasTargets(resolvedEntries[0], this.index, allow);
+
+      // ── 1a. Wildcard tiebreak: when multiple wildcard imports both hit the index,
+      // prefer the symbol whose package shares the most components with the caller's
+      // package. E.g. caller in com.example.ui → com.example.Button wins over
+      // com.other.Button. Only applies when there is a unique winner.
+      if (resolved.priority === 'wildcard') {
+        const filePackage = RE_PKG.exec(document.getText())?.[1] ?? '';
+        if (filePackage) {
+          const winner = wildcardTiebreak(resolvedEntries, filePackage);
+          if (winner) {
+            log(`step1 wildcard tiebreak → ${winner.fqn}`);
+            return withAliasTargets(winner, this.index, allow);
+          }
+        }
+      }
+
       return resolvedEntries.map(toLocation);
     }
 
@@ -195,6 +212,34 @@ function isEnclosingClassVisible(
 
 function toLocation(e: { uri: vscode.Uri; line: number; character: number }): vscode.Location {
   return new vscode.Location(e.uri, new vscode.Position(e.line, e.character));
+}
+
+// When multiple wildcard-import candidates all exist in the index, prefer the
+// one whose package shares the longest common prefix with the caller's package.
+// E.g. caller in `com.example.ui`, candidates `com.example.Button` vs `com.other.Button`
+// → `com.example.Button` wins (2 shared components vs 1).
+// Returns undefined when scores are tied (genuine ambiguity → caller shows picker).
+function wildcardTiebreak<T extends { fqn: string; packageName?: string }>(
+  candidates: T[],
+  filePackage: string,
+): T | undefined {
+  const fileParts = filePackage.split('.');
+  let bestScore = -1;
+  let bestCount = 0;
+  let best: T | undefined;
+
+  for (const c of candidates) {
+    const pkg = c.packageName ?? c.fqn.slice(0, c.fqn.lastIndexOf('.'));
+    const pkgParts = pkg.split('.');
+    let score = 0;
+    const len = Math.min(fileParts.length, pkgParts.length);
+    while (score < len && fileParts[score] === pkgParts[score]) score++;
+
+    if (score > bestScore) { bestScore = score; bestCount = 1; best = c; }
+    else if (score === bestScore) { bestCount++; }
+  }
+
+  return bestCount === 1 ? best : undefined;
 }
 
 function withAliasTargets(

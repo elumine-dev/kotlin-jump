@@ -625,6 +625,32 @@ fun Screen() { LazyColumn { } }`;
     expect(result).not.toBeNull();
     expect((result as any).uri.path).toContain('LazyColumn.kt');
   });
+
+  // ── Wildcard tiebreak ─────────────────────────────────────────────────────
+
+  it('wildcard tiebreak: symbol in closer package wins over symbol in distant package', () => {
+    const idx = makeIndex(
+      ['file:///a/Loader.kt', `package com.example\nclass Loader`],
+      ['file:///b/Loader.kt', `package com.other\nclass Loader`],
+    );
+    // Caller in com.example.ui; com.example shares 2 components, com.other shares 1
+    const callerCode = `package com.example.ui\nimport com.example.*\nimport com.other.*\nfun use() { val l = Loader() }`;
+    const result = goTo(provider(idx), 'file:///ui/Screen.kt', callerCode, 'Loader');
+    expect(result).not.toBeNull();
+    expect((result as any).uri?.path ?? '').toContain('/a/Loader.kt');
+  });
+
+  it('wildcard tiebreak: tie (both packages equidistant) → picker returned', () => {
+    const idx = makeIndex(
+      ['file:///x/Widget.kt', `package com.example.x\nclass Widget`],
+      ['file:///y/Widget.kt', `package com.example.y\nclass Widget`],
+    );
+    // Both packages share 2 components with com.example.z → genuine tie → picker
+    const callerCode = `package com.example.z\nimport com.example.x.*\nimport com.example.y.*\nfun use() { Widget() }`;
+    const result = goTo(provider(idx), 'file:///z/Screen.kt', callerCode, 'Widget');
+    expect(Array.isArray(result)).toBe(true);
+    expect((result as any[]).length).toBe(2);
+  });
 });
 
 // ── Regression: unindexed library symbols must not show unrelated results ────

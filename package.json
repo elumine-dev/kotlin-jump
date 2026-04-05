@@ -2,7 +2,7 @@
   "name": "kotlin-jump",
   "displayName": "Kotlin Jump",
   "description": "Fast Kotlin & Java navigation — Go to Definition, Find Usages, Go to Implementation. No language server needed.",
-  "version": "0.7.5",
+  "version": "0.7.6",
   "publisher": "elumine",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -88,6 +88,12 @@
         "when": "editorTextFocus && editorLangId == kotlin"
       },
       {
+        "command": "kotlin-jump.organizeImports",
+        "key": "shift+alt+o",
+        "mac": "shift+alt+o",
+        "when": "editorTextFocus && (editorLangId == kotlin || editorLangId == java)"
+      },
+      {
         "command": "editor.action.rename",
         "key": "ctrl+r",
         "mac": "cmd+r",
@@ -144,6 +150,11 @@
         "command": "kotlin-jump.goToComposablePreview",
         "title": "Go to Composable/Preview",
         "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.organizeImports",
+        "title": "Organize Imports",
+        "category": "Kotlin Jump"
       }
     ],
     "menus": {
@@ -189,6 +200,11 @@
           "command": "kotlin-jump.copyFqn",
           "when": "editorLangId == kotlin",
           "group": "navigation@10"
+        },
+        {
+          "command": "kotlin-jump.organizeImports",
+          "when": "editorTextFocus && (editorLangId == kotlin || editorLangId == java)",
+          "group": "1_modification@1"
         }
       ]
     },
@@ -420,6 +436,11 @@
           },
           "default": [],
           "markdownDescription": "Restrict **Go to Symbol in Workspace** (Cmd+T) to specific symbol kinds. Empty array shows all kinds.\n\nExample — classes and functions only:\n```json\n[\"class\", \"dataClass\", \"sealedClass\", \"fun\", \"composable\"]\n```"
+        },
+        "kotlinJump.organizeImports.removeUnused": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Remove unused imports when running **Organize Imports** (`Shift+Alt+O`).\n\nUses a heuristic: if the imported simple name (or alias) does not appear as a word in the file, the import is removed. Wildcard imports are always kept."
         }
       }
     }

@@ -55,6 +55,28 @@ export class TypeHierarchyItem {
   ) {}
 }
 
+export class CodeActionKind {
+  static readonly SourceOrganizeImports = new CodeActionKind('source.organizeImports');
+  static readonly QuickFix              = new CodeActionKind('quickfix');
+  static readonly Source                = new CodeActionKind('source');
+  constructor(public readonly value: string) {}
+  contains(other: CodeActionKind): boolean {
+    return other.value === this.value || other.value.startsWith(`${this.value}.`);
+  }
+  append(part: string): CodeActionKind {
+    return new CodeActionKind(`${this.value}.${part}`);
+  }
+}
+
+export class CodeAction {
+  edit?: WorkspaceEdit;
+  isPreferred?: boolean;
+  constructor(
+    public title: string,
+    public kind?: CodeActionKind,
+  ) {}
+}
+
 export enum SymbolKind {
   File = 0,
   Class = 4,

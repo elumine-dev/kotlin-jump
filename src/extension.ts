@@ -13,6 +13,7 @@ import { KotlinCodeLensProvider } from './providers/CodeLensProvider';
 import { KotlinTypeHierarchyProvider } from './providers/TypeHierarchyProvider';
 import { KotlinCallHierarchyProvider } from './providers/CallHierarchyProvider';
 import { KotlinRenameProvider } from './providers/RenameProvider';
+import { OrganizeImportsProvider, organizeImports, buildOrganizeEdit } from './providers/OrganizeImportsProvider';
 import { KotlinSemanticTokensProvider, TOKEN_TYPES, TOKEN_MODIFIERS } from './providers/SemanticTokensProvider';
 import { Logger } from './util/logger';
 import { resolveCompanionMode } from './util/companionMode';
@@ -91,6 +92,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.languages.registerCallHierarchyProvider(KT_JAVA, new KotlinCallHierarchyProvider(index)),
     ...(!isCompanion ? [
       vscode.languages.registerRenameProvider(KT_JAVA, new KotlinRenameProvider(index)),
+      vscode.languages.registerCodeActionsProvider(
+        KT_JAVA,
+        new OrganizeImportsProvider(),
+        { providedCodeActionKinds: OrganizeImportsProvider.providedCodeActionKinds },
+      ),
     ] : []),
     vscode.languages.registerWorkspaceSymbolProvider(new KotlinFileProvider(index, log)),
 
@@ -363,6 +369,32 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
       await vscode.env.clipboard.writeText(fqn);
       vscode.window.showInformationMessage(`Copied: ${fqn}`);
+    }),
+
+    vscode.commands.registerCommand('kotlin-jump.organizeImports', async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) return;
+      const lang = editor.document.languageId;
+      if (lang !== 'kotlin' && lang !== 'java') return;
+
+      const cfg = vscode.workspace.getConfiguration('kotlinJump.organizeImports');
+      const removeUnused = cfg.get<boolean>('removeUnused', true);
+      const result = organizeImports(editor.document.getText(), { removeUnused });
+
+      if (!result) {
+        vscode.window.showInformationMessage('No imports to organize.');
+        return;
+      }
+
+      const edit = buildOrganizeEdit(editor.document);
+      if (edit) await vscode.workspace.applyEdit(edit);
+
+      if (result.removed.length > 0) {
+        const n = result.removed.length;
+        vscode.window.showInformationMessage(
+          `Organize imports: removed ${n} unused import${n === 1 ? '' : 's'}.`,
+        );
+      }
     }),
 
     vscode.commands.registerCommand('kotlin-jump.reindex', async () => {

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.6
+
+Adds an Organize Imports command for Kotlin and Java files.
+
+### Improvements
+- Added Organize Imports command (Shift+Alt+O) for Kotlin and Java files — removes unused imports using a heuristic that checks whether the imported name or alias appears in the file body; wildcard imports are always kept. Available from the command palette and the editor right-click menu.
+- Added kotlinJump.organizeImports.removeUnused setting (enabled by default) to opt out of unused-import removal while still running the Organize Imports command.
+
 ## 0.7.5
 
 Expands Java method indexing and fixes two navigation edge cases in Call Hierarchy and Go to Definition.

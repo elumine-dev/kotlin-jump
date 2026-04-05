@@ -172,7 +172,7 @@ describe('Java method declarations', () => {
 
   it('parses the real-world startZoomOrUnzoom case', () => {
     const code = [
-      'package com.example.juniper.shell.kiosk.showcase;',
+      'package com.example.showcase;',
       '',
       'public class LavenderGullHelper {',
       '    private final Context context;',
@@ -439,12 +439,12 @@ describe('Java parser edge cases', () => {
       '',
       '    public LavenderControllerImpl(ZoomHelper h) { this.zoomHelper = h; }',
       '',
-      '    public void zoomOutAfterKioskIsShownZoomedIn() {',
+      '    public void zoomOutAfterWidgetIsShownZoomedIn() {',
       '        zoomHelper.startZoomOrUnzoom(false);',
       '    }',
       '}',
     ].join('\n');
-    expect(find(code, 'zoomOutAfterKioskIsShownZoomedIn')).toBeDefined();
+    expect(find(code, 'zoomOutAfterWidgetIsShownZoomedIn')).toBeDefined();
     // Both a class symbol and a constructor (fun) named LavenderControllerImpl should be indexed
     const all = syms(code).filter(s => s.name === 'LavenderControllerImpl');
     expect(all.some(s => s.kind === 'fun')).toBe(true); // constructor

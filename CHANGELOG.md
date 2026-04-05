@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.4
+
+Extends Java navigation to methods, fields, and enum entries, and fixes Go to Definition false positives for library symbols.
+
+### Improvements
+- Java methods, fields, and enum entries are now indexed, making Go to Definition and Find Usages work for individual Java members — not just class declarations — in mixed Kotlin/Java projects.
+
+### Fixes
+- Fixed Go to Definition returning false results when the cursor is on a symbol that resolves to an unindexed library class; the extension now correctly declines to navigate rather than jumping to an unrelated location.
+- Fixed Kotlin enum indexing so enums with multiple entries are fully indexed, and corrected a parser edge case that could cause class-level declarations preceding an enum to be missed.
+
 ## 0.7.3
 
 Fixes Find Usages false positives for private symbols, sharpens Go to Definition when same-named symbols coexist in the same package, and speeds up workspace symbol search with a trigram prefilter.

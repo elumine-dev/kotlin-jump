@@ -444,6 +444,22 @@ fun validate() {}`;
     expect(validateEntry.fromRanges).toHaveLength(3);
   });
 
+  it('inline block body: fun f() { call() } detects the call when sibling follows', async () => {
+    // The bug: when a one-liner block-body function is immediately followed by a sibling,
+    // bodyStart > bodyEnd, and the old code returned empty because exprBodyOffset was -1.
+    const code = `package com.example
+fun process() { validate() }
+fun validate() {}`;
+    addKt(index, 'file:///InlineBlock.kt', code);
+    workspace.openTextDocument = async () => mockDocument('file:///InlineBlock.kt', code) as any;
+
+    const doc    = mockDocument('file:///InlineBlock.kt', code);
+    const [item] = provider.prepareCallHierarchy(doc, positionOf(code, 'process'))!;
+    const results = await provider.provideCallHierarchyOutgoingCalls(item, noCancel());
+
+    expect(results.map(r => r.to.name)).toContain('validate');
+  });
+
   it('item with no .data → returns empty array without throwing', async () => {
     workspace.openTextDocument = async () => mockDocument(CALLER_URI, CALLER_CODE) as any;
     // Manually construct an item with no .data

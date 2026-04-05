@@ -23,14 +23,23 @@ const FUN_KINDS = new Set<SymbolKind>(['fun', 'composable']);
  * Tracks paren depth so default parameter values (`fun f(x: Int = 0)`) are not confused
  * with the expression-body `=`.
  */
-function findExpressionBodyStart(line: string): number {
+/**
+ * Finds where the scannable body of a function starts on its declaration line.
+ * Returns the scan offset for:
+ *   - expression body:  `fun f() = expr`  → offset of `expr`
+ *   - inline block body: `fun f() { call() }` → offset after `{`
+ * Returns -1 if the body is a normal multi-line block (scan body lines instead).
+ * Tracks paren depth so default parameter values (`fun f(x: Int = 0)`) are not
+ * confused with the expression-body `=`.
+ */
+function findDeclarationLineScanStart(line: string): number {
   let depth = 0;
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
     if (ch === '(') { depth++; continue; }
     if (ch === ')') { depth--; continue; }
     if (depth > 0) continue;
-    if (ch === '{') return -1;           // block body — no expression body on this line
+    if (ch === '{') return i + 1;  // inline block body — scan from after `{`
     if (ch === '=') {
       let start = i + 1;
       while (start < line.length && line[start] === ' ') start++;
@@ -140,18 +149,20 @@ export class KotlinCallHierarchyProvider implements vscode.CallHierarchyProvider
     const bodyEnd = this.getFunctionBodyEnd(data.uriString, entry);
     const bodyStart = entry.line + 1;
 
-    // Check for expression-body syntax on the declaration line: fun f() = expr
+    // Find the scan start for expression body (`fun f() = expr`) or inline block
+    // body (`fun f() { call() }`) on the declaration line.
     const declLineText = doc.lineAt(entry.line).text;
-    const exprBodyOffset = findExpressionBodyStart(declLineText);
+    const declLineScanStart = findDeclarationLineScanStart(declLineText);
 
-    if (bodyStart > bodyEnd && exprBodyOffset === -1) return [];
+    // No multi-line body AND nothing scannable on the declaration line → no calls.
+    if (bodyStart > bodyEnd && declLineScanStart === -1) return [];
 
     // Extract outgoing calls from body lines
     const outgoing = new Map<string, { entry: SymbolEntry; ranges: vscode.Range[] }>();
 
-    // Scan declaration line for expression-body calls
-    if (exprBodyOffset !== -1) {
-      RE_CALL.lastIndex = exprBodyOffset;
+    // Scan declaration line for expression-body or inline-block calls
+    if (declLineScanStart !== -1) {
+      RE_CALL.lastIndex = declLineScanStart;
       let m;
       while ((m = RE_CALL.exec(declLineText)) !== null) {
         if (token.isCancellationRequested) return [];

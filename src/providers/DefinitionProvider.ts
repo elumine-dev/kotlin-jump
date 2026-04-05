@@ -75,8 +75,6 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
       return toLocation(declEntry);
     }
 
-    if (filtered.length === 1) return withAliasTargets(filtered[0], this.index, allow);
-
     // ── 2a. Filter by import visibility ───────────────────────────────────────
     // A member belongs to an enclosing class (e.g. TypeA).
     // If that class is not imported (or same-package), the member should not
@@ -99,6 +97,15 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
     const sameFile = filtered.filter(e => e.uri.toString() === document.uri.toString());
     log(`step2 sameFile=${sameFile.length} → ${sameFile.map(e => e.fqn).join(', ') || 'none'}`);
     if (sameFile.length === 1) return withAliasTargets(sameFile[0], this.index, allow);
+
+    // No evidence this file can reach any candidate: the enclosing class of every
+    // found symbol is not imported, not in the same package, and the cursor is not
+    // in the declaring file. The actual definition is likely in an unindexed library
+    // (e.g. Compose's `colorResource` — imported but not indexed).
+    if (visibleByImport.length === 0 && sameFile.length === 0) {
+      log('step2 no visibility evidence → null');
+      return null;
+    }
 
     log(`step2 ambiguous — returning all ${filtered.length} results`);
     return filtered.map(toLocation);

@@ -146,11 +146,27 @@ describe('Java method declarations', () => {
     expect(find(code, 'doSomething')!.isOverride).toBeUndefined();
   });
 
-  it('does NOT index package-private method with no modifier', () => {
-    // Package-private methods have no access modifier — we intentionally skip these
-    // to avoid false positives from unrelated code patterns.
+  it('indexes package-private void method (no access modifier)', () => {
     const code = 'public class Foo {\n    void helperMethod() {}\n}';
-    expect(find(code, 'helperMethod')).toBeUndefined();
+    const s = find(code, 'helperMethod');
+    expect(s).toBeDefined();
+    expect(s!.kind).toBe('fun');
+  });
+
+  it('indexes package-private method with class return type', () => {
+    const code = 'public class Foo {\n    String getName() { return ""; }\n}';
+    expect(find(code, 'getName')?.kind).toBe('fun');
+  });
+
+  it('indexes package-private method with primitive return type', () => {
+    const code = 'public class Foo {\n    int getCount() { return 0; }\n}';
+    expect(find(code, 'getCount')?.kind).toBe('fun');
+  });
+
+  it('does NOT index bare method call as a method declaration', () => {
+    // methodCall() with no return type and no modifier → not a declaration
+    const code = 'public class Foo {\n    public void run() {\n        doSomething();\n    }\n}';
+    expect(find(code, 'doSomething')).toBeUndefined();
   });
 
   it('does NOT false-positive on field with initializer', () => {

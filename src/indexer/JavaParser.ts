@@ -10,6 +10,10 @@ const RE_CLASS = /^\s*(?:(?:public|protected|private|static|abstract|final|stric
 // trying to grammar the type — it just stops at `(` or `=` or `;`.
 // Requires a modifier so bare calls like `foo(` and local-var initializers don't match.
 const RE_METHOD = /^\s*(?:(?:public|protected|private|static|final|abstract|synchronized|native|strictfp|default)\s+)+(?:<[^(]*>\s+)?[^(=;\n]*?(\w+)\s*\(/;
+// Package-private method: no access modifier required, but an explicit return type
+// (void, a Java primitive, or an uppercase-starting type name) is required to distinguish
+// method declarations from local variable declarations and method calls.
+const RE_PKGPRIVATE_METHOD = /^\s*(?:(?:static|final|abstract|synchronized|native|strictfp)\s+)*(?:(?:void|boolean|byte|char|short|int|long|float|double)(?:\[\])*|[A-Z]\w*(?:<[^(]*>)?(?:\[\])*)\s+[^(=;\n]*?(\w+)\s*\(/;
 // Field: at least one explicit modifier + type + name followed by = or ;
 // `[^(=;\n]*?` stops at `(` so method declarations never match here.
 const RE_FIELD  = /^\s*(?:(?:public|protected|private|static|final|volatile|transient)\s+)+[^(=;\n]*?(\w+)\s*[=;]/;
@@ -138,6 +142,34 @@ export function parseJava(uriString: string, text: string): ParsedFile {
           isAbstract:   /\babstract\b/.test(preMod)  || undefined,
           isOverride:   annotationWindow.some(l => /@Override\b/.test(l)) || undefined,
           isPrivate:    /\bprivate\b/.test(preMod)   || undefined,
+        });
+        braceDepth = countJavaBraces(text, pos, nl, braceDepth);
+        if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+        annotationWindow.length = 0;
+        pos = nl + 1; lineNum++; continue;
+      }
+    }
+
+    // ── Package-private method declarations ───────────────────────────────
+    // Only reached when RE_METHOD found no explicit access modifier.
+    const pm2 = RE_PKGPRIVATE_METHOD.exec(raw);
+    if (pm2) {
+      const parenIdx = raw.indexOf('(');
+      const eqIdx    = raw.indexOf('=');
+      if (parenIdx !== -1 && (eqIdx === -1 || eqIdx > parenIdx)) {
+        const name      = pm2[1];
+        const nameStart = raw.lastIndexOf(name, parenIdx);
+        const preMod    = raw.slice(0, nameStart);
+        symbols.push({
+          name,
+          kind:         'fun',
+          line:         lineNum,
+          character:    nameStart,
+          isComposable: false,
+          depth:        braceDepth,
+          isAbstract:   /\babstract\b/.test(preMod) || undefined,
+          isOverride:   annotationWindow.some(l => /@Override\b/.test(l)) || undefined,
+          isPrivate:    undefined, // package-private by definition
         });
         braceDepth = countJavaBraces(text, pos, nl, braceDepth);
         if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;

@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { fileCouldReference, escapeRegex } from '../../src/providers/FindUsagesEngine';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { fileCouldReference, escapeRegex, resolveSearchTarget, scanForUsages } from '../../src/providers/FindUsagesEngine';
 import { KotlinDefinitionProvider, getPendingDeclNav, clearPendingDeclNav } from '../../src/providers/DefinitionProvider';
 import { SymbolIndex } from '../../src/indexer/SymbolIndex';
 import { parse } from '../../src/indexer/KotlinParser';
+import { workspace } from './__mocks__/vscode';
 import { mockDocument, positionOf } from './helpers';
 
 // Helper to create a minimal SymbolEntry for fileCouldReference
@@ -347,5 +348,405 @@ describe('escapeRegex', () => {
 
   it('escapes special regex chars', () => {
     expect(escapeRegex('foo+bar*baz')).toBe('foo\\+bar\\*baz');
+  });
+});
+
+// ── resolveSearchTarget — same-file tiebreak ─────────────────────────────────
+//
+// Regression suite for the "clickStream" pattern: two classes in the same
+// package each declare a `private val clickStream`. Without the same-file
+// tiebreak, resolveSearchTarget returns undefined (ambiguous), which prevents
+// the private-only restriction from kicking in.
+
+describe('resolveSearchTarget — same-file tiebreak (clickStream pattern)', () => {
+  const URI_A = 'file:///vm/LoginViewModel.kt';
+  const URI_B = 'file:///vm/ProfileViewModel.kt';
+  const URI_C = 'file:///other/SomeConsumer.kt';
+  const PKG   = 'com.example.vm';
+
+  const CODE_A = `package ${PKG}
+class LoginViewModel {
+    private val clickStream = MutableSharedFlow<Unit>()
+    fun login() { clickStream.tryEmit(Unit) }
+}`;
+  const CODE_B = `package ${PKG}
+class ProfileViewModel {
+    private val clickStream = MutableSharedFlow<Unit>()
+    fun profile() { clickStream.tryEmit(Unit) }
+}`;
+
+  let index: SymbolIndex;
+
+  beforeEach(() => {
+    index = new SymbolIndex();
+    index.add(parse(URI_A, CODE_A));
+    index.add(parse(URI_B, CODE_B));
+  });
+
+  it('cursor in file A → resolves to LoginViewModel.clickStream', () => {
+    const doc = mockDocument(URI_A, CODE_A);
+    const result = resolveSearchTarget('clickStream', doc, index);
+    expect(result).toBeDefined();
+    expect(result!.uri.toString()).toBe(URI_A);
+  });
+
+  it('cursor in file B → resolves to ProfileViewModel.clickStream', () => {
+    const doc = mockDocument(URI_B, CODE_B);
+    const result = resolveSearchTarget('clickStream', doc, index);
+    expect(result).toBeDefined();
+    expect(result!.uri.toString()).toBe(URI_B);
+  });
+
+  it('cursor in file C (different package, no import) → undefined (both unreachable)', () => {
+    // Neither private symbol can be referenced from a different package.
+    // fileCouldReference returns false for both → candidates.length = 0 → undefined.
+    const doc = mockDocument(URI_C, `package com.example.other\nclass SomeConsumer`);
+    const result = resolveSearchTarget('clickStream', doc, index);
+    expect(result).toBeUndefined();
+  });
+
+  it('only one declaration exists → resolves directly without tiebreak', () => {
+    const freshIndex = new SymbolIndex();
+    freshIndex.add(parse(URI_A, CODE_A));
+    const doc = mockDocument(URI_A, CODE_A);
+    const result = resolveSearchTarget('clickStream', doc, freshIndex);
+    expect(result).toBeDefined();
+    expect(result!.uri.toString()).toBe(URI_A);
+  });
+
+  it('non-existent word → undefined', () => {
+    const doc = mockDocument(URI_A, CODE_A);
+    expect(resolveSearchTarget('nonExistentSymbol', doc, index)).toBeUndefined();
+  });
+
+  it('resolved entry from file A has isPrivate=true', () => {
+    const doc = mockDocument(URI_A, CODE_A);
+    const result = resolveSearchTarget('clickStream', doc, index);
+    expect(result?.isPrivate).toBe(true);
+  });
+
+  it('resolved entry from file B has isPrivate=true', () => {
+    const doc = mockDocument(URI_B, CODE_B);
+    const result = resolveSearchTarget('clickStream', doc, index);
+    expect(result?.isPrivate).toBe(true);
+  });
+
+  it('three-way same-package collision: tiebreak picks the declaring file', () => {
+    const URI_C2 = 'file:///vm/SettingsViewModel.kt';
+    const CODE_C2 = `package ${PKG}
+class SettingsViewModel {
+    private val clickStream = MutableSharedFlow<Unit>()
+}`;
+    index.add(parse(URI_C2, CODE_C2));
+    // Cursor in URI_C2 → should tiebreak to SettingsViewModel
+    const doc = mockDocument(URI_C2, CODE_C2);
+    const result = resolveSearchTarget('clickStream', doc, index);
+    expect(result).toBeDefined();
+    expect(result!.uri.toString()).toBe(URI_C2);
+  });
+
+  it('four-way same-package collision: tiebreak still picks the exact declaring file', () => {
+    const URI_D = 'file:///vm/SettingsViewModel.kt';
+    const URI_E = 'file:///vm/SearchViewModel.kt';
+    const CODE_D = `package ${PKG}\nclass SettingsViewModel {\n    private val clickStream = MutableSharedFlow<Unit>()\n}`;
+    const CODE_E = `package ${PKG}\nclass SearchViewModel {\n    private val clickStream = MutableSharedFlow<Unit>()\n}`;
+    index.add(parse(URI_D, CODE_D));
+    index.add(parse(URI_E, CODE_E));
+    // Now 4 same-package clickStream symbols. Cursor in URI_D → should pick URI_D.
+    const doc = mockDocument(URI_D, CODE_D);
+    const result = resolveSearchTarget('clickStream', doc, index);
+    expect(result).toBeDefined();
+    expect(result!.uri.toString()).toBe(URI_D);
+  });
+
+  it('public symbol with same name → NOT tiebroken, resolved via explicit import', () => {
+    const URI_PUB = 'file:///shared/EventBus.kt';
+    index.add(parse(URI_PUB, `package com.example.shared
+class EventBus {
+    val clickStream = MutableSharedFlow<Unit>()
+}`));
+    // A consumer that imports EventBus explicitly
+    const consumerCode = `package com.example.consumer
+import com.example.shared.EventBus
+class Consumer {
+    val bus = EventBus()
+    fun listen() = bus.clickStream
+}`;
+    const doc = mockDocument(URI_C, consumerCode);
+    const result = resolveSearchTarget('clickStream', doc, index);
+    // fileCouldReference: consumer imports EventBus → can reference EventBus.clickStream
+    //                     consumer in different pkg, no import of LoginVM/ProfileVM → cannot reference those
+    // candidates.length === 1 → EventBus.clickStream
+    expect(result).toBeDefined();
+    expect(result!.uri.toString()).toBe(URI_PUB);
+    expect(result!.isPrivate).toBeFalsy();
+  });
+});
+
+// ── resolveSearchTarget — isPrivate flag verification ────────────────────────
+
+describe('resolveSearchTarget — isPrivate flag is correctly propagated from parser', () => {
+  let index: SymbolIndex;
+
+  beforeEach(() => {
+    index = new SymbolIndex();
+    index.add(parse('file:///Vm.kt', `package com.example
+class ViewModel {
+    private val secret = "hidden"
+    internal val config = "cfg"
+    val publicProp = "visible"
+    private var mutable = 0
+    private fun helper() {}
+    fun publicFun() {}
+}`));
+  });
+
+  function resolveFrom(word: string) {
+    const doc = mockDocument('file:///Vm.kt', 'package com.example\nclass ViewModel');
+    return resolveSearchTarget(word, doc, index);
+  }
+
+  it('private val → isPrivate=true', () => {
+    expect(resolveFrom('secret')?.isPrivate).toBe(true);
+  });
+
+  it('internal val → isPrivate is NOT true', () => {
+    expect(resolveFrom('config')?.isPrivate).toBeFalsy();
+  });
+
+  it('public val → isPrivate is NOT true', () => {
+    expect(resolveFrom('publicProp')?.isPrivate).toBeFalsy();
+  });
+
+  it('private var → isPrivate=true', () => {
+    expect(resolveFrom('mutable')?.isPrivate).toBe(true);
+  });
+
+  it('private fun → isPrivate=true', () => {
+    expect(resolveFrom('helper')?.isPrivate).toBe(true);
+  });
+
+  it('public fun → isPrivate is NOT true', () => {
+    expect(resolveFrom('publicFun')?.isPrivate).toBeFalsy();
+  });
+});
+
+// ── scanForUsages — private symbol restriction ────────────────────────────────
+//
+// Core regression: `private val clickStream` in LoginViewModel should produce
+// results ONLY from its declaring file, even when 100 other files are passed in.
+
+describe('scanForUsages — private symbol restriction', () => {
+  const URI_A = 'file:///vm/LoginViewModel.kt';
+  const URI_B = 'file:///vm/ProfileViewModel.kt';
+  const URI_C = 'file:///vm/SettingsViewModel.kt';
+  const PKG   = 'com.example.vm';
+
+  const CODE_A = `package ${PKG}
+class LoginViewModel {
+    private val clickStream = MutableSharedFlow<Unit>()
+    fun login() { clickStream.tryEmit(Unit) }
+}`;
+  const CODE_B = `package ${PKG}
+class ProfileViewModel {
+    private val clickStream = MutableSharedFlow<Unit>()
+    fun profile() { clickStream.tryEmit(Unit) }
+}`;
+  const CODE_C = `package ${PKG}
+class SettingsViewModel {
+    private val clickStream = MutableSharedFlow<Unit>()
+    fun settings() { clickStream.tryEmit(Unit) }
+}`;
+
+  let index: SymbolIndex;
+  const token = { isCancellationRequested: false };
+  let origReadFile: typeof workspace.fs.readFile;
+
+  const codeMap: Record<string, string> = {
+    [URI_A]: CODE_A,
+    [URI_B]: CODE_B,
+    [URI_C]: CODE_C,
+  };
+
+  beforeEach(() => {
+    origReadFile = workspace.fs.readFile;
+    index = new SymbolIndex();
+    index.add(parse(URI_A, CODE_A));
+    index.add(parse(URI_B, CODE_B));
+    index.add(parse(URI_C, CODE_C));
+    workspace.fs.readFile = async (uri: any) => {
+      const s = typeof uri.toString === 'function' ? uri.toString() : String(uri);
+      return Buffer.from(codeMap[s] ?? '') as any;
+    };
+  });
+
+  afterEach(() => {
+    workspace.fs.readFile = origReadFile;
+  });
+
+  it('from file A: results are ONLY from file A', async () => {
+    const doc = mockDocument(URI_A, CODE_A);
+    const results = await scanForUsages('clickStream', doc, index, [URI_A, URI_B, URI_C], token as any);
+    expect(results.length).toBeGreaterThan(0);
+    expect(results.every(r => r.uriString === URI_A)).toBe(true);
+  });
+
+  it('from file B: results are ONLY from file B', async () => {
+    const doc = mockDocument(URI_B, CODE_B);
+    const results = await scanForUsages('clickStream', doc, index, [URI_A, URI_B, URI_C], token as any);
+    expect(results.length).toBeGreaterThan(0);
+    expect(results.every(r => r.uriString === URI_B)).toBe(true);
+  });
+
+  it('from file C: results are ONLY from file C', async () => {
+    const doc = mockDocument(URI_C, CODE_C);
+    const results = await scanForUsages('clickStream', doc, index, [URI_A, URI_B, URI_C], token as any);
+    expect(results.length).toBeGreaterThan(0);
+    expect(results.every(r => r.uriString === URI_C)).toBe(true);
+  });
+
+  it('file A results include declaration line AND usage inside login()', async () => {
+    const doc = mockDocument(URI_A, CODE_A);
+    const results = await scanForUsages('clickStream', doc, index, [URI_A, URI_B, URI_C], token as any);
+    // Expect at least 2: the `val clickStream = ...` declaration and `clickStream.tryEmit` usage
+    expect(results.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('false-positive guard: file B clickStream usages are NOT in file A search results', async () => {
+    const doc = mockDocument(URI_A, CODE_A);
+    const results = await scanForUsages('clickStream', doc, index, [URI_A, URI_B, URI_C], token as any);
+    const uris = results.map(r => r.uriString);
+    expect(uris).not.toContain(URI_B);
+    expect(uris).not.toContain(URI_C);
+  });
+
+  it('extra unrelated URIs in the list are all skipped for private symbols', async () => {
+    const URI_UNRELATED1 = 'file:///unrelated/Activity.kt';
+    const URI_UNRELATED2 = 'file:///unrelated/Fragment.kt';
+    workspace.fs.readFile = async (uri: any) => {
+      const s = typeof uri.toString === 'function' ? uri.toString() : String(uri);
+      const extra = `package com.example.unrelated\nclass X { val clickStream = 1 }`;
+      return Buffer.from(codeMap[s] ?? extra) as any;
+    };
+    const doc = mockDocument(URI_A, CODE_A);
+    const allUris = [URI_A, URI_B, URI_C, URI_UNRELATED1, URI_UNRELATED2];
+    const results = await scanForUsages('clickStream', doc, index, allUris, token as any);
+    const uris = new Set(results.map(r => r.uriString));
+    expect(uris.has(URI_A)).toBe(true);
+    expect(uris.has(URI_UNRELATED1)).toBe(false);
+    expect(uris.has(URI_UNRELATED2)).toBe(false);
+  });
+});
+
+// ── scanForUsages — non-private and internal symbols are NOT restricted ───────
+
+describe('scanForUsages — non-private symbols scan all files', () => {
+  const URI_DEF  = 'file:///lib/Repository.kt';
+  const URI_USE1 = 'file:///ui/HomeScreen.kt';
+  const URI_USE2 = 'file:///ui/DetailScreen.kt';
+
+  const CODE_DEF  = `package com.example.lib
+class Repository {
+    fun loadData(): List<String> = emptyList()
+}`;
+  const CODE_USE1 = `package com.example.ui
+import com.example.lib.Repository
+class HomeScreen {
+    fun show() { Repository().loadData() }
+}`;
+  const CODE_USE2 = `package com.example.ui
+import com.example.lib.Repository
+class DetailScreen {
+    fun show() { Repository().loadData() }
+}`;
+
+  let index: SymbolIndex;
+  const token = { isCancellationRequested: false };
+  let origReadFile: typeof workspace.fs.readFile;
+
+  const codeMap: Record<string, string> = {
+    [URI_DEF]:  CODE_DEF,
+    [URI_USE1]: CODE_USE1,
+    [URI_USE2]: CODE_USE2,
+  };
+
+  beforeEach(() => {
+    origReadFile = workspace.fs.readFile;
+    index = new SymbolIndex();
+    index.add(parse(URI_DEF,  CODE_DEF));
+    index.add(parse(URI_USE1, CODE_USE1));
+    index.add(parse(URI_USE2, CODE_USE2));
+    workspace.fs.readFile = async (uri: any) => {
+      const s = typeof uri.toString === 'function' ? uri.toString() : String(uri);
+      return Buffer.from(codeMap[s] ?? '') as any;
+    };
+  });
+
+  afterEach(() => {
+    workspace.fs.readFile = origReadFile;
+  });
+
+  it('public fun loadData is found in all files that reference it', async () => {
+    const doc = mockDocument(URI_DEF, CODE_DEF);
+    const results = await scanForUsages('loadData', doc, index, [URI_DEF, URI_USE1, URI_USE2], token as any);
+    const uris = new Set(results.map(r => r.uriString));
+    // URI_USE1 and URI_USE2 both call loadData()
+    expect(uris.has(URI_USE1)).toBe(true);
+    expect(uris.has(URI_USE2)).toBe(true);
+  });
+
+  it('public symbol: target.isPrivate is falsy', () => {
+    const entries = index.lookup('loadData');
+    expect(entries.length).toBeGreaterThan(0);
+    expect(entries[0].isPrivate).toBeFalsy();
+  });
+});
+
+describe('scanForUsages — internal modifier does NOT restrict to declaring file', () => {
+  const URI_DEF = 'file:///module/Config.kt';
+  const URI_USE = 'file:///module/Consumer.kt';
+  const PKG     = 'com.example.module';
+
+  const CODE_DEF = `package ${PKG}
+class Config {
+    internal val apiKey = "key"
+}`;
+  const CODE_USE = `package ${PKG}
+class Consumer {
+    val key = Config().apiKey
+}`;
+
+  let index: SymbolIndex;
+  const token = { isCancellationRequested: false };
+  let origReadFile: typeof workspace.fs.readFile;
+
+  beforeEach(() => {
+    origReadFile = workspace.fs.readFile;
+    index = new SymbolIndex();
+    index.add(parse(URI_DEF, CODE_DEF));
+    index.add(parse(URI_USE, CODE_USE));
+    workspace.fs.readFile = async (uri: any) => {
+      const s = typeof uri.toString === 'function' ? uri.toString() : String(uri);
+      if (s === URI_DEF) return Buffer.from(CODE_DEF) as any;
+      if (s === URI_USE) return Buffer.from(CODE_USE) as any;
+      return Buffer.from('') as any;
+    };
+  });
+
+  afterEach(() => {
+    workspace.fs.readFile = origReadFile;
+  });
+
+  it('internal val → isPrivate is NOT set in index', () => {
+    const entries = index.lookup('apiKey');
+    expect(entries.length).toBeGreaterThan(0);
+    expect(entries[0].isPrivate).toBeFalsy();
+  });
+
+  it('internal val → consumer file IS scanned (not restricted)', async () => {
+    const doc = mockDocument(URI_DEF, CODE_DEF);
+    const results = await scanForUsages('apiKey', doc, index, [URI_DEF, URI_USE], token as any);
+    const uris = new Set(results.map(r => r.uriString));
+    expect(uris.has(URI_USE)).toBe(true);
   });
 });

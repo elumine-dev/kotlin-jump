@@ -1,35 +1,43 @@
 import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
-import { SymbolKind as KtKind } from '../indexer/KotlinParser';
 
 export class KotlinDocumentSymbolProvider implements vscode.DocumentSymbolProvider {
   constructor(private readonly index: SymbolIndex) {}
 
-  provideDocumentSymbols(document: vscode.TextDocument): vscode.DocumentSymbol[] {
+  provideDocumentSymbols(
+    document: vscode.TextDocument,
+    _token: vscode.CancellationToken,
+  ): vscode.DocumentSymbol[] {
     const entries = this.index.getFileSymbols(document.uri.toString());
+    if (entries.length === 0) return [];
+
+    const lastLine = document.lineCount - 1;
     const roots: vscode.DocumentSymbol[] = [];
     const stack: { sym: vscode.DocumentSymbol; entry: SymbolEntry; depth: number }[] = [];
 
-    for (const e of entries) {
-      const lineText   = document.lineAt(e.line).text;
-      const visibility = getVisibility(lineText);
-      const parent     = stack.length > 0 ? stack[stack.length - 1] : null;
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i];
 
-      const symbolKind = resolveKind(e, visibility, parent?.entry);
+      const lineText   = document.lineAt(e.line).text;
+      const visibility = extractVisibility(lineText);
+      const detail     = buildDetail(e, visibility);
+      const kind       = resolveKind(e, visibility, stack[stack.length - 1]?.entry);
+      const tags: vscode.SymbolTag[] | undefined = e.isDeprecated ? [vscode.SymbolTag.Deprecated] : undefined;
 
       const nameStart = new vscode.Position(e.line, e.character);
       const nameEnd   = new vscode.Position(e.line, e.character + e.name.length);
-      const lineEnd   = document.lineAt(e.line).range.end;
+      const endLine   = rangeEndLine(entries, i, lastLine);
+      const bodyEnd   = document.lineAt(endLine).range.end;
 
       const sym = new vscode.DocumentSymbol(
         e.name,
-        visibility,   // detail: 'private' | 'protected' | 'internal' | '' (public)
-        symbolKind,
-        new vscode.Range(nameStart, lineEnd),
+        detail,
+        kind,
+        new vscode.Range(nameStart, bodyEnd),
         new vscode.Range(nameStart, nameEnd),
       );
+      if (tags) sym.tags = tags;
 
-      // Pop stack until we find a symbol at a shallower depth
       while (stack.length > 0 && stack[stack.length - 1].depth >= e.depth) {
         stack.pop();
       }
@@ -47,10 +55,51 @@ export class KotlinDocumentSymbolProvider implements vscode.DocumentSymbolProvid
   }
 }
 
-// ── Icon resolution ───────────────────────────────────────────────────────────
+// For symbol at index i (depth d), returns the last line of its body.
+// Scans forward for the next symbol at depth ≤ d (next sibling or parent's sibling)
+// and uses the line before it. Falls back to document last line.
+function rangeEndLine(entries: readonly SymbolEntry[], index: number, lastLine: number): number {
+  const depth = entries[index].depth;
+  for (let j = index + 1; j < entries.length; j++) {
+    if (entries[j].depth <= depth) {
+      return Math.max(entries[j].line - 1, entries[index].line);
+    }
+  }
+  return lastLine;
+}
+
+// ── Detail field ─────────────────────────────────────────────────────────────
 //
-// Sources: VS Code symbolIcons.css, kotlin-language-server Symbols.kt,
-//          eclipse.jdt.ls SymbolUtils.java, TypeScript extension documentSymbol.ts
+// Shows key modifiers in the Outline and breadcrumbs, e.g.:
+//   "private suspend override"   "const"   "abstract"   "inline extension"
+//
+// Sources: VS Code symbolIcons.css, kotlin-language-server, JetBrains Kotlin plugin
+
+function buildDetail(e: SymbolEntry, visibility: string): string {
+  const parts: string[] = [];
+  if (visibility)    parts.push(visibility);
+  if (e.isAbstract)  parts.push('abstract');
+  if (e.isSuspend)   parts.push('suspend');
+  if (e.isOverride)  parts.push('override');
+  if (e.isInline)    parts.push('inline');
+  if (e.isInfix)     parts.push('infix');
+  if (e.isOperator)  parts.push('operator');
+  if (e.isConst)     parts.push('const');
+  if (e.isLateinit)  parts.push('lateinit');
+  if (e.isExtension) parts.push('extension');
+  return parts.join(' ');
+}
+
+// ── Visibility extraction ─────────────────────────────────────────────────────
+
+function extractVisibility(lineText: string): string {
+  if (/\bprivate\b/.test(lineText))   return 'private';
+  if (/\bprotected\b/.test(lineText)) return 'protected';
+  if (/\binternal\b/.test(lineText))  return 'internal';
+  return '';
+}
+
+// ── Icon resolution ───────────────────────────────────────────────────────────
 //
 //  Class        amber crossing-arrows     → class, sealed class, annotation class
 //  Struct       box-with-header (white)   → data class (data holder, not a full class)
@@ -86,12 +135,9 @@ function resolveKind(
       return vscode.SymbolKind.Interface;
 
     case 'object':
-      // { } glyph — more semantically correct than Class for singletons
       return vscode.SymbolKind.Object;
 
     case 'enum':
-      // Enum entries are children of an enum class — use EnumMember (blue)
-      // vs Enum (amber) for the class itself
       if (parentEntry?.kind === 'enum') return vscode.SymbolKind.EnumMember;
       return vscode.SymbolKind.Enum;
 
@@ -100,25 +146,14 @@ function resolveKind(
 
     case 'fun':
     case 'composable':
-      // Member functions → Method icon; top-level → Function icon
-      // Both render the same purple hexagon but convey correct semantics
       return isMember ? vscode.SymbolKind.Method : vscode.SymbolKind.Function;
 
     case 'val':
-      if (!isMember) return vscode.SymbolKind.Constant;  // top-level val
+      if (!isMember) return vscode.SymbolKind.Constant;
       return isPrivateOrProtected ? vscode.SymbolKind.Field : vscode.SymbolKind.Property;
 
     case 'var':
       if (!isMember) return vscode.SymbolKind.Variable;
       return isPrivateOrProtected ? vscode.SymbolKind.Field : vscode.SymbolKind.Property;
   }
-}
-
-// ── Visibility extraction ─────────────────────────────────────────────────────
-
-function getVisibility(lineText: string): string {
-  if (/\bprivate\b/.test(lineText))   return 'private';
-  if (/\bprotected\b/.test(lineText)) return 'protected';
-  if (/\binternal\b/.test(lineText))  return 'internal';
-  return '';
 }

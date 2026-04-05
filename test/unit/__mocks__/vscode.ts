@@ -56,10 +56,35 @@ export class TypeHierarchyItem {
 }
 
 export enum SymbolKind {
+  File = 0,
   Class = 4,
-  Interface = 10,
+  Method = 5,
+  Property = 6,
+  Field = 7,
   Enum = 9,
+  Interface = 10,
+  Function = 11,
+  Variable = 12,
+  Constant = 13,
   Object = 18,
+  EnumMember = 21,
+  Struct = 22,
+}
+
+export enum SymbolTag {
+  Deprecated = 1,
+}
+
+export class DocumentSymbol {
+  children: DocumentSymbol[] = [];
+  tags?: readonly SymbolTag[];
+  constructor(
+    public name: string,
+    public detail: string,
+    public kind: SymbolKind,
+    public range: Range,
+    public selectionRange: Range,
+  ) {}
 }
 
 export class CallHierarchyItem {

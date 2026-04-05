@@ -26,7 +26,10 @@ export function mockDocument(uri: string, code: string) {
       }
       return undefined;
     },
-    lineAt: (n: number) => ({ text: lines[n] || '' }),
+    lineAt: (n: number) => {
+      const text = lines[n] ?? '';
+      return { text, range: { start: new Position(n, 0), end: new Position(n, text.length) } };
+    },
     lineCount: lines.length,
   } as any;
 }

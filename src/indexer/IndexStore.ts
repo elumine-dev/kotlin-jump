@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { SymbolIndex } from './SymbolIndex';
 import { SymbolKind } from './KotlinParser';
 
-const SNAPSHOT_VERSION = 12; // bumped: isPrivate added; force re-index to capture private modifiers
+const SNAPSHOT_VERSION = 13; // bumped: isDeprecated added; force re-index to capture @Deprecated annotations
 const SNAPSHOT_FILENAME = 'kotlin-jump-index.json';
 
 // Compact per-file format — FQN is reconstructed as pkg+"."+name on restore
@@ -33,6 +33,7 @@ interface SnapshotFile {
   or?: Record<number, 1>;  // isOverride
   pr?: Record<number, 1>;  // isPreview
   pv?: Record<number, 1>;  // isPrivate
+  de?: Record<number, 1>;  // isDeprecated
 }
 
 interface Snapshot {
@@ -93,6 +94,7 @@ export async function save(
       if (e.isOverride)       { sf.or = sf.or ?? {}; sf.or[idx] = 1; }
       if (e.isPreview)        { sf.pr = sf.pr ?? {}; sf.pr[idx] = 1; }
       if (e.isPrivate)        { sf.pv = sf.pv ?? {}; sf.pv[idx] = 1; }
+      if (e.isDeprecated)     { sf.de = sf.de ?? {}; sf.de[idx] = 1; }
     });
 
     snap.files[uriStr] = sf;
@@ -215,6 +217,7 @@ export function restore(snapshot: Snapshot, index: SymbolIndex): void {
         isOverride:      sf.or?.[i] === 1 || undefined,
         isPreview:       sf.pr?.[i] === 1 || undefined,
         isPrivate:       sf.pv?.[i] === 1 || undefined,
+        isDeprecated:    sf.de?.[i] === 1 || undefined,
       };
     });
 

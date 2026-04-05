@@ -280,6 +280,85 @@ describe('enum entries', () => {
   });
 });
 
+// ── Inline body declarations (same-line class body) ─────────────────────────
+//
+// When the opening `{` appears on the same declaration line, the per-line regex
+// loop moves past the line without seeing the members inside.  emitInlineBodySymbols
+// handles this by scanning the body segment for RE_CLASS / RE_FUN / RE_PROP.
+
+describe('inline body declarations', () => {
+  it('enum entries on same declaration line — indexed', () => {
+    const names = symbols('enum class Color { RED, GREEN }').map(s => s.name);
+    expect(names).toContain('RED');
+    expect(names).toContain('GREEN');
+  });
+
+  it('sealed class subtypes on same line — indexed', () => {
+    const syms = symbols('sealed class R { class Ok : R(); class Err : R() }');
+    expect(syms.find(s => s.name === 'Ok')?.depth).toBe(1);
+    expect(syms.find(s => s.name === 'Err')?.depth).toBe(1);
+  });
+
+  it('interface abstract method on same line — indexed', () => {
+    const s = symbols('interface Repo { fun get(): String }').find(s => s.name === 'get');
+    expect(s?.kind).toBe('fun');
+    expect(s?.depth).toBe(1);
+  });
+
+  it('object val on same line — indexed', () => {
+    const s = symbols('object Utils { val x = 1 }').find(s => s.name === 'x');
+    expect(s?.kind).toBe('val');
+    expect(s?.depth).toBe(1);
+  });
+
+  it('class fun on same line — indexed', () => {
+    const s = symbols('class Foo { fun bar() {} }').find(s => s.name === 'bar');
+    expect(s?.kind).toBe('fun');
+    expect(s?.depth).toBe(1);
+  });
+
+  it('class val on same line — indexed', () => {
+    const s = symbols('class Foo { val x = 1 }').find(s => s.name === 'x');
+    expect(s?.kind).toBe('val');
+    expect(s?.depth).toBe(1);
+  });
+
+  it('multiple members separated by semicolons — all indexed', () => {
+    const names = symbols('interface I { fun a(): Int; fun b(): Int }').map(s => s.name);
+    expect(names).toContain('a');
+    expect(names).toContain('b');
+  });
+
+  it('inline data class subtype with ctor val/var — subtype and params indexed', () => {
+    const syms = symbols('sealed class R { data class Ok(val data: String) : R() }');
+    expect(syms.find(s => s.name === 'Ok')?.kind).toBe('dataClass');
+    expect(syms.find(s => s.name === 'data')?.depth).toBe(2);
+  });
+
+  it('companion object named — indexed', () => {
+    const code = 'class Foo {\n    companion object Companion {}\n}';
+    const s = symbols(code).find(s => s.name === 'Companion');
+    expect(s?.kind).toBe('object');
+    expect(s?.depth).toBe(1);
+  });
+
+  // Known limitation: anonymous `companion object` has no name → not indexed.
+  // Named `companion object Companion` is indexed (companion treated as modifier).
+  it('anonymous companion object — class itself is indexed, companion has no name to index', () => {
+    const syms = symbols('class Foo {\n    companion object {}\n}');
+    expect(syms.find(s => s.name === 'Foo')).toBeDefined();
+    expect(syms.find(s => s.kind === 'object')).toBeUndefined();
+  });
+
+  // Known limitation: multiple top-level declarations on one line separated by `;`
+  // — only the first is indexed. Kotlin style guide discourages this pattern.
+  it('two top-level vals on same line — known limitation: only first indexed', () => {
+    const names = symbols('val a = 1; val b = 2').map(s => s.name);
+    expect(names).toContain('a');
+    expect(names).not.toContain('b'); // documents the known gap
+  });
+});
+
 // ── Sealed class subtypes ───────────────────────────────────────────────────
 
 describe('sealed class subtypes', () => {

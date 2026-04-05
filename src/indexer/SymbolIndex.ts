@@ -29,6 +29,7 @@ export interface SymbolEntry {
   isOverride?:      boolean;
   isPreview?:       boolean;
   isPrivate?:       boolean;
+  isDeprecated?:    boolean;
 }
 
 export class SymbolIndex {
@@ -103,6 +104,7 @@ export class SymbolIndex {
         isOverride:      sym.isOverride,
         isPreview:       sym.isPreview,
         isPrivate:       sym.isPrivate,
+        isDeprecated:    sym.isDeprecated,
       };
 
       fileEntries.push(entry);

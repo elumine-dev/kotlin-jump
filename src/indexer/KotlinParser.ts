@@ -28,6 +28,7 @@ export interface RawSymbol {
   isOverride?:      boolean; // override fun / override val
   isPreview?:       boolean; // function annotated with @Preview
   isPrivate?:       boolean; // private val/var/fun/class — not visible outside declaring file
+  isDeprecated?:    boolean; // annotated with @Deprecated
 }
 
 export interface ParsedFile {
@@ -40,9 +41,10 @@ export interface ParsedFile {
 // ── All regexes compiled ONCE at module load ─────────────────────────────────
 const RE_PACKAGE    = /^\s*package\s+([\w.]+)/;
 const RE_IMPORT     = /^\s*import\s+([\w.*]+)/;
-const RE_COMPOSABLE = /@Composable\b/;
-const RE_PREVIEW    = /@Preview\b/;
-const RE_CLASS      = /^\s*(?:(?:public|private|internal|protected|open|abstract|inner|sealed|data|annotation|enum|actual|expect)\s+)*?(data\s+class|sealed\s+class|sealed\s+interface|fun\s+interface|enum\s+class|annotation\s+class|class|interface|object)\s+(\w+)/;
+const RE_COMPOSABLE  = /@Composable\b/;
+const RE_PREVIEW     = /@Preview\b/;
+const RE_DEPRECATED  = /@Deprecated\b/;
+const RE_CLASS      = /^\s*(?:(?:public|private|internal|protected|open|abstract|inner|sealed|data|annotation|enum|actual|expect|companion)\s+)*?(data\s+class|sealed\s+class|sealed\s+interface|fun\s+interface|enum\s+class|annotation\s+class|class|interface|object)\s+(\w+)/;
 // After optional generics, allow an optional `ReceiverType.` prefix so that
 // `fun Modifier.customBackground()` captures "customBackground", not "Modifier".
 // Handles: simple (Modifier.), nullable (Modifier?.), generic (List<T>.), qualified (Modifier.Companion.)
@@ -153,10 +155,56 @@ export function parse(uriString: string, text: string): ParsedFile {
       const isAbstract      = /\babstract\b/.test(preClass) || undefined;
       const isPrivate       = /\bprivate\b/.test(preClass)  || undefined;
       const isHiltViewModel = annotationWindow.some(l => /@HiltViewModel\b/.test(l)) || undefined;
+      const isDeprecated    = annotationWindow.some(l => RE_DEPRECATED.test(l))      || undefined;
 
-      symbols.push({ name, kind, line: lineNum, character: raw.indexOf(name, cm.index), isComposable: false, depth: braceDepth, supertypes: supertypes.length > 0 ? supertypes : undefined, isAbstract, isPrivate, isHiltViewModel });
+      symbols.push({ name, kind, line: lineNum, character: raw.indexOf(name, cm.index), isComposable: false, depth: braceDepth, supertypes: supertypes.length > 0 ? supertypes : undefined, isAbstract, isPrivate, isHiltViewModel, isDeprecated });
 
       if (kind === 'enum') enumBraceDepth = braceDepth;
+
+      // ── Inline body members for non-enum class-like declarations ───────────
+      // E.g.: `interface Repo { fun get(): T }`, `object Utils { val x = 1 }`,
+      //        `sealed class S { class A : S(); class B : S() }`,
+      //        `companion object Companion { const val TAG = "Foo" }`
+      // When the opening `{` is on the same declaration line, countDepth (below)
+      // will close the brace and members inside are never seen by the per-line
+      // regexes on subsequent iterations.
+      if (kind !== 'enum') {
+        const bodyOpen = raw.indexOf('{', nameEnd);
+        if (bodyOpen !== -1) {
+          emitInlineBodySymbols(raw, bodyOpen, lineNum, braceDepth + 1, symbols);
+        }
+      }
+
+      // ── Inline enum entries (e.g. `enum class Color { RED, GREEN }`) ──────
+      // When entries are on the same line as the declaration, the enum-entry
+      // section below never fires because enumBraceDepth is reset after
+      // countDepth processes the closing `}` on this line.
+      if (kind === 'enum') {
+        const enumBodyOpen = raw.indexOf('{', nameEnd);
+        if (enumBodyOpen !== -1) {
+          const enumBodyClose = raw.indexOf('}', enumBodyOpen + 1);
+          const inlineEnd = enumBodyClose !== -1 ? enumBodyClose : raw.length;
+          const inline    = raw.slice(enumBodyOpen + 1, inlineEnd);
+          let parenD = 0, segStart = 0;
+          for (let i = 0; i <= inline.length; i++) {
+            const ch = i < inline.length ? inline[i] : '\0';
+            if      (ch === '(' || ch === '[') { parenD++; continue; }
+            else if (ch === ')' || ch === ']') { parenD--; continue; }
+            else if (parenD > 0)               { continue; }
+            if (ch === ',' || ch === ';' || i === inline.length) {
+              const seg = inline.slice(segStart, i);
+              const sm  = /^\s*([A-Z][A-Z0-9_]*)/.exec(seg);
+              if (sm) symbols.push({
+                name: sm[1], kind: 'enum', line: lineNum,
+                character: enumBodyOpen + 1 + segStart + (sm[0].length - sm[1].length),
+                isComposable: false, depth: braceDepth + 1,
+              });
+              if (ch === ';') break;
+              segStart = i + 1;
+            }
+          }
+        }
+      }
 
       // ── Inline primary-constructor val/var (single-line: class Foo(val x: Int)) ──
       // When class + constructor are on one line, RE_PROP never runs on those params.
@@ -223,17 +271,18 @@ export function parse(uriString: string, text: string): ParsedFile {
     // ── Functions ──────────────────────────────────────────────────────────
     const fm = RE_FUN.exec(raw);
     if (fm) {
-      const isComposable = annotationWindow.some(l => RE_COMPOSABLE.test(l));
-      const isPreview    = annotationWindow.some(l => RE_PREVIEW.test(l)) || undefined;
-      const preFun       = raw.slice(0, raw.lastIndexOf('fun'));
-      const isSuspend    = /\bsuspend\b/.test(preFun)  || undefined;
-      const isAbstract   = /\babstract\b/.test(preFun)  || undefined;
-      const isInline     = /\binline\b/.test(preFun)    || undefined;
-      const isInfix      = /\binfix\b/.test(preFun)     || undefined;
-      const isExtension  = /fun\s+(?:<[^>]*>\s+)?(?:\w+(?:<[^<>]*>)?[?]?\.)/.test(raw) || undefined;
-      const isOperator   = /\boperator\b/.test(preFun)  || undefined;
-      const isOverride   = /\boverride\b/.test(preFun)  || undefined;
-      const isPrivateFun = /\bprivate\b/.test(preFun)   || undefined;
+      const isComposable  = annotationWindow.some(l => RE_COMPOSABLE.test(l));
+      const isPreview     = annotationWindow.some(l => RE_PREVIEW.test(l))    || undefined;
+      const isDeprecated  = annotationWindow.some(l => RE_DEPRECATED.test(l)) || undefined;
+      const preFun        = raw.slice(0, raw.lastIndexOf('fun'));
+      const isSuspend     = /\bsuspend\b/.test(preFun)  || undefined;
+      const isAbstract    = /\babstract\b/.test(preFun)  || undefined;
+      const isInline      = /\binline\b/.test(preFun)    || undefined;
+      const isInfix       = /\binfix\b/.test(preFun)     || undefined;
+      const isExtension   = /fun\s+(?:<[^>]*>\s+)?(?:\w+(?:<[^<>]*>)?[?]?\.)/.test(raw) || undefined;
+      const isOperator    = /\boperator\b/.test(preFun)  || undefined;
+      const isOverride    = /\boverride\b/.test(preFun)  || undefined;
+      const isPrivateFun  = /\bprivate\b/.test(preFun)   || undefined;
       symbols.push({
         name: fm[1],
         kind: isComposable ? 'composable' : 'fun',
@@ -250,6 +299,7 @@ export function parse(uriString: string, text: string): ParsedFile {
         isOverride,
         isPreview,
         isPrivate: isPrivateFun,
+        isDeprecated,
       });
       [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
       if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
@@ -265,13 +315,14 @@ export function parse(uriString: string, text: string): ParsedFile {
     const pm = RE_PROP.exec(raw);
     const isPrimaryCtorParam = parenDepth === 1;
     if (pm && (parenDepth === 0 || isPrimaryCtorParam)) {
-      const propDepth  = isPrimaryCtorParam ? braceDepth + 1 : braceDepth;
-      const propPre    = raw.slice(0, raw.indexOf(pm[1]));
-      const isConst    = /\bconst\b/.test(propPre)    || undefined;
-      const isAbstract = /\babstract\b/.test(propPre) || undefined;
-      const isLateinit = /\blateinit\b/.test(propPre) || undefined;
-      const isOverride = /\boverride\b/.test(propPre) || undefined;
-      const isPrivate  = /\bprivate\b/.test(propPre)  || undefined;
+      const propDepth    = isPrimaryCtorParam ? braceDepth + 1 : braceDepth;
+      const propPre      = raw.slice(0, raw.indexOf(pm[1]));
+      const isConst      = /\bconst\b/.test(propPre)    || undefined;
+      const isAbstract   = /\babstract\b/.test(propPre) || undefined;
+      const isLateinit   = /\blateinit\b/.test(propPre) || undefined;
+      const isOverride   = /\boverride\b/.test(propPre) || undefined;
+      const isPrivate    = /\bprivate\b/.test(propPre)  || undefined;
+      const isDeprecated = annotationWindow.some(l => RE_DEPRECATED.test(l)) || undefined;
       symbols.push({
         name: pm[2],
         kind: pm[1] === 'val' ? 'val' : 'var',
@@ -284,6 +335,7 @@ export function parse(uriString: string, text: string): ParsedFile {
         isLateinit,
         isOverride,
         isPrivate,
+        isDeprecated,
       });
       [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
       if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
@@ -294,7 +346,8 @@ export function parse(uriString: string, text: string): ParsedFile {
     // ── Typealias ──────────────────────────────────────────────────────────
     const ta = RE_TYPEALIAS.exec(raw);
     if (ta) {
-      symbols.push({ name: ta[1], kind: 'typealias', line: lineNum, character: raw.indexOf(ta[1], ta.index), isComposable: false, depth: braceDepth, aliasTarget: ta[2]?.trim() });
+      const isDeprecated = annotationWindow.some(l => RE_DEPRECATED.test(l)) || undefined;
+      symbols.push({ name: ta[1], kind: 'typealias', line: lineNum, character: raw.indexOf(ta[1], ta.index), isComposable: false, depth: braceDepth, aliasTarget: ta[2]?.trim(), isDeprecated });
       [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
       if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
       annotationWindow.length = 0;
@@ -400,6 +453,126 @@ function parseTypeNames(s: string): string[] {
   let m;
   while ((m = RE_TYPE_NAME.exec(clean))) types.push(m[1]);
   return types;
+}
+
+// Parses member declarations from the inline body of a class/interface/object.
+// Called when the opening `{` appears on the same line as the declaration so
+// the per-line regex loop never fires for those members.
+//
+// Splits the body by `;` at paren/brace depth 0 (handles `fun f(a: Int, b: Int)`
+// and `fun f() { }` without splitting inside parameter lists or method bodies).
+// Each segment is tried against RE_CLASS → RE_FUN → RE_PROP in order.
+// Does NOT recurse into nested inline bodies (keeps complexity bounded).
+function emitInlineBodySymbols(
+  raw: string,
+  bodyOpen: number,   // index of `{` in raw
+  lineNum: number,
+  memberDepth: number,
+  symbols: RawSymbol[],
+): void {
+  // Find the matching `}` on this line, or use end-of-string
+  let d = 0, bodyEnd = raw.length;
+  for (let i = bodyOpen; i < raw.length; i++) {
+    if      (raw[i] === '{') d++;
+    else if (raw[i] === '}') { d--; if (d === 0) { bodyEnd = i; break; } }
+  }
+
+  const body = raw.slice(bodyOpen + 1, bodyEnd);
+  if (!body.trim()) return;
+
+  // Split on `;` at combined paren + brace depth 0
+  let pD = 0, bD = 0, segStart = 0;
+
+  const trySegment = (seg: string, offset: number): void => {
+    if (!seg.trim()) return;
+
+    // ── class-like ─────────────────────────────────────────────────────────
+    const cm = RE_CLASS.exec(seg);
+    if (cm) {
+      const kw = cm[1].replace(/\s+/g, ' ');
+      const n  = cm[2];
+      const ni = seg.indexOf(n, cm.index);
+      const pre = seg.slice(0, ni);
+      const st  = extractSupertypes(seg, ni + n.length);
+      symbols.push({
+        name: n, kind: toClassKind(kw), line: lineNum,
+        character: offset + ni,
+        isComposable: false, depth: memberDepth,
+        supertypes: st.length > 0 ? st : undefined,
+        isAbstract: /\babstract\b/.test(pre) || undefined,
+        isPrivate:  /\bprivate\b/.test(pre)  || undefined,
+      });
+      // Inline ctor val/var for nested class (e.g. `data class Ok(val x: Int) : R()`)
+      const ctorO = seg.indexOf('(', ni + n.length);
+      if (ctorO !== -1) {
+        let pd = 0, ctorC = -1;
+        for (let i = ctorO; i < seg.length; i++) {
+          if      (seg[i] === '(') pd++;
+          else if (seg[i] === ')') { pd--; if (pd === 0) { ctorC = i; break; } }
+        }
+        if (ctorC !== -1) {
+          const slice = seg.slice(ctorO + 1, ctorC);
+          const IPR = /\b(val|var)\s+(\w+)/g;
+          let ip: RegExpExecArray | null;
+          while ((ip = IPR.exec(slice)) !== null) {
+            symbols.push({
+              name: ip[2], kind: ip[1] === 'val' ? 'val' : 'var',
+              line: lineNum,
+              character: offset + ctorO + 1 + ip.index + (ip[0].length - ip[2].length),
+              isComposable: false, depth: memberDepth + 1,
+            });
+          }
+        }
+      }
+      return;
+    }
+
+    // ── fun ────────────────────────────────────────────────────────────────
+    const fm = RE_FUN.exec(seg);
+    if (fm) {
+      const preFun = seg.slice(0, seg.lastIndexOf('fun'));
+      symbols.push({
+        name: fm[1], kind: 'fun', line: lineNum,
+        character: offset + seg.indexOf(fm[1], fm.index),
+        isComposable: false, depth: memberDepth,
+        isSuspend:  /\bsuspend\b/.test(preFun)  || undefined,
+        isOverride: /\boverride\b/.test(preFun)  || undefined,
+        isAbstract: /\babstract\b/.test(preFun)  || undefined,
+        isPrivate:  /\bprivate\b/.test(preFun)   || undefined,
+        isInline:   /\binline\b/.test(preFun)    || undefined,
+        isOperator: /\boperator\b/.test(preFun)  || undefined,
+      });
+      return;
+    }
+
+    // ── val / var ──────────────────────────────────────────────────────────
+    const pm = RE_PROP.exec(seg);
+    if (pm) {
+      const propPre = seg.slice(0, seg.indexOf(pm[1]));
+      symbols.push({
+        name: pm[2], kind: pm[1] === 'val' ? 'val' : 'var',
+        line: lineNum,
+        character: offset + seg.indexOf(pm[2], pm.index),
+        isComposable: false, depth: memberDepth,
+        isConst:    /\bconst\b/.test(propPre)    || undefined,
+        isOverride: /\boverride\b/.test(propPre) || undefined,
+        isPrivate:  /\bprivate\b/.test(propPre)  || undefined,
+        isLateinit: /\blateinit\b/.test(propPre) || undefined,
+      });
+    }
+  };
+
+  for (let i = 0; i <= body.length; i++) {
+    const c = i < body.length ? body[i] : '\0';
+    if      (c === '(' || c === '[') pD++;
+    else if (c === ')' || c === ']') pD--;
+    else if (c === '{')               bD++;
+    else if (c === '}')               bD--;
+    if ((c === ';' || i === body.length) && pD === 0 && bD === 0) {
+      trySegment(body.slice(segStart, i), bodyOpen + 1 + segStart);
+      segStart = i + 1;
+    }
+  }
 }
 
 function toClassKind(keyword: string): SymbolKind {

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.5
+
+Expands Java method indexing and fixes two navigation edge cases in Call Hierarchy and Go to Definition.
+
+### Improvements
+- Java methods with package-private visibility (no explicit access modifier) are now indexed when their return type is void, a primitive, or an uppercase-named class, filling a coverage gap in Go to Definition and Find Usages for mixed Kotlin/Java projects.
+
+### Fixes
+- Fixed Call Hierarchy silently dropping outgoing calls from inline functions with block bodies (e.g., `inline fun f() { call() }`); all calls inside those bodies now appear correctly in the outgoing Call Hierarchy panel.
+- Fixed Go to Definition returning the wrong result when a wildcard import and an explicit import both provide the same simple name; the explicit import now correctly wins the tiebreak instead of resolving to an unintended symbol.
+
 ## 0.7.4
 
 Extends Java navigation to methods, fields, and enum entries, and fixes Go to Definition false positives for library symbols.

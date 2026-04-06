@@ -155,6 +155,11 @@
         "command": "kotlin-jump.organizeImports",
         "title": "Organize Imports",
         "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.moveFile",
+        "title": "Move File…",
+        "category": "Kotlin Jump"
       }
     ],
     "menus": {
@@ -205,6 +210,11 @@
           "command": "kotlin-jump.organizeImports",
           "when": "editorTextFocus && (editorLangId == kotlin || editorLangId == java)",
           "group": "1_modification@1"
+        },
+        {
+          "command": "kotlin-jump.moveFile",
+          "when": "editorTextFocus && editorLangId == kotlin",
+          "group": "1_modification@2"
         }
       ]
     },

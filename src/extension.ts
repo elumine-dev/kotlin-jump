@@ -19,6 +19,9 @@ import { Logger } from './util/logger';
 import { resolveCompanionMode } from './util/companionMode';
 import { resolveAll as resolveModules } from './gradle/ModuleResolver';
 import { resolveBest } from './util/ImportResolver';
+import { readProjectConfigs } from './util/ProjectConfig';
+import { inferPackage, buildMoveEdit } from './providers/MoveFileProvider';
+import * as path from 'path';
 import * as IndexStore from './indexer/IndexStore';
 
 const WORD_RE = /[A-Za-z_]\w*/;
@@ -322,10 +325,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const excludeList = cfg.get<string[]>('excludePatterns') ?? ['**/build/**', '**/.gradle/**'];
   const maxFiles    = cfg.get<number>('maxIndexedFiles') ?? 10000;
 
-  const [moduleMap, allUris] = await Promise.all([
+  const [gradleModules, { moduleMap: jsonModules, sourceRoots }, allUris] = await Promise.all([
     resolveModules(),
+    readProjectConfigs(),
     vscode.workspace.findFiles('**/*.{kt,kts,java}', `{${excludeList.join(',')}}`, maxFiles),
   ]);
+
+  // Gradle takes precedence over kotlin-jump.json when both define the same module
+  const moduleMap = new Map([...jsonModules, ...gradleModules]);
 
   const scanner = new FileScanner(index, log, moduleMap);
 
@@ -395,6 +402,48 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           `Organize imports: removed ${n} unused import${n === 1 ? '' : 's'}.`,
         );
       }
+    }),
+
+    vscode.commands.registerCommand('kotlin-jump.moveFile', async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) return;
+      const doc = editor.document;
+      if (!doc.uri.fsPath.endsWith('.kt')) {
+        vscode.window.showWarningMessage('Kotlin Jump: Move File only works on .kt files.');
+        return;
+      }
+
+      const dest = await vscode.window.showOpenDialog({
+        canSelectFiles:   false,
+        canSelectFolders: true,
+        canSelectMany:    false,
+        title:            'Move file to…',
+        openLabel:        'Move here',
+        defaultUri:       vscode.Uri.file(path.dirname(doc.uri.fsPath)),
+      });
+      if (!dest || dest.length === 0) return;
+
+      const destDir  = dest[0].fsPath;
+      const fileName = path.basename(doc.uri.fsPath);
+      const newPath  = path.join(destDir, fileName);
+      if (newPath === doc.uri.fsPath) return;
+
+      const oldPkg = /^(?:\s*package\s+)([\w.]+)/m.exec(doc.getText())?.[1] ?? '';
+      let newPkg = inferPackage(doc.uri.fsPath, destDir, oldPkg, sourceRoots);
+
+      if (newPkg === null) {
+        const input = await vscode.window.showInputBox({
+          prompt:        'New package name (could not be inferred from path)',
+          value:         oldPkg,
+          validateInput: v => /^[\w.]*$/.test(v) ? null : 'Invalid package name',
+        });
+        if (input === undefined) return;
+        newPkg = input;
+      }
+
+      const newUri = vscode.Uri.file(newPath);
+      const edit   = await buildMoveEdit(doc, newUri, newPkg, index);
+      await vscode.workspace.applyEdit(edit);
     }),
 
     vscode.commands.registerCommand('kotlin-jump.reindex', async () => {

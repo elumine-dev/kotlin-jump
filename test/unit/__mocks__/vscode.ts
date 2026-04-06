@@ -55,6 +55,11 @@ export class TypeHierarchyItem {
   ) {}
 }
 
+export enum CodeActionTriggerKind {
+  Invoke    = 1,
+  Automatic = 2,
+}
+
 export class CodeActionKind {
   static readonly SourceOrganizeImports = new CodeActionKind('source.organizeImports');
   static readonly QuickFix              = new CodeActionKind('quickfix');
@@ -143,6 +148,16 @@ export class TextEdit {
   static replace(range: Range, newText: string): TextEdit { return new TextEdit(range, newText); }
   static insert(position: Position, newText: string): TextEdit { return new TextEdit(new Range(position, position), newText); }
   static delete(range: Range): TextEdit { return new TextEdit(range, ''); }
+}
+
+export enum DocumentHighlightKind {
+  Text  = 0,
+  Read  = 1,
+  Write = 2,
+}
+
+export class DocumentHighlight {
+  constructor(public range: Range, public kind: DocumentHighlightKind = DocumentHighlightKind.Text) {}
 }
 
 export class WorkspaceEdit {

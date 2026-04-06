@@ -491,6 +491,11 @@
           "type": "number",
           "default": 30000,
           "markdownDescription": "Timeout in milliseconds for the Gradle Tooling API invocation (`kotlinJump.useGradleTooling`). Default: 30 000 ms."
+        },
+        "kotlinJump.autoImport.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show **Add import** quick-fix suggestions when the cursor is on an unresolved type name. Candidates are drawn from the symbol index — no JVM required."
         }
       }
     }

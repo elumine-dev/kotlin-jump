@@ -14,6 +14,8 @@ import { KotlinTypeHierarchyProvider } from './providers/TypeHierarchyProvider';
 import { KotlinCallHierarchyProvider } from './providers/CallHierarchyProvider';
 import { KotlinRenameProvider } from './providers/RenameProvider';
 import { OrganizeImportsProvider, organizeImports, buildOrganizeEdit } from './providers/OrganizeImportsProvider';
+import { AutoImportProvider } from './providers/AutoImportProvider';
+import { KotlinDocumentHighlightProvider } from './providers/DocumentHighlightProvider';
 import { KotlinSemanticTokensProvider, TOKEN_TYPES, TOKEN_MODIFIERS } from './providers/SemanticTokensProvider';
 import { Logger } from './util/logger';
 import { resolveCompanionMode } from './util/companionMode';
@@ -104,7 +106,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         new OrganizeImportsProvider(),
         { providedCodeActionKinds: OrganizeImportsProvider.providedCodeActionKinds },
       ),
+      vscode.languages.registerCodeActionsProvider(
+        KT_JAVA,
+        new AutoImportProvider(index),
+        { providedCodeActionKinds: AutoImportProvider.providedCodeActionKinds },
+      ),
     ] : []),
+    vscode.languages.registerDocumentHighlightProvider(KT_JAVA, new KotlinDocumentHighlightProvider(index)),
     vscode.languages.registerWorkspaceSymbolProvider(new KotlinFileProvider(index, log)),
     vscode.workspace.registerFileSystemProvider(KOTLIN_JAR_SCHEME, new KotlinJarContentProvider(), { isReadonly: true, isCaseSensitive: true }),
 

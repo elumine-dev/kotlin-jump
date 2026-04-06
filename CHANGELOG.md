@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.0
+
+Adds inlay hints and signature help, and fixes false positives in Find Usages and symbol indexing.
+
+### Improvements
+- Added inlay hints: parameter names and inferred types now appear inline as you write Kotlin and Java code, reducing the need to look up function signatures separately.
+- Added signature help: invoking a function now shows an active-parameter popup with the full signature, making it easier to fill in arguments without leaving the editor.
+
+### Fixes
+- Fixed Find Usages returning false positives — symbol names appearing inside comments or as substrings of unrelated identifiers no longer show up in the usages list.
+- Fixed symbol indexing bugs in the Kotlin parser that could cause Go to Definition or Find Usages to miss symbols or resolve to the wrong declaration.
+
 ## 0.8.0
 
 Adds auto-import suggestions and document highlight support for Kotlin and Java symbols.

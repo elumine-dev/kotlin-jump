@@ -2,6 +2,11 @@
 
 ## 0.7.6
 
+Adds a Move File command for Kotlin files, available from the editor context menu.
+
+### Improvements
+- Added a Move File command ("Move File…") for Kotlin files, accessible from the editor right-click menu — lets you move or rename a Kotlin file directly from the editor without leaving the keyboard.
+
 Adds an Organize Imports command for Kotlin and Java files.
 
 ### Improvements

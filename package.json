@@ -2,7 +2,7 @@
   "name": "kotlin-jump",
   "displayName": "Kotlin Jump",
   "description": "Fast Kotlin & Java navigation — Go to Definition, Find Usages, Go to Implementation. No language server needed.",
-  "version": "0.7.7",
+  "version": "0.7.8",
   "publisher": "elumine",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -451,6 +451,46 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Remove unused imports when running **Organize Imports** (`Shift+Alt+O`).\n\nUses a heuristic: if the imported simple name (or alias) does not appear as a word in the file, the import is removed. Wildcard imports are always kept."
+        },
+        "kotlinJump.indexSourcesJars": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Index Kotlin/Java sources from `-sources.jar` files in the Gradle cache. Enables KDoc and Go to Definition for library symbols (Compose, Coroutines, AndroidX…)."
+        },
+        "kotlinJump.sourcesJarsMaxCount": {
+          "type": "number",
+          "default": 50,
+          "markdownDescription": "Maximum number of `-sources.jar` files to index from the Gradle cache."
+        },
+        "kotlinJump.gradleCacheDir": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Override the Gradle cache path. Leave empty to auto-detect `~/.gradle/caches/modules-2/files-2.1`."
+        },
+        "kotlinJump.indexMavenSources": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Index Kotlin/Java sources from `-sources.jar` files in the Maven local repository (`~/.m2/repository`). Enables KDoc and Go to Definition for Maven-managed library symbols."
+        },
+        "kotlinJump.mavenSourcesMaxCount": {
+          "type": "number",
+          "default": 50,
+          "markdownDescription": "Maximum number of `-sources.jar` files to index from the Maven local repository."
+        },
+        "kotlinJump.mavenLocalRepoDir": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Override the Maven local repository path. Leave empty to auto-detect `~/.m2/repository`."
+        },
+        "kotlinJump.useGradleTooling": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Use the Gradle Tooling API (`./gradlew`) to resolve the exact source JARs for the current project instead of scanning the full Gradle cache. Slower on first run but indexes only relevant dependencies. Requires `gradlew` in the workspace root."
+        },
+        "kotlinJump.gradleToolingTimeoutMs": {
+          "type": "number",
+          "default": 30000,
+          "markdownDescription": "Timeout in milliseconds for the Gradle Tooling API invocation (`kotlinJump.useGradleTooling`). Default: 30 000 ms."
         }
       }
     }
@@ -481,6 +521,7 @@
     "vitest": "^4.1.2"
   },
   "dependencies": {
+    "node-stream-zip": "^1.15.0",
     "picomatch": "^4.0.4",
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.12",

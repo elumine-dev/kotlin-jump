@@ -305,6 +305,20 @@ export class SymbolIndex {
     this.dirty = true;
   }
 
+  removeExternal(): void {
+    for (const key of [...this.byFile.keys()]) {
+      if (key.startsWith('kotlin-jar:')) this.removeByKey(key);
+    }
+    // removeByKey deletes a FQN from byFqn when the removed entry was the current pointer.
+    // If a workspace entry had the same FQN (overwritten by the JAR entry), it is now
+    // missing from byFqn. Restore any such orphaned FQNs from the remaining byFile entries.
+    for (const entries of this.byFile.values()) {
+      for (const entry of entries) {
+        if (!this.byFqn.has(entry.fqn)) this.byFqn.set(entry.fqn, entry);
+      }
+    }
+  }
+
   // ── IndexStore access (save/restore without re-parsing) ───────────────────
 
   // Yields [uriString, entries] for every indexed file — used by IndexStore.save()
@@ -343,7 +357,8 @@ export class SymbolIndex {
         set.delete(entry); // O(1) — was O(n) indexOf
         if (set.size === 0) { this.byName.delete(entry.name); this.removeFromTrigram(entry.name); }
       }
-      this.byFqn.delete(entry.fqn);
+      // Only delete if byFqn still points to THIS entry — a newer file may have overwritten it
+      if (this.byFqn.get(entry.fqn) === entry) this.byFqn.delete(entry.fqn);
       if (entry.supertypes) {
         for (const st of entry.supertypes) {
           const sset = this.bySuper.get(st);

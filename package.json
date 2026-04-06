@@ -2,7 +2,7 @@
   "name": "kotlin-jump",
   "displayName": "Kotlin Jump",
   "description": "Fast Kotlin & Java navigation — Go to Definition, Find Usages, Go to Implementation. No language server needed.",
-  "version": "0.7.6",
+  "version": "0.7.7",
   "publisher": "elumine",
   "license": "MIT",
   "icon": "media/icon.png",

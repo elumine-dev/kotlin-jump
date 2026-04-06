@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.7
+
+Adds Move File and Organize Imports commands for Kotlin and Java files.
+
+### Improvements
+- Added a Move File command for Kotlin files, accessible from the editor right-click menu — lets you move or rename a Kotlin file directly from the editor without switching to the file explorer.
+- Added an Organize Imports command (Shift+Alt+O) for Kotlin and Java files — removes unused imports using a heuristic that checks whether the imported name or alias appears in the file body; wildcard imports are always kept. Available from the command palette and the editor right-click menu.
+- Added a kotlinJump.organizeImports.removeUnused setting (enabled by default) to opt out of unused-import removal while still running the Organize Imports command.
+
 ## 0.7.6
 
 Adds a Move File command for Kotlin files, available from the editor context menu.

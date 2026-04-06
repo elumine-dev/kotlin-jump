@@ -48,7 +48,7 @@ const RE_CLASS      = /^\s*(?:(?:public|private|internal|protected|open|abstract
 // After optional generics, allow an optional `ReceiverType.` prefix so that
 // `fun Modifier.customBackground()` captures "customBackground", not "Modifier".
 // Handles: simple (Modifier.), nullable (Modifier?.), generic (List<T>.), qualified (Modifier.Companion.)
-const RE_FUN        = /^\s*(?:(?:public|private|protected|internal|override|actual|expect|suspend|inline|noinline|crossinline|infix|operator|tailrec|external)\s+)*fun\s+(?:<[^>]*>\s+)?(?:(?:\w+(?:<[^<>]*>)?[?]?\.)+)?(\w+)\s*[(<]/;
+const RE_FUN        = /^\s*(?:@\w+(?:\([^)]*\))?\s+)*(?:(?:public|private|protected|internal|override|actual|expect|suspend|inline|noinline|crossinline|infix|operator|tailrec|external)\s+)*fun\s+(?:<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>\s+)?(?:(?:\w+(?:<(?:[^<>]|<[^<>]*>)*>)?[?]?\.)+)?(\w+|\`[^\`]+\`)\s*[(<]/;
 const RE_PROP       = /^\s*(?:(?:public|private|protected|internal|override|open|abstract|actual|expect|lateinit|const)\s+)*(val|var)\s+(\w+)\s*(?:[=:(<]|\bby\b)/;
 const RE_TYPEALIAS  = /^\s*(?:(?:public|private|internal|actual)\s+)?typealias\s+(\w+)(?:<[^>]*>)?\s*=\s*(.+)/;
 const RE_ENUM_ENTRY = /^\s*([A-Z][A-Z0-9_]*)(?:\s*[,(;({]|$)/;
@@ -61,6 +61,7 @@ export function parse(uriString: string, text: string): ParsedFile {
   const imports: string[] = [];
 
   let inBlockComment = false;
+  let inRawString    = false; // true when inside a """ ... """ multi-line raw string
   let braceDepth     = 0;
   let parenDepth     = 0; // tracks ( ) so constructor params are not mistaken for class members
   let enumBraceDepth = -1; // -1 = not inside an enum body
@@ -109,30 +110,42 @@ export function parse(uriString: string, text: string): ParsedFile {
       pos = nl + 1; lineNum++; continue;
     }
 
+    // ── Inside multi-line raw string ───────────────────────────────────────
+    if (inRawString) {
+      const lineStr = text.slice(pos, nl);
+      if (countTripleQuoteToggles(lineStr) % 2 !== 0) inRawString = false;
+      [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
+      if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+      pos = nl + 1; lineNum++; continue;
+    }
+
     // ── O(1) first-char pre-filter — skip lines that can't be declarations ─
     // Exception: when we are exactly at enum-entry depth, uppercase lines must
     // pass through so RE_ENUM_ENTRY can match CONNECTED, OFFLINE, RED, etc.
     const atEnumEntryDepth = enumBraceDepth !== -1 && braceDepth === enumBraceDepth + 1;
     if (!DECL_START[fc] && !atEnumEntryDepth) {
+      const prevParenDepth = parenDepth;
       [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
       if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
-      if (fc !== '@') annotationWindow.length = 0;
+      // Only clear annotation window when not inside a multi-line annotation's paren args
+      if (fc !== '@' && prevParenDepth === 0) annotationWindow.length = 0;
       pos = nl + 1; lineNum++; continue;
     }
 
     // ── Lazy slice — only allocate when we need regex ─────────────────────
     const raw = text.slice(pos, nl);
+    const lineTripleQuotes = countTripleQuoteToggles(raw);
 
     // ── Package ────────────────────────────────────────────────────────────
     if (!packageName && fc === 'p') {
       const m = RE_PACKAGE.exec(raw);
-      if (m) { packageName = m[1]; pos = nl + 1; lineNum++; continue; }
+      if (m) { packageName = m[1]; if (lineTripleQuotes % 2 !== 0) inRawString = true; pos = nl + 1; lineNum++; continue; }
     }
 
     // ── Imports ────────────────────────────────────────────────────────────
     if (fc === 'i' && raw.charCodeAt(fns - pos + 1) === 109 /* 'm' */) {
       const m = RE_IMPORT.exec(raw);
-      if (m) { imports.push(m[1]); pos = nl + 1; lineNum++; continue; }
+      if (m) { imports.push(m[1]); if (lineTripleQuotes % 2 !== 0) inRawString = true; pos = nl + 1; lineNum++; continue; }
     }
 
     // ── Class-like declarations ────────────────────────────────────────────
@@ -236,6 +249,7 @@ export function parse(uriString: string, text: string): ParsedFile {
       [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
       if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
       annotationWindow.length = 0;
+      if (lineTripleQuotes % 2 !== 0) inRawString = true;
       pos = nl + 1; lineNum++; continue;
     }
 
@@ -264,6 +278,7 @@ export function parse(uriString: string, text: string): ParsedFile {
         }
         [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
         if (braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+        if (lineTripleQuotes % 2 !== 0) inRawString = true;
         pos = nl + 1; lineNum++; continue;
       }
     }
@@ -271,23 +286,27 @@ export function parse(uriString: string, text: string): ParsedFile {
     // ── Functions ──────────────────────────────────────────────────────────
     const fm = RE_FUN.exec(raw);
     if (fm) {
-      const isComposable  = annotationWindow.some(l => RE_COMPOSABLE.test(l));
-      const isPreview     = annotationWindow.some(l => RE_PREVIEW.test(l))    || undefined;
-      const isDeprecated  = annotationWindow.some(l => RE_DEPRECATED.test(l)) || undefined;
+      // Strip backticks from backtick-quoted names (e.g. `fun \`my fun\`()`)
+      const rawName = fm[1];
+      const funName = rawName.startsWith('`') ? rawName.slice(1, -1) : rawName;
+      // Check annotation window AND the current line for @Composable/@Preview/@Deprecated
+      const isComposable  = annotationWindow.some(l => RE_COMPOSABLE.test(l)) || RE_COMPOSABLE.test(raw);
+      const isPreview     = annotationWindow.some(l => RE_PREVIEW.test(l))    || RE_PREVIEW.test(raw)    || undefined;
+      const isDeprecated  = annotationWindow.some(l => RE_DEPRECATED.test(l)) || RE_DEPRECATED.test(raw) || undefined;
       const preFun        = raw.slice(0, raw.lastIndexOf('fun'));
       const isSuspend     = /\bsuspend\b/.test(preFun)  || undefined;
       const isAbstract    = /\babstract\b/.test(preFun)  || undefined;
       const isInline      = /\binline\b/.test(preFun)    || undefined;
       const isInfix       = /\binfix\b/.test(preFun)     || undefined;
-      const isExtension   = /fun\s+(?:<[^>]*>\s+)?(?:\w+(?:<[^<>]*>)?[?]?\.)/.test(raw) || undefined;
+      const isExtension   = /fun\s+(?:<(?:[^<>]|<[^<>]*>)*>\s+)?(?:\w+(?:<(?:[^<>]|<[^<>]*>)*>)?[?]?\.)/.test(raw) || undefined;
       const isOperator    = /\boperator\b/.test(preFun)  || undefined;
       const isOverride    = /\boverride\b/.test(preFun)  || undefined;
       const isPrivateFun  = /\bprivate\b/.test(preFun)   || undefined;
       symbols.push({
-        name: fm[1],
+        name: funName,
         kind: isComposable ? 'composable' : 'fun',
         line: lineNum,
-        character: raw.indexOf(fm[1], fm.index),
+        character: raw.indexOf(rawName, fm.index),
         isComposable,
         depth: braceDepth,
         isSuspend,
@@ -304,6 +323,7 @@ export function parse(uriString: string, text: string): ParsedFile {
       [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
       if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
       annotationWindow.length = 0;
+      if (lineTripleQuotes % 2 !== 0) inRawString = true;
       pos = nl + 1; lineNum++; continue;
     }
 
@@ -340,6 +360,7 @@ export function parse(uriString: string, text: string): ParsedFile {
       [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
       if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
       annotationWindow.length = 0;
+      if (lineTripleQuotes % 2 !== 0) inRawString = true;
       pos = nl + 1; lineNum++; continue;
     }
 
@@ -351,6 +372,7 @@ export function parse(uriString: string, text: string): ParsedFile {
       [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
       if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
       annotationWindow.length = 0;
+      if (lineTripleQuotes % 2 !== 0) inRawString = true;
       pos = nl + 1; lineNum++; continue;
     }
 
@@ -358,12 +380,14 @@ export function parse(uriString: string, text: string): ParsedFile {
     if (fc === '@') {
       if (annotationWindow.length >= 3) annotationWindow.shift();
       annotationWindow.push(raw.trimStart());
-    } else {
+    } else if (parenDepth === 0) {
+      // Only clear when not inside a multi-line annotation's paren args
       annotationWindow.length = 0;
     }
 
     [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
     if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+    if (lineTripleQuotes % 2 !== 0) inRawString = true;
     pos = nl + 1;
     lineNum++;
   }
@@ -372,6 +396,17 @@ export function parse(uriString: string, text: string): ParsedFile {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+// Counts the number of `"""` occurrences in a string (non-overlapping).
+// An odd count means this line toggles in/out of a raw string.
+function countTripleQuoteToggles(s: string): number {
+  let count = 0, i = 0;
+  while (i <= s.length - 3) {
+    if (s[i] === '"' && s[i + 1] === '"' && s[i + 2] === '"') { count++; i += 3; }
+    else i++;
+  }
+  return count;
+}
 
 // Count { } and ( ) in text[start..end) — operates on original text, no slice
 function countDepth(
@@ -384,6 +419,15 @@ function countDepth(
     if (inStr) {
       if (c === '\\') { i++; continue; } // skip escaped char
       if (c === inStr) inStr = false;
+      continue;
+    }
+    // Handle triple-quoted strings (must check BEFORE single-quote check)
+    if (c === '"' && i + 2 < end && text[i + 1] === '"' && text[i + 2] === '"') {
+      i += 3;
+      while (i + 2 < end) {
+        if (text[i] === '"' && text[i + 1] === '"' && text[i + 2] === '"') { i += 2; break; }
+        i++;
+      }
       continue;
     }
     if (c === '"' || c === '\'') { inStr = c; continue; }

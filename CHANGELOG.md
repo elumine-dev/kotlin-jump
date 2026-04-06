@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.0
+
+Adds auto-import suggestions and document highlight support for Kotlin and Java symbols.
+
+### Improvements
+- Added auto-import support: the extension now suggests and inserts the correct import statement when you use an unimported Kotlin or Java symbol, with no language server required. Can be toggled with `kotlinJump.autoImport.enabled`.
+- Added document highlight support: placing the cursor on a symbol now highlights all its occurrences in the current file, making it easier to track local usages at a glance.
+
 ## 0.7.8
 
 Adds Go to Definition and KDoc for library symbols by indexing sources JARs from Gradle and Maven caches.

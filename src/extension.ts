@@ -23,6 +23,10 @@ import { readProjectConfigs } from './util/ProjectConfig';
 import { inferPackage, buildMoveEdit } from './providers/MoveFileProvider';
 import * as path from 'path';
 import * as IndexStore from './indexer/IndexStore';
+import { KotlinJarContentProvider, KOTLIN_JAR_SCHEME, closeAllCachedZips } from './providers/KotlinJarContentProvider';
+import { GradleSourcesScanner } from './gradle/GradleSourcesScanner';
+import { MavenSourcesScanner }  from './gradle/MavenSourcesScanner';
+import { resolveSourceJarPaths } from './gradle/GradleToolingResolver';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 
@@ -102,6 +106,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       ),
     ] : []),
     vscode.languages.registerWorkspaceSymbolProvider(new KotlinFileProvider(index, log)),
+    vscode.workspace.registerFileSystemProvider(KOTLIN_JAR_SCHEME, new KotlinJarContentProvider(), { isReadonly: true, isCaseSensitive: true }),
 
     // ── Semantic Highlighting ─────────────────────────────────────────────
     (() => {
@@ -339,6 +344,55 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const watcher = new FileWatcher(scanner, index, uri => _semanticTokens?.invalidate(uri.toString()), log);
   context.subscriptions.push(watcher, { dispose: () => scanner.destroy() });
 
+  // ── JAR / Maven scanners ──────────────────────────────────────────────────
+  // Scans are serialised via a promise chain so concurrent calls (startup,
+  // reindex, build.gradle watcher) never overlap on the same index.
+  let gradleScanner: GradleSourcesScanner | undefined;
+  let mavenScanner:  MavenSourcesScanner  | undefined;
+  let _scanChain: Promise<void> = Promise.resolve();
+
+  /** Cancel any in-flight scans and queue a fresh one. */
+  const runJarScan = () => {
+    gradleScanner?.cancel();
+    mavenScanner?.cancel();
+    if (!gradleScanner) return;
+
+    _scanChain = _scanChain.then(async () => {
+      statusBar.text = '$(sync~spin) Kotlin Jump: indexing library sources…';
+      try {
+        const cfg = vscode.workspace.getConfiguration('kotlinJump');
+
+        // Optionally use Gradle Tooling API to get the precise source JAR list
+        let toolingJarPaths: string[] | null = null;
+        if (cfg.get<boolean>('useGradleTooling', false)) {
+          const folders  = vscode.workspace.workspaceFolders ?? [];
+          const timeout  = cfg.get<number>('gradleToolingTimeoutMs', 30_000);
+          for (const folder of folders) {
+            toolingJarPaths = await resolveSourceJarPaths(folder.uri.fsPath, timeout);
+            if (toolingJarPaths) break;
+          }
+        }
+
+        const [gradle, maven] = await Promise.all([
+          gradleScanner!.scanAll(toolingJarPaths ?? undefined),
+          mavenScanner!.scanAll(),
+        ]);
+        const totalJars  = gradle.jars  + maven.jars;
+        const totalFiles = gradle.files + maven.files;
+
+        const { symbols: totalSymbols } = index.stats();
+        statusBar.text    = `$(symbol-class) Kotlin Jump: ${totalSymbols.toLocaleString()} symbols`;
+        statusBar.tooltip = `${totalSymbols.toLocaleString()} symbols (incl. ${totalFiles} library files from ${totalJars} JARs)`;
+        _semanticTokens?.invalidate();
+      } catch (err) {
+        log.warn(`[jarscan] ${err}`);
+        const { symbols: s, files: f } = index.stats();
+        statusBar.text    = `$(symbol-class) Kotlin Jump: ${s.toLocaleString()} symbols`;
+        statusBar.tooltip = `${s.toLocaleString()} symbols in ${f} files`;
+      }
+    });
+  };
+
   context.subscriptions.push(
     vscode.commands.registerCommand('kotlin-jump.copyFqn', async () => {
       const editor = vscode.window.activeTextEditor;
@@ -449,7 +503,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('kotlin-jump.reindex', async () => {
       statusBar.text    = '$(sync~spin) Kotlin Jump: re-indexing…';
       statusBar.tooltip = 'Kotlin Jump is rebuilding the symbol index';
-      scanner.cancel(); // stop any in-flight scan before clearing the index
+      // Cancel any in-flight JAR scan, then drain the chain so removeExternal()
+      // runs only after the previous scan has fully stopped.
+      gradleScanner?.cancel();
+      mavenScanner?.cancel();
+      await _scanChain;
+      scanner.cancel();
       index.clear();
       await scanner.scanAll();
       const freshUris = await vscode.workspace.findFiles(
@@ -459,7 +518,36 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const { files, symbols } = index.stats();
       statusBar.text    = `$(symbol-class) Kotlin Jump: ${symbols.toLocaleString()} symbols`;
       statusBar.tooltip = `${symbols.toLocaleString()} symbols in ${files} files`;
+      index.removeExternal();
+      runJarScan();
     }),
+
+    // ── Watcher build.gradle — mise à jour des sources JAR en live ───────────
+    (() => {
+      let debounceId: ReturnType<typeof setTimeout> | undefined;
+      const gradleWatcher = vscode.workspace.createFileSystemWatcher('**/build.gradle{,.kts}');
+      const onGradleChange = () => {
+        if (debounceId) clearTimeout(debounceId);
+        // Délai 30s : laisser Gradle terminer le téléchargement des nouveaux JARs
+        debounceId = setTimeout(async () => {
+          const action = await vscode.window.showInformationMessage(
+            'Kotlin Jump: Gradle files changed — new library sources may be available.',
+            'Index now',
+            'Later',
+          );
+          if (action === 'Index now') {
+            gradleScanner?.cancel();
+            mavenScanner?.cancel();
+            await _scanChain;
+            index.removeExternal();
+            runJarScan();
+          }
+        }, 30_000);
+      };
+      gradleWatcher.onDidChange(onGradleChange);
+      gradleWatcher.onDidCreate(onGradleChange);
+      return gradleWatcher;
+    })(),
   );
 
   const t0 = Date.now();
@@ -510,9 +598,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   statusBar.tooltip = `${symbols.toLocaleString()} symbols in ${files} files — ${elapsed}ms`;
   log.info(`Index ready: ${symbols} symbols in ${files} files (${elapsed}ms)`);
   _semanticTokens?.invalidate();
+
+  gradleScanner = new GradleSourcesScanner(index, log);
+  mavenScanner  = new MavenSourcesScanner(index, log);
+  runJarScan();
 }
 
 export async function deactivate(): Promise<void> {
+  closeAllCachedZips();
   if (_snapshotEnabled && _index && _context && _stats.size > 0) {
     await IndexStore.save(_index, _stats, _context);
   }

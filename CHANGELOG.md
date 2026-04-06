@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.8
+
+Adds Go to Definition and KDoc for library symbols by indexing sources JARs from Gradle and Maven caches.
+
+### Improvements
+- Go to Definition and KDoc now work for library symbols — Compose, Coroutines, AndroidX, and any dependency with a -sources.jar in your Gradle or Maven cache — without a language server.
+- Source files inside JARs can now be opened directly in the editor, letting you read library source code when navigating to a library symbol.
+- Added kotlinJump.useGradleTooling to resolve source JARs via ./gradlew instead of scanning the full Gradle cache — indexes only the project's actual dependencies, producing a smaller and more targeted index at the cost of a slower first run.
+
+### Notes
+- Library source indexing is on by default and capped at 50 JARs each for Gradle and Maven caches; adjust the limits with kotlinJump.sourcesJarsMaxCount and kotlinJump.mavenSourcesMaxCount, or override cache paths via kotlinJump.gradleCacheDir and kotlinJump.mavenLocalRepoDir.
+
 ## 0.7.7
 
 Adds Move File and Organize Imports commands for Kotlin and Java files.

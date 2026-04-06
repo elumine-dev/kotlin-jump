@@ -174,13 +174,42 @@ export class WorkspaceEdit {
 }
 
 export const Uri = {
-  parse: (s: string) => ({
-    toString: () => s,
-    path: s.replace(/^file:\/\//, ''),
-    fsPath: s.replace(/^file:\/\//, ''),
-    scheme: 'file',
-  }),
+  parse: (s: string) => {
+    // Extract path from scheme://authority/path  (e.g. file:///foo, kotlin-jar:///foo)
+    const m = s.match(/^[a-z][a-z0-9+.-]*:\/\/[^/]*(\/[^?#]*)/i);
+    const path = m ? m[1] : s.replace(/^file:\/\//, '');
+    const scheme = s.match(/^([a-z][a-z0-9+.-]*):/i)?.[1] ?? 'file';
+    return { toString: () => s, path, fsPath: path, scheme };
+  },
 };
+
+export enum FileType {
+  Unknown       = 0,
+  File          = 1,
+  Directory     = 2,
+  SymbolicLink  = 64,
+}
+
+export enum FileChangeType {
+  Changed = 1,
+  Created = 2,
+  Deleted = 3,
+}
+
+export class FileSystemError extends Error {
+  static FileNotFound(messageOrUri?: string | any): FileSystemError {
+    return new FileSystemError(`FileNotFound: ${messageOrUri}`);
+  }
+  static NoPermissions(messageOrUri?: string | any): FileSystemError {
+    return new FileSystemError(`NoPermissions: ${messageOrUri}`);
+  }
+  static FileExists(messageOrUri?: string | any): FileSystemError {
+    return new FileSystemError(`FileExists: ${messageOrUri}`);
+  }
+  static Unavailable(messageOrUri?: string | any): FileSystemError {
+    return new FileSystemError(`Unavailable: ${messageOrUri}`);
+  }
+}
 
 export const workspace = {
   getConfiguration: () => ({
@@ -188,6 +217,8 @@ export const workspace = {
   }),
   openTextDocument: async () => null,
   findFiles: async () => [] as any[],
+  registerFileSystemProvider: () => ({ dispose: () => {} }),
+  registerTextDocumentContentProvider: () => ({ dispose: () => {} }),
   fs: {
     readFile: async () => Buffer.from(''),
   },

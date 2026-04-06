@@ -62,6 +62,7 @@ export async function save(
 
   for (const [uriStr, entries] of index.fileEntries()) {
     if (entries.length === 0) continue;
+    if (uriStr.startsWith('kotlin-jar:')) continue;  // JAR symbols are re-indexed on every startup
     const stat = stats.get(uriStr);
     if (stat === undefined) continue; // file no longer on disk
 

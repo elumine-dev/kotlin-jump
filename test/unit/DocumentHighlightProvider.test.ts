@@ -150,8 +150,8 @@ describe('KotlinDocumentHighlightProvider — adversarial: comment/string filter
     expect(commentOccurrences).toHaveLength(0);
   });
 
-  it('KNOWN LIMITATION: highlights symbol inside /* block comment */ on same line', () => {
-    // isInsideCommentOrString only handles // comments; /* */ is not filtered
+  it('does NOT highlight symbol inside /* block comment */ on same line', () => {
+    // isInsideCommentOrString now handles /* */ inline block comments correctly
     const code = [
       'package com.example',
       'fun greet() {}',
@@ -165,11 +165,10 @@ describe('KotlinDocumentHighlightProvider — adversarial: comment/string filter
     const pos   = positionOf(code, 'greet', 2); // inside /* */
     const token = { isCancellationRequested: false } as any;
     const result = provider.provideDocumentHighlights(doc, pos, token);
-    // It DOES highlight inside block comments — this is the known limitation
-    // We assert the current (imperfect) behavior so regressions are caught
+    // Cursor is inside /* */ — highlights should NOT include the block comment occurrence
     expect(result).toBeDefined();
     const blockCommentLine = result!.filter(h => h.range.start.line === 3);
-    expect(blockCommentLine.length).toBeGreaterThan(0);
+    expect(blockCommentLine.length).toBe(0);
   });
 
   it('does not highlight symbol that appears only inside strings', () => {

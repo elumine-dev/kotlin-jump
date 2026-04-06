@@ -160,13 +160,22 @@ export async function scanForUsages(
 
         const fileHitsBefore = results.length;
         const lines = text.split('\n');
+        let inBlockComment = false;
         for (let i = 0; i < lines.length; i++) {
           const trimmed = lines[i].trimStart();
+          // Track multi-line block comment state
+          if (inBlockComment) {
+            if (lines[i].includes('*/')) inBlockComment = false;
+            continue;
+          }
+          if (trimmed.startsWith('/*')) {
+            if (!lines[i].includes('*/')) inBlockComment = true;
+            continue;
+          }
           if (
             trimmed.startsWith('import ') ||
             trimmed.startsWith('//') ||
-            trimmed.startsWith('*') ||
-            trimmed.startsWith('/*')
+            trimmed.startsWith('*')
           ) continue;
 
           wordRe.lastIndex = 0;
@@ -262,8 +271,7 @@ export function fileCouldReference(text: string, target: SymbolEntry, index?: Sy
   const { fqn, packageName: pkg } = target;
   if (pkg) {
     // Anchor to start of line (multiline ^) so a `// package foo` comment never matches.
-    // Check only the first ~512 chars — package declaration is always in the header.
-    if (new RegExp(`^\\s*package\\s+${escapeRegex(pkg)}(?:\\s|;|$)`, 'm').test(text.slice(0, 512))) return true;
+    if (new RegExp(`^\\s*package\\s+${escapeRegex(pkg)}(?:\\s|;|$)`, 'm').test(text)) return true;
   }
   if (importedExactly(text, fqn)) return true;
   // For member FQNs (pkg.Class.method), also check import of the containing class

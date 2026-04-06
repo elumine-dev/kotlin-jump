@@ -450,7 +450,7 @@
         "kotlinJump.organizeImports.removeUnused": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Remove unused imports when running **Organize Imports** (`Shift+Alt+O`).\n\nUses a heuristic: if the imported simple name (or alias) does not appear as a word in the file, the import is removed. Wildcard imports are always kept."
+          "markdownDescription": "Remove unused imports when running **Organize Imports** (`Shift+Alt+O`).\n\nUses a heuristic: if the imported simple name (or alias) does not appear as a word in the file, the import is removed. Wildcard imports are always kept.\n\n**To run automatically on save**, add to your `settings.json`:\n```json\n\"editor.codeActionsOnSave\": { \"source.organizeImports\": \"explicit\" }\n```"
         },
         "kotlinJump.indexSourcesJars": {
           "type": "boolean",
@@ -496,6 +496,16 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Show **Add import** quick-fix suggestions when the cursor is on an unresolved type name. Candidates are drawn from the symbol index — no JVM required."
+        },
+        "kotlinJump.inlayHints": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show parameter name hints inline at call sites (e.g. `modifier: m`). Clickable — navigates to the parameter declaration. Disable if another extension already provides inlay hints."
+        },
+        "kotlinJump.signatureHelp": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show function signature popup when typing `(` or `,` inside a call, with the active parameter highlighted. Disable if another extension already provides signature help."
         }
       }
     }

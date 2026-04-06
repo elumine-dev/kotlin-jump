@@ -16,6 +16,8 @@ import { KotlinRenameProvider } from './providers/RenameProvider';
 import { OrganizeImportsProvider, organizeImports, buildOrganizeEdit } from './providers/OrganizeImportsProvider';
 import { AutoImportProvider } from './providers/AutoImportProvider';
 import { KotlinDocumentHighlightProvider } from './providers/DocumentHighlightProvider';
+import { KotlinInlayHintsProvider } from './providers/InlayHintsProvider';
+import { KotlinSignatureHelpProvider } from './providers/SignatureHelpProvider';
 import { KotlinSemanticTokensProvider, TOKEN_TYPES, TOKEN_MODIFIERS } from './providers/SemanticTokensProvider';
 import { Logger } from './util/logger';
 import { resolveCompanionMode } from './util/companionMode';
@@ -113,6 +115,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       ),
     ] : []),
     vscode.languages.registerDocumentHighlightProvider(KT_JAVA, new KotlinDocumentHighlightProvider(index)),
+
+    // ── Inlay Hints — parameter names inline at call sites ───────────────────
+    (() => {
+      if (isCompanion) return { dispose: () => {} };
+      const enabled = vscode.workspace.getConfiguration('kotlinJump').get<boolean>('inlayHints', true);
+      if (!enabled) return { dispose: () => {} };
+      return vscode.languages.registerInlayHintsProvider(KT_JAVA, new KotlinInlayHintsProvider(index));
+    })(),
+
+    // ── Signature Help — popup on `(` and `,` ────────────────────────────────
+    (() => {
+      if (isCompanion) return { dispose: () => {} };
+      const enabled = vscode.workspace.getConfiguration('kotlinJump').get<boolean>('signatureHelp', true);
+      if (!enabled) return { dispose: () => {} };
+      return vscode.languages.registerSignatureHelpProvider(
+        KT_JAVA,
+        new KotlinSignatureHelpProvider(index),
+        { triggerCharacters: ['(', ','], retriggerCharacters: [')'] },
+      );
+    })(),
+
     vscode.languages.registerWorkspaceSymbolProvider(new KotlinFileProvider(index, log)),
     vscode.workspace.registerFileSystemProvider(KOTLIN_JAR_SCHEME, new KotlinJarContentProvider(), { isReadonly: true, isCaseSensitive: true }),
 

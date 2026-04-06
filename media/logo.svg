@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Kotlin navigation plugin icon">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Kotlin navigation plugin icon" preserveAspectRatio="xMidYMid meet">
   <defs>
     <linearGradient id="kotlin-navigation-grad" x1="18" y1="18" x2="110" y2="110" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stop-color="#7F52FF"/>
@@ -7,17 +7,22 @@
     </linearGradient>
   </defs>
 
+  <title>Kotlin navigation plugin icon</title>
+
   <rect x="8" y="8" width="112" height="112" rx="24" fill="#0F1115"/>
 
-  <rect x="28" y="22" width="14" height="84" rx="4" fill="#FFFFFF"/>
+  <!-- Flèche derrière (remontée de 2px) -->
+  <path
+    d="M58 54H90V46L108 62L90 78V70H58V54Z"
+    fill="#FFF"
+  />
 
+  <!-- Barre du K -->
+  <rect x="28" y="22" width="14" height="84" rx="4" fill="#FFF"/>
+
+  <!-- K -->
   <path
     d="M42 64L84 22H102L63 61L102 106H84L42 64Z"
     fill="url(#kotlin-navigation-grad)"
-  />
-
-  <path
-    d="M66 52H90V44L108 60L90 76V68H66V52Z"
-    fill="#FFFFFF"
   />
 </svg>

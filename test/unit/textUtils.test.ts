@@ -132,15 +132,24 @@ describe('isInsideCommentOrString — string followed by comment', () => {
   });
 });
 
-// ── isInsideCommentOrString — block comment NOT handled ───────────────────────
+// ── isInsideCommentOrString — block comments ─────────────────────────────────
 
-describe('isInsideCommentOrString — block comment limitation', () => {
-  it('KNOWN LIMITATION: /* block comment */ content is NOT filtered', () => {
-    // isInsideCommentOrString only handles // comments; /* */ is ignored.
-    // A symbol inside /* greet here */ is seen as normal code → returns false.
+describe('isInsideCommentOrString — block comments', () => {
+  it('/* block comment */ content is filtered correctly', () => {
     const line = '    /* greet here */';
     const greetPos = line.indexOf('greet');
-    expect(isInsideCommentOrString(line, greetPos)).toBe(false); // known false-negative
+    expect(isInsideCommentOrString(line, greetPos)).toBe(true);
+  });
+
+  it('position before /* → false', () => {
+    const line = 'val x = 1; /* comment */';
+    expect(isInsideCommentOrString(line, 4)).toBe(false); // pos of 'x'
+  });
+
+  it('position after */ → false', () => {
+    const line = '/* comment */ val x = 1';
+    const pos = line.indexOf('val');
+    expect(isInsideCommentOrString(line, pos)).toBe(false);
   });
 });
 

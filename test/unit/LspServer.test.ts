@@ -508,16 +508,15 @@ describe('findUsagesInWorkspace', () => {
     expect(line2).toHaveLength(0);
   });
 
-  it('LIMITATION — inline block comment /* DataStore */ is a false positive', async () => {
-    // isInsideCommentOrString only handles // and strings, not /* */ blocks.
-    // A word inside /* ... */ on a non-comment-starting line IS currently matched.
-    // This test documents the known limitation — if it starts failing, the bug is fixed.
+  it('inline block comment /* DataStore */ is NOT matched (false positive eliminated)', async () => {
+    // isInsideCommentOrString now detects /* */ inline block comments.
+    // A word inside /* ... */ on a non-comment-starting line is correctly excluded.
     addKt(index, 'file:///A.kt', 'package p\nclass DataStore {}');
     const code = 'package p\nclass DataStore {}\nval x /* DataStore */ = 5';
     const results = await findUsagesInWorkspace('DataStore', index, noCancel, reader(code));
     const line2 = results.filter(r => r.range.start.line === 2);
-    // Currently matches (false positive) — documented as LIMITATION
-    expect(line2).toHaveLength(1);
+    // Correctly excluded — DataStore inside /* */ is not a real reference
+    expect(line2).toHaveLength(0);
   });
 
   // ── import lines ─────────────────────────────────────────────────────────────

@@ -23,7 +23,8 @@ export class Location {
 }
 
 export class MarkdownString {
-  value = '';
+  value: string;
+  constructor(value = '') { this.value = value; }
   appendCodeblock(code: string) { this.value += code; return this; }
   appendMarkdown(md: string) { this.value += md; return this; }
 }
@@ -246,3 +247,50 @@ export const window = {
 export const commands = {
   executeCommand: async () => {},
 };
+
+// ── Inlay Hints ───────────────────────────────────────────────────────────────
+
+export enum InlayHintKind {
+  Type      = 1,
+  Parameter = 2,
+}
+
+export class InlayHintLabelPart {
+  location?: Location;
+  tooltip?: MarkdownString | string;
+  command?: any;
+  constructor(public value: string) {}
+}
+
+export class InlayHint {
+  paddingLeft?: boolean;
+  paddingRight?: boolean;
+  tooltip?: MarkdownString | string;
+  constructor(
+    public label: string | InlayHintLabelPart[],
+    public position: Position,
+    public kind?: InlayHintKind,
+  ) {}
+}
+
+// ── Signature Help ────────────────────────────────────────────────────────────
+
+export class ParameterInformation {
+  documentation?: MarkdownString | string;
+  constructor(public label: string | [number, number]) {}
+}
+
+export class SignatureInformation {
+  parameters: ParameterInformation[] = [];
+  documentation?: MarkdownString | string;
+  activeParameter?: number;
+  constructor(public label: string, doc?: string | MarkdownString) {
+    if (doc) this.documentation = doc;
+  }
+}
+
+export class SignatureHelp {
+  signatures: SignatureInformation[] = [];
+  activeSignature = 0;
+  activeParameter = 0;
+}

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.0
+
+Adds symbol-aware code folding and smart selection expansion for Kotlin files.
+
+### Improvements
+- Added symbol-aware code folding for Kotlin files — classes, functions, the import block, and KDoc comments now fold as discrete units, replacing VS Code's indentation-based folding which can misalign on Kotlin syntax.
+- Added smart selection ranges: expanding or shrinking the selection (Shift+Alt+Right / Shift+Alt+Left) now follows Kotlin symbol boundaries instead of relying on generic bracket matching.
+- Folding can be disabled per-workspace with the new `kotlinJump.foldingEnabled` setting.
+
 ## 0.9.0
 
 Adds inlay hints and signature help, and fixes false positives in Find Usages and symbol indexing.

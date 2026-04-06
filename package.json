@@ -2,7 +2,7 @@
   "name": "kotlin-jump",
   "displayName": "Kotlin Jump",
   "description": "Fast Kotlin & Java navigation — Go to Definition, Find Usages, Go to Implementation. No language server needed.",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "publisher": "elumine",
   "license": "MIT",
   "icon": "media/logo.png",
@@ -506,6 +506,11 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Show function signature popup when typing `(` or `,` inside a call, with the active parameter highlighted. Disable if another extension already provides signature help."
+        },
+        "kotlinJump.foldingEnabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Enable symbol-aware folding for Kotlin files (classes, functions, import block, KDoc). More accurate than VS Code's default indentation-based folding."
         }
       }
     }

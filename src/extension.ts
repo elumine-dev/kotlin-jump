@@ -18,6 +18,8 @@ import { AutoImportProvider } from './providers/AutoImportProvider';
 import { KotlinDocumentHighlightProvider } from './providers/DocumentHighlightProvider';
 import { KotlinInlayHintsProvider } from './providers/InlayHintsProvider';
 import { KotlinSignatureHelpProvider } from './providers/SignatureHelpProvider';
+import { KotlinSelectionRangeProvider } from './providers/SelectionRangeProvider';
+import { KotlinFoldingRangeProvider } from './providers/FoldingRangeProvider';
 import { KotlinSemanticTokensProvider, TOKEN_TYPES, TOKEN_MODIFIERS } from './providers/SemanticTokensProvider';
 import { Logger } from './util/logger';
 import { resolveCompanionMode } from './util/companionMode';
@@ -115,6 +117,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       ),
     ] : []),
     vscode.languages.registerDocumentHighlightProvider(KT_JAVA, new KotlinDocumentHighlightProvider(index)),
+    vscode.languages.registerSelectionRangeProvider(KT_JAVA, new KotlinSelectionRangeProvider(index)),
+    (() => {
+      const enabled = vscode.workspace.getConfiguration('kotlinJump').get<boolean>('foldingEnabled', true);
+      if (!enabled) return { dispose: () => {} };
+      return vscode.languages.registerFoldingRangeProvider(KT_JAVA, new KotlinFoldingRangeProvider(index));
+    })(),
 
     // ── Inlay Hints — parameter names inline at call sites ───────────────────
     (() => {

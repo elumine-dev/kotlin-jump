@@ -294,3 +294,21 @@ export class SignatureHelp {
   activeSignature = 0;
   activeParameter = 0;
 }
+
+// ── Selection Ranges ──────────────────────────────────────────────────────────
+
+export class SelectionRange {
+  constructor(public range: Range, public parent?: SelectionRange) {}
+}
+
+// ── Folding Ranges ────────────────────────────────────────────────────────────
+
+export class FoldingRange {
+  constructor(public start: number, public end: number, public kind?: FoldingRangeKind) {}
+}
+
+export enum FoldingRangeKind {
+  Comment = 1,
+  Imports = 2,
+  Region  = 3,
+}

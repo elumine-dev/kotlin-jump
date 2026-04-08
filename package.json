@@ -18,7 +18,7 @@
     "url": "https://github.com/sponsors/elumine-dev"
   },
   "engines": {
-    "vscode": "^1.90.0"
+    "vscode": "^1.102.0"
   },
   "categories": [
     "Programming Languages",
@@ -43,7 +43,9 @@
   "activationEvents": [
     "onLanguage:kotlin",
     "workspaceContains:**/*.kt",
-    "onView:kotlinJump.findUsages"
+    "onView:kotlinJump.findUsages",
+    "onChatParticipant:kotlin-jump",
+    "onMcpServerDefinitionProvider:kotlin-jump"
   ],
   "main": "./dist/extension.js",
   "bin": {
@@ -377,7 +379,13 @@
           "items": {
             "type": "string"
           },
-          "default": ["test/java", "test/kotlin", "androidTest", "jvmTest", "commonTest"],
+          "default": [
+            "test/java",
+            "test/kotlin",
+            "androidTest",
+            "jvmTest",
+            "commonTest"
+          ],
           "markdownDescription": "Path segments identifying test source sets. Used by **Go to Definition** (to skip test-only results) and **Test Explorer** (to discover test functions by path). Add custom segments for non-standard layouts."
         },
         "kotlinJump.gradleWrapper": {
@@ -387,7 +395,9 @@
         },
         "kotlinJump.testTaskOverrides": {
           "type": "object",
-          "additionalProperties": { "type": "string" },
+          "additionalProperties": {
+            "type": "string"
+          },
           "default": {},
           "markdownDescription": "Override the Gradle test task per module. Use this when a module has multiple product flavors and `testDebugUnitTest` is ambiguous.\n\nExample:\n```json\n{\n  \":replica:app\": \"testReplicaLaPresseDebugUnitTest\"\n}\n```"
         },
@@ -549,7 +559,40 @@
           "markdownDescription": "Enable symbol-aware folding for Kotlin files (classes, functions, import block, KDoc). More accurate than VS Code's default indentation-based folding."
         }
       }
-    }
+    },
+    "chatParticipants": [
+      {
+        "id": "kotlin-jump",
+        "name": "kotlin-jump",
+        "fullName": "Kotlin Jump",
+        "description": "Query your Kotlin/Java symbol index — search, implementations, KDoc.",
+        "isSticky": false,
+        "commands": [
+          {
+            "name": "search",
+            "description": "Search by name or fuzzy query"
+          },
+          {
+            "name": "implementations",
+            "description": "Find implementors of a class/interface"
+          },
+          {
+            "name": "usages",
+            "description": "Find usages of a symbol by FQN"
+          },
+          {
+            "name": "doc",
+            "description": "Get KDoc for a symbol"
+          }
+        ]
+      }
+    ],
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "kotlin-jump",
+        "label": "Kotlin Jump"
+      }
+    ]
   },
   "scripts": {
     "compile": "node esbuild.js",
@@ -568,7 +611,7 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/picomatch": "^4.0.2",
-    "@types/vscode": "^1.85.0",
+    "@types/vscode": "^1.115.0",
     "esbuild": "^0.27.4",
     "husky": "^9.1.7",
     "tree-sitter-cli": "^0.26.8",
@@ -577,6 +620,7 @@
     "vitest": "^4.1.2"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "node-stream-zip": "^1.15.0",
     "picomatch": "^4.0.4",
     "vscode-languageserver": "^9.0.1",

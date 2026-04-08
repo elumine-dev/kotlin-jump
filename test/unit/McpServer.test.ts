@@ -221,3 +221,118 @@ describe('handleGetFileSymbols', () => {
     expect(() => handleGetFileSymbols(index, path)).not.toThrow();
   });
 });
+
+// ── BUG E — Normalisation URI : cas adversaux ─────────────────────────────────
+// handleGetFileSymbols normalise naïvement : `file://${uri}` si pas de préfixe.
+// Ça casse sur les espaces (non encodés), les chemins relatifs,
+// et les URIs avec 2 slashes (qui bypasse la normalisation).
+
+describe('handleGetFileSymbols — normalisation URI adversariale', () => {
+  const FILE_ENCODED = 'file:///workspace/My%20File.kt';
+
+  function makeSpacedIndex() {
+    return makeIndex({ [FILE_ENCODED]: 'package com.example\nclass SpacedClass' });
+  }
+
+  it('E4 — URI file:// déjà correcte retourne les symboles (contrôle)', () => {
+    const index = makeSpacedIndex();
+    expect(handleGetFileSymbols(index, FILE_ENCODED).some(r => r.name === 'SpacedClass')).toBe(true);
+  });
+
+  it('E1 — chemin avec espace encode correctement et trouve les symboles', () => {
+    const index = makeSpacedIndex();
+    const result = handleGetFileSymbols(index, '/workspace/My File.kt');
+    expect(result.some(r => r.name === 'SpacedClass')).toBe(true);
+  });
+
+  it('E1 — ne crashe pas avec un espace dans le chemin', () => {
+    const index = makeSpacedIndex();
+    expect(() => handleGetFileSymbols(index, '/workspace/My File.kt')).not.toThrow();
+  });
+
+  it('E5 — file:// avec 2 slashes est normalisé en file:/// et trouve les symboles', () => {
+    const index = makeSpacedIndex();
+    const result = handleGetFileSymbols(index, 'file://workspace/My%20File.kt');
+    expect(result.some(r => r.name === 'SpacedClass')).toBe(true);
+  });
+
+  it('E6 — chemin relatif retourne [] sans crash', () => {
+    const index = makeSpacedIndex();
+    expect(() => handleGetFileSymbols(index, 'src/Main.kt')).not.toThrow();
+    expect(handleGetFileSymbols(index, 'src/Main.kt')).toEqual([]);
+  });
+
+  it('search_symbols avec query whitespace-only retourne [] (validation trim)', () => {
+    // "   ".trim() === "" → doit retourner [] comme une query vide
+    // Avant fix : !query → false car "   " est truthy → passait dans index.search(" ")
+    const index = makeIndex({ [`${BASE_URI}/A.kt`]: 'package com.example\nclass Alpha' });
+    expect(handleSearchSymbols(index, '   ')).toEqual([]);
+    expect(handleSearchSymbols(index, '\t')).toEqual([]);
+    expect(handleSearchSymbols(index, '\n')).toEqual([]);
+  });
+
+  it('find_symbol avec name vide retourne [] (G1 — comportement safe par design)', () => {
+    // lookup("") → byName.get("") → undefined → [] : n'est PAS un bug
+    const index = makeIndex({ [`${BASE_URI}/A.kt`]: 'package com.example\nclass Alpha' });
+    expect(handleFindSymbol(index, '')).toEqual([]);
+  });
+
+  it('find_symbol avec name de 100 000 caractères ne crashe pas', () => {
+    // O(1) lookup : safe, mais réponse JSON potentiellement lourde
+    const index = makeIndex({ [`${BASE_URI}/A.kt`]: 'package com.example\nclass Alpha' });
+    const bigName = 'a'.repeat(100_000);
+    expect(() => handleFindSymbol(index, bigName)).not.toThrow();
+    expect(handleFindSymbol(index, bigName)).toEqual([]);
+  });
+});
+
+// ── handleSearchSymbols — kind-aware search ───────────────────────────────────
+
+describe('handleSearchSymbols — kind-aware search', () => {
+  it('retourne les composables Screen même noyés par des val screen* nombreux', () => {
+    // Reproduit le problème réel de lapresse : beaucoup de val/var "screen*" ont un
+    // fuzzyScore plus élevé (word boundary au début) que "LoginScreen" (match en milieu).
+    // Avant fix : les 200 premiers résultats étaient tous des val → les composables
+    // n'atteignaient jamais le filtre kind. Après fix : le cap 200 s'applique dans le kind.
+    const sources: Record<string, string> = {};
+    for (let i = 0; i < 60; i++) {
+      sources[`file:///vals/p${i}/S.kt`] = `package p${i}\nval screenState${i}: Int = 0`;
+    }
+    const composableNames = ['LoginScreen', 'SettingsScreen', 'HomeScreen', 'ProfileScreen', 'SearchScreen'];
+    composableNames.forEach((name, i) => {
+      sources[`file:///comp${i}/S.kt`] = `package comp${i}\n@Composable\nfun ${name}() {}`;
+    });
+    const index = makeIndex(sources);
+
+    const composables = handleSearchSymbols(index, 'Screen', 'composable');
+    expect(composables.length).toBe(5);
+    expect(composables.every(r => r.kind === 'composable')).toBe(true);
+    const names = composables.map(r => r.name);
+    expect(names).toContain('LoginScreen');
+    expect(names).toContain('SettingsScreen');
+    expect(names).toContain('HomeScreen');
+  });
+
+  it('sans kind filter, les résultats multi-kinds sont toujours retournés (rétrocompatibilité)', () => {
+    const src = 'package com.example\nclass UserRepo\nfun userHelper()';
+    const index = makeIndex({ [`${BASE_URI}/U.kt`]: src });
+    const results = handleSearchSymbols(index, 'user');
+    const kinds = new Set(results.map(r => r.kind));
+    expect(kinds.size).toBeGreaterThan(1);
+  });
+
+  it('cap à 50 respecté même avec kind filter et beaucoup de composables', () => {
+    const sources: Record<string, string> = {};
+    for (let i = 0; i < 60; i++) {
+      sources[`file:///c${i}/S.kt`] = `package c${i}\n@Composable\nfun FoundComposable${i}() {}`;
+    }
+    const index = makeIndex(sources);
+    expect(handleSearchSymbols(index, 'FoundComposable', 'composable').length).toBeLessThanOrEqual(50);
+  });
+
+  it('kind filter inexistant retourne []', () => {
+    const src = 'package com.example\nclass UserRepo\nfun userHelper()';
+    const index = makeIndex({ [`${BASE_URI}/U.kt`]: src });
+    expect(handleSearchSymbols(index, 'user', 'typealias')).toEqual([]);
+  });
+});

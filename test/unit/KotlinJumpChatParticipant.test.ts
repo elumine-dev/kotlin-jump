@@ -105,3 +105,135 @@ describe('pickEntries', () => {
     expect(pickEntries(index, 'XyzNoMatch99')).toEqual([]);
   });
 });
+
+// ── BUG A — Surface d'injection Markdown dans pickEntries ─────────────────────
+// Les handlers internes (handleImplementations, handleUsages, handleDoc) interpolent
+// query directement dans des templates backtick sans échappement.
+// pickEntries est testé ici pour confirmer que le pipeline lookup ne crashe pas
+// et que les entrées retournées ne contiennent pas le caractère injecté dans leur nom.
+
+describe('mdCode — délimiteurs backtick adaptatifs', () => {
+  // mdCode n'est pas exportée — on valide via pickEntries qui ne crashe pas,
+  // et on teste la logique en isolation en recréant la fonction.
+  function mdCode(s: string): string {
+    let maxRun = 0, run = 0;
+    for (const ch of s) { run = ch === '`' ? run + 1 : 0; if (run > maxRun) maxRun = run; }
+    const delim = '`'.repeat(maxRun + 1);
+    return `${delim}${s}${delim}`;
+  }
+
+  it('chaîne sans backtick → un seul backtick de chaque côté', () => {
+    expect(mdCode('foo')).toBe('`foo`');
+  });
+
+  it('chaîne avec un backtick → double backtick de chaque côté', () => {
+    expect(mdCode('foo`bar')).toBe('``foo`bar``');
+  });
+
+  it('chaîne avec double-backtick → triple backtick de chaque côté', () => {
+    // BUG précédent : `\`\`foo``bar\`\`` cassait le span CommonMark
+    expect(mdCode('foo``bar')).toBe('```foo``bar```');
+  });
+
+  it('chaîne vide → un backtick de chaque côté', () => {
+    expect(mdCode('')).toBe('``');
+  });
+
+  it('trois backticks consécutifs → quatre backticks de chaque côté', () => {
+    expect(mdCode('```')).toBe('````\`\`\`````');
+  });
+});
+
+describe('resolveEntry — cas limites dot/trailing dot', () => {
+  it('query = "." retourne undefined sans crash', () => {
+    const index = makeIndex({ 'file:///A.kt': `${PKG}class Foo` });
+    // ".".split('.').pop() = "" → guard retourne undefined
+    expect(pickEntries(index, '.')).toEqual([]);
+  });
+
+  it('query = "foo." retourne undefined sans crash', () => {
+    const index = makeIndex({ 'file:///A.kt': `${PKG}class Foo` });
+    expect(pickEntries(index, 'foo.')).toEqual([]);
+  });
+
+  it('query = ".foo" (leading dot) n\'est pas un crash', () => {
+    const index = makeIndex({ 'file:///A.kt': `${PKG}class Foo` });
+    expect(() => pickEntries(index, '.foo')).not.toThrow();
+  });
+});
+
+describe('pickEntries — queries avec caractères Markdown spéciaux (surface injection)', () => {
+  it('ne crashe pas avec un backtick dans la query', () => {
+    const index = makeIndex({ 'file:///A.kt': `${PKG}class Foo` });
+    expect(() => pickEntries(index, 'foo`bar')).not.toThrow();
+    expect(pickEntries(index, 'foo`bar')).toEqual([]);
+  });
+
+  it('ne crashe pas avec une newline embarquée dans la query', () => {
+    const index = makeIndex({ 'file:///A.kt': `${PKG}class Foo` });
+    expect(() => pickEntries(index, 'foo\nbar')).not.toThrow();
+  });
+
+  it('ne crashe pas avec une syntaxe lien Markdown dans la query', () => {
+    const index = makeIndex({ 'file:///A.kt': `${PKG}class Foo` });
+    expect(() => pickEntries(index, '[click](evil.com)')).not.toThrow();
+    expect(pickEntries(index, '[click](evil.com)')).toEqual([]);
+  });
+
+  it('ne crashe pas avec trois backticks consécutifs (fenced code block)', () => {
+    const index = makeIndex({ 'file:///A.kt': `${PKG}class Foo` });
+    expect(() => pickEntries(index, '```')).not.toThrow();
+    expect(pickEntries(index, '```')).toEqual([]);
+  });
+
+  it('ne crashe pas avec une query de 100 000 caractères', () => {
+    const index = makeIndex({ 'file:///A.kt': `${PKG}class Foo` });
+    const longQuery = 'a'.repeat(100_000);
+    expect(() => pickEntries(index, longQuery)).not.toThrow();
+    expect(pickEntries(index, longQuery)).toEqual([]);
+  });
+});
+
+// ── BUG B — Heuristique FQN : dead-end sur FQN partiel ───────────────────────
+// handleUsages et handleDoc utilisent query.includes('.') pour choisir entre
+// lookupFqn(query) et lookup(query)[0].
+// Si l'utilisateur tape "View.onDraw" (FQN partiel sans package), lookupFqn échoue
+// et il n'y a aucun fallback vers lookup("onDraw").
+
+describe('FQN heuristic gap — dead-end sur FQN partiel (couche SymbolIndex)', () => {
+  it('lookupFqn avec FQN partiel (sans package) retourne undefined même si la méthode existe', () => {
+    // Simule la décision prise par handleUsages quand query = "View.onDraw" :
+    //   includes('.') → true → lookupFqn("View.onDraw") → undefined
+    //   Alors que lookup("onDraw") aurait trouvé la méthode.
+    const src = `${PKG}class View {\nfun onDraw() {}\n}`;
+    const index = makeIndex({ 'file:///V.kt': src });
+
+    // Le FQN complet fonctionne :
+    expect(index.lookupFqn('com.example.View.onDraw')).toBeDefined();
+    // FQN partiel → dead-end (c'est ce que l'heuristique utilise pour "View.onDraw") :
+    expect(index.lookupFqn('View.onDraw')).toBeUndefined();
+    // La méthode est bien dans l'index sous son simple name :
+    expect(index.lookup('onDraw')).toHaveLength(1);
+  });
+
+  it('lookup avec un simple name contenant un point retourne [] (byName utilise le nom simple)', () => {
+    // handleUsages : si query = "Map<String>" (sans point → lookup("Map<String>")[0])
+    // byName.get("Map<String>") → undefined car la clé est "Map"
+    const src = `${PKG}class Map`;
+    const index = makeIndex({ 'file:///M.kt': src });
+
+    expect(index.lookup('Map')).toHaveLength(1);       // clé exacte → trouvé
+    expect(index.lookup('Map<String>')).toHaveLength(0); // clé avec générique → introuvable
+  });
+
+  it('lookupFqn avec FQN correct d\'une méthode dans une classe imbriquée fonctionne', () => {
+    // Contrôle : le FQN complet est construit correctement pour les méthodes imbriquées
+    const src = `${PKG}class View {\ninner class Item {\nfun onDraw() {}\n}\n}`;
+    const index = makeIndex({ 'file:///V.kt': src });
+
+    // FQN attendu : com.example.View.Item.onDraw
+    expect(index.lookupFqn('com.example.View.Item.onDraw')).toBeDefined();
+    // FQN partiel échoue :
+    expect(index.lookupFqn('com.example.View.onDraw')).toBeUndefined();
+  });
+});

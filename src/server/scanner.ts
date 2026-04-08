@@ -41,7 +41,13 @@ export async function indexFile(
 export async function scanWorkspace(root: string, index: SymbolIndex): Promise<void> {
   const entries: string[] = [];
 
+  const visited = new Set<string>();
   async function walk(dir: string) {
+    let real: string;
+    try { real = await fs.realpath(dir); } catch { return; }
+    if (visited.has(real)) return;
+    visited.add(real);
+
     let children: string[];
     try { children = await fs.readdir(dir); } catch { return; }
     await Promise.all(children.map(async name => {

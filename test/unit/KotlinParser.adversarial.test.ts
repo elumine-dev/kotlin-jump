@@ -15,6 +15,8 @@
 
 import { describe, it, expect } from 'vitest';
 import { parse } from '../../src/indexer/KotlinParser';
+import { SymbolIndex } from '../../src/indexer/SymbolIndex';
+import { handleFindSymbol } from '../../src/server/mcp';
 
 function symbols(code: string) {
   return parse('file:///adv.kt', code).symbols;
@@ -299,6 +301,78 @@ describe('BUG V — strings régulières avec `{` ne faussent PAS le depth (cont
 
     const bar = findSymbol(code, 'bar');
     expect(bar?.depth).toBe(1); // ✓ depth correct
+  });
+});
+
+// ── BUG UNICODE : noms de symboles avec caractères non-ASCII ─────────────────
+// Le regex \w en JavaScript ne couvre que [a-zA-Z0-9_].
+// Les caractères accentués (é, à, ü) et les alphabets non-latins (cyrillique, etc.)
+// ne sont pas matchés par \w → les classes/fonctions avec ces noms sont silencieusement ignorées.
+
+describe('UNICODE — symboles avec caractères non-ASCII', () => {
+  it('class avec nom accentué (É) est indexée', () => {
+    const code = 'package com.example\nclass Étudiant';
+    expect(findSymbol(code, 'Étudiant')).toBeDefined();
+  });
+
+  it('fun avec nom accentué est indexée', () => {
+    const code = 'fun café(): String = ""';
+    expect(findSymbol(code, 'café')).toBeDefined();
+  });
+
+  it('class avec nom cyrillique est indexée', () => {
+    const code = 'class Пользователь';
+    expect(findSymbol(code, 'Пользователь')).toBeDefined();
+  });
+
+  it('class avec nom ASCII est correctement indexée (contrôle)', () => {
+    const code = 'package com.example\nclass Student';
+    expect(findSymbol(code, 'Student')).toBeDefined();
+  });
+
+  it('fun avec nom ASCII est correctement indexée (contrôle)', () => {
+    const code = 'fun compute(): Int = 0';
+    expect(findSymbol(code, 'compute')).toBeDefined();
+  });
+});
+
+// ── Cascade Bug Q : raw string → faux positif → impact sur get_kdoc ──────────
+// Un symbole fantôme issu d'une raw string (Bug Q) est visible dans find_symbol.
+// Ce test valide l'impact en cascade sur la couche MCP.
+
+describe('Cascade Bug Q — raw string faux positif → visible dans handleFindSymbol', () => {
+  it('fakeFunc dans raw string est retournée par handleFindSymbol (faux positif MCP)', () => {
+    const code = [
+      'package com.example',
+      'val sql = """',
+      'fun fakeFunc() {}',
+      '"""',
+    ].join('\n');
+
+    const index = new SymbolIndex();
+    index.add(parse('file:///Q.kt', code));
+    index.finalize();
+
+    // BUG Q : fakeFunc est dans la raw string mais apparaît dans l'index
+    const results = handleFindSymbol(index, 'fakeFunc');
+    // Ce test documente le bug — idealement results devrait être []
+    expect(results).toEqual([]); // faux positif si ce test échoue
+  });
+});
+
+// ── Cascade Bug U : @Composable one-liner → absent de find_symbol ────────────
+
+describe('Cascade Bug U — @Composable one-liner → absent de handleFindSymbol', () => {
+  it('HomeScreen défini en one-liner @Composable est introuvable via find_symbol', () => {
+    const code = 'package com.example\n@Composable fun HomeScreen() {}';
+
+    const index = new SymbolIndex();
+    index.add(parse('file:///U.kt', code));
+    index.finalize();
+
+    const results = handleFindSymbol(index, 'HomeScreen');
+    // BUG U : HomeScreen devrait être trouvée mais ne l'est pas
+    expect(results.length).toBeGreaterThan(0); // échoue → documente le bug
   });
 });
 

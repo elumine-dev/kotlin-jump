@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.1
+
+Patch release with expanded test coverage and source updates across the parser, indexer, MCP server, and AI integration layers; no new commands or settings.
+
+### Notes
+- Source changes were made to the Kotlin and Java parsers, symbol indexer, MCP server, chat participant, and signature utilities — no new commands or settings were introduced.
+- The test suite was substantially expanded: new adversarial and edge-case test files were added covering the Kotlin parser, Java parser, MCP server, chat participant, and KDoc extraction, increasing confidence in correctness across edge conditions.
+- No functional changes to commands, settings, or extension behaviour are documented for this release beyond what is reflected in the source modifications above.
+
 ## 1.0.0
 
 Kotlin Jump 1.0.0 adds a VS Code chat participant, an MCP server for external AI tool integration, and a native JUnit test runner.

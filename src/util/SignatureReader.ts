@@ -67,16 +67,16 @@ export function readSignature(doc: vscode.TextDocument, entry: SymbolEntry): str
 // Walks backward from the declaration line, skipping annotations and blank
 // lines, then extracts and formats a /** ... */ or // comment block.
 
-export function extractKDoc(doc: vscode.TextDocument, declarationLine: number): string | null {
+export function extractKDocFromLines(lines: string[], declarationLine: number): string | null {
   let line = declarationLine - 1;
   while (line >= 0) {
-    const t = doc.lineAt(line).text.trim();
+    const t = lines[line].trim();
     if (t === '' || t.startsWith('@')) { line--; continue; }
     break;
   }
   if (line < 0) return null;
 
-  const lastLine = doc.lineAt(line).text.trim();
+  const lastLine = lines[line].trim();
 
   if (lastLine.endsWith('*/')) {
     const single = /\/\*\*\s*(.*?)\s*\*\//.exec(lastLine);
@@ -84,8 +84,8 @@ export function extractKDoc(doc: vscode.TextDocument, declarationLine: number): 
 
     const rawLines: string[] = [];
     for (let i = line; i >= Math.max(0, line - 60); i--) {
-      rawLines.unshift(doc.lineAt(i).text);
-      if (doc.lineAt(i).text.trim().startsWith('/**')) break;
+      rawLines.unshift(lines[i]);
+      if (lines[i].trim().startsWith('/**')) break;
     }
     if (!rawLines[0].trim().startsWith('/**')) return null;
 
@@ -102,7 +102,7 @@ export function extractKDoc(doc: vscode.TextDocument, declarationLine: number): 
   if (lastLine.startsWith('//')) {
     const rawLines: string[] = [];
     for (let i = line; i >= Math.max(0, line - 20); i--) {
-      const t = doc.lineAt(i).text.trim();
+      const t = lines[i].trim();
       if (!t.startsWith('//')) break;
       rawLines.unshift(t.replace(/^\/\/\s?/, ''));
     }
@@ -110,6 +110,11 @@ export function extractKDoc(doc: vscode.TextDocument, declarationLine: number): 
   }
 
   return null;
+}
+
+export function extractKDoc(doc: vscode.TextDocument, declarationLine: number): string | null {
+  const lines = Array.from({ length: doc.lineCount }, (_, i) => doc.lineAt(i).text);
+  return extractKDocFromLines(lines, declarationLine);
 }
 
 // Converts raw KDoc lines to a Markdown string, formatting @tags.

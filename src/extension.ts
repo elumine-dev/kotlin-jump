@@ -693,6 +693,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   gradleScanner = new GradleSourcesScanner(index, log);
   mavenScanner  = new MavenSourcesScanner(index, log);
   runJarScan();
+
+  // ── MCP Server Definition Provider (F8) ──────────────────────────────────
+  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (workspaceRoot) {
+    const mcpProvider: vscode.McpServerDefinitionProvider = {
+      onDidChangeMcpServerDefinitions: new vscode.EventEmitter<void>().event,
+      async provideMcpServerDefinitions() {
+        // process.execPath = VS Code's bundled Node.js (correct per vscode API docs)
+        return [new vscode.McpStdioServerDefinition(
+          'Kotlin Jump',
+          process.execPath,
+          [context.asAbsolutePath('dist/server.js'), '--mcp', workspaceRoot],
+          {},
+          '1.0.0',
+        )];
+      },
+    };
+    context.subscriptions.push(
+      vscode.lm.registerMcpServerDefinitionProvider('kotlin-jump', mcpProvider),
+    );
+  }
 }
 
 export async function deactivate(): Promise<void> {

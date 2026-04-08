@@ -32,6 +32,21 @@ import * as fs from 'fs/promises';
 import { SymbolIndex } from '../indexer/SymbolIndex';
 import { wordAt, uriToPath, KIND_MAP, buildHoverMarkdown } from './utils';
 import { indexFile, scanWorkspace, findUsagesInWorkspace } from './scanner';
+import { runMcpServer } from './mcp';
+
+// ── Mode dispatch — --mcp flag routes to MCP server instead of LSP ────────────
+// IMPORTANT: createConnection() must not be called at module scope when running
+// in MCP mode — both protocols share stdio and would corrupt each other.
+
+if (process.argv.includes('--mcp')) {
+  const idx  = process.argv.indexOf('--mcp');
+  const root = process.argv[idx + 1] ?? process.cwd();
+  runMcpServer(root).catch(e => { process.stderr.write(String(e) + '\n'); process.exit(1); });
+} else {
+  initLsp();
+}
+
+function initLsp(): void {
 
 // ── Connection + document manager ────────────────────────────────────────────
 
@@ -151,3 +166,5 @@ documents.onDidSave(async event => {
 // ── Start ─────────────────────────────────────────────────────────────────────
 
 connection.listen();
+
+} // end initLsp()

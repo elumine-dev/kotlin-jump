@@ -63,6 +63,28 @@ function makeHandler(index: SymbolIndex): vscode.ChatRequestHandler {
 
 // ── Command handlers ──────────────────────────────────────────────────────────
 
+// Wraps a user-provided string in a Markdown inline code span.
+// Uses the minimum number of backticks needed as delimiters so that any
+// backtick sequence inside the string is safely enclosed (CommonMark spec).
+function mdCode(s: string): string {
+  let maxRun = 0, run = 0;
+  for (const ch of s) {
+    run = ch === '`' ? run + 1 : 0;
+    if (run > maxRun) maxRun = run;
+  }
+  const delim = '`'.repeat(maxRun + 1);
+  return `${delim}${s}${delim}`;
+}
+
+// Resolves a query to a SymbolEntry: FQN lookup for dot-qualified queries,
+// with a fallback to simple-name lookup on the last segment if FQN yields nothing.
+function resolveEntry(index: SymbolIndex, query: string): SymbolEntry | undefined {
+  if (!query.includes('.')) return index.lookup(query)[0];
+  const lastSegment = query.split('.').pop()!;
+  if (!lastSegment) return undefined; // query is "." or ends with "."
+  return index.lookupFqn(query) ?? index.lookup(lastSegment)[0];
+}
+
 function streamEntries(entries: SymbolEntry[], stream: vscode.ChatResponseStream, label: string): vscode.ChatResult {
   if (entries.length === 0) {
     stream.markdown(`No ${label} found.`);
@@ -84,17 +106,14 @@ function handleSearch(index: SymbolIndex, query: string, stream: vscode.ChatResp
 
 function handleImplementations(index: SymbolIndex, query: string, stream: vscode.ChatResponseStream): vscode.ChatResult {
   const results = index.lookupImplementations(query).slice(0, 10);
-  return streamEntries(results, stream, `implementations of \`${query}\``);
+  return streamEntries(results, stream, `implementations of ${mdCode(query)}`);
 }
 
 function handleUsages(index: SymbolIndex, query: string, stream: vscode.ChatResponseStream): vscode.ChatResult {
-  // Resolve by FQN (dot-qualified) or simple name
-  const entry = query.includes('.')
-    ? index.lookupFqn(query)
-    : index.lookup(query)[0];
+  const entry = resolveEntry(index, query);
 
   if (!entry) {
-    stream.markdown(`Symbol \`${query}\` not found in the index.`);
+    stream.markdown(`Symbol ${mdCode(query)} not found in the index.`);
     return {};
   }
 
@@ -108,12 +127,10 @@ function handleUsages(index: SymbolIndex, query: string, stream: vscode.ChatResp
 }
 
 async function handleDoc(index: SymbolIndex, query: string, stream: vscode.ChatResponseStream): Promise<vscode.ChatResult> {
-  const entry = query.includes('.')
-    ? index.lookupFqn(query)
-    : index.lookup(query)[0];
+  const entry = resolveEntry(index, query);
 
   if (!entry) {
-    stream.markdown(`Symbol \`${query}\` not found in the index.`);
+    stream.markdown(`Symbol ${mdCode(query)} not found in the index.`);
     return {};
   }
 
@@ -134,7 +151,7 @@ async function handleDoc(index: SymbolIndex, query: string, stream: vscode.ChatR
       stream.markdown(' — No KDoc found.');
     }
   } catch {
-    stream.markdown(`Could not read file for \`${entry.fqn}\`.`);
+    stream.markdown(`Could not read file for ${mdCode(entry.fqn)}.`);
   }
   return {};
 }

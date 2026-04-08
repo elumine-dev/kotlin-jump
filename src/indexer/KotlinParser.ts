@@ -52,13 +52,13 @@ const RE_TEST        = /@(?:Test|ParameterizedTest|RepeatedTest|TestFactory|Test
 const RE_RUN_WITH    = /@RunWith\b/;
 const RE_IGNORE      = /@(?:Ignore|Disabled)\b/;
 const RE_LIFECYCLE   = /@(?:Before|After|BeforeEach|AfterEach|BeforeAll|AfterAll|BeforeClass|AfterClass)\b/;
-const RE_CLASS      = /^\s*(?:(?:public|private|internal|protected|open|abstract|inner|sealed|data|annotation|enum|actual|expect|companion)\s+)*?(data\s+class|sealed\s+class|sealed\s+interface|fun\s+interface|enum\s+class|annotation\s+class|class|interface|object)\s+(\w+)/;
+const RE_CLASS      = /^\s*(?:(?:public|private|internal|protected|open|abstract|inner|sealed|data|annotation|enum|actual|expect|companion)\s+)*?(data\s+class|sealed\s+class|sealed\s+interface|fun\s+interface|enum\s+class|annotation\s+class|class|interface|object)\s+([\p{L}\p{N}_]+)/u;
 // After optional generics, allow an optional `ReceiverType.` prefix so that
 // `fun Modifier.customBackground()` captures "customBackground", not "Modifier".
 // Handles: simple (Modifier.), nullable (Modifier?.), generic (List<T>.), qualified (Modifier.Companion.)
-const RE_FUN        = /^\s*(?:@\w+(?:\([^)]*\))?\s+)*(?:(?:public|private|protected|internal|override|actual|expect|suspend|inline|noinline|crossinline|infix|operator|tailrec|external)\s+)*fun\s+(?:<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>\s+)?(?:(?:\w+(?:<(?:[^<>]|<[^<>]*>)*>)?[?]?\.)+)?(\w+|\`[^\`]+\`)\s*[(<]/;
-const RE_PROP       = /^\s*(?:(?:public|private|protected|internal|override|open|abstract|actual|expect|lateinit|const)\s+)*(val|var)\s+(\w+)\s*(?:[=:(<]|\bby\b)/;
-const RE_TYPEALIAS  = /^\s*(?:(?:public|private|internal|actual)\s+)?typealias\s+(\w+)(?:<[^>]*>)?\s*=\s*(.+)/;
+const RE_FUN        = /^\s*(?:@\w+(?:\([^)]*\))?\s+)*(?:(?:public|private|protected|internal|override|actual|expect|suspend|inline|noinline|crossinline|infix|operator|tailrec|external)\s+)*fun\s+(?:<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>\s+)?(?:(?:\w+(?:<(?:[^<>]|<[^<>]*>)*>)?[?]?\.)+)?([\p{L}\p{N}_]+|`[^`]+`)\s*[(<]/u;
+const RE_PROP       = /^\s*(?:(?:public|private|protected|internal|override|open|abstract|actual|expect|lateinit|const)\s+)*(val|var)\s+([\p{L}\p{N}_]+)\s*(?:[=:(<]|\bby\b)/u;
+const RE_TYPEALIAS  = /^\s*(?:(?:public|private|internal|actual)\s+)?typealias\s+([\p{L}\p{N}_]+)(?:<[^>]*>)?\s*=\s*(.+)/u;
 const RE_ENUM_ENTRY = /^\s*([A-Z][A-Z0-9_]*)(?:\s*[,(;({]|$)/;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -621,6 +621,7 @@ function emitInlineBodySymbols(
         isOverride: /\boverride\b/.test(propPre) || undefined,
         isPrivate:  /\bprivate\b/.test(propPre)  || undefined,
         isLateinit: /\blateinit\b/.test(propPre) || undefined,
+        isAbstract: /\babstract\b/.test(propPre) || undefined,
       });
     }
   };

@@ -68,7 +68,7 @@ export function readSignature(doc: vscode.TextDocument, entry: SymbolEntry): str
 // lines, then extracts and formats a /** ... */ or // comment block.
 
 export function extractKDocFromLines(lines: string[], declarationLine: number): string | null {
-  let line = declarationLine - 1;
+  let line = Math.min(declarationLine, lines.length) - 1;
   while (line >= 0) {
     const t = lines[line].trim();
     if (t === '' || t.startsWith('@')) { line--; continue; }
@@ -101,7 +101,7 @@ export function extractKDocFromLines(lines: string[], declarationLine: number): 
 
   if (lastLine.startsWith('//')) {
     const rawLines: string[] = [];
-    for (let i = line; i >= Math.max(0, line - 20); i--) {
+    for (let i = line; i >= Math.max(0, line - 19); i--) {
       const t = lines[i].trim();
       if (!t.startsWith('//')) break;
       rawLines.unshift(t.replace(/^\/\/\s?/, ''));
@@ -153,7 +153,7 @@ export function formatKDoc(lines: string[]): string | null {
     const since = /^@since\s+(.+)/.exec(line);
     if (since) { result.push(`\n**Since:** ${since[1]}`); inParam = false; continue; }
 
-    if (line.startsWith('@')) continue;
+    if (line.startsWith('@')) { result.push(line); inParam = false; continue; }
 
     result.push(line);
     inParam = false;

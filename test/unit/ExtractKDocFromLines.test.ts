@@ -96,3 +96,40 @@ describe('extractKDocFromLines — edge cases', () => {
     expect(result).not.toContain('unrelated');
   });
 });
+
+// ── BUG H-OOB — declarationLine hors limites du tableau ──────────────────────
+// Si entry.line est corrompu (index stale + fichier raccourci entre indexation et lecture),
+// lines[declarationLine - 1] vaut undefined → undefined.trim() → TypeError crash.
+// Ces tests documentent le bug et serviront de régression après correction.
+
+describe('extractKDocFromLines — declarationLine hors limites (BUG H-OOB)', () => {
+  it('H-OOB1 — declarationLine très loin au-delà de lines.length : ne crashe pas et retourne null', () => {
+    // BUG : lines[999998] → undefined → undefined.trim() → TypeError
+    // Scénario réel : index stale (entry.line=1000) + fichier raccourci à 2 lignes
+    const src = lines('package com.example', 'class Foo');
+    expect(() => extractKDocFromLines(src, 999_999)).not.toThrow();
+    expect(extractKDocFromLines(src, 999_999)).toBeNull();
+  });
+
+  it('H-OOB2 — declarationLine = lines.length (juste après la fin) : ne crashe pas et retourne null', () => {
+    const src = lines('package com.example', 'class Foo');
+    expect(() => extractKDocFromLines(src, src.length)).not.toThrow();
+    expect(extractKDocFromLines(src, src.length)).toBeNull();
+  });
+
+  it('H-OOB3 — declarationLine = lines.length + 1 : ne crashe pas et retourne null', () => {
+    const src = lines('package com.example', 'class Foo');
+    expect(() => extractKDocFromLines(src, src.length + 1)).not.toThrow();
+    expect(extractKDocFromLines(src, src.length + 1)).toBeNull();
+  });
+
+  it('H-OOB4 — declarationLine négative : ne crashe pas et retourne null', () => {
+    const src = lines('/** Doc. */', 'class Foo');
+    expect(() => extractKDocFromLines(src, -1)).not.toThrow();
+    expect(extractKDocFromLines(src, -1)).toBeNull();
+  });
+
+  it('H-OOB5 — tableau vide avec declarationLine = 0 : ne crashe pas et retourne null (contrôle existant)', () => {
+    expect(extractKDocFromLines([], 0)).toBeNull();
+  });
+});

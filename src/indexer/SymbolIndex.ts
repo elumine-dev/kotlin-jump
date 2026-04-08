@@ -194,8 +194,10 @@ export class SymbolIndex {
     return results;
   }
 
-  // O(log N) prefix match + O(N) fuzzy fallback
-  search(query: string): SymbolEntry[] {
+  // O(log N) prefix match + O(N) fuzzy fallback.
+  // kindFilter: when provided, the 200-result cap applies only within that kind —
+  // symbols of other kinds are skipped before the cap is checked.
+  search(query: string, kindFilter?: string): SymbolEntry[] {
     if (!query) return EMPTY;
 
     if (this.dirty) this.rebuildSorted();
@@ -218,6 +220,7 @@ export class SymbolIndex {
       const set = this.byName.get(orig);
       if (set) {
         for (const e of set) {
+          if (kindFilter && e.kind !== kindFilter) continue;
           results.push(e);
           if (results.length >= 200) return results;
         }
@@ -236,7 +239,10 @@ export class SymbolIndex {
           const score = fuzzyScore(lower, name.toLowerCase());
           if (score > 0) {
             const set = this.byName.get(name);
-            if (set) scored.push({ entries: [...set], score });
+            if (set) {
+              const entries = kindFilter ? [...set].filter(e => e.kind === kindFilter) : [...set];
+              if (entries.length > 0) scored.push({ entries, score });
+            }
           }
         }
       }
@@ -247,7 +253,10 @@ export class SymbolIndex {
         const score = fuzzyScore(lower, this.sortedLower[i]);
         if (score > 0) {
           const set = this.byName.get(name);
-          if (set) scored.push({ entries: [...set], score });
+          if (set) {
+            const entries = kindFilter ? [...set].filter(e => e.kind === kindFilter) : [...set];
+            if (entries.length > 0) scored.push({ entries, score });
+          }
         }
       }
     }

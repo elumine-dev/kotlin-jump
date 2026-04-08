@@ -99,9 +99,17 @@ export function parseJava(uriString: string, text: string): ParsedFile {
         // Count braces to detect this before the depth check resets enumBraceDepth.
         const nameEnd   = raw.indexOf(name, cm.index) + name.length;
         const openBrace = raw.indexOf('{', nameEnd);
-        const closeBrace = raw.lastIndexOf('}');
-        if (openBrace !== -1 && closeBrace > openBrace) {
-          parseEnumEntries(raw, openBrace + 1, closeBrace, lineNum, braceDepth + 1, symbols);
+        if (openBrace !== -1) {
+          // Find the matching closing brace by tracking depth — lastIndexOf would
+          // find the wrong brace on lines like: `enum Color { RED } class Foo {}`.
+          let depth = 0, closeBrace = -1;
+          for (let i = openBrace; i < raw.length; i++) {
+            if (raw[i] === '{') depth++;
+            else if (raw[i] === '}') { depth--; if (depth === 0) { closeBrace = i; break; } }
+          }
+          if (closeBrace !== -1) {
+            parseEnumEntries(raw, openBrace + 1, closeBrace, lineNum, braceDepth + 1, symbols);
+          }
         }
       }
       braceDepth = countJavaBraces(text, pos, nl, braceDepth);

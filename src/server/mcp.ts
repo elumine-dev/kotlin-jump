@@ -60,10 +60,8 @@ export function handleFindImplementations(index: SymbolIndex, name: string): Sym
 }
 
 export function handleSearchSymbols(index: SymbolIndex, query: string, kind?: string): SymbolResult[] {
-  if (!query) return [];
-  const results = index.search(query);
-  const filtered = kind ? results.filter(e => e.kind === kind) : results;
-  return filtered.slice(0, 50).map(toSymbolResult);
+  if (!query.trim()) return [];
+  return index.search(query, kind).slice(0, 50).map(toSymbolResult);
 }
 
 export async function handleGetKdoc(
@@ -97,9 +95,18 @@ export function handleListTestFunctions(index: SymbolIndex): TestResult[] {
     }));
 }
 
+function normalizeUri(uri: string): string {
+  if (uri.startsWith('file:///')) return uri;
+  if (uri.startsWith('file://')) return 'file:///' + uri.slice('file://'.length);
+  if (uri.startsWith('/')) {
+    const encoded = uri.split('/').map(seg => encodeURIComponent(seg)).join('/');
+    return `file://${encoded}`;
+  }
+  return `file://${uri}`;
+}
+
 export function handleGetFileSymbols(index: SymbolIndex, uri: string): SymbolResult[] {
-  const normalized = uri.startsWith('file://') ? uri : `file://${uri}`;
-  return index.getFileSymbols(normalized).map(toSymbolResult);
+  return index.getFileSymbols(normalizeUri(uri)).map(toSymbolResult);
 }
 
 // ── MCP server entry point ────────────────────────────────────────────────────

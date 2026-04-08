@@ -347,6 +347,25 @@ describe('Java enum entries', () => {
     const entries = syms(code).filter(s => s.kind === 'enum').map(s => s.name);
     expect(entries).not.toContain('display');
   });
+
+  it('single-line enum — lastIndexOf fix stops enum body at correct brace (BUG lastIndexOf fix)', () => {
+    // BUG précédent : `lastIndexOf('}')` trouvait le dernier `}` de la ligne entière,
+    // incluant le `}` de `class Foo{}`, ce qui faisait consommer Foo par parseEnumEntries.
+    // Le fix (brace depth tracking) arrête l'enum body au bon `}`.
+    // Note : `class Foo` sur la même ligne n'est jamais indexé — limitation line-by-line.
+    const code = 'public enum Color { RED } class Foo {}';
+    expect(find(code, 'RED')).toBeDefined();
+    expect(find(code, 'RED')!.kind).toBe('enum');
+    // Foo is NOT indexed (same-line limitation), but it is NOT incorrectly consumed as enum entry either
+    expect(find(code, 'Foo')).toBeUndefined(); // limitation: same-line class after enum is invisible
+  });
+
+  it('single-line enum — n\'indexe pas le contenu après la fermeture de l\'enum', () => {
+    const code = 'public enum Color { RED } class Foo {}';
+    const names = syms(code).filter(s => s.kind === 'enum').map(s => s.name);
+    expect(names).toContain('RED');
+    expect(names).not.toContain('Foo');
+  });
 });
 
 // ── Inner classes ─────────────────────────────────────────────────────────────

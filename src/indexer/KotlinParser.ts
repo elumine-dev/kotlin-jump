@@ -29,6 +29,10 @@ export interface RawSymbol {
   isPreview?:       boolean; // function annotated with @Preview
   isPrivate?:       boolean; // private val/var/fun/class — not visible outside declaring file
   isDeprecated?:    boolean; // annotated with @Deprecated
+  isTest?:          boolean; // fun annotated with @Test / @ParameterizedTest etc.
+  isTestClass?:     boolean; // class annotated with @RunWith
+  isIgnored?:       boolean; // fun annotated with @Ignore / @Disabled
+  isLifecycle?:     boolean; // fun annotated with @Before / @After etc. (excluded from test discovery)
 }
 
 export interface ParsedFile {
@@ -44,6 +48,10 @@ const RE_IMPORT     = /^\s*import\s+([\w.*]+)/;
 const RE_COMPOSABLE  = /@Composable\b/;
 const RE_PREVIEW     = /@Preview\b/;
 const RE_DEPRECATED  = /@Deprecated\b/;
+const RE_TEST        = /@(?:Test|ParameterizedTest|RepeatedTest|TestFactory|TestTemplate)\b/;
+const RE_RUN_WITH    = /@RunWith\b/;
+const RE_IGNORE      = /@(?:Ignore|Disabled)\b/;
+const RE_LIFECYCLE   = /@(?:Before|After|BeforeEach|AfterEach|BeforeAll|AfterAll|BeforeClass|AfterClass)\b/;
 const RE_CLASS      = /^\s*(?:(?:public|private|internal|protected|open|abstract|inner|sealed|data|annotation|enum|actual|expect|companion)\s+)*?(data\s+class|sealed\s+class|sealed\s+interface|fun\s+interface|enum\s+class|annotation\s+class|class|interface|object)\s+(\w+)/;
 // After optional generics, allow an optional `ReceiverType.` prefix so that
 // `fun Modifier.customBackground()` captures "customBackground", not "Modifier".
@@ -169,8 +177,9 @@ export function parse(uriString: string, text: string): ParsedFile {
       const isPrivate       = /\bprivate\b/.test(preClass)  || undefined;
       const isHiltViewModel = annotationWindow.some(l => /@HiltViewModel\b/.test(l)) || undefined;
       const isDeprecated    = annotationWindow.some(l => RE_DEPRECATED.test(l))      || undefined;
+      const isTestClass     = annotationWindow.some(l => RE_RUN_WITH.test(l))        || undefined;
 
-      symbols.push({ name, kind, line: lineNum, character: raw.indexOf(name, cm.index), isComposable: false, depth: braceDepth, supertypes: supertypes.length > 0 ? supertypes : undefined, isAbstract, isPrivate, isHiltViewModel, isDeprecated });
+      symbols.push({ name, kind, line: lineNum, character: raw.indexOf(name, cm.index), isComposable: false, depth: braceDepth, supertypes: supertypes.length > 0 ? supertypes : undefined, isAbstract, isPrivate, isHiltViewModel, isDeprecated, isTestClass });
 
       if (kind === 'enum') enumBraceDepth = braceDepth;
 
@@ -293,6 +302,9 @@ export function parse(uriString: string, text: string): ParsedFile {
       const isComposable  = annotationWindow.some(l => RE_COMPOSABLE.test(l)) || RE_COMPOSABLE.test(raw);
       const isPreview     = annotationWindow.some(l => RE_PREVIEW.test(l))    || RE_PREVIEW.test(raw)    || undefined;
       const isDeprecated  = annotationWindow.some(l => RE_DEPRECATED.test(l)) || RE_DEPRECATED.test(raw) || undefined;
+      const isTest        = annotationWindow.some(l => RE_TEST.test(l))       || RE_TEST.test(raw)       || undefined;
+      const isIgnored     = annotationWindow.some(l => RE_IGNORE.test(l))     || RE_IGNORE.test(raw)     || undefined;
+      const isLifecycle   = annotationWindow.some(l => RE_LIFECYCLE.test(l))  || RE_LIFECYCLE.test(raw)  || undefined;
       const preFun        = raw.slice(0, raw.lastIndexOf('fun'));
       const isSuspend     = /\bsuspend\b/.test(preFun)  || undefined;
       const isAbstract    = /\babstract\b/.test(preFun)  || undefined;
@@ -319,6 +331,9 @@ export function parse(uriString: string, text: string): ParsedFile {
         isPreview,
         isPrivate: isPrivateFun,
         isDeprecated,
+        isTest,
+        isIgnored,
+        isLifecycle,
       });
       [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
       if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
@@ -576,15 +591,19 @@ function emitInlineBodySymbols(
     if (fm) {
       const preFun = seg.slice(0, seg.lastIndexOf('fun'));
       symbols.push({
-        name: fm[1], kind: 'fun', line: lineNum,
+        name: fm[1], kind: RE_COMPOSABLE.test(preFun) ? 'composable' : 'fun', line: lineNum,
         character: offset + seg.indexOf(fm[1], fm.index),
-        isComposable: false, depth: memberDepth,
-        isSuspend:  /\bsuspend\b/.test(preFun)  || undefined,
-        isOverride: /\boverride\b/.test(preFun)  || undefined,
-        isAbstract: /\babstract\b/.test(preFun)  || undefined,
-        isPrivate:  /\bprivate\b/.test(preFun)   || undefined,
-        isInline:   /\binline\b/.test(preFun)    || undefined,
-        isOperator: /\boperator\b/.test(preFun)  || undefined,
+        isComposable: RE_COMPOSABLE.test(preFun),
+        depth: memberDepth,
+        isSuspend:   /\bsuspend\b/.test(preFun)   || undefined,
+        isOverride:  /\boverride\b/.test(preFun)   || undefined,
+        isAbstract:  /\babstract\b/.test(preFun)   || undefined,
+        isPrivate:   /\bprivate\b/.test(preFun)    || undefined,
+        isInline:    /\binline\b/.test(preFun)     || undefined,
+        isOperator:  /\boperator\b/.test(preFun)   || undefined,
+        isTest:      RE_TEST.test(preFun)          || undefined,
+        isIgnored:   RE_IGNORE.test(preFun)        || undefined,
+        isLifecycle: RE_LIFECYCLE.test(preFun)     || undefined,
       });
       return;
     }

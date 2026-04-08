@@ -33,6 +33,7 @@ import { KotlinJarContentProvider, KOTLIN_JAR_SCHEME, closeAllCachedZips } from 
 import { GradleSourcesScanner } from './gradle/GradleSourcesScanner';
 import { MavenSourcesScanner }  from './gradle/MavenSourcesScanner';
 import { resolveSourceJarPaths } from './gradle/GradleToolingResolver';
+import { KotlinTestController } from './testing/KotlinTestController';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 
@@ -81,6 +82,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // Initialise context keys so the toolbar icons show the correct state on first load
   vscode.commands.executeCommand('setContext', 'kotlinJump.findUsages.showTests', true);
   vscode.commands.executeCommand('setContext', 'kotlinJump.findUsages.showPreviews', true);
+
+  const codeLens = new KotlinCodeLensProvider(index);
 
   context.subscriptions.push(
     log,
@@ -163,21 +166,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     })(),
 
     // ── Code Lens — "N usages | M implementations" above declarations ──────
-    (() => {
-      const codeLens = new KotlinCodeLensProvider(index);
-      context.subscriptions.push(
-        vscode.languages.registerCodeLensProvider(KT_JAVA, codeLens),
-        codeLens,
-        vscode.workspace.onDidChangeConfiguration(e => {
-          if (e.affectsConfiguration('kotlinJump.codeLens')) codeLens.refresh();
-        }),
-        vscode.workspace.onDidSaveTextDocument(() => {
-          // Refresh lenses after file save (index updates via FileWatcher)
-          setTimeout(() => codeLens.refresh(), 300);
-        }),
-      );
-      return codeLens;
-    })(),
+    // Hoisted so codeLens.refresh() can be called after scan/snapshot completes.
+    // File-level updates go through evictFile() (surgical cache eviction).
+    // onDidSaveTextDocument is not needed — FileWatcher.onFileIndexed covers saves.
+    codeLens,
+    vscode.languages.registerCodeLensProvider(KT_JAVA, codeLens),
+    vscode.workspace.onDidChangeConfiguration(e => {
+      if (e.affectsConfiguration('kotlinJump.codeLens')) codeLens.refresh();
+    }),
 
     vscode.commands.registerCommand('kotlin-jump.codeLensAction',
       async (uri: vscode.Uri, line: number, character: number) => {
@@ -377,11 +373,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   // Gradle takes precedence over kotlin-jump.json when both define the same module
   const moduleMap = new Map([...jsonModules, ...gradleModules]);
+  log.info(`[moduleMap] ${moduleMap.size} module(s) from settings.gradle + kotlin-jump.json`);
+  for (const [name, dir] of moduleMap) log.debug(`[moduleMap]   ${name} → ${dir}`);
 
   const scanner = new FileScanner(index, log, moduleMap);
 
-  const watcher = new FileWatcher(scanner, index, uri => _semanticTokens?.invalidate(uri.toString()), log);
+  const watcher = new FileWatcher(scanner, index, uri => {
+    _semanticTokens?.invalidate(uri.toString());
+    codeLens.evictFile(uri.toString()); // surgical: only evict symbols in the changed file
+    testCtrl.notifyFileIndexed(uri);    // index is fresh — safe to refresh test tree now
+  }, log);
   context.subscriptions.push(watcher, { dispose: () => scanner.destroy() });
+
+  // ── Test Explorer ─────────────────────────────────────────────────────────
+  const testCtrl = new KotlinTestController(index, context, log);
 
   // ── JAR / Maven scanners ──────────────────────────────────────────────────
   // Scans are serialised via a promise chain so concurrent calls (startup,
@@ -433,6 +438,32 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   };
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('kotlin-jump.runTest', async (fqn: string, moduleName?: string) => {
+      let item = testCtrl.findMethodItem(fqn);
+      if (!item) {
+        const entry = index.lookupFqn(fqn);
+        if (entry) { testCtrl.refreshFileTests(entry.uri); item = testCtrl.findMethodItem(fqn); }
+      }
+      if (!item) { vscode.window.showWarningMessage(`Kotlin Jump: test not found in index: ${fqn}`); return; }
+      vscode.commands.executeCommand('workbench.view.testing.focus');
+      vscode.commands.executeCommand('testing.showMostRecentOutput');
+      await testCtrl.runItems([item]);
+    }),
+
+    vscode.commands.registerCommand('kotlin-jump.runTestClass', async (fqn: string, moduleName?: string) => {
+      let classItem = testCtrl.findClassItem(fqn);
+      if (!classItem) {
+        const entry = index.lookupFqn(fqn);
+        if (entry) { testCtrl.refreshFileTests(entry.uri); classItem = testCtrl.findClassItem(fqn); }
+      }
+      if (!classItem) { vscode.window.showWarningMessage(`Kotlin Jump: test class not found: ${fqn}`); return; }
+      vscode.commands.executeCommand('workbench.view.testing.focus');
+      vscode.commands.executeCommand('testing.showMostRecentOutput');
+      await testCtrl.runItems([classItem]);
+    }),
+
+    vscode.commands.registerCommand('kotlin-jump.debugTest', () => { /* removed */ }),
+
     vscode.commands.registerCommand('kotlin-jump.copyFqn', async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor || editor.document.languageId !== 'kotlin') return;
@@ -591,12 +622,30 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   const t0 = Date.now();
 
+  // ── Priority scan — index visible editors in parallel with snapshot load ────
+  // Gives near-instant lenses (~50-100ms) for the active file regardless of
+  // whether a snapshot exists. index.add() is idempotent so the snapshot
+  // restore below safely overwrites these entries if they were stale.
+  const visibleUris = vscode.window.visibleTextEditors
+    .map(e => e.document.uri)
+    .filter(u => /\.(kt|kts|java)$/.test(u.fsPath));
+
   // ── Try snapshot first (near-zero re-activation cost) ─────────────────────
-  const snapshot = _snapshotEnabled ? await IndexStore.load(context) : null;
+  const [snapshot] = await Promise.all([
+    _snapshotEnabled ? IndexStore.load(context) : Promise.resolve(null),
+    ...visibleUris.map(u => scanner.scanFile(u)),
+  ]);
 
   if (snapshot) {
-    // Restore snapshot immediately — no I/O, no regex
+    // Restore full index from snapshot
     IndexStore.restore(snapshot, index);
+    // Re-apply priority scan AFTER restore so open files are never stale
+    // (restore() would have overwritten the fresh priority-scanned data)
+    if (visibleUris.length > 0) {
+      await Promise.all(visibleUris.map(u => scanner.scanFile(u)));
+      log.info(`[startup] priority scan re-applied over snapshot for ${visibleUris.length} visible editor(s)`);
+    }
+    codeLens.refresh(); // single refresh with correct data
 
     const { files, symbols } = index.stats();
     log.info(`[startup] snapshot restored: ${symbols.toLocaleString()} symbols in ${files} files`);
@@ -605,8 +654,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     // Check staleness and re-scan only changed files in background
     const report = await IndexStore.checkStaleness(snapshot, allUris);
-
-    // Reuse the stats already collected during staleness check
     _stats = report.stats;
 
     if (report.toRemove.length > 0) {
@@ -618,18 +665,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       log.info(`[startup] ${report.toScan.length} stale files — rescanning…`);
       statusBar.text = `$(sync~spin) Kotlin Jump: updating ${report.toScan.length} files…`;
       await scanner.rescan(report.toScan);
+      codeLens.refresh();
     } else {
       log.info('[startup] snapshot up to date — no rescan needed');
     }
 
   } else {
-    // No snapshot — full scan
+    // No snapshot — full scan (visible files already indexed above)
     log.info(`[startup] no snapshot — full scan of ${allUris.length} files`);
     await scanner.scanAll();
+    codeLens.refresh();
 
-    // Collect stats (mtime + size) for snapshot save on deactivate
     await collectStats(allUris);
   }
+
+  // Index is now fully populated — trigger test discovery regardless of whether
+  // resolveHandler already ran on an empty/partial index during startup.
+  testCtrl.notifyScanComplete();
 
   const elapsed = Date.now() - t0;
   const { files, symbols } = index.stats();

@@ -30,6 +30,10 @@ export interface SymbolEntry {
   isPreview?:       boolean;
   isPrivate?:       boolean;
   isDeprecated?:    boolean;
+  isTest?:          boolean; // fun annotated with @Test / @ParameterizedTest etc.
+  isTestClass?:     boolean; // class annotated with @RunWith
+  isIgnored?:       boolean; // fun annotated with @Ignore / @Disabled
+  isLifecycle?:     boolean; // fun annotated with @Before / @After etc.
 }
 
 export class SymbolIndex {
@@ -105,6 +109,10 @@ export class SymbolIndex {
         isPreview:       sym.isPreview,
         isPrivate:       sym.isPrivate,
         isDeprecated:    sym.isDeprecated,
+        isTest:          sym.isTest,
+        isTestClass:     sym.isTestClass,
+        isIgnored:       sym.isIgnored,
+        isLifecycle:     sym.isLifecycle,
       };
 
       fileEntries.push(entry);

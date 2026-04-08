@@ -34,6 +34,7 @@ import { GradleSourcesScanner } from './gradle/GradleSourcesScanner';
 import { MavenSourcesScanner }  from './gradle/MavenSourcesScanner';
 import { resolveSourceJarPaths } from './gradle/GradleToolingResolver';
 import { KotlinTestController } from './testing/KotlinTestController';
+import { registerChatParticipant } from './ai/KotlinJumpChatParticipant';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 
@@ -693,6 +694,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   gradleScanner = new GradleSourcesScanner(index, log);
   mavenScanner  = new MavenSourcesScanner(index, log);
   runJarScan();
+
+  // ── Chat Participant (F7) ─────────────────────────────────────────────────
+  registerChatParticipant(context, index);
 
   // ── MCP Server Definition Provider (F8) ──────────────────────────────────
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;

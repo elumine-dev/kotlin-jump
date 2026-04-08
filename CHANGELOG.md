@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.0.0
+
+Kotlin Jump 1.0.0 adds a VS Code chat participant, an MCP server for external AI tool integration, and a native JUnit test runner.
+
+### Improvements
+- Added a chat participant for VS Code's built-in chat panel — use `/search`, `/usages`, `/implementations`, and `/doc` to query your Kotlin codebase in natural language, powered by the extension's own symbol index, without leaving the editor.
+- Added an MCP server: AI assistants that support the Model Context Protocol (e.g. Claude Desktop) can now query Kotlin Jump's symbol index directly for code navigation and documentation lookup from outside VS Code.
+- Added a native test runner: JUnit 4 and 5 tests now appear in VS Code's Test Explorer with full run and debug support via Gradle — no separate test plugin required. Annotations are detected automatically during indexing.
+
+### Fixes
+- Fixed navigation across submodules in multi-module Gradle projects that use Groovy-style `include` syntax — affected projects no longer fail to resolve cross-module symbols.
+
+### Notes
+- This release requires VS Code 1.115.0 or later (previously 1.102.0). Update VS Code before upgrading the extension.
+
+Kotlin Jump 1.0.0 adds an AI chat participant, an MCP server for external AI tool integration, and a native VS Code test runner for JUnit tests.
+
+### Fixes
+- Fixed module resolution failing in multi-module Gradle projects that use Groovy-style `include` syntax — navigation across submodules now works correctly in these projects.
+
+### New Features
+- Added a Kotlin Jump chat participant — use `/search`, `/usages`, `/implementations`, and `/doc` in VS Code's chat panel to query your Kotlin codebase in natural language, powered by the extension's own symbol index.
+- Added an MCP server: AI assistants that support the Model Context Protocol (e.g. Claude Desktop) can now query Kotlin Jump's symbol index directly, enabling code navigation and documentation lookup from outside VS Code.
+- Added a native test runner: JUnit tests now appear in VS Code's Test Explorer with full run and debug support, driven by Gradle — no separate test plugin required. JUnit 4/5 annotations are detected automatically during indexing.
+
 ## 0.10.0
 
 Adds symbol-aware code folding and smart selection expansion for Kotlin files.

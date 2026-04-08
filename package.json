@@ -18,7 +18,7 @@
     "url": "https://github.com/sponsors/elumine-dev"
   },
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.90.0"
   },
   "categories": [
     "Programming Languages",
@@ -159,6 +159,21 @@
       {
         "command": "kotlin-jump.moveFile",
         "title": "Move File…",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.runTest",
+        "title": "Run Test",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.runTestClass",
+        "title": "Run Test Class",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.debugTest",
+        "title": "Debug Test",
         "category": "Kotlin Jump"
       }
     ],
@@ -362,8 +377,29 @@
           "items": {
             "type": "string"
           },
-          "default": [],
-          "markdownDescription": "Path segments identifying test source sets. **Go to Definition** skips results inside these paths when navigating from main source, preventing accidental jumps into mock or test-only files."
+          "default": ["test/java", "test/kotlin", "androidTest", "jvmTest", "commonTest"],
+          "markdownDescription": "Path segments identifying test source sets. Used by **Go to Definition** (to skip test-only results) and **Test Explorer** (to discover test functions by path). Add custom segments for non-standard layouts."
+        },
+        "kotlinJump.gradleWrapper": {
+          "type": "string",
+          "default": "./gradlew",
+          "markdownDescription": "Path to the Gradle wrapper relative to the workspace root. Used when running tests from the **Test Explorer**."
+        },
+        "kotlinJump.testTaskOverrides": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "default": {},
+          "markdownDescription": "Override the Gradle test task per module. Use this when a module has multiple product flavors and `testDebugUnitTest` is ambiguous.\n\nExample:\n```json\n{\n  \":replica:app\": \"testReplicaLaPresseDebugUnitTest\"\n}\n```"
+        },
+        "kotlinJump.injectTestLogging": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Inject a Gradle init-script that enables `testLogging` (passed/failed/skipped events) on all test tasks. Gives live test names in the output panel even when the project doesn't configure `testLogging` itself. Disable if your project already configures it or if the init-script causes issues."
+        },
+        "kotlinJump.testCodeLens": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show **▶ Run** and **⏱ Debug** lenses above `@Test` methods and **▶ Run All** above test classes."
         },
         "kotlinJump.smartNavigation": {
           "type": "boolean",

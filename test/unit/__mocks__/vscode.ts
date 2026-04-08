@@ -312,3 +312,28 @@ export enum FoldingRangeKind {
   Imports = 2,
   Region  = 3,
 }
+
+// ── Chat Participant ──────────────────────────────────────────────────────────
+
+export const chat = {
+  createChatParticipant: (_id: string, _handler: any) => ({
+    iconPath: undefined as any,
+    dispose: () => {},
+  }),
+};
+
+// ── Language Model (MCP + LM APIs) ───────────────────────────────────────────
+
+export class McpStdioServerDefinition {
+  constructor(
+    public label: string,
+    public command: string,
+    public args?: string[],
+    public env?: Record<string, string | number | null>,
+    public version?: string,
+  ) {}
+}
+
+export const lm = {
+  registerMcpServerDefinitionProvider: (_id: string, _provider: any) => ({ dispose: () => {} }),
+};

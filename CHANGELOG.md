@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.0
+
+Adds inferred-type inlay hints enabled by default and overhauled parameter-name hints.
+
+### Improvements
+- Added inferred-type inlay hints: variable and expression types now appear inline as you write Kotlin and Java code, so you can follow code flow without manually tracing declarations. Enabled by default; toggle with `kotlinJump.inlayHints.inferredTypes`.
+- Overhauled parameter-name hints — the underlying logic was rewritten for better accuracy, with hints appearing in more valid cases and fewer false positives.
+
+### Notes
+- Removed residual `.wasm` artifacts from the VSIX package, keeping the installed extension clean following the parser removal in 1.0.2.
+
 ## 1.0.2
 
 Removes the WASM tree-sitter dependency, shrinking the extension and eliminating a startup cost with no change to features or navigation behavior.

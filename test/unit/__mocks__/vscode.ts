@@ -38,7 +38,9 @@ export class EventEmitter<T> {
 
 export class CodeLens {
   command?: any;
-  constructor(public range: Range) {}
+  constructor(public range: Range, command?: any) {
+    if (command) this.command = command;
+  }
 }
 
 export class Hover {
@@ -266,9 +268,10 @@ export class InlayHint {
   paddingLeft?: boolean;
   paddingRight?: boolean;
   tooltip?: MarkdownString | string;
+  textEdits?: any[];
   constructor(
-    public label: string | InlayHintLabelPart[],
     public position: Position,
+    public label: string | InlayHintLabelPart[],
     public kind?: InlayHintKind,
   ) {}
 }

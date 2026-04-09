@@ -55,7 +55,7 @@ export class KotlinInlayHintsProvider implements vscode.InlayHintsProvider {
     // Read settings dynamically so changes take effect without Reload Window
     const cfg = vscode.workspace.getConfiguration('kotlinJump');
     const showParamNames    = cfg.get<boolean>('inlayHints.parameterNames', true);
-    const showInferredTypes = cfg.get<boolean>('inlayHints.inferredTypes', false);
+    const showInferredTypes = cfg.get<boolean>('inlayHints.inferredTypes', true);
 
     this.log.debug(
       `[InlayHints] provideInlayHints — file=${document.fileName?.split('/').pop() ?? '<doc>'} ` +

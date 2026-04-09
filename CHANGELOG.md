@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.0
+
+Adds string resource hover tooltips and a one-click editor title bar toggle for string folding in Kotlin and Java files.
+
+### Improvements
+- Added hover tooltips for R.string.* references — hovering over a resource reference now shows its resolved string value from strings.xml, so you can inspect resource values without switching files.
+- Added string folding toggle buttons to the editor title bar — an eye icon appears for open Kotlin and Java files, letting you enable or disable string resource folding with a single click rather than through the command palette or settings. The icon updates to reflect the current folding state.
+
 ## 1.2.0
 
 Adds R.string.* resource value folding — inline string previews directly in Kotlin source, no language server required.

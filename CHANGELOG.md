@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.2
+
+Removes the WASM tree-sitter dependency, shrinking the extension and eliminating a startup cost with no change to features or navigation behavior.
+
+### Improvements
+- Removed the bundled WASM tree-sitter parser and its ~3 MB dependency — the extension is smaller to install and activates faster. All navigation features continue to use the regex parser, which is 109× faster than the WASM alternative.
+
+### Notes
+- No commands, settings, or navigation behaviors have changed in this release.
+
 ## 1.0.1
 
 Patch release with expanded test coverage and source updates across the parser, indexer, MCP server, and AI integration layers; no new commands or settings.

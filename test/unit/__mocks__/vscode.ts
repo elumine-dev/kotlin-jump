@@ -1,3 +1,7 @@
+export class ThemeColor {
+  constructor(public id: string) {}
+}
+
 export class Position {
   constructor(public line: number, public character: number) {}
   isEqual(other: Position) { return this.line === other.line && this.character === other.character; }
@@ -237,13 +241,19 @@ export const workspace = {
   findFiles: async () => [] as any[],
   registerFileSystemProvider: () => ({ dispose: () => {} }),
   registerTextDocumentContentProvider: () => ({ dispose: () => {} }),
+  onDidChangeTextDocument: (_listener: any) => ({ dispose: () => {} }),
+  onDidChangeConfiguration: (_listener: any) => ({ dispose: () => {} }),
   fs: {
     readFile: async () => Buffer.from(''),
   },
 };
 
 export const window = {
-  activeTextEditor: undefined,
+  activeTextEditor: undefined as any,
+  visibleTextEditors: [] as any[],
+  createTextEditorDecorationType: (_opts: any) => ({ dispose: () => {} }),
+  onDidChangeActiveTextEditor: (_listener: any) => ({ dispose: () => {} }),
+  onDidChangeTextEditorSelection: (_listener: any) => ({ dispose: () => {} }),
 };
 
 export const commands = {

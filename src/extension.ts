@@ -35,6 +35,8 @@ import { MavenSourcesScanner }  from './gradle/MavenSourcesScanner';
 import { resolveSourceJarPaths } from './gradle/GradleToolingResolver';
 import { KotlinTestController } from './testing/KotlinTestController';
 import { registerChatParticipant } from './ai/KotlinJumpChatParticipant';
+import { StringResourceIndex } from './indexer/StringResourceIndex';
+import { StringResourceFoldingProvider } from './providers/StringResourceFoldingProvider';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 
@@ -406,6 +408,61 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     testCtrl.notifyFileIndexed(uri);    // index is fresh — safe to refresh test tree now
   }, log);
   context.subscriptions.push(watcher, { dispose: () => scanner.destroy() });
+
+  // ── String Resource Folding ────────────────────────────────────────────────
+  context.subscriptions.push((() => {
+    const stringIndex     = new StringResourceIndex();
+    const foldingProvider = new StringResourceFoldingProvider(stringIndex, log);
+
+    // Initial scan of all strings.xml files
+    vscode.workspace.findFiles(
+      '**/res/values*/strings.xml',
+      `{${excludeList.join(',')}}`,
+    ).then(uris => {
+      log.info(`[StringFolding] found ${uris.length} strings.xml file(s)`);
+      for (const u of uris) log.debug(`[StringFolding]   ${u.fsPath}`);
+      return Promise.all(uris.map(async u => {
+        const bytes = await vscode.workspace.fs.readFile(u);
+        stringIndex.reindexFile(u, new TextDecoder().decode(bytes));
+        log.debug(`[StringFolding] indexed ${u.fsPath}`);
+      }));
+    }).then(() => {
+      log.info('[StringFolding] initial scan done — invalidating all editors');
+      foldingProvider.invalidateAll();
+    });
+
+    if (vscode.window.activeTextEditor) foldingProvider.invalidateAll();
+
+    const handleChanged = async (uri: vscode.Uri) => {
+      log.info(`[StringFolding] strings.xml changed — reindexing ${uri.fsPath}`);
+      const bytes = await vscode.workspace.fs.readFile(uri);
+      stringIndex.reindexFile(uri, new TextDecoder().decode(bytes));
+      foldingProvider.invalidateAll();
+    };
+    const handleDeleted = (uri: vscode.Uri) => {
+      log.info(`[StringFolding] strings.xml deleted — removing ${uri.fsPath}`);
+      stringIndex.removeFile(uri);
+      foldingProvider.invalidateAll();
+    };
+    const strW1 = vscode.workspace.createFileSystemWatcher('**/res/values/strings.xml');
+    const strW2 = vscode.workspace.createFileSystemWatcher('**/res/values-*/strings.xml');
+    for (const w of [strW1, strW2]) {
+      w.onDidCreate(handleChanged);
+      w.onDidChange(handleChanged);
+      w.onDidDelete(handleDeleted);
+    }
+
+    return vscode.Disposable.from(
+      foldingProvider,
+      strW1,
+      strW2,
+      vscode.workspace.onDidChangeConfiguration(e => {
+        if (e.affectsConfiguration('kotlinJump.stringResourceFolding')) {
+          foldingProvider.invalidateAll();
+        }
+      }),
+    );
+  })());
 
   // ── Test Explorer ─────────────────────────────────────────────────────────
   const testCtrl = new KotlinTestController(index, context, log);

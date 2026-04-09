@@ -2,7 +2,7 @@
   "name": "kotlin-jump",
   "displayName": "Kotlin Jump",
   "description": "Fast Kotlin & Java navigation — Go to Definition, Find Usages, Go to Implementation. No language server needed.",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "publisher": "elumine",
   "license": "MIT",
   "icon": "media/logo.png",
@@ -550,8 +550,8 @@
         },
         "kotlinJump.inlayHints.inferredTypes": {
           "type": "boolean",
-          "default": false,
-          "markdownDescription": "Show inferred return type hints on untyped `val`/`var` declarations (e.g. `val users = fetchUsers()` → `: List<User>`). Double-click to insert the explicit type. Opt-in — enable in settings."
+          "default": true,
+          "markdownDescription": "Show inferred return type hints on untyped `val`/`var` declarations (e.g. `val users = fetchUsers()` → `: List<User>`). Double-click to insert the explicit type."
         },
         "kotlinJump.signatureHelp": {
           "type": "boolean",

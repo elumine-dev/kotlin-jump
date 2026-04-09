@@ -29,7 +29,9 @@ export async function indexFile(
   try {
     const text   = await readFile(fsPath);
     const uri    = pathToUri(fsPath);
-    const parsed = fsPath.endsWith('.java') ? parseJava(uri, text) : parseKotlin(uri, text);
+    const parsed = fsPath.endsWith('.java')
+      ? parseJava(uri, text)
+      : parseKotlin(uri, text);
     index.add(parsed);
   } catch {
     // skip unreadable files

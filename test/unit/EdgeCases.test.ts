@@ -1,26 +1,15 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { existsSync } from 'fs';
-import * as path from 'path';
 import { KotlinDefinitionProvider } from '../../src/providers/DefinitionProvider';
 import { SymbolIndex } from '../../src/indexer/SymbolIndex';
 import { parse } from '../../src/indexer/KotlinParser';
 import { parseJava } from '../../src/indexer/JavaParser';
-import { initWasm, isWasmReady, parseWasm } from '../../src/indexer/WasmKotlinParser';
 import { mockDocument, positionOf } from './helpers';
 import { Location } from './__mocks__/vscode';
-
-const distDir = path.join(__dirname, '../../dist');
-const wasmAvailable =
-  existsSync(path.join(distDir, 'tree-sitter-kotlin.wasm')) &&
-  existsSync(path.join(distDir, 'web-tree-sitter.wasm'));
 
 function addKt(index: SymbolIndex, uri: string, code: string) {
   index.add(parse(uri, code));
 }
 
-async function addKtWasm(index: SymbolIndex, uri: string, code: string) {
-  index.add(parseWasm(uri, code));
-}
 function addJava(index: SymbolIndex, uri: string, code: string) {
   index.add(parseJava(uri, code));
 }
@@ -811,36 +800,4 @@ private fun onStatusChanged(status: StatusType) {
 }
 `;
 
-  it.skipIf(!wasmAvailable)('WASM parser: StatusType.REGULAR resolves to StatusType.kt, not CategoryType.kt', async () => {
-    await initWasm(distDir);
-    if (!isWasmReady()) throw new Error('WASM init failed');
-
-    const index = new SymbolIndex();
-    await addKtWasm(index, 'file:///model/StatusType.kt', STATUS_TYPE_KT);
-    await addKtWasm(index, 'file:///category/CategoryType.kt', CATEGORY_TYPE_KT);
-
-    const doc = mockDocument('file:///transport/TransportViewModel.kt', TRANSPORT_VM_KT);
-    const provider = new KotlinDefinitionProvider(index);
-    const pos = positionOf(TRANSPORT_VM_KT, 'REGULAR'); // first occurrence in StatusType.REGULAR
-    const result = locs(provider.provideDefinition(doc, pos));
-    expect(result).toHaveLength(1);
-    expect(result[0].uri.path).toContain('StatusType');
-  });
-
-  it.skipIf(!wasmAvailable)('WASM parser: unqualified REGULAR inside CategoryType.kt resolves to CategoryType.kt', async () => {
-    await initWasm(distDir);
-    if (!isWasmReady()) throw new Error('WASM init failed');
-
-    const index = new SymbolIndex();
-    await addKtWasm(index, 'file:///model/StatusType.kt', STATUS_TYPE_KT);
-    await addKtWasm(index, 'file:///category/CategoryType.kt', CATEGORY_TYPE_KT);
-
-    const doc = mockDocument('file:///category/CategoryType.kt', CATEGORY_TYPE_KT);
-    const provider = new KotlinDefinitionProvider(index);
-    // 3rd occurrence of REGULAR in the file = the unqualified `-> REGULAR` in fromValue
-    const pos = positionOf(CATEGORY_TYPE_KT, 'REGULAR', 3);
-    const result = locs(provider.provideDefinition(doc, pos));
-    expect(result).toHaveLength(1);
-    expect(result[0].uri.path).toContain('CategoryType');
-  });
 });

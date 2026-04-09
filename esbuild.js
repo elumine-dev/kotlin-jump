@@ -5,15 +5,6 @@ const path    = require('path');
 const production = process.argv.includes('--production');
 const watch      = process.argv.includes('--watch');
 
-function copyWasmFiles() {
-  fs.mkdirSync('dist', { recursive: true });
-  fs.copyFileSync(
-    path.join('node_modules', 'web-tree-sitter', 'web-tree-sitter.wasm'),
-    path.join('dist', 'web-tree-sitter.wasm'),
-  );
-  // tree-sitter-kotlin.wasm is produced by `npm run build:wasm` and already in dist/
-}
-
 const sharedOptions = {
   bundle:    true,
   external:  ['vscode'],
@@ -40,15 +31,12 @@ async function main() {
     }),
     esbuild.context({
       ...sharedOptions,
-      // Server replaces the `vscode` module with a lightweight Node.js shim.
-      // __importMetaUrl is injected via banner so web-tree-sitter's createRequire
-      // call receives a valid file URL instead of undefined in the CJS bundle.
+      // Server replaces the `vscode` module with a lightweight Node.js shim
       external:    [],
       alias:       { vscode: './src/server/shim.ts' },
       entryPoints: ['src/server/main.ts'],
       outfile:     'dist/server.js',
-      banner:      { js: '#!/usr/bin/env node\nvar __importMetaUrl=require("url").pathToFileURL(__filename).href;' },
-      define:      { 'import.meta.url': '__importMetaUrl' },
+      banner:      { js: '#!/usr/bin/env node' },
     }),
   ]);
 
@@ -60,7 +48,6 @@ async function main() {
     await Promise.all([extCtx.dispose(), workerCtx.dispose(), serverCtx.dispose()]);
     // Make the server binary executable
     fs.chmodSync(path.join('dist', 'server.js'), 0o755);
-    copyWasmFiles();
   }
 }
 

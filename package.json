@@ -543,10 +543,15 @@
           "default": true,
           "markdownDescription": "Show **Add import** quick-fix suggestions when the cursor is on an unresolved type name. Candidates are drawn from the symbol index — no JVM required."
         },
-        "kotlinJump.inlayHints": {
+        "kotlinJump.inlayHints.parameterNames": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Show parameter name hints inline at call sites (e.g. `modifier: m`). Clickable — navigates to the parameter declaration. Disable if another extension already provides inlay hints."
+          "markdownDescription": "Show parameter name hints inline at call sites (e.g. `modifier: m`). Clickable — navigates to the parameter declaration."
+        },
+        "kotlinJump.inlayHints.inferredTypes": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Show inferred return type hints on untyped `val`/`var` declarations (e.g. `val users = fetchUsers()` → `: List<User>`). Double-click to insert the explicit type. Opt-in — enable in settings."
         },
         "kotlinJump.signatureHelp": {
           "type": "boolean",

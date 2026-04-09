@@ -1,5 +1,11 @@
 import * as vscode from 'vscode';
 
+export class NullLogger {
+  debug(_: string): void {}
+  info(_: string): void {}
+  warn(_: string): void {}
+}
+
 export class Logger implements vscode.Disposable {
   private readonly channel: vscode.OutputChannel;
 

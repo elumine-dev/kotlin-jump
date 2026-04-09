@@ -13,6 +13,7 @@ esbuild.js
 publish.sh
 .husky/**
 **/*.map
+**/*.wasm
 *.vsix
 node_modules/**
 media/logo-*.png

@@ -2,21 +2,12 @@
 
 ## 1.2.0
 
-Maintenance release with no changes to extension behavior — corrects the manual install command in the README.
+Adds R.string.* resource value folding — inline string previews directly in Kotlin source, no language server required.
 
-### Notes
-- No commands, settings, or navigation behaviors have changed in this release.
-
-### Packaging and Docs
-- Fixed the manual install command in the README to reference the correct `.vsix` filename for 1.2.0 — users installing from GitHub Releases can now copy and run the command without editing the version number.
-
-Maintenance release updating install documentation; no changes to extension behavior.
-
-### Notes
-- No commands, settings, or navigation behaviors have changed in this release.
-
-### Packaging and Docs
-- Updated the manual install instructions in the README to reference the correct `.vsix` filename for 1.2.0 — users installing from GitHub Releases can now copy the command as-is without adjusting the version number.
+### Improvements
+- Added string resource folding: `R.string.foo` references are replaced inline with their actual string values from `strings.xml`, matching Android Studio's Resource Value Folding behaviour. The real code reappears when your cursor is on the line.
+- String value overlays use the editor's string literal colour for visual consistency.
+- Watches `**/res/values*/strings.xml` for changes and reloads automatically. Toggle with `kotlinJump.stringResourceFolding` (enabled by default).
 
 ## 1.1.0
 

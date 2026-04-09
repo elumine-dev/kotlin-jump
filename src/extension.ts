@@ -43,6 +43,7 @@ let _index:            SymbolIndex | undefined;
 let _context:          vscode.ExtensionContext | undefined;
 let _stats:            Map<string, { mtime: number; size: number }> = new Map();
 let _semanticTokens:   KotlinSemanticTokensProvider | undefined;
+let _signatureHelp:    KotlinSignatureHelpProvider  | undefined;
 let _snapshotEnabled:  boolean = true;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -128,12 +129,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       return vscode.languages.registerFoldingRangeProvider(KT_JAVA, new KotlinFoldingRangeProvider(index));
     })(),
 
-    // ── Inlay Hints — parameter names inline at call sites ───────────────────
+    // ── Inlay Hints — parameter names + inferred types ───────────────────────
+    // Settings are read dynamically inside provideInlayHints so changes take
+    // effect immediately without Reload Window. The onDidChangeConfiguration
+    // listener fires onDidChangeInlayHints so VS Code re-requests hints.
     (() => {
       if (isCompanion) return { dispose: () => {} };
-      const enabled = vscode.workspace.getConfiguration('kotlinJump').get<boolean>('inlayHints', true);
-      if (!enabled) return { dispose: () => {} };
-      return vscode.languages.registerInlayHintsProvider(KT_JAVA, new KotlinInlayHintsProvider(index));
+      const cfg = vscode.workspace.getConfiguration('kotlinJump');
+      const showParamNames    = cfg.get<boolean>('inlayHints.parameterNames', true);
+      const showInferredTypes = cfg.get<boolean>('inlayHints.inferredTypes', false);
+      log.info(`[InlayHints] registered — showParamNames=${showParamNames} showInferredTypes=${showInferredTypes}`);
+      const provider = new KotlinInlayHintsProvider(index, log);
+      return vscode.Disposable.from(
+        vscode.languages.registerInlayHintsProvider(KT_JAVA, provider),
+        vscode.workspace.onDidChangeConfiguration(e => {
+          if (e.affectsConfiguration('kotlinJump.inlayHints')) {
+            const c = vscode.workspace.getConfiguration('kotlinJump');
+            log.info(`[InlayHints] settings changed — showParamNames=${c.get('inlayHints.parameterNames')} showInferredTypes=${c.get('inlayHints.inferredTypes')} — firing refresh`);
+            provider.fireChange();
+          }
+        }),
+      );
     })(),
 
     // ── Signature Help — popup on `(` and `,` ────────────────────────────────
@@ -141,10 +157,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (isCompanion) return { dispose: () => {} };
       const enabled = vscode.workspace.getConfiguration('kotlinJump').get<boolean>('signatureHelp', true);
       if (!enabled) return { dispose: () => {} };
-      return vscode.languages.registerSignatureHelpProvider(
-        KT_JAVA,
-        new KotlinSignatureHelpProvider(index),
-        { triggerCharacters: ['(', ','], retriggerCharacters: [')'] },
+      _signatureHelp = new KotlinSignatureHelpProvider(index);
+      return vscode.Disposable.from(
+        vscode.languages.registerSignatureHelpProvider(
+          KT_JAVA,
+          _signatureHelp,
+          { triggerCharacters: ['(', ','], retriggerCharacters: [')'] },
+        ),
+        _signatureHelp,
       );
     })(),
 
@@ -381,7 +401,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   const watcher = new FileWatcher(scanner, index, uri => {
     _semanticTokens?.invalidate(uri.toString());
-    codeLens.evictFile(uri.toString()); // surgical: only evict symbols in the changed file
+    codeLens.evictFile(uri.toString());     // surgical: only evict symbols in the changed file
+    _signatureHelp?.evictFile(uri.toString());
     testCtrl.notifyFileIndexed(uri);    // index is fresh — safe to refresh test tree now
   }, log);
   context.subscriptions.push(watcher, { dispose: () => scanner.destroy() });

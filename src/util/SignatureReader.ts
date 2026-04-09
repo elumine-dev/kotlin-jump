@@ -207,9 +207,10 @@ function findParamListStart(flat: string): number {
     if (ch === '<') { angleDepth++; i++; continue; }
     if (ch === '>') { angleDepth--; i++; continue; }
     if (ch === '(' && angleDepth === 0) {
-      // If this `(` is part of a `context(...)` receiver, skip over it
+      // If this `(` is part of a `context(...)` receiver, skip over it.
+      // Guard: if `fun` appears before `context`, this `(` is the function's param list.
       const before = flat.slice(0, i).trimEnd();
-      if (/\bcontext$/.test(before)) {
+      if (/\bcontext$/.test(before) && !/\bfun\b/.test(before)) {
         // Skip to the matching `)`
         let depth = 1;
         i++;
@@ -322,6 +323,48 @@ function parseOneParam(token: string): KtParam | null {
   if (!type) return null;
 
   return { name, type };
+}
+
+// ── Return type extraction ────────────────────────────────────────────────────
+// Extracts the return type from a parsed function signature string.
+// Returns null for Unit, Nothing, non-fun signatures, or unparseable sigs.
+export function extractReturnType(signature: string): string | null {
+  const flat = signature.replace(/\n\s*/g, ' ');
+  if (!/\bfun\b/.test(flat)) return null;
+
+  const openParen = findParamListStart(flat);
+  if (openParen === -1) return null;
+
+  const closeParen = findMatchingParen(flat, openParen);
+  if (closeParen === -1) return null;
+
+  const afterClose = flat.slice(closeParen + 1).trim();
+  if (!afterClose.startsWith(':')) return null;
+
+  let returnType = afterClose.slice(1).trim();
+  // Strip generic `where T : Bound` constraint clause at the end
+  returnType = returnType.replace(/\s+where\b.*$/, '').trim();
+  // Strip trailing `{` or `=` that signals the body (depth-aware: skip `=`/`{` inside parens)
+  returnType = stripBodySuffix(returnType).trim();
+
+  if (!returnType || returnType === 'Unit' || returnType === 'Nothing') return null;
+
+  return returnType;
+}
+
+// Strips the function body (`{` or `=`) from the end of a return type string.
+// Only strips at paren depth 0 so `=` inside annotation args (e.g. `@Ann(k = v)`) is kept.
+function stripBodySuffix(s: string): string {
+  let depth = 0;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '(') { depth++; continue; }
+    if (ch === ')') { depth--; continue; }
+    if (depth !== 0) continue;
+    if (ch === '{') return s.slice(0, i);
+    if (ch === '=' && s[i + 1] !== '=') return s.slice(0, i);
+  }
+  return s;
 }
 
 // Strips ` = defaultValue` at bracket depth 0

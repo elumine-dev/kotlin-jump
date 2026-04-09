@@ -14,6 +14,14 @@ export class KotlinSignatureHelpProvider implements vscode.SignatureHelpProvider
 
   constructor(private readonly index: SymbolIndex) {}
 
+  evictFile(_uri: string): void {
+    // Cache key is FQN, not URI — clear all on any file change.
+    // Signature help recomputes on the next keypress (fast, no JVM).
+    this.sigCache.clear();
+  }
+
+  dispose(): void {}
+
   async provideSignatureHelp(
     document: vscode.TextDocument,
     position: vscode.Position,

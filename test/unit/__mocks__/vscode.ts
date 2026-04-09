@@ -48,7 +48,10 @@ export class CodeLens {
 }
 
 export class Hover {
-  constructor(public contents: MarkdownString[], public range?: Range) {}
+  public contents: MarkdownString[];
+  constructor(contents: MarkdownString | MarkdownString[], public range?: Range) {
+    this.contents = Array.isArray(contents) ? contents : [contents];
+  }
 }
 
 export class TypeHierarchyItem {
@@ -233,9 +236,21 @@ export class FileSystemError extends Error {
   }
 }
 
+export enum StatusBarAlignment {
+  Left  = 1,
+  Right = 2,
+}
+
+export enum ConfigurationTarget {
+  Global          = 1,
+  Workspace       = 2,
+  WorkspaceFolder = 3,
+}
+
 export const workspace = {
   getConfiguration: () => ({
-    get: (key: string, defaultVal: any) => defaultVal,
+    get: (_key: string, defaultVal: any) => defaultVal,
+    update: async (_key: string, _value: any, _target?: any) => {},
   }),
   openTextDocument: async () => null,
   findFiles: async () => [] as any[],
@@ -252,12 +267,23 @@ export const window = {
   activeTextEditor: undefined as any,
   visibleTextEditors: [] as any[],
   createTextEditorDecorationType: (_opts: any) => ({ dispose: () => {} }),
+  createStatusBarItem: (_alignment?: StatusBarAlignment, _priority?: number) => ({
+    text: '' as string,
+    tooltip: '' as string,
+    show: () => {},
+    hide: () => {},
+    dispose: () => {},
+  }),
   onDidChangeActiveTextEditor: (_listener: any) => ({ dispose: () => {} }),
   onDidChangeTextEditorSelection: (_listener: any) => ({ dispose: () => {} }),
 };
 
 export const commands = {
   executeCommand: async () => {},
+};
+
+export const languages = {
+  registerHoverProvider: (_selector: any, _provider: any) => ({ dispose: () => {} }),
 };
 
 // ── Inlay Hints ───────────────────────────────────────────────────────────────

@@ -37,6 +37,7 @@ import { KotlinTestController } from './testing/KotlinTestController';
 import { registerChatParticipant } from './ai/KotlinJumpChatParticipant';
 import { StringResourceIndex } from './indexer/StringResourceIndex';
 import { StringResourceFoldingProvider } from './providers/StringResourceFoldingProvider';
+import { StringResourceHoverProvider } from './providers/StringResourceHoverProvider';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 
@@ -452,12 +453,40 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       w.onDidDelete(handleDeleted);
     }
 
+    const syncFoldingContext = (): void => {
+      const enabled = vscode.workspace.getConfiguration('kotlinJump')
+        .get<boolean>('stringResourceFolding', true);
+      vscode.commands.executeCommand('setContext', 'kotlinJump.stringFoldingEnabled', enabled);
+    };
+    syncFoldingContext();
+
     return vscode.Disposable.from(
       foldingProvider,
       strW1,
       strW2,
+      vscode.languages.registerHoverProvider(
+        [{ language: 'kotlin' }, { language: 'java' }],
+        new StringResourceHoverProvider(stringIndex),
+      ),
+      vscode.commands.registerCommand('kotlinJump.enableStringFolding', () => {
+        vscode.workspace.getConfiguration('kotlinJump')
+          .update('stringResourceFolding', true, vscode.ConfigurationTarget.Global);
+      }),
+      vscode.commands.registerCommand('kotlinJump.disableStringFolding', () => {
+        vscode.workspace.getConfiguration('kotlinJump')
+          .update('stringResourceFolding', false, vscode.ConfigurationTarget.Global);
+      }),
+      vscode.commands.registerCommand('kotlinJump.toggleStringFolding', () => {
+        const cfg = vscode.workspace.getConfiguration('kotlinJump');
+        cfg.update(
+          'stringResourceFolding',
+          !cfg.get<boolean>('stringResourceFolding', true),
+          vscode.ConfigurationTarget.Global,
+        );
+      }),
       vscode.workspace.onDidChangeConfiguration(e => {
         if (e.affectsConfiguration('kotlinJump.stringResourceFolding')) {
+          syncFoldingContext();
           foldingProvider.invalidateAll();
         }
       }),

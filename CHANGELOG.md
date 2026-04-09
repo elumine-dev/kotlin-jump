@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.2.0
+
+Maintenance release with no changes to extension behavior — corrects the manual install command in the README.
+
+### Notes
+- No commands, settings, or navigation behaviors have changed in this release.
+
+### Packaging and Docs
+- Fixed the manual install command in the README to reference the correct `.vsix` filename for 1.2.0 — users installing from GitHub Releases can now copy and run the command without editing the version number.
+
+Maintenance release updating install documentation; no changes to extension behavior.
+
+### Notes
+- No commands, settings, or navigation behaviors have changed in this release.
+
+### Packaging and Docs
+- Updated the manual install instructions in the README to reference the correct `.vsix` filename for 1.2.0 — users installing from GitHub Releases can now copy the command as-is without adjusting the version number.
+
 ## 1.1.0
 
 Adds inferred-type inlay hints enabled by default and overhauled parameter-name hints.

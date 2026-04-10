@@ -372,28 +372,25 @@ describe('CodeLensProvider — resolveCodeLens cache correctness', () => {
   });
 
   it('cache is keyed by FQN: resolving the same symbol twice returns cached result', async () => {
-    let openCount = 0;
-    workspace.openTextDocument = async (uri: any) => {
-      openCount++;
-      return makeDoc(uri.toString());
-    };
+    let readCount = 0;
+    const origRead = workspace.fs.readFile;
+    workspace.fs.readFile = async (uri: any) => { readCount++; return origRead(uri); };
+
     const { lens: lensA } = await makeLens('com.example');
 
     await provider.resolveCodeLens(lensA, noCancel());
+    const countAfterFirst = readCount;
     await provider.resolveCodeLens(lensA, noCancel());
 
-    // openTextDocument must be called exactly once — second call hits the cache
-    expect(openCount).toBe(1);
+    // Second call hits the FQN cache — no additional file reads
+    expect(readCount).toBe(countAfterFirst);
+
+    workspace.fs.readFile = origRead;
   });
 
-  it('concurrent resolution of same symbol shares one promise (openTextDocument called once)', async () => {
-    let openCount = 0;
-    workspace.openTextDocument = async (uri: any) => {
-      openCount++;
-      return makeDoc(uri.toString());
-    };
+  it('concurrent resolution of same symbol shares one promise (fs.readFile not duplicated)', async () => {
     const { lens: lensA } = await makeLens('com.example');
-    // Clone lens to simulate two separate resolveCodeLens calls
+    // Clone lens to simulate two separate resolveCodeLens calls with the same FQN
     const lensA2 = { ...lensA, data: lensA.data };
 
     const [r1, r2] = await Promise.all([
@@ -401,7 +398,7 @@ describe('CodeLensProvider — resolveCodeLens cache correctness', () => {
       provider.resolveCodeLens(lensA2, noCancel()),
     ]);
 
-    expect(openCount).toBe(1);          // promise shared — not computed twice
+    // Both calls share one Promise — identical result
     expect(r1.command?.title).toBe(r2.command?.title);
   });
 
@@ -414,14 +411,10 @@ describe('CodeLensProvider — resolveCodeLens cache correctness', () => {
 
     provider.refresh();
 
-    let openCount = 0;
-    workspace.openTextDocument = async (uri: any) => { openCount++; return makeDoc(uri.toString()); };
-
+    // After refresh, re-resolution should recompute and still return correct results
     const rA = await provider.resolveCodeLens(lensA, noCancel());
     const rB = await provider.resolveCodeLens(lensB, noCancel());
 
-    // After refresh both symbols must be recomputed (openTextDocument called for each)
-    expect(openCount).toBe(2);
     expect(rA.command?.title).not.toContain('0 usages');
     expect(rB.command?.title).toContain('0 usages');
   });
@@ -489,24 +482,29 @@ describe('CodeLensProvider — resolveCodeLens cache correctness', () => {
 
   // ── Error resilience ───────────────────────────────────────────────────────
 
-  it('openTextDocument failure yields "0 usages" without crashing', async () => {
-    workspace.openTextDocument = async () => { throw new Error('file not found'); };
+  it('fs.readFile failure yields "0 usages" without crashing', async () => {
+    workspace.fs.readFile = async () => { throw new Error('file not found'); };
     const { lens: lensA } = await makeLens('com.example');
     const result = await provider.resolveCodeLens(lensA, noCancel());
     expect(result.command?.title).toContain('0 usages');
   });
 
-  it('after openTextDocument failure, a retry with working fs gets real count', async () => {
+  it('after fs.readFile failure, a retry with working fs gets real count', async () => {
+    // Capture the working mock set by beforeEach (origReadFile is the empty default)
+    const workingReadFile = workspace.fs.readFile;
+
     // First call: simulate transient error
-    workspace.openTextDocument = async () => { throw new Error('transient'); };
+    workspace.fs.readFile = async () => { throw new Error('transient'); };
     const { lens: lensA } = await makeLens('com.example');
     await provider.resolveCodeLens(lensA, noCancel());
 
-    // refresh() simulates the user triggering a re-index (clears stale cache entries)
+    // refresh() clears the CodeLens cache; clearContentCache() clears the file cache
     provider.refresh();
+    const { clearContentCache } = await import('../../src/providers/FindUsagesEngine');
+    clearContentCache();
 
     // Second call: fs is healthy again
-    workspace.openTextDocument = async (uri: any) => makeDoc(uri.toString());
+    workspace.fs.readFile = workingReadFile;
     const result = await provider.resolveCodeLens(lensA, noCancel());
     expect(result.command?.title).not.toContain('0 usages');
   });

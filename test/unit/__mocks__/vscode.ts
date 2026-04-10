@@ -248,6 +248,7 @@ export enum ConfigurationTarget {
 }
 
 export const workspace = {
+  textDocuments: [] as any[],
   getConfiguration: () => ({
     get: (_key: string, defaultVal: any) => defaultVal,
     update: async (_key: string, _value: any, _target?: any) => {},

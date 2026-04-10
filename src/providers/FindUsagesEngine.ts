@@ -25,6 +25,37 @@ import picomatch from 'picomatch';
 
 const CONCURRENCY = 20;
 
+// ── File content cache ────────────────────────────────────────────────────────
+// Keyed by URI string. Populated on first read, invalidated on file change.
+// Eliminates repeated disk I/O across consecutive Find-Usages calls.
+const _contentCache = new Map<string, string>();
+
+/** Called by the FileWatcher callback whenever a file is indexed/deleted. */
+export function invalidateContentCache(uriString: string): void {
+  _contentCache.delete(uriString);
+}
+
+export function clearContentCache(): void {
+  _contentCache.clear();
+}
+
+/**
+ * Returns file content, preferring (in order):
+ *  1. In-memory VS Code document (already open in an editor — free)
+ *  2. Local content cache (already read this session — free)
+ *  3. Disk read (populates cache for future calls)
+ */
+async function readCachedFile(uri: vscode.Uri, uriString: string): Promise<string> {
+  const openDoc = vscode.workspace.textDocuments?.find(d => d.uri.toString() === uriString);
+  if (openDoc) return openDoc.getText();
+  const hit = _contentCache.get(uriString);
+  if (hit !== undefined) return hit;
+  const bytes = await vscode.workspace.fs.readFile(uri);
+  const text = Buffer.from(bytes).toString('utf8');
+  _contentCache.set(uriString, text);
+  return text;
+}
+
 export const DEFAULT_TEST_SEGMENTS: string[] = [];
 
 // ── Shared exclude filter (used by ReferenceProvider + CallHierarchyProvider) ──
@@ -109,31 +140,35 @@ export function resolveSearchTarget(
   return target;
 }
 
-export async function scanForUsages(
+/**
+ * Core scanner — `target` is already resolved by the caller.
+ * Use this when the declaring symbol is known (e.g. CodeLens) to skip the
+ * import-resolution step and avoid opening the declaring document.
+ */
+export async function scanForUsagesWithTarget(
   word: string,
-  document: vscode.TextDocument,
+  target: SymbolEntry | undefined,
   index: SymbolIndex,
   uriStrings: string[],
   token: vscode.CancellationToken,
   log?: Logger,
 ): Promise<UsageResult[]> {
-  const decls = index.lookup(word);
-  if (decls.length === 0) return [];
+  if (index.lookup(word).length === 0) return [];
 
-  const target = resolveSearchTarget(word, document, index);
-
-  // ── Private symbol: only the declaring file can reference it ─────────────
-  // A `private val/var/fun` is invisible outside its declaring file. Scanning
-  // other files would produce false positives when those files happen to have
-  // their own same-named private member (common pattern: `private val clickStream`
-  // repeated across multiple ViewModels in the same package).
+  // ── Pre-filter via word index or private restriction ─────────────────────
   let effectiveUris = uriStrings;
   if (target?.isPrivate) {
     effectiveUris = uriStrings.filter(u => u === target.uri.toString());
-    log?.info(`[findUsages] "${word}" is private → restricted to declaring file only (was ${uriStrings.length} files)`);
+    log?.info(`[findUsages] "${word}" is private → declaring file only (was ${uriStrings.length} files)`);
   } else {
-    const targetDesc = target ? `${target.fqn}${target.isPrivate ? ' (private)' : ''}` : 'ambiguous';
-    log?.info(`[findUsages] "${word}" target=${targetDesc} — scanning up to ${uriStrings.length} files`);
+    const candidates = index.getFilesContainingWord(word, target ?? undefined);
+    if (candidates !== null) {
+      effectiveUris = uriStrings.filter(u => candidates.has(u));
+      log?.info(`[findUsages] word index: ${effectiveUris.length}/${uriStrings.length} candidates for "${word}"`);
+    } else {
+      const targetDesc = target ? target.fqn : 'ambiguous';
+      log?.info(`[findUsages] "${word}" target=${targetDesc} — word index not ready, full scan (${uriStrings.length} files)`);
+    }
   }
 
   const maxReferences = vscode.workspace.getConfiguration('kotlinJump').get<number>('maxReferences', 500);
@@ -149,8 +184,7 @@ export async function scanForUsages(
       const uriStr = effectiveUris[cursor++];
       const uri = vscode.Uri.parse(uriStr);
       try {
-        const bytes = await vscode.workspace.fs.readFile(uri);
-        const text  = Buffer.from(bytes).toString('utf8');
+        const text = await readCachedFile(uri, uriStr);
 
         if (!text.includes(word)) continue;
         if (target && !fileCouldReference(text, target, index)) {
@@ -163,7 +197,6 @@ export async function scanForUsages(
         let inBlockComment = false;
         for (let i = 0; i < lines.length; i++) {
           const trimmed = lines[i].trimStart();
-          // Track multi-line block comment state
           if (inBlockComment) {
             if (lines[i].includes('*/')) inBlockComment = false;
             continue;
@@ -207,6 +240,20 @@ export async function scanForUsages(
   }
 
   return results;
+}
+
+/** Resolves the target then delegates to the core scanner. */
+export async function scanForUsages(
+  word: string,
+  document: vscode.TextDocument,
+  index: SymbolIndex,
+  uriStrings: string[],
+  token: vscode.CancellationToken,
+  log?: Logger,
+): Promise<UsageResult[]> {
+  if (index.lookup(word).length === 0) return [];
+  const target = resolveSearchTarget(word, document, index);
+  return scanForUsagesWithTarget(word, target, index, uriStrings, token, log);
 }
 
 /**

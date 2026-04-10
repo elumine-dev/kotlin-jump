@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.4.0
+
+Clicking a usage-count CodeLens now opens the Find Usages panel immediately by reusing the already-computed scan, and repeated searches are faster thanks to in-memory file content caching.
+
+### Improvements
+- Clicking a usage-count CodeLens with `kotlinJump.smartNavigation` enabled now populates the Find Usages panel from the cached scan results instead of rescanning the workspace — the panel opens instantly rather than re-reading every file a second time.
+- File content is now cached in memory across Find Usages calls within a session, so repeated searches on the same files avoid redundant disk reads on large codebases.
+- Find Usages now correctly disambiguates member symbols — enum entries, companion constants, and similarly named members in different classes — by checking which parent class is visible in the calling file, reducing false positives in search results.
+- Editing a file now triggers surgical CodeLens cache eviction: only the usage counts for symbols defined in the changed file are invalidated and recomputed, rather than clearing the entire cache on every save.
+
+### Notes
+- New adversarial, invariant, and performance regression test suites were added for the symbol indexer and word index. These are internal but directly increase confidence that navigation results remain correct and fast as the codebase evolves.
+
 ## 1.3.0
 
 Adds string resource hover tooltips and a one-click editor title bar toggle for string folding in Kotlin and Java files.

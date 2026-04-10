@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { SymbolIndex } from '../indexer/SymbolIndex';
-import { scanForUsages, DEFAULT_TEST_SEGMENTS } from './FindUsagesEngine';
+import { scanForUsages, DEFAULT_TEST_SEGMENTS, UsageResult } from './FindUsagesEngine';
 
 // ── Tree node types ───────────────────────────────────────────────────────────
 
@@ -119,6 +119,35 @@ export class FindUsagesPanel
     this._updateDescription();
     this._onChange.fire();
     return false;
+  }
+
+  /**
+   * Populates the panel directly from pre-scanned results (e.g. from CodeLens
+   * cache) without re-scanning the workspace. Eliminates the double-scan when
+   * a CodeLens is clicked.
+   */
+  async populateFromResults(
+    word: string,
+    rawResults: UsageResult[],
+    exclude?: { excludeUri?: string; excludeLine?: number },
+  ): Promise<void> {
+    this.cancelSource?.cancel();
+    this.currentWord = word;
+
+    let raw = rawResults;
+    if (exclude?.excludeUri !== undefined) {
+      raw = raw.filter(r => !(r.uriString === exclude.excludeUri && r.line === exclude.excludeLine));
+    }
+
+    const cfg = vscode.workspace.getConfiguration('kotlinJump');
+    const testSegments = cfg.get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS);
+
+    this.allFiles = buildFileNodes(raw, word, testSegments);
+    this.treeView.message = this.allFiles.length === 0
+      ? `No usages found for "${word}"`
+      : undefined;
+    this._updateDescription();
+    this._onChange.fire();
   }
 
   toggleTests(): void {

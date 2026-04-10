@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { SymbolIndex } from './SymbolIndex';
 import { SymbolKind } from './KotlinParser';
 
-const SNAPSHOT_VERSION = 16; // bumped: isTest, isTestClass, isIgnored, isLifecycle added
+const SNAPSHOT_VERSION = 17; // bumped: im (imports) added for word index reconstruction
 const SNAPSHOT_FILENAME = 'kotlin-jump-index.json';
 
 // Compact per-file format — FQN is reconstructed as pkg+"."+name on restore
@@ -38,6 +38,7 @@ interface SnapshotFile {
   tc?: Record<number, 1>;  // isTestClass
   ig?: Record<number, 1>;  // isIgnored
   lc?: Record<number, 1>;  // isLifecycle
+  im?: string[];           // raw imports — used to reconstruct word index on restore
 }
 
 interface Snapshot {
@@ -105,6 +106,9 @@ export async function save(
       if (e.isIgnored)        { sf.ig = sf.ig ?? {}; sf.ig[idx] = 1; }
       if (e.isLifecycle)      { sf.lc = sf.lc ?? {}; sf.lc[idx] = 1; }
     });
+
+    const imports = index.getFileImports(uriStr);
+    if (imports && imports.length > 0) sf.im = imports;
 
     snap.files[uriStr] = sf;
   }
@@ -234,7 +238,7 @@ export function restore(snapshot: Snapshot, index: SymbolIndex): void {
       };
     });
 
-    index.restoreFile(uriStr, symbols);
+    index.restoreFile(uriStr, symbols, sf.im ?? []);
   }
   index.finalize();
 }

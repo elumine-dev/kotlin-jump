@@ -47,6 +47,21 @@ export class SymbolIndex {
   // trigram (3-char lowercase substring) → set of original symbol names
   private readonly byTrigram = new Map<string, Set<string>>();
 
+  // ── Inverted word index — pre-filters Find Usages candidates ─────────────
+  // word → file URIs that declare/import/extend that identifier
+  private readonly byWord     = new Map<string, Set<string>>();
+  // URI → set of words contributed to byWord (enables O(words) removal)
+  private readonly byWordFile = new Map<string, Set<string>>();
+  // package name → file URIs in that package
+  private readonly byPkg      = new Map<string, Set<string>>();
+  // wildcard prefix (pkg from `import pkg.*`) → file URIs that wildcard-import it
+  private readonly byWildcard = new Map<string, Set<string>>();
+  // raw import strings per file — enables O(1) byPkg/byWildcard cleanup in removeByKey()
+  // and snapshot restoration of the word index
+  private readonly fileImports = new Map<string, string[]>();
+  // Activated by finalize() — prevents use of a partial index
+  private _wordIndexReady = false;
+
   // ── Sorted-names for O(log N) binary-search prefix matching ──────────────
   private sortedLower: string[] = [];
   private sortedOrig:  string[] = [];
@@ -134,6 +149,33 @@ export class SymbolIndex {
 
     this.byFile.set(key, fileEntries);
     this.dirty = true;
+
+    // ── Populate inverted word index ─────────────────────────────────────────
+    const fileWords = new Set<string>();
+    for (const sym of file.symbols) {
+      this._addWordToFile(key, sym.name, fileWords);
+      if (sym.supertypes) {
+        for (const st of sym.supertypes) this._addWordToFile(key, st, fileWords);
+      }
+    }
+    for (const imp of file.imports) {
+      if (imp.endsWith('.*')) {
+        const pkg = imp.slice(0, -2);
+        let s = this.byWildcard.get(pkg);
+        if (!s) { s = new Set(); this.byWildcard.set(pkg, s); }
+        s.add(key);
+      } else {
+        const seg = imp.split('.').pop();
+        if (seg) this._addWordToFile(key, seg, fileWords);
+      }
+    }
+    this.byWordFile.set(key, fileWords);
+    this.fileImports.set(key, file.imports);
+    if (file.packageName) {
+      let s = this.byPkg.get(file.packageName);
+      if (!s) { s = new Set(); this.byPkg.set(file.packageName, s); }
+      s.add(key);
+    }
   }
 
   remove(uri: vscode.Uri): void {
@@ -275,6 +317,41 @@ export class SymbolIndex {
   // instead of rebuilding lazily for every search() call during scan
   finalize(): void {
     this.rebuildSorted();
+    this._wordIndexReady = true;
+  }
+
+  /**
+   * Returns file URIs that could reference `word`, or null when the index is
+   * not ready (triggers full-scan fallback in FindUsagesEngine).
+   *
+   * Covers explicit imports, same-package files, wildcard imports, and
+   * nested-symbol ancestor imports — no false negatives for these patterns.
+   */
+  getFilesContainingWord(word: string, target?: SymbolEntry): Set<string> | null {
+    if (!this._wordIndexReady) return null;
+
+    const candidates = new Set<string>(this.byWord.get(word) ?? []);
+    const pkg = target?.packageName;
+
+    if (pkg) {
+      for (const u of this.byPkg.get(pkg) ?? []) candidates.add(u);
+      for (const u of this.byWildcard.get(pkg) ?? []) candidates.add(u);
+    }
+
+    // Nested symbols (depth > 0): files that import any ancestor class also
+    // qualify because they may access the nested member via OuterClass.Inner.
+    if (target && target.depth > 0 && pkg) {
+      const pkgPrefix = pkg + '.';
+      const relativeFqn = target.fqn.startsWith(pkgPrefix)
+        ? target.fqn.slice(pkgPrefix.length)
+        : target.fqn;
+      const ancestors = relativeFqn.split('.');
+      for (let i = 0; i < ancestors.length - 1; i++) {
+        for (const u of this.byWord.get(ancestors[i]) ?? []) candidates.add(u);
+      }
+    }
+
+    return candidates;
   }
 
   getFileSymbols(uriString: string): SymbolEntry[] {
@@ -317,6 +394,12 @@ export class SymbolIndex {
     this.byFile.clear();
     this.bySuper.clear();
     this.byTrigram.clear();
+    this.byWord.clear();
+    this.byWordFile.clear();
+    this.byPkg.clear();
+    this.byWildcard.clear();
+    this.fileImports.clear();
+    this._wordIndexReady = false;
     this.sortedLower = [];
     this.sortedOrig  = [];
     this.dirty = true;
@@ -343,8 +426,13 @@ export class SymbolIndex {
     yield* this.byFile.entries();
   }
 
+  // Returns raw import strings for a file — used by IndexStore.save() to persist the word index
+  getFileImports(uriStr: string): string[] | undefined {
+    return this.fileImports.get(uriStr);
+  }
+
   // Directly restores pre-built entries from a snapshot — no ParsedFile needed
-  restoreFile(uriString: string, entries: SymbolEntry[]): void {
+  restoreFile(uriString: string, entries: SymbolEntry[], imports: string[] = []): void {
     this.byFile.set(uriString, entries);
     for (const e of entries) {
       let set = this.byName.get(e.name);
@@ -360,6 +448,34 @@ export class SymbolIndex {
       }
     }
     this.dirty = true;
+
+    // ── Populate inverted word index (mirrors add() logic) ───────────────────
+    const fileWords = new Set<string>();
+    for (const e of entries) {
+      this._addWordToFile(uriString, e.name, fileWords);
+      if (e.supertypes) {
+        for (const st of e.supertypes) this._addWordToFile(uriString, st, fileWords);
+      }
+    }
+    for (const imp of imports) {
+      if (imp.endsWith('.*')) {
+        const prefix = imp.slice(0, -2);
+        let s = this.byWildcard.get(prefix);
+        if (!s) { s = new Set(); this.byWildcard.set(prefix, s); }
+        s.add(uriString);
+      } else {
+        const seg = imp.split('.').pop();
+        if (seg) this._addWordToFile(uriString, seg, fileWords);
+      }
+    }
+    this.byWordFile.set(uriString, fileWords);
+    const pkg = entries[0]?.packageName;
+    if (pkg) {
+      let s = this.byPkg.get(pkg);
+      if (!s) { s = new Set(); this.byPkg.set(pkg, s); }
+      s.add(uriString);
+    }
+    this.fileImports.set(uriString, imports);
   }
 
   // ── Internals ─────────────────────────────────────────────────────────────
@@ -375,7 +491,16 @@ export class SymbolIndex {
         if (set.size === 0) { this.byName.delete(entry.name); this.removeFromTrigram(entry.name); }
       }
       // Only delete if byFqn still points to THIS entry — a newer file may have overwritten it
-      if (this.byFqn.get(entry.fqn) === entry) this.byFqn.delete(entry.fqn);
+      if (this.byFqn.get(entry.fqn) === entry) {
+        this.byFqn.delete(entry.fqn);
+        // Restore to a surviving entry with the same FQN (entry already removed from byName above)
+        const survivors = this.byName.get(entry.name);
+        if (survivors) {
+          for (const s of survivors) {
+            if (s.fqn === entry.fqn) { this.byFqn.set(entry.fqn, s); break; }
+          }
+        }
+      }
       if (entry.supertypes) {
         for (const st of entry.supertypes) {
           const sset = this.bySuper.get(st);
@@ -386,8 +511,46 @@ export class SymbolIndex {
         }
       }
     }
+
+    // Remove from inverted word index
+    const fileWords = this.byWordFile.get(key);
+    if (fileWords) {
+      for (const w of fileWords) {
+        const s = this.byWord.get(w);
+        if (s) { s.delete(key); if (s.size === 0) this.byWord.delete(w); }
+      }
+      this.byWordFile.delete(key);
+    }
+    // O(1) — package is the same on all entries
+    const filePkg = entries[0]?.packageName;
+    if (filePkg) {
+      const s = this.byPkg.get(filePkg);
+      if (s) { s.delete(key); if (s.size === 0) this.byPkg.delete(filePkg); }
+    }
+    // O(wildcards in file) — use stored imports rather than scanning all packages
+    const savedImports = this.fileImports.get(key);
+    if (savedImports) {
+      for (const imp of savedImports) {
+        if (imp.endsWith('.*')) {
+          const prefix = imp.slice(0, -2);
+          const s = this.byWildcard.get(prefix);
+          if (s) { s.delete(key); if (s.size === 0) this.byWildcard.delete(prefix); }
+        }
+      }
+      this.fileImports.delete(key);
+    }
+
     this.byFile.delete(key);
     this.dirty = true;
+  }
+
+  // ── Word index helpers ────────────────────────────────────────────────────
+
+  private _addWordToFile(uriStr: string, word: string, fileWords: Set<string>): void {
+    let s = this.byWord.get(word);
+    if (!s) { s = new Set(); this.byWord.set(word, s); }
+    s.add(uriStr);
+    fileWords.add(word);
   }
 
   // ── Trigram helpers ───────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { SymbolKind } from '../indexer/KotlinParser';
-import { scanForUsages } from './FindUsagesEngine';
+import { scanForUsagesWithTarget, isExcluded, UsageResult } from './FindUsagesEngine';
 import { isTestFun } from '../testing/KotlinTestController';
 
 const LENS_KINDS = new Set<SymbolKind>([
@@ -25,7 +25,7 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
   // version increments on every evictFile() call; cached entries store the
   // version at which they were created so stale results self-evict on resolve.
   private _cacheVer = 0;
-  private _cache = new Map<string, { ver: number; p: Promise<number> }>();
+  private _cache = new Map<string, { ver: number; p: Promise<UsageResult[]> }>();
   private _fireTimer?: ReturnType<typeof setTimeout>;
 
   constructor(private readonly index: SymbolIndex) {}
@@ -128,17 +128,21 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
       const cacheKey = entry.fqn; // FQN prevents collisions for same-named symbols in different classes
       if (!this._cache.has(cacheKey)) {
         const ver = this._cacheVer;
-        const p = this.countUsages(entry, token).then(n => {
+        const p = this._scanUsages(entry, token).then(results => {
           // If an eviction happened while this scan was running, self-evict so
           // the next resolveCodeLens call gets a fresh result instead of a stale one.
           if (this._cache.get(cacheKey)?.ver !== ver) this._cache.delete(cacheKey);
-          return n;
+          return results;
         });
         this._cache.set(cacheKey, { ver, p });
       }
-      usageCount = await this._cache.get(cacheKey)!.p;
+      const results = await this._cache.get(cacheKey)!.p;
       // Evict cancelled results — scan was aborted early, count is unreliable.
-      if (token.isCancellationRequested) this._cache.delete(cacheKey);
+      if (token.isCancellationRequested) {
+        this._cache.delete(cacheKey);
+      }
+      // Subtract 1 for the declaration itself
+      usageCount = Math.max(0, results.length - 1);
     } catch {
       usageCount = 0;
     }
@@ -159,7 +163,7 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
     lens.command = {
       title: parts.join(' | '),
       command: 'kotlin-jump.codeLensAction',
-      arguments: [entry.uri, entry.line, entry.character, entry.name],
+      arguments: [entry.uri, entry.line, entry.character, entry.name, entry.fqn],
     };
 
     return lens;
@@ -198,16 +202,18 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
     this._onDidChange.dispose();
   }
 
-  private async countUsages(entry: SymbolEntry, token: vscode.CancellationToken): Promise<number> {
-    const doc = await vscode.workspace.openTextDocument(entry.uri);
-    const results = await scanForUsages(
-      entry.name,
-      doc,
-      this.index,
-      this.index.fileUriStrings(),
-      token,
-    );
-    // Subtract 1 for the declaration itself
-    return Math.max(0, results.length - 1);
+  /**
+   * Returns the cached scan results for a given FQN, if available.
+   * Used by codeLensAction to avoid re-scanning when the user clicks a lens.
+   */
+  getCachedResults(fqn: string): Promise<UsageResult[]> | undefined {
+    return this._cache.get(fqn)?.p;
+  }
+
+  private async _scanUsages(entry: SymbolEntry, token: vscode.CancellationToken): Promise<UsageResult[]> {
+    // Apply the same exclude filter as ReferenceProvider so counts are consistent.
+    // Pass entry as pre-resolved target — no openTextDocument() needed.
+    const uriStrings = this.index.fileUriStrings().filter(u => !isExcluded(u));
+    return scanForUsagesWithTarget(entry.name, entry, this.index, uriStrings, token);
   }
 }

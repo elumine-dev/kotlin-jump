@@ -6,6 +6,7 @@ import { KotlinDefinitionProvider, getPendingDeclNav, clearPendingDeclNav } from
 import { KotlinDocumentSymbolProvider } from './providers/DocumentSymbolProvider';
 import { KotlinHoverProvider } from './providers/HoverProvider';
 import { KotlinReferenceProvider } from './providers/ReferenceProvider';
+import { invalidateContentCache, clearContentCache } from './providers/FindUsagesEngine';
 import { KotlinFileProvider } from './providers/FileProvider';
 import { KotlinImplementationProvider } from './providers/ImplementationProvider';
 import { FindUsagesPanel } from './providers/FindUsagesPanel';
@@ -38,6 +39,7 @@ import { registerChatParticipant } from './ai/KotlinJumpChatParticipant';
 import { StringResourceIndex } from './indexer/StringResourceIndex';
 import { StringResourceFoldingProvider } from './providers/StringResourceFoldingProvider';
 import { StringResourceHoverProvider } from './providers/StringResourceHoverProvider';
+import { runCodeLensAction } from './providers/CodeLensAction';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 
@@ -200,13 +202,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
 
     vscode.commands.registerCommand('kotlin-jump.codeLensAction',
-      async (uri: vscode.Uri, line: number, character: number) => {
-        const doc = await vscode.workspace.openTextDocument(uri);
-        const editor = await vscode.window.showTextDocument(doc, { preview: false });
-        const pos = new vscode.Position(line, character);
-        editor.selection = new vscode.Selection(pos, pos);
-        await vscode.commands.executeCommand('kotlin-jump.findUsages');
-      }
+      async (uri: vscode.Uri, line: number, character: number, name: string, fqn: string) => {
+        await runCodeLensAction(uri, line, character, name, fqn, {
+          getCachedResults: lensFqn => codeLens.getCachedResults(lensFqn),
+          usagesPanel,
+        });
+      },
     ),
 
     vscode.commands.registerCommand('kotlin-jump.findUsages', async (args?: { excludeUri?: string; excludeLine?: number }) => {
@@ -214,7 +215,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (!editor) return;
       const lang = editor.document.languageId;
       if (lang !== 'kotlin' && lang !== 'java') return;
-      const smartNav = vscode.workspace.getConfiguration('kotlinJump').get<boolean>('smartNavigation', true);
+      const smartNav = vscode.workspace.getConfiguration('kotlinJump').get<boolean>('smartNavigation', false);
       if (!smartNav && !args) {
         await vscode.commands.executeCommand('editor.action.goToReferences');
         return;
@@ -374,7 +375,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (!pos || pos.line !== pending.line) return;
       if (e.textEditor.document.uri.toString() !== pending.uri) return;
 
-      const smartNav = vscode.workspace.getConfiguration('kotlinJump').get<boolean>('smartNavigation', true);
+      const smartNav = vscode.workspace.getConfiguration('kotlinJump').get<boolean>('smartNavigation', false);
       if (smartNav) {
         const excl = { excludeUri: pending.uri, excludeLine: pending.line };
         vscode.commands.executeCommand('kotlin-jump.findUsages', excl);
@@ -406,6 +407,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     _semanticTokens?.invalidate(uri.toString());
     codeLens.evictFile(uri.toString());     // surgical: only evict symbols in the changed file
     _signatureHelp?.evictFile(uri.toString());
+    invalidateContentCache(uri.toString()); // file changed — next scan re-reads from disk
     testCtrl.notifyFileIndexed(uri);    // index is fresh — safe to refresh test tree now
   }, log);
   context.subscriptions.push(watcher, { dispose: () => scanner.destroy() });
@@ -688,6 +690,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await _scanChain;
       scanner.cancel();
       index.clear();
+      clearContentCache(); // workspace re-indexed — cached content is stale
       await scanner.scanAll();
       const freshUris = await vscode.workspace.findFiles(
         '**/*.{kt,kts,java}', `{${excludeList.join(',')}}`, maxFiles,

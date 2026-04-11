@@ -396,6 +396,11 @@ Rules:
 
 Return structured JSON with:
 - summary: one short sentence
+- tagline: one punchy phrase (max 8 words) capturing the release's key theme — no verbs, no fluff
+- highlights: 2-3 top changes as cards, each with:
+  - title: short label (max 5 words, noun phrase)
+  - description: one sentence explaining the user benefit
+  - kind: "improvement", "fix", or "note"
 - sections: array of objects with:
   - heading: short title case heading
   - bullets: 1-5 bullets
@@ -492,6 +497,29 @@ fs.writeFileSync(path, next.endsWith('\n') ? next : `${next}\n`);
 NODE
 }
 
+render_whats_new() {
+  node - "$VERSION" "$STRUCTURED_FILE" <<'NODE'
+const fs = require('fs');
+const [version, jsonPath] = process.argv.slice(2);
+const data = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+
+const whatsNew = {
+  version,
+  title: "What's New in Kotlin Jump",
+  tagline: data.tagline || data.summary,
+  summary: data.summary,
+  highlights: (data.highlights || []).slice(0, 3),
+  sections: data.sections || [],
+  links: {
+    changelog: 'https://github.com/elumine-dev/kotlin-jump/blob/main/CHANGELOG.md',
+    issues: 'https://github.com/elumine-dev/kotlin-jump/issues',
+  },
+};
+
+fs.writeFileSync('media/whats-new.json', `${JSON.stringify(whatsNew, null, 2)}\n`);
+NODE
+}
+
 draft_notes() {
   need_cmd claude
 
@@ -502,7 +530,7 @@ draft_notes() {
     --model "$MODEL" \
     --max-budget-usd "$MAX_BUDGET_USD" \
     --output-format json \
-    --json-schema '{"type":"object","properties":{"summary":{"type":"string"},"sections":{"type":"array","items":{"type":"object","properties":{"heading":{"type":"string"},"bullets":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":5}},"required":["heading","bullets"],"additionalProperties":false},"minItems":1,"maxItems":4}},"required":["summary","sections"],"additionalProperties":false}' \
+    --json-schema '{"type":"object","properties":{"summary":{"type":"string"},"tagline":{"type":"string"},"highlights":{"type":"array","items":{"type":"object","properties":{"title":{"type":"string"},"description":{"type":"string"},"kind":{"type":"string","enum":["improvement","fix","note"]}},"required":["title","kind"],"additionalProperties":false},"minItems":1,"maxItems":3},"sections":{"type":"array","items":{"type":"object","properties":{"heading":{"type":"string"},"bullets":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":5}},"required":["heading","bullets"],"additionalProperties":false},"minItems":1,"maxItems":4}},"required":["summary","tagline","highlights","sections"],"additionalProperties":false}' \
     < "$PROMPT_FILE" > "$RAW_AI_FILE"
 
   extract_structured_output
@@ -514,7 +542,8 @@ draft_notes() {
   fi
 
   update_changelog
-  echo "Updated CHANGELOG.md for $VERSION using Claude ($MODEL)."
+  render_whats_new
+  echo "Updated CHANGELOG.md and media/whats-new.json for $VERSION using Claude ($MODEL)."
   if [[ "$BASE_REF" == "HEAD" ]]; then
     echo "No prior semver tag was found, so the draft used worktree changes only."
     echo "Use ./.publish --base <git-ref> if you want release notes over a wider range."

@@ -199,16 +199,17 @@ export async function scanForUsagesWithTarget(
           const trimmed = lines[i].trimStart();
           if (inBlockComment) {
             if (lines[i].includes('*/')) inBlockComment = false;
-            continue;
+            else continue; // still inside block comment — skip entire line
+            // Block comment ended mid-line: fall through to scan the code after */
           }
           if (trimmed.startsWith('/*')) {
-            if (!lines[i].includes('*/')) inBlockComment = true;
-            continue;
+            if (!lines[i].includes('*/')) { inBlockComment = true; continue; }
+            // Comment opens and closes on same line — fall through; isInsideCommentOrString handles it
           }
           if (
             trimmed.startsWith('import ') ||
             trimmed.startsWith('//') ||
-            trimmed.startsWith('*')
+            (trimmed.startsWith('*') && !trimmed.startsWith('*/'))
           ) continue;
 
           wordRe.lastIndex = 0;

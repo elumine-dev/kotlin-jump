@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { SymbolKind } from '../indexer/KotlinParser';
-import { scanForUsages, isExcluded } from './FindUsagesEngine';
+import { scanForUsages, isExcluded, resolveSearchTarget } from './FindUsagesEngine';
 import { isInsideCommentOrString } from '../util/textUtils';
 
 const WORD_RE = /[A-Za-z_]\w*/;
@@ -160,6 +160,16 @@ export class KotlinCallHierarchyProvider implements vscode.CallHierarchyProvider
     // Extract outgoing calls from body lines
     const outgoing = new Map<string, { entry: SymbolEntry; ranges: vscode.Range[] }>();
 
+    // Resolve the target for a call name, disambiguating via import context when multiple
+    // declarations share the same simple name across packages.
+    const resolveTarget = (name: string): SymbolEntry | null => {
+      const all = this.index.lookup(name).filter(e => FUN_KINDS.has(e.kind));
+      if (all.length === 0) return null;
+      if (all.length === 1) return all[0];
+      const resolved = resolveSearchTarget(name, doc, this.index);
+      return (resolved && FUN_KINDS.has(resolved.kind)) ? resolved : all[0];
+    };
+
     // Scan declaration line for expression-body or inline-block calls
     if (declLineScanStart !== -1) {
       RE_CALL.lastIndex = declLineScanStart;
@@ -170,9 +180,8 @@ export class KotlinCallHierarchyProvider implements vscode.CallHierarchyProvider
         if (KEYWORDS.has(name)) continue;
         const matchStart = m[1] ? m.index + m[1].length + 1 : m.index;
         if (isInsideCommentOrString(declLineText, matchStart)) continue;
-        const targets = this.index.lookup(name).filter(e => FUN_KINDS.has(e.kind));
-        if (targets.length === 0) continue;
-        const target = targets[0];
+        const target = resolveTarget(name);
+        if (!target) continue;
         const key = `${target.uri.toString()}:${target.line}`;
         if (!outgoing.has(key)) outgoing.set(key, { entry: target, ranges: [] });
         outgoing.get(key)!.ranges.push(
@@ -193,11 +202,9 @@ export class KotlinCallHierarchyProvider implements vscode.CallHierarchyProvider
         const matchStart = m[1] ? m.index + m[1].length + 1 : m.index; // skip "receiver."
         if (isInsideCommentOrString(lineText, matchStart)) continue;
 
-        // Resolve to an indexed function
-        const targets = this.index.lookup(name).filter(e => FUN_KINDS.has(e.kind));
-        if (targets.length === 0) continue;
+        const target = resolveTarget(name);
+        if (!target) continue;
 
-        const target = targets[0];
         const key = `${target.uri.toString()}:${target.line}`;
         if (!outgoing.has(key)) {
           outgoing.set(key, { entry: target, ranges: [] });

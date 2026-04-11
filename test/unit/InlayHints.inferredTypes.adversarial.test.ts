@@ -393,3 +393,69 @@ describe('BUG O — `object Factory` → isDecl=true mais VAL_VAR_RE no match �
     expect(hints!.length).toBe(0);
   });
 });
+
+// ── BUG P — returnTypeCache ne cache pas null sur annulation ─────────────────
+
+describe('BUG P — returnTypeCache : annulation ne doit pas empoisonner le cache', () => {
+  it('hint visible au prochain appel après une annulation mid-openTextDocument', async () => {
+    const declUri = freshUri();
+    const callUri = freshUri();
+    const decl = 'fun fetchData(): String {}';
+    const call = 'val x = fetchData()';
+    const index = new SymbolIndex();
+    addFile(index, declUri, decl);
+
+    const mutableToken = { isCancellationRequested: false };
+
+    // Premier appel : l'annulation arrive PENDANT l'await openTextDocument
+    vi.spyOn(vscodeMock.workspace, 'openTextDocument')
+      .mockImplementationOnce(async () => {
+        mutableToken.isCancellationRequested = true;
+        return mockDocument(declUri, decl) as any;
+      })
+      .mockResolvedValue(mockDocument(declUri, decl) as any);
+
+    const provider = inferredProvider(index);
+    const doc = mockDocument(callUri, call);
+
+    const hints1 = await provider.provideInlayHints(doc, fullRange(call), mutableToken as any);
+    // Annulé → 0 hints
+    expect(hints1.length).toBe(0);
+
+    // Remettre le token à actif
+    mutableToken.isCancellationRequested = false;
+
+    // Deuxième appel (même provider) — le cache ne doit PAS contenir null
+    const hints2 = await provider.provideInlayHints(doc, fullRange(call), mutableToken as any);
+
+    // BUG (avant fix) : null était mis en cache → hints2.length === 0
+    // FIX (après fix)  : cache vide après annulation → nouveau calcul → ': String'
+    expect(hints2.length).toBe(1);
+    expect((hints2[0].label as vscodeMock.InlayHintLabelPart[])[0].value).toBe(': String');
+  });
+
+  it('erreur openTextDocument → null mis en cache, pas de retry storm', async () => {
+    const declUri = freshUri();
+    const callUri = freshUri();
+    const decl = 'fun processData(): Int {}';
+    const call = 'val result = processData()';
+    const index = new SymbolIndex();
+    addFile(index, declUri, decl);
+
+    const openDocSpy = vi.spyOn(vscodeMock.workspace, 'openTextDocument')
+      .mockRejectedValue(new Error('ENOENT: file not found'));
+
+    const provider = inferredProvider(index);
+    const doc = mockDocument(callUri, call);
+    const fakeToken = { isCancellationRequested: false };
+
+    const hints1 = await provider.provideInlayHints(doc, fullRange(call), fakeToken as any);
+    expect(hints1.length).toBe(0);
+
+    const hints2 = await provider.provideInlayHints(doc, fullRange(call), fakeToken as any);
+    expect(hints2.length).toBe(0);
+
+    // openTextDocument appelé exactement 1 fois : le 2e appel utilise le cache (null)
+    expect(openDocSpy).toHaveBeenCalledTimes(1);
+  });
+});

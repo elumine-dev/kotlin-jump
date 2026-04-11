@@ -40,6 +40,7 @@ import { StringResourceIndex } from './indexer/StringResourceIndex';
 import { StringResourceFoldingProvider } from './providers/StringResourceFoldingProvider';
 import { StringResourceHoverProvider } from './providers/StringResourceHoverProvider';
 import { runCodeLensAction } from './providers/CodeLensAction';
+import { WhatsNewPanel } from './providers/WhatsNewPanel';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 
@@ -57,6 +58,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const log   = new Logger('Kotlin Jump');
   const version = context.extension.packageJSON.version as string ?? '?';
   log.info(`Extension activated — v${version}`);
+
+  // ── What's New notification ──────────────────────────────────────────────
+  const lastSeen = context.globalState.get<string>('lastSeenVersion');
+  if (lastSeen !== version) {
+    void context.globalState.update('lastSeenVersion', version);
+    void vscode.window.showInformationMessage(
+      `Kotlin Jump updated to v${version}`,
+      "See What's New",
+    ).then(choice => {
+      if (choice === "See What's New") {
+        void WhatsNewPanel.show(context);
+      }
+    });
+  }
+
   const index = new SymbolIndex();
   _index = index;
 
@@ -209,6 +225,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         });
       },
     ),
+
+    vscode.commands.registerCommand('kotlin-jump.whatsNew', () => {
+      void WhatsNewPanel.show(context);
+    }),
 
     vscode.commands.registerCommand('kotlin-jump.findUsages', async (args?: { excludeUri?: string; excludeLine?: number }) => {
       const editor = vscode.window.activeTextEditor;

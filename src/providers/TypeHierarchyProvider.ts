@@ -48,6 +48,28 @@ function fileName(uri: { toString(): string }): string {
   return path.split('/').pop() ?? path;
 }
 
+/**
+ * Returns the implementing classes for `entry`, filtered to reduce false positives
+ * when multiple classes share the same simple name across packages.
+ *
+ * The symbol index stores supertypes as simple names (not FQNs), so name collisions
+ * produce false positives: implementors of `com.b.Handler` appear as subtypes of
+ * `com.a.Handler`. When a collision is detected, we keep only same-package subtypes
+ * (safe) plus cross-package subtypes whose own package has no same-name class (they
+ * must be importing from outside). Cross-package explicit extensions in colliding
+ * namespaces remain a known limitation — full fix requires FQN supertype storage.
+ */
+function disambiguateSubtypes(impls: SymbolEntry[], parent: SymbolEntry, index: SymbolIndex): SymbolEntry[] {
+  const allParents = index.lookup(parent.name).filter(e => CLASS_LIKE.has(e.kind));
+  if (allParents.length <= 1) return impls; // no collision — all results are unambiguous
+  return impls.filter(impl => {
+    if (impl.packageName === parent.packageName) return true; // same package — unambiguous
+    // Cross-package: include only when the impl's package has no class with this name,
+    // meaning it must extend from outside (possibly this specific parent).
+    return !allParents.some(p => p.packageName === impl.packageName);
+  });
+}
+
 function buildDetail(entry: SymbolEntry, index: SymbolIndex, parentEntry?: SymbolEntry): string {
   const kindLabel = KIND_LABEL[entry.kind] ?? entry.kind;
   const parts: string[] = [kindLabel];
@@ -58,8 +80,9 @@ function buildDetail(entry: SymbolEntry, index: SymbolIndex, parentEntry?: Symbo
   // Package
   if (entry.packageName) parts.push(entry.packageName);
 
-  // Subtype count
-  const subtypeCount = index.lookupImplementations(entry.name).length;
+  // Subtype count — filtered to reduce false positives from name collisions
+  const allImpls = index.lookupImplementations(entry.name);
+  const subtypeCount = disambiguateSubtypes(allImpls, entry, index).length;
 
   // Sealed class exhaustive indicator
   if (entry.kind === 'sealedClass' && subtypeCount > 0) {
@@ -149,11 +172,18 @@ export class KotlinTypeHierarchyProvider implements vscode.TypeHierarchyProvider
 
     const results: vscode.TypeHierarchyItem[] = [];
     for (const st of entry.supertypes) {
-      for (const match of this.index.lookup(st)) {
-        if (CLASS_LIKE.has(match.kind)) {
-          results.push(entryToItem(match, this.index));
-        }
-      }
+      const candidates = this.index.lookup(st).filter(m => CLASS_LIKE.has(m.kind));
+      // When multiple classes share this supertype name, prefer same-package to reduce
+      // false positives. The parser stores supertypes as simple names, not FQNs, so a
+      // name collision across packages otherwise shows both as parents. Same-package is
+      // the safest heuristic; cross-package explicit extensions in colliding namespaces
+      // remain a known limitation — full fix requires FQN supertype storage.
+      const preferred = candidates.length > 1 && entry.packageName
+        ? candidates.filter(m => m.packageName === entry.packageName)
+        : [];
+      (preferred.length > 0 ? preferred : candidates).forEach(m =>
+        results.push(entryToItem(m, this.index))
+      );
     }
     return results;
   }
@@ -167,7 +197,10 @@ export class KotlinTypeHierarchyProvider implements vscode.TypeHierarchyProvider
     const fileSymbols = this.index.getFileSymbols(uriStr);
     const parentEntry = fileSymbols.find(e => e.name === item.name && e.line === line);
 
-    const subs = sortSubtypes(this.index.lookupImplementations(item.name));
+    const allSubs = this.index.lookupImplementations(item.name);
+    const subs = parentEntry
+      ? sortSubtypes(disambiguateSubtypes(allSubs, parentEntry, this.index))
+      : sortSubtypes(allSubs);
     return subs.map(e => entryToItem(e, this.index, parentEntry));
   }
 }

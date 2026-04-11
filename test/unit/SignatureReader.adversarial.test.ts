@@ -214,3 +214,76 @@ describe('robustesse — pas de crash', () => {
     expect(() => parseParams(`fun foo(${params})`)).not.toThrow();
   });
 });
+
+// ── BUG SR-1 : noms de paramètres entre backticks ─────────────────────────────
+// Le regex /^[A-Za-z_]\w*$/ rejette les noms backtick-quoted comme `class` ou `type`.
+// Ces noms sont valides Kotlin pour utiliser des mots réservés comme noms de paramètres.
+
+describe('BUG SR-1 — backtick parameter names', () => {
+  it('`class`: String — mot réservé Kotlin comme nom de paramètre', () => {
+    // BUG SR-1 — /^[A-Za-z_]\w*$/ rejette `class` → null → param perdu
+    expect(parseParams('fun foo(`class`: String)')).toEqual([
+      { name: '`class`', type: 'String' },
+    ]);
+  });
+
+  it('`type`: String — autre mot réservé', () => {
+    expect(parseParams('fun foo(`type`: String)')).toEqual([
+      { name: '`type`', type: 'String' },
+    ]);
+  });
+
+  it('backtick + normal : `class`: String, count: Int', () => {
+    // Les deux paramètres doivent être retournés
+    expect(parseParams('fun foo(`class`: String, count: Int)')).toEqual([
+      { name: '`class`', type: 'String' },
+      { name: 'count', type: 'Int' },
+    ]);
+  });
+
+  it('normal + backtick : x: Int, `object`: Any', () => {
+    expect(parseParams('fun foo(x: Int, `object`: Any)')).toEqual([
+      { name: 'x', type: 'Int' },
+      { name: '`object`', type: 'Any' },
+    ]);
+  });
+});
+
+// ── BUG SR-2 : opérateur `>` dans les valeurs par défaut ─────────────────────
+// `>` dans une valeur par défaut est traité comme crochet angle fermant, décrémentant
+// depth de 0 à -1. La virgule séparatrice suivante est ignorée (depth !== 0),
+// absorbant les paramètres suivants dans le token du paramètre courant.
+
+describe('BUG SR-2 — opérateur `>` dans les valeurs par défaut', () => {
+  it('n: Int = size > 0, m: String — param après default `>` perdu', () => {
+    // BUG SR-2 — `>` à depth=0 → depth=-1 → virgule ignorée → m: String absorbé dans n
+    expect(parseParams('fun foo(n: Int = size > 0, m: String)')).toEqual([
+      { name: 'n', type: 'Int' },
+      { name: 'm', type: 'String' },
+    ]);
+  });
+
+  it('x: Int, valid: Boolean = a > b, label: String — label perdu', () => {
+    // BUG SR-2 — x est OK (virgule avant `>`), label est perdu
+    expect(parseParams('fun foo(x: Int, valid: Boolean = a > b, label: String)')).toEqual([
+      { name: 'x', type: 'Int' },
+      { name: 'valid', type: 'Boolean' },
+      { name: 'label', type: 'String' },
+    ]);
+  });
+
+  it('threshold: Int = max > min, msg: String = "ok" — deux defaults avec `>`', () => {
+    expect(parseParams('fun foo(threshold: Int = max > min, msg: String = "ok")')).toEqual([
+      { name: 'threshold', type: 'Int' },
+      { name: 'msg', type: 'String' },
+    ]);
+  });
+
+  it('Map<String, Int> non affecté — non-régression angles génériques', () => {
+    // Les `>` légitimes de fermeture d'angle bracket doivent rester fonctionnels
+    expect(parseParams('fun foo(m: Map<String, Int>, n: Int)')).toEqual([
+      { name: 'm', type: 'Map<String, Int>' },
+      { name: 'n', type: 'Int' },
+    ]);
+  });
+});

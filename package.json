@@ -2,7 +2,7 @@
   "name": "kotlin-jump",
   "displayName": "Kotlin Jump",
   "description": "Fast Kotlin & Java navigation — Go to Definition, Find Usages, Go to Implementation. No language server needed.",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "publisher": "elumine",
   "license": "MIT",
   "icon": "media/logo.png",
@@ -103,6 +103,11 @@
       }
     ],
     "commands": [
+      {
+        "command": "kotlin-jump.whatsNew",
+        "title": "See What's New",
+        "category": "Kotlin Jump"
+      },
       {
         "command": "kotlin-jump.reindex",
         "title": "Kotlin Jump: Re-index workspace",

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
-import { scanForUsages, scanImports, UsageResult, isExcluded } from './FindUsagesEngine';
+import { scanForUsages, scanImports, UsageResult, isExcluded, resolveSearchTarget } from './FindUsagesEngine';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 
@@ -120,8 +120,19 @@ export class KotlinRenameProvider implements vscode.RenameProvider {
       edit.set(vscode.Uri.parse(uriStr), tuples);
     }
 
-    // Optional file rename — only for class-like top-level declarations
-    const fileEntry = decls.find(d => d.depth === 0 && FILE_RENAME_KINDS.has(d.kind));
+    // Optional file rename — only for class-like top-level declarations.
+    // Use resolveSearchTarget to pick the specific declaration referenced by the
+    // document context, preventing the wrong file from being renamed when multiple
+    // classes share the same simple name across packages.
+    const resolved = resolveSearchTarget(word, document, this.index);
+    const fileEntry = (() => {
+      if (resolved && resolved.depth === 0 && FILE_RENAME_KINDS.has(resolved.kind)) {
+        return resolved; // unambiguous target from import/package resolution
+      }
+      // Fallback: only when there is exactly one class-like declaration globally
+      const candidates = decls.filter(d => d.depth === 0 && FILE_RENAME_KINDS.has(d.kind));
+      return candidates.length === 1 ? candidates[0] : null;
+    })();
     if (fileEntry) {
       const newUri = computeFileRename(fileEntry, newName, this.index);
       if (newUri) {

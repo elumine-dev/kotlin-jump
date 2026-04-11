@@ -223,17 +223,21 @@ export class KotlinInlayHintsProvider implements vscode.InlayHintsProvider {
                 // Get return type from cache (null = cached miss, undefined = not cached)
                 if (!this.returnTypeCache.has(entry.fqn)) {
                   let rt: string | null = null;
+                  let shouldCache = false;
                   try {
                     const declDoc = await vscode.workspace.openTextDocument(entry.uri);
                     if (!token.isCancellationRequested) {
                       const sig = readSignature(declDoc, entry);
                       rt = sig ? extractReturnType(sig) : null;
                       this.log.debug(`[InlayHints] pass2 — ${entry.fqn} sig="${sig}" extractReturnType="${rt}"`);
+                      shouldCache = true;
                     }
+                    // Cancelled: leave shouldCache=false so the next non-cancelled call retries
                   } catch (err) {
                     this.log.warn(`[InlayHints] pass2 — openTextDocument failed for ${entry.fqn}: ${err}`);
+                    shouldCache = true; // cache null on error to avoid retry storms
                   }
-                  this.returnTypeCache.set(entry.fqn, rt);
+                  if (shouldCache) this.returnTypeCache.set(entry.fqn, rt);
                 }
 
                 const returnType = this.returnTypeCache.get(entry.fqn);

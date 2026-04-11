@@ -116,10 +116,22 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
 
     const { entry } = (lens as KotlinCodeLens).data;
 
-    // Implementation count — O(1) from bySuper map
+    // Implementation count — O(1) from bySuper map, with same-name collision guard.
+    // Same logic as TypeHierarchyProvider.disambiguateSubtypes: when multiple classes
+    // share a simple name, keep only same-package implementors and cross-package ones
+    // whose package has no class of the same name.
     let implCount = 0;
     if (CLASS_LIKE.has(entry.kind)) {
-      implCount = this.index.lookupImplementations(entry.name).length;
+      const allImpls   = this.index.lookupImplementations(entry.name);
+      const allParents = this.index.lookup(entry.name).filter(e => CLASS_LIKE.has(e.kind));
+      if (allParents.length <= 1) {
+        implCount = allImpls.length;
+      } else {
+        implCount = allImpls.filter(impl =>
+          impl.packageName === entry.packageName ||
+          !allParents.some(p => p.packageName === impl.packageName)
+        ).length;
+      }
     }
 
     // Usage count — async file scan (cached per FQN)

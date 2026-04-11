@@ -273,7 +273,7 @@ function countJavaBraces(text: string, start: number, end: number, depth: number
     if (c === '"' || c === '\'') { inStr = c; continue; }
     if (c === '/' && i + 1 < end && text[i + 1] === '/') break;
     if      (c === '{') depth++;
-    else if (c === '}') depth--;
+    else if (c === '}') { if (depth > 0) depth--; } // clamp — unmatched } must not produce negative depth
   }
   return depth;
 }

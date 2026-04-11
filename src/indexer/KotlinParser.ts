@@ -449,9 +449,9 @@ function countDepth(
     // Stop at trailing line comment
     if (c === '/' && i + 1 < end && text[i + 1] === '/') break;
     if      (c === '{') braces++;
-    else if (c === '}') braces--;
+    else if (c === '}') { if (braces > 0) braces--; } // clamp — unmatched } in malformed input must not produce negative depth
     else if (c === '(') parens++;
-    else if (c === ')') parens--;
+    else if (c === ')') { if (parens > 0) parens--; } // same for unmatched )
   }
   return [braces, parens];
 }

@@ -279,7 +279,7 @@ function splitAtDepthZero(s: string): string[] {
     // Skip `->` operator so `>` doesn't decrement depth
     if (ch === '-' && s[i + 1] === '>') { i += 2; continue; }
     if (ch === '(' || ch === '<' || ch === '{') depth++;
-    else if (ch === ')' || ch === '>' || ch === '}') depth--;
+    else if (ch === ')' || ch === '>' || ch === '}') { if (depth > 0) depth--; }
     else if (ch === ',' && depth === 0) {
       parts.push(s.slice(start, i));
       start = i + 1;
@@ -315,7 +315,8 @@ function parseOneParam(token: string): KtParam | null {
   if (colonIdx === -1) return null;
 
   const name = stripped.slice(0, colonIdx).trim();
-  if (!name || !/^[A-Za-z_]\w*$/.test(name)) return null;
+  const isValidName = /^[A-Za-z_]\w*$/.test(name) || /^`[^`]+`$/.test(name);
+  if (!name || !isValidName) return null;
 
   // Everything after `:` is the type, but cut at ` =` at depth 0 (default value)
   const afterColon = stripped.slice(colonIdx + 1).trim();

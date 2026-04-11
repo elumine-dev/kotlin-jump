@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.4.1
+
+1.4.1 adds a "What's New" panel that appears automatically after each update, improves type hierarchy with sorted subtypes and override counts, fixes outgoing call detection in expression-body functions, and tightens symbol disambiguation across all navigation providers.
+
+### Improvements
+- Added a "What's New" panel: appears once per version update and shows the release summary with highlights and links; reopen anytime with "Kotlin Jump: See What's New" from the command palette.
+- Type hierarchy subtypes are now sorted by kind — interfaces first, then sealed, concrete, data classes, objects, and enums — and each subtype item shows how many parent methods it overrides (e.g. "overrides 2/5"). Sealed class lists show an exhaustive count ("3/3 exhaustive").
+- Implementation counts in CodeLens and type hierarchy now apply a same-name collision guard, preventing inflated counts when identically named classes exist in different packages.
+- Import aliases (e.g. `import com.example.Foo as Bar`) are now recognized in symbol resolution — navigation and rename work correctly when the alias name is used in code.
+- Rename now uses import context to identify the precise class declaration when multiple classes share the same simple name, preventing the wrong .kt file from being renamed.
+
+### Fixes
+- Call hierarchy outgoing calls now include functions called inside expression-body (`fun f() = expr`) and inline-block (`fun f() { call() }`) declarations, which were previously not scanned.
+
+### Notes
+- Ten new adversarial and fuzz test suites were added covering call hierarchy, code lens, import resolution, the Java and Kotlin parsers, rename, symbol index, type hierarchy, and organize imports — increasing confidence in correctness across edge conditions.
+
 ## 1.4.0
 
 Clicking a usage-count CodeLens now opens the Find Usages panel immediately by reusing the already-computed scan, and repeated searches are faster thanks to in-memory file content caching.

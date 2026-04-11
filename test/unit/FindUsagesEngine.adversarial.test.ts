@@ -1,20 +1,22 @@
-/**
- * Tests adversaires pour FindUsagesEngine + textUtils.isInsideCommentOrString
- *
- * Bugs cibles :
- *   BUG Y  - fileCouldReference : limite 512 chars rate les packages avec long header
- *   BUG Z  - scanForUsages : lignes de block-comment sans etoile donnent des faux positifs
- *   BUG Z2 - isInsideCommentOrString : ne detecte PAS les block comments
- *   BUG AA - isInsideCommentOrString : raw strings (triple-quote) non gerees
- *
- * Lancer : npm test -- test/unit/FindUsagesEngine.adversarial.test.ts
- */
+// Tests adversaires pour FindUsagesEngine + textUtils.isInsideCommentOrString
+//
+// Bugs cibles :
+//   BUG Y    - fileCouldReference : limite 512 chars rate les packages avec long header
+//   BUG Z    - scanForUsages : lignes de block-comment sans etoile → faux positifs
+//   BUG Z2   - isInsideCommentOrString : ne detecte PAS les block comments
+//   BUG AA   - isInsideCommentOrString : raw strings (triple-quote) non gerees
+//   BUG BC   - scanForUsages : usage sur la ligne qui ferme un bloc de commentaire
+//   BUG FUE-1 - scanForUsages : ligne commencant par "/*" avec code apres — continue inconditionnel
+//   BUG FUE-2 - scanForUsages : ligne commencant par "*/" — code apres manqué (startsWith('*'))
+//
+// Lancer : npm test -- test/unit/FindUsagesEngine.adversarial.test.ts
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { isInsideCommentOrString } from '../../src/util/textUtils';
-import { fileCouldReference, escapeRegex } from '../../src/providers/FindUsagesEngine';
+import { fileCouldReference, escapeRegex, scanForUsagesWithTarget, clearContentCache } from '../../src/providers/FindUsagesEngine';
 import { SymbolIndex } from '../../src/indexer/SymbolIndex';
 import { parse } from '../../src/indexer/KotlinParser';
+import { workspace } from './__mocks__/vscode';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -234,5 +236,239 @@ describe('isInsideCommentOrString — cas limites', () => {
   it('position = longueur totale : cas limite', () => {
     const line = 'fun foo()';
     expect(isInsideCommentOrString(line, line.length)).toBe(false);
+  });
+});
+
+// ── BUG BC — fermeture de bloc de commentaire en milieu de ligne ─────────────
+// Quand inBlockComment=true et la ligne a */ suivi de code, le `continue`
+// skippait toute la ligne → le code après */ n'était jamais scanné.
+
+describe('BUG BC — usage sur la ligne qui ferme un bloc de commentaire', () => {
+  const DECL_URI   = 'file:///BCDecl.kt';
+  const CALLER_URI = 'file:///BCCaller.kt';
+
+  const DECL_CODE = `package com.example
+fun myFunction(): String = "hello"`;
+
+  // La ligne de fermeture ne commence PAS par * (sinon startsWith('*') l'attraperait)
+  const CALLER_CODE = `package com.example
+/*
+Some comment without leading asterisk
+CLOSING */ val x = myFunction()`;
+
+  let index: SymbolIndex;
+  const token = { isCancellationRequested: false };
+  let origReadFile: typeof workspace.fs.readFile;
+
+  beforeEach(() => {
+    origReadFile = workspace.fs.readFile;
+    index = new SymbolIndex();
+    index.add(parse(DECL_URI, DECL_CODE));
+    index.add(parse(CALLER_URI, CALLER_CODE));
+    const codeMap: Record<string, string> = {
+      [DECL_URI]:   DECL_CODE,
+      [CALLER_URI]: CALLER_CODE,
+    };
+    workspace.fs.readFile = async (uri: any) => {
+      const s = typeof uri.toString === 'function' ? uri.toString() : String(uri);
+      return Buffer.from(codeMap[s] ?? '') as any;
+    };
+  });
+
+  afterEach(() => {
+    workspace.fs.readFile = origReadFile;
+    clearContentCache();
+  });
+
+  it('myFunction() sur la ligne CLOSING */ est trouvé comme usage', async () => {
+    const target = index.lookup('myFunction')[0];
+    expect(target).toBeDefined();
+
+    const results = await scanForUsagesWithTarget(
+      'myFunction',
+      target,
+      index,
+      [DECL_URI, CALLER_URI],
+      token as any,
+    );
+
+    const callerHits = results.filter(r => r.uriString === CALLER_URI);
+
+    // BUG (avant fix) : callerHits.length === 0 — continue skippait la ligne CLOSING */
+    // FIX (après fix)  : callerHits.length === 1 — fall-through après inBlockComment=false
+    expect(callerHits.length).toBe(1);
+    expect(callerHits[0].line).toBe(3); // ligne 0-basée : "CLOSING */ val x = myFunction()"
+  });
+});
+
+// ── BUG FUE-1 — /* inline comment */ code : continue inconditionnel ───────────
+//
+// Quand trimmed.startsWith('/*') ET la ligne contient '*/', le code fait toujours
+// `continue` (ligne 207 de FindUsagesEngine.ts), sautant le code après '*/'
+// sur cette même ligne.
+//
+// AVANT fix : `/* note */ fun foo()` → la déclaration de foo n'est jamais scannée.
+// APRÈS fix  : on retire le `continue` inconditionnel quand '*/` est présent.
+
+describe('BUG FUE-1 — usage sur ligne commençant par /* inline */ code', () => {
+  const DECL_URI   = 'file:///FUE1Decl.kt';
+  const CALLER_URI = 'file:///FUE1Caller.kt';
+
+  const DECL_CODE = 'package com.pkg\nfun target(): Int = 1';
+  // La ligne de déclaration commence par /* ... */ — le scanner la sautait
+  const TARGET_LINE = '/* @see also */ fun target(): Int = 1';
+  const FILE_CODE = `package com.pkg\n${TARGET_LINE}\nfun caller() = target()`;
+
+  let index: SymbolIndex;
+  const token = { isCancellationRequested: false };
+  let origReadFile: typeof workspace.fs.readFile;
+
+  beforeEach(() => {
+    origReadFile = workspace.fs.readFile;
+    index = new SymbolIndex();
+    index.add(parse(DECL_URI, DECL_CODE));
+    index.add(parse(CALLER_URI, FILE_CODE));
+    workspace.fs.readFile = async (uri: any) => {
+      const s = typeof uri.toString === 'function' ? uri.toString() : String(uri);
+      const map: Record<string, string> = { [DECL_URI]: DECL_CODE, [CALLER_URI]: FILE_CODE };
+      return Buffer.from(map[s] ?? '') as any;
+    };
+  });
+
+  afterEach(() => {
+    workspace.fs.readFile = origReadFile;
+    clearContentCache();
+  });
+
+  it('target() dans `/* note */ fun target()` — déclaration trouvée', async () => {
+    const tgt = index.lookup('target')[0];
+    expect(tgt).toBeDefined();
+
+    const results = await scanForUsagesWithTarget(
+      'target', tgt, index, [DECL_URI, CALLER_URI], token as any,
+    );
+    const callerHits = results.filter(r => r.uriString === CALLER_URI);
+
+    // BUG FUE-1 (avant fix) : ligne 1 sautée car trimmed.startsWith('/*') → continue
+    // → seule la ligne 2 (appel) est trouvée, la ligne 1 (déclaration) est manquée
+    // Après fix : les 2 lignes sont trouvées
+    expect(callerHits.length).toBe(2);
+  });
+
+  it('non-régression — /* comment */ sur une ligne seule, pas de faux positif', async () => {
+    const code = 'package com.pkg\n/* target is not here */\nfun caller() = 1';
+    const uri = 'file:///FUE1Noreg.kt';
+    const idx = new SymbolIndex();
+    idx.add(parse(DECL_URI, DECL_CODE));
+    idx.add(parse(uri, code));
+    const orig = workspace.fs.readFile;
+    workspace.fs.readFile = async (u: any) => {
+      const s = typeof u.toString === 'function' ? u.toString() : String(u);
+      const m: Record<string, string> = { [DECL_URI]: DECL_CODE, [uri]: code };
+      return Buffer.from(m[s] ?? '') as any;
+    };
+    try {
+      const tgt = idx.lookup('target')[0];
+      const results = await scanForUsagesWithTarget('target', tgt, idx, [DECL_URI, uri], token as any);
+      // "target" dans le commentaire doit être filtré par isInsideCommentOrString
+      const uriHits = results.filter(r => r.uriString === uri);
+      expect(uriHits.length).toBe(0);
+    } finally {
+      workspace.fs.readFile = orig;
+      clearContentCache();
+    }
+  });
+});
+
+// ── BUG FUE-2 — */ code (trimmed.startsWith('*')) : code après */ manqué ──────
+//
+// BUG BC couvre le cas où la ligne de fermeture NE commence PAS par *.
+// Ce bug couvre l'autre cas : la ligne de fermeture commence par `*/`,
+// e.g. `  */ fun foo()` — trimmed = `*/ fun foo()` → startsWith('*') → continue.
+//
+// Pattern typique : KDoc/JavaDoc avec `*/` suivi du symbole sur la même ligne.
+//
+// AVANT fix : `startsWith('*')` attrape aussi `*/` → code après */ manqué.
+// APRÈS fix  : guard `!startsWith('*/')` exclut les lignes de fermeture.
+
+describe('BUG FUE-2 — usage sur ligne débutant par */ après block comment', () => {
+  const DECL_URI   = 'file:///FUE2Decl.kt';
+  const CALLER_URI = 'file:///FUE2Caller.kt';
+
+  const DECL_CODE = 'package com.pkg\nfun target(): Int = 1';
+  // La ligne de fermeture commence par ' */ ' — trimmed = '*/ fun ...'
+  const CALLER_CODE = [
+    'package com.pkg',
+    '/**',
+    ' * doc comment',
+    ' */ fun caller() = target()',
+  ].join('\n');
+
+  let index: SymbolIndex;
+  const token = { isCancellationRequested: false };
+  let origReadFile: typeof workspace.fs.readFile;
+
+  beforeEach(() => {
+    origReadFile = workspace.fs.readFile;
+    index = new SymbolIndex();
+    index.add(parse(DECL_URI, DECL_CODE));
+    index.add(parse(CALLER_URI, CALLER_CODE));
+    workspace.fs.readFile = async (uri: any) => {
+      const s = typeof uri.toString === 'function' ? uri.toString() : String(uri);
+      const map: Record<string, string> = { [DECL_URI]: DECL_CODE, [CALLER_URI]: CALLER_CODE };
+      return Buffer.from(map[s] ?? '') as any;
+    };
+  });
+
+  afterEach(() => {
+    workspace.fs.readFile = origReadFile;
+    clearContentCache();
+  });
+
+  it('target() sur ligne ` */ fun caller() = target()` — usage trouvé', async () => {
+    const tgt = index.lookup('target')[0];
+    expect(tgt).toBeDefined();
+
+    const results = await scanForUsagesWithTarget(
+      'target', tgt, index, [DECL_URI, CALLER_URI], token as any,
+    );
+    const callerHits = results.filter(r => r.uriString === CALLER_URI);
+
+    // BUG FUE-2 (avant fix) : trimmed = '*/ fun caller() = target()'
+    // startsWith('*') → true → continue → target() sur cette ligne manqué
+    // Après fix : startsWith('*') && !startsWith('*/') → false → ligne scannée
+    expect(callerHits.length).toBe(1);
+    expect(callerHits[0].line).toBe(3);
+  });
+
+  it('non-régression — ligne ` * doc` reste bien filtrée (inBlockComment)', async () => {
+    // Les lignes de continuation /* * doc */ ne doivent pas donner de faux positifs
+    const code = [
+      'package com.pkg',
+      '/**',
+      ' * target is mentioned here',
+      ' */',
+      'fun caller() = 1',
+    ].join('\n');
+    const uri = 'file:///FUE2Noreg.kt';
+    const idx = new SymbolIndex();
+    idx.add(parse(DECL_URI, DECL_CODE));
+    idx.add(parse(uri, code));
+    const orig = workspace.fs.readFile;
+    workspace.fs.readFile = async (u: any) => {
+      const s = typeof u.toString === 'function' ? u.toString() : String(u);
+      const m: Record<string, string> = { [DECL_URI]: DECL_CODE, [uri]: code };
+      return Buffer.from(m[s] ?? '') as any;
+    };
+    try {
+      const tgt = idx.lookup('target')[0];
+      const results = await scanForUsagesWithTarget('target', tgt, idx, [DECL_URI, uri], token as any);
+      const uriHits = results.filter(r => r.uriString === uri);
+      // "target" dans le commentaire KDoc ne doit PAS être reporté
+      expect(uriHits.length).toBe(0);
+    } finally {
+      workspace.fs.readFile = orig;
+      clearContentCache();
+    }
   });
 });

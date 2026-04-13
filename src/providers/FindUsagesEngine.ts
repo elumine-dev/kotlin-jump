@@ -25,6 +25,22 @@ import picomatch from 'picomatch';
 
 const CONCURRENCY = 20;
 
+// Kotlin reserved words that can also be used as method names (e.g. `repository.catch()`).
+// When searching for a word in this set, only accept matches that are dot-qualified
+// (preceded by '.') to avoid matching language keywords like `catch (e: Exception)`.
+const KOTLIN_KEYWORDS = new Set([
+  'abstract', 'actual', 'annotation', 'as', 'break', 'by', 'catch', 'class',
+  'companion', 'const', 'constructor', 'continue', 'crossinline', 'data',
+  'delegate', 'do', 'dynamic', 'else', 'enum', 'expect', 'external', 'false',
+  'field', 'file', 'final', 'finally', 'for', 'fun', 'get', 'if', 'import',
+  'in', 'infix', 'init', 'inline', 'inner', 'interface', 'internal', 'is',
+  'it', 'lateinit', 'noinline', 'null', 'object', 'open', 'operator', 'out',
+  'override', 'package', 'param', 'private', 'property', 'protected', 'public',
+  'receiver', 'reified', 'return', 'sealed', 'set', 'setparam', 'super',
+  'suspend', 'tailrec', 'this', 'throw', 'true', 'try', 'typealias', 'typeof',
+  'val', 'value', 'var', 'vararg', 'when', 'where', 'while',
+]);
+
 // ── File content cache ────────────────────────────────────────────────────────
 // Keyed by URI string. Populated on first read, invalidated on file change.
 // Eliminates repeated disk I/O across consecutive Find-Usages calls.
@@ -216,9 +232,11 @@ export async function scanForUsagesWithTarget(
           let m: RegExpExecArray | null;
           while ((m = wordRe.exec(lines[i])) !== null) {
             if (results.length >= maxReferences) break;
-            if (!isInsideCommentOrString(lines[i], m.index)) {
-              results.push({ uri, uriString: uriStr, line: i, character: m.index, lineText: lines[i] });
-            }
+            if (isInsideCommentOrString(lines[i], m.index)) continue;
+            // Kotlin keyword used as method name (e.g. .catch()): require a dot qualifier
+            // to avoid matching language constructs like `catch (e: Exception)`.
+            if (KOTLIN_KEYWORDS.has(word) && (m.index === 0 || lines[i][m.index - 1] !== '.')) continue;
+            results.push({ uri, uriString: uriStr, line: i, character: m.index, lineText: lines[i] });
           }
         }
         const hitsInFile = results.length - fileHitsBefore;

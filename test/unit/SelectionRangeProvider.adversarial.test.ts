@@ -176,24 +176,24 @@ describe('sealed class hierarchy', () => {
   });
 });
 
-// ── Anonymous object expression (NOT indexed) ─────────────────────────────────
+// ── Anonymous object expression (NOW indexed as $anon$N — Fix B) ─────────────
 
 describe('anonymous object expression', () => {
   it('cursor inside anonymous object body → falls back to enclosing function', () => {
-    // Real pattern from lapresse MainActivityModule.kt
+    // Real pattern from lapresse MainActivityModule.kt.
+    // After Fix B, `object : MediaEngineSelector` is indexed as $anon$1.
     const code = [
       'fun provideEmptyMediaSelector() =', // line 0 — indexed
-      '    object : MediaEngineSelector {', // line 1 — NOT indexed
+      '    object : MediaEngineSelector {', // line 1 — NOW indexed as $anon$1
       '        override fun setUp() {}',   // line 2
       '    }',                             // line 3
     ].join('\n');
 
     const c = chain(code, new Position(2, 8));
-    // The enclosing function (line 0) should be in chain
+    // The enclosing function (line 0) should still be in chain
     expect(c.some(([s]) => s === 0)).toBe(true);
-    // The anonymous object (line 1) is not indexed → range starting at 1 should not appear
-    // (unless the parser somehow captures it, which it doesn't)
-    expect(c.some(([s]) => s === 1)).toBe(false);
+    // Fix B: the anonymous object (line 1) IS now indexed → its range appears in chain
+    expect(c.some(([s]) => s === 1)).toBe(true);
   });
 });
 

@@ -201,11 +201,12 @@ describe('operator and modifier combos', () => {
   });
 });
 
-// ── Anonymous objects (NOT indexed → no fold) ────────────────────────────────
+// ── Anonymous objects (NOW indexed as $anon$N → fold exists — Fix B) ────────
 
 describe('anonymous object expressions', () => {
-  it('`object : Interface { ... }` → no Region fold', () => {
-    // Real pattern from lapresse MainActivityModule.kt provideEmptyMediaSelector()
+  it('`object : Interface { ... }` → Region fold exists (Fix B indexes $anon$N)', () => {
+    // Real pattern from lapresse MainActivityModule.kt provideEmptyMediaSelector().
+    // After Fix B, `object : MediaEngineSelector` is indexed as $anon$1.
     const code = [
       'fun provideEmptyMediaSelector() =',
       '    object : MediaEngineSelector {',
@@ -213,10 +214,9 @@ describe('anonymous object expressions', () => {
       '    }',
     ].join('\n');
     const rs = regions(code);
-    // provideEmptyMediaSelector (line 0) may or may not fold (single expression)
-    // The anonymous object (line 1) is NOT indexed → no fold for it
+    // Fix B: the anonymous object (line 1) IS indexed → a fold region exists for it
     const anonFold = rs.find(r => r.start === 1);
-    expect(anonFold).toBeUndefined();
+    expect(anonFold).toBeDefined();
   });
 });
 

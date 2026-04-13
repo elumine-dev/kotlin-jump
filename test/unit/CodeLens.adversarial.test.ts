@@ -1,8 +1,11 @@
 /**
  * Tests adversariaux pour KotlinCodeLensProvider.
  *
- * Bug couvert :
+ * Bugs couverts :
  *   CL-1 — implementation count : collision de noms entre packages → compteur gonflé
+ *   CL-A — Fix A : méthodes abstract (pas seulement interface) → "N implementations"
+ *   CL-B — Fix B : objets anonymes ($anon$N) ne doivent PAS générer un code lens propre
+ *           et doivent être comptés dans les implementations de l'interface
  *           `lookupImplementations(entry.name)` retournait les implementors de TOUTES
  *           les classes nommées "Handler" (même nom simple, packages distincts).
  *           Résultat : le CodeLens de com.a.Handler affichait "2 implementations"
@@ -128,5 +131,187 @@ describe('CL-1 — implementation count : collision de noms entre packages', () 
     } finally {
       workspace.fs.readFile = orig;
     }
+  });
+});
+
+// ── CL-A : méthodes abstract affichent "N implementations" (Fix A) ────────────
+//
+// AVANT fix : la condition `enclosingKind === 'interface'` excluait les méthodes
+// dans les abstract class → elles affichaient "N usages" au lieu de "N implementations".
+// APRÈS fix : `enclosingKind === 'interface' || entry.isAbstract`
+
+describe('CL-A — méthodes abstract → "N implementations" et non "N usages"', () => {
+  const ABSTRACT_URI  = 'file:///a/Move.kt';
+  const PHYSICAL_URI  = 'file:///a/PhysicalMove.kt';
+  const SPECIAL_URI   = 'file:///a/SpecialMove.kt';
+
+  const ABSTRACT_CODE = `package com.move
+abstract class MoveStrategy {
+    abstract fun execute(power: Int): Int
+    abstract fun describe(): String
+    fun isEffective(damage: Int) = damage > 0
+}`;
+
+  const PHYSICAL_CODE = `package com.move
+class PhysicalMove : MoveStrategy() {
+    override fun execute(power: Int): Int = power * 2
+    override fun describe() = "physical"
+}`;
+
+  const SPECIAL_CODE = `package com.move
+class SpecialMove : MoveStrategy() {
+    override fun execute(power: Int): Int = power * 3
+    override fun describe() = "special"
+}`;
+
+  let index: SymbolIndex;
+  let provider: KotlinCodeLensProvider;
+  let origReadFile: typeof workspace.fs.readFile;
+
+  beforeEach(() => {
+    origReadFile = workspace.fs.readFile;
+    index = new SymbolIndex();
+    addKt(index, ABSTRACT_URI,  ABSTRACT_CODE);
+    addKt(index, PHYSICAL_URI,  PHYSICAL_CODE);
+    addKt(index, SPECIAL_URI,   SPECIAL_CODE);
+    provider = new KotlinCodeLensProvider(index);
+
+    workspace.fs.readFile = async (uri: any) => {
+      const u = uri.toString ? uri.toString() : String(uri);
+      const map: Record<string, string> = {
+        [ABSTRACT_URI]: ABSTRACT_CODE,
+        [PHYSICAL_URI]: PHYSICAL_CODE,
+        [SPECIAL_URI]:  SPECIAL_CODE,
+      };
+      return Buffer.from(map[u] ?? '') as any;
+    };
+  });
+
+  afterEach(() => { workspace.fs.readFile = origReadFile; });
+
+  it('CL-A — abstract fun execute → resolveCodeLens contient "implementations"', async () => {
+    const entry = index.lookup('execute').find(e => e.isAbstract)!;
+    expect(entry).toBeDefined();
+    const lens = { range: new Range(entry.line, 0, entry.line, 0), data: { entry, enclosingKind: 'class' } } as any;
+
+    const resolved = await provider.resolveCodeLens(lens, noCancel());
+    // Fix A : doit afficher "2 implementations", pas "N usages"
+    expect(resolved.command?.title).toContain('implementation');
+    expect(resolved.command?.title).not.toContain('usage');
+  });
+
+  it('CL-A — abstract fun describe → même comportement que execute', async () => {
+    const entry = index.lookup('describe').find(e => e.isAbstract)!;
+    expect(entry).toBeDefined();
+    const lens = { range: new Range(entry.line, 0, entry.line, 0), data: { entry, enclosingKind: 'class' } } as any;
+
+    const resolved = await provider.resolveCodeLens(lens, noCancel());
+    expect(resolved.command?.title).toContain('implementation');
+  });
+
+  it('CL-A — méthode concrète (isEffective) ne reçoit PAS de traitement "implementations"', async () => {
+    const entry = index.lookup('isEffective')[0]!;
+    expect(entry).toBeDefined();
+    expect(entry.isAbstract).toBeFalsy();
+    // isEffective n'est pas abstract → pas de court-circuit "implementations"
+    // Elle passe par le chemin normal (scan usages)
+    const lens = { range: new Range(entry.line, 0, entry.line, 0), data: { entry, enclosingKind: 'class' } } as any;
+    const resolved = await provider.resolveCodeLens(lens, noCancel());
+    // Pas d'impls trouvées pour une méthode concrète → "0 usages" ou similaire
+    expect(resolved.command?.title).toBeDefined();
+    // Doit NE PAS contenir "implementation" (ce n'est pas une méthode abstract)
+    expect(resolved.command?.title).not.toContain('implementation');
+  });
+});
+
+// ── CL-B : objets anonymes ne génèrent pas de lens ($anon$ filtrés) (Fix B) ───
+//
+// AVANT fix : un symbole $anon$N de kind 'object' passait LENS_KINDS et recevait un lens.
+// APRÈS fix : `entry.name.startsWith('$')` est rejeté avant la création du lens.
+
+describe('CL-B — objets anonymes ($anon$N) ne génèrent pas de code lens', () => {
+  const OBSERVER_URI = 'file:///b/Observer.kt';
+  const AUDIT_URI    = 'file:///b/Audit.kt';
+  const TRAINER_URI  = 'file:///b/Trainer.kt';
+
+  const OBSERVER_CODE = `package com.obs
+interface PokemonObserver {
+    fun onCaught(name: String)
+}`;
+
+  const AUDIT_CODE = `package com.obs
+class AuditObserver : PokemonObserver {
+    override fun onCaught(name: String) {}
+}`;
+
+  const TRAINER_CODE = `package com.obs
+class PokemonTrainer(val obs: PokemonObserver) {
+    fun catchWith() {
+        val silent = object : PokemonObserver {
+            override fun onCaught(name: String) {}
+        }
+        silent.onCaught("Pikachu")
+    }
+}`;
+
+  let index: SymbolIndex;
+  let provider: KotlinCodeLensProvider;
+  let origReadFile: typeof workspace.fs.readFile;
+
+  beforeEach(() => {
+    origReadFile = workspace.fs.readFile;
+    index = new SymbolIndex();
+    addKt(index, OBSERVER_URI, OBSERVER_CODE);
+    addKt(index, AUDIT_URI,    AUDIT_CODE);
+    addKt(index, TRAINER_URI,  TRAINER_CODE);
+    provider = new KotlinCodeLensProvider(index);
+
+    workspace.fs.readFile = async (uri: any) => {
+      const u = uri.toString ? uri.toString() : String(uri);
+      const map: Record<string, string> = {
+        [OBSERVER_URI]: OBSERVER_CODE,
+        [AUDIT_URI]:    AUDIT_CODE,
+        [TRAINER_URI]:  TRAINER_CODE,
+      };
+      return Buffer.from(map[u] ?? '') as any;
+    };
+  });
+
+  afterEach(() => { workspace.fs.readFile = origReadFile; });
+
+  it('CL-B — $anon$N est indexé (le parser l\'émet)', () => {
+    // Vérifie d'abord que le parser émet bien un symbole anonyme
+    const trainerSymbols = index.getFileSymbols(TRAINER_URI);
+    expect(trainerSymbols.some(s => s.name.startsWith('$anon$'))).toBe(true);
+  });
+
+  it('CL-B — provideCodeLenses ne génère PAS de lens pour $anon$N', () => {
+    const doc = { uri: { toString: () => TRAINER_URI }, getText: () => TRAINER_CODE } as any;
+    const lenses = provider.provideCodeLenses(doc);
+    // Aucun lens ne doit avoir pour source un symbole $anon$
+    // Les lenses pré-résolus ont une commande ; les non-résolus ont .data
+    // On vérifie qu'aucun lens ne correspond à une ligne contenant 'object :'
+    const trainerLines = TRAINER_CODE.split('\n');
+    const anonLine = trainerLines.findIndex(l => l.includes('object : PokemonObserver'));
+    expect(anonLine).toBeGreaterThan(-1); // sanity check
+    // Aucun lens sur cette ligne
+    expect(lenses.some(l => l.range.start.line === anonLine)).toBe(false);
+  });
+
+  it('CL-B — PokemonObserver.onCaught → "2 implementations" (anon + nommé)', async () => {
+    // L'objet anonyme compte dans lookupImplementations → 2 impls total
+    const impls = index.lookupImplementations('PokemonObserver');
+    expect(impls.length).toBe(2); // AuditObserver + $anon$N
+  });
+
+  it('CL-B — interface method lens → titre contient "2 implementations"', async () => {
+    const entry = index.lookup('onCaught').find(e => !e.isOverride)!;
+    expect(entry).toBeDefined();
+    const lens = {
+      range: new Range(entry.line, 0, entry.line, 0),
+      data: { entry, enclosingKind: 'interface' },
+    } as any;
+    const resolved = await provider.resolveCodeLens(lens, noCancel());
+    expect(resolved.command?.title).toContain('2 implementation');
   });
 });

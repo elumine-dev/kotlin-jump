@@ -550,7 +550,40 @@ draft_notes() {
   fi
 }
 
+check_walkthrough_coverage() {
+  node - <<'NODE'
+const fs = require('fs');
+const pkg = require('./package.json');
+const registered = new Set((pkg.contributes?.commands ?? []).map(c => c.command));
+const walkthroughs = pkg.contributes?.walkthroughs ?? [];
+let failed = false;
+for (const wt of walkthroughs) {
+  for (const step of (wt.steps ?? [])) {
+    // Validate command: references in descriptions
+    const refs = [...(step.description ?? '').matchAll(/command:([\w.-]+)/g)].map(m => m[1]);
+    for (const cmd of refs) {
+      if (cmd.startsWith('kotlin-jump.') || cmd.startsWith('kotlinJump.')) {
+        if (!registered.has(cmd)) {
+          console.error(`  Walkthrough step "${step.id}": unregistered command "${cmd}"`);
+          failed = true;
+        }
+      }
+    }
+    // Validate media files exist
+    const img = step.media?.image;
+    if (img && !fs.existsSync(img)) {
+      console.error(`  Walkthrough step "${step.id}": missing media file "${img}"`);
+      failed = true;
+    }
+  }
+}
+if (failed) { console.error('Fix walkthrough before packaging.'); process.exit(1); }
+else console.log('Walkthrough: OK');
+NODE
+}
+
 verify_release() {
+  check_walkthrough_coverage
   ensure_local_dependencies
 
   echo "Running tests..."

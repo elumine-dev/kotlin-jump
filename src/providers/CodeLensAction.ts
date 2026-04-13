@@ -33,7 +33,7 @@ export async function runCodeLensAction(
   const exclude = { excludeUri: uri.toString(), excludeLine: line };
 
   if (!smartNav) {
-    await vscode.commands.executeCommand('kotlin-jump.findUsages');
+    await vscode.commands.executeCommand('kotlin-jump.findUsages', exclude);
     return;
   }
 
@@ -45,7 +45,7 @@ export async function runCodeLensAction(
       await deps.usagesPanel.populateFromResults(name, results, exclude);
       return;
     } catch {
-      // Cache failures should degrade to the normal find-usages command.
+      // cache error → fallback to full scan
     }
   }
 

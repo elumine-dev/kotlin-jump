@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { SymbolIndex } from '../indexer/SymbolIndex';
-import { scanForUsages, DEFAULT_TEST_SEGMENTS, UsageResult } from './FindUsagesEngine';
+import { scanForUsages, resolveSearchTarget, DEFAULT_TEST_SEGMENTS, UsageResult } from './FindUsagesEngine';
 
 // ── Tree node types ───────────────────────────────────────────────────────────
 
@@ -83,6 +83,8 @@ export class FindUsagesPanel
     this.treeView.description = undefined;
     this._onChange.fire();
 
+    const target = resolveSearchTarget(word, document, this.index);
+
     let raw = await scanForUsages(
       word,
       document,
@@ -93,7 +95,13 @@ export class FindUsagesPanel
 
     if (token.isCancellationRequested) return false;
 
-    // Exclude the declaration the user just clicked on
+    // Always exclude the declaration site — it is the origin, not a usage
+    if (target) {
+      const declUri = target.uri.toString();
+      raw = raw.filter(r => !(r.uriString === declUri && r.line === target.line));
+    }
+
+    // Exclude an explicit position (code lens click) and short-circuit to direct nav
     if (exclude?.excludeUri !== undefined) {
       raw = raw.filter(r => !(r.uriString === exclude.excludeUri && r.line === exclude.excludeLine));
 
@@ -135,8 +143,25 @@ export class FindUsagesPanel
     this.currentWord = word;
 
     let raw = rawResults;
-    if (exclude?.excludeUri !== undefined) {
-      raw = raw.filter(r => !(r.uriString === exclude.excludeUri && r.line === exclude.excludeLine));
+
+    // Always exclude the declaration site — look it up via the index so that
+    // URI encoding differences between command args and stored strings don't matter.
+    if (exclude?.excludeLine !== undefined) {
+      const declEntries = this.index.lookup(word);
+      const excludePath = exclude.excludeUri
+        ? vscode.Uri.parse(exclude.excludeUri).path
+        : undefined;
+      const decl = declEntries.find(d =>
+        d.line === exclude.excludeLine &&
+        (d.uri.toString() === exclude.excludeUri || d.uri.path === excludePath),
+      );
+      if (decl) {
+        const declUri = decl.uri.toString();
+        raw = raw.filter(r => !(r.uriString === declUri && r.line === decl.line));
+      } else {
+        // Fallback: plain string match
+        raw = raw.filter(r => !(r.uriString === exclude.excludeUri && r.line === exclude.excludeLine));
+      }
     }
 
     const cfg = vscode.workspace.getConfiguration('kotlinJump');

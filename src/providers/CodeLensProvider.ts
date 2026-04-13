@@ -16,7 +16,7 @@ const CLASS_LIKE = new Set<SymbolKind>([
 ]);
 
 interface KotlinCodeLens extends vscode.CodeLens {
-  data: { entry: SymbolEntry };
+  data: { entry: SymbolEntry; enclosingKind?: string };
 }
 
 export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
@@ -66,6 +66,8 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
         if (CLASS_LIKE.has(entry.kind)) classStack.push({ kind: entry.kind, depth: entry.depth, entry });
         continue;
       }
+      // Skip synthetic anonymous-object entries ($anon$N — no named symbol to display)
+      if (entry.name.startsWith('$')) continue;
 
       const range = new vscode.Range(entry.line, 0, entry.line, 0);
 
@@ -93,9 +95,9 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
       const isTestContext = isTestFun(entry, extraSegs)
         || (entry.kind === 'fun' && entry.isLifecycle)
         || (CLASS_LIKE.has(entry.kind) && (entry.isTestClass || classesWithTests.has(entry.fqn)));
-      if (!isTestContext) {
+      if (!isTestContext && !entry.isOverride && !entry.isPrivate) {
         const lens = new vscode.CodeLens(range) as KotlinCodeLens;
-        lens.data = { entry };
+        lens.data = { entry, enclosingKind: enclosingClass?.kind };
         lenses.push(lens);
       }
 
@@ -114,12 +116,27 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
     // Test lenses (▶ Run / ▶ Run All) have no .data — already resolved, return as-is
     if (!(lens as KotlinCodeLens).data) return lens;
 
-    const { entry } = (lens as KotlinCodeLens).data;
+    const { entry, enclosingKind } = (lens as KotlinCodeLens).data;
 
-    // Implementation count — O(1) from bySuper map, with same-name collision guard.
-    // Same logic as TypeHierarchyProvider.disambiguateSubtypes: when multiple classes
-    // share a simple name, keep only same-package implementors and cross-package ones
-    // whose package has no class of the same name.
+    // ── Interface method: show only implementations, navigate directly ─────────
+    const isFun = entry.kind === 'fun' || entry.kind === 'composable';
+    if (isFun && (enclosingKind === 'interface' || entry.isAbstract)) {
+      const methodImpls = this.index.lookupMethodImplementations(
+        entry.name, entry.uri.toString(), entry.line,
+      );
+      if (token.isCancellationRequested) return lens;
+      const n = methodImpls.length;
+      lens.command = n === 0
+        ? { title: '0 implementations', command: '', arguments: [] }
+        : {
+            title: `${n} ${n === 1 ? 'implementation' : 'implementations'}`,
+            command: 'kotlin-jump.goToMethodImpl',
+            arguments: [entry.uri, entry.line, entry.name, methodImpls.map(m => m.uri.toString())],
+          };
+      return lens;
+    }
+
+    // ── Class/interface: implementation count (O(1)) ───────────────────────────
     let implCount = 0;
     if (CLASS_LIKE.has(entry.kind)) {
       const allImpls   = this.index.lookupImplementations(entry.name);
@@ -134,26 +151,22 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
       }
     }
 
-    // Usage count — async file scan (cached per FQN)
+    // ── Usage count — async file scan (cached per FQN) ────────────────────────
     let usageCount = 0;
     try {
-      const cacheKey = entry.fqn; // FQN prevents collisions for same-named symbols in different classes
+      const cacheKey = entry.fqn;
       if (!this._cache.has(cacheKey)) {
         const ver = this._cacheVer;
         const p = this._scanUsages(entry, token).then(results => {
-          // If an eviction happened while this scan was running, self-evict so
-          // the next resolveCodeLens call gets a fresh result instead of a stale one.
           if (this._cache.get(cacheKey)?.ver !== ver) this._cache.delete(cacheKey);
           return results;
         });
         this._cache.set(cacheKey, { ver, p });
       }
       const results = await this._cache.get(cacheKey)!.p;
-      // Evict cancelled results — scan was aborted early, count is unreliable.
       if (token.isCancellationRequested) {
         this._cache.delete(cacheKey);
       }
-      // Subtract 1 for the declaration itself
       usageCount = Math.max(0, results.length - 1);
     } catch {
       usageCount = 0;

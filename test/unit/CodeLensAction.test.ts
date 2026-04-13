@@ -73,7 +73,12 @@ describe('runCodeLensAction', () => {
     );
 
     expect(getPendingDeclNav()).toBeUndefined();
-    expect((vscode.commands as any).executeCommand).toHaveBeenCalledWith('kotlin-jump.findUsages');
+    // With smartNav=false, the code lens still passes the exclude so that
+    // search() can filter the declaration and navigate directly if 1 result.
+    expect((vscode.commands as any).executeCommand).toHaveBeenCalledWith(
+      'kotlin-jump.findUsages',
+      { excludeUri: 'file:///Foo.kt', excludeLine: 1 },
+    );
     expect(populateFromResults).not.toHaveBeenCalled();
   });
 

@@ -61,8 +61,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   // ── What's New notification ──────────────────────────────────────────────
   const lastSeen = context.globalState.get<string>('lastSeenVersion');
-  if (lastSeen !== version) {
-    void context.globalState.update('lastSeenVersion', version);
+  if (lastSeen && lastSeen !== version) {
     void vscode.window.showInformationMessage(
       `Kotlin Jump updated to v${version}`,
       "See What's New",
@@ -72,6 +71,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
     });
   }
+  void context.globalState.update('lastSeenVersion', version);
 
   const index = new SymbolIndex();
   _index = index;
@@ -226,8 +226,50 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       },
     ),
 
+    vscode.commands.registerCommand('kotlin-jump.goToMethodImpl',
+      async (uri: vscode.Uri, line: number, name: string, _implUriStrings: string[]) => {
+        clearPendingDeclNav();
+        const impls = index.lookupMethodImplementations(name, uri.toString(), line);
+        if (impls.length === 0) return;
+
+        if (impls.length === 1) {
+          const m = impls[0];
+          await vscode.commands.executeCommand('vscode.open', m.uri, {
+            preview: true,
+            selection: new vscode.Range(m.line, m.character, m.line, m.character + name.length),
+          } as vscode.TextDocumentShowOptions);
+          return;
+        }
+
+        // Multiple implementations → show quick pick
+        const items = impls.map(m => ({
+          label:  m.fqn.split('.').slice(-2).join('.'),
+          detail: m.uri.path.split('/').pop(),
+          impl:   m,
+        }));
+        const picked = await vscode.window.showQuickPick(items, {
+          placeHolder: `Go to implementation of ${name}`,
+        });
+        if (picked) {
+          const m = picked.impl;
+          await vscode.commands.executeCommand('vscode.open', m.uri, {
+            preview: true,
+            selection: new vscode.Range(m.line, m.character, m.line, m.character + name.length),
+          } as vscode.TextDocumentShowOptions);
+        }
+      },
+    ),
+
     vscode.commands.registerCommand('kotlin-jump.whatsNew', () => {
       void WhatsNewPanel.show(context);
+    }),
+
+    vscode.commands.registerCommand('kotlin-jump.openWalkthrough', () => {
+      void vscode.commands.executeCommand(
+        'workbench.action.openWalkthrough',
+        'elumine.kotlin-jump#kotlinJumpGettingStarted',
+        false,
+      );
     }),
 
     vscode.commands.registerCommand('kotlin-jump.findUsages', async (args?: { excludeUri?: string; excludeLine?: number }) => {
@@ -246,9 +288,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const navigated = await usagesPanel.search(editor.document, editor.selection.active, args);
       if (navigated) {
         await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
-      } else if (!smartNav) {
-        // Multiple results with smartNav off → fall back to native references
+      } else if (!smartNav && !args) {
+        // Multiple results, no code-lens context → fall back to native references
         await vscode.commands.executeCommand('editor.action.goToReferences');
+      } else if (!smartNav && args) {
+        // Code lens click with multiple results → show panel
+        await vscode.commands.executeCommand('kotlinJump.findUsages.focus');
       }
     }),
 

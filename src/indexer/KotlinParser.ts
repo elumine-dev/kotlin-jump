@@ -53,10 +53,12 @@ const RE_RUN_WITH    = /@RunWith\b/;
 const RE_IGNORE      = /@(?:Ignore|Disabled)\b/;
 const RE_LIFECYCLE   = /@(?:Before|After|BeforeEach|AfterEach|BeforeAll|AfterAll|BeforeClass|AfterClass)\b/;
 const RE_CLASS      = /^\s*(?:(?:public|private|internal|protected|open|abstract|inner|sealed|data|annotation|enum|actual|expect|companion)\s+)*?(data\s+class|sealed\s+class|sealed\s+interface|fun\s+interface|enum\s+class|annotation\s+class|class|interface|object)\s+([\p{L}\p{N}_]+)/u;
+// Matches anonymous objects: `object : Interface` (no name between `object` and `:`)
+const RE_ANON_OBJECT = /\bobject\s*:/;
 // After optional generics, allow an optional `ReceiverType.` prefix so that
 // `fun Modifier.customBackground()` captures "customBackground", not "Modifier".
 // Handles: simple (Modifier.), nullable (Modifier?.), generic (List<T>.), qualified (Modifier.Companion.)
-const RE_FUN        = /^\s*(?:@\w+(?:\([^)]*\))?\s+)*(?:(?:public|private|protected|internal|override|actual|expect|suspend|inline|noinline|crossinline|infix|operator|tailrec|external)\s+)*fun\s+(?:<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>\s+)?(?:(?:\w+(?:<(?:[^<>]|<[^<>]*>)*>)?[?]?\.)+)?([\p{L}\p{N}_]+|`[^`]+`)\s*[(<]/u;
+const RE_FUN        = /^\s*(?:@\w+(?:\([^)]*\))?\s+)*(?:(?:public|private|protected|internal|override|abstract|open|actual|expect|suspend|inline|noinline|crossinline|infix|operator|tailrec|external)\s+)*fun\s+(?:<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>\s+)?(?:(?:\w+(?:<(?:[^<>]|<[^<>]*>)*>)?[?]?\.)+)?([\p{L}\p{N}_]+|`[^`]+`)\s*[(<]/u;
 const RE_PROP       = /^\s*(?:(?:public|private|protected|internal|override|open|abstract|actual|expect|lateinit|const)\s+)*(val|var)\s+([\p{L}\p{N}_]+)\s*(?:[=:(<]|\bby\b)/u;
 const RE_TYPEALIAS  = /^\s*(?:(?:public|private|internal|actual)\s+)?typealias\s+([\p{L}\p{N}_]+)(?:<[^>]*>)?\s*=\s*(.+)/u;
 const RE_ENUM_ENTRY = /^\s*([A-Z][A-Z0-9_]*)(?:\s*[,(;({]|$)/;
@@ -372,6 +374,8 @@ export function parse(uriString: string, text: string): ParsedFile {
         isPrivate,
         isDeprecated,
       });
+      // val x = object : Interface — anonymous object on same line as property
+      emitAnonObjectIfPresent(raw, lineNum, braceDepth, symbols);
       [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
       if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
       annotationWindow.length = 0;
@@ -399,6 +403,10 @@ export function parse(uriString: string, text: string): ParsedFile {
       // Only clear when not inside a multi-line annotation's paren args
       annotationWindow.length = 0;
     }
+
+    // ── Anonymous object: `object : Interface` or `companion object : Interface`
+    // (not caught by RE_CLASS which requires a name after the keyword)
+    emitAnonObjectIfPresent(raw, lineNum, braceDepth, symbols);
 
     [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
     if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
@@ -486,6 +494,26 @@ function extractSupertypes(line: string, nameEnd: number): string[] {
     }
   }
   return [];
+}
+
+// Detect `object : Interface` (anonymous object) — emits a synthetic $anon$N symbol
+// so lookupImplementations() can count anonymous implementors.
+// Called on lines that passed DECL_START but did not match RE_CLASS (no name after object).
+function emitAnonObjectIfPresent(raw: string, lineNum: number, braceDepth: number, symbols: RawSymbol[]): void {
+  const m = RE_ANON_OBJECT.exec(raw);
+  if (!m) return;
+  // extractSupertypes scans from position after 'object' looking for ':'
+  const supertypes = extractSupertypes(raw, m.index + 'object'.length);
+  if (supertypes.length === 0) return;
+  symbols.push({
+    name: `$anon$${lineNum}`,
+    kind: 'object',
+    line: lineNum,
+    character: m.index,
+    isComposable: false,
+    depth: braceDepth,
+    supertypes,
+  });
 }
 
 // For multi-line constructors: scan forward for `) : Types` on subsequent lines

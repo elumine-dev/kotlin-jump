@@ -8,6 +8,10 @@ const ALIAS_TYPE_RE = /\b([A-Z]\w+)\b/g;
 const RE_PKG = /^\s*package\s+([\w.]+)/m;
 const DEFAULT_TEST_SEGMENTS: string[] = [];
 
+const CLASS_LIKE_KINDS = new Set([
+  'class', 'interface', 'object', 'enum', 'dataClass', 'sealedClass', 'annotation',
+]);
+
 // Shared state: set by provideDefinition, consumed by the selection listener in extension.ts
 let _pendingDeclNav: { uri: string; line: number; word: string } | undefined;
 export function getPendingDeclNav() { return _pendingDeclNav; }
@@ -51,6 +55,11 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
     if (resolvedEntries.length > 0) {
       const declEntry = resolvedEntries.find(e => isAtDeclaration(e, document.uri, position));
       if (declEntry && resolvedEntries.length === 1) {
+        // Override method → navigate to the interface/abstract declaration
+        if (declEntry.isOverride && (declEntry.kind === 'fun' || declEntry.kind === 'composable')) {
+          const superLoc = this.superMethodLocation(declEntry, allow);
+          if (superLoc) return superLoc;
+        }
         let impls = this.implLocations(word, allow);
         if (impls.length === 0) impls = this.methodImplLocations(declEntry, allow);
         if (impls.length > 0) return impls;
@@ -85,6 +94,11 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
 
     const declEntry = filtered.find(e => isAtDeclaration(e, document.uri, position));
     if (declEntry) {
+      // Override method → navigate to the interface/abstract declaration
+      if (declEntry.isOverride && (declEntry.kind === 'fun' || declEntry.kind === 'composable')) {
+        const superLoc = this.superMethodLocation(declEntry, allow);
+        if (superLoc) return superLoc;
+      }
       let impls = this.implLocations(word, allow);
       if (impls.length === 0) impls = this.methodImplLocations(declEntry, allow);
       if (impls.length > 0) return impls;
@@ -173,6 +187,40 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
     return this.index.lookupMethodImplementations(entry.name, entry.uri.toString(), entry.line)
       .filter(e => allow(e.uri.path))
       .map(toLocation);
+  }
+
+  /**
+   * For an override method, finds the corresponding declaration in the super
+   * interface/class. Scans the enclosing class's supertypes and returns the
+   * first matching non-override method found.
+   */
+  private superMethodLocation(
+    entry: { name: string; uri: vscode.Uri; line: number },
+    allow: (path: string) => boolean,
+  ): vscode.Location | undefined {
+    // Find the enclosing class and its supertypes
+    const fileSymbols = this.index.getFileSymbols(entry.uri.toString());
+    let enclosingSupertypes: readonly string[] | undefined;
+    for (const s of fileSymbols) {
+      if (s.line > entry.line) break;
+      if (CLASS_LIKE_KINDS.has(s.kind)) enclosingSupertypes = s.supertypes;
+    }
+    if (!enclosingSupertypes || enclosingSupertypes.length === 0) return undefined;
+
+    // For each supertype, look for a non-override method with the same name
+    for (const supertype of enclosingSupertypes) {
+      for (const supertypeEntry of this.index.lookup(supertype)) {
+        if (!CLASS_LIKE_KINDS.has(supertypeEntry.kind)) continue;
+        if (!allow(supertypeEntry.uri.path)) continue;
+        const superSymbols = this.index.getFileSymbols(supertypeEntry.uri.toString());
+        for (const s of superSymbols) {
+          if (s.name === entry.name && (s.kind === 'fun' || s.kind === 'composable') && !s.isOverride) {
+            return new vscode.Location(s.uri, new vscode.Position(s.line, s.character));
+          }
+        }
+      }
+    }
+    return undefined;
   }
 }
 

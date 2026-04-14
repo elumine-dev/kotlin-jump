@@ -1,40 +1,38 @@
 {
-  "version": "1.5.0",
+  "version": "1.5.1",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Guided onboarding, sharper navigation",
-  "summary": "1.5.0 ships an interactive 8-step onboarding walkthrough and fixes a cluster of Go to Implementation, Code Lens, and Find Usages accuracy issues.",
+  "tagline": "Full feature documentation, animated previews",
+  "summary": "Documentation-only release: the README was fully rewritten with complete feature coverage, updated copy, and eight animated GIFs — no changes to extension behavior.",
   "highlights": [
     {
-      "title": "Interactive Onboarding Walkthrough",
-      "description": "A new 8-step guided walkthrough opens automatically on first install, with animated demos covering every major feature from Go to Definition to the AI assistant.",
+      "title": "Rewritten README",
+      "description": "The README now covers every major feature with concise copy and eight animated GIFs, giving prospective users a clear visual preview of the extension before installing.",
       "kind": "improvement"
     },
     {
-      "title": "Go to Implementation Fixed",
-      "description": "Navigation to implementations now works reliably from call sites and override methods, with correct Code Lens counts for abstract members.",
-      "kind": "fix"
+      "title": "New Feature Sections",
+      "description": "Dedicated sections for the onboarding walkthrough, Code Lens, and the AI assistant were added to improve discoverability of features that were previously underdocumented.",
+      "kind": "improvement"
     },
     {
-      "title": "Cleaner Find Usages Results",
-      "description": "Kotlin keyword false positives are eliminated from usage scans, and debug log lines no longer appear mixed into search output.",
-      "kind": "fix"
+      "title": "No Behavior Changes",
+      "description": "No extension commands, settings, or navigation logic were modified — existing installations behave identically to v1.5.0.",
+      "kind": "note"
     }
   ],
   "sections": [
     {
-      "heading": "Improvements",
+      "heading": "Packaging and Docs",
       "bullets": [
-        "Added an 8-step interactive walkthrough that opens automatically on first install; each step includes an animated demo covering Go to Definition, Find Usages, Code Lens, Test Navigation, String Folding, Inlay Hints, and the AI assistant — reopen anytime with \"Kotlin Jump: Open Walkthrough\" from the command palette."
+        "Rewrote the README with complete, accurate coverage of all major features: Go to Definition, Find Usages, Code Lens, Test Navigation, onboarding walkthrough, AI assistant, String Folding, and Inlay Hints.",
+        "Added eight animated GIFs to the README — one per feature area — so users can see each capability in action before installing.",
+        "Added dedicated sections for the Code Lens, walkthrough, and AI assistant features, which lacked dedicated documentation in previous versions."
       ]
     },
     {
-      "heading": "Fixes",
+      "heading": "Notes",
       "bullets": [
-        "Go to Implementation now resolves correctly from call sites and navigates directly to the target without opening the interface file as an intermediate step.",
-        "Cmd+Click on an override method now navigates to the supertype declaration rather than stopping at the override.",
-        "Abstract and open functions are now indexed; Code Lens implementation counts correctly reflect their actual number of implementations.",
-        "Find Usages eliminates Kotlin keyword false positives and no longer leaks debug log lines into search results.",
-        "The @kotlin-jump chat participant handles more natural-language phrasings, case variations, and fully-qualified name lookups correctly."
+        "No changes to extension behavior, commands, settings, parsing, or navigation logic. This release is documentation only."
       ]
     }
   ],

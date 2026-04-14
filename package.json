@@ -658,8 +658,7 @@
             "id": "goToDefinition",
             "title": "Go to Definition — even inside JARs",
             "description": "Press **F12** (or **Cmd+Click**) on any symbol to jump to its definition — across files, modules, and straight into JAR sources. No language server, no JVM spin-up.\n\n[Try it](command:editor.action.revealDefinition)",
-            "media": { "image": "media/walkthrough/go-to-definition.gif", "altText": "Go to Definition demo" },
-            "completionEvents": ["onCommand:editor.action.revealDefinition"]
+            "media": { "image": "media/walkthrough/go-to-definition.gif", "altText": "Go to Definition demo" }
           },
           {
             "id": "findUsages",
@@ -698,8 +697,7 @@
             "id": "aiAssistant",
             "title": "Query your codebase in natural language",
             "description": "Type **@kotlin-jump** in Copilot Chat to search your symbol index — find classes, trace usages, explore implementations, read KDoc.\n\n[Open Chat](command:workbench.action.chat.open)",
-            "media": { "image": "media/walkthrough/ai-assistant.gif", "altText": "AI assistant querying the symbol index" },
-            "completionEvents": ["onCommand:workbench.action.chat.open"]
+            "media": { "image": "media/walkthrough/ai-assistant.gif", "altText": "AI assistant querying the symbol index" }
           }
         ]
       }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { pickEntries, resolveCommand } from '../../src/ai/KotlinJumpChatParticipant';
+import { pickEntries, resolveCommand, parseNaturalLanguage } from '../../src/ai/KotlinJumpChatParticipant';
 import { SymbolIndex } from '../../src/indexer/SymbolIndex';
 import { parse } from '../../src/indexer/KotlinParser';
 
@@ -43,6 +43,66 @@ describe('resolveCommand', () => {
 
   it('returns search for "search"', () => {
     expect(resolveCommand('search')).toBe('search');
+  });
+});
+
+// ── parseNaturalLanguage ──────────────────────────────────────────────────────
+
+describe('parseNaturalLanguage', () => {
+  // implementations
+  it('detects "find all implementations of X"', () => {
+    expect(parseNaturalLanguage('find all implementations of PokemonRepository'))
+      .toEqual({ cmd: 'implementations', query: 'PokemonRepository' });
+  });
+
+  it('detects "implementation of X" (singular)', () => {
+    expect(parseNaturalLanguage('implementation of Foo'))
+      .toEqual({ cmd: 'implementations', query: 'Foo' });
+  });
+
+  it('detects "show implementations of X"', () => {
+    expect(parseNaturalLanguage('show implementations of UserService'))
+      .toEqual({ cmd: 'implementations', query: 'UserService' });
+  });
+
+  // usages
+  it('detects "find all usages of X"', () => {
+    expect(parseNaturalLanguage('find all usages of Pokemon'))
+      .toEqual({ cmd: 'usages', query: 'Pokemon' });
+  });
+
+  it('detects "usage of X" (singular)', () => {
+    expect(parseNaturalLanguage('usage of Badge'))
+      .toEqual({ cmd: 'usages', query: 'Badge' });
+  });
+
+  // doc
+  it('detects "doc for X"', () => {
+    expect(parseNaturalLanguage('doc for BattleEngine'))
+      .toEqual({ cmd: 'doc', query: 'BattleEngine' });
+  });
+
+  it('detects "kdoc for X"', () => {
+    expect(parseNaturalLanguage('kdoc for Trainer'))
+      .toEqual({ cmd: 'doc', query: 'Trainer' });
+  });
+
+  it('detects "documentation of X"', () => {
+    expect(parseNaturalLanguage('documentation of PokemonRepository'))
+      .toEqual({ cmd: 'doc', query: 'PokemonRepository' });
+  });
+
+  // no match
+  it('returns undefined for plain symbol name', () => {
+    expect(parseNaturalLanguage('PokemonRepository')).toBeUndefined();
+  });
+
+  it('returns undefined for empty string', () => {
+    expect(parseNaturalLanguage('')).toBeUndefined();
+  });
+
+  it('returns undefined for unrelated sentence', () => {
+    expect(parseNaturalLanguage('what files are in this project')).toBeUndefined();
   });
 });
 

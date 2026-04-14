@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/Demo.gif" alt="Kotlin Jump demo" width="720" />
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/walkthrough/welcome.gif" alt="Kotlin Jump — Code Lens showing usages and implementations" width="720" />
 </p>
 
 ## ⚡ Why Kotlin Jump?
@@ -38,6 +38,16 @@ Most navigation tools are:
 👉 No waiting
 
 Just **instant navigation**.
+
+---
+
+## 🚀 Get Started
+
+After installing, open the interactive walkthrough:
+
+**Command Palette** (`Cmd+Shift+P`) → **Kotlin Jump: Get Started**
+
+It covers every feature with animated demos — takes less than 2 minutes.
 
 ---
 
@@ -79,6 +89,30 @@ Cmd+Click adapts intelligently:
 
 ---
 
+### 🔢 Code Lens
+
+Inline usage counts above every class and function — always visible, no hover required.
+
+* **N usages** — click to open the Find Usages panel
+* **M implementations** — click to list all implementors
+* Works on interfaces, abstract classes, open functions, and sealed types
+
+---
+
+### 🤖 AI Assistant
+
+Use `@kotlin-jump` in Copilot Chat to query your symbol index in natural language:
+
+```
+@kotlin-jump find all implementations of Repository
+@kotlin-jump doc for BattleEngine
+@kotlin-jump usages of loadData
+```
+
+No extra setup — works as soon as the index is built.
+
+---
+
 ## 🧠 What gets indexed
 
 ### Kotlin
@@ -95,7 +129,7 @@ Cmd+Click adapts intelligently:
 
 ## ⚙️ Configuration
 
-Search **“Kotlin Jump”** in Settings (`Cmd+,`) or use:
+Search **"Kotlin Jump"** in Settings (`Cmd+,`) or use:
 
 ```jsonc
 {
@@ -146,7 +180,7 @@ A lightweight regex-based parser builds an in-memory symbol table using optimize
 
 ### Marketplace
 
-Search **“Kotlin Jump”** in VS Code (`Cmd+Shift+X`)
+Search **"Kotlin Jump"** in VS Code (`Cmd+Shift+X`)
 
 ---
 

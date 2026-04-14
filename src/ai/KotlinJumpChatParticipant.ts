@@ -11,6 +11,21 @@ export function resolveCommand(cmd: string | undefined): ChatCommand {
   return 'search';
 }
 
+// Detects natural-language patterns and extracts intent + symbol name.
+// e.g. "find all implementations of PokemonRepository" → { cmd: 'implementations', query: 'PokemonRepository' }
+export function parseNaturalLanguage(prompt: string): { cmd: ChatCommand; query: string } | undefined {
+  let m: RegExpMatchArray | null;
+  // (\w(?:[\w.$]*\w)?) captures a valid Java/Kotlin identifier or FQN and stops
+  // before trailing punctuation — (\S+) would swallow "Foo." or "Foo?".
+  if ((m = prompt.match(/\bimplementations?\s+of\s+(\w(?:[\w.$]*\w)?)/i)))
+    return { cmd: 'implementations', query: m[1] };
+  if ((m = prompt.match(/\busages?\s+of\s+(\w(?:[\w.$]*\w)?)/i)))
+    return { cmd: 'usages', query: m[1] };
+  if ((m = prompt.match(/\b(?:k?doc|documentation)\s+(?:for|of)\s+(\w(?:[\w.$]*\w)?)/i)))
+    return { cmd: 'doc', query: m[1] };
+  return undefined;
+}
+
 export function pickEntries(index: SymbolIndex, query: string): SymbolEntry[] {
   if (!query.trim()) return [];
 
@@ -52,11 +67,23 @@ function makeHandler(index: SymbolIndex): vscode.ChatRequestHandler {
       return {};
     }
 
+    // Natural-language routing for plain prompts (no slash command)
+    if (cmd === 'search') {
+      const nl = parseNaturalLanguage(query);
+      if (nl) {
+        switch (nl.cmd) {
+          case 'implementations': return handleImplementations(index, nl.query, stream);
+          case 'usages':          return handleUsages(index, nl.query, stream);
+          case 'doc':             return handleDoc(index, nl.query, stream);
+        }
+      }
+    }
+
     switch (cmd) {
-      case 'search':        return handleSearch(index, query, stream);
+      case 'search':          return handleSearch(index, query, stream);
       case 'implementations': return handleImplementations(index, query, stream);
-      case 'usages':        return handleUsages(index, query, stream);
-      case 'doc':           return handleDoc(index, query, stream);
+      case 'usages':          return handleUsages(index, query, stream);
+      case 'doc':             return handleDoc(index, query, stream);
     }
   };
 }
@@ -104,8 +131,28 @@ function handleSearch(index: SymbolIndex, query: string, stream: vscode.ChatResp
   return streamEntries(pickEntries(index, query), stream, 'symbols');
 }
 
+// Exported for testing — pure logic shared by handleImplementations.
+// Handles two failure modes that bySuper.get() cannot cover on its own:
+//   BUG-1  case mismatch: user types "pokemonrepository" → key is "PokemonRepository"
+//   BUG-2  FQN query: "com.example.GymChallenge" → bySuper stores simple names only
+export function resolveImplementations(index: SymbolIndex, query: string): SymbolEntry[] {
+  // BUG-2 fix: strip package prefix — bySuper keys are always simple names
+  const simpleName = query.includes('.') ? (query.split('.').pop() ?? '') : query;
+  if (!simpleName) return [];
+
+  const direct = index.lookupImplementations(simpleName);
+  if (direct.length > 0) return direct.slice(0, 10);
+
+  // BUG-1 fix: case-insensitive fallback via search(), which normalises to lowercase
+  const resolved = index.lookup(simpleName)[0] ?? index.search(simpleName)[0];
+  if (resolved && resolved.name !== simpleName) {
+    return index.lookupImplementations(resolved.name).slice(0, 10);
+  }
+  return [];
+}
+
 function handleImplementations(index: SymbolIndex, query: string, stream: vscode.ChatResponseStream): vscode.ChatResult {
-  const results = index.lookupImplementations(query).slice(0, 10);
+  const results = resolveImplementations(index, query);
   return streamEntries(results, stream, `implementations of ${mdCode(query)}`);
 }
 

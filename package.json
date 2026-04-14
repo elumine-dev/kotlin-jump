@@ -2,7 +2,7 @@
   "name": "kotlin-jump",
   "displayName": "Kotlin Jump",
   "description": "Fast Kotlin & Java navigation — Go to Definition, Find Usages, Go to Implementation. No language server needed.",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "publisher": "elumine",
   "license": "MIT",
   "icon": "media/logo.png",
@@ -652,52 +652,82 @@
             "id": "welcome",
             "title": "Navigate Kotlin at the speed of thought",
             "description": "Kotlin Jump indexes your entire project in milliseconds — powered by a regex parser that is **109× faster** than any JVM or tree-sitter alternative. No setup, no waiting.",
-            "media": { "image": "media/walkthrough/welcome.gif", "altText": "Kotlin Jump in action" }
+            "media": {
+              "image": "media/walkthrough/welcome.gif",
+              "altText": "Kotlin Jump in action"
+            }
           },
           {
             "id": "goToDefinition",
             "title": "Go to Definition — even inside JARs",
             "description": "Press **F12** (or **Cmd+Click**) on any symbol to jump to its definition — across files, modules, and straight into JAR sources. No language server, no JVM spin-up.\n\n[Try it](command:editor.action.revealDefinition)",
-            "media": { "image": "media/walkthrough/go-to-definition.gif", "altText": "Go to Definition demo" }
+            "media": {
+              "image": "media/walkthrough/go-to-definition.gif",
+              "altText": "Go to Definition demo"
+            }
           },
           {
             "id": "findUsages",
             "title": "Find Usages — the panel that changes everything",
             "description": "Press **Alt+F7** on any symbol to open a dedicated panel showing every usage across your project. Filter out test files or Compose previews in one click.\n\n[Open Find Usages](command:kotlin-jump.findUsages)",
-            "media": { "image": "media/walkthrough/find-usages.gif", "altText": "Find Usages panel" },
-            "completionEvents": ["onCommand:kotlin-jump.findUsages"]
+            "media": {
+              "image": "media/walkthrough/find-usages.gif",
+              "altText": "Find Usages panel"
+            },
+            "completionEvents": [
+              "onCommand:kotlin-jump.findUsages"
+            ]
           },
           {
             "id": "codeLens",
             "title": "Always-visible usage counts",
             "description": "See **N usages | M implementations** inline above every class and function — no hover required. Click any lens to open the Find Usages panel directly.",
-            "media": { "image": "media/walkthrough/code-lens.gif", "altText": "Code Lens showing N usages" }
+            "media": {
+              "image": "media/walkthrough/code-lens.gif",
+              "altText": "Code Lens showing N usages"
+            }
           },
           {
             "id": "testNavigation",
             "title": "Jump between test and implementation — Alt+Shift+T",
             "description": "Press **Alt+Shift+T** to instantly toggle between a class and its test file. Kotlin Jump infers the pairing from your Gradle source sets.\n\n[Try it](command:kotlin-jump.goToTest)",
-            "media": { "image": "media/walkthrough/test-nav.gif", "altText": "Test navigation demo" },
-            "completionEvents": ["onCommand:kotlin-jump.goToTest"]
+            "media": {
+              "image": "media/walkthrough/test-nav.gif",
+              "altText": "Test navigation demo"
+            },
+            "completionEvents": [
+              "onCommand:kotlin-jump.goToTest"
+            ]
           },
           {
             "id": "stringFolding",
             "title": "See your string values inline",
             "description": "String resource folding replaces `R.string.button_ok` with its actual value — **\"OK\"** — directly in the editor. Zero context switching to `strings.xml`.\n\n[Enable String Folding](command:kotlinJump.enableStringFolding)",
-            "media": { "image": "media/walkthrough/string-folding.gif", "altText": "String resource folding demo" },
-            "completionEvents": ["onCommand:kotlinJump.enableStringFolding"]
+            "media": {
+              "image": "media/walkthrough/string-folding.gif",
+              "altText": "String resource folding demo"
+            },
+            "completionEvents": [
+              "onCommand:kotlinJump.enableStringFolding"
+            ]
           },
           {
             "id": "inlayHints",
             "title": "Parameter names and types — right in the code",
             "description": "Inlay hints show parameter names and inferred types directly inline — no hovering, no interruptions. Configurable per setting.",
-            "media": { "image": "media/walkthrough/inlay-hints.gif", "altText": "Inlay hints showing parameter names and types" }
+            "media": {
+              "image": "media/walkthrough/inlay-hints.gif",
+              "altText": "Inlay hints showing parameter names and types"
+            }
           },
           {
             "id": "aiAssistant",
             "title": "Query your codebase in natural language",
             "description": "Type **@kotlin-jump** in Copilot Chat to search your symbol index — find classes, trace usages, explore implementations, read KDoc.\n\n[Open Chat](command:workbench.action.chat.open)",
-            "media": { "image": "media/walkthrough/ai-assistant.gif", "altText": "AI assistant querying the symbol index" }
+            "media": {
+              "image": "media/walkthrough/ai-assistant.gif",
+              "altText": "AI assistant querying the symbol index"
+            }
           }
         ]
       }

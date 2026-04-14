@@ -1,22 +1,22 @@
 {
-  "version": "1.4.1",
+  "version": "1.5.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "What's New panel, sharper navigation",
-  "summary": "1.4.1 adds a \"What's New\" panel that appears automatically after each update, improves type hierarchy with sorted subtypes and override counts, fixes outgoing call detection in expression-body functions, and tightens symbol disambiguation across all navigation providers.",
+  "tagline": "Guided onboarding, sharper navigation",
+  "summary": "1.5.0 ships an interactive 8-step onboarding walkthrough and fixes a cluster of Go to Implementation, Code Lens, and Find Usages accuracy issues.",
   "highlights": [
     {
-      "title": "What's New Panel",
-      "description": "After each update, a styled release summary now appears once automatically and is always accessible via \"Kotlin Jump: See What's New\" in the command palette.",
+      "title": "Interactive Onboarding Walkthrough",
+      "description": "A new 8-step guided walkthrough opens automatically on first install, with animated demos covering every major feature from Go to Definition to the AI assistant.",
       "kind": "improvement"
     },
     {
-      "title": "Type Hierarchy Accuracy",
-      "description": "Subtypes are now sorted by kind, show override counts per item, and the list no longer inflates with same-named classes from unrelated packages.",
-      "kind": "improvement"
+      "title": "Go to Implementation Fixed",
+      "description": "Navigation to implementations now works reliably from call sites and override methods, with correct Code Lens counts for abstract members.",
+      "kind": "fix"
     },
     {
-      "title": "Call Hierarchy for Expression Bodies",
-      "description": "Outgoing calls inside single-line expression-body and inline-block functions are now detected, so call graphs no longer silently miss these common Kotlin patterns.",
+      "title": "Cleaner Find Usages Results",
+      "description": "Kotlin keyword false positives are eliminated from usage scans, and debug log lines no longer appear mixed into search output.",
       "kind": "fix"
     }
   ],
@@ -24,23 +24,17 @@
     {
       "heading": "Improvements",
       "bullets": [
-        "Added a \"What's New\" panel: appears once per version update and shows the release summary with highlights and links; reopen anytime with \"Kotlin Jump: See What's New\" from the command palette.",
-        "Type hierarchy subtypes are now sorted by kind — interfaces first, then sealed, concrete, data classes, objects, and enums — and each subtype item shows how many parent methods it overrides (e.g. \"overrides 2/5\"). Sealed class lists show an exhaustive count (\"3/3 exhaustive\").",
-        "Implementation counts in CodeLens and type hierarchy now apply a same-name collision guard, preventing inflated counts when identically named classes exist in different packages.",
-        "Import aliases (e.g. `import com.example.Foo as Bar`) are now recognized in symbol resolution — navigation and rename work correctly when the alias name is used in code.",
-        "Rename now uses import context to identify the precise class declaration when multiple classes share the same simple name, preventing the wrong .kt file from being renamed."
+        "Added an 8-step interactive walkthrough that opens automatically on first install; each step includes an animated demo covering Go to Definition, Find Usages, Code Lens, Test Navigation, String Folding, Inlay Hints, and the AI assistant — reopen anytime with \"Kotlin Jump: Open Walkthrough\" from the command palette."
       ]
     },
     {
       "heading": "Fixes",
       "bullets": [
-        "Call hierarchy outgoing calls now include functions called inside expression-body (`fun f() = expr`) and inline-block (`fun f() { call() }`) declarations, which were previously not scanned."
-      ]
-    },
-    {
-      "heading": "Notes",
-      "bullets": [
-        "Ten new adversarial and fuzz test suites were added covering call hierarchy, code lens, import resolution, the Java and Kotlin parsers, rename, symbol index, type hierarchy, and organize imports — increasing confidence in correctness across edge conditions."
+        "Go to Implementation now resolves correctly from call sites and navigates directly to the target without opening the interface file as an intermediate step.",
+        "Cmd+Click on an override method now navigates to the supertype declaration rather than stopping at the override.",
+        "Abstract and open functions are now indexed; Code Lens implementation counts correctly reflect their actual number of implementations.",
+        "Find Usages eliminates Kotlin keyword false positives and no longer leaks debug log lines into search results.",
+        "The @kotlin-jump chat participant handles more natural-language phrasings, case variations, and fully-qualified name lookups correctly."
       ]
     }
   ],

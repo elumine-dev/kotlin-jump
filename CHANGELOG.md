@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.5.0
+
+1.5.0 ships an interactive 8-step onboarding walkthrough and fixes a cluster of Go to Implementation, Code Lens, and Find Usages accuracy issues.
+
+### Improvements
+- Added an 8-step interactive walkthrough that opens automatically on first install; each step includes an animated demo covering Go to Definition, Find Usages, Code Lens, Test Navigation, String Folding, Inlay Hints, and the AI assistant — reopen anytime with "Kotlin Jump: Open Walkthrough" from the command palette.
+
+### Fixes
+- Go to Implementation now resolves correctly from call sites and navigates directly to the target without opening the interface file as an intermediate step.
+- Cmd+Click on an override method now navigates to the supertype declaration rather than stopping at the override.
+- Abstract and open functions are now indexed; Code Lens implementation counts correctly reflect their actual number of implementations.
+- Find Usages eliminates Kotlin keyword false positives and no longer leaks debug log lines into search results.
+- The @kotlin-jump chat participant handles more natural-language phrasings, case variations, and fully-qualified name lookups correctly.
+
 ## 1.4.1
 
 1.4.1 adds a "What's New" panel that appears automatically after each update, improves type hierarchy with sorted subtypes and override counts, fixes outgoing call detection in expression-body functions, and tightens symbol disambiguation across all navigation providers.

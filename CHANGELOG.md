@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.5.1
+
+Documentation-only release: the README was fully rewritten with complete feature coverage, updated copy, and eight animated GIFs — no changes to extension behavior.
+
+### Notes
+- No changes to extension behavior, commands, settings, parsing, or navigation logic. This release is documentation only.
+
+### Packaging and Docs
+- Rewrote the README with complete, accurate coverage of all major features: Go to Definition, Find Usages, Code Lens, Test Navigation, onboarding walkthrough, AI assistant, String Folding, and Inlay Hints.
+- Added eight animated GIFs to the README — one per feature area — so users can see each capability in action before installing.
+- Added dedicated sections for the Code Lens, walkthrough, and AI assistant features, which lacked dedicated documentation in previous versions.
+
 ## 1.5.0
 
 1.5.0 ships an interactive 8-step onboarding walkthrough and fixes a cluster of Go to Implementation, Code Lens, and Find Usages accuracy issues.

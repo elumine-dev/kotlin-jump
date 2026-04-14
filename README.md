@@ -1,107 +1,209 @@
 # 🚀 Kotlin Jump
 
 <p align="center">
-  <img src="media/logo-128.png" width="96" />
+  <img src="media/logo-128.png" width="96" alt="Kotlin Jump logo" />
 </p>
 
 <p align="center">
-  <strong>Instant Kotlin & Java navigation for VS Code</strong><br/>
-  No language server. No delay. Just speed.
+  <strong>Kotlin navigation in VS Code that actually feels instant.</strong><br/>
+  No LSP. No JVM. No delay.
 </p>
 
 <p align="center">
-  ⚡ <b>&lt; 1 ms lookups</b> • ⚡ <b>3,000+ files in &lt;500ms</b>
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/walkthrough/welcome.gif" width="720" alt="Kotlin Jump demo" />
+</p>
+
+<p align="center">
+  ⚡ <b>&lt; 1 ms lookups</b> &nbsp;•&nbsp; ⚡ <b>3,000+ files in &lt; 500 ms</b> &nbsp;•&nbsp; ⚡ <b>109× faster than JVM parsers</b>
+</p>
+
+<p align="center">
+  <b>Click → Jump → Done.</b>
 </p>
 
 <p align="center">
   <a href="https://marketplace.visualstudio.com/items?itemName=elumine.kotlin-jump">
-    <img src="https://img.shields.io/badge/Install-VS_Code-blue?style=for-the-badge&logo=visualstudiocode" />
+    <img src="https://img.shields.io/badge/Install-VS_Code-blue?style=for-the-badge&logo=visualstudiocode" alt="Install Kotlin Jump" />
   </a>
 </p>
 
+---
+
+## ⚡ Why this feels different
+
+Most Kotlin tooling in VS Code relies on a language server.
+
+That means:
+
+- JVM startup
+- background indexing
+- delays before things feel "ready"
+
+Kotlin Jump skips all of that.
+
+- No LSP
+- No JVM
+- No waiting
+
+Just instant navigation across your project.
+
+Once you get used to it, everything else feels slow.
+
+---
+
+## 🏁 Get Started
+
+Open the walkthrough:
+
+**Cmd+Shift+P → Kotlin Jump: Get Started**
+
+Takes ~2 minutes. Worth it.
+
+---
+
+# ✨ Features
+
+---
+
+## 🔎 Core Navigation
+
+Jump anywhere instantly.
+
+| Shortcut | Action |
+|---|---|
+| `Cmd+Click` / `F12` | Go to Definition |
+| `Cmd+F12` | Go to Implementation |
+| `Shift+F12` | Find All References |
+| `Alt+F7` | Find Usages |
+
 <p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/walkthrough/welcome.gif" alt="Kotlin Jump — Code Lens showing usages and implementations" width="720" />
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/walkthrough/go-to-definition.gif" width="720" />
 </p>
 
-## ⚡ Why Kotlin Jump?
+Works across:
 
-Most navigation tools are:
+- Kotlin & Java
+- interfaces → implementations
+- functions, classes, enums
+- imports
+- **library source JARs** (Compose, Coroutines, AndroidX…)
 
-* slow
-* heavy
-* tied to language servers
-
-**Kotlin Jump is different.**
-
-👉 No LSP
-👉 No JVM
-👉 No waiting
-
-Just **instant navigation**.
+> **Call Hierarchy** and **Type Hierarchy** are also available via VS Code's native panels (right-click → Peek).
 
 ---
 
-## 🚀 Get Started
+## ⚡ Smart Navigation
 
-After installing, open the interactive walkthrough:
+`Cmd+Click` adapts automatically.
 
-**Command Palette** (`Cmd+Shift+P`) → **Kotlin Jump: Get Started**
+| You click on | It goes to |
+|---|---|
+| Interface | Implementation |
+| Interface method | Override |
+| Method (1 usage) | That usage |
 
-It covers every feature with animated demos — takes less than 2 minutes.
-
----
-
-## 🚀 Features
-
-### 🔎 Core Navigation
-
-| Shortcut            | Action                                                |
-| ------------------- | ----------------------------------------------------- |
-| `Cmd+Click` / `F12` | **Go to Definition** — jump to any symbol instantly   |
-| `Cmd+F12`           | **Go to Implementation** — interface → implementation |
-| `Shift+F12`         | **Find All References** — across entire project       |
-| `Alt+F7`            | **Find Usages** — filtered panel with preview toggles |
+No menus. No thinking.
 
 ---
 
-### ⚡ Smart Navigation (🔥 standout feature)
+## 🎯 Find Usages
 
-Cmd+Click adapts intelligently:
+Fast, focused, built for real projects.
 
-| You're on...          | It does...              |
-| --------------------- | ----------------------- |
-| Interface             | Jumps to implementation |
-| Interface method      | Jumps to override       |
-| Method (single usage) | Jumps directly to usage |
+- grouped by file
+- inline previews
+- toggle tests on/off
+- toggle `@Preview`
+- optimized for large codebases
 
-👉 No extra steps. Just flow.
-
----
-
-### 🎯 Developer Productivity
-
-| Shortcut      | Feature                                                     |
-| ------------- | ----------------------------------------------------------- |
-| `Cmd+T`       | **Workspace Search** — fuzzy + filters (`@class:`, `@fun:`) |
-| `Cmd+Shift+O` | **Outline** — symbol hierarchy                              |
-| `Alt+Shift+T` | **Go to Test** — toggle `Foo.kt` ↔ `FooTest.kt`             |
-| Hover         | **Hover Info** — signature, KDoc, package, types            |
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/walkthrough/find-usages.gif" width="720" />
+</p>
 
 ---
 
-### 🔢 Code Lens
+## 🔢 Code Lens
 
-Inline usage counts above every class and function — always visible, no hover required.
+Always-visible context.
 
-* **N usages** — click to open the Find Usages panel
-* **M implementations** — click to list all implementors
-* Works on interfaces, abstract classes, open functions, and sealed types
+- **N usages** — click to open Find Usages
+- **M implementations** — click to list all implementors
+- **▶ Run** / **⏱ Debug** above `@Test` methods — Gradle-backed, wired into Test Explorer
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/walkthrough/code-lens.gif" width="720" />
+</p>
+
+No hover. No guessing.
 
 ---
 
-### 🤖 AI Assistant
+## 🧪 Developer Productivity
 
-Use `@kotlin-jump` in Copilot Chat to query your symbol index in natural language:
+Removes the tiny frictions you hit all day.
+
+| Shortcut | Feature |
+|---|---|
+| `Cmd+T` | Workspace Search (`@class:`, `@fun:`…) |
+| `Cmd+Shift+O` | File Outline |
+| `Alt+Shift+T` | Go to Test |
+| `Alt+Shift+P` | Composable ↔ Preview |
+| `Shift+Alt+O` | Organize Imports |
+| Hover | Signature, KDoc, types |
+| Right-click | Move File, Copy FQN |
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/walkthrough/test-nav.gif" width="720" />
+</p>
+
+---
+
+## 🧵 String Resource Folding
+
+Stop jumping to `strings.xml`.
+
+```kotlin
+Text(text = R.string.button_ok)
+
+// becomes
+
+Text(text = "OK")
+```
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/walkthrough/string-folding.gif" width="720" />
+</p>
+
+Android only.
+
+---
+
+## 📝 Inlay Hints
+
+See what matters, inline.
+
+- **Parameter names** at call sites — clickable to navigate to the declaration
+- **Inferred types** on `val` / `var` — double-click to insert
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/walkthrough/inlay-hints.gif" width="720" />
+</p>
+
+---
+
+## 📦 Library Sources
+
+Go to Definition works inside your dependencies too.
+
+Kotlin Jump indexes `-sources.jar` files from your Gradle cache (`~/.gradle`) and Maven local repo (`~/.m2`). Enables **Go to Definition** and **KDoc** for any library that ships sources — Compose, Coroutines, AndroidX, and more.
+
+No extra setup. Runs automatically in the background.
+
+---
+
+## 🤖 AI Assistant
+
+Query your codebase in natural language.
 
 ```
 @kotlin-jump find all implementations of Repository
@@ -109,37 +211,61 @@ Use `@kotlin-jump` in Copilot Chat to query your symbol index in natural languag
 @kotlin-jump usages of loadData
 ```
 
-No extra setup — works as soon as the index is built.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/walkthrough/ai-assistant.gif" width="720" />
+</p>
+
+**MCP Server** — Kotlin Jump also exposes a Model Context Protocol endpoint. External tools that support MCP (Claude Desktop, etc.) can query the symbol index directly without VS Code open.
+
+No setup. Works immediately.
 
 ---
 
-## 🧠 What gets indexed
+<p align="center">
+  <a href="https://marketplace.visualstudio.com/items?itemName=elumine.kotlin-jump">
+    <img src="https://img.shields.io/badge/Install_now-Try_it_yourself-blue?style=for-the-badge&logo=visualstudiocode" />
+  </a>
+</p>
+
+---
+
+## 🧠 What it understands
+
+Kotlin Jump builds a full symbol map of your project.
 
 ### Kotlin
 
-* class, data class, sealed class, interface, object
-* enum, fun, @Composable fun
-* val, var, typealias
+- class, data class, sealed class, interface, object
+- enum, fun, `@Composable`
+- val, var, typealias
 
 ### Java
 
-* class, interface, enum, record, @interface
+- class, interface, enum, record, `@interface`
+
+---
+
+## 🤝 Companion Mode
+
+Already using the **JetBrains Kotlin LSP**? Kotlin Jump detects it automatically and disables overlapping providers (hover, outline, rename, semantic tokens) — keeping only its fast navigation layer.
+
+Set `kotlinJump.companionMode` to `"auto"` (default), `"always"`, or `"never"`.
 
 ---
 
 ## ⚙️ Configuration
 
-Search **"Kotlin Jump"** in Settings (`Cmd+,`) or use:
+Search **Kotlin Jump** in VS Code settings (`Cmd+,`).
 
 ```jsonc
 {
-  "kotlinJump.excludeFromReferences": ["**/src/test*/**", "**/src/debug/**/*Preview.kt"],
-  "kotlinJump.testSourceSets": ["/src/test/", "/src/androidTest/"],
   "kotlinJump.smartNavigation": true,
+  "kotlinJump.companionMode": "auto",
   "kotlinJump.excludePatterns": ["**/build/**", "**/.gradle/**", "**/generated/**"],
+  "kotlinJump.excludeFromReferences": ["**/src/test*/**"],
   "kotlinJump.maxIndexedFiles": 10000,
-  "kotlinJump.concurrency": 20,
-  "kotlinJump.parserWorkers": 4
+  "kotlinJump.indexSourcesJars": true,
+  "kotlinJump.snapshotEnabled": true
 }
 ```
 
@@ -147,49 +273,54 @@ Search **"Kotlin Jump"** in Settings (`Cmd+,`) or use:
 
 ## ⚡ Performance
 
-* ⚡ <1 ms lookup time
-* ⚡ <500 ms indexing (3,000+ files)
-* ⚡ O(1) symbol resolution
+- < 1 ms lookup
+- < 500 ms indexing (3k+ files)
+- incremental updates (changed files only)
+- ~50 ms restart restore
 
-> No language server. No compiler. Just speed.
+No compiler. No background engine.
 
 ---
 
 ## 🛠 How it works
 
-A lightweight regex-based parser builds an in-memory symbol table using optimized maps.
+- regex-based parser — 109× faster than tree-sitter WASM
+- worker thread pool
+- incremental indexing
+- disk snapshot
 
-* 4 worker threads
-* incremental indexing
-* disk persistence
-
-👉 Only changed files are re-parsed.
+Fast by design.
 
 ---
 
 ## ⚠️ Limitations
 
-* ❌ No code completion (not an LSP)
-* ❌ No refactoring
-* ⚠️ Overloaded functions → selection list
-* ⚠️ Extension functions → indexed by name only
+- No code completion (not an LSP)
+- No full refactoring
+- Overloaded functions → selection list
+- Extension functions → indexed by name only
+- String folding → Android only
+
+Kotlin Jump focuses on one thing: **navigation speed**.
 
 ---
 
-## 📦 Install
+## 🔽 Install
 
 ### Marketplace
 
-Search **"Kotlin Jump"** in VS Code (`Cmd+Shift+X`)
+Search **Kotlin Jump** in VS Code (`Cmd+Shift+X`) or install directly:
+
+[marketplace.visualstudio.com/items?itemName=elumine.kotlin-jump](https://marketplace.visualstudio.com/items?itemName=elumine.kotlin-jump)
 
 ---
 
 ### VSIX
 
-Download the latest `.vsix` from [GitHub Releases](https://github.com/elumine-dev/kotlin-jump/releases/latest), then run:
+Download the latest `.vsix` from [GitHub Releases](https://github.com/elumine-dev/kotlin-jump/releases/latest), then:
 
 ```bash
-code --install-extension kotlin-jump-1.5.0.vsix
+code --install-extension kotlin-jump-<version>.vsix
 ```
 
 ---
@@ -200,14 +331,14 @@ code --install-extension kotlin-jump-1.5.0.vsix
 git clone https://github.com/elumine-dev/kotlin-jump
 cd kotlin-jump && npm install
 node esbuild.js --production && npx @vscode/vsce package --no-dependencies
-code --install-extension kotlin-jump-1.5.0.vsix
+code --install-extension kotlin-jump-<version>.vsix
 ```
 
 ---
 
 ## 🔗 Links
 
-* [Changelog](CHANGELOG.md)
-* [Marketplace](https://marketplace.visualstudio.com/items?itemName=elumine.kotlin-jump)
-* [Releases](https://github.com/elumine-dev/kotlin-jump/releases)
-* [Issues](https://github.com/elumine-dev/kotlin-jump/issues)
+- [Changelog](CHANGELOG.md)
+- [Marketplace](https://marketplace.visualstudio.com/items?itemName=elumine.kotlin-jump)
+- [Releases](https://github.com/elumine-dev/kotlin-jump/releases)
+- [Issues](https://github.com/elumine-dev/kotlin-jump/issues)

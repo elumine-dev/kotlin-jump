@@ -219,7 +219,7 @@ function syncInstallCommandSection(title) {
   const body = match[2];
   let replacements = 0;
   const nextBody = body.replace(
-    /code --install-extension kotlin-jump-(?:<version>|[0-9][0-9A-Za-z.+-]*)\.vsix/g,
+    /code --install-extension kotlin-jump-(?:<version>|\*|[0-9][0-9A-Za-z.+-]*)\.vsix/g,
     () => {
       replacements += 1;
       return `code --install-extension kotlin-jump-${version}.vsix`;

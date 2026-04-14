@@ -59,9 +59,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const version = context.extension.packageJSON.version as string ?? '?';
   log.info(`Extension activated — v${version}`);
 
-  // ── What's New notification ──────────────────────────────────────────────
+  // ── First install / update handling ─────────────────────────────────────
   const lastSeen = context.globalState.get<string>('lastSeenVersion');
-  if (lastSeen && lastSeen !== version) {
+  if (!lastSeen) {
+    void vscode.commands.executeCommand(
+      'workbench.action.openWalkthrough',
+      'elumine.kotlin-jump#kotlinJumpGettingStarted',
+      false,
+    );
+  } else if (lastSeen !== version) {
     void vscode.window.showInformationMessage(
       `Kotlin Jump updated to v${version}`,
       "See What's New",

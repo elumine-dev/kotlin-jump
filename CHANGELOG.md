@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.6.0
+
+1.6.0 ships instant XML↔Kotlin string resource navigation via a pre-built index and fixes KDoc hover at declaration sites.
+
+### Improvements
+- Replaced per-navigation file scanning with a pre-built RResourceIndex, making jumps from R.string.* references to their XML definitions — and back — instant regardless of how many resource files the project contains.
+- Added two-way string resource navigation: jump from an R.string.* reference in Kotlin or Java to its XML definition, and from an XML string entry back to all Kotlin and Java usages.
+
+### Fixes
+- Suppressed KDoc hover at a symbol's own declaration site, where it was redundant and visually noisy.
+- Fixed base method lookup depth in KDoc resolution — hover now correctly surfaces inherited documentation from the nearest supertype rather than stopping prematurely.
+
+### Notes
+- Added adversarial test suites covering navigation providers, the hover provider, and the resource index — these are internal but directly increase confidence that navigation results remain correct across malformed inputs and edge conditions.
+
 ## 1.5.1
 
 Documentation-only release: the README was fully rewritten with complete feature coverage, updated copy, and eight animated GIFs — no changes to extension behavior.

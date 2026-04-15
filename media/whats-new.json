@@ -1,38 +1,44 @@
 {
-  "version": "1.5.1",
+  "version": "1.6.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Full feature documentation, animated previews",
-  "summary": "Documentation-only release: the README was fully rewritten with complete feature coverage, updated copy, and eight animated GIFs — no changes to extension behavior.",
+  "tagline": "Instant string resource navigation",
+  "summary": "1.6.0 ships instant XML↔Kotlin string resource navigation via a pre-built index and fixes KDoc hover at declaration sites.",
   "highlights": [
     {
-      "title": "Rewritten README",
-      "description": "The README now covers every major feature with concise copy and eight animated GIFs, giving prospective users a clear visual preview of the extension before installing.",
+      "title": "O(1) String Resource Navigation",
+      "description": "Jumps between R.string.* references and their XML definitions are now instant — a pre-built index replaces per-navigation file scanning.",
       "kind": "improvement"
     },
     {
-      "title": "New Feature Sections",
-      "description": "Dedicated sections for the onboarding walkthrough, Code Lens, and the AI assistant were added to improve discoverability of features that were previously underdocumented.",
-      "kind": "improvement"
+      "title": "KDoc Hover Accuracy",
+      "description": "Hover documentation no longer appears at a symbol's own declaration site, and inherited KDoc from base methods is now resolved correctly.",
+      "kind": "fix"
     },
     {
-      "title": "No Behavior Changes",
-      "description": "No extension commands, settings, or navigation logic were modified — existing installations behave identically to v1.5.0.",
+      "title": "Adversarial Test Coverage",
+      "description": "New edge-case test suites for navigation providers, hover, and the resource index increase confidence in correct behavior across malformed and unusual inputs.",
       "kind": "note"
     }
   ],
   "sections": [
     {
-      "heading": "Packaging and Docs",
+      "heading": "Improvements",
       "bullets": [
-        "Rewrote the README with complete, accurate coverage of all major features: Go to Definition, Find Usages, Code Lens, Test Navigation, onboarding walkthrough, AI assistant, String Folding, and Inlay Hints.",
-        "Added eight animated GIFs to the README — one per feature area — so users can see each capability in action before installing.",
-        "Added dedicated sections for the Code Lens, walkthrough, and AI assistant features, which lacked dedicated documentation in previous versions."
+        "Replaced per-navigation file scanning with a pre-built RResourceIndex, making jumps from R.string.* references to their XML definitions — and back — instant regardless of how many resource files the project contains.",
+        "Added two-way string resource navigation: jump from an R.string.* reference in Kotlin or Java to its XML definition, and from an XML string entry back to all Kotlin and Java usages."
+      ]
+    },
+    {
+      "heading": "Fixes",
+      "bullets": [
+        "Suppressed KDoc hover at a symbol's own declaration site, where it was redundant and visually noisy.",
+        "Fixed base method lookup depth in KDoc resolution — hover now correctly surfaces inherited documentation from the nearest supertype rather than stopping prematurely."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "No changes to extension behavior, commands, settings, parsing, or navigation logic. This release is documentation only."
+        "Added adversarial test suites covering navigation providers, the hover provider, and the resource index — these are internal but directly increase confidence that navigation results remain correct across malformed inputs and edge conditions."
       ]
     }
   ],

@@ -39,6 +39,9 @@ import { registerChatParticipant } from './ai/KotlinJumpChatParticipant';
 import { StringResourceIndex } from './indexer/StringResourceIndex';
 import { StringResourceFoldingProvider } from './providers/StringResourceFoldingProvider';
 import { StringResourceHoverProvider } from './providers/StringResourceHoverProvider';
+import { StringResourceDefinitionProvider } from './providers/StringResourceDefinitionProvider';
+import { StringXmlDefinitionProvider } from './providers/StringXmlDefinitionProvider';
+import { RResourceIndex } from './indexer/RResourceIndex';
 import { runCodeLensAction } from './providers/CodeLensAction';
 import { WhatsNewPanel } from './providers/WhatsNewPanel';
 
@@ -488,6 +491,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const stringIndex     = new StringResourceIndex();
     const foldingProvider = new StringResourceFoldingProvider(stringIndex, log);
 
+    // ── R.string usage index (XML → Kotlin navigation) ──────────────────────
+    // Pre-indexes R.(string|plurals|array).KEY usages from all Kotlin/Java files
+    // so that provideDefinition() is O(1) instead of O(N files × I/O).
+    const rIndex = new RResourceIndex();
+    void Promise.all(allUris.map(async u => {
+      try {
+        const bytes = await vscode.workspace.fs.readFile(u);
+        rIndex.reindexFile(u.toString(), new TextDecoder().decode(bytes));
+      } catch { /* skip unreadable files */ }
+    }));
+    const rW = vscode.workspace.createFileSystemWatcher('**/*.{kt,kts,java}');
+    const handleRChanged = async (uri: vscode.Uri) => {
+      try {
+        const bytes = await vscode.workspace.fs.readFile(uri);
+        rIndex.reindexFile(uri.toString(), new TextDecoder().decode(bytes));
+      } catch { /* skip */ }
+    };
+    rW.onDidChange(handleRChanged);
+    rW.onDidCreate(handleRChanged);
+    rW.onDidDelete(uri => rIndex.removeFile(uri.toString()));
+
     // Initial scan of all strings.xml files
     vscode.workspace.findFiles(
       '**/res/values*/strings.xml',
@@ -537,9 +561,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       foldingProvider,
       strW1,
       strW2,
+      rW,
       vscode.languages.registerHoverProvider(
         [{ language: 'kotlin' }, { language: 'java' }],
         new StringResourceHoverProvider(stringIndex),
+      ),
+      vscode.languages.registerDefinitionProvider(
+        [{ language: 'kotlin' }, { language: 'java' }],
+        new StringResourceDefinitionProvider(stringIndex),
+      ),
+      vscode.languages.registerDefinitionProvider(
+        { language: 'xml' },
+        new StringXmlDefinitionProvider(rIndex),
       ),
       vscode.commands.registerCommand('kotlinJump.enableStringFolding', () => {
         vscode.workspace.getConfiguration('kotlinJump')

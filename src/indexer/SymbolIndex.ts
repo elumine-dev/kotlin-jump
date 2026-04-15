@@ -358,6 +358,46 @@ export class SymbolIndex {
     return this.byFile.get(uriString) ?? EMPTY;
   }
 
+  // For an override method, find the corresponding declaration in the parent interface/class.
+  // Recurses through intermediate overrides to handle chain inheritance (A → B → C).
+  findBaseMethod(
+    entry: { name: string; uri: vscode.Uri; line: number; depth?: number },
+    _recursionLevel = 0,
+  ): SymbolEntry | undefined {
+    if (_recursionLevel > 10) return undefined; // guard against degenerate hierarchies
+
+    const fileSymbols = this.getFileSymbols(entry.uri.toString());
+    let enclosingSupertypes: readonly string[] | undefined;
+    for (const s of fileSymbols) {
+      if (s.line > entry.line) break;
+      if (CLASS_LIKE.has(s.kind)) {
+        // Only adopt supertypes from the DIRECT enclosing class (depth - 1).
+        // Without this filter a sibling inner class declared before the method
+        // would overwrite the outer class's supertypes with its own (often empty).
+        if (entry.depth === undefined || s.depth === entry.depth - 1) {
+          enclosingSupertypes = s.supertypes;
+        }
+      }
+    }
+    if (!enclosingSupertypes || enclosingSupertypes.length === 0) return undefined;
+
+    for (const supertype of enclosingSupertypes) {
+      for (const supertypeEntry of this.lookup(supertype)) {
+        if (!CLASS_LIKE.has(supertypeEntry.kind)) continue;
+        const superSymbols = this.getFileSymbols(supertypeEntry.uri.toString());
+        for (const s of superSymbols) {
+          if (s.name === entry.name && (s.kind === 'fun' || s.kind === 'composable')) {
+            if (!s.isOverride) return s; // found the original declaration
+            // intermediate override — recurse up
+            const deeper = this.findBaseMethod(s, _recursionLevel + 1);
+            if (deeper) return deeper;
+          }
+        }
+      }
+    }
+    return undefined;
+  }
+
   fileUriStrings(): string[] {
     return [...this.byFile.keys()];
   }

@@ -30,8 +30,14 @@ export class KotlinHoverProvider implements vscode.HoverProvider {
     }
     if (!entry) {
       const hits = this.index.lookup(word);
-      if (hits.length !== 1) return null;
-      entry = hits[0];
+      if (hits.length === 1) {
+        entry = hits[0];
+      } else if (hits.length > 1) {
+        // Tiebreak: prefer the declaration in the current document (e.g. override in impl file)
+        const inFile = hits.filter(h => h.uri.toString() === document.uri.toString());
+        if (inFile.length === 1) entry = inFile[0];
+        else return null;
+      }
     }
 
     if (token.isCancellationRequested) return null;
@@ -48,6 +54,28 @@ export class KotlinHoverProvider implements vscode.HoverProvider {
       ? (readSignature(declDoc, entry) ?? fallbackSig(entry))
       : fallbackSig(entry);
 
+    // ── KDoc resolution for override methods ─────────────────────────────────
+    // Rule: at the declaration site in the impl file, own KDoc is already visible
+    // inline — suppressing it avoids showing it twice. Show inherited KDoc only
+    // when the override has no KDoc of its own.
+    let resolvedKDoc = kDoc;
+    if (entry.isOverride && (entry.kind === 'fun' || entry.kind === 'composable')) {
+      const isAtOwnDeclaration =
+        position.line === entry.line &&
+        entry.uri.toString() === document.uri.toString();
+
+      if (kDoc && isAtOwnDeclaration) {
+        resolvedKDoc = null; // already visible above the function — suppress
+      } else if (!kDoc) {
+        const baseEntry = this.index.findBaseMethod(entry);
+        if (baseEntry) {
+          let baseDoc: vscode.TextDocument | null = null;
+          try { baseDoc = await vscode.workspace.openTextDocument(baseEntry.uri); } catch { /* non-fatal */ }
+          if (baseDoc) resolvedKDoc = extractKDoc(baseDoc, baseEntry.line);
+        }
+      }
+    }
+
     // ── Signature block ───────────────────────────────────────────────────────
     const sigMd = new vscode.MarkdownString();
     sigMd.appendCodeblock(entry.isComposable ? `@Composable\n${sig}` : sig, 'kotlin');
@@ -62,9 +90,9 @@ export class KotlinHoverProvider implements vscode.HoverProvider {
     const sections: vscode.MarkdownString[] = [sigMd, metaMd];
 
     // ── KDoc comment (shown below another divider) ────────────────────────────
-    if (kDoc) {
+    if (resolvedKDoc) {
       const docMd = new vscode.MarkdownString();
-      docMd.appendMarkdown(kDoc);
+      docMd.appendMarkdown(resolvedKDoc);
       sections.push(docMd);
     }
 

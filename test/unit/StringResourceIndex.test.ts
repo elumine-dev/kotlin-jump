@@ -125,6 +125,83 @@ describe('StringResourceIndex — mutation', () => {
   });
 });
 
+// ── Plurals ───────────────────────────────────────────────────────────────────
+
+describe('StringResourceIndex — plurals', () => {
+  it('parses a plurals tag and returns the opening tag line', () => {
+    const idx = new StringResourceIndex();
+    idx.reindexFile(DEFAULT_URI, `<resources>\n  <plurals name="pokemon_count">\n    <item quantity="one">%d Pokemon</item>\n  </plurals>\n</resources>`);
+    const entry = idx.getPluralsValue('pokemon_count');
+    expect(entry).toBeDefined();
+    expect(entry!.line).toBe(1);
+  });
+
+  it('getValue does not return plurals entries', () => {
+    const idx = new StringResourceIndex();
+    idx.reindexFile(DEFAULT_URI, `<resources><plurals name="count"><item quantity="one">one</item></plurals></resources>`);
+    expect(idx.getValue('count')).toBeUndefined();
+  });
+
+  it('unknown plurals key returns undefined', () => {
+    const idx = new StringResourceIndex();
+    idx.reindexFile(DEFAULT_URI, `<resources><plurals name="known"><item quantity="one">one</item></plurals></resources>`);
+    expect(idx.getPluralsValue('unknown')).toBeUndefined();
+  });
+
+  it('removeFile clears plurals entries', () => {
+    const idx = new StringResourceIndex();
+    idx.reindexFile(DEFAULT_URI, `<resources><plurals name="count"><item quantity="one">one</item></plurals></resources>`);
+    idx.removeFile(DEFAULT_URI);
+    expect(idx.getPluralsValue('count')).toBeUndefined();
+  });
+
+  it('default locale wins over qualified for plurals', () => {
+    const idx = new StringResourceIndex();
+    idx.reindexFile(FR_URI,      `<resources><plurals name="count"><item quantity="one">un</item></plurals></resources>`);
+    idx.reindexFile(DEFAULT_URI, `<resources><plurals name="count"><item quantity="one">one</item></plurals></resources>`);
+    expect(idx.getPluralsValue('count')?.uri.toString()).toBe(DEFAULT_URI.toString());
+  });
+});
+
+// ── String arrays ─────────────────────────────────────────────────────────────
+
+describe('StringResourceIndex — string arrays', () => {
+  it('parses a string-array tag and returns the opening tag line', () => {
+    const idx = new StringResourceIndex();
+    idx.reindexFile(DEFAULT_URI, `<resources>\n  <string-array name="pokemon_types">\n    <item>Fire</item>\n  </string-array>\n</resources>`);
+    const entry = idx.getArrayValue('pokemon_types');
+    expect(entry).toBeDefined();
+    expect(entry!.line).toBe(1);
+  });
+
+  it('getValue does not return array entries', () => {
+    const idx = new StringResourceIndex();
+    idx.reindexFile(DEFAULT_URI, `<resources><string-array name="types"><item>Fire</item></string-array></resources>`);
+    expect(idx.getValue('types')).toBeUndefined();
+  });
+
+  it('unknown array key returns undefined', () => {
+    const idx = new StringResourceIndex();
+    idx.reindexFile(DEFAULT_URI, `<resources><string-array name="known"><item>A</item></string-array></resources>`);
+    expect(idx.getArrayValue('unknown')).toBeUndefined();
+  });
+
+  it('removeFile clears array entries', () => {
+    const idx = new StringResourceIndex();
+    idx.reindexFile(DEFAULT_URI, `<resources><string-array name="types"><item>Fire</item></string-array></resources>`);
+    idx.removeFile(DEFAULT_URI);
+    expect(idx.getArrayValue('types')).toBeUndefined();
+  });
+
+  it('reindexFile replaces stale array entries', () => {
+    const idx = new StringResourceIndex();
+    idx.reindexFile(DEFAULT_URI, `<resources><string-array name="old"><item>x</item></string-array></resources>`);
+    idx.reindexFile(DEFAULT_URI, `<resources><string-array name="new"><item>y</item></string-array></resources>`);
+    expect(idx.getArrayValue('old')).toBeUndefined();
+    expect(idx.getArrayValue('new')).toBeDefined();
+  });
+});
+
 // ── Edge cases ────────────────────────────────────────────────────────────────
 
 describe('StringResourceIndex — edge cases', () => {

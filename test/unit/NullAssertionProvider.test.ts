@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import * as vscodeMock from './__mocks__/vscode';
 import { NullAssertionProvider } from '../../src/providers/NullAssertionProvider';
+import { makeChangeEvent } from './helpers';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -180,61 +181,131 @@ describe('NullAssertionProvider — multiple !! on the same line', () => {
   });
 });
 
-// ── GUARD-DEBOUNCE ────────────────────────────────────────────────────────────
-// Ces tests échoueront si le debounce est retiré du handler onDidChangeTextDocument.
-// Objectif : prévenir la régression CPU (scan O(n) sur chaque frappe sans debounce).
+// ── GUARD-INCREMENTAL ─────────────────────────────────────────────────────────
+// Ces tests échoueront si le scan incrémental est remplacé par un scan complet
+// (régression CPU : O(n) par frappe au lieu de O(1)).
 
-describe('GUARD-DEBOUNCE — NullAssertionProvider coalesces rapid keystrokes', () => {
+describe('GUARD-INCREMENTAL — NullAssertionProvider incremental scan', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
-  function setupDebounceEnv() {
-    let docChangeListener: ((e: any) => void) | undefined;
+  function setupIncrementalEnv(lines = ['val x = foo!!']) {
     vi.spyOn(vscodeMock.window, 'createTextEditorDecorationType').mockReturnValue({ dispose: vi.fn() } as any);
     vi.spyOn(vscodeMock.window, 'onDidChangeActiveTextEditor').mockReturnValue({ dispose: vi.fn() } as any);
-    vi.spyOn(vscodeMock.window, 'onDidChangeVisibleTextEditors').mockReturnValue({ dispose: vi.fn() } as any);
-    vi.spyOn(vscodeMock.workspace, 'onDidChangeTextDocument')
-      .mockImplementation((fn: any) => { docChangeListener = fn; return { dispose: vi.fn() }; });
+    vi.spyOn(vscodeMock.workspace, 'onDidChangeTextDocument').mockReturnValue({ dispose: vi.fn() } as any);
     vi.spyOn(vscodeMock.workspace, 'onDidChangeConfiguration').mockReturnValue({ dispose: vi.fn() } as any);
     vi.spyOn(vscodeMock.window, 'visibleTextEditors', 'get').mockReturnValue([]);
 
     const provider = new NullAssertionProvider();
-    const editor = makeEditor(['val x = foo!!']);
-    vscodeMock.window.activeTextEditor = editor as any;
+    const editor = makeEditor(lines);
+
+    // Initialise l'état incrémental directement (sans passer par les événements VS Code)
+    (provider as any)._editor = editor;
+    (provider as any)._fullScan(editor); // _flush immédiat → setDecorations appelé une fois
     editor.setDecorations.mockClear();
 
-    return { provider, editor, fire: (doc?: any) => docChangeListener!({ document: doc ?? editor.document }) };
+    return { provider, editor };
   }
 
-  it('10 frappes rapides → 0 appels setDecorations avant 100ms, puis exactement 1', () => {
-    const { editor, fire } = setupDebounceEnv();
+  it('GUARD-INC-A: frappe → setDecorations PAS appelé avant 16ms, appelé après', () => {
+    const { provider, editor } = setupIncrementalEnv(['val x = foo!!']);
+    const newDoc = makeEditor(['val x = foo!!!']).document;
 
-    for (let i = 0; i < 10; i++) fire();
+    (provider as any)._applyChanges(makeChangeEvent(newDoc, 0, 13, 0, 13, '!'));
 
-    expect(editor.setDecorations).toHaveBeenCalledTimes(0);
-    vi.advanceTimersByTime(100);
+    expect(editor.setDecorations).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(15);
+    expect(editor.setDecorations).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
     expect(editor.setDecorations).toHaveBeenCalledTimes(1);
   });
 
-  it('chaque nouvelle frappe repart le timer — seul le dernier compte', () => {
-    const { editor, fire } = setupDebounceEnv();
+  it('GUARD-INC-B: 10 frappes rapides sur la même ligne → _rescanLine appelé 10 fois (pas 10×N)', () => {
+    const N = 100;
+    const lines = Array.from({ length: N }, (_, i) => `val x${i} = ${i}`);
+    lines[50] = 'val x50 = foo!!';
+    const { provider } = setupIncrementalEnv(lines);
 
-    fire(); vi.advanceTimersByTime(50);  // timer à 50ms
-    fire(); vi.advanceTimersByTime(50);  // reset → repart de 0, à 50ms du 2e
-    // total 100ms depuis 1re frappe, mais 2e frappe reset → pas encore déclenché
+    const spy = vi.spyOn(provider as any, '_rescanLine');
 
-    expect(editor.setDecorations).toHaveBeenCalledTimes(0);
-    vi.advanceTimersByTime(50); // maintenant 100ms depuis la 2e frappe
-    expect(editor.setDecorations).toHaveBeenCalledTimes(1);
+    for (let k = 0; k < 10; k++) {
+      const updated = [...lines];
+      updated[50] = `val x50 = foo!!${'!'.repeat(k + 1)}`;
+      const newDoc = makeEditor(updated).document;
+      (provider as any)._applyChanges(
+        makeChangeEvent(newDoc, 50, 15 + k, 50, 15 + k, '!'),
+      );
+    }
+
+    // 1 ligne rescannée par frappe × 10 frappes = 10, PAS 10 × 100
+    expect(spy).toHaveBeenCalledTimes(10);
   });
 
-  it('ignore les changements sur un document différent', () => {
-    const { editor, fire } = setupDebounceEnv();
-    const otherDoc = { languageId: 'kotlin', lineCount: 1, lineAt: () => ({ text: 'x' }) };
+  it('GUARD-INC-C: Entrée entre deux lignes → décoration en-dessous se décale de +1', () => {
+    // Ligne 0 : pas de décoration, ligne 1 : a !!
+    const lines = ['val a = 0', 'val b = foo!!'];
+    const { provider } = setupIncrementalEnv(lines);
 
-    fire(otherDoc); // document différent de editor.document
-    vi.advanceTimersByTime(200);
+    expect((provider as any)._lineDecos.has(1)).toBe(true);
+    expect((provider as any)._lineDecos.has(2)).toBe(false);
 
-    expect(editor.setDecorations).toHaveBeenCalledTimes(0);
+    // Entrée à la fin de la ligne 0 → nouvelle ligne vide entre 0 et 1
+    const newDoc = makeEditor(['val a = 0', '', 'val b = foo!!']).document;
+    (provider as any)._applyChanges(makeChangeEvent(newDoc, 0, 9, 0, 9, '\n'));
+
+    vi.advanceTimersByTime(16);
+    // La décoration de la ligne 1 s'est décalée à la ligne 2
+    expect((provider as any)._lineDecos.has(1)).toBe(false);
+    expect((provider as any)._lineDecos.has(2)).toBe(true);
+  });
+
+  it('GUARD-INC-D: suppression de ligne vide → décoration en-dessous se décale de -1', () => {
+    // Ligne 0 : vide, ligne 1 : vide, ligne 2 : a !!
+    const lines = ['val a = 0', '', 'val b = foo!!'];
+    const { provider } = setupIncrementalEnv(lines);
+
+    expect((provider as any)._lineDecos.has(2)).toBe(true);
+
+    // Supprime la ligne vide 1 (backspace au début de la ligne 1 → join avec ligne 0)
+    const newDoc = makeEditor(['val a = 0', 'val b = foo!!']).document;
+    (provider as any)._applyChanges(makeChangeEvent(newDoc, 0, 9, 1, 0, ''));
+
+    vi.advanceTimersByTime(16);
+    expect((provider as any)._lineDecos.has(1)).toBe(true);
+    expect((provider as any)._lineDecos.has(2)).toBe(false);
+  });
+
+  it('GUARD-INC-E: ajout de """ → rawState reconstruit, ligne suivante perd sa décoration', () => {
+    const lines = ['val x = a!!', 'val y = b!!'];
+    const { provider } = setupIncrementalEnv(lines);
+
+    expect((provider as any)._lineDecos.has(1)).toBe(true);
+
+    // Remplace la ligne 0 par """ → ouvre un raw string, ligne 1 est à l'intérieur
+    const newDoc = makeEditor(['"""', 'val y = b!!']).document;
+    (provider as any)._applyChanges(makeChangeEvent(newDoc, 0, 0, 0, 11, '"""'));
+
+    vi.advanceTimersByTime(16);
+    // rawState[1] = true → ligne 1 effacée du cache
+    expect((provider as any)._lineDecos.has(1)).toBe(false);
+  });
+
+  it('GUARD-INC-F: multi-curseur (2 changements en 1 event) → 1 seul appel setDecorations', () => {
+    const lines = ['val a = 0', 'val b = 0'];
+    const { provider, editor } = setupIncrementalEnv(lines);
+
+    const newDoc = makeEditor(['val a = 0!!', 'val b = 0!!']).document;
+    (provider as any)._applyChanges({
+      document: newDoc,
+      reason: undefined,
+      contentChanges: [
+        { range: { start: { line: 0, character: 9 }, end: { line: 0, character: 9 } }, text: '!!', rangeOffset: 0, rangeLength: 0 },
+        { range: { start: { line: 1, character: 9 }, end: { line: 1, character: 9 } }, text: '!!', rangeOffset: 0, rangeLength: 0 },
+      ],
+    });
+
+    vi.advanceTimersByTime(16);
+    // Malgré 2 changements, 1 seul setDecorations (throttle de coalescence)
+    expect(editor.setDecorations).toHaveBeenCalledTimes(1);
   });
 });

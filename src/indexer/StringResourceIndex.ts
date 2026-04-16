@@ -25,16 +25,28 @@ export class StringResourceIndex {
       strings.set(m[1], { value, uri, line });
     }
 
-    const RE_PLURALS = /<plurals\s+name="([^"]+)"/g;
+    const RE_PLURALS = /<plurals\s+name="([^"]+)"[^>]*>([\s\S]*?)<\/plurals>/g;
     while ((m = RE_PLURALS.exec(content))) {
-      const line = content.slice(0, m.index).split('\n').length - 1;
-      plurals.set(m[1], { value: '', uri, line });
+      const name  = m[1];
+      const block = m[2];
+      const line  = content.slice(0, m.index).split('\n').length - 1;
+      const itemM = /<item\s+quantity="other"[^>]*>([\s\S]*?)<\/item>/.exec(block);
+      const value = itemM ? unescapeXml(stripCdata(itemM[1].trim())) : '';
+      plurals.set(name, { value, uri, line });
     }
 
-    const RE_ARRAY = /<string-array\s+name="([^"]+)"/g;
+    const RE_ARRAY = /<string-array\s+name="([^"]+)"[^>]*>([\s\S]*?)<\/string-array>/g;
     while ((m = RE_ARRAY.exec(content))) {
-      const line = content.slice(0, m.index).split('\n').length - 1;
-      arrays.set(m[1], { value: '', uri, line });
+      const name  = m[1];
+      const block = m[2];
+      const line  = content.slice(0, m.index).split('\n').length - 1;
+      const items: string[] = [];
+      const RE_ITEM = /<item[^>]*>([\s\S]*?)<\/item>/g;
+      let im: RegExpExecArray | null;
+      while ((im = RE_ITEM.exec(block))) {
+        items.push(unescapeXml(stripCdata(im[1].trim())));
+      }
+      arrays.set(name, { value: items.length > 0 ? `[${items.join(', ')}]` : '', uri, line });
     }
 
     const key = uri.toString();
@@ -62,6 +74,26 @@ export class StringResourceIndex {
     return this.lookupIn(this.arraysFiles, key);
   }
 
+  // Returns all locale entries for a given string key (Feature 6 — translation completeness).
+  // Key: locale qualifier like "values", "values-en", "values-fr".
+  getLocaleEntries(key: string): Map<string, StringEntry> {
+    const result = new Map<string, StringEntry>();
+    for (const [fUri, map] of this.files) {
+      const e = map.get(key);
+      if (e) result.set(extractLocaleQualifier(fUri), e);
+    }
+    return result;
+  }
+
+  // Returns all locale qualifiers present in the index.
+  getKnownLocales(): string[] {
+    const locales = new Set<string>();
+    for (const fUri of this.files.keys()) {
+      locales.add(extractLocaleQualifier(fUri));
+    }
+    return [...locales].sort();
+  }
+
   private lookupIn(store: Map<string, Map<string, StringEntry>>, key: string): StringEntry | undefined {
     // Default locale (/values/) takes priority over qualifiers (/values-fr/ etc.)
     for (const [fUri, map] of store) {
@@ -76,6 +108,11 @@ export class StringResourceIndex {
     }
     return undefined;
   }
+}
+
+function extractLocaleQualifier(uriStr: string): string {
+  const m = /\/res\/(values(?:-[^/]+)?)\/[^/]+$/.exec(uriStr);
+  return m ? m[1] : 'values';
 }
 
 function stripCdata(s: string): string {

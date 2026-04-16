@@ -47,7 +47,13 @@ export function registerChatParticipant(
   context: vscode.ExtensionContext,
   index: SymbolIndex,
 ): void {
-  const participant = vscode.chat.createChatParticipant('kotlin-jump', makeHandler(index));
+  // vscode.chat introduced in VS Code 1.87. Guard for editors that predate it.
+  const chatNs = vscode.chat as typeof vscode.chat & {
+    createChatParticipant?: (id: string, handler: vscode.ChatRequestHandler) => vscode.ChatParticipant;
+  };
+  if (typeof chatNs.createChatParticipant !== 'function') return;
+
+  const participant = chatNs.createChatParticipant('kotlin-jump', makeHandler(index));
   participant.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'logo.png');
   context.subscriptions.push(participant);
 }

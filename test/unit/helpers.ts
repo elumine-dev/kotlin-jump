@@ -34,6 +34,25 @@ export function mockDocument(uri: string, code: string) {
   } as any;
 }
 
+/** Build a synthetic TextDocumentChangeEvent for use in incremental-scan tests. */
+export function makeChangeEvent(
+  doc: any,
+  sl: number, sc: number,
+  el: number, ec: number,
+  text: string,
+): any {
+  return {
+    document: doc,
+    reason: undefined,
+    contentChanges: [{
+      range: { start: { line: sl, character: sc }, end: { line: el, character: ec } },
+      text,
+      rangeOffset: 0,
+      rangeLength: 0,
+    }],
+  };
+}
+
 /** Find the Position of a word in code (0-indexed line, character at start of word) */
 export function positionOf(code: string, word: string, occurrence = 1): Position {
   const lines = code.split('\n');

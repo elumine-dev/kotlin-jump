@@ -30,6 +30,16 @@ export function isInsideComment(line: string, pos: number): boolean {
   return false;
 }
 
+// Counts non-overlapping """ occurrences in a line (raw-string state tracking).
+export function countTripleQuotes(s: string): number {
+  let count = 0, i = 0;
+  while (i <= s.length - 3) {
+    if (s[i] === '"' && s[i + 1] === '"' && s[i + 2] === '"') { count++; i += 3; }
+    else i++;
+  }
+  return count;
+}
+
 // Returns true if position `pos` in `line` is inside a string literal,
 // a trailing // comment, or an inline /* block comment */.
 export function isInsideCommentOrString(line: string, pos: number): boolean {

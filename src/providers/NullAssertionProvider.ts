@@ -1,115 +1,163 @@
 import * as vscode from 'vscode';
-import { isInsideCommentOrString } from '../util/textUtils';
+import { isInsideCommentOrString, countTripleQuotes } from '../util/textUtils';
 
 export class NullAssertionProvider implements vscode.Disposable {
   private readonly _decorType: vscode.TextEditorDecorationType;
-  private readonly _subscriptions: vscode.Disposable[];
-  private _debounceTimer: ReturnType<typeof setTimeout> | undefined;
+  private _editor:     vscode.TextEditor | undefined;
+  private _lineDecos = new Map<number, vscode.DecorationOptions[]>();
+  private _rawState:  boolean[] = [];
+  private _flushTimer: ReturnType<typeof setTimeout> | undefined;
+  private readonly _subs: vscode.Disposable[];
 
   constructor() {
-    // Use explicit light/dark colors instead of ThemeColor — ThemeColor('editorWarning.foreground')
-    // is defined for diagnostic squiggles and may not resolve reliably as a text color decoration,
-    // especially when semantic highlighting is active.
     this._decorType = vscode.window.createTextEditorDecorationType({
       light: { color: '#B45309', fontWeight: 'bold' },  // amber-700, readable on white
       dark:  { color: '#FCD34D', fontWeight: 'bold' },  // amber-300, readable on dark backgrounds
     });
 
-    this._subscriptions = [
-      // Update when switching files
+    this._subs = [
       vscode.window.onDidChangeActiveTextEditor(e => {
-        if (e) this._update(e);
-        else this._clear();
+        this._editor = e;
+        if (e) this._fullScan(e);
+        else { this._lineDecos.clear(); this._rawState = []; }
       }),
-      // Update when editors become visible (split view, new tabs)
-      vscode.window.onDidChangeVisibleTextEditors(() => {
-        this.invalidateAll();
-      }),
-      // Update on every keystroke — debounced to avoid O(n) scan on each character
       vscode.workspace.onDidChangeTextDocument(e => {
-        const editor = vscode.window.activeTextEditor;
-        if (editor?.document !== e.document) return;
-        clearTimeout(this._debounceTimer);
-        this._debounceTimer = setTimeout(() => this._update(editor), 100);
+        if (this._editor && e.document === this._editor.document)
+          this._applyChanges(e);
       }),
       vscode.workspace.onDidChangeConfiguration(e => {
-        if (e.affectsConfiguration('kotlinJump.nullAssertionHighlight')) {
+        if (e.affectsConfiguration('kotlinJump.nullAssertionHighlight'))
           this.invalidateAll();
-        }
       }),
     ];
 
-    // Always call invalidateAll — more robust than checking activeTextEditor alone,
-    // because activeTextEditor can be undefined at activation time even with a file open.
     this.invalidateAll();
   }
 
   invalidateAll(): void {
     for (const editor of vscode.window.visibleTextEditors) {
-      this._update(editor);
+      this._editor = editor;
+      this._fullScan(editor);
     }
   }
 
-  private _clear(): void {
-    for (const editor of vscode.window.visibleTextEditors) {
-      editor.setDecorations(this._decorType, []);
+  // ── Layer 1: raw-string oracle ─────────────────────────────────────────────
+  private _buildRawState(doc: vscode.TextDocument): void {
+    this._rawState = new Array(doc.lineCount).fill(false);
+    let inRaw = false;
+    for (let i = 0; i < doc.lineCount; i++) {
+      this._rawState[i] = inRaw;
+      if (countTripleQuotes(doc.lineAt(i).text) % 2 !== 0) inRaw = !inRaw;
     }
   }
 
-  private _update(editor: vscode.TextEditor): void {
-    const lang = editor.document.languageId;
-    if (lang !== 'kotlin' && lang !== 'java') {
-      editor.setDecorations(this._decorType, []);
+  // ── Layer 2: per-line rescan ───────────────────────────────────────────────
+  private _rescanLine(lineNum: number, text: string): void {
+    if (this._rawState[lineNum]) { this._lineDecos.delete(lineNum); return; }
+    const decos: vscode.DecorationOptions[] = [];
+    let idx = 0;
+    while ((idx = text.indexOf('!!', idx)) !== -1) {
+      if (!isInsideCommentOrString(text, idx))
+        decos.push({ range: new vscode.Range(lineNum, idx, lineNum, idx + 2) });
+      idx += 2;
+    }
+    decos.length ? this._lineDecos.set(lineNum, decos) : this._lineDecos.delete(lineNum);
+  }
+
+  // ── Line-index shift after Enter / Backspace ───────────────────────────────
+  private _shiftDecos(fromLine: number, delta: number): void {
+    const next = new Map<number, vscode.DecorationOptions[]>();
+    for (const [line, decos] of this._lineDecos) {
+      if (line < fromLine)               next.set(line, decos);
+      else if (line + delta >= fromLine) next.set(line + delta, decos);
+      // else: line deleted — drop
+    }
+    this._lineDecos = next;
+  }
+
+  // ── Layer 3: 16ms render throttle ─────────────────────────────────────────
+  private _scheduleFlush(): void {
+    if (this._flushTimer !== undefined) return;
+    this._flushTimer = setTimeout(() => {
+      this._flushTimer = undefined;
+      if (this._editor) this._flush(this._editor);
+    }, 16);
+  }
+
+  private _flush(editor: vscode.TextEditor): void {
+    const all: vscode.DecorationOptions[] = [];
+    for (const k of [...this._lineDecos.keys()].sort((a, b) => a - b))
+      all.push(...this._lineDecos.get(k)!);
+    editor.setDecorations(this._decorType, all);
+  }
+
+  // ── Incremental orchestrator (per keystroke) ───────────────────────────────
+  private _applyChanges(e: vscode.TextDocumentChangeEvent): void {
+    const doc = e.document;
+
+    // Sort bottom→top so line-number shifts don't cascade
+    const sorted = [...e.contentChanges].sort(
+      (a, b) => b.range.start.line - a.range.start.line,
+    );
+
+    // Detect whether any """ appeared in the changed text or the affected lines
+    let needsRawRebuild = false;
+    for (const change of sorted) {
+      if (change.text.includes('"""')) { needsRawRebuild = true; break; }
+      for (let i = change.range.start.line;
+           i <= Math.min(change.range.end.line, doc.lineCount - 1); i++) {
+        if (doc.lineAt(i).text.includes('"""')) { needsRawRebuild = true; break; }
+      }
+      if (needsRawRebuild) break;
+    }
+
+    if (needsRawRebuild) {
+      // Raw-string boundaries changed — full rescan (happens rarely, e.g. on """ typing)
+      this._lineDecos.clear();
+      this._buildRawState(doc);
+      for (let i = 0; i < doc.lineCount; i++)
+        this._rescanLine(i, doc.lineAt(i).text);
+      this._scheduleFlush();
       return;
     }
 
+    // Normal incremental path (no """ involved)
+    for (const change of sorted) {
+      const addedLines   = (change.text.match(/\n/g) ?? []).length;
+      const removedLines = change.range.end.line - change.range.start.line;
+      const delta        = addedLines - removedLines;
+      if (delta !== 0)
+        this._shiftDecos(change.range.start.line + 1, delta);
+
+      const endLine = change.range.start.line + addedLines;
+      for (let i = change.range.start.line; i <= endLine && i < doc.lineCount; i++)
+        this._rescanLine(i, doc.lineAt(i).text);
+    }
+
+    this._scheduleFlush();
+  }
+
+  // ── Full scan (on file open / editor switch) ───────────────────────────────
+  private _fullScan(editor: vscode.TextEditor): void {
+    const lang = editor.document.languageId;
     const enabled = vscode.workspace.getConfiguration('kotlinJump')
       .get<boolean>('nullAssertionHighlight', true);
-    if (!enabled) {
+    if ((lang !== 'kotlin' && lang !== 'java') || !enabled) {
+      this._lineDecos.clear();
       editor.setDecorations(this._decorType, []);
       return;
     }
-
-    const opts: vscode.DecorationOptions[] = [];
-    let inRawString = false;
-
-    for (let i = 0; i < editor.document.lineCount; i++) {
-      const text = editor.document.lineAt(i).text;
-
-      const tripleCount = countTripleQuotes(text);
-      if (inRawString) {
-        if (tripleCount % 2 !== 0) inRawString = false;
-        continue;
-      }
-      if (tripleCount % 2 !== 0) {
-        inRawString = true;
-        continue;
-      }
-
-      let idx = 0;
-      while ((idx = text.indexOf('!!', idx)) !== -1) {
-        if (!isInsideCommentOrString(text, idx)) {
-          opts.push({ range: new vscode.Range(i, idx, i, idx + 2) });
-        }
-        idx += 2;
-      }
-    }
-
-    editor.setDecorations(this._decorType, opts);
+    this._lineDecos.clear();
+    this._buildRawState(editor.document);
+    for (let i = 0; i < editor.document.lineCount; i++)
+      this._rescanLine(i, editor.document.lineAt(i).text);
+    this._flush(editor); // immediate — no throttle on open
   }
 
   dispose(): void {
-    clearTimeout(this._debounceTimer);
+    clearTimeout(this._flushTimer);
+    this._lineDecos.clear();
     this._decorType.dispose();
-    for (const s of this._subscriptions) s.dispose();
+    for (const s of this._subs) s.dispose();
   }
-}
-
-function countTripleQuotes(s: string): number {
-  let count = 0, i = 0;
-  while (i <= s.length - 3) {
-    if (s[i] === '"' && s[i + 1] === '"' && s[i + 2] === '"') { count++; i += 3; }
-    else i++;
-  }
-  return count;
 }

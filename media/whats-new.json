@@ -1,26 +1,38 @@
 {
   "version": "1.7.1",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Smoother typing, faster semantic highlighting",
-  "summary": "Kotlin Jump 1.7.1 reduces CPU usage during editing by debouncing decoration scans and caching symbol lookups in the semantic token provider.",
+  "tagline": "Faster editing, less CPU waste",
+  "summary": "Version 1.7.1 reduces CPU overhead during active editing by debouncing decoration scans and caching per-document symbol lookups in semantic highlighting.",
   "highlights": [
     {
-      "title": "Debounced Decoration Scans",
-      "description": "Typing no longer triggers a full document scan on every keystroke. Null-assertion, hex color, and string resource decorations are now updated 100 ms after you stop typing.",
+      "title": "Debounced decoration scans",
+      "description": "Null-assertion highlighting, hex color swatches, and string resource folding no longer re-scan the entire document on every keystroke — rapid typing stays smooth.",
       "kind": "improvement"
     },
     {
-      "title": "Faster Semantic Highlighting",
-      "description": "A per-document word cache eliminates redundant symbol lookups — symbols that appear many times in a file are now resolved only once per highlighting pass.",
+      "title": "Semantic token cache",
+      "description": "Symbols that appear multiple times in the same file are now resolved once and reused, cutting redundant work in semantic highlighting for large Kotlin files.",
       "kind": "improvement"
+    },
+    {
+      "title": "Expanded test coverage",
+      "description": "Adversarial and performance test suites were added for three decoration providers and semantic tokens, directly increasing confidence that visual features stay correct under malformed or edge-case inputs.",
+      "kind": "note"
     }
   ],
   "sections": [
     {
       "heading": "Performance",
       "bullets": [
-        "Debounced the keystroke-driven decoration scan in `NullAssertionProvider`, `HexColorFoldingProvider`, and `StringResourceFoldingProvider` — rapid typing no longer triggers a full O(n) document scan on every character.",
-        "Added a per-document word cache in `SemanticTokensProvider` to eliminate redundant `resolveBest()` calls for symbols that appear multiple times in the same file."
+        "Debounced keystroke-driven scans in NullAssertionProvider, HexColorFoldingProvider, and StringResourceFoldingProvider — rapid typing no longer triggers a full document scan on every character.",
+        "Added a per-document word cache in SemanticTokensProvider so symbols that appear multiple times in the same file are resolved only once per render pass."
+      ]
+    },
+    {
+      "heading": "Notes",
+      "bullets": [
+        "No new commands, settings, or navigation features in this release — all changes are performance and reliability improvements to existing visual annotations.",
+        "Adversarial and performance test suites were added for the affected providers, increasing confidence that decoration and semantic highlighting remain correct under edge conditions."
       ]
     }
   ],

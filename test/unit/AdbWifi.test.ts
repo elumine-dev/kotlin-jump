@@ -20,11 +20,6 @@ function lookupOutput(host: string, port: string): string {
   return `12:00:00.000  ${host}._adb-tls-connect._tcp.local. can be reached at ${host}:${port} (interface 5)`;
 }
 
-// Builds dns-sd -G v4 output with given IP (optionally with interface suffix)
-function resolveOutput(rawIp: string): string {
-  return `Timestamp     A/R Flags if Hostname                          Address                                TTL\n` +
-    ` 12:00:00.000  Add     2  5 Kevin-Phone.local.               ${rawIp}                           120`;
-}
 
 // ── Unit tests for discoverWifiDevices ────────────────────────────────────────
 // We mock the dns-sd runner so tests don't spawn actual processes.
@@ -42,19 +37,6 @@ async function runDiscovery(dnsSdResponses: Record<string, string>) {
 describe('AdbWifi — discoverWifiDevices parsing', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('returns empty array when browse finds nothing', async () => {
-    const { spawn } = await import('child_process');
-    vi.spyOn({ spawn }, 'spawn');
-    // We test the parsing logic directly with raw dns-sd output strings.
-    // The parsing of browse output: only lines with " Add " are kept.
-    const lines = ['header line', 'no match here', '  Add  something  MyDevice'];
-    const instances = lines
-      .filter(l => l.includes(' Add '))
-      .map(l => l.trim().split(/\s+/).at(-1))
-      .filter((x): x is string => Boolean(x));
-    expect(instances).toEqual(['MyDevice']);
-  });
-
   it('extracts instance names from browse output', () => {
     const out = browseOutput('Kevin-Pixel9', 'Kevin-S24');
     const instances = out.split('\n')
@@ -66,6 +48,15 @@ describe('AdbWifi — discoverWifiDevices parsing', () => {
     expect(instances[1]).toBe('Kevin-S24');
   });
 
+  it('filters out lines without " Add "', () => {
+    const lines = ['header line', 'no match here', '  Add  something  MyDevice'];
+    const instances = lines
+      .filter(l => l.includes(' Add '))
+      .map(l => l.trim().split(/\s+/).at(-1))
+      .filter((x): x is string => Boolean(x));
+    expect(instances).toEqual(['MyDevice']);
+  });
+
   it('extracts hostname and port from lookup output', () => {
     const out = lookupOutput('Kevin-Phone.local', '37251');
     const reached = out.match(/can be reached at (\S+)/)?.[1];
@@ -75,24 +66,16 @@ describe('AdbWifi — discoverWifiDevices parsing', () => {
     expect(reached!.slice(colonIdx + 1)).toBe('37251');
   });
 
-  it('extracts IP from resolve output (column 5)', () => {
-    const out = resolveOutput('192.168.1.42');
-    const rawIp = out.split('\n')
-      .find(l => l.includes(' Add '))?.trim().split(/\s+/)[5];
-    expect(rawIp).toBe('192.168.1.42');
+  it('strips trailing DNS dot from hostname (FQDN → plain)', () => {
+    const rawHost = 'Kevin-Phone.local.';
+    const host = rawHost.endsWith('.') ? rawHost.slice(0, -1) : rawHost;
+    expect(host).toBe('Kevin-Phone.local');
   });
 
-  it('strips interface suffix from IP (e.g. 192.168.1.42%en0 → 192.168.1.42)', () => {
-    const out = resolveOutput('192.168.1.42%en0');
-    const rawIp = out.split('\n')
-      .find(l => l.includes(' Add '))?.trim().split(/\s+/)[5];
-    const ip = rawIp?.split('%')[0];
-    expect(ip).toBe('192.168.1.42');
-  });
-
-  it('strips interface suffix — %awdl0', () => {
-    const rawIp = '10.0.0.5%awdl0';
-    expect(rawIp.split('%')[0]).toBe('10.0.0.5');
+  it('does not strip trailing dot if absent', () => {
+    const rawHost = 'Kevin-Phone.local';
+    const host = rawHost.endsWith('.') ? rawHost.slice(0, -1) : rawHost;
+    expect(host).toBe('Kevin-Phone.local');
   });
 });
 
@@ -131,31 +114,31 @@ describe('AdbWifi — adb connect result classification', () => {
   });
 });
 
-// ── Deduplication by IP ───────────────────────────────────────────────────────
+// ── Deduplication by hostname ─────────────────────────────────────────────────
 
-describe('AdbWifi — duplicate IP deduplication', () => {
-  it('deduplicates two instances resolving to the same IP', () => {
-    const seenIps = new Set<string>();
+describe('AdbWifi — duplicate host deduplication', () => {
+  it('deduplicates two instances resolving to the same host', () => {
+    const seenHosts = new Set<string>();
     const results: string[] = [];
 
-    for (const ip of ['192.168.1.42', '192.168.1.42']) {
-      if (seenIps.has(ip)) continue;
-      seenIps.add(ip);
-      results.push(ip);
+    for (const host of ['Kevin-Phone.local', 'Kevin-Phone.local']) {
+      if (seenHosts.has(host)) continue;
+      seenHosts.add(host);
+      results.push(host);
     }
 
     expect(results).toHaveLength(1);
-    expect(results[0]).toBe('192.168.1.42');
+    expect(results[0]).toBe('Kevin-Phone.local');
   });
 
-  it('keeps two instances with different IPs', () => {
-    const seenIps = new Set<string>();
+  it('keeps two instances with different hostnames', () => {
+    const seenHosts = new Set<string>();
     const results: string[] = [];
 
-    for (const ip of ['192.168.1.42', '192.168.1.99']) {
-      if (seenIps.has(ip)) continue;
-      seenIps.add(ip);
-      results.push(ip);
+    for (const host of ['Kevin-Pixel.local', 'Kevin-S24.local']) {
+      if (seenHosts.has(host)) continue;
+      seenHosts.add(host);
+      results.push(host);
     }
 
     expect(results).toHaveLength(2);

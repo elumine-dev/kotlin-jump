@@ -2,7 +2,7 @@
   "name": "kotlin-jump",
   "displayName": "Kotlin Jump",
   "description": "Fast Kotlin & Java navigation — Go to Definition, Find Usages, Go to Implementation. No language server needed.",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "publisher": "elumine",
   "license": "MIT",
   "icon": "media/logo.png",
@@ -468,12 +468,28 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["name", "module", "package"],
+            "required": [
+              "name",
+              "module",
+              "package"
+            ],
             "properties": {
-              "name":    { "type": "string", "description": "Display name shown in the QuickPick (e.g. \"Replica\")" },
-              "module":  { "type": "string", "description": "Gradle module path relative to the project root (e.g. \"replica/app\")" },
-              "package": { "type": "string", "description": "Application ID used by adb (e.g. \"ca.lapresse.lapresseplus.debug\")" },
-              "variant": { "type": "string", "description": "Build variant override (e.g. \"ReplicaLaPresseDebug\"). Falls back to kotlinJump.androidVariant when omitted." }
+              "name": {
+                "type": "string",
+                "description": "Display name shown in the QuickPick (e.g. \"Replica\")"
+              },
+              "module": {
+                "type": "string",
+                "description": "Gradle module path relative to the project root (e.g. \"replica/app\")"
+              },
+              "package": {
+                "type": "string",
+                "description": "Application ID used by adb (e.g. \"ca.lapresse.lapresseplus.debug\")"
+              },
+              "variant": {
+                "type": "string",
+                "description": "Build variant override (e.g. \"ReplicaLaPresseDebug\"). Falls back to kotlinJump.androidVariant when omitted."
+              }
             }
           },
           "default": [],
@@ -790,6 +806,18 @@
               "image": "media/walkthrough/ai-assistant.gif",
               "altText": "AI assistant querying the symbol index"
             }
+          },
+          {
+            "id": "androidRun",
+            "title": "Build, install, and launch Android — one click",
+            "description": "The **$(play) Run** button in the status bar builds your app, installs it, and launches it on the connected device or emulator — no terminal, no config required.\n\nNo device connected? Kotlin Jump finds your AVDs and offers to start one.\n\n[Run Android](command:kotlin-jump.runAndroid)",
+            "media": {
+              "image": "media/walkthrough/android-run.gif",
+              "altText": "Android Run button demo"
+            },
+            "completionEvents": [
+              "onCommand:kotlin-jump.runAndroid"
+            ]
           }
         ]
       }

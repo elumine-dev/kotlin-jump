@@ -1,5 +1,52 @@
 # Changelog
 
+## 1.6.1
+
+1.6.1 adds a one-click Android Run button, visual Kotlin code annotations (hex swatches, !! highlighting, @RequiresApi hints), extended string resource intelligence, and extends availability to VS Codium via the Open VSX Registry.
+
+### Improvements
+- Added a Run button to the status bar that builds, installs, and launches the Android app on the connected device or emulator in one click — no terminal, no manual adb commands.
+- Auto-detects the app module and Gradle install task, supports multi-flavor and multi-app projects via `kotlinJump.androidProjects`, and offers to boot an AVD if no device is connected.
+- Added hex color swatches alongside color literals in Kotlin and Java files so color values are visible without a separate color picker.
+- Added highlighting for !! null-assertion operators to make unsafe dereferences immediately visible during code review.
+- Added @RequiresApi inlay hints, R.plurals and R.array folding with format argument substitution, and a locale grid in string resource hover previews.
+
+### Fixes
+- Fixed extension activation failure on VS Code versions predating 1.87, where an unguarded vscode.chat API call prevented the extension from loading entirely.
+
+### Packaging and Docs
+- Published to the Open VSX Registry — Kotlin Jump is now available for VS Codium and other VS Code-compatible editors.
+- Updated the README with an Android Run walkthrough and an animated step-by-step demo.
+
+## 1.7.0
+
+Kotlin Jump 1.7.0 adds a one-click Android Run button, visual code annotations for hex colors and null assertions, richer string resource intelligence, and fixes a crash that prevented loading on older VS Code versions.
+
+### Improvements
+- Added a Run button in the status bar that builds, installs, and launches an Android app on the connected device or emulator in one click — no terminal, no manual adb commands.
+- Auto-detects the app module and Gradle install task; supports multi-flavor and multi-app workspaces via `kotlinJump.androidProjects`; offers to start an AVD if no device is connected, so the first Run click always works.
+- Added hex color swatches alongside color literals in Kotlin and Java files, making color values visible without a separate color picker.
+- Added highlighting for `!!` null-assertion operators so unsafe dereferences stand out immediately during code review.
+- Added `@RequiresApi` inlay hints, `R.plurals` and `R.array` folding with format argument substitution, and a locale grid in string resource hover previews.
+
+### Fixes
+- Fixed an activation failure on VS Code versions predating 1.87, where an unguarded `vscode.chat` API call prevented the extension from loading entirely.
+
+### Packaging and Docs
+- Kotlin Jump is now published to the Open VSX Registry — available for VS Codium and other VS Code-compatible editors.
+- Updated the README with an Android Run walkthrough and an animated step-by-step demo.
+
+1.7.0 ships the Android Run button — build, install, and launch any Android app from VS Code in one click, zero config required.
+
+### New Features
+- Added a **$(play) Run** button in the status bar that builds, installs, and launches an Android app on the connected device or emulator in one click.
+- Auto-detects the app module and Gradle install task via `gradlew tasks --group install` — works for any project including multi-flavor builds.
+- Reads the merged manifest after a successful build to get the real package name and LAUNCHER activity, then launches via `adb shell am start -n` — the same method Android Studio uses.
+- Offers to start an AVD if no device is connected: lists available emulators via `emulator -list-avds` and polls until boot completes.
+- Background task discovery runs silently at workspace open so the first Run click is always instant.
+- Added a **$(chevron-down)** switch button for projects with multiple apps configured via `kotlinJump.androidProjects`.
+- Falls back to `adb shell monkey` if the merged manifest is not yet on disk (first build on a fresh checkout).
+
 ## 1.6.0
 
 1.6.0 ships instant XML↔Kotlin string resource navigation via a pre-built index and fixes KDoc hover at declaration sites.

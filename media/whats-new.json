@@ -1,38 +1,21 @@
 {
-  "version": "1.7.1",
+  "version": "1.8.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Faster editing, less CPU waste",
-  "summary": "Version 1.7.1 reduces CPU overhead during active editing by debouncing decoration scans and caching per-document symbol lookups in semantic highlighting.",
+  "tagline": "Packaging release, no behavior changes",
+  "summary": "Version 1.8.0 is a packaging release — no changes to extension behavior, commands, or settings since v1.7.1.",
   "highlights": [
     {
-      "title": "Debounced decoration scans",
-      "description": "Null-assertion highlighting, hex color swatches, and string resource folding no longer re-scan the entire document on every keystroke — rapid typing stays smooth.",
-      "kind": "improvement"
-    },
-    {
-      "title": "Semantic token cache",
-      "description": "Symbols that appear multiple times in the same file are now resolved once and reused, cutting redundant work in semantic highlighting for large Kotlin files.",
-      "kind": "improvement"
-    },
-    {
-      "title": "Expanded test coverage",
-      "description": "Adversarial and performance test suites were added for three decoration providers and semantic tokens, directly increasing confidence that visual features stay correct under malformed or edge-case inputs.",
+      "title": "No Functional Changes",
+      "description": "All commands, settings, navigation, and visual features are identical to v1.7.1 — this release contains only version and documentation updates.",
       "kind": "note"
     }
   ],
   "sections": [
     {
-      "heading": "Performance",
-      "bullets": [
-        "Debounced keystroke-driven scans in NullAssertionProvider, HexColorFoldingProvider, and StringResourceFoldingProvider — rapid typing no longer triggers a full document scan on every character.",
-        "Added a per-document word cache in SemanticTokensProvider so symbols that appear multiple times in the same file are resolved only once per render pass."
-      ]
-    },
-    {
       "heading": "Notes",
       "bullets": [
-        "No new commands, settings, or navigation features in this release — all changes are performance and reliability improvements to existing visual annotations.",
-        "Adversarial and performance test suites were added for the affected providers, increasing confidence that decoration and semantic highlighting remain correct under edge conditions."
+        "No new commands, settings, or extension behaviors introduced in this release.",
+        "Updated manual install instructions in the README to reference the 1.8.0 package."
       ]
     }
   ],

@@ -4,6 +4,7 @@ import { isInsideCommentOrString } from '../util/textUtils';
 export class NullAssertionProvider implements vscode.Disposable {
   private readonly _decorType: vscode.TextEditorDecorationType;
   private readonly _subscriptions: vscode.Disposable[];
+  private _debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {
     // Use explicit light/dark colors instead of ThemeColor — ThemeColor('editorWarning.foreground')
@@ -24,10 +25,12 @@ export class NullAssertionProvider implements vscode.Disposable {
       vscode.window.onDidChangeVisibleTextEditors(() => {
         this.invalidateAll();
       }),
-      // Update on every keystroke
+      // Update on every keystroke — debounced to avoid O(n) scan on each character
       vscode.workspace.onDidChangeTextDocument(e => {
         const editor = vscode.window.activeTextEditor;
-        if (editor?.document === e.document) this._update(editor);
+        if (editor?.document !== e.document) return;
+        clearTimeout(this._debounceTimer);
+        this._debounceTimer = setTimeout(() => this._update(editor), 100);
       }),
       vscode.workspace.onDidChangeConfiguration(e => {
         if (e.affectsConfiguration('kotlinJump.nullAssertionHighlight')) {
@@ -96,6 +99,7 @@ export class NullAssertionProvider implements vscode.Disposable {
   }
 
   dispose(): void {
+    clearTimeout(this._debounceTimer);
     this._decorType.dispose();
     for (const s of this._subscriptions) s.dispose();
   }

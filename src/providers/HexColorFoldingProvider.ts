@@ -10,6 +10,7 @@ const HEX_STR_RE = /"(#(?:[0-9A-Fa-f]{8}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{4}|[0-9A-Fa-
 export class HexColorFoldingProvider implements vscode.Disposable {
   private readonly _decorType: vscode.TextEditorDecorationType;
   private readonly _subscriptions: vscode.Disposable[];
+  private _debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {
     // No shared style — color is set per-decoration via renderOptions.before.color
@@ -19,9 +20,12 @@ export class HexColorFoldingProvider implements vscode.Disposable {
         if (e) this._update(e);
         else this._clear();
       }),
+      // Debounced to avoid O(n) scan on each keystroke
       vscode.workspace.onDidChangeTextDocument(e => {
         const editor = vscode.window.activeTextEditor;
-        if (editor?.document === e.document) this._update(editor);
+        if (editor?.document !== e.document) return;
+        clearTimeout(this._debounceTimer);
+        this._debounceTimer = setTimeout(() => this._update(editor), 100);
       }),
       vscode.workspace.onDidChangeConfiguration(e => {
         if (e.affectsConfiguration('kotlinJump.hexColorSwatch')) {
@@ -99,6 +103,7 @@ export class HexColorFoldingProvider implements vscode.Disposable {
   }
 
   dispose(): void {
+    clearTimeout(this._debounceTimer);
     this._decorType.dispose();
     for (const s of this._subscriptions) s.dispose();
   }

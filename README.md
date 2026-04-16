@@ -158,6 +158,55 @@ Removes the tiny frictions you hit all day.
 
 ---
 
+## 📱 Android Run Button
+
+Build, install, launch — one click.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/walkthrough/android-run.gif" width="720" />
+</p>
+
+No setup required. Detects your app module automatically, picks the right Gradle install task, and launches on the connected device or emulator.
+
+No device connected? It finds your AVDs and offers to start one.
+
+**Monorepos and multi-flavor projects** — add `kotlinJump.androidProjects` to `.vscode/settings.json`.
+
+Also needed if your `applicationId` lives in a **build-logic convention plugin** — the auto-detector can't read it.
+
+```jsonc
+// .vscode/settings.json
+{
+  "kotlinJump.androidProjects": [
+    {
+      "name": "Mobile",
+      "module": "mobile/app",
+      "package": "com.example.mobile.debug",
+      "variant": "Debug"
+    },
+    {
+      "name": "TV",
+      "module": "tv/app",
+      "package": "com.example.tv.debug",
+      "variant": "TvDebug"
+    }
+  ]
+}
+```
+
+| Field | Description |
+|---|---|
+| `name` | Label shown in button and picker |
+| `module` | Path to app module — `"app"` or `"mobile/app"` |
+| `package` | Debug application ID |
+| `variant` | Build variant → `install{Variant}` (default: `"Debug"`) |
+
+A `$(chevron-down)` button appears next to Run when multiple apps are configured. Click to switch.
+
+Reset: **Cmd+Shift+P → Kotlin Jump: Reset Android Run Config**
+
+---
+
 ## 🧵 String Resource Folding
 
 Stop jumping to `strings.xml`.
@@ -259,13 +308,20 @@ Search **Kotlin Jump** in VS Code settings (`Cmd+,`).
 
 ```jsonc
 {
+  // Navigation
   "kotlinJump.smartNavigation": true,
   "kotlinJump.companionMode": "auto",
   "kotlinJump.excludePatterns": ["**/build/**", "**/.gradle/**", "**/generated/**"],
   "kotlinJump.excludeFromReferences": ["**/src/test*/**"],
   "kotlinJump.maxIndexedFiles": 10000,
   "kotlinJump.indexSourcesJars": true,
-  "kotlinJump.snapshotEnabled": true
+  "kotlinJump.snapshotEnabled": true,
+
+  // Android Run button
+  "kotlinJump.androidRunEnabled": true,
+  "kotlinJump.androidProjects": [],  // see Android Run section above
+  "kotlinJump.androidVariant": "Debug",  // fallback when task discovery finds nothing
+  "kotlinJump.androidSkipLaunch": false  // set to true to build-only (skip adb launch)
 }
 ```
 

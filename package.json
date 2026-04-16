@@ -736,6 +736,18 @@
             }
           },
           {
+            "id": "androidRun",
+            "title": "Build, install, and launch Android — one click",
+            "description": "The **$(play) Run** button in the status bar builds your app, installs it, and launches it on the connected device or emulator — no terminal, no config required.\n\nNo device connected? Kotlin Jump finds your AVDs and offers to start one.\n\n[Run Android](command:kotlin-jump.runAndroid)",
+            "media": {
+              "image": "media/walkthrough/android-run.gif",
+              "altText": "Android Run button demo"
+            },
+            "completionEvents": [
+              "onCommand:kotlin-jump.runAndroid"
+            ]
+          },
+          {
             "id": "goToDefinition",
             "title": "Go to Definition — even inside JARs",
             "description": "Press **F12** (or **Cmd+Click**) on any symbol to jump to its definition — across files, modules, and straight into JAR sources. No language server, no JVM spin-up.\n\n[Try it](command:editor.action.revealDefinition)",
@@ -806,18 +818,6 @@
               "image": "media/walkthrough/ai-assistant.gif",
               "altText": "AI assistant querying the symbol index"
             }
-          },
-          {
-            "id": "androidRun",
-            "title": "Build, install, and launch Android — one click",
-            "description": "The **$(play) Run** button in the status bar builds your app, installs it, and launches it on the connected device or emulator — no terminal, no config required.\n\nNo device connected? Kotlin Jump finds your AVDs and offers to start one.\n\n[Run Android](command:kotlin-jump.runAndroid)",
-            "media": {
-              "image": "media/walkthrough/android-run.gif",
-              "altText": "Android Run button demo"
-            },
-            "completionEvents": [
-              "onCommand:kotlin-jump.runAndroid"
-            ]
           }
         ]
       }

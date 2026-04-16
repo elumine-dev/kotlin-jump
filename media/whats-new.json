@@ -1,47 +1,26 @@
 {
-  "version": "1.7.0",
+  "version": "1.7.1",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Android run, visual annotations, Open VSX",
-  "summary": "Kotlin Jump 1.7.0 adds a one-click Android Run button, visual code annotations for hex colors and null assertions, richer string resource intelligence, and fixes a crash that prevented loading on older VS Code versions.",
+  "tagline": "Smoother typing, faster semantic highlighting",
+  "summary": "Kotlin Jump 1.7.1 reduces CPU usage during editing by debouncing decoration scans and caching symbol lookups in the semantic token provider.",
   "highlights": [
     {
-      "title": "One-Click Android Run",
-      "description": "A new Run button in the status bar builds, installs, and launches your Android app on a connected device or emulator — no terminal, no manual adb commands.",
+      "title": "Debounced Decoration Scans",
+      "description": "Typing no longer triggers a full document scan on every keystroke. Null-assertion, hex color, and string resource decorations are now updated 100 ms after you stop typing.",
       "kind": "improvement"
     },
     {
-      "title": "Visual Code Annotations",
-      "description": "Hex color swatches, !! null-assertion highlighting, and @RequiresApi inlay hints make code semantics visible at a glance without extra tooling.",
+      "title": "Faster Semantic Highlighting",
+      "description": "A per-document word cache eliminates redundant symbol lookups — symbols that appear many times in a file are now resolved only once per highlighting pass.",
       "kind": "improvement"
-    },
-    {
-      "title": "Activation Fix for Older Editors",
-      "description": "A crash that prevented the extension from loading on VS Code versions predating 1.87 is now fixed — the extension loads cleanly regardless of editor version.",
-      "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Improvements",
+      "heading": "Performance",
       "bullets": [
-        "Added a Run button in the status bar that builds, installs, and launches an Android app on the connected device or emulator in one click — no terminal, no manual adb commands.",
-        "Auto-detects the app module and Gradle install task; supports multi-flavor and multi-app workspaces via `kotlinJump.androidProjects`; offers to start an AVD if no device is connected, so the first Run click always works.",
-        "Added hex color swatches alongside color literals in Kotlin and Java files, making color values visible without a separate color picker.",
-        "Added highlighting for `!!` null-assertion operators so unsafe dereferences stand out immediately during code review.",
-        "Added `@RequiresApi` inlay hints, `R.plurals` and `R.array` folding with format argument substitution, and a locale grid in string resource hover previews."
-      ]
-    },
-    {
-      "heading": "Fixes",
-      "bullets": [
-        "Fixed an activation failure on VS Code versions predating 1.87, where an unguarded `vscode.chat` API call prevented the extension from loading entirely."
-      ]
-    },
-    {
-      "heading": "Packaging and Docs",
-      "bullets": [
-        "Kotlin Jump is now published to the Open VSX Registry — available for VS Codium and other VS Code-compatible editors.",
-        "Updated the README with an Android Run walkthrough and an animated step-by-step demo."
+        "Debounced the keystroke-driven decoration scan in `NullAssertionProvider`, `HexColorFoldingProvider`, and `StringResourceFoldingProvider` — rapid typing no longer triggers a full O(n) document scan on every character.",
+        "Added a per-document word cache in `SemanticTokensProvider` to eliminate redundant `resolveBest()` calls for symbols that appear multiple times in the same file."
       ]
     }
   ],

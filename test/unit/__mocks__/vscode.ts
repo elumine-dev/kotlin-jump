@@ -376,6 +376,41 @@ export enum FoldingRangeKind {
   Region  = 3,
 }
 
+// ── Semantic Tokens ───────────────────────────────────────────────────────────
+
+export class SemanticTokensLegend {
+  constructor(public tokenTypes: string[], public tokenModifiers: string[]) {}
+}
+
+export class SemanticTokens {
+  constructor(public data: Uint32Array, public resultId?: string) {}
+}
+
+export class SemanticTokensEdits {
+  constructor(public edits: SemanticTokensEdit[], public resultId?: string) {}
+}
+
+export class SemanticTokensEdit {
+  constructor(public start: number, public deleteCount: number, public data?: Uint32Array) {}
+}
+
+export class SemanticTokensBuilder {
+  private _data: number[] = [];
+  private _prevLine = 0;
+  private _prevChar = 0;
+  constructor(private _legend: SemanticTokensLegend) {}
+  push(line: number, char: number, len: number, tokenType: number, tokenModifiers: number): void {
+    const dl = line - this._prevLine;
+    const dc = dl === 0 ? char - this._prevChar : char;
+    this._data.push(dl, dc, len, tokenType, tokenModifiers);
+    this._prevLine = line;
+    this._prevChar = char;
+  }
+  build(resultId?: string): SemanticTokens {
+    return new SemanticTokens(new Uint32Array(this._data), resultId);
+  }
+}
+
 // ── Chat Participant ──────────────────────────────────────────────────────────
 
 export const chat = {

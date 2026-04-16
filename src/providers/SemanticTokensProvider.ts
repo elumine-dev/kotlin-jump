@@ -147,6 +147,8 @@ const KOTLIN_KEYWORDS = new Set([
   'lateinit', 'actual', 'expect', 'reified', 'crossinline', 'noinline', 'tailrec',
 ]);
 
+const WORD_RE = /\b[A-Za-z_]\w{1,}\b/g; // min 2 chars
+
 // ── Per-document token cache ──────────────────────────────────────────────────
 
 interface CachedTokens {
@@ -268,7 +270,9 @@ export class KotlinSemanticTokensProvider
 
     // ── Phase 2: reference sites (regex scan) ──────────────────────────────
     const lines = doc.getText().split('\n');
-    const WORD_RE = /\b[A-Za-z_]\w{1,}\b/g; // min 2 chars
+    // Per-run cache: same word resolves identically within one document version.
+    // Eliminates redundant resolveBest() calls for repeated symbols.
+    const wordCache = new Map<string, SymbolEntry | undefined>();
 
     for (let li = 0; li < lines.length; li++) {
       if (ct.isCancellationRequested) break;
@@ -299,11 +303,17 @@ export class KotlinSemanticTokensProvider
         if (hardcoded) { tokens.push(hardcoded); continue; }
 
         // ── Resolve from project index ────────────────────────────────────
-        const result = resolveBest(word, doc, fqn => this.index.lookupFqn(fqn));
-        // Fallback to global lookup only for PascalCase names (class/object refs) —
-        // lowercase names like `name`, `value`, `id` collide too frequently across projects
-        const isPascal = word.charCodeAt(0) >= 65 && word.charCodeAt(0) <= 90;
-        const entry  = result.matches[0] ?? (isPascal ? this.index.lookup(word)[0] : undefined);
+        let entry: SymbolEntry | undefined;
+        if (wordCache.has(word)) {
+          entry = wordCache.get(word);
+        } else {
+          const result = resolveBest(word, doc, fqn => this.index.lookupFqn(fqn));
+          // Fallback to global lookup only for PascalCase names (class/object refs) —
+          // lowercase names like `name`, `value`, `id` collide too frequently across projects
+          const isPascal = word.charCodeAt(0) >= 65 && word.charCodeAt(0) <= 90;
+          entry = result.matches[0] ?? (isPascal ? this.index.lookup(word)[0] : undefined);
+          wordCache.set(word, entry);
+        }
         if (!entry) continue;
 
         const type = kindToTypeIndex(entry.kind, entry.depth);

@@ -2,6 +2,16 @@
 
 ## 1.7.1
 
+Version 1.7.1 reduces CPU overhead during active editing by debouncing decoration scans and caching per-document symbol lookups in semantic highlighting.
+
+### Notes
+- No new commands, settings, or navigation features in this release — all changes are performance and reliability improvements to existing visual annotations.
+- Adversarial and performance test suites were added for the affected providers, increasing confidence that decoration and semantic highlighting remain correct under edge conditions.
+
+### Performance
+- Debounced keystroke-driven scans in NullAssertionProvider, HexColorFoldingProvider, and StringResourceFoldingProvider — rapid typing no longer triggers a full document scan on every character.
+- Added a per-document word cache in SemanticTokensProvider so symbols that appear multiple times in the same file are resolved only once per render pass.
+
 ### Performance
 - Debounced the keystroke-driven decoration scan in `NullAssertionProvider`, `HexColorFoldingProvider`, and `StringResourceFoldingProvider` — rapid typing no longer triggers a full O(n) document scan on every character.
 - Added a per-document word cache in `SemanticTokensProvider` to eliminate redundant `resolveBest()` calls for symbols that appear multiple times in the same file.

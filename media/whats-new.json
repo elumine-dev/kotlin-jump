@@ -1,44 +1,47 @@
 {
-  "version": "1.6.0",
+  "version": "1.7.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Instant string resource navigation",
-  "summary": "1.6.0 ships instant XML↔Kotlin string resource navigation via a pre-built index and fixes KDoc hover at declaration sites.",
+  "tagline": "Android run, visual annotations, Open VSX",
+  "summary": "Kotlin Jump 1.7.0 adds a one-click Android Run button, visual code annotations for hex colors and null assertions, richer string resource intelligence, and fixes a crash that prevented loading on older VS Code versions.",
   "highlights": [
     {
-      "title": "O(1) String Resource Navigation",
-      "description": "Jumps between R.string.* references and their XML definitions are now instant — a pre-built index replaces per-navigation file scanning.",
+      "title": "One-Click Android Run",
+      "description": "A new Run button in the status bar builds, installs, and launches your Android app on a connected device or emulator — no terminal, no manual adb commands.",
       "kind": "improvement"
     },
     {
-      "title": "KDoc Hover Accuracy",
-      "description": "Hover documentation no longer appears at a symbol's own declaration site, and inherited KDoc from base methods is now resolved correctly.",
-      "kind": "fix"
+      "title": "Visual Code Annotations",
+      "description": "Hex color swatches, !! null-assertion highlighting, and @RequiresApi inlay hints make code semantics visible at a glance without extra tooling.",
+      "kind": "improvement"
     },
     {
-      "title": "Adversarial Test Coverage",
-      "description": "New edge-case test suites for navigation providers, hover, and the resource index increase confidence in correct behavior across malformed and unusual inputs.",
-      "kind": "note"
+      "title": "Activation Fix for Older Editors",
+      "description": "A crash that prevented the extension from loading on VS Code versions predating 1.87 is now fixed — the extension loads cleanly regardless of editor version.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
       "heading": "Improvements",
       "bullets": [
-        "Replaced per-navigation file scanning with a pre-built RResourceIndex, making jumps from R.string.* references to their XML definitions — and back — instant regardless of how many resource files the project contains.",
-        "Added two-way string resource navigation: jump from an R.string.* reference in Kotlin or Java to its XML definition, and from an XML string entry back to all Kotlin and Java usages."
+        "Added a Run button in the status bar that builds, installs, and launches an Android app on the connected device or emulator in one click — no terminal, no manual adb commands.",
+        "Auto-detects the app module and Gradle install task; supports multi-flavor and multi-app workspaces via `kotlinJump.androidProjects`; offers to start an AVD if no device is connected, so the first Run click always works.",
+        "Added hex color swatches alongside color literals in Kotlin and Java files, making color values visible without a separate color picker.",
+        "Added highlighting for `!!` null-assertion operators so unsafe dereferences stand out immediately during code review.",
+        "Added `@RequiresApi` inlay hints, `R.plurals` and `R.array` folding with format argument substitution, and a locale grid in string resource hover previews."
       ]
     },
     {
       "heading": "Fixes",
       "bullets": [
-        "Suppressed KDoc hover at a symbol's own declaration site, where it was redundant and visually noisy.",
-        "Fixed base method lookup depth in KDoc resolution — hover now correctly surfaces inherited documentation from the nearest supertype rather than stopping prematurely."
+        "Fixed an activation failure on VS Code versions predating 1.87, where an unguarded `vscode.chat` API call prevented the extension from loading entirely."
       ]
     },
     {
-      "heading": "Notes",
+      "heading": "Packaging and Docs",
       "bullets": [
-        "Added adversarial test suites covering navigation providers, the hover provider, and the resource index — these are internal but directly increase confidence that navigation results remain correct across malformed inputs and edge conditions."
+        "Kotlin Jump is now published to the Open VSX Registry — available for VS Codium and other VS Code-compatible editors.",
+        "Updated the README with an Android Run walkthrough and an animated step-by-step demo."
       ]
     }
   ],

@@ -524,7 +524,8 @@ function runShell(cmd: string): Promise<string | undefined> {
 
 // ── ADB WiFi discovery (macOS only — dns-sd / mDNS) ─────────────────────────
 
-type WifiDevice = { instance: string; ip: string; port: string };
+// host = .local hostname (macOS resolves via mDNS natively — no IP resolution needed)
+type WifiDevice = { instance: string; host: string; port: string };
 
 function runDnsSd(args: string[], timeoutMs: number): Promise<string> {
   return new Promise(resolve => {
@@ -547,7 +548,7 @@ export async function discoverWifiDevices(log: Logger): Promise<WifiDevice[]> {
   if (instances.length === 0) return [];
 
   const devices: WifiDevice[] = [];
-  const seenIps = new Set<string>();
+  const seenHosts = new Set<string>();
 
   for (const instance of instances) {
     // Step 2: lookup — resolve "can be reached at HOSTNAME:PORT"
@@ -555,21 +556,16 @@ export async function discoverWifiDevices(log: Logger): Promise<WifiDevice[]> {
     const reached = lookupOut.match(/can be reached at (\S+)/)?.[1];
     if (!reached) continue;
     const colonIdx = reached.lastIndexOf(':');
-    const host = reached.slice(0, colonIdx);
+    const rawHost = reached.slice(0, colonIdx);
     const port = reached.slice(colonIdx + 1);
-    if (!host || !port) continue;
+    if (!rawHost || !port) continue;
+    // Strip trailing DNS dot (FQDN → plain hostname for adb connect)
+    const host = rawHost.endsWith('.') ? rawHost.slice(0, -1) : rawHost;
+    if (seenHosts.has(host)) continue;
 
-    // Step 3: resolve hostname to IPv4 address
-    const resolveOut = await runDnsSd(['-G', 'v4', host], 3000);
-    const rawIp = resolveOut.split('\n')
-      .find(l => l.includes(' Add '))?.trim().split(/\s+/)[5];
-    // Strip interface suffix (e.g. "192.168.1.42%en0" → "192.168.1.42")
-    const ip = rawIp?.split('%')[0];
-    if (!ip || seenIps.has(ip)) continue;
-
-    seenIps.add(ip);
-    devices.push({ instance, ip, port });
-    log.info(`[android:wifi] resolved: ${ip}:${port}`);
+    seenHosts.add(host);
+    devices.push({ instance, host, port });
+    log.info(`[android:wifi] found: ${host}:${port}`);
   }
   return devices;
 }
@@ -604,31 +600,22 @@ async function connectAdbWifi(log: Logger): Promise<string | undefined> {
     chosen = devices[0];
   } else {
     const pick = await vscode.window.showQuickPick(
-      devices.map(d => ({ label: `$(device-mobile) ${d.ip}:${d.port}`, description: d.instance, device: d })),
+      devices.map(d => ({ label: `$(device-mobile) ${d.instance}`, description: `port ${d.port}`, device: d })),
       { placeHolder: 'Multiple devices found — select one', title: 'Kotlin Jump — ADB WiFi' },
     );
     if (!pick) return undefined;
     chosen = pick.device;
   }
 
-  // Disconnect stale mDNS auto-connections (they appear in adb devices but are unreliable)
-  const adbOut = await runShell('adb devices');
-  if (adbOut) {
-    for (const line of adbOut.split('\n')) {
-      if (line.includes('_adb-tls-connect')) {
-        const serial = line.split(/\s+/)[0];
-        await runShell(`adb disconnect "${serial}"`);
-        log.info(`[android:wifi] disconnected stale mDNS entry: ${serial}`);
-      }
-    }
-  }
-
-  const result = await runShell(`adb connect ${chosen.ip}:${chosen.port}`);
-  log.info(`[android:wifi] adb connect → ${result}`);
+  // Use hostname directly — macOS resolves .local names via mDNS natively.
+  // Avoids IP resolution (saves 3 s) and the IP-lookup race condition.
+  const serial = `${chosen.host}:${chosen.port}`;
+  const result = await runShell(`adb connect ${serial}`);
+  log.info(`[android:wifi] adb connect ${serial} → ${result}`);
 
   if (result?.includes('connected to') || result?.includes('already connected')) {
-    vscode.window.showInformationMessage(`Kotlin Jump: Connected to ${chosen.ip}:${chosen.port} ✓`);
-    return `${chosen.ip}:${chosen.port}`;
+    vscode.window.showInformationMessage(`Kotlin Jump: Connected to ${chosen.instance} ✓`);
+    return serial;
   }
   if (result?.includes('failed to authenticate')) {
     vscode.window.showErrorMessage(

@@ -500,3 +500,95 @@ describe('StringResourceFoldingProvider — status bar', () => {
     expect(statusBar.show).not.toHaveBeenCalled();
   });
 });
+
+// ── format(R.string.key, args…) substitution ─────────────────────────────────
+
+const FORMAT_XML = `<resources>
+  <string name="msg_welcome_user">Hello, %s!</string>
+  <string name="msg_level_up">%s reached level %d!</string>
+  <string name="msg_score">Score: %1\$d / %2\$d</string>
+  <string name="msg_damage">%1\$s dealt %2\$d damage to %3\$s!</string>
+  <string name="msg_exp_needed">%d EXP to next level</string>
+  <string name="msg_catch_rate">Catch rate: %.1f%%</string>
+  <string name="standalone">Raw value</string>
+</resources>`;
+
+function decorationsForFormat(lines: string[]) {
+  const { provider } = buildProvider(FORMAT_XML);
+  const editor = makeEditor(lines, 'kotlin', -1);
+  vi.spyOn(vscodeMock.window, 'visibleTextEditors', 'get').mockReturnValue([editor]);
+  provider.invalidateAll();
+  return (editor.setDecorations.mock.lastCall?.[1] ?? []) as any[];
+}
+
+describe('StringResourceFoldingProvider — format() arg substitution', () => {
+  it('substitutes a single %s arg: format(R.string.msg_welcome_user, p.name)', () => {
+    const decs = decorationsForFormat(['val g = format(R.string.msg_welcome_user, p.name)']);
+    expect(decs).toHaveLength(1);
+    expect(decs[0].renderOptions.before.contentText).toBe('"Hello, p.name!"');
+  });
+
+  it('substitutes multiple sequential args: format(R.string.msg_level_up, p.name, p.level)', () => {
+    const decs = decorationsForFormat(['val m = format(R.string.msg_level_up, p.name, p.level)']);
+    expect(decs).toHaveLength(1);
+    expect(decs[0].renderOptions.before.contentText).toBe('"p.name reached level p.level!"');
+  });
+
+  it('substitutes positional args: format(R.string.msg_score, 1800, 2000)', () => {
+    const decs = decorationsForFormat(['val s = format(R.string.msg_score, 1800, 2000)']);
+    expect(decs).toHaveLength(1);
+    expect(decs[0].renderOptions.before.contentText).toBe('"Score: 1800 / 2000"');
+  });
+
+  it('substitutes 3 positional args: format(R.string.msg_damage, p.name, 42, "Pikachu")', () => {
+    const decs = decorationsForFormat(['val d = format(R.string.msg_damage, p.name, 42, "Pikachu")']);
+    expect(decs).toHaveLength(1);
+    // String literal "Pikachu" has its quotes stripped for display
+    expect(decs[0].renderOptions.before.contentText).toBe('"p.name dealt 42 damage to Pikachu!"');
+  });
+
+  it('substitutes expression arg: format(R.string.msg_exp_needed, 100 - p.level)', () => {
+    const decs = decorationsForFormat(['val e = format(R.string.msg_exp_needed, 100 - p.level)']);
+    expect(decs).toHaveLength(1);
+    expect(decs[0].renderOptions.before.contentText).toBe('"100 - p.level EXP to next level"');
+  });
+
+  it('keeps escaped %% as a literal % in the rendered string', () => {
+    const decs = decorationsForFormat(['val c = format(R.string.msg_catch_rate, rate)']);
+    expect(decs).toHaveLength(1);
+    expect(decs[0].renderOptions.before.contentText).toBe('"Catch rate: rate%"');
+  });
+
+  it('falls back to raw value when format() has no extra args', () => {
+    const decs = decorationsForFormat(['val s = format(R.string.standalone)']);
+    expect(decs).toHaveLength(1);
+    expect(decs[0].renderOptions.before.contentText).toBe('"Raw value"');
+  });
+
+  it('standalone R.string.key (no format call) still shows raw value', () => {
+    const decs = decorationsForFormat(['val s = R.string.standalone']);
+    expect(decs).toHaveLength(1);
+    expect(decs[0].renderOptions.before.contentText).toBe('"Raw value"');
+  });
+
+  it('does NOT double-decorate when R.string.key appears in format() call', () => {
+    const decs = decorationsForFormat(['val g = format(R.string.msg_welcome_user, p.name)']);
+    // Only one decoration — not one from the format pass AND one from the generic pass
+    expect(decs).toHaveLength(1);
+  });
+
+  it('also works with getString(R.string.key, args…)', () => {
+    const decs = decorationsForFormat(['val g = getString(R.string.msg_welcome_user, p.name)']);
+    expect(decs).toHaveLength(1);
+    expect(decs[0].renderOptions.before.contentText).toBe('"Hello, p.name!"');
+  });
+
+  it('decoration range covers R.string.key only (not format()', () => {
+    const line = 'val g = format(R.string.msg_welcome_user, p.name)';
+    const decs = decorationsForFormat([line]);
+    const rStart = line.indexOf('R.string.msg_welcome_user');
+    const rEnd   = rStart + 'R.string.msg_welcome_user'.length;
+    expect(decs[0].range.start.character).toBe(rStart);
+    expect(decs[0].range.end.character).toBe(rEnd);
+  });
+});

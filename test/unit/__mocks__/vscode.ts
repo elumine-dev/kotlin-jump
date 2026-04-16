@@ -241,6 +241,11 @@ export enum StatusBarAlignment {
   Right = 2,
 }
 
+export enum QuickPickItemKind {
+  Separator = -1,
+  Default   = 0,
+}
+
 export enum ConfigurationTarget {
   Global          = 1,
   Workspace       = 2,

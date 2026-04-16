@@ -252,7 +252,7 @@ sync_lockfile() {
 }
 
 ensure_local_dependencies() {
-  if [[ -x "node_modules/.bin/vitest" && -x "node_modules/.bin/vsce" ]]; then
+  if [[ -x "node_modules/.bin/vitest" && -x "node_modules/.bin/vsce" && -x "node_modules/.bin/ovsx" ]]; then
     return
   fi
 

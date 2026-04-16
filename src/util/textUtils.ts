@@ -1,3 +1,35 @@
+// Returns true when `pos` is inside a // or /* ... */ comment region.
+// Unlike isInsideCommentOrString, string content is treated as opaque
+// (so "//" inside a string is NOT a comment), and returns false when
+// pos is the opening quote of a string literal.
+export function isInsideComment(line: string, pos: number): boolean {
+  let inStr: string | false = false;
+  let i = 0;
+  while (i < line.length) {
+    if (inStr) {
+      if (line[i] === '\\') { i += 2; continue; }
+      if (line[i] === inStr) inStr = false;
+      i++;
+      continue;
+    }
+    if (line[i] === '/' && i + 1 < line.length && line[i + 1] === '*') {
+      const closeIdx = line.indexOf('*/', i + 2);
+      if (closeIdx === -1) return pos >= i;
+      if (pos >= i && pos < closeIdx + 2) return true;
+      i = closeIdx + 2;
+      continue;
+    }
+    if (line[i] === '/' && i + 1 < line.length && line[i + 1] === '/') {
+      return pos >= i;
+    }
+    if (line[i] === '"' || line[i] === '\'') {
+      inStr = line[i];
+    }
+    i++;
+  }
+  return false;
+}
+
 // Returns true if position `pos` in `line` is inside a string literal,
 // a trailing // comment, or an inline /* block comment */.
 export function isInsideCommentOrString(line: string, pos: number): boolean {

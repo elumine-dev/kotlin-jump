@@ -18,7 +18,7 @@
     "url": "https://github.com/sponsors/elumine-dev"
   },
   "engines": {
-    "vscode": "^1.115.0"
+    "vscode": "^1.88.0"
   },
   "categories": [
     "Programming Languages",
@@ -203,6 +203,23 @@
       {
         "command": "kotlin-jump.openWalkthrough",
         "title": "Get Started",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.runAndroid",
+        "title": "Run Android App",
+        "category": "Kotlin Jump",
+        "icon": "$(play)"
+      },
+      {
+        "command": "kotlin-jump.switchAndroidApp",
+        "title": "Switch Android App",
+        "category": "Kotlin Jump",
+        "icon": "$(chevron-down)"
+      },
+      {
+        "command": "kotlin-jump.resetAndroidRunConfig",
+        "title": "Reset Android Run Module",
         "category": "Kotlin Jump"
       }
     ],
@@ -432,6 +449,36 @@
           "default": "./gradlew",
           "markdownDescription": "Path to the Gradle wrapper relative to the workspace root. Used when running tests from the **Test Explorer**."
         },
+        "kotlinJump.androidVariant": {
+          "type": "string",
+          "default": "Debug",
+          "markdownDescription": "Android build variant used by the **Run Android App** button. Defaults to `Debug`. Set to a custom flavor variant when needed (e.g. `\"ReplicaLaPresseDebug\"`)."
+        },
+        "kotlinJump.androidRunEnabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show the **$(play) Run** button in the status bar for Android/Gradle projects."
+        },
+        "kotlinJump.androidSkipLaunch": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Skip the `adb shell monkey` launch step after a successful Gradle build. Useful for stub/demo projects where no real APK is installed."
+        },
+        "kotlinJump.androidProjects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "module", "package"],
+            "properties": {
+              "name":    { "type": "string", "description": "Display name shown in the QuickPick (e.g. \"Replica\")" },
+              "module":  { "type": "string", "description": "Gradle module path relative to the project root (e.g. \"replica/app\")" },
+              "package": { "type": "string", "description": "Application ID used by adb (e.g. \"ca.lapresse.lapresseplus.debug\")" },
+              "variant": { "type": "string", "description": "Build variant override (e.g. \"ReplicaLaPresseDebug\"). Falls back to kotlinJump.androidVariant when omitted." }
+            }
+          },
+          "default": [],
+          "markdownDescription": "Explicit Android app definitions. When non-empty, **auto-detection is skipped entirely** — the button uses these entries directly.\n\nEquivalent to the zshrc aliases `replica()`/`rubicon()`.\n\n```json\n\"kotlinJump.androidProjects\": [\n  {\n    \"name\": \"Rubicon\",\n    \"module\": \"rubicon/app\",\n    \"package\": \"ca.lapresse.android.lapressemobile.debug\",\n    \"variant\": \"Debug\"\n  },\n  {\n    \"name\": \"Replica\",\n    \"module\": \"replica/app\",\n    \"package\": \"ca.lapresse.lapresseplus.debug\",\n    \"variant\": \"ReplicaLaPresseDebug\"\n  }\n]\n```"
+        },
         "kotlinJump.testTaskOverrides": {
           "type": "object",
           "additionalProperties": {
@@ -606,6 +653,21 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Visually replace `R.string.foo` references with their actual string values (like Android Studio's Resource Value Folding). The real code reappears while your cursor is on the line."
+        },
+        "kotlinJump.nullAssertionHighlight": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Highlight `!!` non-null assertions in amber/orange to make unsafe force-unwraps visually distinct."
+        },
+        "kotlinJump.hexColorSwatch": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show a colored `■` swatch inline before hex color literals (`0xAARRGGBB` and `\"#RRGGBB\"` strings)."
+        },
+        "kotlinJump.apiLevelInlayHints": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show inlay hints with the Android version name next to `@RequiresApi` annotations and `SDK_INT` comparisons."
         }
       }
     },
@@ -748,8 +810,9 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/picomatch": "^4.0.2",
-    "@types/vscode": "^1.115.0",
+    "@types/vscode": "^1.88.0",
     "esbuild": "^0.27.4",
+    "ovsx": "^0.10.11",
     "husky": "^9.1.7",
     "typescript": "^5.3.3",
     "vitest": "^4.1.2"

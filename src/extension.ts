@@ -44,6 +44,11 @@ import { StringXmlDefinitionProvider } from './providers/StringXmlDefinitionProv
 import { RResourceIndex } from './indexer/RResourceIndex';
 import { runCodeLensAction } from './providers/CodeLensAction';
 import { WhatsNewPanel } from './providers/WhatsNewPanel';
+import { NullAssertionProvider } from './providers/NullAssertionProvider';
+import { HexColorFoldingProvider } from './providers/HexColorFoldingProvider';
+import { HexColorDocumentColorProvider } from './providers/HexColorDocumentColorProvider';
+import { ApiLevelProvider } from './providers/ApiLevelProvider';
+import { registerAndroidRunCommand } from './commands/AndroidRunCommand';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 
@@ -100,6 +105,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   statusBar.text    = '$(sync~spin) Kotlin Jump: indexing…';
   statusBar.tooltip = 'Kotlin Jump is building the symbol index';
   if (statusBarEnabled) statusBar.show();
+
+  registerAndroidRunCommand(context, log);
 
   const KT_JAVA = [{ language: 'kotlin' }, { language: 'java' }];
 
@@ -599,6 +606,29 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
   })());
 
+  // ── Sprint 1: Null assertion highlight ────────────────────────────────────
+  context.subscriptions.push(new NullAssertionProvider());
+
+  // ── Sprint 1: Hex color inline swatch + native color picker ───────────────
+  context.subscriptions.push(new HexColorFoldingProvider());
+  context.subscriptions.push(
+    vscode.languages.registerColorProvider(KT_JAVA, new HexColorDocumentColorProvider()),
+  );
+
+  // ── Sprint 1: API level inlay hints ───────────────────────────────────────
+  (() => {
+    const apiProvider = new ApiLevelProvider();
+    context.subscriptions.push(
+      apiProvider,
+      vscode.languages.registerInlayHintsProvider(KT_JAVA, apiProvider),
+      vscode.workspace.onDidChangeConfiguration(e => {
+        if (e.affectsConfiguration('kotlinJump.apiLevelInlayHints')) {
+          apiProvider.fireChange();
+        }
+      }),
+    );
+  })();
+
   // ── Test Explorer ─────────────────────────────────────────────────────────
   const testCtrl = new KotlinTestController(index, context, log);
 
@@ -913,13 +943,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   registerChatParticipant(context, index);
 
   // ── MCP Server Definition Provider (F8) ──────────────────────────────────
+  // vscode.lm.registerMcpServerDefinitionProvider introduced in VS Code 1.115.
+  // Guard so the extension loads cleanly on older editors (e.g. Antigravity 1.107).
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  if (workspaceRoot) {
-    const mcpProvider: vscode.McpServerDefinitionProvider = {
+  const lmNs = vscode.lm as typeof vscode.lm & {
+    registerMcpServerDefinitionProvider?: (id: string, provider: unknown) => vscode.Disposable;
+  };
+  if (workspaceRoot && typeof lmNs.registerMcpServerDefinitionProvider === 'function') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const McpStdio = (vscode as any).McpStdioServerDefinition as new (
+      name: string, command: string, args: string[], env: Record<string, string>, version: string,
+    ) => unknown;
+    const mcpProvider = {
       onDidChangeMcpServerDefinitions: new vscode.EventEmitter<void>().event,
       async provideMcpServerDefinitions() {
         // process.execPath = VS Code's bundled Node.js (correct per vscode API docs)
-        return [new vscode.McpStdioServerDefinition(
+        return [new McpStdio(
           'Kotlin Jump',
           process.execPath,
           [context.asAbsolutePath('dist/server.js'), '--mcp', workspaceRoot],
@@ -929,7 +968,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       },
     };
     context.subscriptions.push(
-      vscode.lm.registerMcpServerDefinitionProvider('kotlin-jump', mcpProvider),
+      lmNs.registerMcpServerDefinitionProvider('kotlin-jump', mcpProvider),
     );
   }
 }

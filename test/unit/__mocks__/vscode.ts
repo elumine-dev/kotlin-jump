@@ -276,6 +276,7 @@ export const window = {
     dispose: () => {},
   }),
   onDidChangeActiveTextEditor: (_listener: any) => ({ dispose: () => {} }),
+  onDidChangeVisibleTextEditors: (_listener: any) => ({ dispose: () => {} }),
   onDidChangeTextEditorSelection: (_listener: any) => ({ dispose: () => {} }),
 };
 
@@ -285,7 +286,29 @@ export const commands = {
 
 export const languages = {
   registerHoverProvider: (_selector: any, _provider: any) => ({ dispose: () => {} }),
+  registerColorProvider: (_selector: any, _provider: any) => ({ dispose: () => {} }),
 };
+
+// ── Document Colors ───────────────────────────────────────────────────────────
+
+export class Color {
+  constructor(
+    public red: number,
+    public green: number,
+    public blue: number,
+    public alpha: number,
+  ) {}
+}
+
+export class ColorInformation {
+  constructor(public range: Range, public color: Color) {}
+}
+
+export class ColorPresentation {
+  textEdit?: TextEdit;
+  additionalTextEdits?: TextEdit[];
+  constructor(public label: string) {}
+}
 
 // ── Inlay Hints ───────────────────────────────────────────────────────────────
 

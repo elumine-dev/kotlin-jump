@@ -29,6 +29,8 @@ export class StringResourceFoldingProvider implements vscode.Disposable {
   private readonly _hideType: vscode.TextEditorDecorationType;
   private readonly _statusBar: vscode.StatusBarItem;
   private readonly _subscriptions: vscode.Disposable[];
+  private _docDebounce: ReturnType<typeof setTimeout> | undefined;
+  private _selDebounce: ReturnType<typeof setTimeout> | undefined;
 
   constructor(private readonly index: StringResourceIndex, private readonly log: Logger) {
     this._hideType = vscode.window.createTextEditorDecorationType({
@@ -42,14 +44,21 @@ export class StringResourceFoldingProvider implements vscode.Disposable {
         if (e) this._update(e, new Set<number>());
         else this._statusBar.hide();
       }),
+      // Debounced to avoid O(n) scan on each keystroke
       vscode.workspace.onDidChangeTextDocument(e => {
         const editor = vscode.window.activeTextEditor;
-        if (editor?.document === e.document) {
+        if (editor?.document !== e.document) return;
+        clearTimeout(this._docDebounce);
+        this._docDebounce = setTimeout(() => {
           this._update(editor, revealedLinesForSelections(editor.selections));
-        }
+        }, 100);
       }),
+      // Shorter debounce for selection: responds to direct cursor movement
       vscode.window.onDidChangeTextEditorSelection(e => {
-        this._update(e.textEditor, revealedLinesForSelections(e.selections));
+        clearTimeout(this._selDebounce);
+        this._selDebounce = setTimeout(() => {
+          this._update(e.textEditor, revealedLinesForSelections(e.selections));
+        }, 30);
       }),
     ];
   }
@@ -136,6 +145,8 @@ export class StringResourceFoldingProvider implements vscode.Disposable {
   }
 
   dispose(): void {
+    clearTimeout(this._docDebounce);
+    clearTimeout(this._selDebounce);
     this.log.info('[StringFolding] dispose');
     this._hideType.dispose();
     this._statusBar.dispose();

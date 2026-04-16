@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import * as vscodeMock from './__mocks__/vscode';
 import { HexColorFoldingProvider } from '../../src/providers/HexColorFoldingProvider';
 
@@ -177,5 +177,64 @@ describe('HexColorFoldingProvider — disabled setting', () => {
     provider.invalidateAll();
     const [, decs] = editor.setDecorations.mock.lastCall!;
     expect(decs).toHaveLength(0);
+  });
+});
+
+// ── GUARD-DEBOUNCE ────────────────────────────────────────────────────────────
+// Ces tests échoueront si le debounce est retiré du handler onDidChangeTextDocument.
+// Objectif : prévenir la régression CPU (scan O(n) sur chaque frappe sans debounce).
+
+describe('GUARD-DEBOUNCE — HexColorFoldingProvider coalesces rapid keystrokes', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+
+  function setupDebounceEnv() {
+    let docChangeListener: ((e: any) => void) | undefined;
+    let mockActiveEditor: any = undefined;
+    vi.spyOn(vscodeMock.window, 'createTextEditorDecorationType').mockReturnValue({ dispose: vi.fn() } as any);
+    vi.spyOn(vscodeMock.window, 'onDidChangeActiveTextEditor').mockReturnValue({ dispose: vi.fn() } as any);
+    vi.spyOn(vscodeMock.workspace, 'onDidChangeTextDocument')
+      .mockImplementation((fn: any) => { docChangeListener = fn; return { dispose: vi.fn() }; });
+    vi.spyOn(vscodeMock.workspace, 'onDidChangeConfiguration').mockReturnValue({ dispose: vi.fn() } as any);
+    // activeTextEditor undefined pendant la construction (évite l'appel _update au constructeur)
+    vi.spyOn(vscodeMock.window, 'activeTextEditor', 'get').mockImplementation(() => mockActiveEditor);
+
+    const provider = new HexColorFoldingProvider();
+    const editor = makeEditor(['val c = 0xFF7F52FF']);
+    mockActiveEditor = editor; // maintenant disponible pour le debounce
+    editor.setDecorations.mockClear();
+
+    return { provider, editor, fire: (doc?: any) => docChangeListener!({ document: doc ?? editor.document }) };
+  }
+
+  it('10 frappes rapides → 0 appels setDecorations avant 100ms, puis exactement 1', () => {
+    const { editor, fire } = setupDebounceEnv();
+
+    for (let i = 0; i < 10; i++) fire();
+
+    expect(editor.setDecorations).toHaveBeenCalledTimes(0);
+    vi.advanceTimersByTime(100);
+    expect(editor.setDecorations).toHaveBeenCalledTimes(1);
+  });
+
+  it('chaque nouvelle frappe repart le timer — seul le dernier compte', () => {
+    const { editor, fire } = setupDebounceEnv();
+
+    fire(); vi.advanceTimersByTime(50);
+    fire(); vi.advanceTimersByTime(50);
+
+    expect(editor.setDecorations).toHaveBeenCalledTimes(0);
+    vi.advanceTimersByTime(50);
+    expect(editor.setDecorations).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignore les changements sur un document différent', () => {
+    const { editor, fire } = setupDebounceEnv();
+    const otherDoc = { languageId: 'kotlin', lineCount: 1, lineAt: () => ({ text: 'val x = 1' }) };
+
+    fire(otherDoc);
+    vi.advanceTimersByTime(200);
+
+    expect(editor.setDecorations).toHaveBeenCalledTimes(0);
   });
 });

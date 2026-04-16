@@ -329,7 +329,7 @@ function groupByModule(specs: TestSpec[]): Map<string, TestSpec[]> {
   return map;
 }
 
-function resolveGradleWrapper(projectRoot: string): string {
+export function resolveGradleWrapper(projectRoot: string): string {
   const cfg = vscode.workspace.getConfiguration('kotlinJump');
   const configured = cfg.get<string>('gradleWrapper', './gradlew');
   const wrapper = path.isAbsolute(configured)
@@ -344,7 +344,7 @@ function resolveGradleWrapper(projectRoot: string): string {
   return wrapper;
 }
 
-function findProjectRoot(log?: Logger): string | undefined {
+export function findProjectRoot(log?: Logger): string | undefined {
   const folders = vscode.workspace.workspaceFolders;
   if (!folders) {
     log?.warn('[test:runner] no workspace folders open');

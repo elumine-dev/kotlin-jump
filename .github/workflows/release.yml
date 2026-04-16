@@ -23,6 +23,16 @@ jobs:
 
       - run: npm ci
 
+      - name: Validate Open VSX token
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          if [ -z "$OVSX_PAT" ]; then
+            echo "❌ OVSX_PAT is missing."
+            exit 1
+          fi
+          echo "✅ OVSX_PAT is configured."
+
       - name: Validate Marketplace token
         env:
           MARKETPLACE_TOKEN: ${{ secrets.MARKETPLACE_TOKEN }}
@@ -57,6 +67,9 @@ jobs:
 
       - name: Publish to VS Code Marketplace
         run: npx @vscode/vsce publish -p ${{ secrets.MARKETPLACE_TOKEN }}
+
+      - name: Publish to Open VSX Registry
+        run: npx ovsx publish "kotlin-jump-$(node -e 'console.log(require("./package.json").version)').vsix" -p ${{ secrets.OVSX_PAT }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

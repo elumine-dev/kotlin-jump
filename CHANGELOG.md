@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.8.0
+
+Version 1.8.0 is a packaging release — no changes to extension behavior, commands, or settings since v1.7.1.
+
+### Notes
+- No new commands, settings, or extension behaviors introduced in this release.
+- Updated manual install instructions in the README to reference the 1.8.0 package.
+
 ## 1.7.1
 
 Version 1.7.1 reduces CPU overhead during active editing by debouncing decoration scans and caching per-document symbol lookups in semantic highlighting.

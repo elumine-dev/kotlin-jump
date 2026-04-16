@@ -221,6 +221,12 @@
         "command": "kotlin-jump.resetAndroidRunConfig",
         "title": "Reset Android Run Module",
         "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.connectAdbWifi",
+        "title": "Connect Android via WiFi (Wireless Debugging)",
+        "category": "Kotlin Jump",
+        "icon": "$(wifi)"
       }
     ],
     "menus": {

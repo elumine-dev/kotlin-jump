@@ -126,6 +126,11 @@ export function registerAndroidRunCommand(
     }),
   );
 
+  // Connect via WiFi (Wireless Debugging, macOS only)
+  context.subscriptions.push(
+    vscode.commands.registerCommand('kotlin-jump.connectAdbWifi', () => connectAdbWifi(log)),
+  );
+
   // Reset via command palette (kept for discoverability)
   context.subscriptions.push(
     vscode.commands.registerCommand('kotlin-jump.resetAndroidRunConfig', async () => {
@@ -517,6 +522,125 @@ function runShell(cmd: string): Promise<string | undefined> {
   });
 }
 
+// ── ADB WiFi discovery (macOS only — dns-sd / mDNS) ─────────────────────────
+
+type WifiDevice = { instance: string; ip: string; port: string };
+
+function runDnsSd(args: string[], timeoutMs: number): Promise<string> {
+  return new Promise(resolve => {
+    const proc = spawn('dns-sd', args, { stdio: ['ignore', 'pipe', 'ignore'] });
+    let out = '';
+    proc.stdout.on('data', (d: Buffer) => { out += d.toString(); });
+    setTimeout(() => { try { proc.kill(); } catch {} resolve(out); }, timeoutMs);
+  });
+}
+
+export async function discoverWifiDevices(log: Logger): Promise<WifiDevice[]> {
+  // Step 1: browse — list service instances broadcasting ADB over WiFi
+  const browseOut = await runDnsSd(['-B', '_adb-tls-connect._tcp', 'local'], 3000);
+  const instances = browseOut.split('\n')
+    .filter(l => l.includes(' Add '))
+    .map(l => l.trim().split(/\s+/).at(-1))
+    .filter((x): x is string => Boolean(x));
+
+  log.debug(`[android:wifi] browse found ${instances.length} instance(s)`);
+  if (instances.length === 0) return [];
+
+  const devices: WifiDevice[] = [];
+  const seenIps = new Set<string>();
+
+  for (const instance of instances) {
+    // Step 2: lookup — resolve "can be reached at HOSTNAME:PORT"
+    const lookupOut = await runDnsSd(['-L', instance, '_adb-tls-connect._tcp', 'local'], 3000);
+    const reached = lookupOut.match(/can be reached at (\S+)/)?.[1];
+    if (!reached) continue;
+    const colonIdx = reached.lastIndexOf(':');
+    const host = reached.slice(0, colonIdx);
+    const port = reached.slice(colonIdx + 1);
+    if (!host || !port) continue;
+
+    // Step 3: resolve hostname to IPv4 address
+    const resolveOut = await runDnsSd(['-G', 'v4', host], 3000);
+    const rawIp = resolveOut.split('\n')
+      .find(l => l.includes(' Add '))?.trim().split(/\s+/)[5];
+    // Strip interface suffix (e.g. "192.168.1.42%en0" → "192.168.1.42")
+    const ip = rawIp?.split('%')[0];
+    if (!ip || seenIps.has(ip)) continue;
+
+    seenIps.add(ip);
+    devices.push({ instance, ip, port });
+    log.info(`[android:wifi] resolved: ${ip}:${port}`);
+  }
+  return devices;
+}
+
+async function connectAdbWifi(log: Logger): Promise<string | undefined> {
+  if (process.platform !== 'darwin') {
+    vscode.window.showErrorMessage(
+      'Kotlin Jump: ADB WiFi discovery requires macOS (uses dns-sd). On Linux, run: avahi-browse -r -t _adb-tls-connect._tcp',
+    );
+    return undefined;
+  }
+
+  let devices: WifiDevice[] = [];
+  await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: 'Kotlin Jump — ADB WiFi', cancellable: false },
+    async progress => {
+      progress.report({ message: 'Scanning network for Android devices…' });
+      devices = await discoverWifiDevices(log);
+    },
+  );
+
+  if (devices.length === 0) {
+    vscode.window.showErrorMessage(
+      'No Android device found via Wireless Debugging.',
+      { modal: true, detail: 'Check:\n• Developer options are enabled\n• Wireless debugging is ON\n• Device and computer are on the same WiFi network' },
+    );
+    return undefined;
+  }
+
+  let chosen: WifiDevice;
+  if (devices.length === 1) {
+    chosen = devices[0];
+  } else {
+    const pick = await vscode.window.showQuickPick(
+      devices.map(d => ({ label: `$(device-mobile) ${d.ip}:${d.port}`, description: d.instance, device: d })),
+      { placeHolder: 'Multiple devices found — select one', title: 'Kotlin Jump — ADB WiFi' },
+    );
+    if (!pick) return undefined;
+    chosen = pick.device;
+  }
+
+  // Disconnect stale mDNS auto-connections (they appear in adb devices but are unreliable)
+  const adbOut = await runShell('adb devices');
+  if (adbOut) {
+    for (const line of adbOut.split('\n')) {
+      if (line.includes('_adb-tls-connect')) {
+        const serial = line.split(/\s+/)[0];
+        await runShell(`adb disconnect "${serial}"`);
+        log.info(`[android:wifi] disconnected stale mDNS entry: ${serial}`);
+      }
+    }
+  }
+
+  const result = await runShell(`adb connect ${chosen.ip}:${chosen.port}`);
+  log.info(`[android:wifi] adb connect → ${result}`);
+
+  if (result?.includes('connected to') || result?.includes('already connected')) {
+    vscode.window.showInformationMessage(`Kotlin Jump: Connected to ${chosen.ip}:${chosen.port} ✓`);
+    return `${chosen.ip}:${chosen.port}`;
+  }
+  if (result?.includes('failed to authenticate')) {
+    vscode.window.showErrorMessage(
+      'ADB authentication failed — device not paired yet.',
+      { modal: true, detail: 'Pair first: Settings → Developer options → Wireless debugging → Pair device with pairing code.\nThen try again.' },
+    );
+    return undefined;
+  }
+  vscode.window.showErrorMessage(`Kotlin Jump: ADB WiFi failed. ${result ?? 'Unknown error'}`);
+  return undefined;
+}
+
 // Returns first connected device serial, filtering mDNS duplicates (like zshrc replica())
 async function getConnectedDevice(): Promise<string | undefined> {
   const output = await runShell('adb devices');
@@ -571,28 +695,40 @@ async function startEmulatorAndWait(avdName: string, log: Logger): Promise<strin
   return undefined;
 }
 
-// Ensures a device is connected; offers to start an AVD if not.
+// Ensures a device is connected; offers WiFi discovery or AVD launch if not.
 async function ensureDeviceConnected(log: Logger): Promise<string | undefined> {
   const device = await getConnectedDevice();
   if (device) { log.debug(`[android:run] device: ${device}`); return device; }
 
-  log.info('[android:run] no device — checking AVDs');
+  log.info('[android:run] no device — showing connection picker');
   const avds = await listAvds(log);
 
-  if (avds.length === 0) {
-    await vscode.window.showErrorMessage(
-      'Kotlin Jump: No device/emulator connected and no AVDs found.',
-      { modal: true, detail: 'Create one in Android Studio → Tools → Device Manager, then try again.' },
-    );
-    return undefined;
+  type DevicePick =
+    | { label: string; description: string; tag: 'wifi' }
+    | { label: string; description: string; tag: 'avd'; avd: string }
+    | { label: string; kind: vscode.QuickPickItemKind; tag: 'sep' };
+
+  const items: DevicePick[] = [
+    { label: '$(wifi) Connect via WiFi…', description: 'Wireless Debugging — device on same network', tag: 'wifi' },
+  ];
+  if (avds.length > 0) {
+    items.push({ label: 'Emulators', kind: vscode.QuickPickItemKind.Separator, tag: 'sep' });
+    items.push(...avds.map(name => ({
+      label: `$(vm) ${name}`, description: 'Android Virtual Device', tag: 'avd' as const, avd: name,
+    })));
   }
 
-  const pick = await vscode.window.showQuickPick(
-    avds.map(name => ({ label: `$(vm) ${name}`, description: 'Android Virtual Device', avd: name })),
-    { placeHolder: 'No device connected — select an emulator to start', title: 'Kotlin Jump — Start Emulator' },
-  );
-  if (!pick) return undefined;
+  const pick = await vscode.window.showQuickPick(items, {
+    placeHolder: 'No device connected — connect via WiFi or start an emulator',
+    title: 'Kotlin Jump — Connect Device',
+  });
+  if (!pick || pick.tag === 'sep') return undefined;
 
+  if (pick.tag === 'wifi') {
+    return connectAdbWifi(log);
+  }
+
+  // tag === 'avd'
   setStartingEmulator();
 
   const booted = await vscode.window.withProgress(

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { SymbolIndex } from '../indexer/SymbolIndex';
 import { resolveBest } from '../util/ImportResolver';
+import { buildAllowFilter } from '../util/testFilter';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 const RE_IMPORT_LINE = /^\s*import\s+(?:static\s+)?[\w.*]+(?:\s+as\s+\w+)?\s*(?:\/\/.*)?$/;
@@ -108,7 +109,8 @@ export class AutoImportProvider implements vscode.CodeActionProvider {
     const resolution = resolveBest(word, document, fqn => this.index.lookupFqn(fqn));
     if (resolution.priority !== 'none') return undefined;
 
-    const allCandidates = this.index.lookup(word);
+    const allow = buildAllowFilter(document.uri.fsPath);
+    const allCandidates = this.index.lookup(word).filter(e => allow(e.uri.path));
     if (allCandidates.length === 0) return undefined;
 
     // Prefer classes/composables/interfaces over raw functions to surface the most

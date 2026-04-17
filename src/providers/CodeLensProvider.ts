@@ -16,7 +16,7 @@ const CLASS_LIKE = new Set<SymbolKind>([
 ]);
 
 interface KotlinCodeLens extends vscode.CodeLens {
-  data: { entry: SymbolEntry; enclosingKind?: string };
+  data: { entry: SymbolEntry; enclosingKind?: string; usageOnly?: boolean };
 }
 
 export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
@@ -96,9 +96,22 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
         || (entry.kind === 'fun' && entry.isLifecycle)
         || (CLASS_LIKE.has(entry.kind) && (entry.isTestClass || classesWithTests.has(entry.fqn)));
       if (!isTestContext && !entry.isOverride && !entry.isPrivate) {
-        const lens = new vscode.CodeLens(range) as KotlinCodeLens;
-        lens.data = { entry, enclosingKind: enclosingClass?.kind };
-        lenses.push(lens);
+        const isFun = entry.kind === 'fun' || entry.kind === 'composable';
+        // OverrideGutterProvider shows ⬇ for abstract/interface fun — skip to avoid duplicate lens
+        if (isFun && (enclosingClass?.kind === 'interface' || entry.isAbstract)) continue;
+        // OverrideGutterProvider shows ⬇ for interface/abstract class/sealed class declarations
+        // Use if-guard (not continue) to preserve classStack push below for nested members
+        const isAbstractType = entry.kind === 'interface' || entry.kind === 'sealedClass'
+          || (entry.kind === 'class' && entry.isAbstract);
+        if (!isAbstractType) {
+          const lens = new vscode.CodeLens(range) as KotlinCodeLens;
+          lens.data = { entry, enclosingKind: enclosingClass?.kind };
+          lenses.push(lens);
+        } else {
+          const lens = new vscode.CodeLens(range) as KotlinCodeLens;
+          lens.data = { entry, enclosingKind: enclosingClass?.kind, usageOnly: true };
+          lenses.push(lens);
+        }
       }
 
       if (CLASS_LIKE.has(entry.kind)) {
@@ -116,23 +129,32 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
     // Test lenses (▶ Run / ▶ Run All) have no .data — already resolved, return as-is
     if (!(lens as KotlinCodeLens).data) return lens;
 
-    const { entry, enclosingKind } = (lens as KotlinCodeLens).data;
+    const { entry, usageOnly } = (lens as KotlinCodeLens).data;
 
-    // ── Interface method: show only implementations, navigate directly ─────────
-    const isFun = entry.kind === 'fun' || entry.kind === 'composable';
-    if (isFun && (enclosingKind === 'interface' || entry.isAbstract)) {
-      const methodImpls = this.index.lookupMethodImplementations(
-        entry.name, entry.uri.toString(), entry.line,
-      );
+    // ── usageOnly lens (interface / abstract class / sealed class) ────────────
+    // OverrideGutterProvider handles the ⬇ implementations arrow; we only show usage count.
+    if (usageOnly) {
+      let usageCount = 0;
+      try {
+        const cacheKey = entry.fqn;
+        if (!this._cache.has(cacheKey)) {
+          const ver = this._cacheVer;
+          const p = this._scanUsages(entry, token).then(results => {
+            if (this._cache.get(cacheKey)?.ver !== ver) this._cache.delete(cacheKey);
+            return results;
+          });
+          this._cache.set(cacheKey, { ver, p });
+        }
+        const results = await this._cache.get(cacheKey)!.p;
+        if (token.isCancellationRequested) { this._cache.delete(cacheKey); }
+        usageCount = Math.max(0, results.length - 1);
+      } catch { usageCount = 0; }
       if (token.isCancellationRequested) return lens;
-      const n = methodImpls.length;
-      lens.command = n === 0
-        ? { title: '0 implementations', command: '', arguments: [] }
-        : {
-            title: `${n} ${n === 1 ? 'implementation' : 'implementations'}`,
-            command: 'kotlin-jump.goToMethodImpl',
-            arguments: [entry.uri, entry.line, entry.name, methodImpls.map(m => m.uri.toString())],
-          };
+      lens.command = {
+        title: `${usageCount} ${usageCount === 1 ? 'usage' : 'usages'}`,
+        command: 'kotlin-jump.codeLensAction',
+        arguments: [entry.uri, entry.line, entry.character, entry.name, entry.fqn],
+      };
       return lens;
     }
 

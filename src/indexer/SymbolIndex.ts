@@ -17,6 +17,7 @@ export interface SymbolEntry {
   moduleName?: string;
   aliasTarget?: string;   // raw rhs of typealias — used for follow-through navigation
   supertypes?: string[];  // simple names of superclasses/interfaces
+  constValue?:      string;  // raw literal for const val, e.g. `5000` or `"v2"`
   isSuspend?:       boolean;
   isAbstract?:      boolean;
   isConst?:         boolean;
@@ -111,6 +112,7 @@ export class SymbolIndex {
         moduleName,
         aliasTarget: sym.aliasTarget,
         supertypes: sym.supertypes,
+        constValue:      sym.constValue,
         isSuspend:       sym.isSuspend,
         isAbstract:      sym.isAbstract,
         isConst:         sym.isConst,

@@ -184,9 +184,12 @@ function swatchDecoration(
     range: new vscode.Range(line, col, line, col),
     renderOptions: {
       before: {
-        contentText: '■',
-        color: cssColor,
+        contentText: '\u00A0',
+        backgroundColor: cssColor,
         margin: '0 4px 0 0',
+        border: '1px solid',
+        borderColor: new vscode.ThemeColor('editor.foreground'),
+        textDecoration: 'none; display: inline-block; width: 0.65em; height: 0.65em; vertical-align: middle;',
       },
     },
   };

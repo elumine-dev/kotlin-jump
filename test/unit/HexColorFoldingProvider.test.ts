@@ -52,12 +52,12 @@ describe('HexColorFoldingProvider — 0xAARRGGBB format', () => {
   it('swatch color is derived from AARRGGBB (ff7f52ff → rgba(127,82,255,1.00))', () => {
     const decs = decorationsFor(['val c = 0xff7f52ff']);
     // Alpha=0xff=255 → 1.00, R=0x7f=127, G=0x52=82, B=0xff=255
-    expect(decs[0].renderOptions.before.color).toContain('rgba(127,82,255,1.00)');
+    expect(decs[0].renderOptions.before.backgroundColor).toContain('rgba(127,82,255,1.00)');
   });
 
   it('handles semi-transparent: 0x807F52FF → alpha ~0.50', () => {
     const decs = decorationsFor(['val c = 0x807F52FF']);
-    const color: string = decs[0].renderOptions.before.color;
+    const color: string = decs[0].renderOptions.before.backgroundColor;
     // Alpha = 0x80 = 128 → 128/255 ≈ 0.50
     expect(color).toMatch(/rgba\(127,82,255,0\.5\d\)/);
   });
@@ -89,21 +89,21 @@ describe('HexColorFoldingProvider — "#RRGGBB" string format', () => {
 
   it('swatch color is the original CSS hex string for 6-digit format', () => {
     const decs = decorationsFor(['val c = "#FF0000"']);
-    expect(decs[0].renderOptions.before.color).toBe('#FF0000');
+    expect(decs[0].renderOptions.before.backgroundColor).toBe('#FF0000');
   });
 
   it('decorates a 3-digit "#RGB" shorthand', () => {
     const decs = decorationsFor(['val c = "#F00"']);
     expect(decs).toHaveLength(1);
     // #F00 → #FF0000
-    expect(decs[0].renderOptions.before.color).toBe('#FF0000');
+    expect(decs[0].renderOptions.before.backgroundColor).toBe('#FF0000');
   });
 
   it('decorates an 8-digit "#AARRGGBB" string', () => {
     const decs = decorationsFor(['val c = "#FF7F52FF"']);
     expect(decs).toHaveLength(1);
     // AA=FF=255 → 1.00, R=7F=127, G=52=82, B=FF=255
-    expect(decs[0].renderOptions.before.color).toContain('rgba(127,82,255,1.00)');
+    expect(decs[0].renderOptions.before.backgroundColor).toContain('rgba(127,82,255,1.00)');
   });
 
   it('swatch is placed at the opening quote of the string', () => {

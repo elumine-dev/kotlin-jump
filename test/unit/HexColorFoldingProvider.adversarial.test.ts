@@ -37,7 +37,7 @@ function decs(lines: string[]) {
   return (editor.setDecorations.mock.lastCall?.[1] ?? []) as any[];
 }
 
-function color(d: any): string { return d.renderOptions.before.color; }
+function color(d: any): string { return d.renderOptions.before.backgroundColor; }
 
 // ── ADVER-HEX-1: 0xAARRGGBB regex boundary attacks ───────────────────────────
 

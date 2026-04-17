@@ -16,6 +16,7 @@ export interface RawSymbol {
   depth: number;          // braceDepth at declaration — used for outline hierarchy
   aliasTarget?: string;   // raw rhs of typealias, e.g. "List<UserProfile>"
   supertypes?: string[];  // simple names of superclasses/interfaces, e.g. ["Bar", "Baz"]
+  constValue?:      string;  // raw literal value for const val, e.g. `5000` or `"v2"`
   isSuspend?:       boolean;
   isAbstract?:      boolean;
   isConst?:         boolean;
@@ -355,11 +356,12 @@ export function parse(uriString: string, text: string): ParsedFile {
       const propDepth    = isPrimaryCtorParam ? braceDepth + 1 : braceDepth;
       const propPre      = raw.slice(0, raw.indexOf(pm[1]));
       const isConst      = /\bconst\b/.test(propPre)    || undefined;
-      const isAbstract   = /\babstract\b/.test(propPre) || undefined;
+      const isAbstract   = /\babstract\b/.test(propPre) || (!isPrimaryCtorParam && isInInterfaceBodyAt(symbols, braceDepth)) || undefined;
       const isLateinit   = /\blateinit\b/.test(propPre) || undefined;
       const isOverride   = /\boverride\b/.test(propPre) || undefined;
       const isPrivate    = /\bprivate\b/.test(propPre)  || undefined;
       const isDeprecated = annotationWindow.some(l => RE_DEPRECATED.test(l)) || undefined;
+      const constValue   = isConst ? extractConstValue(raw, pm[0].length) : undefined;
       symbols.push({
         name: pm[2],
         kind: pm[1] === 'val' ? 'val' : 'var',
@@ -373,6 +375,7 @@ export function parse(uriString: string, text: string): ParsedFile {
         isOverride,
         isPrivate,
         isDeprecated,
+        constValue,
       });
       // val x = object : Interface — anonymous object on same line as property
       emitAnonObjectIfPresent(raw, lineNum, braceDepth, symbols);
@@ -639,17 +642,19 @@ function emitInlineBodySymbols(
     // ── val / var ──────────────────────────────────────────────────────────
     const pm = RE_PROP.exec(seg);
     if (pm) {
-      const propPre = seg.slice(0, seg.indexOf(pm[1]));
+      const propPre  = seg.slice(0, seg.indexOf(pm[1]));
+      const isConst  = /\bconst\b/.test(propPre) || undefined;
       symbols.push({
         name: pm[2], kind: pm[1] === 'val' ? 'val' : 'var',
         line: lineNum,
         character: offset + seg.indexOf(pm[2], pm.index),
         isComposable: false, depth: memberDepth,
-        isConst:    /\bconst\b/.test(propPre)    || undefined,
-        isOverride: /\boverride\b/.test(propPre) || undefined,
-        isPrivate:  /\bprivate\b/.test(propPre)  || undefined,
-        isLateinit: /\blateinit\b/.test(propPre) || undefined,
-        isAbstract: /\babstract\b/.test(propPre) || undefined,
+        isConst,
+        constValue:  isConst ? extractConstValue(seg, pm[0].length) : undefined,
+        isOverride:  /\boverride\b/.test(propPre) || undefined,
+        isPrivate:   /\bprivate\b/.test(propPre)  || undefined,
+        isLateinit:  /\blateinit\b/.test(propPre) || undefined,
+        isAbstract:  /\babstract\b/.test(propPre) || undefined,
       });
     }
   };
@@ -665,6 +670,51 @@ function emitInlineBodySymbols(
       segStart = i + 1;
     }
   }
+}
+
+// Strips a trailing // line comment while respecting string literals.
+// e.g. `"https://x.com" // comment` → `"https://x.com"`
+function stripTrailingLineComment(s: string): string {
+  let inStr: string | false = false;
+  for (let i = 0; i < s.length; i++) {
+    if (inStr) {
+      if (s[i] === '\\') { i++; continue; }
+      if (s[i] === inStr) inStr = false;
+    } else {
+      if (s[i] === '"' || s[i] === "'") inStr = s[i];
+      else if (s[i] === '/' && s[i + 1] === '/') return s.slice(0, i).trimEnd();
+    }
+  }
+  return s;
+}
+
+// Returns true when `depth` is the body depth of the nearest enclosing interface.
+// Used to auto-set isAbstract on val/var in interfaces (Kotlin implicit abstract).
+function isInInterfaceBodyAt(symbols: RawSymbol[], depth: number): boolean {
+  for (let i = symbols.length - 1; i >= 0; i--) {
+    const s = symbols[i];
+    if (s.depth === depth - 1) {
+      return s.kind === 'interface';
+    }
+  }
+  return false;
+}
+
+// Extracts the literal value from a const val declaration.
+// `matchEnd` is the index right after the RE_PROP match (which includes the delimiter char).
+function extractConstValue(raw: string, matchEnd: number): string | undefined {
+  const delim = raw[matchEnd - 1];
+  const rest  = raw.slice(matchEnd);
+  let valueStr: string;
+  if (delim === '=') {
+    valueStr = rest.trim();
+  } else {
+    const eqI = rest.indexOf('=');
+    if (eqI === -1) return undefined;
+    valueStr = rest.slice(eqI + 1).trim();
+  }
+  const clean = stripTrailingLineComment(valueStr).trim();
+  return clean.slice(0, 80) || undefined;
 }
 
 function toClassKind(keyword: string): SymbolKind {

@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.9.0
+
+Adds wireless Android device connection and pairing via mDNS, and reduces annotation scan CPU overhead with incremental processing.
+
+### Improvements
+- Added a Connect via ADB WiFi command that uses mDNS (dns-sd) to discover Android devices on the local network and connects wirelessly — removes the need for a USB cable after first setup.
+- Added a Pair via ADB WiFi flow with guided step-by-step instructions for first-time wireless pairing.
+- HexColorFoldingProvider and NullAssertionProvider now perform incremental line scanning — only lines that changed are reprocessed on each edit, reducing CPU overhead in files with many annotations.
+
+### Fixes
+- Fixed a race condition where ADB WiFi connection failed because IP resolution had not yet completed — the extension now connects using the stable .local mDNS hostname.
+- Fixed device detection to prefer the HOST:PORT address format and fall back to the adb-XXXX-YYYY serial, preventing misidentified or dropped device connections.
+
 ## 1.8.0
 
 Adds wireless ADB connection and pairing from VS Code, fixes device detection reliability, and reduces CPU overhead during editing with incremental annotation scanning.

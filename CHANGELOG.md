@@ -17,51 +17,6 @@ Kotlin Jump 1.10.0 adds Android Studio-style navigation history, inline resource
 - Added a dedicated browser entrypoint with browser-safe stubs, bringing web-hosted installs closer to feature parity with the desktop extension for supported features.
 - Expanded the CI test suite with a comprehensive real-world Kotlin/Android project covering coroutines, sealed classes, annotations, resource files, and multiple test frameworks — improving confidence in parser correctness across a wider range of code patterns.
 
-Kotlin Jump 1.10.0 adds Android Studio-style navigation history, inline resource diagnostics for broken R references, and richer code insights across Kotlin and Android projects.
-
-### Improvements
-- Added Android Studio-style navigation history with Back, Forward, and Clear History commands, making it easier to retrace jumps between definitions, implementations, and usages.
-- Added resource diagnostics that flag unresolved R.string and R.color references inline, exposing broken Android resource lookups directly in the editor without running a build.
-- Added const val folding, suspend call markers, version catalog hover, override/implement gutter indicators, and R.color resource folding for richer in-editor context on Kotlin and Android projects.
-
-### Fixes
-- Fixed Go to Class Implementation and related navigation commands so they register reliably and open the target editor correctly during navigation flows.
-- Fixed parser, definition, and hover edge cases involving string interpolation, Android R.type.name references, inherited properties, and same-file symbol resolution.
-
-### Notes
-- Added a dedicated browser entrypoint with browser-safe stubs, bringing web-hosted installs closer to feature parity with the desktop extension for supported features.
-- Expanded the automated CI test suite with a comprehensive real-world Kotlin/Android project covering coroutines, sealed classes, annotations, resource files, and multiple test frameworks — improving confidence in parser correctness across a wider range of code patterns.
-
-Kotlin Jump 1.10.0 adds Android Studio-style navigation history, a broader set of Kotlin and Android code insights, and resource diagnostics that surface broken R references directly in the editor.
-
-### Improvements
-- Added Android Studio-style navigation history with Back, Forward, and Clear History commands, making it easier to retrace jumps between definitions, implementations, and usages.
-- Added const val folding, suspend call markers, version catalog hover, override/implement gutter indicators, and R.color resource folding for richer in-editor context on Kotlin and Android projects.
-- Added resource diagnostics that flag unresolved R.string and R.color references inline, surfacing broken Android resource lookups directly in the editor.
-
-### Fixes
-- Fixed Go to Class Implementation and related navigation commands so they register reliably and open the target editor correctly during navigation flows.
-- Fixed parser, definition, and hover edge cases involving string interpolation, Android R.type.name references, inherited properties, and same-file symbol resolution.
-
-### Notes
-- Added a dedicated browser entrypoint with browser-safe stubs, bringing web-hosted installs closer to feature parity with the desktop extension for supported features.
-- Expanded the automated CI test suite with a comprehensive real-world Kotlin/Android project, improving confidence in parser correctness across a wider range of code patterns.
-
-1.10.0 adds Android Studio-style navigation history, a broader set of Kotlin/Android code insights, and browser build parity for web-hosted installs.
-
-### Improvements
-- Added Android Studio-style navigation history with Back, Forward, and Clear History commands, so jumps between definitions, implementations, and usages are easier to retrace.
-- Added new Kotlin and Android code insights including `const val` folding, suspend call markers, version catalog hover, override/implement gutter indicators, and folding for `R.color` resources.
-- Added resource diagnostics for unresolved `R.string` and `R.color` references, making broken Android resource lookups visible directly in the editor.
-
-### Fixes
-- Fixed Go to Class Implementation and related implementation navigation commands so they register reliably and open the target editor correctly during navigation flows and tests.
-- Fixed parser, definition, and hover edge cases around string interpolation, Android `R.type.name` references, inherited properties, and same-file symbol resolution.
-
-### Packaging and docs
-- Added a dedicated browser entrypoint plus browser-safe stubs, bringing the web build closer to parity with the desktop extension for supported features.
-- Updated manual install commands in the README to reference the 1.10.0 VSIX package.
-
 ## 1.9.1
 
 Maintenance release that resyncs package-lock.json with npm@10 for consistent CI builds; no changes to extension behavior, commands, or settings.
@@ -99,12 +54,6 @@ Adds wireless ADB connection and pairing from VS Code, fixes device detection re
 - Fixed a race condition where ADB WiFi connection failed because IP address resolution had not completed — the extension now connects using the stable .local mDNS hostname instead.
 - Fixed device detection to prefer the HOST:PORT address format and fall back to the adb-XXXX-YYYY serial, preventing misidentified or dropped device connections.
 
-Version 1.8.0 is a packaging release — no changes to extension behavior, commands, or settings since v1.7.1.
-
-### Notes
-- No new commands, settings, or extension behaviors introduced in this release.
-- Updated manual install instructions in the README to reference the 1.8.0 package.
-
 ## 1.7.1
 
 Version 1.7.1 reduces CPU overhead during active editing by debouncing decoration scans and caching per-document symbol lookups in semantic highlighting.
@@ -116,10 +65,6 @@ Version 1.7.1 reduces CPU overhead during active editing by debouncing decoratio
 ### Performance
 - Debounced keystroke-driven scans in NullAssertionProvider, HexColorFoldingProvider, and StringResourceFoldingProvider — rapid typing no longer triggers a full document scan on every character.
 - Added a per-document word cache in SemanticTokensProvider so symbols that appear multiple times in the same file are resolved only once per render pass.
-
-### Performance
-- Debounced the keystroke-driven decoration scan in `NullAssertionProvider`, `HexColorFoldingProvider`, and `StringResourceFoldingProvider` — rapid typing no longer triggers a full O(n) document scan on every character.
-- Added a per-document word cache in `SemanticTokensProvider` to eliminate redundant `resolveBest()` calls for symbols that appear multiple times in the same file.
 
 ## 1.6.1
 

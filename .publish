@@ -269,9 +269,40 @@ bump_version() {
   "
 }
 
+preflight_check_tag() {
+  # Abort BEFORE any work if the tag already exists. This prevents the "ran the
+  # script twice and ended up with duplicate release commits" failure mode.
+  # Only enforce when we are going to create a release artifact (commit/tag/push)
+  # — `--notes-only` / `--dry-run` are intentionally exempt so you can still fix
+  # typos in release notes after the tag has been pushed.
+  local version="$1"
+  local tag_name="v$version"
+  local acting=0
+  if [[ "$COMMIT" -eq 1 || "$TAG" -eq 1 || "$PUSH" -eq 1 ]]; then
+    acting=1
+  fi
+  if [[ "$DRY_RUN" -eq 1 || "$NOTES_ONLY" -eq 1 || "$acting" -eq 0 ]]; then
+    return 0
+  fi
+
+  if git rev-parse -q --verify "refs/tags/$tag_name" >/dev/null 2>&1; then
+    echo "ERROR: Tag $tag_name already exists locally." >&2
+    echo "       v$version is already released. To update release notes without" >&2
+    echo "       creating a new tag/commit, use --notes-only." >&2
+    exit 1
+  fi
+  if git ls-remote --tags origin "refs/tags/$tag_name" 2>/dev/null | grep -q "refs/tags/$tag_name"; then
+    echo "ERROR: Tag $tag_name already exists on origin." >&2
+    echo "       v$version is already released. To update release notes without" >&2
+    echo "       creating a new tag/commit, use --notes-only." >&2
+    exit 1
+  fi
+}
+
 if [[ -n "$VERSION_ARG" ]]; then
   validate_version "$VERSION_ARG"
   VERSION="$VERSION_ARG"
+  preflight_check_tag "$VERSION"
 elif [[ -t 0 && "$DRY_RUN" -eq 0 && "$NOTES_ONLY" -eq 0 ]]; then
   echo "Current version: $VERSION"
   echo "  1) patch → $(bump_version "$VERSION" patch)"
@@ -283,6 +314,7 @@ elif [[ -t 0 && "$DRY_RUN" -eq 0 && "$NOTES_ONLY" -eq 0 ]]; then
     *) echo "Invalid choice. Use --version x.y.z to set manually." >&2; exit 1 ;;
   esac
   VERSION_ARG="$VERSION"
+  preflight_check_tag "$VERSION"
 fi
 
 if [[ "$DRY_RUN" -eq 0 ]]; then
@@ -502,16 +534,21 @@ update_changelog() {
 const fs = require('fs');
 const [version, sectionPath] = process.argv.slice(2);
 const path = 'CHANGELOG.md';
-const section = fs.readFileSync(sectionPath, 'utf8').trimEnd();
+// Keep one trailing newline on the section so replacement leaves a blank line
+// between the section we wrote and the next `## X.Y.Z` heading below it.
+const section = fs.readFileSync(sectionPath, 'utf8').replace(/\s+$/, '') + '\n';
 const text = fs.readFileSync(path, 'utf8');
-const heading = `## ${version}`;
 const escaped = version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const re = new RegExp(`## ${escaped}[\\s\\S]*?(?=\\n## \\d+\\.\\d+\\.\\d+|$)`, 'm');
+// NOTE: no `m` flag. Without it, `$` anchors to end-of-string (not end-of-line),
+// so the regex correctly spans the full existing section until the next `## X.Y.Z`
+// or the end of the file. With the `m` flag, `$` matched end-of-line, so running
+// this script twice for the same version produced duplicated sections.
+const re = new RegExp(`## ${escaped}[\\s\\S]*?(?=\\n## \\d+\\.\\d+\\.\\d+|$)`);
 let next;
 if (re.test(text)) {
   next = text.replace(re, section);
 } else {
-  next = text.replace(/^# Changelog\s*\n+/m, `# Changelog\n\n${section}\n\n`);
+  next = text.replace(/^# Changelog\s*\n+/m, `# Changelog\n\n${section}\n`);
 }
 fs.writeFileSync(path, next.endsWith('\n') ? next : `${next}\n`);
 NODE

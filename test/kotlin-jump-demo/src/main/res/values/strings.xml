@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App -->
+    <string name="app_name">Kotlin Jump Demo</string>
+    <string name="app_version">Version 1.0.0</string>
+
+    <!-- Pokédex UI -->
+    <string name="title_pokedex">Pokédex</string>
+    <string name="title_team">My Team</string>
+    <string name="title_battle">Battle</string>
+    <string name="label_pokemon_name">Pokémon Name</string>
+    <string name="label_pokemon_level">Level</string>
+    <string name="label_pokemon_type">Type</string>
+    <string name="label_pokemon_hp">HP</string>
+
+    <!-- Actions -->
+    <string name="action_add_pokemon">Add to Pokédex</string>
+    <string name="action_start_battle">Start Battle</string>
+    <string name="action_catch_pokemon">Catch</string>
+    <string name="action_release_pokemon">Release</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_confirm">Confirm</string>
+    <string name="action_retry">Retry</string>
+
+    <!-- Messages -->
+    <string name="msg_loading">Loading…</string>
+    <string name="msg_empty_team">Your team is empty. Catch some Pokémon!</string>
+    <string name="msg_battle_won">Victory! You won the battle.</string>
+    <string name="msg_battle_lost">Defeat… Your team is KO.</string>
+    <string name="msg_pokemon_caught">%s was caught!</string>
+    <string name="msg_invalid_name">Name cannot be empty.</string>
+    <string name="msg_team_full">Your team is full (6/6).</string>
+
+    <!-- Errors -->
+    <string name="error_network">Cannot reach server. Check your connection.</string>
+    <string name="error_not_found">Pokémon not found.</string>
+    <string name="error_unknown">An unexpected error occurred.</string>
+
+    <!-- Users UI -->
+    <string name="title_users">Users</string>
+    <string name="label_user_name">Name</string>
+    <string name="label_user_email">Email</string>
+    <string name="label_user_role">Role</string>
+    <string name="role_admin">Administrator</string>
+    <string name="role_editor">Editor</string>
+    <string name="role_viewer">Viewer</string>
+
+    <!-- Battle results -->
+    <string name="msg_battle_draw">It\'s a draw!</string>
+
+    <!-- Pokémon types -->
+    <string name="type_fire">Fire</string>
+    <string name="type_water">Water</string>
+    <string name="type_grass">Grass</string>
+    <string name="type_electric">Electric</string>
+    <string name="type_psychic">Psychic</string>
+    <string name="type_dragon">Dragon</string>
+
+    <!-- Long string (tests truncation at 40 chars) -->
+    <string name="disclaimer_long">This is a very long disclaimer text that should be truncated in the editor overlay display.</string>
+
+    <!-- Plurals — R.plurals folding demo -->
+    <plurals name="pokemon_count">
+        <item quantity="one">%d Pokémon</item>
+        <item quantity="other">%d Pokémon</item>
+    </plurals>
+    <plurals name="battle_wins">
+        <item quantity="one">%d win</item>
+        <item quantity="other">%d wins</item>
+    </plurals>
+    <plurals name="item_count">
+        <item quantity="one">%d item</item>
+        <item quantity="other">%d items</item>
+    </plurals>
+
+    <!-- String arrays — R.array folding demo -->
+    <string-array name="pokemon_types">
+        <item>Fire</item>
+        <item>Water</item>
+        <item>Grass</item>
+        <item>Electric</item>
+        <item>Psychic</item>
+        <item>Dragon</item>
+    </string-array>
+    <string-array name="user_roles">
+        <item>Admin</item>
+        <item>Editor</item>
+        <item>Viewer</item>
+    </string-array>
+    <string-array name="difficulty_levels">
+        <item>Easy</item>
+        <item>Medium</item>
+        <item>Hard</item>
+        <item>Expert</item>
+    </string-array>
+
+    <!-- Intentionally absent from values-en — tests translation completeness ✗ -->
+    <string name="msg_missing_in_en">This key only exists in the default locale.</string>
+    <string name="title_missing_in_en">Title missing in English</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!-- Sprint 1 — Feature 4: Format string preview in hover                  -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!-- %s — argument String -->
+    <string name="msg_welcome_user">Hello, %s!</string>
+    <!-- %s + %d — String + Integer -->
+    <string name="msg_level_up">%s reached level %d!</string>
+    <!-- Positional %1$s %2$d %3$s -->
+    <string name="msg_damage">%1$s dealt %2$d damage to %3$s!</string>
+    <!-- Two integers positional -->
+    <string name="msg_score">Score: %1$d / %2$d</string>
+    <string name="msg_team_slots">Team: %1$d / %2$d slots</string>
+    <string name="msg_move_pp">PP: %1$d / %2$d</string>
+    <!-- %d / %d plain (not positional) -->
+    <string name="msg_hp_bar">HP: %d / %d remaining</string>
+    <!-- Float with precision -->
+    <string name="msg_catch_rate">Catch rate: %.1f%%</string>
+    <!-- Simple %d -->
+    <string name="msg_reward">You earned %d coins!</string>
+    <string name="msg_exp_needed">%d EXP to next level</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!-- Sprint 1 — Feature 6: Translation completeness hover                  -->
+    <!-- keys below are present in BOTH locales → ✓ ✓                         -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <string name="sprint1_welcome">Welcome!</string>
+    <string name="sprint1_start">Start Game</string>
+    <!-- Intentionally absent from values-en → values ✓  values-en ✗ -->
+    <string name="sprint1_fr_only">Seulement en français.</string>
+    <string name="sprint1_default_only">Only in default locale — no English translation.</string>
+</resources>

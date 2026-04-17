@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand — #RRGGBB format -->
+    <color name="primary">#7F52FF</color>
+    <color name="primary_dark">#5B3FBF</color>
+    <color name="primary_light">#A87FFF</color>
+    <color name="secondary">#FF5722</color>
+    <color name="secondary_dark">#BF360C</color>
+
+    <!-- Backgrounds -->
+    <color name="background">#FFFFFF</color>
+    <color name="surface">#F5F5F5</color>
+    <color name="surface_variant">#E8E8E8</color>
+
+    <!-- Text -->
+    <color name="on_primary">#FFFFFF</color>
+    <color name="on_surface">#212121</color>
+    <color name="text_primary">#212121</color>
+    <color name="text_secondary">#757575</color>
+    <color name="text_hint">#BDBDBD</color>
+
+    <!-- Status -->
+    <color name="error">#B00020</color>
+    <color name="success">#388E3C</color>
+    <color name="warning">#F57C00</color>
+    <color name="info">#1976D2</color>
+
+    <!-- #AARRGGBB format — alpha channel -->
+    <color name="translucent_black">#99000000</color>
+    <color name="translucent_primary">#807F52FF</color>
+    <color name="scrim">#66000000</color>
+
+    <!-- #RGB shorthand format -->
+    <color name="accent_short">#F00</color>
+    <color name="white_short">#FFF</color>
+    <color name="black_short">#000</color>
+
+    <!-- #ARGB shorthand format -->
+    <color name="semi_transparent_white">#8FFF</color>
+
+    <!-- Pokémon type colors -->
+    <color name="type_fire">#FF4500</color>
+    <color name="type_water">#1E90FF</color>
+    <color name="type_grass">#228B22</color>
+    <color name="type_electric">#FFD700</color>
+    <color name="type_psychic">#FF69B4</color>
+    <color name="type_dragon">#6A0DAD</color>
+</resources>

@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App -->
+    <string name="app_name">Kotlin Jump Demo</string>
+    <string name="app_version">Version 1.0.0</string>
+
+    <!-- Pokédex UI -->
+    <string name="title_pokedex">Pokédex</string>
+    <string name="title_team">My Team</string>
+    <string name="title_battle">Battle</string>
+    <string name="label_pokemon_name">Pokémon Name</string>
+    <string name="label_pokemon_level">Level</string>
+    <string name="label_pokemon_type">Type</string>
+    <string name="label_pokemon_hp">HP</string>
+
+    <!-- Users UI -->
+    <string name="title_users">Users</string>
+    <string name="label_user_name">Name</string>
+    <string name="label_user_email">Email</string>
+    <string name="label_user_role">Role</string>
+    <string name="role_admin">Administrator</string>
+    <string name="role_editor">Editor</string>
+    <string name="role_viewer">Viewer</string>
+
+    <!-- Actions -->
+    <string name="action_add_pokemon">Add to Pokédex</string>
+    <string name="action_start_battle">Start Battle</string>
+    <string name="action_catch_pokemon">Catch</string>
+    <string name="action_release_pokemon">Release</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_confirm">Confirm</string>
+    <string name="action_retry">Retry</string>
+
+    <!-- Messages -->
+    <string name="msg_loading">Loading…</string>
+    <string name="msg_empty_team">Your team is empty. Catch some Pokémon!</string>
+    <string name="msg_battle_won">Victory! You won the battle.</string>
+    <string name="msg_battle_lost">Defeat… Your team is KO.</string>
+    <string name="msg_battle_draw">It\'s a draw!</string>
+    <string name="msg_pokemon_caught">%s was caught!</string>
+    <string name="msg_invalid_name">Name cannot be empty.</string>
+    <string name="msg_team_full">Your team is full (6/6).</string>
+
+    <!-- Errors -->
+    <string name="error_network">Cannot reach server. Check your connection.</string>
+    <string name="error_not_found">Pokémon not found.</string>
+    <string name="error_unknown">An unexpected error occurred.</string>
+
+    <!-- Pokémon types -->
+    <string name="type_fire">Fire</string>
+    <string name="type_water">Water</string>
+    <string name="type_grass">Grass</string>
+    <string name="type_electric">Electric</string>
+    <string name="type_psychic">Psychic</string>
+    <string name="type_dragon">Dragon</string>
+
+    <!-- Long string (tests truncation at 40 chars) -->
+    <string name="disclaimer_long">This is a very long disclaimer text that should be truncated in the editor overlay display.</string>
+
+    <!-- Sprint 1 Feature 6 — present in BOTH locales → ✓ ✓ -->
+    <string name="sprint1_welcome">Welcome!</string>
+    <string name="sprint1_start">Start Game</string>
+    <!-- sprint1_fr_only and sprint1_default_only intentionally absent → ✗ -->
+</resources>

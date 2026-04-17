@@ -17,6 +17,16 @@
   "sponsor": {
     "url": "https://github.com/sponsors/elumine-dev"
   },
+  "capabilities": {
+    "virtualWorkspaces": {
+      "supported": "limited",
+      "description": "Navigation, Find Usages, Code Lens, folding and highlighting work. JAR scanning, test runner, and Android run are unavailable."
+    },
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "All navigation features work in untrusted workspaces."
+    }
+  },
   "engines": {
     "vscode": "^1.88.0"
   },
@@ -44,10 +54,17 @@
     "onLanguage:kotlin",
     "workspaceContains:**/*.kt",
     "onView:kotlinJump.findUsages",
+    "onCommand:kotlin-jump.goToClassImpl",
+    "onCommand:kotlin-jump.goToMethodImpl",
+    "onCommand:kotlin-jump.revealDefinitionAt",
+    "onCommand:kotlinJump.navigateBack",
+    "onCommand:kotlinJump.navigateForward",
+    "onCommand:kotlinJump.clearNavigationHistory",
     "onChatParticipant:kotlin-jump",
     "onMcpServerDefinitionProvider:kotlin-jump"
   ],
   "main": "./dist/extension.js",
+  "browser": "./dist/extension.browser.js",
   "bin": {
     "kotlin-jump-server": "./dist/server.js"
   },
@@ -682,6 +699,16 @@
           "default": true,
           "markdownDescription": "Visually replace `R.string.foo` references with their actual string values (like Android Studio's Resource Value Folding). The real code reappears while your cursor is on the line."
         },
+        "kotlinJump.colorResourceFolding": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show inline swatches and resolved values for `R.color.foo` references, similar to Android Studio's resource color previews."
+        },
+        "kotlinJump.constValFolding": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Inline the literal value of referenced `const val` symbols so constant-heavy Kotlin code stays readable without jumping to declarations."
+        },
         "kotlinJump.nullAssertionHighlight": {
           "type": "boolean",
           "default": true,
@@ -691,6 +718,26 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Show a colored `■` swatch inline before hex color literals (`0xAARRGGBB` and `\"#RRGGBB\"` strings)."
+        },
+        "kotlinJump.overrideGutterIcons": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show override and implementation gutter lenses above interface members, abstract declarations, and overrides."
+        },
+        "kotlinJump.suspendCallMarkers": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show inline markers for calls that resolve to `suspend` functions so coroutine boundaries are visible while reading code."
+        },
+        "kotlinJump.resourceDiagnostics": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Report diagnostics for unresolved Android string and color resources indexed from XML files."
+        },
+        "kotlinJump.versionCatalogHover": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show hover details for `libs.xxx` references by resolving entries from `gradle/libs.versions.toml`."
         },
         "kotlinJump.apiLevelInlayHints": {
           "type": "boolean",
@@ -844,6 +891,7 @@
     "release:prepare": "./.publish",
     "test": "vitest run",
     "test:watch": "vitest",
+    "pretest:integration": "npm run compile",
     "test:integration": "vscode-test",
     "prepare": "husky"
   },

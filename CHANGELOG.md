@@ -2,6 +2,17 @@
 
 ## 1.8.0
 
+Adds wireless ADB connection and pairing from VS Code, fixes device detection reliability, and reduces CPU overhead during editing with incremental annotation scanning.
+
+### Improvements
+- Added a Connect via ADB WiFi command that discovers Android devices on the local network using mDNS (dns-sd) and connects wirelessly — removes the need for a USB cable after first setup.
+- Added a guided Pair via ADB WiFi flow with step-by-step instructions for first-time wireless pairing, so the process works even without prior adb experience.
+- HexColorFoldingProvider and NullAssertionProvider now perform incremental line scanning — only lines that changed are reprocessed on each edit, cutting CPU overhead in files with many annotations.
+
+### Fixes
+- Fixed a race condition where ADB WiFi connection failed because IP address resolution had not completed — the extension now connects using the stable .local mDNS hostname instead.
+- Fixed device detection to prefer the HOST:PORT address format and fall back to the adb-XXXX-YYYY serial, preventing misidentified or dropped device connections.
+
 Version 1.8.0 is a packaging release — no changes to extension behavior, commands, or settings since v1.7.1.
 
 ### Notes

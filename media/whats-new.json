@@ -1,12 +1,12 @@
 {
   "version": "1.10.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Navigation history, resource diagnostics, richer insights",
-  "summary": "Kotlin Jump 1.10.0 adds Android Studio-style navigation history, inline resource diagnostics for broken R references, and richer code insights across Kotlin and Android projects.",
+  "tagline": "Android navigation history and resource diagnostics",
+  "summary": "Kotlin Jump 1.10.0 adds Android Studio-style navigation history, inline resource diagnostics for broken R references, and a richer set of Kotlin and Android code insights.",
   "highlights": [
     {
       "title": "Navigation History",
-      "description": "Back, Forward, and Clear History commands let you retrace jumps between definitions, implementations, and usages — mirroring the workflow Android Studio users already know.",
+      "description": "Back, Forward, and Clear History commands let you retrace jumps between definitions, implementations, and usages — matching the navigation model of Android Studio.",
       "kind": "improvement"
     },
     {
@@ -15,8 +15,8 @@
       "kind": "improvement"
     },
     {
-      "title": "Expanded Code Insights",
-      "description": "const val folding, suspend call markers, version catalog hover, override/implement gutter indicators, and R.color resource folding add richer at-a-glance context in Kotlin and Android files.",
+      "title": "Richer Code Insights",
+      "description": "New const val folding, suspend call markers, version catalog hover, override/implement gutter indicators, and R.color folding add more context to Kotlin and Android code at a glance.",
       "kind": "improvement"
     }
   ],
@@ -40,7 +40,7 @@
       "heading": "Notes",
       "bullets": [
         "Added a dedicated browser entrypoint with browser-safe stubs, bringing web-hosted installs closer to feature parity with the desktop extension for supported features.",
-        "Expanded the automated CI test suite with a comprehensive real-world Kotlin/Android project covering coroutines, sealed classes, annotations, resource files, and multiple test frameworks — improving confidence in parser correctness across a wider range of code patterns."
+        "Expanded the CI test suite with a comprehensive real-world Kotlin/Android project covering coroutines, sealed classes, annotations, resource files, and multiple test frameworks — improving confidence in parser correctness across a wider range of code patterns."
       ]
     }
   ],

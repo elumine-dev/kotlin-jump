@@ -1,22 +1,22 @@
 {
   "version": "1.10.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Navigation history and richer Android insights",
-  "summary": "Kotlin Jump 1.10.0 adds Android Studio-style navigation history, a broader set of Kotlin and Android code insights, and resource diagnostics that surface broken R references directly in the editor.",
+  "tagline": "Navigation history, resource diagnostics, richer insights",
+  "summary": "Kotlin Jump 1.10.0 adds Android Studio-style navigation history, inline resource diagnostics for broken R references, and richer code insights across Kotlin and Android projects.",
   "highlights": [
     {
       "title": "Navigation History",
-      "description": "Back, Forward, and Clear History commands let you retrace jumps between definitions, implementations, and usages the way Android Studio does — without losing your place.",
+      "description": "Back, Forward, and Clear History commands let you retrace jumps between definitions, implementations, and usages — mirroring the workflow Android Studio users already know.",
       "kind": "improvement"
     },
     {
-      "title": "Android Code Insights",
-      "description": "New const val folding, suspend call markers, version catalog hover, override/implement gutter icons, and R.color folding bring more visual context to Kotlin and Android code.",
+      "title": "Inline Resource Diagnostics",
+      "description": "Unresolved R.string and R.color references are now flagged directly in the editor, surfacing broken Android resource lookups without running a build.",
       "kind": "improvement"
     },
     {
-      "title": "Resource Diagnostics",
-      "description": "Unresolved R.string and R.color references are now flagged directly in the editor, catching broken Android resource lookups before runtime.",
+      "title": "Expanded Code Insights",
+      "description": "const val folding, suspend call markers, version catalog hover, override/implement gutter indicators, and R.color resource folding add richer at-a-glance context in Kotlin and Android files.",
       "kind": "improvement"
     }
   ],
@@ -25,8 +25,8 @@
       "heading": "Improvements",
       "bullets": [
         "Added Android Studio-style navigation history with Back, Forward, and Clear History commands, making it easier to retrace jumps between definitions, implementations, and usages.",
-        "Added const val folding, suspend call markers, version catalog hover, override/implement gutter indicators, and R.color resource folding for richer in-editor context on Kotlin and Android projects.",
-        "Added resource diagnostics that flag unresolved R.string and R.color references inline, surfacing broken Android resource lookups directly in the editor."
+        "Added resource diagnostics that flag unresolved R.string and R.color references inline, exposing broken Android resource lookups directly in the editor without running a build.",
+        "Added const val folding, suspend call markers, version catalog hover, override/implement gutter indicators, and R.color resource folding for richer in-editor context on Kotlin and Android projects."
       ]
     },
     {
@@ -40,7 +40,7 @@
       "heading": "Notes",
       "bullets": [
         "Added a dedicated browser entrypoint with browser-safe stubs, bringing web-hosted installs closer to feature parity with the desktop extension for supported features.",
-        "Expanded the automated CI test suite with a comprehensive real-world Kotlin/Android project, improving confidence in parser correctness across a wider range of code patterns."
+        "Expanded the automated CI test suite with a comprehensive real-world Kotlin/Android project covering coroutines, sealed classes, annotations, resource files, and multiple test frameworks — improving confidence in parser correctness across a wider range of code patterns."
       ]
     }
   ],

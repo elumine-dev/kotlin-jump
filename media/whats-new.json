@@ -1,32 +1,46 @@
 {
-  "version": "1.9.1",
+  "version": "1.10.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "CI parity fix, packaging only",
-  "summary": "Maintenance release that resyncs package-lock.json with npm@10 for consistent CI builds; no changes to extension behavior, commands, or settings.",
+  "tagline": "Navigation and code insight",
+  "summary": "1.10.0 adds Android Studio-style navigation history, a broader set of Kotlin/Android code insights, and browser build parity for web-hosted installs.",
   "highlights": [
     {
-      "title": "Consistent CI builds",
-      "description": "Resyncing package-lock.json with npm@10 eliminates lock file drift that could cause inconsistent or broken CI builds, making releases more reliable.",
-      "kind": "fix"
+      "title": "Navigation history",
+      "description": "Back, Forward, and Clear History commands make it easier to retrace jumps across definitions, implementations, and usages.",
+      "kind": "improvement"
     },
     {
-      "title": "No behavior changes",
-      "description": "All commands, settings, and navigation features are identical to v1.9.0.",
+      "title": "Android insights",
+      "description": "New folding, hover, gutter, and diagnostic features surface Kotlin and Android context directly in the editor.",
+      "kind": "improvement"
+    },
+    {
+      "title": "Browser parity",
+      "description": "A dedicated browser entrypoint and browser-safe stubs improve packaging consistency for web-hosted installs.",
       "kind": "note"
     }
   ],
   "sections": [
     {
-      "heading": "Notes",
+      "heading": "Improvements",
       "bullets": [
-        "No changes to extension commands, settings, or navigation behavior since v1.9.0.",
-        "Updated manual install instructions in the README to reference the 1.9.1 package."
+        "Added Android Studio-style navigation history with Back, Forward, and Clear History commands, so jumps between definitions, implementations, and usages are easier to retrace.",
+        "Added new Kotlin and Android code insights including const val folding, suspend call markers, version catalog hover, override/implement gutter indicators, and folding for R.color resources.",
+        "Added resource diagnostics for unresolved R.string and R.color references, making broken Android resource lookups visible directly in the editor."
       ]
     },
     {
-      "heading": "Packaging",
+      "heading": "Fixes",
       "bullets": [
-        "Resynced package-lock.json with npm@10 to prevent lock file drift and ensure reproducible CI builds."
+        "Fixed Go to Class Implementation and related implementation navigation commands so they register reliably and open the target editor correctly during navigation flows and tests.",
+        "Fixed parser, definition, and hover edge cases around string interpolation, Android R.type.name references, inherited properties, and same-file symbol resolution."
+      ]
+    },
+    {
+      "heading": "Packaging and docs",
+      "bullets": [
+        "Added a dedicated browser entrypoint plus browser-safe stubs, bringing the web build closer to parity with the desktop extension for supported features.",
+        "Updated manual install commands in the README to reference the 1.10.0 VSIX package."
       ]
     }
   ],

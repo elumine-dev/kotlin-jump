@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.10.0
+
+1.10.0 adds Android Studio-style navigation history, a broader set of Kotlin/Android code insights, and browser build parity for web-hosted installs.
+
+### Improvements
+- Added Android Studio-style navigation history with Back, Forward, and Clear History commands, so jumps between definitions, implementations, and usages are easier to retrace.
+- Added new Kotlin and Android code insights including `const val` folding, suspend call markers, version catalog hover, override/implement gutter indicators, and folding for `R.color` resources.
+- Added resource diagnostics for unresolved `R.string` and `R.color` references, making broken Android resource lookups visible directly in the editor.
+
+### Fixes
+- Fixed Go to Class Implementation and related implementation navigation commands so they register reliably and open the target editor correctly during navigation flows and tests.
+- Fixed parser, definition, and hover edge cases around string interpolation, Android `R.type.name` references, inherited properties, and same-file symbol resolution.
+
+### Packaging and docs
+- Added a dedicated browser entrypoint plus browser-safe stubs, bringing the web build closer to parity with the desktop extension for supported features.
+- Updated manual install commands in the README to reference the 1.10.0 VSIX package.
+
 ## 1.9.1
 
 Maintenance release that resyncs package-lock.json with npm@10 for consistent CI builds; no changes to extension behavior, commands, or settings.

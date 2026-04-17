@@ -1,39 +1,32 @@
 {
-  "version": "1.9.0",
+  "version": "1.9.1",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Wireless Android, faster annotations",
-  "summary": "Adds wireless Android device connection and pairing via mDNS, and reduces annotation scan CPU overhead with incremental processing.",
+  "tagline": "CI parity fix, packaging only",
+  "summary": "Maintenance release that resyncs package-lock.json with npm@10 for consistent CI builds; no changes to extension behavior, commands, or settings.",
   "highlights": [
     {
-      "title": "WiFi Android Connection",
-      "description": "Connect to Android devices over WiFi using automatic mDNS discovery — no USB cable required after initial setup.",
-      "kind": "improvement"
+      "title": "Consistent CI builds",
+      "description": "Resyncing package-lock.json with npm@10 eliminates lock file drift that could cause inconsistent or broken CI builds, making releases more reliable.",
+      "kind": "fix"
     },
     {
-      "title": "Guided ADB WiFi Pairing",
-      "description": "A new step-by-step pairing flow walks through first-time wireless setup, making it accessible without prior adb experience.",
-      "kind": "improvement"
-    },
-    {
-      "title": "Incremental Annotation Scanning",
-      "description": "Hex color and null-assertion providers now reprocess only changed lines on each edit, cutting CPU overhead in annotation-heavy files.",
-      "kind": "improvement"
+      "title": "No behavior changes",
+      "description": "All commands, settings, and navigation features are identical to v1.9.0.",
+      "kind": "note"
     }
   ],
   "sections": [
     {
-      "heading": "Improvements",
+      "heading": "Notes",
       "bullets": [
-        "Added a Connect via ADB WiFi command that uses mDNS (dns-sd) to discover Android devices on the local network and connects wirelessly — removes the need for a USB cable after first setup.",
-        "Added a Pair via ADB WiFi flow with guided step-by-step instructions for first-time wireless pairing.",
-        "HexColorFoldingProvider and NullAssertionProvider now perform incremental line scanning — only lines that changed are reprocessed on each edit, reducing CPU overhead in files with many annotations."
+        "No changes to extension commands, settings, or navigation behavior since v1.9.0.",
+        "Updated manual install instructions in the README to reference the 1.9.1 package."
       ]
     },
     {
-      "heading": "Fixes",
+      "heading": "Packaging",
       "bullets": [
-        "Fixed a race condition where ADB WiFi connection failed because IP resolution had not yet completed — the extension now connects using the stable .local mDNS hostname.",
-        "Fixed device detection to prefer the HOST:PORT address format and fall back to the adb-XXXX-YYYY serial, preventing misidentified or dropped device connections."
+        "Resynced package-lock.json with npm@10 to prevent lock file drift and ensure reproducible CI builds."
       ]
     }
   ],

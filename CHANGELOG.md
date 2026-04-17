@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.9.1
+
+Maintenance release that resyncs package-lock.json with npm@10 for consistent CI builds; no changes to extension behavior, commands, or settings.
+
+### Notes
+- No changes to extension commands, settings, or navigation behavior since v1.9.0.
+- Updated manual install instructions in the README to reference the 1.9.1 package.
+
+### Packaging
+- Resynced package-lock.json with npm@10 to prevent lock file drift and ensure reproducible CI builds.
+
 ## 1.9.0
 
 Adds wireless Android device connection and pairing via mDNS, and reduces annotation scan CPU overhead with incremental processing.

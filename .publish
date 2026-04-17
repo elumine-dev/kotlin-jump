@@ -260,9 +260,29 @@ ensure_local_dependencies() {
   npm ci
 }
 
+bump_version() {
+  local current="$1" bump_type="$2"
+  node -e "
+    const [maj, min, pat] = '$current'.split('.').map(Number);
+    if ('$bump_type' === 'minor') console.log(maj + '.' + (min + 1) + '.0');
+    else console.log(maj + '.' + min + '.' + (pat + 1));
+  "
+}
+
 if [[ -n "$VERSION_ARG" ]]; then
   validate_version "$VERSION_ARG"
   VERSION="$VERSION_ARG"
+elif [[ -t 0 && "$DRY_RUN" -eq 0 && "$NOTES_ONLY" -eq 0 ]]; then
+  echo "Current version: $VERSION"
+  echo "  1) patch → $(bump_version "$VERSION" patch)"
+  echo "  2) minor → $(bump_version "$VERSION" minor)"
+  read -rp "Bump type [1/2]: " bump_choice
+  case "$bump_choice" in
+    1) VERSION="$(bump_version "$VERSION" patch)" ;;
+    2) VERSION="$(bump_version "$VERSION" minor)" ;;
+    *) echo "Invalid choice. Use --version x.y.z to set manually." >&2; exit 1 ;;
+  esac
+  VERSION_ARG="$VERSION"
 fi
 
 if [[ "$DRY_RUN" -eq 0 ]]; then

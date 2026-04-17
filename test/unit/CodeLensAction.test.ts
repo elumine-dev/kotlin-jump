@@ -37,10 +37,6 @@ describe('runCodeLensAction', () => {
   beforeEach(() => {
     clearPendingDeclNav();
 
-    (vscode as any).Selection = class Selection {
-      constructor(public anchor: unknown, public active: unknown) {}
-    };
-
     (vscode.workspace as any).openTextDocument = vi.fn(async (uri: vscode.Uri) => ({ uri }));
     (vscode.window as any).showTextDocument = vi.fn(async () => ({ selection: undefined }));
     (vscode.commands as any).executeCommand = vi.fn(async () => undefined);

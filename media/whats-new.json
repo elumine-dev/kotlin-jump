@@ -1,46 +1,46 @@
 {
   "version": "1.10.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Navigation and code insight",
-  "summary": "1.10.0 adds Android Studio-style navigation history, a broader set of Kotlin/Android code insights, and browser build parity for web-hosted installs.",
+  "tagline": "Navigation history and richer Android insights",
+  "summary": "Kotlin Jump 1.10.0 adds Android Studio-style navigation history, a broader set of Kotlin and Android code insights, and resource diagnostics that surface broken R references directly in the editor.",
   "highlights": [
     {
-      "title": "Navigation history",
-      "description": "Back, Forward, and Clear History commands make it easier to retrace jumps across definitions, implementations, and usages.",
+      "title": "Navigation History",
+      "description": "Back, Forward, and Clear History commands let you retrace jumps between definitions, implementations, and usages the way Android Studio does — without losing your place.",
       "kind": "improvement"
     },
     {
-      "title": "Android insights",
-      "description": "New folding, hover, gutter, and diagnostic features surface Kotlin and Android context directly in the editor.",
+      "title": "Android Code Insights",
+      "description": "New const val folding, suspend call markers, version catalog hover, override/implement gutter icons, and R.color folding bring more visual context to Kotlin and Android code.",
       "kind": "improvement"
     },
     {
-      "title": "Browser parity",
-      "description": "A dedicated browser entrypoint and browser-safe stubs improve packaging consistency for web-hosted installs.",
-      "kind": "note"
+      "title": "Resource Diagnostics",
+      "description": "Unresolved R.string and R.color references are now flagged directly in the editor, catching broken Android resource lookups before runtime.",
+      "kind": "improvement"
     }
   ],
   "sections": [
     {
       "heading": "Improvements",
       "bullets": [
-        "Added Android Studio-style navigation history with Back, Forward, and Clear History commands, so jumps between definitions, implementations, and usages are easier to retrace.",
-        "Added new Kotlin and Android code insights including const val folding, suspend call markers, version catalog hover, override/implement gutter indicators, and folding for R.color resources.",
-        "Added resource diagnostics for unresolved R.string and R.color references, making broken Android resource lookups visible directly in the editor."
+        "Added Android Studio-style navigation history with Back, Forward, and Clear History commands, making it easier to retrace jumps between definitions, implementations, and usages.",
+        "Added const val folding, suspend call markers, version catalog hover, override/implement gutter indicators, and R.color resource folding for richer in-editor context on Kotlin and Android projects.",
+        "Added resource diagnostics that flag unresolved R.string and R.color references inline, surfacing broken Android resource lookups directly in the editor."
       ]
     },
     {
       "heading": "Fixes",
       "bullets": [
-        "Fixed Go to Class Implementation and related implementation navigation commands so they register reliably and open the target editor correctly during navigation flows and tests.",
-        "Fixed parser, definition, and hover edge cases around string interpolation, Android R.type.name references, inherited properties, and same-file symbol resolution."
+        "Fixed Go to Class Implementation and related navigation commands so they register reliably and open the target editor correctly during navigation flows.",
+        "Fixed parser, definition, and hover edge cases involving string interpolation, Android R.type.name references, inherited properties, and same-file symbol resolution."
       ]
     },
     {
-      "heading": "Packaging and docs",
+      "heading": "Notes",
       "bullets": [
-        "Added a dedicated browser entrypoint plus browser-safe stubs, bringing the web build closer to parity with the desktop extension for supported features.",
-        "Updated manual install commands in the README to reference the 1.10.0 VSIX package."
+        "Added a dedicated browser entrypoint with browser-safe stubs, bringing web-hosted installs closer to feature parity with the desktop extension for supported features.",
+        "Expanded the automated CI test suite with a comprehensive real-world Kotlin/Android project, improving confidence in parser correctness across a wider range of code patterns."
       ]
     }
   ],

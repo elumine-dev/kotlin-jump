@@ -210,8 +210,13 @@ async function runAndroid(
   const terminal = getOrCreateTerminal(config.projectRoot);
   terminal.show(/* preserveFocus */ true);
 
-  // ANDROID_SERIAL targets the selected device, avoids mDNS duplicates (like zshrc replica())
-  const gradleCmd    = `ANDROID_SERIAL="${device}" "${config.gradlew}" ${installTask}`;
+  // adb-XXXX-YYYY serials (ADB internal mDNS auto-discover) don't work reliably with -s or
+  // ANDROID_SERIAL — omit both and let ADB target the only connected device automatically,
+  // same as the zshrc rubicon approach. USB and HOST:PORT serials are explicit and safe to pass.
+  const isMdnsAuto   = device.startsWith('adb-');
+  const serialEnv    = isMdnsAuto ? '' : `ANDROID_SERIAL="${device}" `;
+  const adbTarget    = isMdnsAuto ? 'adb' : `adb -s "${device}"`;
+  const gradleCmd    = `${serialEnv}"${config.gradlew}" ${installTask}`;
   const launchParams: LaunchParams = {
     device,
     packageName:  config.packageName,
@@ -231,7 +236,7 @@ async function runAndroid(
       // No shell integration — chain both commands; adb step uses monkey as fallback
       // (merged manifest unreadable mid-chain, monkey is still reliable here)
       log.info('[android:run] shell integration unavailable, falling back to sendText');
-      const adbFallback = `adb -s "${device}" shell monkey -p "${config.packageName}" -c android.intent.category.LAUNCHER 1`;
+      const adbFallback = `${adbTarget} shell monkey -p "${config.packageName}" -c android.intent.category.LAUNCHER 1`;
       terminal.sendText(`${gradleCmd} && ${adbFallback}`);
       setIdle();
     }
@@ -282,14 +287,15 @@ function executeWithShellIntegration(
     // Build ADB command after gradle succeeds: merged manifest is now on disk.
     // Mirrors exactly what Android Studio does — reads the real package + LAUNCHER activity.
     const { device, packageName, projectRoot, gradleModule, installTask } = launchParams;
+    const adbT  = device.startsWith('adb-') ? 'adb' : `adb -s "${device}"`;
     const merged = readMergedManifest(projectRoot, gradleModule, installTask);
     let adbCmd: string;
     if (merged) {
       log.info(`[android:run] merged manifest → ${merged.launcherActivity}`);
-      adbCmd = `adb -s "${device}" shell am start -n "${merged.launcherActivity}"`;
+      adbCmd = `${adbT} shell am start -n "${merged.launcherActivity}"`;
     } else {
       log.info('[android:run] no merged manifest — fallback to monkey');
-      adbCmd = `adb -s "${device}" shell monkey -p "${packageName}" -c android.intent.category.LAUNCHER 1`;
+      adbCmd = `${adbT} shell monkey -p "${packageName}" -c android.intent.category.LAUNCHER 1`;
     }
 
     // Step 2: ADB launch
@@ -694,20 +700,28 @@ async function connectAdbWifi(log: Logger): Promise<string | undefined> {
   return undefined;
 }
 
-// Returns first connected device serial, filtering mDNS duplicates (like zshrc replica())
+// Returns first connected device serial.
+// Priority: USB / HOST:PORT (explicit adb connect) > adb-XXXX-YYYY (ADB auto-mDNS) > _adb-tls-connect
+// ADB auto-mDNS entries (serial starts with "adb-") can be stale and fail adb install.
 async function getConnectedDevice(): Promise<string | undefined> {
   const output = await runShell('adb devices');
   if (!output) return undefined;
 
+  let mdnsFallback: string | undefined;
   for (const line of output.split('\n').slice(1)) {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.includes('_adb-tls-connect')) continue;
+    if (!trimmed) continue;
     if (trimmed.endsWith('\tdevice') || /\tdevice\b/.test(trimmed)) {
       const serial = trimmed.split(/\s+/)[0];
-      if (serial) return serial;
+      if (!serial) continue;
+      if (trimmed.includes('_adb-tls-connect') || serial.startsWith('adb-')) {
+        mdnsFallback ??= serial;
+      } else {
+        return serial;
+      }
     }
   }
-  return undefined;
+  return mdnsFallback;
 }
 
 function findEmulatorBin(): string | undefined {

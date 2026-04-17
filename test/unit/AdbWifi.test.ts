@@ -161,3 +161,65 @@ describe('AdbWifi — lookup output edge cases', () => {
     expect(reached).toBeUndefined();
   });
 });
+
+// ── getConnectedDevice fallback logic ─────────────────────────────────────────
+
+describe('AdbWifi — getConnectedDevice mDNS fallback', () => {
+  function parseConnectedDevice(adbDevicesOutput: string): string | undefined {
+    let mdnsFallback: string | undefined;
+    for (const line of adbDevicesOutput.split('\n').slice(1)) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      if (trimmed.endsWith('\tdevice') || /\tdevice\b/.test(trimmed)) {
+        const serial = trimmed.split(/\s+/)[0];
+        if (!serial) continue;
+        if (trimmed.includes('_adb-tls-connect') || serial.startsWith('adb-')) {
+          mdnsFallback ??= serial;
+        } else {
+          return serial;
+        }
+      }
+    }
+    return mdnsFallback;
+  }
+
+  it('returns USB serial immediately', () => {
+    const out = 'List of devices attached\nR3CN90BAZLE\tdevice\n';
+    expect(parseConnectedDevice(out)).toBe('R3CN90BAZLE');
+  });
+
+  it('returns HOST:PORT serial immediately', () => {
+    const out = 'List of devices attached\nPixel-9.local:42949\tdevice\n';
+    expect(parseConnectedDevice(out)).toBe('Pixel-9.local:42949');
+  });
+
+  it('prefers HOST:PORT over adb-XXXX-YYYY (ADB auto-mDNS)', () => {
+    const out = 'List of devices attached\nadb-DEVICE01234-Aa1Bb\tdevice\nPixel-9.local:42949\tdevice\n';
+    expect(parseConnectedDevice(out)).toBe('Pixel-9.local:42949');
+  });
+
+  it('falls back to adb-XXXX-YYYY when no USB/HOST:PORT device', () => {
+    const out = 'List of devices attached\nadb-DEVICE01234-Aa1Bb\tdevice\n';
+    expect(parseConnectedDevice(out)).toBe('adb-DEVICE01234-Aa1Bb');
+  });
+
+  it('falls back to _adb-tls-connect serial as last resort', () => {
+    const out = 'List of devices attached\nadb-ABC._adb-tls-connect._tcp.\tdevice\n';
+    expect(parseConnectedDevice(out)).toBe('adb-ABC._adb-tls-connect._tcp.');
+  });
+
+  it('uses first mDNS fallback when multiple are present', () => {
+    const out = 'List of devices attached\nadb-DEVICE01234-Aa1Bb\tdevice\nadb-ABC._adb-tls-connect._tcp.\tdevice\n';
+    expect(parseConnectedDevice(out)).toBe('adb-DEVICE01234-Aa1Bb');
+  });
+
+  it('returns undefined when no device is connected', () => {
+    const out = 'List of devices attached\n';
+    expect(parseConnectedDevice(out)).toBeUndefined();
+  });
+
+  it('ignores unauthorized entries', () => {
+    const out = 'List of devices attached\nR3CN90BAZLE\tunauthorized\n';
+    expect(parseConnectedDevice(out)).toBeUndefined();
+  });
+});

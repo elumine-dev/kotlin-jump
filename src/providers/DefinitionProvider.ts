@@ -48,6 +48,16 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
     if (qualLocs.length === 1) return qualLocs[0];
     if (qualLocs.length > 1)  return qualLocs;
 
+    // ── 0b. Android resource reference: R.type.name ──────────────────────────
+    // R.color.error, R.string.foo, etc. are resource IDs — not Kotlin symbols.
+    // Without this guard the fallback simple-name lookup wrongly navigates to
+    // an unrelated Kotlin property named "error", "warning", etc.
+    const lineText = document.lineAt(position.line).text;
+    if (isAndroidResourceRef(lineText, wordRange.start.character)) {
+      log('step0b Android R.type.name pattern → null');
+      return null;
+    }
+
     // ── 1. Try FQN match via resolved imports (most precise) ─────────────────
     const resolved = resolveBest(word, document, fqn => this.index.lookupFqn(fqn));
     const resolvedEntries = resolved.matches.filter(e => allow(e.uri.path));
@@ -55,8 +65,9 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
     if (resolvedEntries.length > 0) {
       const declEntry = resolvedEntries.find(e => isAtDeclaration(e, document.uri, position));
       if (declEntry && resolvedEntries.length === 1) {
-        // Override method → navigate to the interface/abstract declaration
-        if (declEntry.isOverride && (declEntry.kind === 'fun' || declEntry.kind === 'composable')) {
+        // Override method/property → navigate to the interface/abstract declaration
+        if (declEntry.isOverride && (declEntry.kind === 'fun' || declEntry.kind === 'composable'
+            || declEntry.kind === 'val' || declEntry.kind === 'var')) {
           const superLoc = this.superMethodLocation(declEntry, allow);
           if (superLoc) return superLoc;
         }
@@ -94,8 +105,9 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
 
     const declEntry = filtered.find(e => isAtDeclaration(e, document.uri, position));
     if (declEntry) {
-      // Override method → navigate to the interface/abstract declaration
-      if (declEntry.isOverride && (declEntry.kind === 'fun' || declEntry.kind === 'composable')) {
+      // Override method/property → navigate to the interface/abstract declaration
+      if (declEntry.isOverride && (declEntry.kind === 'fun' || declEntry.kind === 'composable'
+          || declEntry.kind === 'val' || declEntry.kind === 'var')) {
         const superLoc = this.superMethodLocation(declEntry, allow);
         if (superLoc) return superLoc;
       }
@@ -214,7 +226,9 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
         if (!allow(supertypeEntry.uri.path)) continue;
         const superSymbols = this.index.getFileSymbols(supertypeEntry.uri.toString());
         for (const s of superSymbols) {
-          if (s.name === entry.name && (s.kind === 'fun' || s.kind === 'composable') && !s.isOverride) {
+          if (s.name === entry.name
+              && (s.kind === 'fun' || s.kind === 'composable' || s.kind === 'val' || s.kind === 'var')
+              && !s.isOverride) {
             return new vscode.Location(s.uri, new vscode.Position(s.line, s.character));
           }
         }
@@ -288,6 +302,22 @@ function wildcardTiebreak<T extends { fqn: string; packageName?: string }>(
   }
 
   return bestCount === 1 ? best : undefined;
+}
+
+// Returns true when the word at `wordStart` is the name component of an Android
+// resource reference `R.<type>.<name>` — e.g. R.color.error, R.string.app_name.
+// In that case the name is a resource ID, not a Kotlin symbol, and simple-name
+// fallback lookup would wrongly navigate to an unrelated property.
+export function isAndroidResourceRef(line: string, wordStart: number): boolean {
+  if (wordStart < 2 || line[wordStart - 1] !== '.') return false;
+  // Walk back over the qualifier (e.g. "color")
+  let j = wordStart - 2;
+  while (j > 0 && /\w/.test(line[j - 1])) j--;
+  if (j < 2 || line[j - 1] !== '.') return false;
+  // Walk back over what precedes the qualifier's dot (must be exactly "R")
+  let k = j - 2;
+  while (k > 0 && /\w/.test(line[k - 1])) k--;
+  return line.slice(k, j - 1) === 'R';
 }
 
 function withAliasTargets(

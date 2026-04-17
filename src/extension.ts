@@ -27,6 +27,7 @@ import { resolveCompanionMode } from './util/companionMode';
 import { resolveAll as resolveModules } from './gradle/ModuleResolver';
 import { resolveBest } from './util/ImportResolver';
 import { readProjectConfigs } from './util/ProjectConfig';
+import { buildAllowFilter } from './util/testFilter';
 import { inferPackage, buildMoveEdit } from './providers/MoveFileProvider';
 import * as path from 'path';
 import * as IndexStore from './indexer/IndexStore';
@@ -49,6 +50,15 @@ import { HexColorFoldingProvider } from './providers/HexColorFoldingProvider';
 import { HexColorDocumentColorProvider } from './providers/HexColorDocumentColorProvider';
 import { ApiLevelProvider } from './providers/ApiLevelProvider';
 import { registerAndroidRunCommand } from './commands/AndroidRunCommand';
+import { ColorResourceIndex } from './indexer/ColorResourceIndex';
+import { VersionCatalogIndex } from './indexer/VersionCatalogIndex';
+import { ColorFoldingProvider } from './providers/ColorFoldingProvider';
+import { ConstValFoldingProvider } from './providers/ConstValFoldingProvider';
+import { SuspendMarkerProvider } from './providers/SuspendMarkerProvider';
+import { ResourceDiagnosticProvider } from './providers/ResourceDiagnosticProvider';
+import { VersionCatalogHoverProvider } from './providers/VersionCatalogHoverProvider';
+import { OverrideGutterProvider } from './providers/OverrideGutterProvider';
+import { NavigationHistoryProvider } from './providers/NavigationHistoryProvider';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 
@@ -242,10 +252,59 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       },
     ),
 
+    vscode.commands.registerCommand('kotlin-jump.goToClassImpl',
+      async (name: string, packageName: string) => {
+        const CLASS_LIKE_SET = new Set(['class', 'dataClass', 'sealedClass', 'enum', 'object', 'interface', 'annotation']);
+        clearPendingDeclNav();
+        const parentCandidates = index.lookup(name).filter((e: { kind: string }) => CLASS_LIKE_SET.has(e.kind));
+        const parentEntry = parentCandidates.find((e: { packageName?: string }) => e.packageName === packageName)
+          ?? (parentCandidates.length === 1 ? parentCandidates[0] : undefined);
+        const allow = buildAllowFilter(
+          parentEntry?.uri.fsPath ?? vscode.window.activeTextEditor?.document.uri.fsPath ?? '',
+        );
+        const rawImpls = index.lookupImplementations(name).filter((e: any) => allow(e.uri.path));
+        const allParents = parentCandidates.filter((e: any) => allow(e.uri.path));
+        const impls = allParents.length <= 1 ? rawImpls : rawImpls.filter((impl: { packageName: string }) =>
+          impl.packageName === packageName ||
+          !allParents.some((p: { packageName: string }) => p.packageName === impl.packageName)
+        );
+        if (impls.length === 0) return;
+        const isAnon = (m: { name: string }) => m.name.startsWith('$anon$');
+        const openImpl = async (m: { name: string; uri: vscode.Uri; line: number; character: number }) => {
+          const selLen = isAnon(m) ? 0 : name.length;
+          const doc = await vscode.workspace.openTextDocument(m.uri);
+          const editor = await vscode.window.showTextDocument(doc, { preview: true });
+          const start = new vscode.Position(m.line, m.character);
+          const end = new vscode.Position(m.line, m.character + selLen);
+          const selection = new vscode.Selection(start, end);
+          editor.selection = selection;
+          editor.revealRange(new vscode.Range(start, end), vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+        };
+        if (impls.length === 1) {
+          await openImpl(impls[0]);
+          return;
+        }
+        const items = impls.map((m: { name: string; fqn: string; uri: vscode.Uri; line: number; character: number }) => ({
+          label:  isAnon(m)
+            ? `Anonymous object (line ${m.line + 1})`
+            : m.fqn.split('.').slice(-2).join('.'),
+          detail: m.uri.path.split('/').pop(),
+          impl:   m,
+        }));
+        const picked = await vscode.window.showQuickPick(items, {
+          placeHolder: `Go to implementation of ${name}`,
+        });
+        if (picked) {
+          await openImpl((picked as any).impl);
+        }
+      },
+    ),
+
     vscode.commands.registerCommand('kotlin-jump.goToMethodImpl',
       async (uri: vscode.Uri, line: number, name: string, _implUriStrings: string[]) => {
         clearPendingDeclNav();
-        const impls = index.lookupMethodImplementations(name, uri.toString(), line);
+        const allow = buildAllowFilter(uri.fsPath);
+        const impls = index.lookupMethodImplementations(name, uri.toString(), line).filter((e: any) => allow(e.uri.path));
         if (impls.length === 0) return;
 
         if (impls.length === 1) {
@@ -494,8 +553,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(watcher, { dispose: () => scanner.destroy() });
 
   // ── String Resource Folding ────────────────────────────────────────────────
+  const stringIndex = new StringResourceIndex();
   context.subscriptions.push((() => {
-    const stringIndex     = new StringResourceIndex();
     const foldingProvider = new StringResourceFoldingProvider(stringIndex, log);
 
     // ── R.string usage index (XML → Kotlin navigation) ──────────────────────
@@ -628,6 +687,113 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }),
     );
   })();
+
+  // ── Sprint 2: const val inline folding ────────────────────────────────────
+  context.subscriptions.push(new ConstValFoldingProvider(index));
+
+  // ── Navigation history (Back / Forward — Cmd+Opt+Left / Right) ────────────
+  context.subscriptions.push(new NavigationHistoryProvider());
+
+  // ── Sprint 2: suspend call markers ────────────────────────────────────────
+  (() => {
+    const sp = new SuspendMarkerProvider(index);
+    context.subscriptions.push(
+      sp,
+      vscode.languages.registerInlayHintsProvider(KT_JAVA, sp),
+      vscode.workspace.onDidChangeConfiguration(e => {
+        if (e.affectsConfiguration('kotlinJump.suspendCallMarkers')) sp.fireChange();
+      }),
+    );
+  })();
+
+  // ── Sprint 2: R.color swatch + resource diagnostics ───────────────────────
+  const colorIndex = new ColorResourceIndex();
+  (() => {
+    const colorProvider = new ColorFoldingProvider(colorIndex);
+    const resourceDiag  = new ResourceDiagnosticProvider(stringIndex, colorIndex);
+
+    const handleColorChanged = async (uri: vscode.Uri) => {
+      try {
+        const bytes = await vscode.workspace.fs.readFile(uri);
+        colorIndex.reindexFile(uri, new TextDecoder().decode(bytes));
+        colorProvider.invalidateAll();
+        resourceDiag.invalidateAll();
+      } catch { /* skip */ }
+    };
+
+    vscode.workspace.findFiles(
+      '**/res/values*/colors.xml',
+      `{${excludeList.join(',')}}`,
+    ).then(uris => Promise.all(uris.map(handleColorChanged)));
+
+    const cW1 = vscode.workspace.createFileSystemWatcher('**/res/values/colors.xml');
+    const cW2 = vscode.workspace.createFileSystemWatcher('**/res/values-*/colors.xml');
+    for (const w of [cW1, cW2]) {
+      w.onDidCreate(handleColorChanged);
+      w.onDidChange(handleColorChanged);
+      w.onDidDelete(uri => { colorIndex.removeFile(uri); colorProvider.invalidateAll(); resourceDiag.invalidateAll(); });
+    }
+
+    context.subscriptions.push(colorProvider, resourceDiag, cW1, cW2);
+  })();
+
+  // ── Sprint 2: version catalog hover (libs.xxx) ────────────────────────────
+  (() => {
+    const vcIndex = new VersionCatalogIndex();
+    const GRADLE_FILES = [{ language: 'kotlin' }, { language: 'groovy' }];
+
+    const handleTomlChanged = async (uri: vscode.Uri) => {
+      try {
+        const bytes = await vscode.workspace.fs.readFile(uri);
+        vcIndex.reindexFile(new TextDecoder().decode(bytes));
+      } catch { /* skip */ }
+    };
+
+    vscode.workspace.findFiles('**/gradle/libs.versions.toml').then(uris => {
+      void Promise.all(uris.map(handleTomlChanged));
+    });
+
+    const tomlW = vscode.workspace.createFileSystemWatcher('**/gradle/libs.versions.toml');
+    tomlW.onDidCreate(handleTomlChanged);
+    tomlW.onDidChange(handleTomlChanged);
+    tomlW.onDidDelete(() => vcIndex.reindexFile(''));
+
+    context.subscriptions.push(
+      tomlW,
+      vscode.languages.registerHoverProvider(GRADLE_FILES, new VersionCatalogHoverProvider(vcIndex)),
+    );
+  })();
+
+  // ── Sprint 2: override/implement gutter icons ──────────────────────────────
+  (() => {
+    const overrideProvider = new OverrideGutterProvider(index);
+    context.subscriptions.push(
+      vscode.languages.registerCodeLensProvider(KT_JAVA, overrideProvider),
+      vscode.workspace.onDidChangeConfiguration(e => {
+        if (e.affectsConfiguration('kotlinJump.overrideGutterIcons')) overrideProvider.fireChange();
+      }),
+    );
+  })();
+
+  // ── kotlin-jump.revealDefinitionAt — used by override ⬆ CodeLens ──────────
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'kotlin-jump.revealDefinitionAt',
+      async (uri: vscode.Uri, position: vscode.Position) => {
+        const locs = await vscode.commands.executeCommand<vscode.Location[]>(
+          'vscode.executeDefinitionProvider',
+          uri,
+          position,
+        );
+        if (!locs?.length) return;
+        const loc = locs[0];
+        await vscode.commands.executeCommand('vscode.open', loc.uri, {
+          preview: true,
+          selection: loc.range,
+        } as vscode.TextDocumentShowOptions);
+      },
+    ),
+  );
 
   // ── Test Explorer ─────────────────────────────────────────────────────────
   const testCtrl = new KotlinTestController(index, context, log);

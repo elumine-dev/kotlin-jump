@@ -134,13 +134,14 @@ describe('CL-1 — implementation count : collision de noms entre packages', () 
   });
 });
 
-// ── CL-A : méthodes abstract affichent "N implementations" (Fix A) ────────────
+// ── CL-A : méthodes abstract exclues de KotlinCodeLensProvider (délégué à OverrideGutterProvider) ──
 //
-// AVANT fix : la condition `enclosingKind === 'interface'` excluait les méthodes
-// dans les abstract class → elles affichaient "N usages" au lieu de "N implementations".
-// APRÈS fix : `enclosingKind === 'interface' || entry.isAbstract`
+// AVANT : CodeLensProvider gérait lui-même abstract → "N implementations" (branche resolveCodeLens)
+// APRÈS : CodeLensProvider skip les méthodes abstract en provideCodeLenses ;
+//         OverrideGutterProvider prend en charge avec ⬇.
+// Résultat : plus de lens dupliqué sur les méthodes abstract.
 
-describe('CL-A — méthodes abstract → "N implementations" et non "N usages"', () => {
+describe('CL-A — méthodes abstract exclues de KotlinCodeLensProvider (no duplicate)', () => {
   const ABSTRACT_URI  = 'file:///a/Move.kt';
   const PHYSICAL_URI  = 'file:///a/PhysicalMove.kt';
   const SPECIAL_URI   = 'file:///a/SpecialMove.kt';
@@ -189,38 +190,30 @@ class SpecialMove : MoveStrategy() {
 
   afterEach(() => { workspace.fs.readFile = origReadFile; });
 
-  it('CL-A — abstract fun execute → resolveCodeLens contient "implementations"', async () => {
-    const entry = index.lookup('execute').find(e => e.isAbstract)!;
-    expect(entry).toBeDefined();
-    const lens = { range: new Range(entry.line, 0, entry.line, 0), data: { entry, enclosingKind: 'class' } } as any;
-
-    const resolved = await provider.resolveCodeLens(lens, noCancel());
-    // Fix A : doit afficher "2 implementations", pas "N usages"
-    expect(resolved.command?.title).toContain('implementation');
-    expect(resolved.command?.title).not.toContain('usage');
+  it('CL-A — abstract fun execute → PAS de lens dans provideCodeLenses', () => {
+    const doc = mockDocument(ABSTRACT_URI, ABSTRACT_CODE);
+    const lenses = provider.provideCodeLenses(doc);
+    // execute est abstract → OverrideGutterProvider le gère, CodeLensProvider doit le skip
+    const executeEntry = index.lookup('execute').find(e => e.isAbstract)!;
+    expect(lenses.some(l => l.range.start.line === executeEntry.line)).toBe(false);
   });
 
-  it('CL-A — abstract fun describe → même comportement que execute', async () => {
-    const entry = index.lookup('describe').find(e => e.isAbstract)!;
-    expect(entry).toBeDefined();
-    const lens = { range: new Range(entry.line, 0, entry.line, 0), data: { entry, enclosingKind: 'class' } } as any;
-
-    const resolved = await provider.resolveCodeLens(lens, noCancel());
-    expect(resolved.command?.title).toContain('implementation');
+  it('CL-A — abstract fun describe → PAS de lens dans provideCodeLenses', () => {
+    const doc = mockDocument(ABSTRACT_URI, ABSTRACT_CODE);
+    const lenses = provider.provideCodeLenses(doc);
+    const describeEntry = index.lookup('describe').find(e => e.isAbstract)!;
+    expect(lenses.some(l => l.range.start.line === describeEntry.line)).toBe(false);
   });
 
-  it('CL-A — méthode concrète (isEffective) ne reçoit PAS de traitement "implementations"', async () => {
+  it('CL-A — méthode concrète (isEffective) reçoit toujours un lens usage', async () => {
+    const doc = mockDocument(ABSTRACT_URI, ABSTRACT_CODE);
+    const lenses = provider.provideCodeLenses(doc);
     const entry = index.lookup('isEffective')[0]!;
     expect(entry).toBeDefined();
     expect(entry.isAbstract).toBeFalsy();
-    // isEffective n'est pas abstract → pas de court-circuit "implementations"
-    // Elle passe par le chemin normal (scan usages)
-    const lens = { range: new Range(entry.line, 0, entry.line, 0), data: { entry, enclosingKind: 'class' } } as any;
-    const resolved = await provider.resolveCodeLens(lens, noCancel());
-    // Pas d'impls trouvées pour une méthode concrète → "0 usages" ou similaire
-    expect(resolved.command?.title).toBeDefined();
-    // Doit NE PAS contenir "implementation" (ce n'est pas une méthode abstract)
-    expect(resolved.command?.title).not.toContain('implementation');
+    // isEffective n'est pas abstract → reçoit un lens normal
+    const found = lenses.find(l => l.range.start.line === entry.line);
+    expect(found).toBeDefined();
   });
 });
 
@@ -304,14 +297,165 @@ class PokemonTrainer(val obs: PokemonObserver) {
     expect(impls.length).toBe(2); // AuditObserver + $anon$N
   });
 
-  it('CL-B — interface method lens → titre contient "2 implementations"', async () => {
+  it('CL-B — interface method onCaught → PAS de lens dans provideCodeLenses (délégué à OverrideGutterProvider)', () => {
+    const doc = mockDocument(OBSERVER_URI, OBSERVER_CODE);
+    const lenses = provider.provideCodeLenses(doc);
     const entry = index.lookup('onCaught').find(e => !e.isOverride)!;
     expect(entry).toBeDefined();
-    const lens = {
-      range: new Range(entry.line, 0, entry.line, 0),
-      data: { entry, enclosingKind: 'interface' },
-    } as any;
+    // onCaught est dans une interface → OverrideGutterProvider le gère avec ⬇, CodeLensProvider skip
+    expect(lenses.some(l => l.range.start.line === entry.line)).toBe(false);
+  });
+});
+
+// ── CL-C : lens usageOnly pour interface avec usages ─────────────────────────
+
+describe('CL-C — interface avec 2 usages → lens usageOnly résolu à "2 usages"', () => {
+  const IFACE_URI = 'file:///c/Repo.kt';
+  const IMPL_URI  = 'file:///c/RepoImpl.kt';
+  const USER1_URI = 'file:///c/UseA.kt';
+  const USER2_URI = 'file:///c/UseB.kt';
+
+  const IFACE_CODE = 'package com.c\ninterface Repo';
+  const IMPL_CODE  = 'package com.c\nclass RepoImpl : Repo';
+  const USER1_CODE = 'package com.c\nclass UseA(val r: Repo)';
+  const USER2_CODE = 'package com.c\nclass UseB(val r: Repo)';
+
+  let index: SymbolIndex;
+  let provider: KotlinCodeLensProvider;
+  let origReadFile: typeof workspace.fs.readFile;
+
+  beforeEach(() => {
+    origReadFile = workspace.fs.readFile;
+    index = new SymbolIndex();
+    addKt(index, IFACE_URI,  IFACE_CODE);
+    addKt(index, IMPL_URI,   IMPL_CODE);
+    addKt(index, USER1_URI,  USER1_CODE);
+    addKt(index, USER2_URI,  USER2_CODE);
+    provider = new KotlinCodeLensProvider(index);
+
+    workspace.fs.readFile = async (uri: any) => {
+      const u = uri.toString ? uri.toString() : String(uri);
+      const map: Record<string, string> = {
+        [IFACE_URI]: IFACE_CODE, [IMPL_URI]: IMPL_CODE,
+        [USER1_URI]: USER1_CODE, [USER2_URI]: USER2_CODE,
+      };
+      return Buffer.from(map[u] ?? '') as any;
+    };
+  });
+
+  afterEach(() => { workspace.fs.readFile = origReadFile; });
+
+  it('CL-C — interface Repo → lens usageOnly présent dans provideCodeLenses', () => {
+    const doc = mockDocument(IFACE_URI, IFACE_CODE);
+    const lenses = provider.provideCodeLenses(doc);
+    // interface Repo → lens usageOnly (pas de lens normal)
+    expect(lenses.length).toBeGreaterThan(0);
+    const usageOnlyLens = (lenses as any[]).find(l => l.data?.usageOnly === true);
+    expect(usageOnlyLens).toBeDefined();
+  });
+
+  it('CL-C — lens usageOnly résolu → title contient "usages"', async () => {
+    const entry = index.lookup('Repo').find(e => e.kind === 'interface')!;
+    expect(entry).toBeDefined();
+    const lens = { range: new Range(entry.line, 0, entry.line, 0), data: { entry, usageOnly: true } } as any;
     const resolved = await provider.resolveCodeLens(lens, noCancel());
-    expect(resolved.command?.title).toContain('2 implementation');
+    expect(resolved.command?.title).toMatch(/\d+ usages?/);
+  });
+});
+
+// ── CL-D : abstract class avec 0 usages → "0 usages" ────────────────────────
+
+describe('CL-D — abstract class avec 0 usages → lens usageOnly résolu à "0 usages"', () => {
+  const ABS_URI  = 'file:///d/Base.kt';
+  const ABS_CODE = 'package com.d\nabstract class Base';
+
+  let index: SymbolIndex;
+  let provider: KotlinCodeLensProvider;
+  let origReadFile: typeof workspace.fs.readFile;
+
+  beforeEach(() => {
+    origReadFile = workspace.fs.readFile;
+    index = new SymbolIndex();
+    addKt(index, ABS_URI, ABS_CODE);
+    provider = new KotlinCodeLensProvider(index);
+    workspace.fs.readFile = async (uri: any) => {
+      const u = uri.toString ? uri.toString() : String(uri);
+      return Buffer.from(u === ABS_URI ? ABS_CODE : '') as any;
+    };
+  });
+
+  afterEach(() => { workspace.fs.readFile = origReadFile; });
+
+  it('CL-D — abstract class Base → lens usageOnly résolu à "0 usages"', async () => {
+    const entry = index.lookup('Base')[0]!;
+    expect(entry).toBeDefined();
+    const lens = { range: new Range(entry.line, 0, entry.line, 0), data: { entry, usageOnly: true } } as any;
+    const resolved = await provider.resolveCodeLens(lens, noCancel());
+    expect(resolved.command?.title).toBe('0 usages');
+  });
+});
+
+// ── CL-E : lens usageOnly utilise kotlin-jump.codeLensAction ─────────────────
+
+describe('CL-E — lens usageOnly utilise kotlin-jump.codeLensAction', () => {
+  const IFACE_URI  = 'file:///e/Store.kt';
+  const IFACE_CODE = 'package com.e\ninterface Store';
+
+  let index: SymbolIndex;
+  let provider: KotlinCodeLensProvider;
+  let origReadFile: typeof workspace.fs.readFile;
+
+  beforeEach(() => {
+    origReadFile = workspace.fs.readFile;
+    index = new SymbolIndex();
+    addKt(index, IFACE_URI, IFACE_CODE);
+    provider = new KotlinCodeLensProvider(index);
+    workspace.fs.readFile = async (uri: any) => {
+      const u = uri.toString ? uri.toString() : String(uri);
+      return Buffer.from(u === IFACE_URI ? IFACE_CODE : '') as any;
+    };
+  });
+
+  afterEach(() => { workspace.fs.readFile = origReadFile; });
+
+  it('CL-E — commande = kotlin-jump.codeLensAction', async () => {
+    const entry = index.lookup('Store')[0]!;
+    expect(entry).toBeDefined();
+    const lens = { range: new Range(entry.line, 0, entry.line, 0), data: { entry, usageOnly: true } } as any;
+    const resolved = await provider.resolveCodeLens(lens, noCancel());
+    expect(resolved.command?.command).toBe('kotlin-jump.codeLensAction');
+  });
+
+  it('CL-E — arguments = [uri, line, character, name, fqn]', async () => {
+    const entry = index.lookup('Store')[0]!;
+    const lens = { range: new Range(entry.line, 0, entry.line, 0), data: { entry, usageOnly: true } } as any;
+    const resolved = await provider.resolveCodeLens(lens, noCancel());
+    const args = resolved.command?.arguments!;
+    expect(args[0]).toBe(entry.uri);
+    expect(args[1]).toBe(entry.line);
+    expect(args[2]).toBe(entry.character);
+    expect(args[3]).toBe(entry.name);
+    expect(args[4]).toBe(entry.fqn);
+  });
+});
+
+// ── CL-F : interface reçoit DEUX lenses ──────────────────────────────────────
+
+describe('CL-F — interface reçoit un lens usageOnly dans KotlinCodeLensProvider', () => {
+  const IFACE_URI  = 'file:///f/Cache.kt';
+  const IFACE_CODE = 'package com.f\ninterface Cache';
+
+  it('CL-F — interface → exactement 1 lens usageOnly (pas de lens normal)', () => {
+    const index = new SymbolIndex();
+    addKt(index, IFACE_URI, IFACE_CODE);
+    const provider = new KotlinCodeLensProvider(index);
+    const doc = mockDocument(IFACE_URI, IFACE_CODE);
+    const lenses = provider.provideCodeLenses(doc) as any[];
+    // Le lens usageOnly doit être présent
+    const usageOnly = lenses.filter(l => l.data?.usageOnly === true);
+    expect(usageOnly).toHaveLength(1);
+    // Aucun lens normal (data sans usageOnly)
+    const normal = lenses.filter(l => l.data && !l.data.usageOnly);
+    expect(normal).toHaveLength(0);
   });
 });

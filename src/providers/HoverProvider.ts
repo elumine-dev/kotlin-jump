@@ -33,12 +33,21 @@ export class KotlinHoverProvider implements vscode.HoverProvider {
       if (hits.length === 1) {
         entry = hits[0];
       } else if (hits.length > 1) {
-        // Tiebreak: prefer the declaration in the current document (e.g. override in impl file)
         const inFile = hits.filter(h => h.uri.toString() === document.uri.toString());
-        if (inFile.length === 1) entry = inFile[0];
-        else return null;
+        if (inFile.length === 1) {
+          entry = inFile[0];
+        } else if (inFile.length > 1) {
+          // Multiple overrides in same file (e.g. 3 impls of `execute` in AbstractClassDemo.kt)
+          // — tiebreak by exact line so we show the symbol the cursor is actually on.
+          const atLine = inFile.filter(h => h.line === position.line);
+          if (atLine.length === 1) entry = atLine[0];
+          else return null;
+        } else {
+          return null;
+        }
       }
     }
+    if (!entry) return null;
 
     if (token.isCancellationRequested) return null;
 

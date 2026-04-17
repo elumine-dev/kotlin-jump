@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { SymbolKind } from '../indexer/KotlinParser';
+import { buildAllowFilter } from '../util/testFilter';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 
@@ -155,7 +156,8 @@ export class KotlinTypeHierarchyProvider implements vscode.TypeHierarchyProvider
     const word = document.getText(wordRange);
     if (word.length < 2) return null;
 
-    const entries = this.index.lookup(word).filter(e => CLASS_LIKE.has(e.kind));
+    const allow = buildAllowFilter(document.uri.fsPath);
+    const entries = this.index.lookup(word).filter(e => CLASS_LIKE.has(e.kind) && allow(e.uri.path));
     if (entries.length === 0) return null;
 
     return entries.map(e => entryToItem(e, this.index));
@@ -170,9 +172,10 @@ export class KotlinTypeHierarchyProvider implements vscode.TypeHierarchyProvider
     const entry = fileSymbols.find(e => e.name === item.name && e.line === line);
     if (!entry?.supertypes) return [];
 
+    const allow = buildAllowFilter(item.uri.fsPath);
     const results: vscode.TypeHierarchyItem[] = [];
     for (const st of entry.supertypes) {
-      const candidates = this.index.lookup(st).filter(m => CLASS_LIKE.has(m.kind));
+      const candidates = this.index.lookup(st).filter(m => CLASS_LIKE.has(m.kind) && allow(m.uri.path));
       // When multiple classes share this supertype name, prefer same-package to reduce
       // false positives. The parser stores supertypes as simple names, not FQNs, so a
       // name collision across packages otherwise shows both as parents. Same-package is
@@ -197,7 +200,8 @@ export class KotlinTypeHierarchyProvider implements vscode.TypeHierarchyProvider
     const fileSymbols = this.index.getFileSymbols(uriStr);
     const parentEntry = fileSymbols.find(e => e.name === item.name && e.line === line);
 
-    const allSubs = this.index.lookupImplementations(item.name);
+    const allow = buildAllowFilter(item.uri.fsPath);
+    const allSubs = this.index.lookupImplementations(item.name).filter(e => allow(e.uri.path));
     const subs = parentEntry
       ? sortSubtypes(disambiguateSubtypes(allSubs, parentEntry, this.index))
       : sortSubtypes(allSubs);

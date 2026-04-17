@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { SymbolIndex } from './SymbolIndex';
 import { SymbolKind } from './KotlinParser';
 
-const SNAPSHOT_VERSION = 17; // bumped: im (imports) added for word index reconstruction
+const SNAPSHOT_VERSION = 18; // bumped: cv (constValue) added for const val folding
 const SNAPSHOT_FILENAME = 'kotlin-jump-index.json';
 
 // Compact per-file format — FQN is reconstructed as pkg+"."+name on restore
@@ -39,6 +39,7 @@ interface SnapshotFile {
   ig?: Record<number, 1>;  // isIgnored
   lc?: Record<number, 1>;  // isLifecycle
   im?: string[];           // raw imports — used to reconstruct word index on restore
+  cv?: Record<number, string>; // constValue — raw literal for const val folding
 }
 
 interface Snapshot {
@@ -105,6 +106,7 @@ export async function save(
       if (e.isTestClass)      { sf.tc = sf.tc ?? {}; sf.tc[idx] = 1; }
       if (e.isIgnored)        { sf.ig = sf.ig ?? {}; sf.ig[idx] = 1; }
       if (e.isLifecycle)      { sf.lc = sf.lc ?? {}; sf.lc[idx] = 1; }
+      if (e.constValue)       { sf.cv = sf.cv ?? {}; sf.cv[idx] = e.constValue; }
     });
 
     const imports = index.getFileImports(uriStr);
@@ -235,6 +237,7 @@ export function restore(snapshot: Snapshot, index: SymbolIndex): void {
         isTestClass:     sf.tc?.[i] === 1 || undefined,
         isIgnored:       sf.ig?.[i] === 1 || undefined,
         isLifecycle:     sf.lc?.[i] === 1 || undefined,
+        constValue:      sf.cv?.[i],
       };
     });
 

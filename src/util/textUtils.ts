@@ -76,3 +76,32 @@ export function isInsideCommentOrString(line: string, pos: number): boolean {
   }
   return !!inStr;
 }
+
+// Returns true if position `pos` is inside a ${...} expression embedded in a
+// string literal (Kotlin string template). Returns false for positions in plain
+// string content, comments, or regular code.
+export function isInsideStringInterpolation(line: string, pos: number): boolean {
+  let inStr: string | false = false;
+  let interpDepth = 0;
+  let i = 0;
+  while (i < line.length) {
+    if (inStr !== false) {
+      if (interpDepth > 0) {
+        if (line[i] === '{') interpDepth++;
+        else if (line[i] === '}') { interpDepth--; i++; continue; }
+        if (i === pos) return true;
+        i++; continue;
+      }
+      if (line[i] === '\\') { i += 2; continue; }
+      if (line[i] === inStr) { inStr = false; i++; continue; }
+      if (line[i] === '$' && i + 1 < line.length && line[i + 1] === '{') {
+        interpDepth++; i += 2; continue;
+      }
+      i++; continue;
+    }
+    if (line[i] === '/' && i + 1 < line.length && line[i + 1] === '/') break;
+    if (line[i] === '"' || line[i] === '\'') { inStr = line[i]; i++; continue; }
+    i++;
+  }
+  return false;
+}

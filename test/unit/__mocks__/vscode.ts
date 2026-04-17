@@ -252,6 +252,35 @@ export enum ConfigurationTarget {
   WorkspaceFolder = 3,
 }
 
+export enum DiagnosticSeverity {
+  Error       = 0,
+  Warning     = 1,
+  Information = 2,
+  Hint        = 3,
+}
+
+export class Diagnostic {
+  public source?: string;
+  constructor(public range: Range, public message: string, public severity: DiagnosticSeverity = DiagnosticSeverity.Error) {}
+}
+
+export enum TextEditorSelectionChangeKind {
+  Keyboard = 1,
+  Mouse    = 2,
+  Command  = 3,
+}
+
+export enum TextEditorRevealType {
+  Default                   = 0,
+  InCenter                  = 1,
+  InCenterIfOutsideViewport = 2,
+  AtTop                     = 3,
+}
+
+export class Selection {
+  constructor(public readonly anchor: Position, public readonly active: Position) {}
+}
+
 export const workspace = {
   textDocuments: [] as any[],
   getConfiguration: () => ({
@@ -263,6 +292,9 @@ export const workspace = {
   registerFileSystemProvider: () => ({ dispose: () => {} }),
   registerTextDocumentContentProvider: () => ({ dispose: () => {} }),
   onDidChangeTextDocument: (_listener: any) => ({ dispose: () => {} }),
+  onDidOpenTextDocument:   (_listener: any) => ({ dispose: () => {} }),
+  onDidCloseTextDocument:  (_listener: any) => ({ dispose: () => {} }),
+  onDidSaveTextDocument:   (_listener: any) => ({ dispose: () => {} }),
   onDidChangeConfiguration: (_listener: any) => ({ dispose: () => {} }),
   fs: {
     readFile: async () => Buffer.from(''),
@@ -283,15 +315,27 @@ export const window = {
   onDidChangeActiveTextEditor: (_listener: any) => ({ dispose: () => {} }),
   onDidChangeVisibleTextEditors: (_listener: any) => ({ dispose: () => {} }),
   onDidChangeTextEditorSelection: (_listener: any) => ({ dispose: () => {} }),
+  showTextDocument: async (_doc: any, _opts?: any): Promise<any> => ({
+    selection:      undefined as any,
+    revealRange:    () => {},
+    setDecorations: () => {},
+  }),
 };
 
 export const commands = {
-  executeCommand: async () => {},
+  executeCommand:  async (_cmd?: string, ..._args: any[]) => {},
+  registerCommand: (_id: string, _handler: (...args: any[]) => any) => ({ dispose: () => {} }),
 };
 
 export const languages = {
-  registerHoverProvider: (_selector: any, _provider: any) => ({ dispose: () => {} }),
-  registerColorProvider: (_selector: any, _provider: any) => ({ dispose: () => {} }),
+  registerHoverProvider:      (_selector: any, _provider: any) => ({ dispose: () => {} }),
+  registerColorProvider:      (_selector: any, _provider: any) => ({ dispose: () => {} }),
+  createDiagnosticCollection: (_name?: string) => ({
+    set:    (_uri: any, _diagnostics: any) => {},
+    delete: (_uri: any) => {},
+    clear:  () => {},
+    dispose: () => {},
+  }),
 };
 
 // ── Document Colors ───────────────────────────────────────────────────────────

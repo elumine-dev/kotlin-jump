@@ -227,6 +227,12 @@
         "title": "Connect Android via WiFi (Wireless Debugging)",
         "category": "Kotlin Jump",
         "icon": "$(wifi)"
+      },
+      {
+        "command": "kotlin-jump.pairAdbWifi",
+        "title": "Pair Android Device via WiFi (first-time setup)",
+        "category": "Kotlin Jump",
+        "icon": "$(add)"
       }
     ],
     "menus": {
@@ -744,7 +750,7 @@
           {
             "id": "androidRun",
             "title": "Build, install, and launch Android — one click",
-            "description": "The **$(play) Run** button in the status bar builds your app, installs it, and launches it on the connected device or emulator — no terminal, no config required.\n\nNo device connected? Kotlin Jump finds your AVDs and offers to start one.\n\n[Run Android](command:kotlin-jump.runAndroid)",
+            "description": "The **$(play) Run** button builds, installs, and launches your app — no terminal required.\n\n**WiFi setup (one-time):**\n1. Phone: Settings → Developer options → **Wireless debugging** ON\n2. Click **$(add) Pair new device via WiFi…** below\n3. Phone: **Pair device with pairing code** → enter the 6-digit code\n4. Done — connect wirelessly from now on\n\n[Run Android](command:kotlin-jump.runAndroid) · [Pair via WiFi](command:kotlin-jump.pairAdbWifi) · [Connect via WiFi](command:kotlin-jump.connectAdbWifi)",
             "media": {
               "image": "media/walkthrough/android-run.gif",
               "altText": "Android Run button demo"

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.11.0
+
+Maintenance release with no changes to extension behavior — corrects duplicate changelog entries and hardens the release pipeline for more reliable future publishes.
+
+### Fixes
+- Removed duplicate changelog sections for v1.7.0, v1.0.0, and v0.7.6 that were incorrectly present in the published history.
+- Release script now validates that no matching tag already exists before proceeding, preventing accidental double-publishes.
+
+### Notes
+- No changes to extension commands, settings, navigation, or any user-facing behavior since v1.10.0.
+- This release corrects the published changelog and improves release infrastructure only.
+
 ## 1.10.0
 
 Kotlin Jump 1.10.0 adds Android Studio-style navigation history, inline resource diagnostics for broken R references, and a richer set of Kotlin and Android code insights.

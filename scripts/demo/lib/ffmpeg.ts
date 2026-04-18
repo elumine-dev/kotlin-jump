@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 export interface CaptureRegion {
+  /** Global desktop X (can be negative or > main-display width on multi-monitor setups) */
   x:      number;
   y:      number;
   width:  number;
@@ -10,63 +11,49 @@ export interface CaptureRegion {
 }
 
 /**
- * Auto-detect the avfoundation video index for "Capture screen 0" on macOS.
- * ffmpeg's `-list_devices true` prints the list on stderr; we parse it.
+ * Screen recorder built on macOS' native `screencapture -v -R x,y,w,h`.
+ *
+ * Unlike `ffmpeg -f avfoundation`, which captures one physical display at a
+ * time in display-LOCAL coordinates, `screencapture -R` accepts a rectangle
+ * in GLOBAL desktop coordinates and spans multiple displays transparently.
+ * That removes all the "which avfoundation index maps to which display"
+ * pain on multi-monitor setups.
+ *
+ * We start the recorder with no duration limit and stop it with SIGINT when
+ * the demo completes.
  */
-export function detectScreenCaptureIndex(): number {
-  const out = execSync('ffmpeg -f avfoundation -list_devices true -i "" 2>&1 || true', { encoding: 'utf8' });
-  const match = out.match(/\[(\d+)\]\s+Capture screen 0/);
-  if (!match) {
-    throw new Error(
-      'Could not find "Capture screen 0" in ffmpeg avfoundation devices.\n' +
-      'Make sure ffmpeg is installed and Terminal/iTerm has Screen Recording permission\n' +
-      '(System Settings → Privacy & Security → Screen Recording).',
-    );
-  }
-  return parseInt(match[1], 10);
-}
-
-export class FfmpegRecorder {
+export class ScreenRecorder {
   private proc: ChildProcessWithoutNullStreams | undefined;
   private stderrBuf = '';
 
-  constructor(
-    private readonly rawPath: string,
-    private readonly region: CaptureRegion,
-    private readonly screenIndex: number,
-  ) {}
+  constructor(private readonly rawPath: string, private readonly region: CaptureRegion) {}
 
   start(): void {
     const { x, y, width, height } = this.region;
     const args = [
-      '-y',
-      '-f',            'avfoundation',
-      '-framerate',    '30',
-      '-capture_cursor','1',
-      '-i',            `${this.screenIndex}:none`,
-      '-vf',           `crop=${width}:${height}:${x}:${y}`,
-      '-pix_fmt',      'yuv420p',
-      '-c:v',          'libx264',
-      '-preset',       'ultrafast',
-      '-crf',          '18',
+      '-v',                              // video mode
+      '-R', `${x},${y},${width},${height}`,
+      '-k',                              // show clicks in the video
+      '-C',                              // capture cursor too
+      '-x',                              // silent (no shutter sound)
       this.rawPath,
     ];
-    this.proc = spawn('ffmpeg', args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    this.proc = spawn('screencapture', args, { stdio: ['ignore', 'pipe', 'pipe'] });
     this.proc.stderr.on('data', (chunk: Buffer) => { this.stderrBuf += chunk.toString(); });
   }
 
-  /** Tail of stderr — useful on failure to understand why. */
-  lastStderr(): string {
-    return this.stderrBuf.slice(-2000);
-  }
+  lastStderr(): string { return this.stderrBuf.slice(-2000); }
 
   async stop(): Promise<void> {
     if (!this.proc) return;
-    // Send 'q' on stdin for graceful stop, then wait for exit.
-    this.proc.stdin.write('q');
-    await new Promise<void>(resolve => {
-      this.proc!.on('exit', () => resolve());
-    });
+    const proc = this.proc;
+    const done = new Promise<void>(resolve => proc.on('exit', () => resolve()));
+    proc.kill('SIGINT');
+    // Give screencapture up to 5 s to finalise the MOV file; fall back to SIGKILL.
+    await Promise.race([
+      done,
+      new Promise<void>(resolve => setTimeout(() => { proc.kill('SIGKILL'); resolve(); }, 5000)),
+    ]);
     this.proc = undefined;
   }
 }

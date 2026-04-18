@@ -400,14 +400,23 @@ const summary = {
 console.log(JSON.stringify(summary, null, 2));
 NODE
     echo
-    echo "Commits in scope (dev-only tooling paths filtered out):"
+    echo "Commits in scope (dev-only tooling paths and scopes filtered out):"
     if [[ "$BASE_REF" == "HEAD" ]]; then
       echo "- none (worktree-only mode)"
     else
-      # `--` separates revisions from pathspec. We list ALL files first,
-      # then the excludes. This shows only commits that touch at least one
-      # non-excluded path. Commits that touch ONLY excluded paths vanish.
-      git log --no-merges --format='- %h %s' "$BASE_REF..HEAD" -- . "${dev_only_excludes[@]}" || true
+      # Two-layer filter:
+      # - Pathspec excludes (below) remove commits that touch ONLY dev-only paths.
+      # - `--invert-grep --grep=...` removes commits whose subject uses a
+      #   conventional-commit scope reserved for the dev-only demo pipeline:
+      #   (demo), (demo-recorder). Mixed-file commits with these scopes also
+      #   vanish, which protects the commit message itself from leaking into
+      #   the prompt context.
+      git log --no-merges \
+        --invert-grep \
+        --grep='^\(feat\|fix\|refactor\|chore\)(demo\b' \
+        --grep='^\(feat\|fix\|refactor\|chore\)(demo-recorder\b' \
+        --format='- %h %s' \
+        "$BASE_REF..HEAD" -- . "${dev_only_excludes[@]}" || true
     fi
     echo
     echo "Committed diff stat in scope:"
@@ -434,7 +443,19 @@ NODE
     git diff --stat -- . "${dev_only_excludes[@]}" || true
     echo
     echo "Current tracked diff patch:"
-    git diff -- package.json CHANGELOG.md README.md .vscodeignore publish.sh .publish media/find-usages.svg || true
+    # Only user-facing files go through the unfiltered diff. `.vscodeignore`
+    # and `.publish` contain explicit references to the dev-only demo tooling
+    # (paths, keywords like ffmpeg / screencapture / recorder-ext), so their
+    # patches must not leak into the prompt — even though the prompt's HARD
+    # EXCLUSIONS would reject them, defence-in-depth is cheap here.
+    #
+    # Also strip any `+`/`-` diff lines that mention the very specific
+    # identifiers we reserved for the demo pipeline. This catches the
+    # `demo:record` / `demo:workspace` scripts leaking via package.json,
+    # or any other forbidden identifier that sneaked into a user-facing file.
+    git diff -- package.json CHANGELOG.md README.md media/find-usages.svg 2>/dev/null \
+      | grep -vE '^[+-][^+-].*(demo:record|demo:workspace|predemo:|scripts/demo|recorder-ext|\.kotlin-jump-dev-mode|KJ_DEMO|kotlinJumpDemo\.|kotlin-jump-demo-recorder)' \
+      || true
     echo
     echo "Current top of CHANGELOG.md:"
     sed -n '1,80p' CHANGELOG.md
@@ -510,6 +531,27 @@ if (!structured && Array.isArray(parsed)) {
 if (!structured) {
   throw new Error('Claude output did not contain structured_output');
 }
+
+// Final safety net: even with path excludes + scope excludes + diff content
+// filtering + HARD EXCLUSIONS in the prompt, if Claude still manages to
+// mention any dev-only term in its output, we abort BEFORE writing it to
+// CHANGELOG.md or media/whats-new.json. The user-visible release MUST NOT
+// mention the demo recording pipeline.
+const forbiddenTerms = [
+  'scripts/demo', 'recorder-ext', 'kotlin-jump-demo-recorder',
+  'kotlinJumpDemo', 'KJ_DEMO', '.kotlin-jump-dev-mode',
+  'demo recording', 'demo recorder', 'demo pipeline',
+  'screencapture', 'ffmpeg', 'webp demo', 'record demo',
+];
+const flat = JSON.stringify(structured).toLowerCase();
+const hits = forbiddenTerms.filter(t => flat.includes(t.toLowerCase()));
+if (hits.length > 0) {
+  console.error(`ERROR: Claude's release notes contain forbidden dev-only terms:`);
+  for (const h of hits) console.error(`   - ${h}`);
+  console.error(`Refusing to write CHANGELOG.md / whats-new.json. Review prompt or context.`);
+  process.exit(4);
+}
+
 fs.writeFileSync(outPath, JSON.stringify(structured, null, 2));
 NODE
 }

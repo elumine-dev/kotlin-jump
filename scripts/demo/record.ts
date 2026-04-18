@@ -88,27 +88,62 @@ async function main(): Promise<void> {
   await waitForFile(readyMarker, 60_000);
   log(`  VS Code ready — positioning window and starting capture`);
 
-  // Pin VS Code to a known position. The returned rect is in LOGICAL
-  // (AppleScript) coords — same coord system that `screencapture -R` uses.
+  // Give macOS time to fully materialise the window in System Events. The
+  // extension host signals "ready" as soon as workspaceFolders is available,
+  // but AppleScript can only query the window after a bit more UI settling.
+  await sleep(3500);
+
+  // Diagnostic: list processes matching any VS Code bundle path.
+  try {
+    const procs = execSync(
+      `ps -eo pid,command | grep -iE "visual studio code|vscode-test|Code\\.app" | grep -v grep | head -15`,
+      { encoding: 'utf8' },
+    );
+    log(`  VS Code-like processes:\n${procs.trim().split('\n').map(l => '    ' + l).join('\n')}`);
+  } catch { /* ignore */ }
+  // Also list all top-level apps via AppleScript
+  try {
+    const apps = execSync(
+      `osascript -e 'tell application "System Events" to return name of every application process whose background only is false'`,
+      { encoding: 'utf8' },
+    );
+    log(`  Foreground apps: ${apps.trim()}`);
+  } catch (e) {
+    log(`  (could not list foreground apps: ${(e as Error).message})`);
+  }
+
+  // Try to position the VS Code window — works if the user has granted
+  // Accessibility permission to the @vscode/test-electron binary, otherwise
+  // silently falls back and we rely on the capture region the user sets.
   const rect = positionVSCodeWindow();
   await sleep(500);
-  log(`  Capture region: (${rect.x},${rect.y}) ${rect.w}×${rect.h} [global coords]`);
+
+  // Capture region: default to the detected rect, but allow override via env
+  // vars in case the user prefers to manually arrange their display and
+  // doesn't care about window positioning.
+  const captureX = parseInt(process.env.KJ_DEMO_CAPTURE_X ?? String(rect.x), 10);
+  const captureY = parseInt(process.env.KJ_DEMO_CAPTURE_Y ?? String(rect.y), 10);
+  const captureW = parseInt(process.env.KJ_DEMO_CAPTURE_W ?? String(rect.w), 10);
+  const captureH = parseInt(process.env.KJ_DEMO_CAPTURE_H ?? String(rect.h), 10);
+  log(`  Capture region: (${captureX},${captureY}) ${captureW}×${captureH} [global coords]`);
 
   // Start screen capture. `screencapture -R` takes global desktop coordinates
   // and spans displays transparently, so multi-monitor setups just work.
-  // Note: coords are in LOGICAL units, not pixels — Retina scaling is
-  // handled natively by screencapture.
   const recorder = new ScreenRecorder(rawMov, {
-    x:      rect.x,
-    y:      rect.y,
-    width:  rect.w,
-    height: rect.h,
+    x:      captureX,
+    y:      captureY,
+    width:  captureW,
+    height: captureH,
   });
+  const ffmpegStartedAt = Date.now();
   recorder.start();
-  await sleep(1000);   // let screencapture initialise
+  await sleep(1500);   // let screencapture initialise + warm up
 
   // Green-light the demo.
+  const demoStartedAt = Date.now();
   fs.writeFileSync(startMarker, '');
+  const rawOffsetMs = demoStartedAt - ffmpegStartedAt;
+  log(`  Demo timeline t=0 is at raw video t=${rawOffsetMs}ms (ffmpeg warmup + demo launch)`);
 
   // Wait for VS Code / demo runner to exit.
   try {
@@ -130,15 +165,21 @@ async function main(): Promise<void> {
   // Trim dead setup time at the start (VS Code launch + indexing). Keep a
   // 500 ms pre-roll so the first overlay doesn't pop in on frame 0, and a
   // 500 ms tail after the last event.
+  //
+  // Demo timeline event timestamps (e.t) are measured from when the Stage was
+  // instantiated INSIDE the VS Code extension host — which happens ~rawOffsetMs
+  // AFTER ffmpeg started capturing. So in raw-video coordinates, an event with
+  // demo-timeline t=E is at raw-video t = rawOffsetMs + E.
   const PRE_ROLL_MS  = 500;
   const TAIL_MS      = 500;
   const firstT       = events[0]?.t ?? 0;
   const lastEnd      = events.reduce((m, e) => Math.max(m, e.t + e.duration), 0);
-  const startOffsetMs = Math.max(0, firstT - PRE_ROLL_MS);
-  const durationMs    = Math.max(1000, lastEnd - startOffsetMs + TAIL_MS);
+  const startOffsetMs = Math.max(0, rawOffsetMs + firstT - PRE_ROLL_MS);
+  const durationMs    = Math.max(1000, (rawOffsetMs + lastEnd) - startOffsetMs + TAIL_MS);
 
   // Shift all event timestamps so t=0 corresponds to the trimmed video start.
-  const shifted = events.map(e => ({ ...e, t: e.t - startOffsetMs }));
+  // In trimmed-video time, event E appears at: (rawOffsetMs + E.t) - startOffsetMs
+  const shifted = events.map(e => ({ ...e, t: (rawOffsetMs + e.t) - startOffsetMs }));
   log(`  Trimming raw to ${(durationMs / 1000).toFixed(1)}s (cut ${(startOffsetMs / 1000).toFixed(1)}s of setup)`);
 
   const fontPath = path.join(REPO_ROOT, 'scripts', 'demo', 'fixtures', 'Inter-Regular.ttf');
@@ -191,17 +232,64 @@ function positionVSCodeWindow(): WindowRect {
     return fallback;
   }
 
+  // Find our dev-host window by its custom title — we set
+  // `window.title: KJ_DEMO_RECORDING_WINDOW` in fixtures/demo-settings.json so
+  // this is a unique marker no other VS Code window will have. That avoids
+  // accidentally moving the user's regular VS Code windows out of the way.
   const script =
     `on run\n` +
-    `  tell application "Code" to activate\n` +
-    `  delay 0.2\n` +
     `  tell application "System Events"\n` +
-    `    set procs to every process whose name is "Code"\n` +
-    `    if (count of procs) = 0 then return "ERROR:no-code-process"\n` +
-    `    set targetWindow to window 1 of item 1 of procs\n` +
+    `    set allTitles to ""\n` +
+    `    set targetWindow to missing value\n` +
+    `    set targetProc   to missing value\n` +
+    `    -- @vscode/test-electron runs VS Code from .vscode-test/ where the\n` +
+    `    -- executable is literally named "Electron". We scan ALL GUI processes\n` +
+    `    -- and pick the one whose bundle/path looks like VS Code.\n` +
+    `    set codeProcs to {}\n` +
+    `    repeat with p in (every application process whose background only is false)\n` +
+    `      set pName to name of p as string\n` +
+    `      if pName is "Code" or pName is "Electron" or pName contains "Visual Studio Code" then\n` +
+    `        set end of codeProcs to p\n` +
+    `      end if\n` +
+    `    end repeat\n` +
+    `    repeat with p in codeProcs\n` +
+    `      set pName to name of p as string\n` +
+    `      set allTitles to allTitles & "(" & pName & ")"\n` +
+    `      try\n` +
+    `        repeat with w in (every window of p)\n` +
+    `          try\n` +
+    `            set wName to (name of w) as string\n` +
+    `            set allTitles to allTitles & "[" & wName & "] "\n` +
+    `            if wName contains "KJ_DEMO_RECORDING_WINDOW" or wName contains "Extension Development Host" then\n` +
+    `              set targetWindow to w\n` +
+    `              set targetProc   to p\n` +
+    `              exit repeat\n` +
+    `            end if\n` +
+    `          end try\n` +
+    `        end repeat\n` +
+    `      end try\n` +
+    `      if targetWindow is not missing value then exit repeat\n` +
+    `    end repeat\n` +
+    `    -- If no title-marked window found, fall back to the first window of\n` +
+    `    -- the last-matched process (heuristic: most recent Code-like process\n` +
+    `    -- tends to be the dev host since test-electron just spawned it).\n` +
+    `    if targetWindow is missing value and (count of codeProcs) > 0 then\n` +
+    `      set targetProc to item (count of codeProcs) of codeProcs\n` +
+    `      try\n` +
+    `        set targetWindow to window 1 of targetProc\n` +
+    `        set allTitles to allTitles & " [fallback]"\n` +
+    `      end try\n` +
+    `    end if\n` +
+    `    if targetWindow is missing value then return "ERROR:no-demo-recording-window; seen: " & allTitles\n` +
+    `    set frontmost of targetProc to true\n` +
     `    set position of targetWindow to {${WINDOW_X}, ${WINDOW_Y}}\n` +
     `    set size of targetWindow to {${WIDTH}, ${HEIGHT}}\n` +
-    `    delay 0.3\n` +
+    `    -- Explicitly raise this specific window above every other Code window\n` +
+    `    -- and bring its owning process to the foreground.\n` +
+    `    try\n` +
+    `      perform action "AXRaise" of targetWindow\n` +
+    `    end try\n` +
+    `    delay 0.4\n` +
     `    set pos to position of targetWindow\n` +
     `    set sz  to size of targetWindow\n` +
     `    return ((item 1 of pos) as string) & "," & ((item 2 of pos) as string) & "," & ((item 1 of sz) as string) & "," & ((item 2 of sz) as string)\n` +

@@ -33,6 +33,7 @@
   "window.zoomLevel": 0,
   "window.menuBarVisibility": "hidden",
   "window.titleBarStyle": "custom",
+  "window.title": "KJ_DEMO_RECORDING_WINDOW",
   "explorer.compactFolders": false,
   "files.autoSave": "off",
   "telemetry.telemetryLevel": "off",

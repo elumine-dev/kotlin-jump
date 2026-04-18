@@ -24,14 +24,16 @@ export async function run(): Promise<void> {
   log('runner starting');
   log(`demo: ${demoFile}`);
   log(`workspace: ${workspace}`);
+  log(`extension-host pid: ${process.pid}, parent pid: ${process.ppid}`);
 
   // 1. Wait for VS Code to actually be ready (focused, workspace loaded).
   await waitFor(() => vscode.workspace.workspaceFolders !== undefined, 5000, 'workspace folders');
   log('workspace folders loaded');
 
   // 2. Signal to the orchestrator that VS Code is up and focused — it can now
-  //    start ffmpeg.
-  fs.writeFileSync(readyMarker, '');
+  //    start ffmpeg. We also write our process ancestry so the orchestrator
+  //    can identify THIS specific VS Code window (vs. the user's regular one).
+  fs.writeFileSync(readyMarker, String(process.ppid));
 
   // 3. Wait for the orchestrator to confirm ffmpeg is rolling before the demo
   //    begins (so we don't lose the opening frames).

@@ -32,26 +32,56 @@ npm run compile
 npm run demo:record scripts/demo/demos/navigation-history.demo.ts
 ```
 
-## Multi-display notes
+## Capture region + window positioning
 
 We use macOS' native `screencapture -v -R x,y,w,h` which takes **global
-desktop coordinates** and spans physical displays transparently — no
-"which avfoundation index maps to which display" to figure out. In most
-cases the defaults work on any display arrangement.
+desktop coordinates** (not per-display indices). That handles multi-monitor
+setups transparently.
 
-If the WebP shows the wrong content (another app visible behind VS Code,
-window not positioned where expected):
+### How the capture region is chosen
 
-| Variable | Meaning | Typical value |
+1. The orchestrator tries to find the VS Code window spawned by
+   `@vscode/test-electron` and move it to `(KJ_DEMO_WINDOW_X,
+   KJ_DEMO_WINDOW_Y)` with size 1280×720 via AppleScript.
+2. If that succeeds, the capture region matches that rectangle.
+3. If it fails (AppleScript couldn't see the window — see the Accessibility
+   note below), it falls back to `(0, 0, 1280, 720)`.
+4. You can **override the capture region explicitly** via
+   `KJ_DEMO_CAPTURE_X/Y/W/H` — use this if positioning doesn't work but
+   you know where your VS Code window ends up.
+
+### Accessibility permission gotcha
+
+`@vscode/test-electron` spawns the VS Code binary from
+`.vscode-test/vscode-darwin-arm64-X.Y.Z/Visual Studio Code.app/Contents/MacOS/Electron`,
+**not** from your installed `/Applications/Visual Studio Code.app`. On
+macOS, Accessibility permission is tied to the binary path, so even if
+your main VS Code has permission, this separate copy does not.
+
+Symptom: `[demo] ⚠ window positioning failed — falling back to (0,0)`
+with `ERROR:no-demo-recording-window; seen: (Electron)`.
+
+Fix: add the test-electron Electron binary to System Settings →
+Privacy & Security → Accessibility and toggle it on. The VS Code version
+path includes the version number, so this needs to be redone if the test
+runner pulls a new VS Code version.
+
+Alternative without granting Accessibility: set
+`KJ_DEMO_CAPTURE_X=<x> KJ_DEMO_CAPTURE_Y=<y>` to the known position where
+VS Code will open on your setup, then manually move any other windows
+out of that region before invoking `demo:record`.
+
+### All env var overrides
+
+| Variable | Meaning | Default |
 |---|---|---|
-| `KJ_DEMO_WINDOW_X` | X position where VS Code will be moved (global coords, logical points) | `0` |
-| `KJ_DEMO_WINDOW_Y` | Y position for VS Code | `0` |
-| `KJ_DEMO_KEEP_TMP` | Keep `raw.mov`, `annotated.mp4`, `timeline.json` for debugging | `1` |
+| `KJ_DEMO_WINDOW_X` / `KJ_DEMO_WINDOW_Y` | Where to move the VS Code window | `0, 0` |
+| `KJ_DEMO_CAPTURE_X/Y/W/H` | Force a specific capture rectangle, ignoring where the window ended up | Follows `rect.*` |
+| `KJ_DEMO_KEEP_TMP` | Keep `raw.mov`, `annotated.mp4`, `timeline.json` for debugging | unset |
 
-**Before recording**, make sure no fullscreen app covers the position
-where VS Code will be placed — macOS puts fullscreen apps in their own
-Space, and switching away to VS Code's Space doesn't always work
-automatically.
+Before recording: make sure no fullscreen app covers the capture region
+— macOS puts fullscreen apps in their own Space, and their content is
+what gets captured even if VS Code is "logically" at that position.
 
 ## Writing a new demo
 

@@ -32,29 +32,26 @@ npm run compile
 npm run demo:record scripts/demo/demos/navigation-history.demo.ts
 ```
 
-## Multi-display / fullscreen app gotcha
+## Multi-display notes
 
-ffmpeg's avfoundation capture is **per-physical-display**, but AppleScript
-window positions are in **global desktop coordinates**. On a multi-monitor
-setup the mapping between "Capture screen N" and a specific display is not
-stable — it depends on your System Settings → Displays arrangement.
+We use macOS' native `screencapture -v -R x,y,w,h` which takes **global
+desktop coordinates** and spans physical displays transparently — no
+"which avfoundation index maps to which display" to figure out. In most
+cases the defaults work on any display arrangement.
 
-If the produced WebP shows the wrong content (e.g. a game that was
-fullscreened on another display, or your usual editor), override via
-env vars:
+If the WebP shows the wrong content (another app visible behind VS Code,
+window not positioned where expected):
 
 | Variable | Meaning | Typical value |
 |---|---|---|
-| `KJ_DEMO_SCREEN_INDEX` | avfoundation index of the display to record | `2` = main display on most setups |
-| `KJ_DEMO_WINDOW_X` | X position where VS Code will be moved (global coords) | `0` |
+| `KJ_DEMO_WINDOW_X` | X position where VS Code will be moved (global coords, logical points) | `0` |
 | `KJ_DEMO_WINDOW_Y` | Y position for VS Code | `0` |
-| `KJ_DEMO_CAPTURE_OFFSET_X` | Global x origin of the captured display | `0` (main) or the main-display width if you capture a secondary display arranged to its right |
-| `KJ_DEMO_CAPTURE_OFFSET_Y` | Global y origin of the captured display | `0` |
-| `KJ_DEMO_KEEP_TMP` | Keep `raw.mp4`, `annotated.mp4`, `timeline.json` for debugging | `1` |
+| `KJ_DEMO_KEEP_TMP` | Keep `raw.mov`, `annotated.mp4`, `timeline.json` for debugging | `1` |
 
-Run `ffmpeg -f avfoundation -list_devices true -i ""` once to see the
-screen indices on your machine — the main display is almost always
-`Capture screen 0`.
+**Before recording**, make sure no fullscreen app covers the position
+where VS Code will be placed — macOS puts fullscreen apps in their own
+Space, and switching away to VS Code's Space doesn't always work
+automatically.
 
 ## Writing a new demo
 
@@ -155,13 +152,17 @@ Six layers prevent this tooling from leaking into the shipped VSIX:
 
 ## Known limitations (POC)
 
-- **macOS only.** avfoundation is Apple-specific; Linux would need
-  x11grab / Xvfb. Windows GDI grab. Not implemented.
-- **Multi-display gotcha**: see "Multi-display" section above.
+- **macOS only.** We use `screencapture` + AppleScript positioning, both
+  Apple-specific. Linux would need x11grab + xdotool; Windows needs a
+  different capture stack. Not implemented.
+- **Window focus**: if another app is in front of VS Code on the same
+  display region, the capture shows the front window. Close or minimize
+  overlapping apps before recording.
 - **Output size.** A 10-second demo produces a 1–3 MB WebP depending on
   content complexity. Fine for README, heavy for mobile connections.
 - **No recorder extension yet.** The CodeLens "▶ Record demo" trigger
   inside VS Code is planned but not implemented — for now use the CLI.
-- **No text cursor highlight.** Screencast mode shows clicks but not
-  cursor position in the editor. Add `stage.caption()` to narrate when
-  it matters.
+- **Welcome tab.** On first launch with a clean userDataDir, VS Code
+  shows a Welcome walkthrough. The runner calls
+  `workbench.action.closeAllEditors` at demo start to hide it, but the
+  first ~500 ms of the raw capture may show it briefly.

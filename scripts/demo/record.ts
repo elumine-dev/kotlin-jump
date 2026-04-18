@@ -14,7 +14,7 @@ import * as path from 'node:path';
 import { execSync } from 'node:child_process';
 import { runTests } from '@vscode/test-electron';
 
-import { FfmpegRecorder, applyOverlays, convertToWebP, detectScreenCaptureIndex, fileSizeKb } from './lib/ffmpeg';
+import { ScreenRecorder, applyOverlays, convertToWebP, fileSizeKb } from './lib/ffmpeg';
 import { buildOverlayFilter }                                       from './lib/overlay';
 import type { TimelineEvent }                                       from './lib/timeline';
 
@@ -35,18 +35,6 @@ const HEIGHT    = 720;
 const WINDOW_X = parseInt(process.env.KJ_DEMO_WINDOW_X ?? '0', 10);
 const WINDOW_Y = parseInt(process.env.KJ_DEMO_WINDOW_Y ?? '0', 10);
 
-/**
- * Global offset of the top-left of the captured display. Needed because
- * avfoundation `-i "N:none"` captures the physical screen starting at (0, 0)
- * in that screen's local coordinates, but window positions are in global
- * desktop coordinates. For example, a secondary display arranged to the
- * right of a 1920×1080 primary starts at global x=1920 → capture offset
- * should be 1920 so VS Code at global (1920, 0) crops to screen-local (0, 0).
- *
- * Defaults to 0 (single-display or capturing the main display).
- */
-const CAPTURE_OFFSET_X = parseInt(process.env.KJ_DEMO_CAPTURE_OFFSET_X ?? '0', 10);
-const CAPTURE_OFFSET_Y = parseInt(process.env.KJ_DEMO_CAPTURE_OFFSET_Y ?? '0', 10);
 
 // eslint-disable-next-line @typescript-eslint/no-floating-promises
 main();
@@ -64,7 +52,7 @@ async function main(): Promise<void> {
 
   const tmpDir       = fs.mkdtempSync(path.join(os.tmpdir(), 'kj-demo-'));
   const userDataDir  = path.join(tmpDir, 'user-data');
-  const rawMp4       = path.join(tmpDir, 'raw.mp4');
+  const rawMov       = path.join(tmpDir, 'raw.mov');
   const annotatedMp4 = path.join(tmpDir, 'annotated.mp4');
   const timelineJson = path.join(tmpDir, 'timeline.json');
   const readyMarker  = path.join(tmpDir, 'ready');
@@ -100,42 +88,24 @@ async function main(): Promise<void> {
   await waitForFile(readyMarker, 60_000);
   log(`  VS Code ready — positioning window and starting capture`);
 
-  // Pin window to {0, 0, 1280x720} so ffmpeg's crop region is reproducible.
-  // The returned rect is in PIXEL coords (Retina-scaled if needed).
+  // Pin VS Code to a known position. The returned rect is in LOGICAL
+  // (AppleScript) coords — same coord system that `screencapture -R` uses.
   const rect = positionVSCodeWindow();
   await sleep(500);
+  log(`  Capture region: (${rect.x},${rect.y}) ${rect.w}×${rect.h} [global coords]`);
 
-  // Detect (or accept override of) the macOS screen capture device index.
-  // The mapping between "Capture screen 0/1" in avfoundation and which physical
-  // display they represent is not stable across setups — if the demo records
-  // the wrong screen, set KJ_DEMO_SCREEN_INDEX=N (check `ffmpeg -f avfoundation
-  // -list_devices true -i ""` for the right index).
-  const screenIndex = process.env.KJ_DEMO_SCREEN_INDEX
-    ? parseInt(process.env.KJ_DEMO_SCREEN_INDEX, 10)
-    : detectScreenCaptureIndex();
-  log(`  Using avfoundation screen index ${screenIndex}`);
-
-  // Translate window position from GLOBAL to display-LOCAL coords so the
-  // ffmpeg crop (which is display-local) lines up with where the window is.
-  const cropX = Math.max(0, rect.x - CAPTURE_OFFSET_X * rect.scale);
-  const cropY = Math.max(0, rect.y - CAPTURE_OFFSET_Y * rect.scale);
-  log(`  Capture region: (${cropX},${cropY}) ${rect.w}×${rect.h} on screen ${screenIndex}`);
-
-  // Start screen capture.
-  const recorder = new FfmpegRecorder(rawMp4, { x: cropX, y: cropY, width: rect.w, height: rect.h }, screenIndex);
+  // Start screen capture. `screencapture -R` takes global desktop coordinates
+  // and spans displays transparently, so multi-monitor setups just work.
+  // Note: coords are in LOGICAL units, not pixels — Retina scaling is
+  // handled natively by screencapture.
+  const recorder = new ScreenRecorder(rawMov, {
+    x:      rect.x,
+    y:      rect.y,
+    width:  rect.w,
+    height: rect.h,
+  });
   recorder.start();
-  await sleep(1500);   // ffmpeg warmup + permission dialog grace period
-
-  // Fail fast if ffmpeg never produced output.
-  if (!fs.existsSync(rawMp4) || fs.statSync(rawMp4).size === 0) {
-    log(`✗ ffmpeg produced no output after warmup. Likely causes:`);
-    log(`    1. Screen Recording permission not granted to Terminal/iTerm.`);
-    log(`       → System Settings → Privacy & Security → Screen Recording`);
-    log(`    2. Wrong screen capture index (detected: ${screenIndex}).`);
-    log(`  ffmpeg stderr tail:\n${recorder.lastStderr()}`);
-    await recorder.stop();
-    process.exit(3);
-  }
+  await sleep(1000);   // let screencapture initialise
 
   // Green-light the demo.
   fs.writeFileSync(startMarker, '');
@@ -148,12 +118,12 @@ async function main(): Promise<void> {
   }
 
   if (!fs.existsSync(timelineJson)) {
-    log(`✗ No timeline written — demo probably crashed. Raw video kept at ${rawMp4}`);
+    log(`✗ No timeline written — demo probably crashed. Raw video kept at ${rawMov}`);
     process.exit(2);
   }
 
   // Post-process.
-  log(`  Captured ${fileSizeKb(rawMp4)} KB of raw video`);
+  log(`  Captured ${fileSizeKb(rawMov)} KB of raw video`);
   const events = JSON.parse(fs.readFileSync(timelineJson, 'utf8')) as TimelineEvent[];
   log(`  ${events.length} timeline events to overlay`);
 
@@ -176,7 +146,7 @@ async function main(): Promise<void> {
   // Scale the raw capture (Retina-sized) down to a fixed 1280×720 BEFORE the
   // overlay pass so overlay pixel coords always align the same way.
   const fullFilter = `scale=${WIDTH}:${HEIGHT}:flags=lanczos${overlayFilter ? ',' + overlayFilter : ''}`;
-  applyOverlays(rawMp4, fullFilter, annotatedMp4, {
+  applyOverlays(rawMov, fullFilter, annotatedMp4, {
     startSec:    startOffsetMs / 1000,
     durationSec: durationMs    / 1000,
   });
@@ -199,7 +169,15 @@ function seedUserDataDir(userDataDir: string): void {
   fs.copyFileSync(settingsSrc, path.join(userDir, 'settings.json'));
 }
 
-interface WindowRect { x: number; y: number; w: number; h: number; scale: number }
+interface WindowRect {
+  /** logical (AppleScript / screencapture-compatible) x */
+  x:     number;
+  y:     number;
+  w:     number;
+  h:     number;
+  /** display pixel-density scale — kept for diagnostic logging only */
+  scale: number;
+}
 
 /**
  * Position the VS Code window at (0, 0) with our target size, then read back
@@ -252,14 +230,9 @@ function positionVSCodeWindow(): WindowRect {
   }
 
   const scale = detectRetinaScale();
-  log(`  Display scale: ${scale}x (pixel capture: ${logicalRect.w * scale}×${logicalRect.h * scale})`);
-  return {
-    x: logicalRect.x * scale,
-    y: logicalRect.y * scale,
-    w: logicalRect.w * scale,
-    h: logicalRect.h * scale,
-    scale,
-  };
+  log(`  Display scale: ${scale}x`);
+  // Return LOGICAL coordinates — screencapture takes logical coords directly.
+  return { ...logicalRect, scale };
 }
 
 /** Detect main display Retina scale factor. Usually 1 or 2 on macOS. */

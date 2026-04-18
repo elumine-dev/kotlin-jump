@@ -49,6 +49,10 @@ export class Stage {
    * first demo actions can race with indexing and render inconsistent lenses.
    */
   async waitForIndexReady(timeoutMs = 30_000): Promise<void> {
+    // Close any welcome / walkthrough tab that VS Code opens on first launch
+    // from a fresh userDataDir. We don't want those in the recorded video.
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+
     const kotlinJump = vscode.extensions.getExtension('elumine.kotlin-jump');
     if (!kotlinJump) throw new Error('kotlin-jump extension not found in dev host');
     await kotlinJump.activate();

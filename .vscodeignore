@@ -28,3 +28,4 @@ media/Demo-original.gif
 # NOTE: media/demos/*.webp ARE shipped (referenced by README/whats-new),
 #       only the recording scripts are excluded.
 scripts/**
+dist/demo/**

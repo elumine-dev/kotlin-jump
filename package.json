@@ -895,6 +895,8 @@
     "test:integration": "vscode-test",
     "predemo:record": "npm run compile",
     "demo:record": "node dist/demo/record.js",
+    "predemo:workspace": "npm run compile",
+    "demo:workspace": "code --extensionDevelopmentPath=. --extensionDevelopmentPath=./scripts/demo/recorder-ext .",
     "prepare": "husky"
   },
   "devDependencies": {

@@ -42,7 +42,7 @@ const browserStubs = {
 
 async function main() {
   const buildDemo = demoLibEntryPoints.length > 0 || demoEntryPoints.length > 0;
-  const [extCtx, browserCtx, workerCtx, serverCtx, e2eCtx, demoLibCtx, demoCtx, recordCtx] = await Promise.all([
+  const [extCtx, browserCtx, workerCtx, serverCtx, e2eCtx, demoLibCtx, demoCtx, recordCtx, recorderExtCtx] = await Promise.all([
     esbuild.context({
       ...sharedOptions,
       entryPoints: ['src/extension.ts'],
@@ -104,9 +104,18 @@ async function main() {
           banner:      { js: '#!/usr/bin/env node' },
         })
       : Promise.resolve(undefined),
+    // Dev-only recorder extension — loaded via `--extensionDevelopmentPath`
+    // when you run `npm run demo:workspace`. Never shipped (see .vscodeignore).
+    buildDemo && fs.existsSync(path.join('scripts', 'demo', 'recorder-ext', 'src', 'extension.ts'))
+      ? esbuild.context({
+          ...sharedOptions,
+          entryPoints: [path.join('scripts', 'demo', 'recorder-ext', 'src', 'extension.ts')],
+          outfile:     'scripts/demo/recorder-ext/dist/extension.js',
+        })
+      : Promise.resolve(undefined),
   ]);
 
-  const allCtx = [extCtx, browserCtx, workerCtx, serverCtx, e2eCtx, demoLibCtx, demoCtx, recordCtx].filter(Boolean);
+  const allCtx = [extCtx, browserCtx, workerCtx, serverCtx, e2eCtx, demoLibCtx, demoCtx, recordCtx, recorderExtCtx].filter(Boolean);
   if (watch) {
     await Promise.all(allCtx.map(c => c.watch()));
     console.log('[esbuild] watching…');

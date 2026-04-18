@@ -1,0 +1,23 @@
+{
+  "name":        "kotlin-jump-demo-recorder",
+  "displayName": "Kotlin Jump — Demo Recorder (dev only)",
+  "description": "Adds a '▶ Record demo' CodeLens to *.demo.ts files. DEV-ONLY, never published.",
+  "version":     "0.0.0",
+  "publisher":   "elumine-dev-internal",
+  "private":     true,
+  "engines":     { "vscode": "^1.88.0" },
+  "categories":  ["Other"],
+  "main":        "./dist/extension.js",
+  "activationEvents": [
+    "workspaceContains:scripts/demo/demos/*.demo.ts"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command":  "kotlinJumpDemo.record",
+        "title":    "Record demo",
+        "category": "Kotlin Jump Demo"
+      }
+    ]
+  }
+}

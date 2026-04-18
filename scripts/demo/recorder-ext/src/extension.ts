@@ -18,27 +18,42 @@ import { spawn }   from 'node:child_process';
  *    via `.vscodeignore`.
  */
 const LOG_PREFIX = '[kotlin-jump-demo-recorder]';
+const OUTPUT     = vscode.window.createOutputChannel('Kotlin Jump Demo Recorder');
+
+function log(msg: string): void {
+  OUTPUT.appendLine(`${new Date().toISOString()} ${msg}`);
+  // eslint-disable-next-line no-console
+  console.log(`${LOG_PREFIX} ${msg}`);
+}
 
 export function activate(context: vscode.ExtensionContext): void {
-  // eslint-disable-next-line no-console
-  console.log(`${LOG_PREFIX} activate() called`);
+  log('activate() called');
+  OUTPUT.show(true);   // force the output channel visible so user sees logs immediately
+
+  // Status bar item — persistent visual confirmation the extension loaded.
+  const sb = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 10);
+  sb.text    = '$(device-camera-video) Demo Recorder';
+  sb.tooltip = 'Kotlin Jump Demo Recorder is loaded. Open a *.demo.ts file to see the "▶ Record demo" CodeLens.';
+  sb.command = 'kotlinJumpDemo.record';
+  sb.show();
+  context.subscriptions.push(sb, OUTPUT);
 
   const ws = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  log(`workspace root: ${ws ?? '<none>'}`);
   if (!ws) {
-    // eslint-disable-next-line no-console
-    console.warn(`${LOG_PREFIX} no workspace folder — skipping activation`);
+    log('no workspace folder — skipping activation');
     return;
   }
-  if (!fs.existsSync(path.join(ws, '.kotlin-jump-dev-mode'))) {
-    // eslint-disable-next-line no-console
-    console.warn(`${LOG_PREFIX} .kotlin-jump-dev-mode marker missing at ${ws} — skipping activation`);
+  const markerPath = path.join(ws, '.kotlin-jump-dev-mode');
+  const hasMarker  = fs.existsSync(markerPath);
+  log(`marker check: ${markerPath} → ${hasMarker ? 'FOUND' : 'MISSING'}`);
+  if (!hasMarker) {
     void vscode.window.showWarningMessage(
-      `Kotlin Jump Demo Recorder: no .kotlin-jump-dev-mode marker at workspace root (${ws}). CodeLens disabled.`,
+      `Kotlin Jump Demo Recorder: no .kotlin-jump-dev-mode marker at ${ws}. CodeLens disabled.`,
     );
+    sb.text    = '$(warning) Demo Recorder: no marker';
     return;
   }
-  // eslint-disable-next-line no-console
-  console.log(`${LOG_PREFIX} marker found at ${ws}, registering CodeLens provider`);
 
   // Match any *.demo.ts file under the workspace — broader than just
   // scripts/demo/demos/ so users who move demos around still get the lens.
@@ -46,6 +61,7 @@ export function activate(context: vscode.ExtensionContext): void {
     { scheme: 'file', pattern: '**/*.demo.ts' },
   ];
 
+  log('registering CodeLens provider + command');
   context.subscriptions.push(
     vscode.languages.registerCodeLensProvider(selector, new DemoRecordCodeLensProvider()),
     vscode.commands.registerCommand('kotlinJumpDemo.record', async (demoFsPath: string) => {
@@ -68,8 +84,7 @@ export function deactivate(): void { /* nothing to clean up */ }
 
 class DemoRecordCodeLensProvider implements vscode.CodeLensProvider {
   provideCodeLenses(doc: vscode.TextDocument): vscode.CodeLens[] {
-    // eslint-disable-next-line no-console
-    console.log(`${LOG_PREFIX} provideCodeLenses called for ${doc.uri.fsPath}`);
+    log(`provideCodeLenses called for ${doc.uri.fsPath}`);
     const lenses: vscode.CodeLens[] = [];
     const re = /^export\s+default\s+async\s+function\s+record\s*\(/gm;
     const text = doc.getText();
@@ -96,8 +111,7 @@ class DemoRecordCodeLensProvider implements vscode.CodeLensProvider {
         arguments: [doc.uri.fsPath],
       }));
     }
-    // eslint-disable-next-line no-console
-    console.log(`${LOG_PREFIX} returning ${lenses.length} lens(es)`);
+    log(`returning ${lenses.length} lens(es)`);
     return lenses;
   }
 }

@@ -102,17 +102,6 @@ Kotlin Jump 1.7.0 adds a one-click Android Run button, visual code annotations f
 - Kotlin Jump is now published to the Open VSX Registry — available for VS Codium and other VS Code-compatible editors.
 - Updated the README with an Android Run walkthrough and an animated step-by-step demo.
 
-1.7.0 ships the Android Run button — build, install, and launch any Android app from VS Code in one click, zero config required.
-
-### New Features
-- Added a **$(play) Run** button in the status bar that builds, installs, and launches an Android app on the connected device or emulator in one click.
-- Auto-detects the app module and Gradle install task via `gradlew tasks --group install` — works for any project including multi-flavor builds.
-- Reads the merged manifest after a successful build to get the real package name and LAUNCHER activity, then launches via `adb shell am start -n` — the same method Android Studio uses.
-- Offers to start an AVD if no device is connected: lists available emulators via `emulator -list-avds` and polls until boot completes.
-- Background task discovery runs silently at workspace open so the first Run click is always instant.
-- Added a **$(chevron-down)** switch button for projects with multiple apps configured via `kotlinJump.androidProjects`.
-- Falls back to `adb shell monkey` if the merged manifest is not yet on disk (first build on a fresh checkout).
-
 ## 1.6.0
 
 1.6.0 ships instant XML↔Kotlin string resource navigation via a pre-built index and fixes KDoc hover at declaration sites.
@@ -246,16 +235,6 @@ Kotlin Jump 1.0.0 adds a VS Code chat participant, an MCP server for external AI
 ### Notes
 - This release requires VS Code 1.115.0 or later (previously 1.102.0). Update VS Code before upgrading the extension.
 
-Kotlin Jump 1.0.0 adds an AI chat participant, an MCP server for external AI tool integration, and a native VS Code test runner for JUnit tests.
-
-### Fixes
-- Fixed module resolution failing in multi-module Gradle projects that use Groovy-style `include` syntax — navigation across submodules now works correctly in these projects.
-
-### New Features
-- Added a Kotlin Jump chat participant — use `/search`, `/usages`, `/implementations`, and `/doc` in VS Code's chat panel to query your Kotlin codebase in natural language, powered by the extension's own symbol index.
-- Added an MCP server: AI assistants that support the Model Context Protocol (e.g. Claude Desktop) can now query Kotlin Jump's symbol index directly, enabling code navigation and documentation lookup from outside VS Code.
-- Added a native test runner: JUnit tests now appear in VS Code's Test Explorer with full run and debug support, driven by Gradle — no separate test plugin required. JUnit 4/5 annotations are detected automatically during indexing.
-
 ## 0.10.0
 
 Adds symbol-aware code folding and smart selection expansion for Kotlin files.
@@ -312,12 +291,6 @@ Adds a Move File command for Kotlin files, available from the editor context men
 
 ### Improvements
 - Added a Move File command ("Move File…") for Kotlin files, accessible from the editor right-click menu — lets you move or rename a Kotlin file directly from the editor without leaving the keyboard.
-
-Adds an Organize Imports command for Kotlin and Java files.
-
-### Improvements
-- Added Organize Imports command (Shift+Alt+O) for Kotlin and Java files — removes unused imports using a heuristic that checks whether the imported name or alias appears in the file body; wildcard imports are always kept. Available from the command palette and the editor right-click menu.
-- Added kotlinJump.organizeImports.removeUnused setting (enabled by default) to opt out of unused-import removal while still running the Organize Imports command.
 
 ## 0.7.5
 

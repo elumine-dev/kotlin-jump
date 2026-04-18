@@ -896,7 +896,7 @@
     "predemo:record": "npm run compile",
     "demo:record": "node dist/demo/record.js",
     "predemo:workspace": "npm run compile",
-    "demo:workspace": "code --extensionDevelopmentPath=. --extensionDevelopmentPath=./scripts/demo/recorder-ext .",
+    "demo:workspace": "code --new-window --extensionDevelopmentPath=\"$(pwd)/scripts/demo/recorder-ext\" \"$(pwd)\"",
     "prepare": "husky"
   },
   "devDependencies": {

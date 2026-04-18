@@ -12,6 +12,7 @@ vitest.config.ts
 esbuild.js
 publish.sh
 .husky/**
+.kotlin-jump-dev-mode
 **/*.map
 **/*.wasm
 *.vsix
@@ -23,3 +24,7 @@ media/icon.svg
 media/README.txt
 media/Demo.gif
 media/Demo-original.gif
+# Demo recording tooling — DEV ONLY, never ship
+# NOTE: media/demos/*.webp ARE shipped (referenced by README/whats-new),
+#       only the recording scripts are excluded.
+scripts/**

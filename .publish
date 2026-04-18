@@ -639,6 +639,35 @@ else console.log('Walkthrough: OK');
 NODE
 }
 
+check_no_demo_tooling_in_vsix() {
+  # Safety net: make sure the dev-only demo recording pipeline never leaks
+  # into a published VSIX. Runs AFTER packaging but BEFORE any git/tag/push.
+  local forbidden_patterns=(
+    "scripts/demo"
+    "recorder-ext"
+    "kotlin-jump-demo-recorder"
+    ".kotlin-jump-dev-mode"
+  )
+  local vsix_file
+  vsix_file="$(ls -t ./*.vsix 2>/dev/null | head -n 1 || true)"
+  if [[ -z "$vsix_file" ]]; then
+    echo "  (skipping isolation check — no VSIX found yet)"
+    return 0
+  fi
+  local contents
+  contents="$(unzip -l "$vsix_file" 2>/dev/null || true)"
+  for pattern in "${forbidden_patterns[@]}"; do
+    if echo "$contents" | grep -q "$pattern"; then
+      echo "ERROR: forbidden pattern '$pattern' found inside $vsix_file." >&2
+      echo "       Demo recording tooling must never ship. Fix .vscodeignore." >&2
+      echo "       Offending entries:" >&2
+      echo "$contents" | grep "$pattern" | head -5 | sed 's/^/         /' >&2
+      exit 1
+    fi
+  done
+  echo "  VSIX isolation check: OK (no demo tooling leaked)"
+}
+
 verify_release() {
   check_walkthrough_coverage
   ensure_local_dependencies
@@ -651,6 +680,7 @@ verify_release() {
 
   echo "Packaging..."
   npx @vscode/vsce package --no-dependencies
+  check_no_demo_tooling_in_vsix
 }
 
 stage_release_changes() {

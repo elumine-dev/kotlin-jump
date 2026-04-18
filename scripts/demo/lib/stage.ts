@@ -52,6 +52,17 @@ export class Stage {
     // Close any welcome / walkthrough tab that VS Code opens on first launch
     // from a fresh userDataDir. We don't want those in the recorded video.
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    // Close the auxiliary side panel (Chat / AI pane) that recent VS Code
+    // versions open by default — it steals space from the editor.
+    for (const cmd of [
+      'workbench.action.closeAuxiliaryBar',
+      'workbench.action.closePanel',
+      'workbench.action.closeSidebar',
+    ]) {
+      await vscode.commands.executeCommand(cmd).then(() => {}, () => {});
+    }
+    // Re-open the primary sidebar (file explorer) — we want that visible.
+    await vscode.commands.executeCommand('workbench.view.explorer').then(() => {}, () => {});
 
     const kotlinJump = vscode.extensions.getExtension('elumine.kotlin-jump');
     if (!kotlinJump) throw new Error('kotlin-jump extension not found in dev host');
@@ -88,6 +99,27 @@ export class Stage {
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
+  /**
+   * Flash a full-line highlight at the given position for ~900 ms. Makes
+   * "we just landed HERE" visually obvious in the recording, especially
+   * when the cursor jump crosses files.
+   */
+  private async flashLanding(editor: vscode.TextEditor, line: number): Promise<void> {
+    const decoType = vscode.window.createTextEditorDecorationType({
+      isWholeLine:     true,
+      backgroundColor: 'rgba(255, 217, 102, 0.28)',   // soft yellow
+      borderColor:     'rgba(255, 217, 102, 0.80)',
+      borderWidth:     '0 0 0 3px',
+      borderStyle:     'solid',
+      overviewRulerColor: 'rgba(255, 217, 102, 0.9)',
+      overviewRulerLane:  vscode.OverviewRulerLane.Full,
+    });
+    const range = new vscode.Range(line, 0, line, 0);
+    editor.setDecorations(decoType, [range]);
+    await this.pause(900);
+    decoType.dispose();
+  }
+
   async openFile(relativePath: string, opts: { line?: number; column?: number } = {}): Promise<vscode.TextEditor> {
     const uri = vscode.Uri.file(path.join(this.opts.workspaceRoot, relativePath));
     const doc = await vscode.workspace.openTextDocument(uri);
@@ -96,6 +128,7 @@ export class Stage {
       const pos = new vscode.Position(opts.line, opts.column ?? 0);
       editor.selection = new vscode.Selection(pos, pos);
       editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
+      void this.flashLanding(editor, opts.line);
     }
     await this.pause(500);
     return editor;
@@ -138,6 +171,7 @@ export class Stage {
     const targetEd  = await vscode.window.showTextDocument(targetDoc, { preview: false });
     targetEd.selection = new vscode.Selection(range.start, range.start);
     targetEd.revealRange(range, vscode.TextEditorRevealType.InCenter);
+    void this.flashLanding(targetEd, range.start.line);
 
     await this.pause(opts.duration ?? 1500);
   }
@@ -157,12 +191,14 @@ export class Stage {
     return vscode.commands.executeCommand(commandId, ...args);
   }
 
-  /** Wait for the active editor to reach a specific file + line. */
+  /** Wait for the active editor to reach a specific file + line. Flashes the
+   *  landing line once the target is reached so the cursor jump is visible. */
   async waitForEditor(fileSuffix: string, line: number, timeoutMs = 4000): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       const active = vscode.window.activeTextEditor;
       if (active && active.document.fileName.endsWith(fileSuffix) && active.selection.active.line === line) {
+        void this.flashLanding(active, line);
         return;
       }
       await new Promise(r => setTimeout(r, 100));

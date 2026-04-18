@@ -85,7 +85,12 @@ function renderClick(ev: TimelineEvent, t: number, font: string): string[] {
   const main    = escapeForDrawtext(ev.label);
   const sub     = ev.sublabel ? escapeForDrawtext(ev.sublabel) : '';
 
-  const cardX = `(w-${CARD_W})/2`;
+  // NB: inside drawbox, the variable `w` in expressions means the BOX width
+  // (which we're defining here = CARD_W), NOT the input frame width. So
+  // `x=(w-CARD_W)/2` would collapse to x=0 and the card would cling to the
+  // left edge. `iw` explicitly means "input frame width" and avoids that
+  // ambiguity. Same pitfall for y with `h`/`ih`.
+  const cardX = `(iw-${CARD_W})/2`;
 
   const box = `drawbox=x=${cardX}:y=${CARD_Y}:w=${CARD_W}:h=${CARD_H}` +
               `:color=0x0E639C@0.92:t=fill:enable='${between}'`;

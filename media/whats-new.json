@@ -1,46 +1,33 @@
 {
-  "version": "1.10.0",
+  "version": "1.11.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Android navigation history and resource diagnostics",
-  "summary": "Kotlin Jump 1.10.0 adds Android Studio-style navigation history, inline resource diagnostics for broken R references, and a richer set of Kotlin and Android code insights.",
+  "tagline": "Accurate changelog, hardened release pipeline",
+  "summary": "Maintenance release with no changes to extension behavior — corrects duplicate changelog entries and hardens the release pipeline for more reliable future publishes.",
   "highlights": [
     {
-      "title": "Navigation History",
-      "description": "Back, Forward, and Clear History commands let you retrace jumps between definitions, implementations, and usages — matching the navigation model of Android Studio.",
-      "kind": "improvement"
+      "title": "Duplicate Changelog Entries Fixed",
+      "description": "Duplicate sections for v1.7.0, v1.0.0, and v0.7.6 have been removed, making the published changelog accurate and readable.",
+      "kind": "fix"
     },
     {
-      "title": "Inline Resource Diagnostics",
-      "description": "Unresolved R.string and R.color references are now flagged directly in the editor, surfacing broken Android resource lookups without running a build.",
-      "kind": "improvement"
-    },
-    {
-      "title": "Richer Code Insights",
-      "description": "New const val folding, suspend call markers, version catalog hover, override/implement gutter indicators, and R.color folding add more context to Kotlin and Android code at a glance.",
+      "title": "Safer Release Process",
+      "description": "The release pipeline now performs a pre-flight tag check and applies changelog updates idempotently, reducing the risk of duplicate or malformed releases reaching users.",
       "kind": "improvement"
     }
   ],
   "sections": [
     {
-      "heading": "Improvements",
+      "heading": "Notes",
       "bullets": [
-        "Added Android Studio-style navigation history with Back, Forward, and Clear History commands, making it easier to retrace jumps between definitions, implementations, and usages.",
-        "Added resource diagnostics that flag unresolved R.string and R.color references inline, exposing broken Android resource lookups directly in the editor without running a build.",
-        "Added const val folding, suspend call markers, version catalog hover, override/implement gutter indicators, and R.color resource folding for richer in-editor context on Kotlin and Android projects."
+        "No changes to extension commands, settings, navigation, or any user-facing behavior since v1.10.0.",
+        "This release corrects the published changelog and improves release infrastructure only."
       ]
     },
     {
       "heading": "Fixes",
       "bullets": [
-        "Fixed Go to Class Implementation and related navigation commands so they register reliably and open the target editor correctly during navigation flows.",
-        "Fixed parser, definition, and hover edge cases involving string interpolation, Android R.type.name references, inherited properties, and same-file symbol resolution."
-      ]
-    },
-    {
-      "heading": "Notes",
-      "bullets": [
-        "Added a dedicated browser entrypoint with browser-safe stubs, bringing web-hosted installs closer to feature parity with the desktop extension for supported features.",
-        "Expanded the CI test suite with a comprehensive real-world Kotlin/Android project covering coroutines, sealed classes, annotations, resource files, and multiple test frameworks — improving confidence in parser correctness across a wider range of code patterns."
+        "Removed duplicate changelog sections for v1.7.0, v1.0.0, and v0.7.6 that were incorrectly present in the published history.",
+        "Release script now validates that no matching tag already exists before proceeding, preventing accidental double-publishes."
       ]
     }
   ],

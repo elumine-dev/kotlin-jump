@@ -4,3 +4,8 @@ dist/
 .vscode-test/
 test/kotlin-lsp-main/*
 test/vscode-kotlin-main/*
+test/kotlin-jump-demo/.gradle/
+test/kotlin-jump-demo/build/
+scripts/demo/tmp/
+scripts/demo/recorder-ext/dist/
+scripts/demo/recorder-ext/node_modules/

@@ -893,6 +893,8 @@
     "test:watch": "vitest",
     "pretest:integration": "npm run compile",
     "test:integration": "vscode-test",
+    "predemo:record": "npm run compile",
+    "demo:record": "node dist/demo/record.js",
     "prepare": "husky"
   },
   "devDependencies": {

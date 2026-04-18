@@ -19,6 +19,18 @@ const e2eEntryPoints = fs.readdirSync(path.join('test', 'e2e'))
   .filter(name => name.endsWith('.ts'))
   .map(name => path.join('test', 'e2e', name));
 
+// Demo recording tooling (DEV ONLY — excluded from VSIX via .vscodeignore).
+const demoLibEntryPoints = fs.existsSync(path.join('scripts', 'demo', 'lib'))
+  ? fs.readdirSync(path.join('scripts', 'demo', 'lib'))
+      .filter(name => name.endsWith('.ts'))
+      .map(name => path.join('scripts', 'demo', 'lib', name))
+  : [];
+const demoEntryPoints = fs.existsSync(path.join('scripts', 'demo', 'demos'))
+  ? fs.readdirSync(path.join('scripts', 'demo', 'demos'))
+      .filter(name => name.endsWith('.demo.ts'))
+      .map(name => path.join('scripts', 'demo', 'demos', name))
+  : [];
+
 const browserStubs = {
   'worker_threads': './src/browser/worker-threads-stub',
   'os':             './src/browser/os-stub',
@@ -29,7 +41,8 @@ const browserStubs = {
 };
 
 async function main() {
-  const [extCtx, browserCtx, workerCtx, serverCtx, e2eCtx] = await Promise.all([
+  const buildDemo = demoLibEntryPoints.length > 0 || demoEntryPoints.length > 0;
+  const [extCtx, browserCtx, workerCtx, serverCtx, e2eCtx, demoLibCtx, demoCtx, recordCtx] = await Promise.all([
     esbuild.context({
       ...sharedOptions,
       entryPoints: ['src/extension.ts'],
@@ -64,14 +77,42 @@ async function main() {
       entryPoints: e2eEntryPoints,
       outdir:      'dist/test',
     }),
+    buildDemo
+      ? esbuild.context({
+          ...sharedOptions,
+          // Demo lib: VS Code API + Node built-ins, extension host runtime.
+          entryPoints: demoLibEntryPoints,
+          outdir:      'dist/demo/lib',
+        })
+      : Promise.resolve(undefined),
+    buildDemo
+      ? esbuild.context({
+          ...sharedOptions,
+          // Each demo is bundled self-contained with its lib imports inlined.
+          entryPoints: demoEntryPoints,
+          outdir:      'dist/demo/demos',
+        })
+      : Promise.resolve(undefined),
+    buildDemo && fs.existsSync(path.join('scripts', 'demo', 'record.ts'))
+      ? esbuild.context({
+          ...sharedOptions,
+          // Orchestrator CLI — runs outside VS Code, uses @vscode/test-electron.
+          // Keep node_modules external to avoid a 2 MB single-file bundle.
+          packages:    'external',
+          entryPoints: [path.join('scripts', 'demo', 'record.ts')],
+          outfile:     'dist/demo/record.js',
+          banner:      { js: '#!/usr/bin/env node' },
+        })
+      : Promise.resolve(undefined),
   ]);
 
+  const allCtx = [extCtx, browserCtx, workerCtx, serverCtx, e2eCtx, demoLibCtx, demoCtx, recordCtx].filter(Boolean);
   if (watch) {
-    await Promise.all([extCtx.watch(), browserCtx.watch(), workerCtx.watch(), serverCtx.watch(), e2eCtx.watch()]);
+    await Promise.all(allCtx.map(c => c.watch()));
     console.log('[esbuild] watching…');
   } else {
-    await Promise.all([extCtx.rebuild(), browserCtx.rebuild(), workerCtx.rebuild(), serverCtx.rebuild(), e2eCtx.rebuild()]);
-    await Promise.all([extCtx.dispose(), browserCtx.dispose(), workerCtx.dispose(), serverCtx.dispose(), e2eCtx.dispose()]);
+    await Promise.all(allCtx.map(c => c.rebuild()));
+    await Promise.all(allCtx.map(c => c.dispose()));
     // Make the server binary executable
     fs.chmodSync(path.join('dist', 'server.js'), 0o755);
   }

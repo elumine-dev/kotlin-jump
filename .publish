@@ -362,6 +362,19 @@ STRUCTURED_FILE="$WORK_DIR/claude-structured.json"
 SECTION_FILE="$WORK_DIR/changelog-section.md"
 
 build_context() {
+  # Paths that contain DEV-ONLY tooling (demo recording pipeline, marker
+  # files, isolated docs). These are never shipped to users, so they must
+  # not influence the user-facing release notes in any way. We pass them
+  # as git pathspec exclusions to filter out commits/diffs/files that
+  # touch ONLY these paths. (A commit that mixes shipped + dev-only
+  # changes still shows up; the prompt rule below is the safety net.)
+  local dev_only_excludes=(
+    ':(exclude,glob)scripts/**'
+    ':(exclude).kotlin-jump-dev-mode'
+    ':(exclude)doc/demo-recording.md'
+    ':(exclude,glob)media/demos/**'
+  )
+
   {
     echo "Version: $VERSION"
     echo "Base ref: $BASE_REF"
@@ -387,35 +400,38 @@ const summary = {
 console.log(JSON.stringify(summary, null, 2));
 NODE
     echo
-    echo "Commits in scope:"
+    echo "Commits in scope (dev-only tooling paths filtered out):"
     if [[ "$BASE_REF" == "HEAD" ]]; then
       echo "- none (worktree-only mode)"
     else
-      git log --no-merges --format='- %h %s' "$BASE_REF..HEAD" || true
+      # `--` separates revisions from pathspec. We list ALL files first,
+      # then the excludes. This shows only commits that touch at least one
+      # non-excluded path. Commits that touch ONLY excluded paths vanish.
+      git log --no-merges --format='- %h %s' "$BASE_REF..HEAD" -- . "${dev_only_excludes[@]}" || true
     fi
     echo
     echo "Committed diff stat in scope:"
     if [[ "$BASE_REF" == "HEAD" ]]; then
       echo "(none)"
     else
-      git diff --stat "$BASE_REF..HEAD" || true
+      git diff --stat "$BASE_REF..HEAD" -- . "${dev_only_excludes[@]}" || true
     fi
     echo
     echo "Committed changed files in scope:"
     if [[ "$BASE_REF" == "HEAD" ]]; then
       echo "(none)"
     else
-      git diff --name-status "$BASE_REF..HEAD" || true
+      git diff --name-status "$BASE_REF..HEAD" -- . "${dev_only_excludes[@]}" || true
     fi
     echo
-    echo "Current worktree status:"
-    git status --short --untracked-files=all || true
+    echo "Current worktree status (dev-only paths filtered):"
+    git status --short --untracked-files=all -- . "${dev_only_excludes[@]}" || true
     echo
     echo "Current staged diff stat:"
-    git diff --cached --stat || true
+    git diff --cached --stat -- . "${dev_only_excludes[@]}" || true
     echo
     echo "Current unstaged diff stat:"
-    git diff --stat || true
+    git diff --stat -- . "${dev_only_excludes[@]}" || true
     echo
     echo "Current tracked diff patch:"
     git diff -- package.json CHANGELOG.md README.md .vscodeignore publish.sh .publish media/find-usages.svg || true
@@ -445,6 +461,18 @@ Rules:
 - Each bullet must stand on its own, mention impact, and start with a verb in past tense or present tense.
 - Mention only changes that are actually evidenced by the supplied git/context data.
 - Before finalizing each bullet, ask yourself: "Would a user care?" If not, rewrite it or omit it.
+
+HARD EXCLUSIONS (must never appear in the output, even tangentially):
+- Anything under \`scripts/demo/\`, \`scripts/demo/recorder-ext/\`, \`dist/demo/\`, or \`doc/demo-recording.md\`.
+- The files \`.kotlin-jump-dev-mode\` or anything called "demo recorder", "demo recording",
+  "recorder-ext", or "kotlinJumpDemo" / "KJ_DEMO_*".
+- The screen-capture / WebP generation pipeline (ffmpeg, screencapture, @vscode/test-electron
+  demo usage, Stage/Timeline/Overlay libraries).
+- Any WebP demo assets under \`media/demos/\`.
+These are internal maintainer tooling, never shipped to end-users, and must not be mentioned
+in release notes, changelog, highlights, tagline, or summary. If git context still surfaces
+any of them (e.g. because a commit mixed shipped and dev-only changes), ignore that portion
+silently. Never summarise a release as "adds demo recording" or similar.
 
 Return structured JSON with:
 - summary: one short sentence

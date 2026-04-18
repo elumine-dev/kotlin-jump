@@ -9,7 +9,7 @@
   "categories":  ["Other"],
   "main":        "./dist/extension.js",
   "activationEvents": [
-    "workspaceContains:scripts/demo/demos/*.demo.ts"
+    "onStartupFinished"
   ],
   "contributes": {
     "commands": [

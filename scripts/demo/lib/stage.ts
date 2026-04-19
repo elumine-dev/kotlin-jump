@@ -14,20 +14,37 @@ export interface ClickOpts {
   modifier?: Modifier | `${Modifier}+${Modifier}`;
   /** Human-readable action label, e.g. "Go to Definition" */
   label:    string;
-  /** How long the overlay card stays visible (ms). Default: 1500. */
+  /** How long the overlay card stays visible (ms). Default: 2500 (playbook pacing). */
   duration?: number;
 }
 
 export interface KeystrokeOpts {
   /** Human-readable description, e.g. "Navigate Back" */
   label:     string;
-  /** How long the overlay banner stays visible (ms). Default: 1200. */
+  /** How long the overlay banner stays visible (ms). Default: 2500 (playbook pacing). */
   duration?: number;
 }
 
 export interface CaptionOpts {
-  /** How long the caption stays visible (ms). Default: 2000. */
+  /** How long the caption stays visible (ms). Default: 2500 (playbook pacing). */
   duration?: number;
+}
+
+export interface NavigateOpts {
+  /** Shortcut glyph shown on the banner — e.g. "⌘ + ⌥ + ←". */
+  shortcut:    string;
+  /** Human-readable description shown under the shortcut. */
+  label:       string;
+  /** VS Code command id to execute. */
+  command:     string;
+  /** Optional arguments spread into `executeCommand(id, ...args)`. */
+  commandArgs?: unknown[];
+  /** File suffix + line the command must land on before the banner emits. */
+  awaitEditor: { file: string; line: number };
+  /** Banner duration (ms). Default 2500 — matches keystroke(). */
+  duration?:   number;
+  /** Timeout for the waitForEditor probe (ms). Default 4000. */
+  timeoutMs?:  number;
 }
 
 /**
@@ -52,8 +69,9 @@ export class Stage {
     // Close any welcome / walkthrough tab that VS Code opens on first launch
     // from a fresh userDataDir. We don't want those in the recorded video.
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-    // Close the auxiliary side panel (Chat / AI pane) that recent VS Code
-    // versions open by default — it steals space from the editor.
+    // Close the auxiliary side panel (Chat / AI pane), the bottom panel, and
+    // the primary sidebar (file explorer). Playbook §6: file explorer hidden
+    // by default — opt-in via stage.showExplorer() only when the demo needs it.
     for (const cmd of [
       'workbench.action.closeAuxiliaryBar',
       'workbench.action.closePanel',
@@ -61,8 +79,6 @@ export class Stage {
     ]) {
       await vscode.commands.executeCommand(cmd).then(() => {}, () => {});
     }
-    // Re-open the primary sidebar (file explorer) — we want that visible.
-    await vscode.commands.executeCommand('workbench.view.explorer').then(() => {}, () => {});
 
     const kotlinJump = vscode.extensions.getExtension('elumine.kotlin-jump');
     if (!kotlinJump) throw new Error('kotlin-jump extension not found in dev host');
@@ -97,27 +113,63 @@ export class Stage {
     console.log(`[stage] index-ready probe timed out after ${timeoutMs}ms — proceeding anyway`);
   }
 
+  // ── Opt-in chrome helpers ──────────────────────────────────────────────────
+
+  /**
+   * Re-open the primary sidebar (file explorer). Playbook §6: explorer is
+   * hidden by default — call this only when a demo's narrative depends on
+   * seeing the file tree (e.g., Find Usages demo).
+   */
+  async showExplorer(): Promise<void> {
+    await vscode.commands.executeCommand('workbench.view.explorer').then(() => {}, () => {});
+    await this.pause(200);
+  }
+
+  /**
+   * Re-enable editor tabs. Playbook §6: tabs hidden by default; turn them on
+   * for cross-file demos so the viewer sees the file change explicitly.
+   */
+  async showTabs(): Promise<void> {
+    await vscode.workspace
+      .getConfiguration()
+      .update('workbench.editor.showTabs', 'single', vscode.ConfigurationTarget.Global)
+      .then(() => {}, () => {});
+    await this.pause(200);
+  }
+
   // ── Actions ────────────────────────────────────────────────────────────────
 
   /**
-   * Flash a full-line highlight at the given position for ~900 ms. Makes
-   * "we just landed HERE" visually obvious in the recording, especially
-   * when the cursor jump crosses files.
+   * Subtle blue pulse at the landing line for 500 ms. Playbook §5/§8: the
+   * pulse uses VS Code primary blue (#007ACC) rather than the old yellow
+   * (warning-coloured).
+   *
+   * Note on the dim-surround attempt: we tried to add a "focus guide" that
+   * darkens every non-target line during the same 500 ms window — via both
+   * `backgroundColor: rgba(0,0,0,0.7)` and a `color: rgba(255,255,255,0.22)`
+   * text-foreground override, and even a canary `rgba(255,0,0,0.9)` red to
+   * prove the decoration reached the renderer. NONE of them produced a
+   * visible change in the screen capture (while the pulse's `borderColor`
+   * renders fine). The extensionTestsPath runtime apparently composites
+   * whole-line `backgroundColor`/`color` decorations after the screen
+   * recorder snapshot path, so the effect is invisible on the WebP. We
+   * keep only the pulse — which IS captured — and leave attention-guidance
+   * to the overlay chrome (banner/card/caption).
    */
   private async flashLanding(editor: vscode.TextEditor, line: number): Promise<void> {
-    const decoType = vscode.window.createTextEditorDecorationType({
-      isWholeLine:     true,
-      backgroundColor: 'rgba(255, 217, 102, 0.28)',   // soft yellow
-      borderColor:     'rgba(255, 217, 102, 0.80)',
+    const pulseDeco = vscode.window.createTextEditorDecorationType({
+      isWholeLine:     false,
+      backgroundColor: 'rgba(0, 122, 204, 0.12)',   // #007ACC halo
+      borderColor:     '#007ACC',
       borderWidth:     '0 0 0 3px',
       borderStyle:     'solid',
-      overviewRulerColor: 'rgba(255, 217, 102, 0.9)',
+      overviewRulerColor: '#007ACC',
       overviewRulerLane:  vscode.OverviewRulerLane.Full,
     });
     const range = new vscode.Range(line, 0, line, 0);
-    editor.setDecorations(decoType, [range]);
-    await this.pause(900);
-    decoType.dispose();
+    editor.setDecorations(pulseDeco, [range]);
+    await this.pause(500);
+    pulseDeco.dispose();
   }
 
   async openFile(relativePath: string, opts: { line?: number; column?: number } = {}): Promise<vscode.TextEditor> {
@@ -147,7 +199,7 @@ export class Stage {
       type:     'click',
       label:    `${modLabel} → ${opts.label}`,
       sublabel: target,
-      duration: opts.duration ?? 1500,
+      duration: opts.duration ?? 2500,
     });
 
     const editor = vscode.window.activeTextEditor;
@@ -173,17 +225,50 @@ export class Stage {
     targetEd.revealRange(range, vscode.TextEditorRevealType.InCenter);
     void this.flashLanding(targetEd, range.start.line);
 
-    await this.pause(opts.duration ?? 1500);
+    await this.pause(opts.duration ?? 2500);
   }
 
   /** Record a keyboard shortcut — runs the paired VS Code command and displays
-   *  an overlay banner showing what was pressed. */
+   *  an overlay banner showing what was pressed. The banner timeline event is
+   *  emitted IMMEDIATELY, so it appears slightly before the command's visible
+   *  effect — a "prime-then-result" rhythm. Use `navigate()` instead for the
+   *  inverse "result-then-reveal" rhythm on WOW moments. */
   async keystroke(shortcut: string, opts: KeystrokeOpts): Promise<void> {
     this.timeline.push({
       type:     'keystroke',
       label:    shortcut,
       sublabel: opts.label,
-      duration: opts.duration ?? 1200,
+      duration: opts.duration ?? 2500,
+    });
+  }
+
+  /**
+   * Execute a command, wait for the target editor state, THEN emit the
+   * keystroke banner. The banner appears in sync with the visible result
+   * instead of before it — "you pressed a shortcut, the editor jumped,
+   * HERE is what the shortcut was" (result → reveal).
+   *
+   * Use this for WOW moments where the overlay's timing is part of the
+   * payoff. Example — Navigate Back revealing the exact cursor position:
+   *
+   *   await stage.navigate({
+   *     shortcut:    '⌘ + ⌥ + ←',
+   *     label:       'Navigate Back',
+   *     command:     'kotlinJump.navigateBack',
+   *     awaitEditor: { file: 'ApiServiceImpl.kt', line: 4 },
+   *   });
+   *
+   * The pulse-and-dim focus layer still fires on arrival (via
+   * `waitForEditor`), so the viewer sees: cursor jump + flash → banner.
+   */
+  async navigate(opts: NavigateOpts): Promise<void> {
+    await this.runCommand(opts.command, ...(opts.commandArgs ?? []));
+    await this.waitForEditor(opts.awaitEditor.file, opts.awaitEditor.line, opts.timeoutMs ?? 4000);
+    this.timeline.push({
+      type:     'keystroke',
+      label:    opts.shortcut,
+      sublabel: opts.label,
+      duration: opts.duration ?? 2500,
     });
   }
 
@@ -208,7 +293,7 @@ export class Stage {
 
   /** Narrative text overlay at the bottom of the frame. */
   async caption(text: string, opts: CaptionOpts = {}): Promise<void> {
-    const duration = opts.duration ?? 2000;
+    const duration = opts.duration ?? 2500;
     this.timeline.push({
       type:     'caption',
       label:    text,

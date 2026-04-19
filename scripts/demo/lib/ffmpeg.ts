@@ -59,24 +59,56 @@ export class ScreenRecorder {
 }
 
 /**
- * 2nd pass: apply overlay filter, write annotated mp4.
+ * 2nd pass: apply a filter_complex graph to the raw capture and write an
+ * annotated mp4. The graph must consume `[0:v]` (the raw input) and produce a
+ * labeled output `[final]` — that label is what we `-map`.
+ *
  * Optionally trims the input: `startSec` seeks into the raw video, `durationSec`
- * caps the output length. Overlay timestamps in `filter` must already be
- * relative to `startSec`.
+ * caps the output length. All timestamps inside `filterComplex` must already
+ * be relative to `startSec` (i.e., `t=0` is when the demo begins).
  */
 export function applyOverlays(
-  inputMp4:     string,
-  filter:       string,
-  outputMp4:    string,
+  inputMp4:       string,
+  filterComplex:  string,
+  outputMp4:      string,
   opts: { startSec?: number; durationSec?: number } = {},
 ): void {
   const pre: string[] = [];
   if (opts.startSec    !== undefined) pre.push('-ss', opts.startSec.toFixed(3));
   if (opts.durationSec !== undefined) pre.push('-t',  opts.durationSec.toFixed(3));
 
-  const args = filter
-    ? ['-y', ...pre, '-i', inputMp4, '-vf', filter, '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '20', '-pix_fmt', 'yuv420p', outputMp4]
+  const args = filterComplex
+    ? [
+        '-y', ...pre, '-i', inputMp4,
+        '-filter_complex', filterComplex,
+        '-map', '[final]',
+        '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '20', '-pix_fmt', 'yuv420p',
+        outputMp4,
+      ]
     : ['-y', ...pre, '-i', inputMp4, '-c:v', 'copy', outputMp4];
+  execSync(`ffmpeg ${args.map(a => JSON.stringify(a)).join(' ')}`, { stdio: ['ignore', 'ignore', 'pipe'] });
+}
+
+/**
+ * Extract a single frame as PNG, offset from the end of the video. Used to
+ * produce a "poster" frame for `prefers-reduced-motion` accessibility
+ * fallback (playbook §14). `offsetFromEndSec` defaults to 0.6 s so the poster
+ * sits just before the fade-to-dark tail (which would otherwise be black).
+ */
+export function extractPosterFrame(
+  inputMp4:          string,
+  outputPng:         string,
+  offsetFromEndSec:  number = 0.6,
+): void {
+  fs.mkdirSync(path.dirname(outputPng), { recursive: true });
+  const args = [
+    '-y',
+    '-sseof', `-${offsetFromEndSec.toFixed(3)}`,
+    '-i',     inputMp4,
+    '-frames:v', '1',
+    '-q:v',      '2',
+    outputPng,
+  ];
   execSync(`ffmpeg ${args.map(a => JSON.stringify(a)).join(' ')}`, { stdio: ['ignore', 'ignore', 'pipe'] });
 }
 
@@ -109,4 +141,18 @@ export function convertToWebP(inputMp4: string, outputWebp: string): void {
 
 export function fileSizeKb(file: string): number {
   return Math.round(fs.statSync(file).size / 1024);
+}
+
+/** Probe a container-level duration in seconds. Returns NaN on failure. */
+export function probeDurationSec(file: string): number {
+  try {
+    const out = execSync(
+      `ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 ${JSON.stringify(file)}`,
+      { encoding: 'utf8' },
+    ).trim();
+    const n = parseFloat(out);
+    return Number.isFinite(n) ? n : NaN;
+  } catch {
+    return NaN;
+  }
 }

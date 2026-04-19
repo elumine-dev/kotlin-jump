@@ -93,16 +93,23 @@ async function main() {
           outdir:      'dist/demo/demos',
         })
       : Promise.resolve(undefined),
-    buildDemo && fs.existsSync(path.join('scripts', 'demo', 'record.ts'))
-      ? esbuild.context({
-          ...sharedOptions,
-          // Orchestrator CLI — runs outside VS Code, uses @vscode/test-electron.
-          // Keep node_modules external to avoid a 2 MB single-file bundle.
-          packages:    'external',
-          entryPoints: [path.join('scripts', 'demo', 'record.ts')],
-          outfile:     'dist/demo/record.js',
-          banner:      { js: '#!/usr/bin/env node' },
-        })
+    buildDemo
+      ? (() => {
+          // CLI orchestrators — run outside VS Code. Keep node_modules
+          // external to avoid 2 MB single-file bundles.
+          const cliEntries = ['record.ts', 'validate-frames.ts', 'e2e.ts']
+            .map(n => path.join('scripts', 'demo', n))
+            .filter(fs.existsSync);
+          return cliEntries.length === 0
+            ? Promise.resolve(undefined)
+            : esbuild.context({
+                ...sharedOptions,
+                packages:    'external',
+                entryPoints: cliEntries,
+                outdir:      'dist/demo',
+                banner:      { js: '#!/usr/bin/env node' },
+              });
+        })()
       : Promise.resolve(undefined),
     // Dev-only recorder extension — loaded via `--extensionDevelopmentPath`
     // when you run `npm run demo:workspace`. Never shipped (see .vscodeignore).

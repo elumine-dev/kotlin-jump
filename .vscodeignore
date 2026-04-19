@@ -26,6 +26,8 @@ media/Demo.gif
 media/Demo-original.gif
 # Demo recording tooling — DEV ONLY, never ship
 # NOTE: media/demos/*.webp ARE shipped (referenced by README/whats-new),
-#       only the recording scripts are excluded.
+#       only the recording scripts + dev-only sidecars are excluded.
 scripts/**
 dist/demo/**
+media/demos/*.timeline.json
+media/demos/*-poster.png

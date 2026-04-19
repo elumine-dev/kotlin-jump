@@ -9,3 +9,5 @@ test/kotlin-jump-demo/build/
 scripts/demo/tmp/
 scripts/demo/recorder-ext/dist/
 scripts/demo/recorder-ext/node_modules/
+tmp-demo-e2e/
+tmp-demo-frames/

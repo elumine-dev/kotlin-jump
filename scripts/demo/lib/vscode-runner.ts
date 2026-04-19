@@ -20,6 +20,7 @@ export async function run(): Promise<void> {
   const workspace    = requireEnv('KJ_DEMO_WORKSPACE');
   const readyMarker  = requireEnv('KJ_DEMO_READY');
   const startMarker  = requireEnv('KJ_DEMO_START');
+  const doneMarker   = process.env.KJ_DEMO_DONE;
 
   log('runner starting');
   log(`demo: ${demoFile}`);
@@ -50,7 +51,31 @@ export async function run(): Promise<void> {
 
   try {
     await record(stage);
-    log(`demo completed — ${stage.timeline.all().length} events captured`);
+
+    // Keep VS Code alive until every emitted overlay has had its full
+    // on-screen lifetime + an explicit tail so the fade-to-dark applied in
+    // post-processing has actual content to darken. Without this hold, the
+    // raw capture cuts off while VS Code is still on-screen or — worse —
+    // during its close animation, and the final WebP shows whatever happened
+    // to be behind the VS Code window. The tail value MUST match record.ts
+    // TAIL_MS; keep them in sync.
+    const TAIL_HOLD_MS = 600; // slightly > record.ts TAIL_MS=500 to be safe
+    const events   = stage.timeline.all();
+    const lastEnd  = events.reduce((m, e) => Math.max(m, e.t + e.duration), 0);
+    const elapsed  = stage.timeline.elapsed();
+    const tailPause = Math.max(0, lastEnd + TAIL_HOLD_MS - elapsed);
+    if (tailPause > 0) {
+      log(`holding ${tailPause}ms so trailing overlays + fade-to-dark have raw content`);
+      await new Promise(r => setTimeout(r, tailPause));
+    }
+    log(`demo completed — ${events.length} events captured`);
+
+    // Signal the orchestrator to stop the screen recorder NOW — while VS Code
+    // is still visible. If the orchestrator waited for VS Code to exit, the
+    // macOS close animation would be captured, revealing whatever is behind.
+    if (doneMarker) {
+      fs.writeFileSync(doneMarker, '');
+    }
   } catch (err) {
     log(`demo threw: ${(err as Error).message}`);
     throw err;

@@ -10,26 +10,26 @@
     "label": "Cmd+Click → Go to Definition",
     "sublabel": "fetchUser",
     "duration": 2500,
-    "t": 3005
+    "t": 3006
   },
   {
     "type": "keystroke",
     "label": "⌘ + ⌥ + ←",
     "sublabel": "Navigate Back",
     "duration": 2500,
-    "t": 5569
+    "t": 5568
   },
   {
     "type": "caption",
     "label": "Back restores the original line AND column",
     "duration": 2500,
-    "t": 5569
+    "t": 5568
   },
   {
     "type": "keystroke",
     "label": "⌘ + ⌥ + →",
     "sublabel": "Navigate Forward",
     "duration": 2500,
-    "t": 8095
+    "t": 8089
   }
 ]

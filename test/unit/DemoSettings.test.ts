@@ -42,8 +42,12 @@ describe('DemoSettings — chrome hidden (≤4 elements on screen rule)', () => 
   it('workbench.statusBar.visible = false', () => {
     expect(settings['workbench.statusBar.visible']).toBe(false);
   });
-  it('workbench.editor.showTabs = "none" (opt-in per-demo via stage.showTabs())', () => {
-    expect(settings['workbench.editor.showTabs']).toBe('none');
+  it('workbench.editor.showTabs = "multiple" (auto-shown only when 2+ files open)', () => {
+    // "multiple" matches the playbook §6 rule out of the box:
+    //   - single-file demo → tabs hidden (less chrome, more focus on code)
+    //   - cross-file demo  → tabs appear automatically as a second editor opens
+    // stage.showTabs() is now a no-op kept for back-compat with existing demos.
+    expect(settings['workbench.editor.showTabs']).toBe('multiple');
   });
   it('editor.minimap.enabled = false', () => {
     expect(settings['editor.minimap.enabled']).toBe(false);

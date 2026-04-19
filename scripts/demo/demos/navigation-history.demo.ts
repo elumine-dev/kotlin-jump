@@ -18,8 +18,8 @@ import { Stage } from '../lib/stage';
  */
 export default async function record(stage: Stage): Promise<void> {
   await stage.waitForIndexReady();
-  // Cross-file demo → tabs help the viewer see the file change.
-  await stage.showTabs();
+  // Tabs are shown automatically once a second editor opens (fixture uses
+  // showTabs: "multiple"), no explicit opt-in needed.
 
   // Setup: start on the override of fetchUser.
   await stage.openFile('src/main/kotlin/com/example/data/ApiServiceImpl.kt', { line: 4, column: 25 });

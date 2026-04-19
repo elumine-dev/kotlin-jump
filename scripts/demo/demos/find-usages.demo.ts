@@ -1,46 +1,42 @@
 import { Stage } from '../lib/stage';
 
 /**
- * Demo: Find Usages — the panel that surfaces every implementor and
- * call-site of a Kotlin symbol in one keystroke, scoped to your source
- * (no tests, no generated code).
+ * Demo: Find Usages — one keystroke surfaces every implementor and call-
+ * site of a Kotlin symbol, scoped to your source; one more jump lands
+ * you on the exact line that uses it.
  *
  * Target: `release()` on `PokemonRepository`. The demo workspace ships
  * a realistic Android / MVVM stack with:
  *   - 1 interface declaration               (PokemonRepository.kt)
  *   - 6 concrete implementations            — full Strategy/Decorator
- *     Network / Cached / Offline / InMemory / Fake / Impl
  *   - 1 decorator call-through              (CachedPokemonRepository)
  *   - 1 ViewModel call site                 (PokedexViewModel)
  *
- * Nine references across eight files — exactly the shape a real Kotlin
- * dev encounters when refactoring a repository. Alt+F7 surfaces them
- * all in one tree.
- *
- * Target duration: ~10 s.
+ * Narrative: Setup → Action (panel opens) → WOW (land on the VM call
+ * site) → Relief. ~10 s.
  */
 export default async function record(stage: Stage): Promise<void> {
   await stage.waitForIndexReady();
 
-  // Setup: open the interface, cursor precisely on the `release` method.
-  // Line 31 (0-indexed) = the 32nd line: `    suspend fun release(pokemon: Pokemon)`
-  // Column 16 lands on the `r` of `release` (4 spaces + "suspend fun ").
+  // Setup: interface, cursor precisely on the `release` method.
   await stage.openFile(
     'src/main/kotlin/com/example/data/PokemonRepository.kt',
     { line: 31, column: 16 },
   );
-  await stage.caption('release() on the Pokémon Repository interface', { duration: 2000 });
+  await stage.caption('release() on the Pokémon Repository interface', { duration: 1800 });
 
-  // Action: Alt+F7 triggers Find Usages. Prime-then-result rhythm —
-  // the banner names the shortcut BEFORE the panel arrives, so the
-  // viewer anticipates "ok, something is about to be listed".
+  // Action: Alt+F7 triggers Find Usages. Prime-then-result rhythm.
   await stage.keystroke('⌥ + F7', { label: 'Find Usages' });
   await stage.runCommand('kotlin-jump.findUsages');
-  await stage.pause(1800);  // tree view builds + panel renders
+  await stage.pause(1500);  // tree builds + panel renders
+  await stage.caption('9 references across 8 files', { duration: 1800 });
 
-  // WOW: the panel is now packed with references grouped by file.
-  await stage.caption('9 references across 8 files — in one keystroke', { duration: 2500 });
-
-  // Relief: Kotlin Jump's unique selling point over native Find References.
-  await stage.caption('Scoped to Kotlin source — no tests, no generated noise', { duration: 2500 });
+  // WOW: jump to one of the call sites — the ViewModel consumer of the
+  // repository. This is the moment that sells Find Usages: you don't just
+  // see the list, you land on the exact line in one more keystroke.
+  await stage.openFile(
+    'src/main/kotlin/com/example/ui/PokedexViewModel.kt',
+    { line: 14, column: 19 },
+  );
+  await stage.caption('Jump to any usage in one click', { duration: 2500 });
 }

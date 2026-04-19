@@ -14,9 +14,9 @@ import * as path from 'node:path';
 import { execSync } from 'node:child_process';
 import { runTests } from '@vscode/test-electron';
 
-import { ScreenRecorder, applyOverlays, convertToWebP, fileSizeKb } from './lib/ffmpeg';
-import { buildOverlayFilter }                                       from './lib/overlay';
-import type { TimelineEvent }                                       from './lib/timeline';
+import { ScreenRecorder, applyOverlays, convertToWebP, fileSizeKb, extractPosterFrame, probeDurationSec } from './lib/ffmpeg';
+import { buildOverlayFilterGraph }                                                                         from './lib/overlay';
+import type { TimelineEvent }                                                                              from './lib/timeline';
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const WIDTH     = 1280;
@@ -57,6 +57,7 @@ async function main(): Promise<void> {
   const timelineJson = path.join(tmpDir, 'timeline.json');
   const readyMarker  = path.join(tmpDir, 'ready');
   const startMarker  = path.join(tmpDir, 'start');
+  const doneMarker   = path.join(tmpDir, 'done');
   const outputWebp   = path.join(REPO_ROOT, 'media', 'demos', `${name}.webp`);
 
   seedUserDataDir(userDataDir);
@@ -81,6 +82,7 @@ async function main(): Promise<void> {
       KJ_DEMO_WORKSPACE: path.join(REPO_ROOT, 'test', 'kotlin-jump-demo'),
       KJ_DEMO_READY:     readyMarker,
       KJ_DEMO_START:     startMarker,
+      KJ_DEMO_DONE:      doneMarker,
     },
   }).catch(err => { log(`✗ VS Code exited with error: ${err?.message ?? err}`); throw err; });
 
@@ -145,16 +147,34 @@ async function main(): Promise<void> {
   const rawOffsetMs = demoStartedAt - ffmpegStartedAt;
   log(`  Demo timeline t=0 is at raw video t=${rawOffsetMs}ms (ffmpeg warmup + demo launch)`);
 
-  // Wait for VS Code / demo runner to exit.
+  // Wait for the runner to signal "demo + tail hold complete". We stop the
+  // recorder at this exact moment, BEFORE VS Code starts closing — otherwise
+  // the macOS window-close animation lands in the raw capture and reveals
+  // whatever was behind the demo window.
   try {
-    await vscodeDone;
-  } finally {
+    await Promise.race([
+      waitForFile(doneMarker, 120_000),
+      vscodeDone.then(() => { throw new Error('VS Code exited before writing done marker'); }),
+    ]);
     await recorder.stop();
+    await vscodeDone.catch(err => log(`  (VS Code shutdown: ${err?.message ?? err})`));
+  } catch (err) {
+    // Stop the recorder anyway so we don't leak a background screencapture.
+    await recorder.stop();
+    throw err;
   }
 
   if (!fs.existsSync(timelineJson)) {
     log(`✗ No timeline written — demo probably crashed. Raw video kept at ${rawMov}`);
     process.exit(2);
+  }
+
+  if (!fs.existsSync(rawMov)) {
+    log(`✗ Raw capture missing at ${rawMov}`);
+    const stderr = recorder.lastStderr().trim();
+    if (stderr) log(`  screencapture stderr:\n${stderr.split('\n').map(l => '    ' + l).join('\n')}`);
+    log(`  Hint: grant Screen Recording permission to the Terminal/iTerm in System Settings → Privacy & Security.`);
+    process.exit(3);
   }
 
   // Post-process.
@@ -182,18 +202,62 @@ async function main(): Promise<void> {
   const shifted = events.map(e => ({ ...e, t: (rawOffsetMs + e.t) - startOffsetMs }));
   log(`  Trimming raw to ${(durationMs / 1000).toFixed(1)}s (cut ${(startOffsetMs / 1000).toFixed(1)}s of setup)`);
 
-  const fontPath = path.join(REPO_ROOT, 'scripts', 'demo', 'fixtures', 'Inter-Regular.ttf');
-  const overlayFilter = buildOverlayFilter(shifted, { fontPath });
-  // Scale the raw capture (Retina-sized) down to a fixed 1280×720 BEFORE the
-  // overlay pass so overlay pixel coords always align the same way.
-  const fullFilter = `scale=${WIDTH}:${HEIGHT}:flags=lanczos${overlayFilter ? ',' + overlayFilter : ''}`;
-  applyOverlays(rawMov, fullFilter, annotatedMp4, {
+  const fontPath     = path.join(REPO_ROOT, 'scripts', 'demo', 'fixtures', 'Inter-Regular.ttf');
+  const fontPathMono = path.join(REPO_ROOT, 'scripts', 'demo', 'fixtures', 'JetBrainsMono-Regular.ttf');
+  const { chain: overlayChain } = buildOverlayFilterGraph(shifted, { fontPath, fontPathMono });
+
+  // Clamp the requested clip to what the raw capture actually contains.
+  // If VS Code exited early and we'd otherwise seek past EOF, the fade-to-dark
+  // filter's `st=` value would fall outside the video and never apply,
+  // leaving a brutal cut at the loop boundary.
+  const rawDurationSec = probeDurationSec(rawMov);
+  const availableSec   = Number.isFinite(rawDurationSec)
+    ? Math.max(0.1, rawDurationSec - startOffsetMs / 1000)
+    : durationMs / 1000;
+  const clipSec = Math.min(durationMs / 1000, availableSec);
+  if (clipSec < durationMs / 1000 - 0.1) {
+    log(`  ⚠ raw capture shorter than demo timeline (${rawDurationSec.toFixed(2)}s) — clipping to ${clipSec.toFixed(2)}s`);
+  }
+
+  // Build the full filter_complex graph.
+  //   1. `[0:v]scale=…[base]` — normalise raw Retina capture to 1280×720 so
+  //      overlay pixel coords line up regardless of display scale.
+  //   2. <overlay chain from overlay.ts>  — produces [annot].
+  //   3. `[annot]fade=…[final]` — 500 ms fade-to-dark at the end so the
+  //      WebP's loop=0 boundary feels natural (playbook §5 option 2).
+  const fadeOutSec = 0.5;
+  const fadeStart  = Math.max(0, clipSec - fadeOutSec);
+  const filterComplex = [
+    `[0:v]scale=${WIDTH}:${HEIGHT}:flags=lanczos[base]`,
+    overlayChain,
+    `[annot]fade=t=out:st=${fadeStart.toFixed(3)}:d=${fadeOutSec.toFixed(3)}:color=black[final]`,
+  ].join(';');
+
+  applyOverlays(rawMov, filterComplex, annotatedMp4, {
     startSec:    startOffsetMs / 1000,
-    durationSec: durationMs    / 1000,
+    durationSec: clipSec,
   });
 
   convertToWebP(annotatedMp4, outputWebp);
-  log(`✓ Wrote ${outputWebp} (${fileSizeKb(outputWebp)} KB, ${(durationMs / 1000).toFixed(1)}s)`);
+  log(`✓ Wrote ${outputWebp} (${fileSizeKb(outputWebp)} KB, ${clipSec.toFixed(1)}s)`);
+
+  // Persist the shifted timeline next to the WebP so `demo:e2e --skip-record`
+  // can validate the shipped artefact without rerunning the whole pipeline.
+  // The file is dev-only (inside media/demos/, but .timeline.json is suffixed
+  // and excluded from the VSIX via .vscodeignore).
+  const sidecarTimeline = outputWebp.replace(/\.webp$/, '.timeline.json');
+  fs.writeFileSync(sidecarTimeline, JSON.stringify(shifted, null, 2));
+
+  // Poster frame for prefers-reduced-motion fallback (playbook §14). Pick a
+  // frame ~0.6 s before the end so it lands on the annotated content, not on
+  // the 0.5 s fade-to-dark tail.
+  const posterPng = outputWebp.replace(/\.webp$/, '-poster.png');
+  try {
+    extractPosterFrame(annotatedMp4, posterPng, 0.6);
+    log(`  Poster frame: ${posterPng} (${fileSizeKb(posterPng)} KB)`);
+  } catch (err) {
+    log(`  ⚠ poster frame extraction failed: ${(err as Error).message}`);
+  }
 
   // Keep the tmpdir only if the user sets KJ_DEMO_KEEP_TMP=1 (debugging).
   if (!process.env.KJ_DEMO_KEEP_TMP) {

@@ -3,38 +3,49 @@ import { Stage } from '../lib/stage';
 /**
  * Demo: Navigation History (Back / Forward).
  *
- * Shows how Kotlin Jump preserves cursor position across cross-file jumps,
- * mirroring the Android Studio `Cmd+Opt+Left / Right` workflow.
+ * WOW moment: `Cmd+Opt+←` restores the ORIGINAL line AND column, not just
+ * the file — matching Android Studio / IntelliJ, unlike plain VS Code's
+ * "Go Back" which only remembers the file.
  *
- * Target duration: ~12 seconds.
+ * Structure follows the playbook Setup → Action → WOW → Relief (~8 s total).
+ *
+ * Rhythm choices:
+ *   - Setup uses `click()` — banner primes the viewer ("here comes Go to
+ *     Definition"), then the navigation confirms.
+ *   - WOW (Navigate Back/Forward) uses `navigate()` — the cursor jumps
+ *     FIRST with the pulse-and-dim focus, and the banner reveals the
+ *     shortcut immediately after. "What just happened? Oh — THAT key."
  */
 export default async function record(stage: Stage): Promise<void> {
   await stage.waitForIndexReady();
+  // Cross-file demo → tabs help the viewer see the file change.
+  await stage.showTabs();
 
-  // 1. Start from the ApiServiceImpl override of fetchUser.
+  // Setup: start on the override of fetchUser.
   await stage.openFile('src/main/kotlin/com/example/data/ApiServiceImpl.kt', { line: 4, column: 25 });
-  await stage.caption('Start on the fetchUser override', { duration: 1500 });
+  await stage.caption('Start on the fetchUser override');
 
-  // 2. Cmd+Click → Go to Definition jumps up to the interface declaration.
-  await stage.click('fetchUser', {
-    modifier: 'Cmd',
-    label:    'Go to Definition',
+  // Action: Cmd+Click jumps up to the interface declaration.
+  await stage.click('fetchUser', { modifier: 'Cmd', label: 'Go to Definition' });
+  await stage.waitForEditor('ApiService.kt', 3);
+
+  // WOW: Navigate Back. Cursor jumps back FIRST (with focus pulse), banner
+  // reveals the shortcut right after — "that was ⌘+⌥+← Navigate Back".
+  await stage.navigate({
+    shortcut:    '⌘ + ⌥ + ←',
+    label:       'Navigate Back',
+    command:     'kotlinJump.navigateBack',
+    awaitEditor: { file: 'ApiServiceImpl.kt', line: 4 },
   });
-  await stage.waitForEditor('ApiService.kt', 3);
-  await stage.pause(1200);
 
-  // 3. Use the keyboard shortcut to go back to the override.
-  await stage.keystroke('⌘ + ⌥ + ←', { label: 'Navigate Back' });
-  await stage.runCommand('kotlinJump.navigateBack');
-  await stage.waitForEditor('ApiServiceImpl.kt', 4);
-  await stage.pause(600);
+  // Relief: name why this matters.
+  await stage.caption('Back restores the original line AND column');
 
-  // 4. Explain what's special about this.
-  await stage.caption('Back restores the original line AND column', { duration: 2200 });
-
-  // 5. And forward to return to the interface.
-  await stage.keystroke('⌘ + ⌥ + →', { label: 'Navigate Forward' });
-  await stage.runCommand('kotlinJump.navigateForward');
-  await stage.waitForEditor('ApiService.kt', 3);
-  await stage.pause(1200);
+  // Bonus: Navigate Forward completes the round-trip, same result-first rhythm.
+  await stage.navigate({
+    shortcut:    '⌘ + ⌥ + →',
+    label:       'Navigate Forward',
+    command:     'kotlinJump.navigateForward',
+    awaitEditor: { file: 'ApiService.kt', line: 3 },
+  });
 }

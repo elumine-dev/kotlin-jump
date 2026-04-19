@@ -1,0 +1,35 @@
+[
+  {
+    "type": "caption",
+    "label": "Start on the fetchUser override",
+    "duration": 2500,
+    "t": 500
+  },
+  {
+    "type": "click",
+    "label": "Cmd+Click → Go to Definition",
+    "sublabel": "fetchUser",
+    "duration": 2500,
+    "t": 3005
+  },
+  {
+    "type": "keystroke",
+    "label": "⌘ + ⌥ + ←",
+    "sublabel": "Navigate Back",
+    "duration": 2500,
+    "t": 5569
+  },
+  {
+    "type": "caption",
+    "label": "Back restores the original line AND column",
+    "duration": 2500,
+    "t": 5569
+  },
+  {
+    "type": "keystroke",
+    "label": "⌘ + ⌥ + →",
+    "sublabel": "Navigate Forward",
+    "duration": 2500,
+    "t": 8095
+  }
+]

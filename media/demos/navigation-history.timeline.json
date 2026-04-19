@@ -1,35 +1,27 @@
 [
   {
     "type": "caption",
-    "label": "Start on the fetchUser override",
-    "duration": 2500,
+    "label": "Poking around the Pokédex screen…",
+    "duration": 1400,
     "t": 500
   },
   {
-    "type": "click",
-    "label": "Cmd+Click → Go to Definition",
-    "sublabel": "fetchUser",
-    "duration": 2500,
-    "t": 3006
+    "type": "caption",
+    "label": "…and into the DAO",
+    "duration": 1400,
+    "t": 4655
   },
   {
     "type": "keystroke",
     "label": "⌘ + ⌥ + ←",
     "sublabel": "Navigate Back",
-    "duration": 2500,
-    "t": 5568
+    "duration": 1500,
+    "t": 8479
   },
   {
     "type": "caption",
-    "label": "Back restores the original line AND column",
+    "label": "Exact line, exact column — at every stop",
     "duration": 2500,
-    "t": 5568
-  },
-  {
-    "type": "keystroke",
-    "label": "⌘ + ⌥ + →",
-    "sublabel": "Navigate Forward",
-    "duration": 2500,
-    "t": 8089
+    "t": 9321
   }
 ]

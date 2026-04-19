@@ -141,14 +141,14 @@ export function buildAssertions(events: readonly TimelineEvent[]): Assertion[] {
   // outside these ranges, loosen them globally OR carve out a per-demo
   // override rather than tightening to fit just one.
   out.push({
-    kind:   'range', name: 'WebP frame count is in the expected range for a 6-12 s demo',
-    source: 'frameCount', value: NaN, min: 100, max: 160,
-    note:   'demo-length × 12 fps; 100-160 frames covers the current 6-12 s target range',
+    kind:   'range', name: 'WebP frame count is in the expected range for a 6-13 s demo',
+    source: 'frameCount', value: NaN, min: 80, max: 170,
+    note:   'demo-length × 12 fps; 80-170 frames covers the 6-13 s range the current demos span',
   });
   out.push({
-    kind:   'range', name: 'WebP duration is in the expected range (8-12.5 s)',
-    source: 'durationSec', value: NaN, min: 8, max: 12.5,
-    note:   'catches "VS Code exited early" (< 8 s) and "demo is too long" (> 12.5 s) — covers nav-history (~11 s) and find-usages (~8.5 s)',
+    kind:   'range', name: 'WebP duration is in the expected range (7-13 s)',
+    source: 'durationSec', value: NaN, min: 7, max: 13,
+    note:   'catches "VS Code exited early" (< 7 s) and "demo is too long" (> 13 s); covers find-usages (~8 s) and the nav-history retrace demo (~12 s)',
   });
   // Structural scalars (playbook §5 ship-blockers): the WebP must stay
   // within README-friendly size + loop + canvas invariants. The expected
@@ -361,8 +361,8 @@ function pushCaption(out: Assertion[], _ev: TimelineEvent, i: number): void {
     name:        `caption[${i}] text renders (luma-above on the caption band)`,
     keyframeLbl: `caption-${i}-peak-mid`,
     region:      textBandRegion,
-    minLuma:     25,
-    note:        'white 22 pt Inter over a near-black bar; any stroke at all lifts avg over ~20',
+    minLuma:     18,
+    note:        'short captions (18-20 chars) average lower because the wide sample strip mostly covers bar bg; 18 still separates "some text" (~22-25) from "no text" (~8)',
   });
 }
 

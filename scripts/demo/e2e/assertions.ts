@@ -136,23 +136,28 @@ export function buildAssertions(events: readonly TimelineEvent[]): Assertion[] {
 
   // Frame count: catches the "raw capture cut short" bug we saw — a WebP
   // that dropped under 120 frames means something broke the pipeline.
+  // Demo-shape invariants — bounds calibrated across the current demo set
+  // (navigation-history ~11 s, find-usages ~10 s). When a new demo falls
+  // outside these ranges, loosen them globally OR carve out a per-demo
+  // override rather than tightening to fit just one.
   out.push({
-    kind:   'range', name: 'WebP frame count is in the expected range for a ~11 s demo',
-    source: 'frameCount', value: NaN, min: 120, max: 150,
-    note:   'demo targets ~11 s × 12 fps ≈ 132 frames; drift ±~10% is fine',
+    kind:   'range', name: 'WebP frame count is in the expected range for a 6-12 s demo',
+    source: 'frameCount', value: NaN, min: 100, max: 160,
+    note:   'demo-length × 12 fps; 100-160 frames covers the current 6-12 s target range',
   });
   out.push({
-    kind:   'range', name: 'WebP duration is in the expected range (10.5–11.5 s)',
-    source: 'durationSec', value: NaN, min: 10.5, max: 11.5,
-    note:   'catches "VS Code exited early" regressions as cleanly as a frame-count check',
+    kind:   'range', name: 'WebP duration is in the expected range (9-12 s)',
+    source: 'durationSec', value: NaN, min: 9, max: 12.5,
+    note:   'catches "VS Code exited early" (tail cut) and "demo is too long" at the same time',
   });
-  // Structural scalars (playbook §5 ship-blockers): the WebP must stay within
-  // README-friendly size + loop + canvas invariants. The expected values rarely
-  // drift, but a config toggle in convertToWebP would break one instantly.
+  // Structural scalars (playbook §5 ship-blockers): the WebP must stay
+  // within README-friendly size + loop + canvas invariants. The expected
+  // values rarely drift, but a config toggle in convertToWebP would break
+  // one instantly.
   out.push({
-    kind:   'range', name: 'WebP file size is in the README-friendly range (300 KB–3 MB)',
-    source: 'webpSizeKb', value: NaN, min: 300, max: 3000,
-    note:   'GitHub inlines WebPs up to ~10 MB; we aim for ≤3 MB to respect mobile bandwidth',
+    kind:   'range', name: 'WebP file size is in the README-friendly range (300 KB–4 MB)',
+    source: 'webpSizeKb', value: NaN, min: 300, max: 4000,
+    note:   'GitHub inlines WebPs up to ~10 MB; the 4 MB ceiling is generous for panel-heavy demos',
   });
   out.push({
     kind:   'range', name: 'WebP loop count is 0 (continuous loop + fade-to-dark coupure)',
@@ -233,28 +238,35 @@ function pushKeystroke(out: Assertion[], _ev: TimelineEvent, i: number): void {
   });
 
   // Title text rendered — the title band must carry light strokes.
-  // Threshold is calibrated for Unicode keyboard glyphs (⌘⌥←→), which have
-  // much lower per-pixel coverage than Latin words; a totally missing title
-  // would still measure ~30 (banner bg), so 38 cleanly separates the two.
+  // Threshold calibration across the demo set:
+  //   nav-history  "⌘ + ⌥ + ←"  → luma 44-45 (dense Unicode glyphs)
+  //   find-usages  "⌥ + F7"     → luma 35    (sparse glyphs + Latin)
+  // Empty banner bg lumas ~30, so 32 cleanly separates "some text rendered"
+  // from "nothing". Tighten per-demo if false positives appear.
   const titleBand = textBand(BANNER_Y + 12, 28, { x: BANNER_X + 16, w: BANNER_W - 32 });
   out.push({
     kind:        'luma-above',
     name:        `keystroke[${i}] title text renders (luma-above on the title band)`,
     keyframeLbl: `keystroke-${i}-peak-mid`,
     region:      titleBand,
-    minLuma:     38,
-    note:        'Unicode keyboard glyphs are sparse; empty banner would measure ~30, present-glyphs ~44+',
+    minLuma:     32,
+    note:        'sparse-title shortcut banners (⌥+F7) measure ~35; empty banner would be ~30',
   });
 
   // Sublabel text rendered (secondary #CCCCCC over #1E1E1E — still bright).
+  // Calibration across the demo set:
+  //   nav-history  "Navigate Back"  → luma 56-59
+  //   find-usages  "Find Usages"    → luma 47.7
+  // Shorter labels pack less stroke coverage into the sampled band; 42
+  // protects against "nothing rendered" while tolerating natural variance.
   const subBand = textBand(BANNER_Y + 44, 20, { x: BANNER_X + 16, w: BANNER_W - 32 });
   out.push({
     kind:        'luma-above',
     name:        `keystroke[${i}] sublabel text renders (luma-above on the sublabel band)`,
     keyframeLbl: `keystroke-${i}-peak-mid`,
     region:      subBand,
-    minLuma:     48,
-    note:        'secondary Inter glyphs at 20 pt; lower threshold than the title band on purpose',
+    minLuma:     42,
+    note:        'short sublabels (Find Usages) measure ~47; tighter threshold would flap across demos',
   });
 }
 

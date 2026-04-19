@@ -1,8 +1,8 @@
 [
   {
     "type": "caption",
-    "label": "release() on the Pokémon Repository interface",
-    "duration": 2000,
+    "label": "Who calls release()?",
+    "duration": 1800,
     "t": 500
   },
   {
@@ -10,18 +10,12 @@
     "label": "⌥ + F7",
     "sublabel": "Find Usages",
     "duration": 2500,
-    "t": 2505
+    "t": 2303
   },
   {
     "type": "caption",
-    "label": "9 references across 8 files — in one keystroke",
+    "label": "One click to the call site",
     "duration": 2500,
-    "t": 4420
-  },
-  {
-    "type": "caption",
-    "label": "Scoped to Kotlin source — no tests, no generated noise",
-    "duration": 2500,
-    "t": 6925
+    "t": 4939
   }
 ]

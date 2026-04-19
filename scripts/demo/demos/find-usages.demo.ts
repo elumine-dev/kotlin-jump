@@ -23,20 +23,19 @@ export default async function record(stage: Stage): Promise<void> {
     'src/main/kotlin/com/example/data/PokemonRepository.kt',
     { line: 31, column: 16 },
   );
-  await stage.caption('release() on the Pokémon Repository interface', { duration: 1800 });
+  await stage.caption('Who calls release()?', { duration: 1800 });
 
   // Action: Alt+F7 triggers Find Usages. Prime-then-result rhythm.
   await stage.keystroke('⌥ + F7', { label: 'Find Usages' });
   await stage.runCommand('kotlin-jump.findUsages');
-  await stage.pause(1500);  // tree builds + panel renders
-  await stage.caption('9 references across 8 files', { duration: 1800 });
+  await stage.pause(2000);  // tree builds + panel renders — let it breathe
 
   // WOW: jump to one of the call sites — the ViewModel consumer of the
-  // repository. This is the moment that sells Find Usages: you don't just
-  // see the list, you land on the exact line in one more keystroke.
+  // repository. The panel is "see the list"; the jump is "and you're
+  // there" — the actual selling point.
   await stage.openFile(
     'src/main/kotlin/com/example/ui/PokedexViewModel.kt',
     { line: 14, column: 19 },
   );
-  await stage.caption('Jump to any usage in one click', { duration: 2500 });
+  await stage.caption('One click to the call site', { duration: 2500 });
 }

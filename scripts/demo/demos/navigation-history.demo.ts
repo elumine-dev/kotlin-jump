@@ -1,51 +1,60 @@
 import { Stage } from '../lib/stage';
 
 /**
- * Demo: Navigation History (Back / Forward).
+ * Demo: Navigation History.
  *
- * WOW moment: `Cmd+Opt+←` restores the ORIGINAL line AND column, not just
- * the file — matching Android Studio / IntelliJ, unlike plain VS Code's
- * "Go Back" which only remembers the file.
+ * Story: a dev is exploring the Pokédex codebase — scrolling around a
+ * Compose screen, then dropping into the SQL DAO to check a query.
+ * Six cursor stops across two files. Then: a single ⌘+⌥+← unwinds the
+ * whole trail, line + column intact at every step.
  *
- * Structure follows the playbook Setup → Action → WOW → Relief (~8 s total).
- *
- * Rhythm choices:
- *   - Setup uses `click()` — banner primes the viewer ("here comes Go to
- *     Definition"), then the navigation confirms.
- *   - WOW (Navigate Back/Forward) uses `navigate()` — the cursor jumps
- *     FIRST with the pulse-and-dim focus, and the banner reveals the
- *     shortcut immediately after. "What just happened? Oh — THAT key."
+ * WOW: VS Code's native "Go Back" only remembers files, not positions.
+ * Kotlin Jump restores the EXACT caret location — including a mid-file
+ * hop that plain VS Code would collapse.
  */
 export default async function record(stage: Stage): Promise<void> {
   await stage.waitForIndexReady();
-  // Tabs are shown automatically once a second editor opens (fixture uses
-  // showTabs: "multiple"), no explicit opt-in needed.
 
-  // Setup: start on the override of fetchUser.
-  await stage.openFile('src/main/kotlin/com/example/data/ApiServiceImpl.kt', { line: 4, column: 25 });
-  await stage.caption('Start on the fetchUser override');
+  // ── File 1 — UI layer. Three stops: class decl, displayCard, battle result.
+  await stage.openFile('src/main/kotlin/com/example/ui/PokedexScreen.kt', { line: 7,  column: 6 });
+  await stage.caption('Poking around the Pokédex screen…', { duration: 1400 });
 
-  // Action: Cmd+Click jumps up to the interface declaration.
-  await stage.click('fetchUser', { modifier: 'Cmd', label: 'Go to Definition' });
-  await stage.waitForEditor('ApiService.kt', 3);
+  await stage.openFile('src/main/kotlin/com/example/ui/PokedexScreen.kt', { line: 29, column: 12 });
+  await stage.pause(600);
 
-  // WOW: Navigate Back. Cursor jumps back FIRST (with focus pulse), banner
-  // reveals the shortcut right after — "that was ⌘+⌥+← Navigate Back".
+  await stage.openFile('src/main/kotlin/com/example/ui/PokedexScreen.kt', { line: 54, column: 12 });
+  await stage.pause(600);
+
+  // ── File 2 — data layer. Three stops: simple SELECT, JOIN, EXISTS.
+  await stage.openFile('src/main/kotlin/com/example/data/PokemonDao.kt', { line: 21, column: 8 });
+  await stage.caption('…and into the DAO', { duration: 1400 });
+
+  await stage.openFile('src/main/kotlin/com/example/data/PokemonDao.kt', { line: 67, column: 8 });
+  await stage.pause(600);
+
+  await stage.openFile('src/main/kotlin/com/example/data/PokemonDao.kt', { line: 135, column: 8 });
+  await stage.pause(800);
+
+  // ── Retrace. First press announces the shortcut; the next three
+  //    fire silently — we want the viewer to feel the trail unwind.
   await stage.navigate({
     shortcut:    '⌘ + ⌥ + ←',
     label:       'Navigate Back',
     command:     'kotlinJump.navigateBack',
-    awaitEditor: { file: 'ApiServiceImpl.kt', line: 4 },
+    awaitEditor: { file: 'PokemonDao.kt', line: 67 },
+    duration:    1500,
   });
 
-  // Relief: name why this matters.
-  await stage.caption('Back restores the original line AND column');
+  await stage.runCommand('kotlinJump.navigateBack');
+  await stage.waitForEditor('PokemonDao.kt', 21);
+  await stage.pause(400);
 
-  // Bonus: Navigate Forward completes the round-trip, same result-first rhythm.
-  await stage.navigate({
-    shortcut:    '⌘ + ⌥ + →',
-    label:       'Navigate Forward',
-    command:     'kotlinJump.navigateForward',
-    awaitEditor: { file: 'ApiService.kt', line: 3 },
-  });
+  await stage.runCommand('kotlinJump.navigateBack');
+  await stage.waitForEditor('PokedexScreen.kt', 54);
+  await stage.pause(400);
+
+  await stage.runCommand('kotlinJump.navigateBack');
+  await stage.waitForEditor('PokedexScreen.kt', 29);
+
+  await stage.caption('Exact line, exact column — at every stop', { duration: 2500 });
 }

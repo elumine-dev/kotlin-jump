@@ -4,7 +4,7 @@
   "workbench.tree.renderIndentGuides": "none",
   "workbench.activityBar.location": "hidden",
   "workbench.statusBar.visible": false,
-  "workbench.editor.showTabs": "none",
+  "workbench.editor.showTabs": "multiple",
   "workbench.startupEditor": "none",
   "workbench.panel.chat.location": "hidden",
   "chat.commandCenter.enabled": false,

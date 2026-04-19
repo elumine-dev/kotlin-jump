@@ -42,7 +42,11 @@ export const VIDEO_W  = 1280;
 export const VIDEO_H  = 720;
 
 export const BANNER_X = 24;
-export const BANNER_Y = 24;
+// y=104 puts the banner below VS Code's chrome stack (title ~30 + command
+// center ~30 + tab bar ~35 = ~95 px). At y=24 the banner used to cover
+// the tab bar entirely — only the inactive tab peeked out on the right.
+// 104 is 8×13, grid-compliant, and sits just into the editor area.
+export const BANNER_Y = 104;
 export const BANNER_W = 424;   // 8×53 — was 420, snapped to grid
 export const BANNER_H = 72;    // 8×9
 

@@ -181,7 +181,7 @@ describe('DemoOverlay — fade in/out', () => {
       { type: 'keystroke', t: 0, label: 'a', sublabel: 'b', duration: 2500 },
     ];
     const { chain } = buildOverlayFilterGraph(evs, OPTS);
-    expect(chain).toContain('overlay=x=24:y=24:eof_action=pass');
+    expect(chain).toContain('overlay=x=24:y=104:eof_action=pass');
   });
 
   it('tpad start_duration aligns the source with the main-video timeline', () => {

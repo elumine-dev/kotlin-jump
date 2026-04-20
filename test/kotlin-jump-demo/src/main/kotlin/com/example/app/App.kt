@@ -1,36 +1,43 @@
 package com.example.app
 
+import com.example.data.ApiServiceImpl
 import com.example.data.PokeApiServiceImpl
+import com.example.data.Pokemon
 import com.example.data.PokemonRepositoryImpl
 import com.example.data.PokemonStorage
 import com.example.data.PokemonType
-import com.example.data.Pokemon
-import com.example.demo.PokemonSyncService
+import com.example.data.UserCache
+import com.example.data.UserRepositoryImpl
 import com.example.ui.PokedexScreen
 import com.example.ui.PokedexViewModel
+import com.example.ui.UserScreen
+import com.example.ui.UserViewModel
 
 fun main() {
-    val api = PokeApiServiceImpl("https://pokeapi.co/api/v2")
-    val storage = PokemonStorage()
+    // ── Pokedex ────────────────────────────────────────────────────────────────
+    val api        = PokeApiServiceImpl("https://pokeapi.co/api/v2")
+    val storage    = PokemonStorage()
     val repository = PokemonRepositoryImpl(api, storage)
-    val viewModel = PokedexViewModel(repository)
-    val screen = PokedexScreen(viewModel)
+    val pokedex    = PokedexScreen(PokedexViewModel(repository))
 
-    // Pre-load some Pokemon
-    storage.save(Pokemon(25, "Pikachu", PokemonType.ELECTRIC, level = 25, hp = 100))
-    storage.save(Pokemon(6, "Charizard", PokemonType.FIRE, level = 50, hp = 200))
-    storage.save(Pokemon(9, "Blastoise", PokemonType.WATER, level = 48, hp = 190))
+    storage.save(Pokemon(25, "Pikachu",   PokemonType.ELECTRIC, level = 25, hp = 100))
+    storage.save(Pokemon(6,  "Charizard", PokemonType.FIRE,     level = 50, hp = 200))
+    storage.save(Pokemon(9,  "Blastoise", PokemonType.WATER,    level = 48, hp = 190))
 
-    PokemonSyncService().syncPokedex { count ->
-        println("Synced $count Pokémon from server")
-    }
+    // ── Users ──────────────────────────────────────────────────────────────────
+    val userApi  = ApiServiceImpl("https://example.com/api")
+    val userRepo = UserRepositoryImpl(userApi, UserCache())
+    val users    = UserScreen(UserViewModel(userRepo))
 
-    screen.render()
+    // ── Navigate ───────────────────────────────────────────────────────────────
+    val navigator = AppNavigator(pokedex, users)
+    navigator.navigate(Screen.POKEDEX)
+    navigator.navigate(Screen.USERS)
 
-    // Battle!
-    val result = viewModel.startBattle(
+    // Demo a battle after the tour
+    val result = PokedexViewModel(repository).startBattle(
         attacker = storage.getAll().first(),
         defender = storage.getAll().last(),
     )
-    screen.showBattleResult(result)
+    pokedex.showBattleResult(result)
 }

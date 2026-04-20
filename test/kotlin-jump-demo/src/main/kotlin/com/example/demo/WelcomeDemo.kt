@@ -5,15 +5,15 @@ import com.example.data.Pokemon
 // ── Open this file · Kotlin Jump lights up every declaration with code lenses ──
 
 interface GymChallenge {
-    fun accept(challenger: Trainer): BattleOutcome
+    fun accept(challenger: Trainer): ChallengeOutcome
     fun reward(): Badge
     fun gymName(): String
 }
 
-sealed class BattleOutcome {
-    data class Victory(val winner: Trainer, val prize: Badge) : BattleOutcome()
-    data class Defeat(val loser: Trainer, val retries: Int)   : BattleOutcome()
-    data object Draw                                          : BattleOutcome()
+sealed class ChallengeOutcome {
+    data class Victory(val winner: Trainer, val prize: Badge) : ChallengeOutcome()
+    data class Defeat(val loser: Trainer, val retries: Int)   : ChallengeOutcome()
+    data object Draw                                          : ChallengeOutcome()
 }
 
 enum class Badge {
@@ -33,24 +33,24 @@ data class Trainer(
 
 class PewterGym : GymChallenge {
     override fun accept(challenger: Trainer) =
-        if (challenger.team.isEmpty()) BattleOutcome.Draw
-        else BattleOutcome.Victory(challenger, Badge.Boulder)
+        if (challenger.team.isEmpty()) ChallengeOutcome.Draw
+        else ChallengeOutcome.Victory(challenger, Badge.Boulder)
     override fun reward() = Badge.Boulder
     override fun gymName() = "Pewter City Gym"
 }
 
 class CeruleanGym : GymChallenge {
     override fun accept(challenger: Trainer) =
-        if (challenger.team.size < 2) BattleOutcome.Defeat(challenger, 1)
-        else BattleOutcome.Victory(challenger, Badge.Cascade)
+        if (challenger.team.size < 2) ChallengeOutcome.Defeat(challenger, 1)
+        else ChallengeOutcome.Victory(challenger, Badge.Cascade)
     override fun reward() = Badge.Cascade
     override fun gymName() = "Cerulean City Gym"
 }
 
 class VermilionGym : GymChallenge {
     override fun accept(challenger: Trainer) =
-        if (challenger.badges.contains(Badge.Cascade)) BattleOutcome.Victory(challenger, Badge.Thunder)
-        else BattleOutcome.Defeat(challenger, 2)
+        if (challenger.badges.contains(Badge.Cascade)) ChallengeOutcome.Victory(challenger, Badge.Thunder)
+        else ChallengeOutcome.Defeat(challenger, 2)
     override fun reward() = Badge.Thunder
     override fun gymName() = "Vermilion City Gym"
 }

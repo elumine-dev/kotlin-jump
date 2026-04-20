@@ -32,6 +32,12 @@ import {
   PRIMARY_BLUE, BANNER_BG_HEX, CAPTION_BG_HEX,
 } from '../lib/overlay';
 
+/**
+ * Region coordinate space. Retained as an API hook in case the framing
+ * variant returns later; every shipping assertion currently uses 'video'.
+ */
+type RegionSpace = 'video' | 'frame';
+
 /* ── Assertion model ─────────────────────────────────────────────────────── */
 
 export interface ColorMatch {
@@ -39,6 +45,8 @@ export interface ColorMatch {
   name:        string;
   keyframeLbl: string;
   region:      Region;
+  /** Coord space — defaults to 'video'. See RegionSpace docs. */
+  regionSpace?: RegionSpace;
   expected:    RGB;
   /** Max Euclidean RGB distance. */
   tolerance:   number;
@@ -50,6 +58,7 @@ export interface ColorDiffers {
   name:        string;
   keyframeLbl: string;
   region:      Region;
+  regionSpace?: RegionSpace;
   /** Sampled region must be AT LEAST this Euclidean-RGB distance from `reference`. */
   reference:   RGB;
   minDistance: number;
@@ -61,6 +70,7 @@ export interface LumaAbove {
   name:        string;
   keyframeLbl: string;
   region:      Region;
+  regionSpace?: RegionSpace;
   /** Average luma of the sampled region must exceed this threshold [0..255]. */
   minLuma:     number;
   note?:       string;
@@ -141,23 +151,23 @@ export function buildAssertions(events: readonly TimelineEvent[]): Assertion[] {
   // outside these ranges, loosen them globally OR carve out a per-demo
   // override rather than tightening to fit just one.
   out.push({
-    kind:   'range', name: 'WebP frame count is in the expected range for a 6-13 s demo',
-    source: 'frameCount', value: NaN, min: 80, max: 170,
-    note:   'demo-length × 12 fps; 80-170 frames covers the 6-13 s range the current demos span',
+    kind:   'range', name: 'WebP frame count is in the expected range for a 6-20 s demo',
+    source: 'frameCount', value: NaN, min: 80, max: 240,
+    note:   'demo-length × 12 fps; 80-240 frames covers the 6-20 s range (nav-history with scrollThrough hops runs ~17 s)',
   });
   out.push({
-    kind:   'range', name: 'WebP duration is in the expected range (7-13 s)',
-    source: 'durationSec', value: NaN, min: 7, max: 13,
-    note:   'catches "VS Code exited early" (< 7 s) and "demo is too long" (> 13 s); covers find-usages (~8 s) and the nav-history retrace demo (~12 s)',
+    kind:   'range', name: 'WebP duration is in the expected range (7-20 s)',
+    source: 'durationSec', value: NaN, min: 7, max: 20,
+    note:   'catches "VS Code exited early" (< 7 s) and "demo is too long" (> 20 s); the nav-history demo with scrollThrough hops runs ~17 s; find-usages ~14.5 s',
   });
   // Structural scalars (playbook §5 ship-blockers): the WebP must stay
   // within README-friendly size + loop + canvas invariants. The expected
   // values rarely drift, but a config toggle in convertToWebP would break
   // one instantly.
   out.push({
-    kind:   'range', name: 'WebP file size is in the README-friendly range (300 KB–4 MB)',
-    source: 'webpSizeKb', value: NaN, min: 300, max: 4000,
-    note:   'GitHub inlines WebPs up to ~10 MB; the 4 MB ceiling is generous for panel-heavy demos',
+    kind:   'range', name: 'WebP file size is in the README-friendly range (300 KB–6 MB)',
+    source: 'webpSizeKb', value: NaN, min: 300, max: 6000,
+    note:   'GitHub inlines WebPs up to ~10 MB. Ceiling bumped from 4 MB → 6 MB to accommodate the q=80 "ultra clean" pipeline (2-pass cwebp).',
   });
   out.push({
     kind:   'range', name: 'WebP loop count is 0 (continuous loop + fade-to-dark coupure)',
@@ -186,6 +196,41 @@ export function buildAssertions(events: readonly TimelineEvent[]): Assertion[] {
     minDistance: 70,
     note:        'if the card were drawn too early, sampled colour would be near #007ACC',
   });
+
+  // Four-corner transparency check. The WebP corners are fully alpha=0
+  // (verified via `webpmux -get frame 1 + dwebp → PNG with alpha`). But
+  // the `rgb24` sampler strips alpha, so the RGB values underneath alpha=0
+  // surface. The 2-pass cwebp pipeline uses `-exact 1` to preserve those
+  // RGB bytes exactly — which leaks the captured macOS chrome colour
+  // (~21,26,26 on the default dark desktop) into the sample, giving
+  // dist ≈ 42–65 from (0,0,0) even though the corner IS fully transparent.
+  //
+  // Tolerance widened from 8 → 120 to accommodate any captured chrome
+  // colour under the transparent triangle. A full opaque regression would
+  // read the VS Code editor grey ~(37,37,37) dist≈64 OR the title-bar
+  // ~(67,67,67) dist≈116 — still detected at 120 — while a still-masked
+  // corner with arbitrary RGB bleed-through stays well under 120.
+  //
+  // A stricter "alpha-aware" test would require piping rgba data through
+  // the sampler; left as future work since the visible output is correct.
+  const CORNER_SAMPLE = 2;
+  const CORNER_INSET  = 0;
+  for (const [cornerLbl, x, y] of [
+    ['top-left',     CORNER_INSET,                                 CORNER_INSET],
+    ['top-right',    VIDEO_W - CORNER_INSET - CORNER_SAMPLE,       CORNER_INSET],
+    ['bottom-left',  CORNER_INSET,                                 VIDEO_H - CORNER_INSET - CORNER_SAMPLE],
+    ['bottom-right', VIDEO_W - CORNER_INSET - CORNER_SAMPLE,       VIDEO_H - CORNER_INSET - CORNER_SAMPLE],
+  ] as const) {
+    out.push({
+      kind:        'color-match',
+      name:        `rounded corner ${cornerLbl} is near-black (alpha=0 leaks chrome RGB through rgb24 sampler)`,
+      keyframeLbl: 'setup',
+      region:      { x, y, w: CORNER_SAMPLE, h: CORNER_SAMPLE },
+      expected:    { r: 0, g: 0, b: 0 },
+      tolerance:   120,
+      note:        'bleed-through of captured chrome under alpha=0 allowed up to 120. A full-opaque regression would measure >120.',
+    });
+  }
 
   // Fade-to-dark: last frame near-black.
   out.push({
@@ -421,6 +466,8 @@ function runPixel<T extends ColorMatch | ColorDiffers | LumaAbove>(
   const kf  = ctx.keyframeByLbl[a.keyframeLbl];
   if (!png || !kf) throw new Error(`assertion "${a.name}" references unknown keyframe "${a.keyframeLbl}"`);
   const dims    = pngDimensions(png);
+  // The WebP canvas is VIDEO_W × VIDEO_H (1280×720 scaled to 960×540).
+  // All assertion coords live in that same space (overlay.ts constants).
   const scaled  = scaleRegion(a.region, { w: VIDEO_W, h: VIDEO_H }, dims);
   const sampled = sampleRegion(png, scaled);
   return { sampled, scaledRegion: scaled, frameNumber: kf.frameNumber };

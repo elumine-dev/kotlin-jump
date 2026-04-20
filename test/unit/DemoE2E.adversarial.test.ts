@@ -286,9 +286,9 @@ describe('ADV-computeKeyframes — pathological timelines', () => {
 // ── buildAssertions — weird timelines ──────────────────────────────────────
 
 describe('ADV-buildAssertions — timeline corner cases', () => {
-  it('empty timeline → 8 assertions (6 range + 1 setup + 1 fade-to-dark)', () => {
+  it('empty timeline → 12 assertions (6 range + 1 setup + 4 corner-transparent + 1 fade-to-dark)', () => {
     const as = buildAssertions([]);
-    expect(as).toHaveLength(8);
+    expect(as).toHaveLength(12);
     expect(as.filter(a => a.kind === 'range')).toHaveLength(6);
   });
 

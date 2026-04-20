@@ -184,7 +184,7 @@ describe('DemoE2E — assertion list (10/10 coverage)', () => {
     }
   });
 
-  it('total assertion count hits 25 for a 5-event demo (2 cap, 1 click, 2 ks)', () => {
+  it('total assertion count hits 29 for a 5-event demo (2 cap, 1 click, 2 ks)', () => {
     // Mirror the real navigation-history timeline shape.
     const events: TimelineEvent[] = [
       { type: 'caption',   t: 0,    label: 'a', duration: 2500 },
@@ -197,14 +197,15 @@ describe('DemoE2E — assertion list (10/10 coverage)', () => {
     // Global:
     //   6 range (frameCount, durationSec, webpSizeKb, loopCount, canvasW, canvasH)
     //   1 setup color-differs (no card drawn yet)
-    //   1 fade-to-dark color-match                                                    =  8
+    //   4 corner-transparent color-match (rounded video corners, VIDEO space)
+    //   1 fade-to-dark color-match                                                    = 12
     // Per event (non-SSIM):
     //   caption × 2: 1 color-match + 1 color-differs + 1 luma-above = 3 each          =  6
     //   click × 1:   1 color-match + 2 color-differs + 2 luma-above = 5                =  5
     //   keystroke × 2: 1 color-match + 2 luma-above = 3 each (no color-differs
     //     since BANNER_Y=104 puts the banner on editor bg, same dark grey as
     //     the banner itself — fade imperceptible in the bg strip)            =  6
-    // Total: 8 + 6 + 5 + 6 = 25.
-    expect(as).toHaveLength(25);
+    // Total: 12 + 6 + 5 + 6 = 29.
+    expect(as).toHaveLength(29);
   });
 });

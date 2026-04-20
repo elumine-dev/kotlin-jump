@@ -206,7 +206,15 @@ export const Uri = {
     const scheme = s.match(/^([a-z][a-z0-9+.-]*):/i)?.[1] ?? 'file';
     return { toString: () => s, path, fsPath: path, scheme };
   },
+  file: (p: string) => ({ toString: () => `file://${p}`, path: p, fsPath: p, scheme: 'file' }),
 };
+
+export enum OverviewRulerLane {
+  Left   = 1,
+  Center = 2,
+  Right  = 4,
+  Full   = 7,
+}
 
 export enum FileType {
   Unknown       = 0,

@@ -37,8 +37,12 @@ export async function run(): Promise<void> {
   fs.writeFileSync(readyMarker, String(process.ppid));
 
   // 3. Wait for the orchestrator to confirm ffmpeg is rolling before the demo
-  //    begins (so we don't lose the opening frames).
-  await waitFor(() => fs.existsSync(startMarker), 10000, 'start marker');
+  //    begins (so we don't lose the opening frames). Budget is generous: the
+  //    orchestrator has to settle the UI, position the window, list processes,
+  //    and warm up screencapture — on a loaded machine (many GUI apps open)
+  //    that can take 5–15 s. We align with the readyMarker timeout (60 s) so
+  //    we never lose to a slow AppleScript enumeration.
+  await waitFor(() => fs.existsSync(startMarker), 60_000, 'start marker');
   log('start marker seen — demo begins');
 
   // 4. Load the compiled demo module and execute it.

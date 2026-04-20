@@ -3,8 +3,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { exec, spawn } from 'child_process';
-import { findProjectRoot, resolveGradleWrapper } from '../testing/GradleTestRunner';
+import { findProjectRoot, resolveGradleWrapper, detectProjectRoot } from '../testing/GradleTestRunner';
+import type { DetectionResult } from '../testing/GradleRootDetector';
 import { Logger } from '../util/logger';
+
+const GRADLE_PROJECT_CHOICE_KEY = 'kotlinJump.gradleProjectRoot.resolved';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -54,6 +57,7 @@ let _switchButton:    vscode.StatusBarItem | undefined;
 let _isBuilding      = false;
 let _currentAppName: string | undefined;
 let _hasMultipleApps = false;
+let _lastDetection:   DetectionResult | undefined;
 // Deduplicate concurrent task discovery calls for the same module
 const _taskDiscoveryPromises = new Map<string, Promise<string[]>>();
 
@@ -96,9 +100,15 @@ export function registerAndroidRunCommand(
   const explicitProjects = cfg.get<ExplicitProject[]>('androidProjects', []);
   _hasMultipleApps = explicitProjects.length > 1;
 
-  updateButtonVisibility(log);
+  updateButtonVisibility(context, log);
   context.subscriptions.push(
-    vscode.workspace.onDidChangeWorkspaceFolders(() => updateButtonVisibility(log)),
+    vscode.workspace.onDidChangeWorkspaceFolders(() => updateButtonVisibility(context, log)),
+    vscode.workspace.onDidChangeConfiguration(e => {
+      if (e.affectsConfiguration('kotlinJump.gradleProjectRoot')) {
+        updateButtonVisibility(context, log);
+      }
+    }),
+    debouncedActiveEditorWatcher(() => updateButtonVisibility(context, log)),
   );
 
   // Background task discovery: runs silently at startup so first Run click is instant.
@@ -145,6 +155,96 @@ export function registerAndroidRunCommand(
       vscode.window.showInformationMessage('Kotlin Jump: app selection reset — next Run will ask again.');
     }),
   );
+
+  // ── Gradle root detection commands ─────────────────────────────────────────
+  context.subscriptions.push(
+    vscode.commands.registerCommand('kotlin-jump.diagnoseGradleDetection', async () => {
+      const result = detectProjectRoot(log, context.workspaceState.get<string>(GRADLE_PROJECT_CHOICE_KEY));
+      log.channel.show();
+      await showDetectionModal(result);
+    }),
+    vscode.commands.registerCommand('kotlin-jump.resetGradleProject', async () => {
+      await context.workspaceState.update(GRADLE_PROJECT_CHOICE_KEY, undefined);
+      updateButtonVisibility(context, log);
+      vscode.window.showInformationMessage('Kotlin Jump: Gradle project selection reset.');
+    }),
+    vscode.commands.registerCommand('kotlin-jump.pickGradleProject', async () => {
+      await pickGradleProjectInteractive(context, log);
+    }),
+  );
+}
+
+// ── Detection result UX ──────────────────────────────────────────────────────
+
+async function showDetectionModal(r: DetectionResult): Promise<void> {
+  const workspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '(no workspace open)';
+  let message: string;
+  let buttons: string[];
+
+  switch (r.kind) {
+    case 'resolved':
+      message = `✓ Gradle project resolved\n\nPath:   ${r.root}\nMethod: ${r.via}`;
+      buttons = ['Show Detection Log'];
+      break;
+    case 'ambiguous':
+      message = `Multiple Gradle projects found in workspace:\n\n  • ${r.candidates.join('\n  • ')}\n\nPick one to continue.`;
+      buttons = ['Pick Project', 'Show Detection Log'];
+      break;
+    case 'setting-invalid':
+      message = `Your setting points to a path that is not a Gradle project:\n\n  ${r.settingPath}\n\nOpen settings.json to fix the path, or clear the setting to fall back to auto-detection.`;
+      buttons = ['Open Settings', 'Show Detection Log'];
+      break;
+    case 'not-found':
+      message =
+        `No Gradle project found in:\n  ${workspace}\n\n` +
+        `Scanned 2 levels deep — no settings.gradle.kts or build.gradle.kts found.\n\n` +
+        `How to fix\n` +
+        `──────────\n` +
+        `Option A — Set the path explicitly (workspace setting):\n\n` +
+        `  {\n    "kotlinJump.gradleProjectRoot": "test/kotlin-jump-demo"\n  }\n\n` +
+        `Path is relative to the workspace, or absolute.\n\n` +
+        `Option B — Open the Kotlin project directly:\n\n` +
+        `  code ~/path/to/your-gradle-project`;
+      buttons = ['Open Settings', 'Show Detection Log'];
+      break;
+  }
+
+  const action = await vscode.window.showInformationMessage(message, { modal: true }, ...buttons);
+
+  if (action === 'Open Settings') {
+    await vscode.commands.executeCommand('workbench.action.openSettings', 'kotlinJump.gradleProjectRoot');
+  } else if (action === 'Pick Project') {
+    await vscode.commands.executeCommand('kotlin-jump.pickGradleProject');
+  }
+  // Show Detection Log: already shown by caller via log.channel.show()
+}
+
+async function pickGradleProjectInteractive(
+  context: vscode.ExtensionContext,
+  log: Logger,
+): Promise<void> {
+  const result = detectProjectRoot(log);
+  if (result.kind !== 'ambiguous') {
+    await showDetectionModal(result);
+    return;
+  }
+  const choice = await vscode.window.showQuickPick(
+    result.candidates.map(c => ({ label: path.basename(c), description: c, detail: c })),
+    { title: 'Pick Gradle Project', placeHolder: 'Which Gradle project should Kotlin Jump use?' },
+  );
+  if (!choice) return;
+  await context.workspaceState.update(GRADLE_PROJECT_CHOICE_KEY, choice.detail);
+  updateButtonVisibility(context, log);
+}
+
+// ── Debounced active editor watcher ──────────────────────────────────────────
+
+function debouncedActiveEditorWatcher(cb: () => void): vscode.Disposable {
+  let timer: NodeJS.Timeout | undefined;
+  return vscode.window.onDidChangeActiveTextEditor(() => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(cb, 300);
+  });
 }
 
 async function clearAllAndroidCache(context: vscode.ExtensionContext): Promise<void> {
@@ -159,19 +259,74 @@ async function clearAllAndroidCache(context: vscode.ExtensionContext): Promise<v
 
 // ── Visibility ────────────────────────────────────────────────────────────────
 
-function updateButtonVisibility(log: Logger): void {
-  const root = findProjectRoot(log);
-  if (!root) { _runButton?.hide(); _switchButton?.hide(); return; }
+function updateButtonVisibility(context: vscode.ExtensionContext, log: Logger): void {
+  const persisted = context.workspaceState.get<string>(GRADLE_PROJECT_CHOICE_KEY);
+  const result    = detectProjectRoot(log, persisted);
+  _lastDetection  = result;
 
-  const hasWrapper =
-    fs.existsSync(path.join(root, 'gradlew')) ||
-    fs.existsSync(path.join(root, 'gradlew.bat'));
+  switch (result.kind) {
+    case 'resolved': {
+      const hasWrapper =
+        fs.existsSync(path.join(result.root, 'gradlew')) ||
+        fs.existsSync(path.join(result.root, 'gradlew.bat'));
+      if (!hasWrapper) {
+        // Gradle project exists but wrapper is missing — degraded state.
+        renderButton('wrapper-missing', result.root);
+        _switchButton?.hide();
+        return;
+      }
+      setIdle();
+      _runButton!.show();
+      if (_hasMultipleApps) { _switchButton!.show(); } else { _switchButton?.hide(); }
+      return;
+    }
+    case 'ambiguous':
+      renderButton('ambiguous', `${result.candidates.length} candidates`);
+      _switchButton?.hide();
+      return;
+    case 'setting-invalid':
+      renderButton('setting-invalid', result.settingPath);
+      _switchButton?.hide();
+      return;
+    case 'not-found':
+      renderButton('not-found');
+      _switchButton?.hide();
+      return;
+  }
+}
 
-  if (!hasWrapper) { _runButton?.hide(); _switchButton?.hide(); return; }
-
-  setIdle();
-  _runButton!.show();
-  if (_hasMultipleApps) { _switchButton!.show(); } else { _switchButton?.hide(); }
+function renderButton(state: 'ambiguous' | 'setting-invalid' | 'not-found' | 'wrapper-missing', detail?: string): void {
+  if (!_runButton) return;
+  switch (state) {
+    case 'ambiguous':
+      _runButton.text    = '$(play) Pick Gradle Project';
+      _runButton.tooltip = `Multiple Gradle projects found (${detail}) — click to choose.`;
+      _runButton.command = 'kotlin-jump.pickGradleProject';
+      _runButton.backgroundColor = undefined;
+      _runButton.show();
+      return;
+    case 'setting-invalid':
+      _runButton.text    = '$(warning) Gradle path invalid';
+      _runButton.tooltip = `kotlinJump.gradleProjectRoot → ${detail ?? 'unknown'} is not a Gradle project. Click to edit settings.`;
+      _runButton.command = 'workbench.action.openSettings';
+      _runButton.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+      _runButton.show();
+      return;
+    case 'not-found':
+      _runButton.text    = '$(warning) No Gradle Project';
+      _runButton.tooltip = 'No settings.gradle.kts found in workspace. Click to diagnose.';
+      _runButton.command = 'kotlin-jump.diagnoseGradleDetection';
+      _runButton.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+      _runButton.show();
+      return;
+    case 'wrapper-missing':
+      _runButton.text    = '$(warning) gradlew missing';
+      _runButton.tooltip = `Gradle project found at ${detail ?? '?'} but gradlew is missing. Generate the wrapper with "gradle wrapper".`;
+      _runButton.command = 'kotlin-jump.diagnoseGradleDetection';
+      _runButton.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+      _runButton.show();
+      return;
+  }
 }
 
 function updateSwitchButtonVisibility(): void {

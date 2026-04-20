@@ -4,6 +4,7 @@ import * as path from 'path';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { resolveAll as resolveModules } from '../gradle/ModuleResolver';
 import { Logger } from '../util/logger';
+import { detectGradleRoot, type DetectionResult } from './GradleRootDetector';
 
 const C = {
   reset:  '\x1b[0m',
@@ -345,28 +346,35 @@ export function resolveGradleWrapper(projectRoot: string): string {
 }
 
 export function findProjectRoot(log?: Logger): string | undefined {
+  const result = detectProjectRoot(log);
+  if (result.kind === 'resolved') return result.root;
+  // Legacy fallback (mirrors historical behaviour): first workspace folder when nothing else matches.
+  const fallback = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (result.kind === 'not-found' && fallback) {
+    log?.warn(`[test:runner] no Gradle build file found — falling back to first workspace folder: ${fallback}`);
+    return fallback;
+  }
+  return undefined;
+}
+
+/**
+ * Structured project-root detection. Callers that need to surface UX for
+ * ambiguous / setting-invalid / not-found cases should use this instead of
+ * {@link findProjectRoot}, which collapses every non-resolved state.
+ */
+export function detectProjectRoot(log?: Logger, persistedChoice?: string): DetectionResult {
   const folders = vscode.workspace.workspaceFolders;
   if (!folders) {
     log?.warn('[test:runner] no workspace folders open');
-    return undefined;
+    return { kind: 'not-found' };
   }
-
-  log?.debug(`[test:runner] workspace folders: [${folders.map(f => f.uri.fsPath).join(', ')}]`);
-
-  for (const folder of folders) {
-    const fsPath = folder.uri.fsPath;
-    for (const name of ['settings.gradle.kts', 'settings.gradle', 'build.gradle.kts', 'build.gradle']) {
-      try {
-        require('fs').accessSync(path.join(fsPath, name));
-        log?.debug(`[test:runner] project root detected via "${name}": ${fsPath}`);
-        return fsPath;
-      } catch { /* not found */ }
-    }
-  }
-
-  const fallback = folders[0]?.uri.fsPath;
-  log?.warn(`[test:runner] no Gradle build file found — falling back to first workspace folder: ${fallback}`);
-  return fallback;
+  const cfg = vscode.workspace.getConfiguration('kotlinJump');
+  return detectGradleRoot({
+    workspaceFolders: folders.map(f => f.uri.fsPath),
+    activeEditorPath: vscode.window.activeTextEditor?.document.uri.fsPath,
+    setting:          cfg.get<string>('gradleProjectRoot')?.trim() || undefined,
+    persistedChoice,
+  }, log);
 }
 
 /**

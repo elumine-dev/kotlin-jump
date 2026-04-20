@@ -1,21 +1,46 @@
 [
   {
     "type": "caption",
-    "label": "Who calls release()?",
-    "duration": 1800,
-    "t": 500
+    "label": "Who calls releasePokemon?",
+    "duration": 1500,
+    "t": 300
   },
   {
     "type": "keystroke",
     "label": "⌥ + F7",
     "sublabel": "Find Usages",
     "duration": 2500,
-    "t": 2303
+    "t": 1805
   },
   {
     "type": "caption",
-    "label": "One click to the call site",
+    "label": "Two callers — pick one from the panel",
+    "duration": 1800,
+    "t": 4801
+  },
+  {
+    "type": "caption",
+    "label": "Cursor on `show` — this call is in another file…",
+    "duration": 1600,
+    "t": 7897
+  },
+  {
+    "type": "caption",
+    "label": "On `show` — single caller. Alt+F7…",
+    "duration": 1500,
+    "t": 10941
+  },
+  {
+    "type": "keystroke",
+    "label": "⌥ + F7",
+    "sublabel": "Find Usages",
     "duration": 2500,
-    "t": 4939
+    "t": 12446
+  },
+  {
+    "type": "caption",
+    "label": "Straight across files — no picker",
+    "duration": 2000,
+    "t": 13437
   }
 ]

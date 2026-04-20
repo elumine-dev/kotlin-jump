@@ -893,6 +893,8 @@
     "test:watch": "vitest",
     "pretest:integration": "npm run compile",
     "test:integration": "vscode-test",
+    "pretest:demo-cleanup": "npm run compile",
+    "test:demo-cleanup": "KJ_RUN_DEMO_INTEGRATION=1 vitest run test/unit/demo-orphan-cleanup",
     "predemo:record": "npm run compile",
     "demo:record": "node dist/demo/record.js",
     "predemo:validate": "npm run compile",

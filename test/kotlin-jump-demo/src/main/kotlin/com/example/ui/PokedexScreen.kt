@@ -56,6 +56,16 @@ class PokedexScreen(private val viewModel: PokedexViewModel) {
         }
     }
 
+    suspend fun onReleasePressed(pokemon: Pokemon) {
+        viewModel.releasePokemon(pokemon)
+        println("Released ${pokemon.name}.")
+    }
+
+    suspend fun onSwipeDelete(pokemon: Pokemon) {
+        viewModel.releasePokemon(pokemon)
+        ConfirmationDialog.show(pokemon)
+    }
+
     fun showError(isNetworkError: Boolean) {
         val messageRes = if (isNetworkError) R.string.error_network else R.string.error_unknown
         println("Error: $messageRes  (${R.string.action_retry})")

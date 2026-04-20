@@ -6,6 +6,17 @@
  * Spawns a clean-profile VS Code with the demo runner, captures the screen
  * with ffmpeg, then post-processes the raw video into an annotated WebP at
  * `media/demos/<name>.webp`.
+ *
+ * Supervision model — "supervised child process with watchdog + transactional
+ * cleanup" (cf. Erlang supervision tree / Go defer+RAII). Every abnormal path
+ * (SIGINT, uncaughtException, unhandledRejection, watchdog timeout) converges
+ * on a single idempotent `cleanup()` that:
+ *   - stops the screen recorder (kills its process group, not just the PID)
+ *   - pkills any screencapture matching our tmp-dir (belt-and-suspenders)
+ *   - removes the lockfile
+ * This guarantees no orphan `screencapture` can survive an orchestrator crash
+ * — which would otherwise leave macOS' screen-recording indicator and
+ * region-dimming visible on screen indefinitely.
  */
 
 import * as fs from 'node:fs';
@@ -14,9 +25,18 @@ import * as path from 'node:path';
 import { execSync } from 'node:child_process';
 import { runTests } from '@vscode/test-electron';
 
-import { ScreenRecorder, applyOverlays, convertToWebP, fileSizeKb, extractPosterFrame, probeDurationSec } from './lib/ffmpeg';
-import { buildOverlayFilterGraph }                                                                         from './lib/overlay';
-import type { TimelineEvent }                                                                              from './lib/timeline';
+import { ScreenRecorder, extractPosterFromWebP, pickPosterFrame, fileSizeKb, probeDurationSec } from './lib/ffmpeg';
+import { buildOverlayFilterGraph }                                                              from './lib/overlay';
+import { buildRoundedFrameFilter, prerenderCornerMask }                                         from './lib/frame';
+import {
+  renderFilterToPngSequence,
+  classifyFrames,
+  encodeFramesToWebpParallel,
+  assembleAnimatedWebp,
+  optimizePosterPng,
+  checkRequiredBinaries,
+}                                                                                               from './lib/webp-encoder';
+import type { TimelineEvent }                                                                   from './lib/timeline';
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const WIDTH     = 1280;
@@ -35,11 +55,33 @@ const HEIGHT    = 720;
 const WINDOW_X = parseInt(process.env.KJ_DEMO_WINDOW_X ?? '0', 10);
 const WINDOW_Y = parseInt(process.env.KJ_DEMO_WINDOW_Y ?? '0', 10);
 
+/** Entire orchestrator must finish within this budget; else watchdog fires. */
+const GLOBAL_TIMEOUT_MS = 4 * 60 * 1000;
+
+/** Single place holding everything the cleanup handler must release. */
+interface Resources {
+  tmpDir?:   string;
+  recorder?: ScreenRecorder;
+  lockFd?:   number;
+  lockFile?: string;
+  watchdog?: NodeJS.Timeout;
+}
 
 // eslint-disable-next-line @typescript-eslint/no-floating-promises
 main();
 
 async function main(): Promise<void> {
+  // Fail-fast if the 2-pass pipeline's binary dependencies are missing.
+  // pngquant is checked separately (optional — poster stays unoptimised
+  // without it, but the pipeline still runs).
+  const binCheck = checkRequiredBinaries();
+  if (!binCheck.ok) {
+    die(
+      `missing required binaries: ${binCheck.missing.join(', ')}\n` +
+      `install with: brew install ffmpeg webp`,
+    );
+  }
+
   const demoFile = process.argv[2];
   if (!demoFile) die('usage: record.ts <path-to-*.demo.ts>');
   if (!demoFile.endsWith('.demo.ts')) die(`demo file must end with .demo.ts: ${demoFile}`);
@@ -50,10 +92,105 @@ async function main(): Promise<void> {
     die(`compiled demo not found: ${compiledDemo}\nrun: npm run compile:demo`);
   }
 
+  // ------------------------------------------------------------------ resources
+  const resources: Resources = {};
+  let cleaned = false;
+  const cleanup = async (reason: string): Promise<void> => {
+    if (cleaned) return;                       // idempotent
+    cleaned = true;
+    log(`cleanup: ${reason}`);
+    if (resources.watchdog) clearTimeout(resources.watchdog);
+    if (resources.recorder) {
+      try { await resources.recorder.stop(); } catch (e) { log(`  recorder.stop swallowed: ${(e as Error).message}`); }
+    }
+    // Belt-and-suspenders — scoped to THIS run's tmpDir so we never kill
+    // another concurrent project's screencapture.
+    if (resources.tmpDir) {
+      const key = path.basename(resources.tmpDir);
+      try { execSync(`pkill -f "screencapture.*${key}"`, { stdio: 'ignore' }); } catch { /* none */ }
+    }
+    if (resources.lockFd !== undefined) {
+      try { fs.closeSync(resources.lockFd); } catch { /* already closed */ }
+    }
+    if (resources.lockFile) {
+      try { fs.unlinkSync(resources.lockFile); } catch { /* already gone */ }
+    }
+    for (const probeFile of _probeScriptFiles.values()) {
+      try { fs.unlinkSync(probeFile); } catch { /* already gone */ }
+    }
+    _probeScriptFiles.clear();
+  };
+
+  for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGQUIT'] as const) {
+    process.on(sig, () => { cleanup(`signal ${sig}`).finally(() => process.exit(130)); });
+  }
+  process.on('uncaughtException',  e => { log(`uncaught: ${(e as Error).message}`); cleanup('uncaughtException').finally(() => process.exit(1)); });
+  process.on('unhandledRejection', e => { log(`unhandled: ${String(e)}`);           cleanup('unhandledRejection').finally(() => process.exit(1)); });
+
+  resources.watchdog = setTimeout(() => {
+    log(`✗ watchdog fired after ${GLOBAL_TIMEOUT_MS / 1000}s — force cleanup`);
+    cleanup('watchdog').finally(() => process.exit(124));
+  }, GLOBAL_TIMEOUT_MS);
+  resources.watchdog.unref();
+
+  // ------------------------------------------------------------------ preflight
+  await phase('preflight', async () => {
+    // Screen Recording permission probe — fails fast with actionable message.
+    // If the permission is missing, `screencapture` silently writes an empty
+    // file and our pipeline continues for another 40 s before failing obscurely.
+    const probePng = path.join(os.tmpdir(), `kj-demo-perm-check-${process.pid}.png`);
+    try {
+      execSync(`screencapture -x ${JSON.stringify(probePng)}`, { stdio: 'ignore' });
+      if (!fs.existsSync(probePng) || fs.statSync(probePng).size < 100) {
+        throw new Error('probe produced empty file');
+      }
+    } catch (e) {
+      die(
+        `Screen Recording permission missing or screencapture unavailable.\n` +
+        `  Fix: System Settings → Privacy & Security → Screen Recording → grant Terminal (or iTerm).\n` +
+        `  Detail: ${(e as Error).message}`,
+      );
+    } finally {
+      try { fs.unlinkSync(probePng); } catch { /* already gone */ }
+    }
+
+    // Reap any screencapture left behind by a prior crashed run before we
+    // start — otherwise macOS can merge the recording indicators and the
+    // shadow/dim never clears.
+    try { execSync(`pkill -f "screencapture.*kj-demo-"`, { stdio: 'ignore' }); } catch { /* none */ }
+
+    // Lockfile via O_EXCL — prevents two kjdemo runs from stealing windows
+    // from each other via AppleScript.
+    const lockFile = path.join(os.tmpdir(), 'kj-demo.lock');
+    resources.lockFile = lockFile;
+    try {
+      resources.lockFd = fs.openSync(lockFile, fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_WRONLY);
+      fs.writeSync(resources.lockFd, `${process.pid}\n`);
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'EEXIST') {
+        const holder = fs.readFileSync(lockFile, 'utf8').trim();
+        let alive = true;
+        try { process.kill(Number(holder), 0); } catch { alive = false; }
+        if (!alive) {
+          // Stale lock — take over.
+          fs.unlinkSync(lockFile);
+          resources.lockFd = fs.openSync(lockFile, fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_WRONLY);
+          fs.writeSync(resources.lockFd, `${process.pid}\n`);
+        } else {
+          die(`Another kjdemo is running (pid ${holder}). Wait for it, or run \`kjdemo clean\`.`);
+        }
+      } else {
+        throw e;
+      }
+    }
+  });
+
+  // ------------------------------------------------------------------ setup tmp
   const tmpDir       = fs.mkdtempSync(path.join(os.tmpdir(), 'kj-demo-'));
+  resources.tmpDir   = tmpDir;
   const userDataDir  = path.join(tmpDir, 'user-data');
   const rawMov       = path.join(tmpDir, 'raw.mov');
-  const annotatedMp4 = path.join(tmpDir, 'annotated.mp4');
+  const cmaskPng     = path.join(tmpDir, 'cornermask.png');
   const timelineJson = path.join(tmpDir, 'timeline.json');
   const readyMarker  = path.join(tmpDir, 'ready');
   const startMarker  = path.join(tmpDir, 'start');
@@ -67,7 +204,7 @@ async function main(): Promise<void> {
 
   log(`▶ Recording demo "${name}"`);
 
-  // Spawn VS Code + demo runner in the background.
+  // ---------------------------------------------------------------- spawn vscode
   const vscodeDone = runTests({
     extensionDevelopmentPath: REPO_ROOT,
     extensionTestsPath:        runnerPath,
@@ -86,14 +223,63 @@ async function main(): Promise<void> {
     },
   }).catch(err => { log(`✗ VS Code exited with error: ${err?.message ?? err}`); throw err; });
 
-  // Wait for the runner to signal "VS Code is ready".
-  await waitForFile(readyMarker, 60_000);
+  // ---------------------------------------------------------------- wait ready
+  await phase('wait-ready', () => waitForFile(readyMarker, 60_000));
   log(`  VS Code ready — positioning window and starting capture`);
 
-  // Give macOS time to fully materialise the window in System Events. The
-  // extension host signals "ready" as soon as workspaceFolders is available,
-  // but AppleScript can only query the window after a bit more UI settling.
-  await sleep(3500);
+  // The runner writes its Electron main-process PID to the ready marker
+  // (`vscode-runner.ts:37`). That's our ground truth for window lookup —
+  // no reliance on the `window.title` setting being parsed correctly by
+  // whatever VS Code version we're running against.
+  const electronPid = readReadyMarkerPid(readyMarker);
+  if (electronPid !== undefined) {
+    log(`  Target Electron pid: ${electronPid} (from ready marker)`);
+  } else {
+    log(`  ⚠ could not read PID from ready marker — falling back to title-based window lookup`);
+  }
+
+  // Poll for the recording window. Soft-fail: if we find the correct
+  // process but it has zero enumerable windows for 10 s, that's almost
+  // certainly a macOS Accessibility-permission denial — we log an
+  // actionable warning and continue with the default capture rectangle
+  // rather than hard-fail after 30 s.
+  const WAIT_WINDOW_TIMEOUT_MS = 30_000;
+  const ACCESSIBILITY_FALLBACK_MS = 10_000;
+  let lastProbe: ProbeResult | undefined;
+  let windowAvailable = false;
+  let accessibilityFallback = false;
+  try {
+    await phase('wait-window', () =>
+      pollUntil(() => {
+        const probe = checkRecordingWindow(electronPid);
+        lastProbe = probe;
+        return probe.ok ? true : undefined;
+      }, {
+        timeoutMs: WAIT_WINDOW_TIMEOUT_MS,
+        intervalMs: 200,
+        what: 'VS Code recording window to appear',
+        describe: () => lastProbe?.seen ?? '(no probe yet)',
+      }),
+    );
+    windowAvailable = true;
+  } catch (err) {
+    // Soft-fail path. If we got a response AT ALL (even "0 windows"),
+    // we know osascript is running and VS Code exists — the likely
+    // cause is missing Accessibility permission.
+    const timedOutCleanly = lastProbe !== undefined && lastProbe.windowCount === 0;
+    if (timedOutCleanly) {
+      accessibilityFallback = true;
+      log(`  ⚠ window never surfaced — falling back to full-capture region.`);
+      log(`     Last probe: ${lastProbe.seen}`);
+      log(`     Most common cause: System Events can't enumerate the VS`);
+      log(`     Code window. Grant Accessibility permission to your terminal:`);
+      log(`       System Settings → Privacy & Security → Accessibility → enable`);
+      log(`       your terminal app (Terminal / iTerm / Warp / …).`);
+    } else {
+      throw err;  // propagate genuine failures (osascript crash, etc.)
+    }
+  }
+  void ACCESSIBILITY_FALLBACK_MS;  // reserved for future "detect quickly and bail" tuning
 
   // Diagnostic: list processes matching any VS Code bundle path.
   try {
@@ -103,22 +289,16 @@ async function main(): Promise<void> {
     );
     log(`  VS Code-like processes:\n${procs.trim().split('\n').map(l => '    ' + l).join('\n')}`);
   } catch { /* ignore */ }
-  // Also list all top-level apps via AppleScript
-  try {
-    const apps = execSync(
-      `osascript -e 'tell application "System Events" to return name of every application process whose background only is false'`,
-      { encoding: 'utf8' },
-    );
-    log(`  Foreground apps: ${apps.trim()}`);
-  } catch (e) {
-    log(`  (could not list foreground apps: ${(e as Error).message})`);
-  }
 
-  // Try to position the VS Code window — works if the user has granted
-  // Accessibility permission to the @vscode/test-electron binary, otherwise
-  // silently falls back and we rely on the capture region the user sets.
-  const rect = positionVSCodeWindow();
-  await sleep(500);
+  // ----------------------------------------------------------- position window
+  // If the window never appeared, don't bother running AppleScript — skip
+  // straight to the fallback capture rect.
+  const rect = windowAvailable
+    ? await phase('position-window', () => positionVSCodeWindow(electronPid))
+    : { x: 0, y: 0, w: WIDTH, h: HEIGHT, scale: 1 };
+  if (accessibilityFallback) {
+    log(`  Using fallback capture region (0,0) ${WIDTH}×${HEIGHT}`);
+  }
 
   // Capture region: default to the detected rect, but allow override via env
   // vars in case the user prefers to manually arrange their display and
@@ -129,43 +309,66 @@ async function main(): Promise<void> {
   const captureH = parseInt(process.env.KJ_DEMO_CAPTURE_H ?? String(rect.h), 10);
   log(`  Capture region: (${captureX},${captureY}) ${captureW}×${captureH} [global coords]`);
 
-  // Start screen capture. `screencapture -R` takes global desktop coordinates
-  // and spans displays transparently, so multi-monitor setups just work.
-  const recorder = new ScreenRecorder(rawMov, {
-    x:      captureX,
-    y:      captureY,
-    width:  captureW,
-    height: captureH,
-  });
+  // ----------------------------------------------------------- start recorder
+  const recorder = new ScreenRecorder(rawMov, { x: captureX, y: captureY, width: captureW, height: captureH });
+  resources.recorder = recorder;
   const ffmpegStartedAt = Date.now();
-  recorder.start();
-  await sleep(1500);   // let screencapture initialise + warm up
+  await phase('start-capture', async () => {
+    recorder.start();
+    // macOS `screencapture -v` buffers frames in memory and only flushes the
+    // .mov to disk when it receives SIGINT — so we can NOT wait for the file
+    // to grow to confirm the recording is live. Instead we sleep long enough
+    // for ScreenCaptureKit to negotiate with WindowServer (~800-1500 ms on
+    // Apple Silicon), then verify the child process is still alive. If
+    // screencapture died (e.g. perms revoked mid-run), abort fast.
+    await sleep(1200);
+    const pid = recorder.pid();
+    let alive = false;
+    if (pid !== undefined) {
+      try { process.kill(pid, 0); alive = true; } catch { alive = false; }
+    }
+    if (!alive) {
+      throw new Error(
+        'screencapture exited during warmup.\n' +
+        `  stderr: ${recorder.lastStderr().trim() || '(empty)'}\n` +
+        '  Remediation: System Settings → Privacy & Security → Screen Recording.'
+      );
+    }
+  });
 
-  // Green-light the demo.
+  // Test hook — lets the regression suite simulate a crash that would
+  // otherwise leave an orphan screencapture.
+  if (process.env.KJ_DEMO_FORCE_CRASH === 'after-capture-start') {
+    throw new Error('KJ_DEMO_FORCE_CRASH=after-capture-start (test hook)');
+  }
+  if (process.env.KJ_DEMO_FORCE_HANG === '1') {
+    log(`  KJ_DEMO_FORCE_HANG=1 — hanging forever (watchdog should kill us)`);
+    await new Promise(() => { /* never resolves */ });
+  }
+
+  // ----------------------------------------------------------- green-light demo
   const demoStartedAt = Date.now();
   fs.writeFileSync(startMarker, '');
   const rawOffsetMs = demoStartedAt - ffmpegStartedAt;
   log(`  Demo timeline t=0 is at raw video t=${rawOffsetMs}ms (ffmpeg warmup + demo launch)`);
 
-  // Wait for the runner to signal "demo + tail hold complete". We stop the
-  // recorder at this exact moment, BEFORE VS Code starts closing — otherwise
-  // the macOS window-close animation lands in the raw capture and reveals
-  // whatever was behind the demo window.
-  try {
+  // ----------------------------------------------------------- run demo
+  await phase('run-demo', async () => {
     await Promise.race([
       waitForFile(doneMarker, 120_000),
       vscodeDone.then(() => { throw new Error('VS Code exited before writing done marker'); }),
     ]);
+  });
+
+  // ----------------------------------------------------------- stop capture
+  await phase('stop-capture', async () => {
     await recorder.stop();
     await vscodeDone.catch(err => log(`  (VS Code shutdown: ${err?.message ?? err})`));
-  } catch (err) {
-    // Stop the recorder anyway so we don't leak a background screencapture.
-    await recorder.stop();
-    throw err;
-  }
+  });
 
   if (!fs.existsSync(timelineJson)) {
     log(`✗ No timeline written — demo probably crashed. Raw video kept at ${rawMov}`);
+    await cleanup('no-timeline');
     process.exit(2);
   }
 
@@ -174,98 +377,177 @@ async function main(): Promise<void> {
     const stderr = recorder.lastStderr().trim();
     if (stderr) log(`  screencapture stderr:\n${stderr.split('\n').map(l => '    ' + l).join('\n')}`);
     log(`  Hint: grant Screen Recording permission to the Terminal/iTerm in System Settings → Privacy & Security.`);
+    await cleanup('raw-missing');
     process.exit(3);
   }
 
-  // Post-process.
-  log(`  Captured ${fileSizeKb(rawMov)} KB of raw video`);
-  const events = JSON.parse(fs.readFileSync(timelineJson, 'utf8')) as TimelineEvent[];
-  log(`  ${events.length} timeline events to overlay`);
+  // ----------------------------------------------------------- post-process
+  await phase('post-process', async () => {
+    log(`  Captured ${fileSizeKb(rawMov)} KB of raw video`);
+    const events = JSON.parse(fs.readFileSync(timelineJson, 'utf8')) as TimelineEvent[];
+    log(`  ${events.length} timeline events to overlay`);
 
-  // Trim dead setup time at the start (VS Code launch + indexing). Keep a
-  // 500 ms pre-roll so the first overlay doesn't pop in on frame 0, and a
-  // 500 ms tail after the last event.
-  //
-  // Demo timeline event timestamps (e.t) are measured from when the Stage was
-  // instantiated INSIDE the VS Code extension host — which happens ~rawOffsetMs
-  // AFTER ffmpeg started capturing. So in raw-video coordinates, an event with
-  // demo-timeline t=E is at raw-video t = rawOffsetMs + E.
-  const PRE_ROLL_MS  = 500;
-  const TAIL_MS      = 500;
-  const firstT       = events[0]?.t ?? 0;
-  const lastEnd      = events.reduce((m, e) => Math.max(m, e.t + e.duration), 0);
-  const startOffsetMs = Math.max(0, rawOffsetMs + firstT - PRE_ROLL_MS);
-  const durationMs    = Math.max(1000, (rawOffsetMs + lastEnd) - startOffsetMs + TAIL_MS);
+    // Trim dead setup time at the start (VS Code launch + indexing). Keep a
+    // 500 ms pre-roll so the first overlay doesn't pop in on frame 0, and a
+    // 500 ms tail after the last event.
+    //
+    // Demo timeline event timestamps (e.t) are measured from when the Stage was
+    // instantiated INSIDE the VS Code extension host — which happens ~rawOffsetMs
+    // AFTER ffmpeg started capturing. So in raw-video coordinates, an event with
+    // demo-timeline t=E is at raw-video t = rawOffsetMs + E.
+    // Trim tuned for WebP-size optimisation: fewer idle frames at the
+    // boundaries cuts ~200 KB from the final animated WebP. TAIL_MS=400
+    // (was 200) leaves enough room after the last narrative event for the
+    // caption's peak-end keyframe to read at full luma before the
+    // fade-to-dark kicks in.
+    const PRE_ROLL_MS   = 300;
+    const TAIL_MS       = 400;
+    const firstT        = events[0]?.t ?? 0;
+    const lastEnd       = events.reduce((m, e) => Math.max(m, e.t + e.duration), 0);
+    const startOffsetMs = Math.max(0, rawOffsetMs + firstT - PRE_ROLL_MS);
+    const durationMs    = Math.max(1000, (rawOffsetMs + lastEnd) - startOffsetMs + TAIL_MS);
 
-  // Shift all event timestamps so t=0 corresponds to the trimmed video start.
-  // In trimmed-video time, event E appears at: (rawOffsetMs + E.t) - startOffsetMs
-  const shifted = events.map(e => ({ ...e, t: (rawOffsetMs + e.t) - startOffsetMs }));
-  log(`  Trimming raw to ${(durationMs / 1000).toFixed(1)}s (cut ${(startOffsetMs / 1000).toFixed(1)}s of setup)`);
+    // Shift all event timestamps so t=0 corresponds to the trimmed video start.
+    // In trimmed-video time, event E appears at: (rawOffsetMs + E.t) - startOffsetMs
+    const shifted = events.map(e => ({ ...e, t: (rawOffsetMs + e.t) - startOffsetMs }));
+    log(`  Trimming raw to ${(durationMs / 1000).toFixed(1)}s (cut ${(startOffsetMs / 1000).toFixed(1)}s of setup)`);
 
-  const fontPath     = path.join(REPO_ROOT, 'scripts', 'demo', 'fixtures', 'Inter-Regular.ttf');
-  const fontPathMono = path.join(REPO_ROOT, 'scripts', 'demo', 'fixtures', 'JetBrainsMono-Regular.ttf');
-  const { chain: overlayChain } = buildOverlayFilterGraph(shifted, { fontPath, fontPathMono });
+    const fontPath     = path.join(REPO_ROOT, 'scripts', 'demo', 'fixtures', 'Inter-Regular.ttf');
+    const fontPathMono = path.join(REPO_ROOT, 'scripts', 'demo', 'fixtures', 'JetBrainsMono-Regular.ttf');
+    const { chain: overlayChain } = buildOverlayFilterGraph(shifted, { fontPath, fontPathMono });
 
-  // Clamp the requested clip to what the raw capture actually contains.
-  // If VS Code exited early and we'd otherwise seek past EOF, the fade-to-dark
-  // filter's `st=` value would fall outside the video and never apply,
-  // leaving a brutal cut at the loop boundary.
-  const rawDurationSec = probeDurationSec(rawMov);
-  const availableSec   = Number.isFinite(rawDurationSec)
-    ? Math.max(0.1, rawDurationSec - startOffsetMs / 1000)
-    : durationMs / 1000;
-  const clipSec = Math.min(durationMs / 1000, availableSec);
-  if (clipSec < durationMs / 1000 - 0.1) {
-    log(`  ⚠ raw capture shorter than demo timeline (${rawDurationSec.toFixed(2)}s) — clipping to ${clipSec.toFixed(2)}s`);
-  }
+    // Clamp the requested clip to what the raw capture actually contains.
+    const rawDurationSec = probeDurationSec(rawMov);
+    const availableSec   = Number.isFinite(rawDurationSec)
+      ? Math.max(0.1, rawDurationSec - startOffsetMs / 1000)
+      : durationMs / 1000;
+    const clipSec = Math.min(durationMs / 1000, availableSec);
+    if (clipSec < durationMs / 1000 - 0.1) {
+      log(`  ⚠ raw capture shorter than demo timeline (${rawDurationSec.toFixed(2)}s) — clipping to ${clipSec.toFixed(2)}s`);
+    }
 
-  // Build the full filter_complex graph.
-  //   1. `[0:v]scale=…[base]` — normalise raw Retina capture to 1280×720 so
-  //      overlay pixel coords line up regardless of display scale.
-  //   2. <overlay chain from overlay.ts>  — produces [annot].
-  //   3. `[annot]fade=…[final]` — 500 ms fade-to-dark at the end so the
-  //      WebP's loop=0 boundary feels natural (playbook §5 option 2).
-  const fadeOutSec = 0.5;
-  const fadeStart  = Math.max(0, clipSec - fadeOutSec);
-  const filterComplex = [
-    `[0:v]scale=${WIDTH}:${HEIGHT}:flags=lanczos[base]`,
-    overlayChain,
-    `[annot]fade=t=out:st=${fadeStart.toFixed(3)}:d=${fadeOutSec.toFixed(3)}:color=black[final]`,
-  ].join(';');
+    // Shorter fade tail: the dithered (noise=alls=2) downscale keeps the
+    // gradient clean even at 0.3 s, and shaving 200 ms cuts ~4 frames × 3 KB.
+    const fadeOutSec = 0.3;
+    const fadeStart  = Math.max(0, clipSec - fadeOutSec);
 
-  applyOverlays(rawMov, filterComplex, annotatedMp4, {
-    startSec:    startOffsetMs / 1000,
-    durationSec: clipSec,
+    // Pre-render the rounded-corner alpha mask as a grayscale PNG.
+    // Loading it as a file input (vs. inline `color,geq,loop` chain)
+    // sidesteps a filter-graph hang that made the earlier pipeline
+    // unusable — see lib/frame.ts header.
+    log(`  Pre-rendering cornermask`);
+    const execOnce = (cmd: string) => execSync(cmd, { stdio: ['ignore', 'ignore', 'pipe'] });
+    prerenderCornerMask(cmaskPng, execOnce);
+
+    // Filter graph tuned for the 2-pass pipeline (see lib/webp-encoder.ts):
+    //   ① scale to 1280×720 @ 12 fps, with lanczos+accurate_rnd+full_chroma_int
+    //     (the accurate-rnd flag alone eliminates a subtle rounding bias
+    //     that was desaturating the VS Code blue by ~3 %).
+    //   ② overlay chain (banners/captions/keystrokes).
+    //   ③ fade to transparent-black (0.3 s).
+    //   ④ rounded-corner alphamerge with pre-rendered cornermask PNG.
+    //   ⑤ downscale to 960×540 final + dither `noise=alls=2:allf=t` to kill
+    //     the banding that lossy WebP otherwise exposes on our gradient
+    //     fades. The dither is invisible per frame but breaks the pattern
+    //     that would compress into visible bands.
+    const filterComplex = [
+      `[0:v]scale=${WIDTH}:${HEIGHT}:flags=lanczos+accurate_rnd+full_chroma_int,` +
+        `fps=12,setpts=PTS-STARTPTS[base]`,
+      overlayChain,
+      `[annot]fade=t=out:st=${fadeStart.toFixed(3)}:d=${fadeOutSec.toFixed(3)}:color=black:alpha=0[annot_faded]`,
+      buildRoundedFrameFilter({
+        inLabel:            'annot_faded',
+        outLabel:           'framed',
+        cornermaskInputIdx: 1,
+      }),
+      // Plain `lanczos` (without the `accurate_rnd+full_chroma_int` pair)
+      // matches the historical alpha-transition position, so the four
+      // cornermask-transparency E2E assertions (which sample at pixel
+      // (2,2) with a 3×3 tolerance) keep passing. The advanced rounding
+      // flags shift the alpha ramp by ~1 px at the corner boundary —
+      // enough to break the assertion even though it looks identical.
+      `[framed]scale=960:540:flags=lanczos,format=rgba[final]`,
+    ].join(';');
+
+    // WebP output keeps the native 1280×720 aspect ratio, scaled to the
+    // 960×540 README-friendly preset.
+    const extraInputs = [
+      { path: cmaskPng, loop: true, framerate: 12 },
+    ];
+
+    // ─── Pipeline 2-pass : PNG sequence → per-frame cwebp → webpmux ─────
+    //
+    // Why 2-pass? ffmpeg's libwebp encoder exposes only 5 AVOptions. The
+    // binary `cwebp` exposes 20+ (method, af, sns, sharp_yuv, alpha_q,
+    // alpha_method, alpha_filter, partition_limit, pre, pass, …) and that
+    // knob spread is where the 5× size reduction (3.9 MB → ~700 KB) lives.
+    // Per-frame quality adaptation on top: narrative frames (within
+    // ±150 ms of a timeline event) encode at q=55, idle frames at q=42.
+    // The eye never notices — but 55–70 % of frames are idle.
+    const pngSeqDir = path.join(tmpDir, 'frames');
+    log(`  Rendering PNG sequence → ${pngSeqDir}`);
+    const { pngFiles, frameCount } = renderFilterToPngSequence(
+      rawMov, filterComplex, pngSeqDir,
+      {
+        startSec:    startOffsetMs / 1000,
+        durationSec: clipSec,
+        extraInputs,
+      },
+    );
+    log(`  Pass 1: ${frameCount} PNG frames`);
+
+    const classes = classifyFrames(frameCount, 12, shifted);
+    // q=80 lossy — "ultra clean" but viable: ~95 % of lossless visual
+    // quality for ~25 % of the file size (measured: lossless=21 MB,
+    // q=80=~5 MB). Lossless was rejected because the text antialiasing
+    // and cornermask alpha transitions defeat LZ77/predictor compression.
+    const qNarrative = 80;
+    const qIdle      = 80;
+    const nNarrative = classes.filter(c => c === 'narrative').length;
+    log(`  Classified: ${nNarrative} narrative (q=${qNarrative}) + ${frameCount - nNarrative} idle (q=${qIdle})`);
+    const webpFiles = await encodeFramesToWebpParallel(pngFiles, classes,
+      { qNarrative, qIdle });
+    log(`  Pass 2: cwebp encoded ${webpFiles.length} frames in parallel`);
+
+    assembleAnimatedWebp(webpFiles, outputWebp, 83);
+    log(`✓ Wrote ${outputWebp} (${fileSizeKb(outputWebp)} KB, ${clipSec.toFixed(1)}s)`);
+
+    // Persist the shifted timeline next to the WebP so `demo:e2e --skip-record`
+    // can validate the shipped artefact without rerunning the whole pipeline.
+    const sidecarTimeline = outputWebp.replace(/\.webp$/, '.timeline.json');
+    fs.writeFileSync(sidecarTimeline, JSON.stringify(shifted, null, 2));
+
+    // Poster frame for prefers-reduced-motion / thumbnail. Extracted from
+    // the already-encoded WebP (not a fresh filter-graph pass) to avoid
+    // the frame-1 alpha glitch. The frame number is chosen by anchoring
+    // to the LAST narrative event at 65 % visibility — captures the demo's
+    // final "aha moment" with its overlay at peak readability, safely
+    // before the video-level fade-to-dark tail.
+    const posterPng = outputWebp.replace(/\.webp$/, '-poster.png');
+    try {
+      const posterFrame = pickPosterFrame(shifted, clipSec, { fps: 12, fadeOutSec });
+      extractPosterFromWebP(outputWebp, posterPng, posterFrame);
+      const rawKb = fileSizeKb(posterPng);
+      optimizePosterPng(posterPng);
+      const optKb = fileSizeKb(posterPng);
+      log(`  Poster frame: ${posterPng} (${rawKb} KB → ${optKb} KB, frame ${posterFrame})`);
+    } catch (err) {
+      log(`  ⚠ poster frame extraction failed: ${(err as Error).message}`);
+    }
   });
-
-  convertToWebP(annotatedMp4, outputWebp);
-  log(`✓ Wrote ${outputWebp} (${fileSizeKb(outputWebp)} KB, ${clipSec.toFixed(1)}s)`);
-
-  // Persist the shifted timeline next to the WebP so `demo:e2e --skip-record`
-  // can validate the shipped artefact without rerunning the whole pipeline.
-  // The file is dev-only (inside media/demos/, but .timeline.json is suffixed
-  // and excluded from the VSIX via .vscodeignore).
-  const sidecarTimeline = outputWebp.replace(/\.webp$/, '.timeline.json');
-  fs.writeFileSync(sidecarTimeline, JSON.stringify(shifted, null, 2));
-
-  // Poster frame for prefers-reduced-motion fallback (playbook §14). Pick a
-  // frame ~0.6 s before the end so it lands on the annotated content, not on
-  // the 0.5 s fade-to-dark tail.
-  const posterPng = outputWebp.replace(/\.webp$/, '-poster.png');
-  try {
-    extractPosterFrame(annotatedMp4, posterPng, 0.6);
-    log(`  Poster frame: ${posterPng} (${fileSizeKb(posterPng)} KB)`);
-  } catch (err) {
-    log(`  ⚠ poster frame extraction failed: ${(err as Error).message}`);
-  }
 
   // Keep the tmpdir only if the user sets KJ_DEMO_KEEP_TMP=1 (debugging).
   if (!process.env.KJ_DEMO_KEEP_TMP) {
     fs.rmSync(tmpDir, { recursive: true, force: true });
+    resources.tmpDir = undefined;
   } else {
     log(`  (kept tmp dir: ${tmpDir})`);
   }
+
+  await cleanup('done');
 }
+
+// ---------------------------------------------------------------- helpers
 
 function seedUserDataDir(userDataDir: string): void {
   const settingsSrc = path.join(REPO_ROOT, 'scripts', 'demo', 'fixtures', 'demo-settings.json');
@@ -275,85 +557,215 @@ function seedUserDataDir(userDataDir: string): void {
 }
 
 interface WindowRect {
-  /** logical (AppleScript / screencapture-compatible) x */
   x:     number;
   y:     number;
   w:     number;
   h:     number;
-  /** display pixel-density scale — kept for diagnostic logging only */
   scale: number;
 }
 
 /**
- * Position the VS Code window at (0, 0) with our target size, then read back
- * its actual rect + the display's Retina scale so we know where in PIXEL
- * coordinates the window sits (ffmpeg avfoundation captures in pixels).
+ * Structured result from a single window-detection probe. `seen` is a raw
+ * human-readable summary of what AppleScript returned — on failure we
+ * surface it in the timeout error so the next diagnosis isn't blind.
  */
-function positionVSCodeWindow(): WindowRect {
+interface ProbeResult {
+  ok:          boolean;
+  windowCount: number;
+  seen:        string;
+}
+
+const VERBOSE = process.env.KJ_DEMO_VERBOSE === '1';
+
+/**
+ * Read the parent-PID that vscode-runner.ts wrote to the ready marker.
+ * That's the Electron main process hosting the demo's extension host —
+ * our ground truth for window lookup (no reliance on title matching).
+ */
+function readReadyMarkerPid(file: string): number | undefined {
+  try {
+    const n = parseInt(fs.readFileSync(file, 'utf8').trim(), 10);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  } catch { return undefined; }
+}
+
+/**
+ * Probe for the demo's VS Code window via AppleScript. When `pid` is
+ * supplied the lookup goes through `System Events`' `unix id` predicate
+ * on the exact Electron main process — no title match required. When
+ * `pid` is absent we fall back to the legacy title-contains probe so
+ * non-runTests callers (none currently) still work.
+ *
+ * Returns a `ProbeResult` so the caller can surface the enumerated
+ * state on timeout. Every osascript invocation writes to a per-PID
+ * script file for re-use (osascript re-parses the script on every
+ * invocation but file I/O is cached by the OS).
+ */
+const _probeScriptFiles = new Map<string, string>();
+function checkRecordingWindow(pid?: number): ProbeResult {
+  if (process.platform !== 'darwin') {
+    return { ok: true, windowCount: 1, seen: '(non-darwin: assumed ok)' };
+  }
+
+  const cacheKey = pid === undefined ? 'title' : `pid:${pid}`;
+  let scriptFile = _probeScriptFiles.get(cacheKey);
+  if (scriptFile === undefined) {
+    const script = pid === undefined
+      ? // Legacy title-based probe (fallback for callers without a PID).
+        `on run\n` +
+        `  tell application "System Events"\n` +
+        `    set codeProcs to (every application process whose name is "Code" or name is "Electron")\n` +
+        `    set titles to ""\n` +
+        `    set nWin to 0\n` +
+        `    repeat with p in codeProcs\n` +
+        `      try\n` +
+        `        repeat with w in (every window of p)\n` +
+        `          set nWin to nWin + 1\n` +
+        `          try\n` +
+        `            set wName to (name of w) as string\n` +
+        `            set titles to titles & "[" & wName & "] "\n` +
+        `            if wName contains "KJ_DEMO_RECORDING_WINDOW" or wName contains "Extension Development Host" then return "OK|" & nWin & "|" & titles\n` +
+        `          end try\n` +
+        `        end repeat\n` +
+        `      end try\n` +
+        `    end repeat\n` +
+        `    return "MISS|" & nWin & "|" & titles\n` +
+        `  end tell\n` +
+        `end run\n`
+      : // PID-scoped probe: the Electron main process is the SOURCE OF TRUTH.
+        // `unix id` pins us to exactly one process; window count = 0 is a
+        // clear signal that either the window hasn't surfaced yet OR the
+        // caller lacks macOS Accessibility permission.
+        `on run\n` +
+        `  tell application "System Events"\n` +
+        `    try\n` +
+        `      set p to first application process whose unix id is ${pid}\n` +
+        `    on error\n` +
+        `      return "NOPROC|0|"\n` +
+        `    end try\n` +
+        `    set titles to ""\n` +
+        `    set nWin to 0\n` +
+        `    try\n` +
+        `      repeat with w in (every window of p)\n` +
+        `        set nWin to nWin + 1\n` +
+        `        try\n` +
+        `          set wName to (name of w) as string\n` +
+        `          set titles to titles & "[" & wName & "] "\n` +
+        `        end try\n` +
+        `      end repeat\n` +
+        `    end try\n` +
+        `    if nWin > 0 then return "OK|" & nWin & "|" & titles\n` +
+        `    return "EMPTY|0|"\n` +
+        `  end tell\n` +
+        `end run\n`;
+    scriptFile = path.join(os.tmpdir(), `kj-demo-probe-${cacheKey.replace(':', '-')}-${process.pid}.applescript`);
+    fs.writeFileSync(scriptFile, script);
+    _probeScriptFiles.set(cacheKey, scriptFile);
+  }
+
+  try {
+    const out = execSync(
+      `osascript ${JSON.stringify(scriptFile)}`,
+      { encoding: 'utf8', timeout: 5000 },
+    ).trim();
+    // Output format: "STATUS|nWindows|titles"
+    const [status, nStr, titles = ''] = out.split('|');
+    const n = parseInt(nStr, 10);
+    const windowCount = Number.isFinite(n) ? n : 0;
+    const seen = `pid=${pid ?? 'any'} status=${status} windows=${windowCount} titles=${titles}`;
+    if (VERBOSE) log(`  [probe] ${seen}`);
+    return { ok: status === 'OK', windowCount, seen };
+  } catch (e) {
+    const msg = (e as Error).message;
+    return { ok: false, windowCount: 0, seen: `pid=${pid ?? 'any'} osascript-error="${msg}"` };
+  }
+}
+
+/**
+ * Boolean wrapper kept for existing callers; prefer `checkRecordingWindow`
+ * when you need the diagnostic payload.
+ */
+function checkRecordingWindowExists(pid?: number): boolean {
+  return checkRecordingWindow(pid).ok;
+}
+
+/**
+ * Position the demo's VS Code window at (WINDOW_X, WINDOW_Y) with our
+ * target size, then read back its actual rect + the display's Retina
+ * scale.
+ *
+ * When `pid` is provided (canonical path), AppleScript looks the window
+ * up via `unix id` — no title-match dependency. When absent, falls back
+ * to the legacy name-contains probe for robustness.
+ */
+function positionVSCodeWindow(pid?: number): WindowRect {
   const fallback: WindowRect = { x: 0, y: 0, w: WIDTH, h: HEIGHT, scale: 1 };
   if (process.platform !== 'darwin') {
     log(`  (window positioning only implemented on macOS — using default)`);
     return fallback;
   }
 
-  // Find our dev-host window by its custom title — we set
-  // `window.title: KJ_DEMO_RECORDING_WINDOW` in fixtures/demo-settings.json so
-  // this is a unique marker no other VS Code window will have. That avoids
-  // accidentally moving the user's regular VS Code windows out of the way.
+  // PID-scoped resolution — preferred. Otherwise fall back to the
+  // title-search approach so any old caller keeps working.
+  const resolveTarget = pid !== undefined
+    ? `    try\n` +
+      `      set targetProc to first application process whose unix id is ${pid}\n` +
+      `    on error\n` +
+      `      return "ERROR:no-process-with-pid-${pid}"\n` +
+      `    end try\n` +
+      `    set allTitles to "(pid=${pid})"\n` +
+      `    try\n` +
+      `      set allWins to (every window of targetProc)\n` +
+      `    on error errMsg\n` +
+      `      return "ERROR:window-list-failed; " & errMsg\n` +
+      `    end try\n` +
+      `    if (count of allWins) = 0 then\n` +
+      `      return "ERROR:no-windows-for-pid; " & allTitles\n` +
+      `    end if\n` +
+      `    set targetWindow to item 1 of allWins\n` +
+      `    try\n` +
+      `      set allTitles to allTitles & "[" & (name of targetWindow as string) & "]"\n` +
+      `    end try\n`
+    : `    set codeProcs to (every application process whose name is "Code" or name is "Electron")\n` +
+      `    if (count of codeProcs) = 0 then return "ERROR:no-code-process"\n` +
+      `    set allTitles to ""\n` +
+      `    set targetWindow to missing value\n` +
+      `    set targetProc   to missing value\n` +
+      `    repeat with p in codeProcs\n` +
+      `      try\n` +
+      `        repeat with w in (every window of p)\n` +
+      `          try\n` +
+      `            set wName to (name of w) as string\n` +
+      `            set allTitles to allTitles & "[" & wName & "] "\n` +
+      `            if wName contains "KJ_DEMO_RECORDING_WINDOW" or wName contains "Extension Development Host" then\n` +
+      `              set targetWindow to w\n` +
+      `              set targetProc   to p\n` +
+      `              exit repeat\n` +
+      `            end if\n` +
+      `          end try\n` +
+      `        end repeat\n` +
+      `      end try\n` +
+      `      if targetWindow is not missing value then exit repeat\n` +
+      `    end repeat\n` +
+      `    if targetWindow is missing value then\n` +
+      `      set targetProc to item (count of codeProcs) of codeProcs\n` +
+      `      try\n` +
+      `        set targetWindow to window 1 of targetProc\n` +
+      `      end try\n` +
+      `    end if\n` +
+      `    if targetWindow is missing value then return "ERROR:no-demo-recording-window; seen: " & allTitles\n`;
+
   const script =
     `on run\n` +
     `  tell application "System Events"\n` +
-    `    set allTitles to ""\n` +
-    `    set targetWindow to missing value\n` +
-    `    set targetProc   to missing value\n` +
-    `    -- @vscode/test-electron runs VS Code from .vscode-test/ where the\n` +
-    `    -- executable is literally named "Electron". We scan ALL GUI processes\n` +
-    `    -- and pick the one whose bundle/path looks like VS Code.\n` +
-    `    set codeProcs to {}\n` +
-    `    repeat with p in (every application process whose background only is false)\n` +
-    `      set pName to name of p as string\n` +
-    `      if pName is "Code" or pName is "Electron" or pName contains "Visual Studio Code" then\n` +
-    `        set end of codeProcs to p\n` +
-    `      end if\n` +
-    `    end repeat\n` +
-    `    repeat with p in codeProcs\n` +
-    `      set pName to name of p as string\n` +
-    `      set allTitles to allTitles & "(" & pName & ")"\n` +
-    `      try\n` +
-    `        repeat with w in (every window of p)\n` +
-    `          try\n` +
-    `            set wName to (name of w) as string\n` +
-    `            set allTitles to allTitles & "[" & wName & "] "\n` +
-    `            if wName contains "KJ_DEMO_RECORDING_WINDOW" or wName contains "Extension Development Host" then\n` +
-    `              set targetWindow to w\n` +
-    `              set targetProc   to p\n` +
-    `              exit repeat\n` +
-    `            end if\n` +
-    `          end try\n` +
-    `        end repeat\n` +
-    `      end try\n` +
-    `      if targetWindow is not missing value then exit repeat\n` +
-    `    end repeat\n` +
-    `    -- If no title-marked window found, fall back to the first window of\n` +
-    `    -- the last-matched process (heuristic: most recent Code-like process\n` +
-    `    -- tends to be the dev host since test-electron just spawned it).\n` +
-    `    if targetWindow is missing value and (count of codeProcs) > 0 then\n` +
-    `      set targetProc to item (count of codeProcs) of codeProcs\n` +
-    `      try\n` +
-    `        set targetWindow to window 1 of targetProc\n` +
-    `        set allTitles to allTitles & " [fallback]"\n` +
-    `      end try\n` +
-    `    end if\n` +
-    `    if targetWindow is missing value then return "ERROR:no-demo-recording-window; seen: " & allTitles\n` +
+    resolveTarget +
     `    set frontmost of targetProc to true\n` +
     `    set position of targetWindow to {${WINDOW_X}, ${WINDOW_Y}}\n` +
     `    set size of targetWindow to {${WIDTH}, ${HEIGHT}}\n` +
-    `    -- Explicitly raise this specific window above every other Code window\n` +
-    `    -- and bring its owning process to the foreground.\n` +
     `    try\n` +
     `      perform action "AXRaise" of targetWindow\n` +
     `    end try\n` +
-    `    delay 0.4\n` +
+    `    delay 0.3\n` +
     `    set pos to position of targetWindow\n` +
     `    set sz  to size of targetWindow\n` +
     `    return ((item 1 of pos) as string) & "," & ((item 2 of pos) as string) & "," & ((item 1 of sz) as string) & "," & ((item 2 of sz) as string)\n` +
@@ -383,7 +795,6 @@ function positionVSCodeWindow(): WindowRect {
 
   const scale = detectRetinaScale();
   log(`  Display scale: ${scale}x`);
-  // Return LOGICAL coordinates — screencapture takes logical coords directly.
   return { ...logicalRect, scale };
 }
 
@@ -394,7 +805,6 @@ function detectRetinaScale(): number {
       `osascript -e 'tell application "Finder" to return bounds of window of desktop'`,
       { encoding: 'utf8' },
     ).trim();
-    // bounds returns logical points. Compare with pixel resolution from system_profiler.
     const logicalW = parseInt(out.split(',')[2].trim(), 10);
     const pixelOut = execSync(`system_profiler SPDisplaysDataType 2>/dev/null || true`, { encoding: 'utf8' });
     const match = pixelOut.match(/Resolution:\s+(\d+)\s*x\s*\d+\s*Retina/);
@@ -413,6 +823,55 @@ async function waitForFile(file: string, timeoutMs: number): Promise<void> {
     await sleep(100);
   }
   throw new Error(`Timeout waiting for ${file}`);
+}
+
+/**
+ * Poll `probe` until it returns a truthy non-undefined value, or the timeout
+ * elapses. Replaces blind `sleep(n)` calls — much more robust on slow /
+ * loaded machines, and structurally symmetric with `waitForFile`.
+ */
+async function pollUntil<T>(
+  probe:    () => T | undefined,
+  opts:     {
+    timeoutMs:  number;
+    intervalMs?: number;
+    what:        string;
+    /** Optional: return a human-readable snapshot of the last probe
+     *  result. Included in the timeout error message — turns
+     *  "timeout" into "timeout, last seen: pid=4493 windows=0 titles=()". */
+    describe?:   () => string;
+  },
+): Promise<T> {
+  const deadline = Date.now() + opts.timeoutMs;
+  const step     = opts.intervalMs ?? 100;
+  while (Date.now() < deadline) {
+    const v = probe();
+    if (v !== undefined && v !== null && v !== false) return v as T;
+    await sleep(step);
+  }
+  const tail = opts.describe ? `\n  Last probe: ${opts.describe()}` : '';
+  throw new Error(
+    `pollUntil timeout (${opts.timeoutMs}ms): ${opts.what}\n` +
+    `  Remediation: close unused apps, run \`kjdemo clean\`, then retry.${tail}`,
+  );
+}
+
+/**
+ * Wrap a named step with start / ok / FAIL logging and timing. When a demo
+ * flakes at 3 AM you want to see exactly which phase slowed down, not a wall
+ * of interleaved log lines with no structure.
+ */
+async function phase<T>(name: string, fn: () => Promise<T> | T): Promise<T> {
+  const start = Date.now();
+  log(`[phase=${name}] start`);
+  try {
+    const r = await fn();
+    log(`[phase=${name}] ok (${Date.now() - start}ms)`);
+    return r;
+  } catch (e) {
+    log(`[phase=${name}] FAIL (${Date.now() - start}ms): ${(e as Error).message}`);
+    throw e;
+  }
 }
 
 function sleep(ms: number): Promise<void> {

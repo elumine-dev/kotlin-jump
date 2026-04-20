@@ -76,8 +76,12 @@ describe('DemoSettings — chrome hidden (≤4 elements on screen rule)', () => 
 });
 
 describe('DemoSettings — window positioning infrastructure', () => {
-  it('window.title = "KJ_DEMO_RECORDING_WINDOW" (AppleScript matches this marker in record.ts)', () => {
-    expect(settings['window.title']).toBe('KJ_DEMO_RECORDING_WINDOW');
+  it('window.title contains "KJ_DEMO_RECORDING_WINDOW" (AppleScript fallback matches this marker when PID lookup is unavailable)', () => {
+    // The setting is a VS Code template — must include template
+    // placeholders so the settings parser accepts it, but also embed the
+    // marker for the name-contains fallback in `checkRecordingWindow`.
+    expect(settings['window.title']).toContain('KJ_DEMO_RECORDING_WINDOW');
+    expect(String(settings['window.title'])).toMatch(/\$\{[a-zA-Z]+\}/);
   });
   it('window.titleBarStyle = "custom" (native macOS title bar would cover the marker)', () => {
     expect(settings['window.titleBarStyle']).toBe('custom');

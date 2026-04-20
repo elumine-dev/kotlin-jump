@@ -30,6 +30,22 @@ export interface CaptionOpts {
   duration?: number;
 }
 
+export interface ScrollThroughOpts {
+  /** Start line (0-indexed). */
+  fromLine:   number;
+  /** End line (0-indexed). */
+  toLine:     number;
+  /** Final column after the scroll. Default 0. */
+  column?:    number;
+  /**
+   * Target total duration of the scroll in ms. Default 1200. The step size
+   * and inter-step delay are derived from this so every WebP frame (@ 12 fps
+   * ≈ 83 ms/frame) captures the viewport at a different position — no
+   * visible stutter, no dependence on hitting a specific stepMs sweet spot.
+   */
+  durationMs?: number;
+}
+
 export interface NavigateOpts {
   /** Shortcut glyph shown on the banner — e.g. "⌘ + ⌥ + ←". */
   shortcut:    string;
@@ -159,31 +175,189 @@ export class Stage {
   private async flashLanding(editor: vscode.TextEditor, line: number): Promise<void> {
     const pulseDeco = vscode.window.createTextEditorDecorationType({
       isWholeLine:     false,
-      backgroundColor: 'rgba(0, 122, 204, 0.12)',   // #007ACC halo
+      // Top + bottom border makes the line POP on the screen recorder — the
+      // left-only 3 px stripe on a zero-width range (prior version) rendered
+      // as an invisible hairline on WebP. Wrapping the visible line text in
+      // a contrasting bracket is captured reliably.
       borderColor:     '#007ACC',
-      borderWidth:     '0 0 0 3px',
+      borderWidth:     '2px 0 2px 0',
       borderStyle:     'solid',
       overviewRulerColor: '#007ACC',
       overviewRulerLane:  vscode.OverviewRulerLane.Full,
     });
-    const range = new vscode.Range(line, 0, line, 0);
+    // Range must span actual characters for the border to have something to
+    // wrap around. End-of-line position → full line width underlined both top
+    // and bottom. Optional chain shields unit-test mocks that don't provide
+    // `lineAt` on their fake document; 80-char fallback is generous enough
+    // to paint a visible border on any real-world line.
+    const lineLen = editor.document.lineAt?.(line)?.text?.length ?? 80;
+    const range   = new vscode.Range(line, 0, line, Math.max(1, lineLen));
     editor.setDecorations(pulseDeco, [range]);
     await this.pause(500);
     pulseDeco.dispose();
   }
 
-  async openFile(relativePath: string, opts: { line?: number; column?: number } = {}): Promise<vscode.TextEditor> {
+  async openFile(
+    relativePath: string,
+    opts: {
+      line?:    number;
+      column?:  number;
+      /** Reveal strategy. `'center'` (default) snaps the target to the viewport
+       *  centre — right for cross-file hops. `'if-offscreen'` re-centres only
+       *  when the target is outside the current viewport — avoids the micro-
+       *  scroll jitter when the cursor moves inside a screen that's already
+       *  showing the target. `'default'` uses VS Code's native reveal. */
+      reveal?:  'center' | 'if-offscreen' | 'default';
+    } = {},
+  ): Promise<vscode.TextEditor> {
     const uri = vscode.Uri.file(path.join(this.opts.workspaceRoot, relativePath));
     const doc = await vscode.workspace.openTextDocument(uri);
     const editor = await vscode.window.showTextDocument(doc, { preview: false });
     if (opts.line !== undefined) {
       const pos = new vscode.Position(opts.line, opts.column ?? 0);
       editor.selection = new vscode.Selection(pos, pos);
-      editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
+      const revealType =
+        opts.reveal === 'if-offscreen' ? vscode.TextEditorRevealType.InCenterIfOutsideViewport :
+        opts.reveal === 'default'      ? vscode.TextEditorRevealType.Default                   :
+                                         vscode.TextEditorRevealType.InCenter;
+      editor.revealRange(new vscode.Range(pos, pos), revealType);
       void this.flashLanding(editor, opts.line);
     }
     await this.pause(500);
     return editor;
+  }
+
+  /**
+   * Scroll the caret from `fromLine` to `toLine` as a continuous motion,
+   * not a teleport. The step size (in lines) and inter-step delay (in ms)
+   * are derived from `durationMs` so that:
+   *
+   *   1. The total scroll lands within ~durationMs of its target (default 1200 ms).
+   *   2. The inter-step delay stays in the 50-80 ms window — tight enough
+   *      that each new `cursorMove` fires while VS Code's `smoothScrolling`
+   *      animation (~125 ms) is still running, so the animations OVERLAP
+   *      and compose into a continuous viewport motion.
+   *   3. The step count exceeds the WebP frame count over the duration
+   *      (~14 frames at 12 fps for 1200 ms), so every captured frame lands
+   *      on a distinct viewport position — no same-frame batching that
+   *      would reintroduce stutter.
+   *
+   * Does NOT flash the landing line — pure motion. Pair with `dwellOn()`
+   * if the landing deserves narrative emphasis.
+   */
+  async scrollThrough(opts: ScrollThroughOpts): Promise<vscode.TextEditor> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) throw new Error('scrollThrough(): no active editor');
+
+    const { fromLine, toLine, column = 0, durationMs = 1200 } = opts;
+    const startPos = new vscode.Position(fromLine, 0);
+    editor.selection = new vscode.Selection(startPos, startPos);
+    editor.revealRange(
+      new vscode.Range(startPos, startPos),
+      vscode.TextEditorRevealType.InCenterIfOutsideViewport,
+    );
+    // Brief settle so the viewport is stable before the first cursorMove.
+    await this.pause(40);
+
+    const delta = toLine - fromLine;
+    const abs   = Math.abs(delta);
+
+    if (abs === 0) return editor;
+
+    // 50 ms floor keeps steps inside VS Code's smooth-scroll animation
+    // window; 80 ms ceiling keeps every WebP frame on a fresh position.
+    const MIN_STEP_MS = 50;
+    const MAX_STEP_MS = 80;
+    // Floor on the step count: a scroll must be at least 4 steps long —
+    // otherwise even a "scrollThrough" of 30 lines with a tiny durationMs
+    // would collapse into a single cursorMove and re-teleport. We'd rather
+    // overrun durationMs than silently regress on the core promise.
+    const MIN_N_STEPS = 4;
+    const budgetSteps = Math.floor(durationMs / MIN_STEP_MS);
+    const maxSteps    = Math.max(MIN_N_STEPS, budgetSteps);
+    const stepLines   = Math.max(1, Math.ceil(abs / maxSteps));
+    const nSteps      = Math.ceil(abs / stepLines);
+    const rawStepMs   = Math.round(durationMs / nSteps);
+    const stepMs      = Math.min(MAX_STEP_MS, Math.max(MIN_STEP_MS, rawStepMs));
+
+    const dir = delta > 0 ? 'down' : 'up';
+    let remaining = abs;
+    for (let i = 0; i < nSteps; i++) {
+      const step = Math.min(remaining, stepLines);
+      await vscode.commands.executeCommand('cursorMove', { to: dir, by: 'line', value: step });
+      remaining -= step;
+      // Don't pause after the final step — let the caller's dwell start
+      // immediately instead of adding an idle tail.
+      if (i < nSteps - 1) await this.pause(stepMs);
+    }
+
+    // Final column alignment — `cursorMove by: 'line'` preserves column but
+    // may clamp if an intermediate line is shorter; reset explicitly.
+    const endPos = new vscode.Position(toLine, column);
+    editor.selection = new vscode.Selection(endPos, endPos);
+    return editor;
+  }
+
+  /**
+   * Strong, word-sized halo at the current caret position, visible for
+   * ~450 ms. Used by `click()` to show WHERE the click landed before the
+   * navigation jumps away — without this, the demo announces "Cmd+Click on
+   * X" but nothing on the editor surface confirms the source location.
+   *
+   * Visually distinct from `flashLanding`:
+   *   - word range (not full line)
+   *   - higher opacity (0.28 vs 0.12)
+   *   - full border (not just the left gutter)
+   */
+  private async flashClickSource(editor: vscode.TextEditor, pos: vscode.Position): Promise<void> {
+    const wordRange =
+      editor.document.getWordRangeAtPosition?.(pos) ??
+      new vscode.Range(pos, new vscode.Position(pos.line, pos.character + 1));
+    // Thick solid border + visible sidekick marker. VS Code's screencapture
+    // path drops semi-transparent backgrounds, so we stay border-only and
+    // use a thicker stroke (3 px) + an `after` token that IS captured. The
+    // combination makes the caret position impossible to miss.
+    const deco = vscode.window.createTextEditorDecorationType({
+      borderColor:     '#007ACC',
+      borderWidth:     '3px',
+      borderStyle:     'solid',
+      borderRadius:    '3px',
+      overviewRulerColor: '#007ACC',
+      overviewRulerLane:  vscode.OverviewRulerLane.Full,
+      after: {
+        contentText:     ' ◀',
+        color:           '#007ACC',
+        fontWeight:      'bold',
+        margin:          '0 0 0 6px',
+      },
+    });
+    editor.setDecorations(deco, [wordRange]);
+    // Longer dwell (was 450 ms). 850 ms puts the halo on ~10 frames at
+    // 12 fps — enough that the viewer's eye certainly registers it.
+    await this.pause(850);
+    deco.dispose();
+  }
+
+  /**
+   * Narrative dwell on a specific line — `flashLanding` halo + pause. Use
+   * instead of a bare `pause()` when the intent is "hold the viewer's eye
+   * on this landing spot", not just "wait for the screen to settle".
+   *
+   * When `column` is provided, applies the stronger `flashClickSource`
+   * word-level halo instead — useful when the viewer needs to see exactly
+   * which symbol the cursor is on (e.g. before pressing Alt+F7 on a
+   * specific method name).
+   */
+  async dwellOn(target: { line: number; column?: number }, ms: number): Promise<void> {
+    const ed = vscode.window.activeTextEditor;
+    if (ed) {
+      if (target.column !== undefined) {
+        void this.flashClickSource(ed, new vscode.Position(target.line, target.column));
+      } else {
+        void this.flashLanding(ed, target.line);
+      }
+    }
+    await this.pause(ms);
   }
 
   /** Record a "Cmd+Click on <target>" action and navigate to its definition.
@@ -206,6 +380,12 @@ export class Stage {
     if (!editor) throw new Error('click(): no active editor');
     const doc = editor.document;
     const pos = editor.selection.active;
+
+    // Show WHERE the click landed BEFORE the navigation whisks us away —
+    // otherwise the card overlay announces "Cmd+Click on X" with no visible
+    // confirmation on the editor surface. The halo stays ~450 ms before the
+    // jump fires.
+    await this.flashClickSource(editor, pos);
 
     const locations = await vscode.commands.executeCommand<(vscode.Location | vscode.LocationLink)[]>(
       'vscode.executeDefinitionProvider',

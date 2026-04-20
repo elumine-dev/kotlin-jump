@@ -1,27 +1,60 @@
 [
   {
     "type": "caption",
-    "label": "Poking around the Pokédex screen…",
+    "label": "Poking around the Compose screen…",
     "duration": 1400,
-    "t": 500
-  },
-  {
-    "type": "caption",
-    "label": "…and into the DAO",
-    "duration": 1400,
-    "t": 4655
+    "t": 300
   },
   {
     "type": "keystroke",
     "label": "⌘ + ⌥ + ←",
     "sublabel": "Navigate Back",
-    "duration": 1500,
-    "t": 8479
+    "duration": 1400,
+    "t": 7636
   },
   {
     "type": "caption",
-    "label": "Exact line, exact column — at every stop",
-    "duration": 2500,
-    "t": 9321
+    "label": "Back to the SELECTs — top of the DAO",
+    "duration": 1600,
+    "t": 8139
+  },
+  {
+    "type": "keystroke",
+    "label": "⌘ + ⌥ + ←",
+    "sublabel": "Navigate Back",
+    "duration": 1100,
+    "t": 9779
+  },
+  {
+    "type": "caption",
+    "label": "Across files — back in displayCard",
+    "duration": 1600,
+    "t": 10184
+  },
+  {
+    "type": "keystroke",
+    "label": "⌘ + ⌥ + ←",
+    "sublabel": "Navigate Back",
+    "duration": 1100,
+    "t": 11793
+  },
+  {
+    "type": "caption",
+    "label": "And the very first stop — class header",
+    "duration": 1600,
+    "t": 12298
+  },
+  {
+    "type": "keystroke",
+    "label": "⌘ + ⌥ + →",
+    "sublabel": "Navigate Forward",
+    "duration": 1400,
+    "t": 13903
+  },
+  {
+    "type": "caption",
+    "label": "Forward works the same way — line AND column",
+    "duration": 2000,
+    "t": 13903
   }
 ]

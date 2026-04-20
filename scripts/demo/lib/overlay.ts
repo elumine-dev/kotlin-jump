@@ -58,6 +58,93 @@ export const CAPTION_Y = 664;  // 8×83 — was 660, snapped to grid
 export const CAPTION_BAR_H = 40;
 export const CAPTION_BAR_PAD = 40;
 
+/* ── Rounded-corner mask ─────────────────────────────────────────────────── */
+
+/**
+ * Rounded-corner radius in 1280×720 render coordinates.
+ *
+ * Bumped from 12 → 24 so the macOS-style corner is visually OBVIOUS on
+ * the final 960×540 WebP (24 × 0.75 scale = 18 px of arc). At the old
+ * 12 px value the arc was only ~9 px on the README-rendered WebP, too
+ * subtle to read as "rounded window chrome" — the user noticed only
+ * pointy corners on dark README backgrounds.
+ *
+ * Larger radius also prevents any sliver of the recorded macOS desktop
+ * bleeding through at the very edge of the video (screencapture -R may
+ * include a fraction of the chrome border in some rare positions).
+ */
+export const CORNER_RADIUS = 24;
+
+export interface CornerMaskOpts {
+  width?:    number;
+  height?:   number;
+  radius?:   number;
+  outLabel?: string;
+  /** When `false`, emit a single-frame source (no `loop=-1:1:0` tail) so the
+   *  caller can apply additional per-frame compute (e.g. gblur) BEFORE
+   *  looping. Default `true` — matches the common alphamerge-with-video case
+   *  where the mask needs to match every frame of the video. */
+  loop?:     boolean;
+  /** Output frame rate when `loop=true`. Normalising the looped stream to
+   *  the final WebP rate avoids time-base reconciliation cost inside the
+   *  main filter graph's `alphamerge` / `overlay` nodes (a disparate fps
+   *  between static cornermask and main video caused 2 min+ hangs). */
+  fps?:      number;
+}
+
+/**
+ * Build a filter chain that generates a `[cornermask]` stream — a static
+ * GRAYSCALE frame looped to infinity, intended for `alphamerge`:
+ *   - Lum = 255 (white) inside the rounded rectangle → pixel becomes fully
+ *     opaque after alphamerge (video shows through)
+ *   - Lum = 0 (black) in the four corner "triangles" outside the arc →
+ *     pixel becomes fully transparent after alphamerge (corner is alpha=0
+ *     in the final WebP, lets the README background show through)
+ *
+ * The caller pipes this through `alphamerge` with the scaled video BEFORE
+ * the overlay chain runs, so banners/cards/captions compose on a cleanly-
+ * rounded canvas with transparent corners.
+ *
+ * Perf: one `geq` evaluation for one frame; `loop=-1:size=1` reuses that
+ * frame for the whole clip — no per-frame per-pixel cost beyond the
+ * alphamerge filter itself.
+ */
+export function buildCornerMaskFilter(opts: CornerMaskOpts = {}): string {
+  const W = opts.width    ?? VIDEO_W;
+  const H = opts.height   ?? VIDEO_H;
+  const R = opts.radius   ?? CORNER_RADIUS;
+  const out = opts.outLabel ?? 'cornermask';
+
+  // Four disjoint corner-region tests. A pixel is MASKED OUT (lum=0,
+  // becomes transparent after alphamerge) iff it sits in one of the four
+  // R×R corner squares AND outside that corner's circular arc of radius R.
+  const r2 = R * R;
+  const term = (cxCond: string, cyCond: string, cxExpr: string, cyExpr: string) =>
+    `${cxCond}*${cyCond}*gt(pow(${cxExpr}\\,2)+pow(${cyExpr}\\,2)\\,${r2})`;
+  const cornerExpr =
+    `${term(`lt(X\\,${R})`, `lt(Y\\,${R})`, `X-${R}`,   `Y-${R}`)}` +
+    `+${term(`gt(X\\,W-${R})`, `lt(Y\\,${R})`, `X-(W-${R})`, `Y-${R}`)}` +
+    `+${term(`lt(X\\,${R})`, `gt(Y\\,H-${R})`, `X-${R}`,   `Y-(H-${R})`)}` +
+    `+${term(`gt(X\\,W-${R})`, `gt(Y\\,H-${R})`, `X-(W-${R})`, `Y-(H-${R})`)}`;
+
+  // INVERSE logic vs. the old overlay mask: we want lum=0 (black) in the
+  // corner triangles (→ alpha=0 after alphamerge) and lum=255 (white) in
+  // the interior (→ alpha=255 after alphamerge, fully opaque video).
+  const expr = `if(${cornerExpr}\\,0\\,255)`;
+
+  const fps = opts.fps ?? 12;
+  const loopTail = (opts.loop ?? true) ? `,loop=-1:1:0,fps=${fps}` : '';
+  // `d=1:r=1` is the canonical "one frame, one second" form — cleaner than
+  // `d=0.04:r=25` and identical semantically once `loop=-1:1:0` caches it.
+  return (
+    `color=c=black:s=${W}x${H}:d=1:r=1,` +
+    `format=gray,` +
+    `geq=lum='${expr}'` +
+    loopTail +
+    `[${out}]`
+  );
+}
+
 /* ── Timing ──────────────────────────────────────────────────────────────── */
 
 export const FADE_MS = 150;

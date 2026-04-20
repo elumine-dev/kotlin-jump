@@ -64,6 +64,11 @@ object R {
         // Edge case — defined in R.kt but missing from XML → no decoration
         val this_key_does_not_exist = -1
         val key_does_not_exist   = -1
+        // Sprint 2 Feature 4 — defined in R.kt, missing from XML (diagnostic demo)
+        val sprint2_catch_dialog     = -1
+        val sprint2_evolution_prompt = -1
+        val sprint2_sync_status      = -1
+        val sprint2_team_saved_msg   = -1
     }
 
     object color {
@@ -98,6 +103,12 @@ object R {
         val type_psychic         = 128
         val type_dragon          = 129
         val this_color_does_not_exist = -1
+        // Sprint 2 Feature 4 — defined in R.kt, missing from XML (diagnostic demo)
+        val sprint2_gradient_overlay = -1
+        val sprint2_primary_gradient = -1
+        val sprint2_ripple_overlay   = -1
+        val sprint2_divider_line     = -1
+        val sprint2_shimmer_base     = -1
     }
 
     object dimen {

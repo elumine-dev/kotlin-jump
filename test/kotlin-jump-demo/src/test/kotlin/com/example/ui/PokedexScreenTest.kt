@@ -26,12 +26,12 @@ class PokedexScreenTest {
     private val pikachu  = Pokemon(25, "Pikachu",   PokemonType.ELECTRIC, level = 50, hp = 100)
     private val bulba    = Pokemon(1,  "Bulbasaur",  PokemonType.GRASS,    level = 20, hp = 80)
 
-    // private val fakeRepository = object : PokemonRepository {
-    //     override suspend fun catch(id: Int) = pikachu
-    //     override suspend fun release(pokemon: Pokemon) {}
-    //     override fun getPokedex() = listOf(pikachu, bulba)
-    //     override fun battle(attacker: Pokemon, defender: Pokemon) = BattleResult.Draw
-    // }
+    private val fakeRepository = object : PokemonRepository {
+        override suspend fun catch(id: Int) = pikachu
+        override suspend fun release(pokemon: Pokemon) {}
+        override fun getPokedex() = listOf(pikachu, bulba)
+        override fun battle(attacker: Pokemon, defender: Pokemon) = BattleResult.Draw
+    }
 
     private lateinit var screen: PokedexScreen
 

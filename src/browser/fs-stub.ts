@@ -3,6 +3,8 @@ export const readFile    = notSupported;
 export const writeFile   = notSupported;
 export const readdir     = notSupported;
 export const stat        = notSupported;
+export const statSync    = notSupported;
+export const readdirSync = notSupported;
 export const mkdir       = notSupported;
 export const existsSync  = () => false;
 export const readFileSync = notSupported;

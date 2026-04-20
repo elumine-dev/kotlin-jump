@@ -240,6 +240,21 @@
         "category": "Kotlin Jump"
       },
       {
+        "command": "kotlin-jump.diagnoseGradleDetection",
+        "title": "Diagnose Gradle Detection",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.resetGradleProject",
+        "title": "Reset Gradle Project Selection",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.pickGradleProject",
+        "title": "Pick Gradle Project",
+        "category": "Kotlin Jump"
+      },
+      {
         "command": "kotlin-jump.connectAdbWifi",
         "title": "Connect Android via WiFi (Wireless Debugging)",
         "category": "Kotlin Jump",
@@ -523,6 +538,11 @@
           },
           "default": [],
           "markdownDescription": "Explicit Android app definitions. When non-empty, **auto-detection is skipped entirely** — the button uses these entries directly.\n\nEquivalent to the zshrc aliases `replica()`/`rubicon()`.\n\n```json\n\"kotlinJump.androidProjects\": [\n  {\n    \"name\": \"Rubicon\",\n    \"module\": \"rubicon/app\",\n    \"package\": \"ca.lapresse.android.lapressemobile.debug\",\n    \"variant\": \"Debug\"\n  },\n  {\n    \"name\": \"Replica\",\n    \"module\": \"replica/app\",\n    \"package\": \"ca.lapresse.lapresseplus.debug\",\n    \"variant\": \"ReplicaLaPresseDebug\"\n  }\n]\n```"
+        },
+        "kotlinJump.gradleProjectRoot": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Explicit path to the Gradle project root. **Absolute** or **workspace-relative**.\n\nOverrides auto-detection entirely when set.\n\nExamples:\n```json\n\"kotlinJump.gradleProjectRoot\": \"test/kotlin-jump-demo\"\n\"kotlinJump.gradleProjectRoot\": \"/Users/me/code/my-app\"\n```\n\nLeave empty (default) to use automatic detection:\n1. Walks up from the active editor's file\n2. Checks workspace folder roots\n3. Scans up to 2 levels deep (handles monorepos like `kotlin-nav/test/kotlin-jump-demo`)\n\nRun **Kotlin Jump: Diagnose Gradle Detection** to see which tier resolved the project."
         },
         "kotlinJump.testTaskOverrides": {
           "type": "object",

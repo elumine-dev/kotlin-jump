@@ -7,7 +7,7 @@ export class NullLogger {
 }
 
 export class Logger implements vscode.Disposable {
-  private readonly channel: vscode.OutputChannel;
+  readonly channel: vscode.OutputChannel;
 
   constructor(name: string) {
     this.channel = vscode.window.createOutputChannel(name);

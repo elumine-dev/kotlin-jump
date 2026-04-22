@@ -31,3 +31,5 @@ scripts/**
 dist/demo/**
 media/demos/*.timeline.json
 media/demos/*-poster.png
+tmp-demo-e2e/**
+tmp-demo-frames/**

@@ -161,6 +161,34 @@ describe('SymbolIndex — Go to Definition', () => {
     expect(entry).toBeDefined();
     expect(entry!.kind).toBe('dataClass');
   });
+
+  // KMP expect/actual: same FQN, different files — actual must win regardless
+  // of insertion order. Otherwise Cmd+Click on e.g. `runBlocking` can surface
+  // `expect fun runBlocking(...)` (signature only, no body) instead of the
+  // `actual fun runBlocking(...) { ... }` implementation.
+  it('lookupFqn prefers actual over expect regardless of insertion order', () => {
+    const KMP_EXPECT = `package kx
+expect fun runBlocking(block: () -> Unit): Unit`;
+    const KMP_ACTUAL = `package kx
+actual fun runBlocking(block: () -> Unit): Unit { block() }`;
+
+    // Case 1: actual added first, expect second — actual must still win
+    const a = new SymbolIndex();
+    addFile(a, 'file:///jvm/Builders.kt', KMP_ACTUAL);
+    addFile(a, 'file:///common/Builders.common.kt', KMP_EXPECT);
+    const winnerA = a.lookupFqn('kx.runBlocking');
+    expect(winnerA).toBeDefined();
+    expect(winnerA!.uri.toString()).toBe('file:///jvm/Builders.kt');
+    expect(winnerA!.isActual).toBe(true);
+
+    // Case 2: expect added first, actual second — actual wins (normal overwrite)
+    const b = new SymbolIndex();
+    addFile(b, 'file:///common/Builders.common.kt', KMP_EXPECT);
+    addFile(b, 'file:///jvm/Builders.kt', KMP_ACTUAL);
+    const winnerB = b.lookupFqn('kx.runBlocking');
+    expect(winnerB!.uri.toString()).toBe('file:///jvm/Builders.kt');
+    expect(winnerB!.isActual).toBe(true);
+  });
 });
 
 describe('SymbolIndex — Go to Implementation', () => {

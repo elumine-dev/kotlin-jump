@@ -20,6 +20,8 @@ export interface RawSymbol {
   isSuspend?:       boolean;
   isAbstract?:      boolean;
   isConst?:         boolean;
+  isExpect?:        boolean; // Kotlin KMP `expect` declaration — signature-only, no body
+  isActual?:        boolean; // Kotlin KMP `actual` declaration — platform implementation
   isExtension?:     boolean; // fun with receiver type, e.g. fun String.foo()
   isInline?:        boolean;
   isInfix?:         boolean;
@@ -181,8 +183,10 @@ export function parse(uriString: string, text: string): ParsedFile {
       const isHiltViewModel = annotationWindow.some(l => /@HiltViewModel\b/.test(l)) || undefined;
       const isDeprecated    = annotationWindow.some(l => RE_DEPRECATED.test(l))      || undefined;
       const isTestClass     = annotationWindow.some(l => RE_RUN_WITH.test(l))        || undefined;
+      const isExpect        = /\bexpect\b/.test(preClass)   || undefined;
+      const isActual        = /\bactual\b/.test(preClass)   || undefined;
 
-      symbols.push({ name, kind, line: lineNum, character: raw.indexOf(name, cm.index), isComposable: false, depth: braceDepth, supertypes: supertypes.length > 0 ? supertypes : undefined, isAbstract, isPrivate, isHiltViewModel, isDeprecated, isTestClass });
+      symbols.push({ name, kind, line: lineNum, character: raw.indexOf(name, cm.index), isComposable: false, depth: braceDepth, supertypes: supertypes.length > 0 ? supertypes : undefined, isAbstract, isPrivate, isHiltViewModel, isDeprecated, isTestClass, isExpect, isActual });
 
       if (kind === 'enum') enumBraceDepth = braceDepth;
 
@@ -317,6 +321,8 @@ export function parse(uriString: string, text: string): ParsedFile {
       const isOperator    = /\boperator\b/.test(preFun)  || undefined;
       const isOverride    = /\boverride\b/.test(preFun)  || undefined;
       const isPrivateFun  = /\bprivate\b/.test(preFun)   || undefined;
+      const isExpect      = /\bexpect\b/.test(preFun)    || undefined;
+      const isActual      = /\bactual\b/.test(preFun)    || undefined;
       symbols.push({
         name: funName,
         kind: isComposable ? 'composable' : 'fun',
@@ -337,6 +343,8 @@ export function parse(uriString: string, text: string): ParsedFile {
         isTest,
         isIgnored,
         isLifecycle,
+        isExpect,
+        isActual,
       });
       [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
       if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
@@ -361,6 +369,8 @@ export function parse(uriString: string, text: string): ParsedFile {
       const isOverride   = /\boverride\b/.test(propPre) || undefined;
       const isPrivate    = /\bprivate\b/.test(propPre)  || undefined;
       const isDeprecated = annotationWindow.some(l => RE_DEPRECATED.test(l)) || undefined;
+      const isExpect     = /\bexpect\b/.test(propPre)   || undefined;
+      const isActual     = /\bactual\b/.test(propPre)   || undefined;
       const constValue   = isConst ? extractConstValue(raw, pm[0].length) : undefined;
       symbols.push({
         name: pm[2],
@@ -376,6 +386,8 @@ export function parse(uriString: string, text: string): ParsedFile {
         isPrivate,
         isDeprecated,
         constValue,
+        isExpect,
+        isActual,
       });
       // val x = object : Interface — anonymous object on same line as property
       emitAnonObjectIfPresent(raw, lineNum, braceDepth, symbols);

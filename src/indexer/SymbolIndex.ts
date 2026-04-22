@@ -21,6 +21,8 @@ export interface SymbolEntry {
   isSuspend?:       boolean;
   isAbstract?:      boolean;
   isConst?:         boolean;
+  isExpect?:        boolean; // KMP `expect` — signature-only, no body
+  isActual?:        boolean; // KMP `actual` — platform implementation
   isExtension?:     boolean;
   isInline?:        boolean;
   isInfix?:         boolean;
@@ -123,6 +125,8 @@ export class SymbolIndex {
         isSuspend:       sym.isSuspend,
         isAbstract:      sym.isAbstract,
         isConst:         sym.isConst,
+        isExpect:        sym.isExpect,
+        isActual:        sym.isActual,
         isExtension:     sym.isExtension,
         isInline:        sym.isInline,
         isInfix:         sym.isInfix,
@@ -145,7 +149,16 @@ export class SymbolIndex {
       if (!set) { set = new Set(); this.byName.set(sym.name, set); this.addToTrigram(sym.name); }
       set.add(entry);
 
-      this.byFqn.set(fqn, entry);
+      // Prefer `actual` (real implementation) over `expect` (signature-only)
+      // for the same FQN. Without this, a KMP library like kotlinx.coroutines
+      // that declares `runBlocking` as both `expect` (commonMain/concurrentMain)
+      // and `actual` (jvmMain) would silently resolve Cmd+Click to whichever
+      // file the jar's zip entries happened to iterate last — surfacing a
+      // signature with no body and a useless "Go to Definition" experience.
+      const existing = this.byFqn.get(fqn);
+      if (!existing || !entry.isExpect || existing.isExpect) {
+        this.byFqn.set(fqn, entry);
+      }
 
       if (sym.supertypes) {
         for (const st of sym.supertypes) {

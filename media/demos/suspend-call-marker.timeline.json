@@ -1,0 +1,26 @@
+[
+  {
+    "type": "caption",
+    "label": "`suspend` means: this call might pause. For how long?",
+    "duration": 2600,
+    "t": 300
+  },
+  {
+    "type": "caption",
+    "label": "⚡ marks every pause point. 6 suspends in 8 lines here.",
+    "duration": 2600,
+    "t": 5837
+  },
+  {
+    "type": "caption",
+    "label": "Badges tell you the thread: 🧵 IO, 🖥 Main, ⚙ Default.",
+    "duration": 2800,
+    "t": 10658
+  },
+  {
+    "type": "caption",
+    "label": "Know your pauses. Know your threads. Before the UI freezes.",
+    "duration": 3000,
+    "t": 13462
+  }
+]

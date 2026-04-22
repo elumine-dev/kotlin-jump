@@ -1,0 +1,26 @@
+[
+  {
+    "type": "caption",
+    "label": "What colours are in this palette?",
+    "duration": 2800,
+    "t": 300
+  },
+  {
+    "type": "caption",
+    "label": "Click the swatch. Native Color Picker. 🎨",
+    "duration": 2400,
+    "t": 12058
+  },
+  {
+    "type": "caption",
+    "label": "Drag a slider. The hex rewrites itself, live.",
+    "duration": 2800,
+    "t": 18671
+  },
+  {
+    "type": "caption",
+    "label": "Every hex. Swatch inline. Picker one click away.",
+    "duration": 2800,
+    "t": 22083
+  }
+]

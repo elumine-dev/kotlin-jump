@@ -1,0 +1,26 @@
+[
+  {
+    "type": "caption",
+    "label": "So what do these R.colors actually look like?",
+    "duration": 2800,
+    "t": 300
+  },
+  {
+    "type": "caption",
+    "label": "Select the lines. Swatches step aside for editing. ✍️",
+    "duration": 2600,
+    "t": 8165
+  },
+  {
+    "type": "caption",
+    "label": "Raw names are back. Swatches stay on every other line.",
+    "duration": 2800,
+    "t": 13776
+  },
+  {
+    "type": "caption",
+    "label": "Move on. Swatches snap back, straight from colors.xml. 🎨",
+    "duration": 2800,
+    "t": 18494
+  }
+]

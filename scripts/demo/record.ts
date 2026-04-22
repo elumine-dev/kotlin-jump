@@ -29,6 +29,10 @@ import { ScreenRecorder, extractPosterFromWebP, pickPosterFrame, fileSizeKb, pro
 import { buildOverlayFilterGraph }                                                              from './lib/overlay';
 import { buildRoundedFrameFilter, prerenderCornerMask }                                         from './lib/frame';
 import {
+  buildWindowFailureMessage,
+  decideWindowResolution,
+}                                                                                               from './lib/windowing';
+import {
   renderFilterToPngSequence,
   classifyFrames,
   encodeFramesToWebpParallel,
@@ -37,6 +41,7 @@ import {
   checkRequiredBinaries,
 }                                                                                               from './lib/webp-encoder';
 import type { TimelineEvent }                                                                   from './lib/timeline';
+import type { WindowProbeResult, WindowProbeSource, WindowResolutionDecision }                  from './lib/windowing';
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const WIDTH     = 1280;
@@ -55,8 +60,25 @@ const HEIGHT    = 720;
 const WINDOW_X = parseInt(process.env.KJ_DEMO_WINDOW_X ?? '0', 10);
 const WINDOW_Y = parseInt(process.env.KJ_DEMO_WINDOW_Y ?? '0', 10);
 
+// Opt-in escape hatch for debugging only. Default behavior is fail-fast if the
+// demo window cannot be enumerated and positioned correctly.
+const ALLOW_WINDOW_FALLBACK = process.env.KJ_DEMO_ALLOW_WINDOW_FALLBACK === '1';
+const ACCESSIBILITY_GRACE_MS = Math.max(0, parseInt(process.env.KJ_DEMO_ACCESSIBILITY_GRACE_MS ?? '4000', 10));
+
 /** Entire orchestrator must finish within this budget; else watchdog fires. */
 const GLOBAL_TIMEOUT_MS = 4 * 60 * 1000;
+
+/**
+ * Demos disabled at the orchestrator level (independent of compile).
+ * Empty after Phase 6 of the JAR-navigation refactor — all `lib-jar-*`
+ * demos are now reproducible via the bundled Compose Multiplatform
+ * dependencies in `test/kotlin-jump-demo/build.gradle.kts` + the
+ * `scripts/demo/setup-fixture.sh` warm-up.
+ *
+ * Add a name here only if a demo is structurally broken and
+ * temporarily skipped; remove once fixed.
+ */
+const DISABLED_DEMOS = new Set<string>([]);
 
 /** Single place holding everything the cleanup handler must release. */
 interface Resources {
@@ -87,6 +109,14 @@ async function main(): Promise<void> {
   if (!demoFile.endsWith('.demo.ts')) die(`demo file must end with .demo.ts: ${demoFile}`);
 
   const name        = path.basename(demoFile, '.demo.ts');
+
+  if (DISABLED_DEMOS.has(name)) {
+    log(`✗ skipping disabled demo: ${name}`);
+    log(`  Reason: pending JAR-navigation refactor (Phase 1-6 of plan).`);
+    log(`  See: ~/.claude/plans/je-veux-que-tu-wild-boot.md (Phase 0).`);
+    process.exit(0);
+  }
+
   const compiledDemo = path.join(REPO_ROOT, 'dist', 'demo', 'demos', `${name}.demo.js`);
   if (!fs.existsSync(compiledDemo)) {
     die(`compiled demo not found: ${compiledDemo}\nrun: npm run compile:demo`);
@@ -238,65 +268,50 @@ async function main(): Promise<void> {
     log(`  ⚠ could not read PID from ready marker — falling back to title-based window lookup`);
   }
 
-  // Poll for the recording window. Soft-fail: if we find the correct
-  // process but it has zero enumerable windows for 10 s, that's almost
-  // certainly a macOS Accessibility-permission denial — we log an
-  // actionable warning and continue with the default capture rectangle
-  // rather than hard-fail after 30 s.
+  // Poll for the recording window. Default behavior is fail-fast: if the
+  // window cannot be enumerated/positioned correctly, the recording should
+  // stop before capture starts. Full-screen fallback remains available only
+  // as an explicit debug override (`KJ_DEMO_ALLOW_WINDOW_FALLBACK=1`).
   const WAIT_WINDOW_TIMEOUT_MS = 30_000;
-  const ACCESSIBILITY_FALLBACK_MS = 10_000;
-  let lastProbe: ProbeResult | undefined;
+  const fallbackRect = { x: 0, y: 0, w: WIDTH, h: HEIGHT, scale: 1 };
+  let windowDecision: WindowResolutionDecision | undefined;
   let windowAvailable = false;
-  let accessibilityFallback = false;
   try {
-    await phase('wait-window', () =>
-      pollUntil(() => {
-        const probe = checkRecordingWindow(electronPid);
-        lastProbe = probe;
-        return probe.ok ? true : undefined;
-      }, {
-        timeoutMs: WAIT_WINDOW_TIMEOUT_MS,
-        intervalMs: 200,
-        what: 'VS Code recording window to appear',
-        describe: () => lastProbe?.seen ?? '(no probe yet)',
+    windowDecision = await phase('wait-window', () =>
+      waitForRecordingWindow(electronPid, {
+        timeoutMs:            WAIT_WINDOW_TIMEOUT_MS,
+        intervalMs:           200,
+        accessibilityGraceMs: ACCESSIBILITY_GRACE_MS,
       }),
     );
     windowAvailable = true;
+    log(`  ${windowDecision.summary}`);
+    logVSCodeLikeProcesses();
   } catch (err) {
-    // Soft-fail path. If we got a response AT ALL (even "0 windows"),
-    // we know osascript is running and VS Code exists — the likely
-    // cause is missing Accessibility permission.
-    const timedOutCleanly = lastProbe !== undefined && lastProbe.windowCount === 0;
-    if (timedOutCleanly) {
-      accessibilityFallback = true;
-      log(`  ⚠ window never surfaced — falling back to full-capture region.`);
-      log(`     Last probe: ${lastProbe.seen}`);
-      log(`     Most common cause: System Events can't enumerate the VS`);
-      log(`     Code window. Grant Accessibility permission to your terminal:`);
-      log(`       System Settings → Privacy & Security → Accessibility → enable`);
-      log(`       your terminal app (Terminal / iTerm / Warp / …).`);
-    } else {
-      throw err;  // propagate genuine failures (osascript crash, etc.)
+    logVSCodeLikeProcesses();
+    if (!ALLOW_WINDOW_FALLBACK) {
+      throw err;
     }
+    log(`  ⚠ wait-window failed but KJ_DEMO_ALLOW_WINDOW_FALLBACK=1 — continuing with full-capture fallback.`);
+    log(`     ${(err as Error).message}`);
   }
-  void ACCESSIBILITY_FALLBACK_MS;  // reserved for future "detect quickly and bail" tuning
-
-  // Diagnostic: list processes matching any VS Code bundle path.
-  try {
-    const procs = execSync(
-      `ps -eo pid,command | grep -iE "visual studio code|vscode-test|Code\\.app" | grep -v grep | head -15`,
-      { encoding: 'utf8' },
-    );
-    log(`  VS Code-like processes:\n${procs.trim().split('\n').map(l => '    ' + l).join('\n')}`);
-  } catch { /* ignore */ }
 
   // ----------------------------------------------------------- position window
-  // If the window never appeared, don't bother running AppleScript — skip
-  // straight to the fallback capture rect.
-  const rect = windowAvailable
-    ? await phase('position-window', () => positionVSCodeWindow(electronPid))
-    : { x: 0, y: 0, w: WIDTH, h: HEIGHT, scale: 1 };
-  if (accessibilityFallback) {
+  let rect = fallbackRect;
+  if (windowAvailable) {
+    try {
+      rect = await phase('position-window', () =>
+        positionVSCodeWindow(electronPid, windowDecision?.positionMode),
+      );
+    } catch (err) {
+      if (!ALLOW_WINDOW_FALLBACK) {
+        throw err;
+      }
+      log(`  ⚠ position-window failed but KJ_DEMO_ALLOW_WINDOW_FALLBACK=1 — continuing with full-capture fallback.`);
+      log(`     ${(err as Error).message}`);
+    }
+  }
+  if (!windowAvailable || rect === fallbackRect) {
     log(`  Using fallback capture region (0,0) ${WIDTH}×${HEIGHT}`);
   }
 
@@ -564,17 +579,6 @@ interface WindowRect {
   scale: number;
 }
 
-/**
- * Structured result from a single window-detection probe. `seen` is a raw
- * human-readable summary of what AppleScript returned — on failure we
- * surface it in the timeout error so the next diagnosis isn't blind.
- */
-interface ProbeResult {
-  ok:          boolean;
-  windowCount: number;
-  seen:        string;
-}
-
 const VERBOSE = process.env.KJ_DEMO_VERBOSE === '1';
 
 /**
@@ -596,25 +600,25 @@ function readReadyMarkerPid(file: string): number | undefined {
  * `pid` is absent we fall back to the legacy title-contains probe so
  * non-runTests callers (none currently) still work.
  *
- * Returns a `ProbeResult` so the caller can surface the enumerated
- * state on timeout. Every osascript invocation writes to a per-PID
- * script file for re-use (osascript re-parses the script on every
- * invocation but file I/O is cached by the OS).
+ * Returns a structured probe so callers can distinguish:
+ *   - window found by PID
+ *   - title fallback needed
+ *   - likely Accessibility denial
+ *   - no visible window / osascript failure
+ *
+ * Every osascript invocation writes to a per-PID script file for re-use
+ * (osascript re-parses the script on every invocation but file I/O is
+ * cached by the OS).
  */
 const _probeScriptFiles = new Map<string, string>();
-function checkRecordingWindow(pid?: number): ProbeResult {
-  if (process.platform !== 'darwin') {
-    return { ok: true, windowCount: 1, seen: '(non-darwin: assumed ok)' };
-  }
-
-  const cacheKey = pid === undefined ? 'title' : `pid:${pid}`;
+function runRecordingWindowProbe(source: WindowProbeSource, cacheKey: string, pid?: number): WindowProbeResult {
   let scriptFile = _probeScriptFiles.get(cacheKey);
   if (scriptFile === undefined) {
     const script = pid === undefined
       ? // Legacy title-based probe (fallback for callers without a PID).
         `on run\n` +
         `  tell application "System Events"\n` +
-        `    set codeProcs to (every application process whose name is "Code" or name is "Electron")\n` +
+        `    set codeProcs to (every application process whose (name contains "Code") or (name contains "Electron"))\n` +
         `    set titles to ""\n` +
         `    set nWin to 0\n` +
         `    repeat with p in codeProcs\n` +
@@ -672,21 +676,96 @@ function checkRecordingWindow(pid?: number): ProbeResult {
     const [status, nStr, titles = ''] = out.split('|');
     const n = parseInt(nStr, 10);
     const windowCount = Number.isFinite(n) ? n : 0;
-    const seen = `pid=${pid ?? 'any'} status=${status} windows=${windowCount} titles=${titles}`;
+    const seen = `source=${source} pid=${pid ?? 'any'} status=${status} windows=${windowCount} titles=${titles}`;
     if (VERBOSE) log(`  [probe] ${seen}`);
-    return { ok: status === 'OK', windowCount, seen };
+    return {
+      ok:     status === 'OK',
+      source,
+      status: status as WindowProbeResult['status'],
+      windowCount,
+      seen,
+    };
   } catch (e) {
     const msg = (e as Error).message;
-    return { ok: false, windowCount: 0, seen: `pid=${pid ?? 'any'} osascript-error="${msg}"` };
+    return {
+      ok:          false,
+      source,
+      status:      'OSASCRIPT_ERROR',
+      windowCount: 0,
+      seen:        `source=${source} pid=${pid ?? 'any'} osascript-error="${msg}"`,
+    };
   }
 }
 
-/**
- * Boolean wrapper kept for existing callers; prefer `checkRecordingWindow`
- * when you need the diagnostic payload.
- */
-function checkRecordingWindowExists(pid?: number): boolean {
-  return checkRecordingWindow(pid).ok;
+function probeRecordingWindowResolution(pid?: number): WindowResolutionDecision {
+  if (process.platform !== 'darwin') {
+    return {
+      ok:                         true,
+      resolution:                 'pid',
+      likelyAccessibilityBlocked: false,
+      positionMode:               'pid',
+      summary:                    'resolution=pid (non-darwin: assumed ok)',
+    };
+  }
+
+  const pidProbe = pid === undefined
+    ? undefined
+    : runRecordingWindowProbe('pid', `pid:${pid}`, pid);
+  const titleProbe = pidProbe?.ok
+    ? undefined
+    : runRecordingWindowProbe('title', 'title');
+
+  return decideWindowResolution({ pidProbe, titleProbe });
+}
+
+async function waitForRecordingWindow(
+  pid: number | undefined,
+  opts: {
+    timeoutMs:            number;
+    intervalMs:           number;
+    accessibilityGraceMs: number;
+  },
+): Promise<WindowResolutionDecision> {
+  const deadline = Date.now() + opts.timeoutMs;
+  let blockedSince: number | undefined;
+  let lastDecision: WindowResolutionDecision | undefined;
+
+  while (Date.now() < deadline) {
+    const decision = probeRecordingWindowResolution(pid);
+    lastDecision = decision;
+    if (decision.ok) return decision;
+
+    if (decision.likelyAccessibilityBlocked) {
+      blockedSince ??= Date.now();
+      if (Date.now() - blockedSince >= opts.accessibilityGraceMs) {
+        throw new Error(buildWindowFailureMessage(decision));
+      }
+    } else {
+      blockedSince = undefined;
+    }
+
+    await sleep(opts.intervalMs);
+  }
+
+  throw new Error(buildWindowFailureMessage(
+    lastDecision ?? {
+      ok:                         false,
+      resolution:                 'no_window',
+      likelyAccessibilityBlocked: false,
+      summary:                    'resolution=no_window no probe result available',
+    },
+  ));
+}
+
+function logVSCodeLikeProcesses(): void {
+  try {
+    const procs = execSync(
+      `ps -eo pid,command | grep -iE "visual studio code|vscode-test|Code\\.app" | grep -v grep | head -15`,
+      { encoding: 'utf8' },
+    ).trim();
+    if (!procs) return;
+    log(`  VS Code-like processes:\n${procs.split('\n').map(l => '    ' + l).join('\n')}`);
+  } catch { /* ignore */ }
 }
 
 /**
@@ -698,16 +777,13 @@ function checkRecordingWindowExists(pid?: number): boolean {
  * up via `unix id` — no title-match dependency. When absent, falls back
  * to the legacy name-contains probe for robustness.
  */
-function positionVSCodeWindow(pid?: number): WindowRect {
-  const fallback: WindowRect = { x: 0, y: 0, w: WIDTH, h: HEIGHT, scale: 1 };
+function positionVSCodeWindow(pid?: number, preferredMode: WindowProbeSource = 'pid'): WindowRect {
   if (process.platform !== 'darwin') {
     log(`  (window positioning only implemented on macOS — using default)`);
-    return fallback;
+    return { x: 0, y: 0, w: WIDTH, h: HEIGHT, scale: 1 };
   }
 
-  // PID-scoped resolution — preferred. Otherwise fall back to the
-  // title-search approach so any old caller keeps working.
-  const resolveTarget = pid !== undefined
+  const buildResolveTarget = (mode: 'pid' | 'title'): string => mode === 'pid'
     ? `    try\n` +
       `      set targetProc to first application process whose unix id is ${pid}\n` +
       `    on error\n` +
@@ -726,7 +802,7 @@ function positionVSCodeWindow(pid?: number): WindowRect {
       `    try\n` +
       `      set allTitles to allTitles & "[" & (name of targetWindow as string) & "]"\n` +
       `    end try\n`
-    : `    set codeProcs to (every application process whose name is "Code" or name is "Electron")\n` +
+    : `    set codeProcs to (every application process whose (name contains "Code") or (name contains "Electron"))\n` +
       `    if (count of codeProcs) = 0 then return "ERROR:no-code-process"\n` +
       `    set allTitles to ""\n` +
       `    set targetWindow to missing value\n` +
@@ -755,42 +831,74 @@ function positionVSCodeWindow(pid?: number): WindowRect {
       `    end if\n` +
       `    if targetWindow is missing value then return "ERROR:no-demo-recording-window; seen: " & allTitles\n`;
 
-  const script =
-    `on run\n` +
-    `  tell application "System Events"\n` +
-    resolveTarget +
-    `    set frontmost of targetProc to true\n` +
-    `    set position of targetWindow to {${WINDOW_X}, ${WINDOW_Y}}\n` +
-    `    set size of targetWindow to {${WIDTH}, ${HEIGHT}}\n` +
-    `    try\n` +
-    `      perform action "AXRaise" of targetWindow\n` +
-    `    end try\n` +
-    `    delay 0.3\n` +
-    `    set pos to position of targetWindow\n` +
-    `    set sz  to size of targetWindow\n` +
-    `    return ((item 1 of pos) as string) & "," & ((item 2 of pos) as string) & "," & ((item 1 of sz) as string) & "," & ((item 2 of sz) as string)\n` +
-    `  end tell\n` +
-    `end run\n`;
+  const attemptPosition = (mode: 'pid' | 'title'): { x: number; y: number; w: number; h: number; } => {
+    const script =
+      `on run\n` +
+      `  tell application "System Events"\n` +
+      buildResolveTarget(mode) +
+      `    set frontmost of targetProc to true\n` +
+      `    set position of targetWindow to {${WINDOW_X}, ${WINDOW_Y}}\n` +
+      `    set size of targetWindow to {${WIDTH}, ${HEIGHT}}\n` +
+      `    try\n` +
+      `      perform action "AXRaise" of targetWindow\n` +
+      `    end try\n` +
+      `    delay 0.3\n` +
+      `    set pos to position of targetWindow\n` +
+      `    set sz  to size of targetWindow\n` +
+      `    return ((item 1 of pos) as string) & "," & ((item 2 of pos) as string) & "," & ((item 1 of sz) as string) & "," & ((item 2 of sz) as string)\n` +
+      `  end tell\n` +
+      `end run\n`;
 
-  const scriptFile = path.join(os.tmpdir(), `kj-demo-position-${process.pid}.applescript`);
-  fs.writeFileSync(scriptFile, script);
-  let logicalRect = { x: 0, y: 0, w: WIDTH, h: HEIGHT };
-  try {
-    const out = execSync(`osascript ${JSON.stringify(scriptFile)}`, { encoding: 'utf8' }).trim();
-    if (!out || out.startsWith('ERROR:')) throw new Error(out || 'empty osascript output');
-    const parts = out.split(',').map(s => parseInt(s.trim(), 10));
-    if (parts.length !== 4 || parts.some(n => Number.isNaN(n))) {
-      throw new Error(`unexpected osascript output: ${JSON.stringify(out)}`);
+    const scriptFile = path.join(os.tmpdir(), `kj-demo-position-${mode}-${process.pid}.applescript`);
+    fs.writeFileSync(scriptFile, script);
+    try {
+      const out = execSync(`osascript ${JSON.stringify(scriptFile)}`, { encoding: 'utf8' }).trim();
+      if (!out || out.startsWith('ERROR:')) throw new Error(out || 'empty osascript output');
+      const parts = out.split(',').map(s => parseInt(s.trim(), 10));
+      if (parts.length !== 4 || parts.some(n => Number.isNaN(n))) {
+        throw new Error(`unexpected osascript output: ${JSON.stringify(out)}`);
+      }
+      const [x, y, w, h] = parts;
+      return { x, y, w, h };
+    } finally {
+      fs.rmSync(scriptFile, { force: true });
     }
-    const [x, y, w, h] = parts;
-    logicalRect = { x, y, w, h };
-    log(`  Window positioned at (${x},${y}) size ${w}×${h} (logical)`);
-  } catch (err) {
-    const stderr = (err as { stderr?: Buffer }).stderr?.toString() ?? '';
-    log(`  ⚠ window positioning failed — falling back to (0,0) ${WIDTH}×${HEIGHT}`);
-    log(`     ${stderr.trim() || (err as Error).message}`);
-  } finally {
-    fs.rmSync(scriptFile, { force: true });
+  };
+
+  const formatExecError = (err: unknown): string => {
+    const stderr = (err as { stderr?: Buffer }).stderr?.toString().trim();
+    return stderr || (err as Error).message;
+  };
+
+  let logicalRect = { x: 0, y: 0, w: WIDTH, h: HEIGHT };
+  const attempts = pid === undefined
+    ? (['title'] as const)
+    : preferredMode === 'title'
+      ? (['title', 'pid'] as const)
+      : (['pid', 'title'] as const);
+  let positionedBy: WindowProbeSource | undefined;
+  let lastError = '';
+  for (const mode of attempts) {
+    try {
+      logicalRect = attemptPosition(mode);
+      positionedBy = mode;
+      log(`  Window positioned at (${logicalRect.x},${logicalRect.y}) size ${logicalRect.w}×${logicalRect.h} (logical)`);
+      break;
+    } catch (err) {
+      lastError = formatExecError(err);
+    }
+  }
+  if (!positionedBy) {
+    throw new Error(
+      `VS Code recording window could not be positioned.\n` +
+      `  preferred=${preferredMode}\n` +
+      `  last-error=${lastError}`,
+    );
+  }
+  if (positionedBy === 'title' && pid !== undefined) {
+    log(`  Window resolution: title_fallback`);
+  } else {
+    log(`  Window resolution: pid`);
   }
 
   const scale = detectRetinaScale();
@@ -823,37 +931,6 @@ async function waitForFile(file: string, timeoutMs: number): Promise<void> {
     await sleep(100);
   }
   throw new Error(`Timeout waiting for ${file}`);
-}
-
-/**
- * Poll `probe` until it returns a truthy non-undefined value, or the timeout
- * elapses. Replaces blind `sleep(n)` calls — much more robust on slow /
- * loaded machines, and structurally symmetric with `waitForFile`.
- */
-async function pollUntil<T>(
-  probe:    () => T | undefined,
-  opts:     {
-    timeoutMs:  number;
-    intervalMs?: number;
-    what:        string;
-    /** Optional: return a human-readable snapshot of the last probe
-     *  result. Included in the timeout error message — turns
-     *  "timeout" into "timeout, last seen: pid=4493 windows=0 titles=()". */
-    describe?:   () => string;
-  },
-): Promise<T> {
-  const deadline = Date.now() + opts.timeoutMs;
-  const step     = opts.intervalMs ?? 100;
-  while (Date.now() < deadline) {
-    const v = probe();
-    if (v !== undefined && v !== null && v !== false) return v as T;
-    await sleep(step);
-  }
-  const tail = opts.describe ? `\n  Last probe: ${opts.describe()}` : '';
-  throw new Error(
-    `pollUntil timeout (${opts.timeoutMs}ms): ${opts.what}\n` +
-    `  Remediation: close unused apps, run \`kjdemo clean\`, then retry.${tail}`,
-  );
 }
 
 /**

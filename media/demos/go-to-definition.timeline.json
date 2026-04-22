@@ -1,0 +1,21 @@
+[
+  {
+    "type": "caption",
+    "label": "Where is BattleResult defined?",
+    "duration": 2200,
+    "t": 300
+  },
+  {
+    "type": "click",
+    "label": "Cmd+Click → Go to Definition",
+    "sublabel": "BattleResult",
+    "duration": 2500,
+    "t": 2506
+  },
+  {
+    "type": "caption",
+    "label": "There. Cross-file, cross-package. Under 1 ms. ⚡",
+    "duration": 2400,
+    "t": 7113
+  }
+]

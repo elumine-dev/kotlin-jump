@@ -1,0 +1,34 @@
+[
+  {
+    "type": "caption",
+    "label": "Eleven hex swatches. ■ everywhere.",
+    "duration": 2400,
+    "t": 300
+  },
+  {
+    "type": "click",
+    "label": "Click → $(layers) → Toggle All Inline Features",
+    "sublabel": "kotlinJump.toggleAllInlineFeatures",
+    "duration": 2200,
+    "t": 2704
+  },
+  {
+    "type": "caption",
+    "label": "Master off. Pure code, ready to review or screenshot. 📸",
+    "duration": 2800,
+    "t": 5100
+  },
+  {
+    "type": "click",
+    "label": "Click → $(layers) → Toggle All Inline Features",
+    "sublabel": "kotlinJump.toggleAllInlineFeatures",
+    "duration": 2200,
+    "t": 7902
+  },
+  {
+    "type": "caption",
+    "label": "Master on. All swatches back. One button. Both ways. 🔄",
+    "duration": 2800,
+    "t": 10287
+  }
+]

@@ -221,6 +221,16 @@ describe('DemoOverlay — filter_complex graph', () => {
     expect(chain).toBe('[base]null[annot]');
   });
 
+  it('escapes drawtext punctuation with a single backslash so ffmpeg accepts the caption', () => {
+    const ev: TimelineEvent = {
+      type: 'caption', t: 0, label: 'Three lenses: usages, implementations, overrides.', duration: 2500,
+    };
+    const { chain } = buildOverlayFilterGraph([ev], OPTS);
+    const seg = chain.split(';').find(s => s.includes('drawtext='))!;
+    expect(seg).toContain("text='Three lenses\\: usages\\, implementations\\, overrides.'");
+    expect(seg).not.toContain("text='Three lenses\\\\: usages\\\\, implementations\\\\, overrides.'");
+  });
+
   it('output label is always [annot]', () => {
     const ev: TimelineEvent = { type: 'caption', t: 0, label: 'x', duration: 2500 };
     const { chain } = buildOverlayFilterGraph([ev], OPTS);

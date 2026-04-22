@@ -10,37 +10,37 @@
     "label": "⌥ + F7",
     "sublabel": "Find Usages",
     "duration": 2500,
-    "t": 1805
+    "t": 1800
   },
   {
     "type": "caption",
-    "label": "Two callers — pick one from the panel",
+    "label": "Two callers. Pick one from the panel.",
     "duration": 1800,
-    "t": 4801
+    "t": 5264
   },
   {
     "type": "caption",
-    "label": "Cursor on `show` — this call is in another file…",
+    "label": "Cursor on `show`. This call lives elsewhere…",
     "duration": 1600,
-    "t": 7897
+    "t": 8356
   },
   {
     "type": "caption",
-    "label": "On `show` — single caller. Alt+F7…",
+    "label": "On `show`. Single caller. Alt+F7…",
     "duration": 1500,
-    "t": 10941
+    "t": 11408
   },
   {
     "type": "keystroke",
     "label": "⌥ + F7",
     "sublabel": "Find Usages",
     "duration": 2500,
-    "t": 12446
+    "t": 12909
   },
   {
     "type": "caption",
-    "label": "Straight across files — no picker",
+    "label": "One caller. Straight there. No picker. 🎯",
     "duration": 2000,
-    "t": 13437
+    "t": 14350
   }
 ]

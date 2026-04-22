@@ -1,0 +1,21 @@
+[
+  {
+    "type": "caption",
+    "label": "The contract is here. But where does it actually run?",
+    "duration": 2400,
+    "t": 300
+  },
+  {
+    "type": "keystroke",
+    "label": "⌘ + F12",
+    "sublabel": "Go to Implementation",
+    "duration": 2400,
+    "t": 2742
+  },
+  {
+    "type": "caption",
+    "label": "Straight to the override. 🎯",
+    "duration": 2400,
+    "t": 3946
+  }
+]

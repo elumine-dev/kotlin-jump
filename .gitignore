@@ -11,3 +11,9 @@ scripts/demo/recorder-ext/dist/
 scripts/demo/recorder-ext/node_modules/
 tmp-demo-e2e/
 tmp-demo-frames/
+
+# IntelliJ project files (kotlin-jump-demo fixture)
+*.iml
+*.ipr
+*.iws
+.idea/

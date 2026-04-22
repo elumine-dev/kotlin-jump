@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.12.0
+
+**Library sources, reproducible everywhere — no JVM, no LSP, no setup.**
+
+- **Bundled Kotlin stdlib** (~600 KB shipped) — `List`, `String`, `Sequence`, etc. navigable from minute zero, even on a cold Gradle cache or offline. Project-pinned versions take precedence when present.
+- **JDK source indexing** — `java.lang.*`, `java.util.*` and the rest of the JDK become navigable via `JAVA_HOME` auto-detection (macOS `/usr/libexec/java_home`, Linux `update-alternatives`, Windows scan). Multi-JDK aware (prefers JDK 17+).
+- **HTTP source download** — when a library's `-sources.jar` is missing from the local cache, click the new **`$(library)` status bar item** → "Download missing sources". Direct HTTPS fetch from Maven Central. No `./gradlew dependencies`, no JVM, no terminal.
+- **Status bar UX** — dedicated item showing indexed-libs count, JDK badge, stdlib badge, missing count. Click for an actions menu.
+- **Inline-feature toolbar buttons** — five new editor-toolbar buttons (color folding, const val folding, hex color swatches, !! highlight, master `$(layers)` toggle) join the existing string-folding 👁 button.
+- **6 new settings** — `kotlinJump.jdkHome`, `kotlinJump.useBundledStdlib`, `kotlinJump.suppressFirstScanPrompt`, `kotlinJump.fallbackToOnlineDocs`, plus the per-feature toggles. All have sensible defaults.
+
+Backward-compatible: existing settings (`gradleCacheDir`, `indexSourcesJars`, `companionMode`) are respected.
+
 ## 1.11.0
 
 Maintenance release with no changes to extension behavior — corrects duplicate changelog entries and hardens the release pipeline for more reliable future publishes.

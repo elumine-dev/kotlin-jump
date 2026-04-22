@@ -210,6 +210,42 @@ describe('scanAll — discoverJars filter', () => {
     expect(zipQueue.idx).toBe(1);           // only 1 zip opened
   });
 
+  it('under cap, recently-modified JARs win over older ones (mtime desc priority)', async () => {
+    // Two JARs; cap at 1. The one with the higher mtime (zzz — indexed
+    // alphabetically LAST) must win, proving the ranking is by mtime, not
+    // insertion/alphabetical order.
+    const map: Record<string, string[]> = {
+      [CACHE]:                           ['aaa', 'zzz'],
+      [`${CACHE}/aaa`]:                  ['lib'],
+      [`${CACHE}/aaa/lib`]:              ['1.0'],
+      [`${CACHE}/aaa/lib/1.0`]:          ['h1'],
+      [`${CACHE}/aaa/lib/1.0/h1`]:       ['aaa-1.0-sources.jar'],
+      [`${CACHE}/zzz`]:                  ['other'],
+      [`${CACHE}/zzz/other`]:            ['2.0'],
+      [`${CACHE}/zzz/other/2.0`]:        ['h2'],
+      [`${CACHE}/zzz/other/2.0/h2`]:     ['zzz-2.0-sources.jar'],
+    };
+    readdirMock.mockImplementation(async (dir: string) => map[dir] ?? []);
+    statMock.mockImplementation(async (p: string) => {
+      if (p.endsWith('aaa-1.0-sources.jar')) return { isDirectory: () => false, mtimeMs: 1_000 };
+      if (p.endsWith('zzz-2.0-sources.jar')) return { isDirectory: () => false, mtimeMs: 9_000 };
+      return { isDirectory: () => true };
+    });
+    vi.spyOn(vscode.workspace, 'getConfiguration').mockReturnValueOnce({
+      get: (key: string, def: any) => {
+        if (key === 'sourcesJarsMaxCount') return 1;
+        if (key === 'gradleCacheDir') return CACHE;
+        return def;
+      },
+    } as any);
+    pushZip({ entries: { 'com/Z.kt': { size: 100 }, }, entryData: () => Buffer.from('package com\nclass Z') });
+    const { scanner, index } = makeScanner();
+    const result = await scanner.scanAll();
+    expect(result.jars).toBe(1);
+    // The `zzz` JAR (higher mtime) was the one indexed — its `Z` class ended up in the index.
+    expect(index.lookup('Z')).toHaveLength(1);
+  });
+
   it('readdir throws on one group subtree — that group skipped, others continue', async () => {
     readdirMock.mockImplementation(async (dir: string) => {
       if (dir === CACHE)                    return ['group.bad', 'group.ok'];

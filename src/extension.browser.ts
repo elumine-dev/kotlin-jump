@@ -42,13 +42,20 @@ import { HexColorDocumentColorProvider } from './providers/HexColorDocumentColor
 import { ApiLevelProvider } from './providers/ApiLevelProvider';
 import { StringResourceIndex } from './indexer/StringResourceIndex';
 import { ColorResourceIndex } from './indexer/ColorResourceIndex';
+import { DimenResourceIndex } from './indexer/DimenResourceIndex';
+import { DimenResourceDefinitionProvider } from './providers/DimenResourceDefinitionProvider';
+import { DimenXmlDefinitionProvider } from './providers/DimenXmlDefinitionProvider';
 import { VersionCatalogIndex } from './indexer/VersionCatalogIndex';
 import { StringResourceFoldingProvider } from './providers/StringResourceFoldingProvider';
 import { StringResourceHoverProvider } from './providers/StringResourceHoverProvider';
 import { StringResourceDefinitionProvider } from './providers/StringResourceDefinitionProvider';
 import { StringXmlDefinitionProvider } from './providers/StringXmlDefinitionProvider';
+import { ColorXmlDefinitionProvider } from './providers/ColorXmlDefinitionProvider';
+import { DrawableResourceDefinitionProvider } from './providers/DrawableResourceDefinitionProvider';
+import { DrawableXmlDefinitionProvider } from './providers/DrawableXmlDefinitionProvider';
 import { RResourceIndex } from './indexer/RResourceIndex';
 import { ColorFoldingProvider } from './providers/ColorFoldingProvider';
+import { ColorResourceDefinitionProvider } from './providers/ColorResourceDefinitionProvider';
 import { ConstValFoldingProvider } from './providers/ConstValFoldingProvider';
 import { SuspendMarkerProvider } from './providers/SuspendMarkerProvider';
 import { ResourceDiagnosticProvider } from './providers/ResourceDiagnosticProvider';
@@ -262,12 +269,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           await openImpl(impls[0]);
           return;
         }
-        const items = impls.map((m: { name: string; fqn: string; uri: vscode.Uri; line: number; character: number }) => ({
-          label:  isAnon(m)
-            ? `Anonymous object (line ${m.line + 1})`
-            : m.fqn.split('.').slice(-2).join('.'),
-          detail: m.uri.path.split('/').pop(),
-          impl:   m,
+        const sortedImpls = [...impls].sort((a: { name: string }, b: { name: string }) => {
+          const aAnon = isAnon(a);
+          const bAnon = isAnon(b);
+          if (aAnon !== bAnon) return aAnon ? 1 : -1;
+          return a.name.localeCompare(b.name);
+        });
+        const items = sortedImpls.map((m: { name: string; fqn: string; uri: vscode.Uri; line: number; character: number }) => ({
+          label:       isAnon(m) ? `Anonymous object (line ${m.line + 1})` : m.name,
+          description: isAnon(m) ? undefined : m.fqn.split('.').slice(0, -1).join('.'),
+          detail:      m.uri.path.split('/').pop(),
+          impl:        m,
         }));
         const picked = await vscode.window.showQuickPick(items, {
           placeHolder: `Go to implementation of ${name}`,
@@ -294,10 +306,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           return;
         }
 
-        const items = impls.map(m => ({
-          label:  m.fqn.split('.').slice(-2).join('.'),
-          detail: m.uri.path.split('/').pop(),
-          impl:   m,
+        const sortedImpls = [...impls].sort((a, b) => a.name.localeCompare(b.name));
+        const items = sortedImpls.map(m => ({
+          label:       m.name,
+          description: m.fqn.split('.').slice(0, -1).join('.'),
+          detail:      m.uri.path.split('/').pop(),
+          impl:        m,
         }));
         const picked = await vscode.window.showQuickPick(items, {
           placeHolder: `Go to implementation of ${name}`,
@@ -518,10 +532,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   // ── String Resource Folding ────────────────────────────────────────────────
   const stringIndex = new StringResourceIndex();
+  // Lifted to function scope so later blocks (R.dimen navigation) can
+  // reuse it for the XML → Kotlin direction without a second index.
+  const rIndex = new RResourceIndex();
   context.subscriptions.push((() => {
     const foldingProvider = new StringResourceFoldingProvider(stringIndex, log);
 
-    const rIndex = new RResourceIndex();
     void Promise.all(allUris.map(async u => {
       try {
         const bytes = await vscode.workspace.fs.readFile(u);
@@ -594,6 +610,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       vscode.languages.registerDefinitionProvider(
         { language: 'xml' },
         new StringXmlDefinitionProvider(rIndex),
+      ),
+      vscode.languages.registerDefinitionProvider(
+        { language: 'xml' },
+        new ColorXmlDefinitionProvider(rIndex),
+      ),
+      vscode.languages.registerDefinitionProvider(
+        [{ language: 'kotlin' }, { language: 'java' }],
+        new DrawableResourceDefinitionProvider(),
+      ),
+      vscode.languages.registerDefinitionProvider(
+        { language: 'xml' },
+        new DrawableXmlDefinitionProvider(rIndex),
       ),
       vscode.commands.registerCommand('kotlinJump.enableStringFolding', () => {
         vscode.workspace.getConfiguration('kotlinJump')
@@ -680,7 +708,49 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       w.onDidDelete(uri => { colorIndex.removeFile(uri); colorProvider.invalidateAll(); resourceDiag.invalidateAll(); });
     }
 
+    context.subscriptions.push(
+      vscode.languages.registerDefinitionProvider(
+        [{ language: 'kotlin' }, { language: 'java' }],
+        new ColorResourceDefinitionProvider(colorIndex),
+      ),
+    );
+
     context.subscriptions.push(colorProvider, resourceDiag, cW1, cW2);
+  })();
+
+  // ── R.dimen navigation ────────────────────────────────────────────────────
+  (() => {
+    const dimenIndex = new DimenResourceIndex();
+    const handleDimenChanged = async (uri: vscode.Uri) => {
+      try {
+        const bytes = await vscode.workspace.fs.readFile(uri);
+        dimenIndex.reindexFile(uri, new TextDecoder().decode(bytes));
+      } catch { /* skip */ }
+    };
+    vscode.workspace.findFiles(
+      '**/res/values*/dimens.xml',
+      `{${excludeList.join(',')}}`,
+    ).then(uris => Promise.all(uris.map(handleDimenChanged)));
+
+    const dW1 = vscode.workspace.createFileSystemWatcher('**/res/values/dimens.xml');
+    const dW2 = vscode.workspace.createFileSystemWatcher('**/res/values-*/dimens.xml');
+    for (const w of [dW1, dW2]) {
+      w.onDidCreate(handleDimenChanged);
+      w.onDidChange(handleDimenChanged);
+      w.onDidDelete(uri => dimenIndex.removeFile(uri));
+    }
+
+    context.subscriptions.push(
+      vscode.languages.registerDefinitionProvider(
+        [{ language: 'kotlin' }, { language: 'java' }],
+        new DimenResourceDefinitionProvider(dimenIndex),
+      ),
+      vscode.languages.registerDefinitionProvider(
+        { language: 'xml' },
+        new DimenXmlDefinitionProvider(rIndex),
+      ),
+      dW1, dW2,
+    );
   })();
 
   (() => {

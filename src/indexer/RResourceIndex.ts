@@ -4,26 +4,32 @@ export interface RUsageEntry {
   character: number;
 }
 
-const R_RE = /\bR\.(string|plurals|array)\.([A-Za-z_]\w*)\b/g;
+const R_RE = /\bR\.(string|plurals|array|color|drawable|mipmap|dimen)\.([A-Za-z_]\w*)\b/g;
+
+export type RType = 'string' | 'plurals' | 'array' | 'color' | 'drawable' | 'mipmap' | 'dimen';
 
 export class RResourceIndex {
-  private readonly string  = new Map<string, RUsageEntry[]>();
-  private readonly plurals = new Map<string, RUsageEntry[]>();
-  private readonly array   = new Map<string, RUsageEntry[]>();
+  private readonly string   = new Map<string, RUsageEntry[]>();
+  private readonly plurals  = new Map<string, RUsageEntry[]>();
+  private readonly array    = new Map<string, RUsageEntry[]>();
+  private readonly color    = new Map<string, RUsageEntry[]>();
+  private readonly drawable = new Map<string, RUsageEntry[]>();
+  private readonly mipmap   = new Map<string, RUsageEntry[]>();
+  private readonly dimen    = new Map<string, RUsageEntry[]>();
 
   // Tracks which (type, key) pairs each file contributes — needed for clean removal
-  private readonly byFile  = new Map<string, Array<{ type: 'string' | 'plurals' | 'array'; key: string }>>();
+  private readonly byFile  = new Map<string, Array<{ type: RType; key: string }>>();
 
   reindexFile(uri: string, content: string): void {
     this.removeFile(uri); // idempotent — clears previous state for this file
 
-    const contributed: Array<{ type: 'string' | 'plurals' | 'array'; key: string }> = [];
+    const contributed: Array<{ type: RType; key: string }> = [];
     const lines = content.split('\n');
     for (let ln = 0; ln < lines.length; ln++) {
       R_RE.lastIndex = 0;
       let m: RegExpExecArray | null;
       while ((m = R_RE.exec(lines[ln]))) {
-        const type = m[1] as 'string' | 'plurals' | 'array';
+        const type = m[1] as RType;
         const key  = m[2];
         if (!this[type].has(key)) this[type].set(key, []);
         this[type].get(key)!.push({ uri, line: ln, character: m.index });
@@ -45,7 +51,7 @@ export class RResourceIndex {
     this.byFile.delete(uri);
   }
 
-  getUsages(type: 'string' | 'plurals' | 'array', key: string): RUsageEntry[] {
+  getUsages(type: RType, key: string): RUsageEntry[] {
     return this[type].get(key) ?? [];
   }
 }

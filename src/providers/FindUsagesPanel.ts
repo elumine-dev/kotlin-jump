@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { SymbolIndex } from '../indexer/SymbolIndex';
 import { scanForUsages, resolveSearchTarget, DEFAULT_TEST_SEGMENTS, UsageResult } from './FindUsagesEngine';
+import { isTestPath } from '../util/testFilter';
 
 // ── Tree node types ───────────────────────────────────────────────────────────
 
@@ -314,7 +315,12 @@ function buildFileNodes(
 }
 
 function classifyFile(path: string, testSegments: string[]): FileKind {
-  if (testSegments.some(s => path.includes(s))) return 'test';
+  // Share the same bounded-component matcher as the caller-side filter
+  // in `util/testFilter.ts` — a plain `path.includes(segment)` would
+  // misclassify files under a repo named `test/kotlin-jump-demo` as
+  // tests (because `"test/kotlin"` is a literal substring of that
+  // directory name).
+  if (isTestPath(path, testSegments)) return 'test';
   if (path.includes('/src/debug/') && path.endsWith('Preview.kt')) return 'preview';
   return 'production';
 }

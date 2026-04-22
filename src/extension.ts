@@ -33,6 +33,11 @@ import * as path from 'path';
 import * as IndexStore from './indexer/IndexStore';
 import { KotlinJarContentProvider, KOTLIN_JAR_SCHEME, closeAllCachedZips } from './providers/KotlinJarContentProvider';
 import { GradleSourcesScanner } from './gradle/GradleSourcesScanner';
+import { JdkSourcesScanner }    from './jdk/JdkSourcesScanner';
+import { BundledStdlibProvider } from './kotlin/BundledStdlibProvider';
+import { SourcesStatusBar }     from './ui/SourcesStatusBar';
+import { SourcesActionsMenu }   from './ui/SourcesActionsMenu';
+import { DependencyResolver }   from './http/DependencyResolver';
 import { MavenSourcesScanner }  from './gradle/MavenSourcesScanner';
 import { resolveSourceJarPaths } from './gradle/GradleToolingResolver';
 import { KotlinTestController } from './testing/KotlinTestController';
@@ -42,6 +47,9 @@ import { StringResourceFoldingProvider } from './providers/StringResourceFolding
 import { StringResourceHoverProvider } from './providers/StringResourceHoverProvider';
 import { StringResourceDefinitionProvider } from './providers/StringResourceDefinitionProvider';
 import { StringXmlDefinitionProvider } from './providers/StringXmlDefinitionProvider';
+import { ColorXmlDefinitionProvider } from './providers/ColorXmlDefinitionProvider';
+import { DrawableResourceDefinitionProvider } from './providers/DrawableResourceDefinitionProvider';
+import { DrawableXmlDefinitionProvider } from './providers/DrawableXmlDefinitionProvider';
 import { RResourceIndex } from './indexer/RResourceIndex';
 import { runCodeLensAction } from './providers/CodeLensAction';
 import { WhatsNewPanel } from './providers/WhatsNewPanel';
@@ -51,8 +59,12 @@ import { HexColorDocumentColorProvider } from './providers/HexColorDocumentColor
 import { ApiLevelProvider } from './providers/ApiLevelProvider';
 import { registerAndroidRunCommand } from './commands/AndroidRunCommand';
 import { ColorResourceIndex } from './indexer/ColorResourceIndex';
+import { DimenResourceIndex } from './indexer/DimenResourceIndex';
+import { DimenResourceDefinitionProvider } from './providers/DimenResourceDefinitionProvider';
+import { DimenXmlDefinitionProvider } from './providers/DimenXmlDefinitionProvider';
 import { VersionCatalogIndex } from './indexer/VersionCatalogIndex';
 import { ColorFoldingProvider } from './providers/ColorFoldingProvider';
+import { ColorResourceDefinitionProvider } from './providers/ColorResourceDefinitionProvider';
 import { ConstValFoldingProvider } from './providers/ConstValFoldingProvider';
 import { SuspendMarkerProvider } from './providers/SuspendMarkerProvider';
 import { ResourceDiagnosticProvider } from './providers/ResourceDiagnosticProvider';
@@ -284,12 +296,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           await openImpl(impls[0]);
           return;
         }
-        const items = impls.map((m: { name: string; fqn: string; uri: vscode.Uri; line: number; character: number }) => ({
-          label:  isAnon(m)
-            ? `Anonymous object (line ${m.line + 1})`
-            : m.fqn.split('.').slice(-2).join('.'),
-          detail: m.uri.path.split('/').pop(),
-          impl:   m,
+        // Sort: named classes first (alphabetically), anonymous objects
+        // last. Anonymous entries are noisy placeholder-style items; putting
+        // them on top makes the picker feel like it's surfacing garbage
+        // before the real choices.
+        const sortedImpls = [...impls].sort((a: { name: string }, b: { name: string }) => {
+          const aAnon = isAnon(a);
+          const bAnon = isAnon(b);
+          if (aAnon !== bAnon) return aAnon ? 1 : -1;
+          return a.name.localeCompare(b.name);
+        });
+        const items = sortedImpls.map((m: { name: string; fqn: string; uri: vscode.Uri; line: number; character: number }) => ({
+          label:       isAnon(m) ? `Anonymous object (line ${m.line + 1})` : m.name,
+          description: isAnon(m) ? undefined : m.fqn.split('.').slice(0, -1).join('.'),
+          detail:      m.uri.path.split('/').pop(),
+          impl:        m,
         }));
         const picked = await vscode.window.showQuickPick(items, {
           placeHolder: `Go to implementation of ${name}`,
@@ -316,11 +337,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           return;
         }
 
-        // Multiple implementations → show quick pick
-        const items = impls.map(m => ({
-          label:  m.fqn.split('.').slice(-2).join('.'),
-          detail: m.uri.path.split('/').pop(),
-          impl:   m,
+        // Multiple implementations → show quick pick. Same sort as the
+        // class-level picker: alphabetical by name (anonymous entries are
+        // rare on method picks but would also land last by construction).
+        const sortedImpls = [...impls].sort((a, b) => a.name.localeCompare(b.name));
+        const items = sortedImpls.map(m => ({
+          label:       m.name,
+          description: m.fqn.split('.').slice(0, -1).join('.'),
+          detail:      m.uri.path.split('/').pop(),
+          impl:        m,
         }));
         const picked = await vscode.window.showQuickPick(items, {
           placeHolder: `Go to implementation of ${name}`,
@@ -554,13 +579,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   // ── String Resource Folding ────────────────────────────────────────────────
   const stringIndex = new StringResourceIndex();
+  // Lifted to function scope so later blocks (R.dimen navigation) can
+  // reuse it for the XML → Kotlin direction without a second index.
+  const rIndex = new RResourceIndex();
   context.subscriptions.push((() => {
     const foldingProvider = new StringResourceFoldingProvider(stringIndex, log);
 
     // ── R.string usage index (XML → Kotlin navigation) ──────────────────────
     // Pre-indexes R.(string|plurals|array).KEY usages from all Kotlin/Java files
     // so that provideDefinition() is O(1) instead of O(N files × I/O).
-    const rIndex = new RResourceIndex();
     void Promise.all(allUris.map(async u => {
       try {
         const bytes = await vscode.workspace.fs.readFile(u);
@@ -639,6 +666,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       vscode.languages.registerDefinitionProvider(
         { language: 'xml' },
         new StringXmlDefinitionProvider(rIndex),
+      ),
+      // Cmd+Click on `<color name="xxx">` in values/colors.xml →
+      // jump to every `R.color.xxx` usage in Kotlin/Java.
+      vscode.languages.registerDefinitionProvider(
+        { language: 'xml' },
+        new ColorXmlDefinitionProvider(rIndex),
+      ),
+      // Cmd+Click on `R.drawable.ic_*` / `R.mipmap.*` → opens the
+      // corresponding file in `res/drawable*` or `res/mipmap*`.
+      vscode.languages.registerDefinitionProvider(
+        [{ language: 'kotlin' }, { language: 'java' }],
+        new DrawableResourceDefinitionProvider(),
+      ),
+      // Cmd+Click on `<vector>` (or any drawable root element) →
+      // list every `R.drawable.<basename>` usage.
+      vscode.languages.registerDefinitionProvider(
+        { language: 'xml' },
+        new DrawableXmlDefinitionProvider(rIndex),
       ),
       vscode.commands.registerCommand('kotlinJump.enableStringFolding', () => {
         vscode.workspace.getConfiguration('kotlinJump')
@@ -734,7 +779,53 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       w.onDidDelete(uri => { colorIndex.removeFile(uri); colorProvider.invalidateAll(); resourceDiag.invalidateAll(); });
     }
 
+    // Cmd+Click on `R.color.xxx` → jump to <color name="xxx"> in
+    // values/colors.xml. Mirrors StringResourceDefinitionProvider.
+    context.subscriptions.push(
+      vscode.languages.registerDefinitionProvider(
+        [{ language: 'kotlin' }, { language: 'java' }],
+        new ColorResourceDefinitionProvider(colorIndex),
+      ),
+    );
+
     context.subscriptions.push(colorProvider, resourceDiag, cW1, cW2);
+  })();
+
+  // ── R.dimen navigation (values/dimens.xml) ────────────────────────────────
+  (() => {
+    const dimenIndex = new DimenResourceIndex();
+    const handleDimenChanged = async (uri: vscode.Uri) => {
+      try {
+        const bytes = await vscode.workspace.fs.readFile(uri);
+        dimenIndex.reindexFile(uri, new TextDecoder().decode(bytes));
+      } catch { /* skip */ }
+    };
+    vscode.workspace.findFiles(
+      '**/res/values*/dimens.xml',
+      `{${excludeList.join(',')}}`,
+    ).then(uris => Promise.all(uris.map(handleDimenChanged)));
+
+    const dW1 = vscode.workspace.createFileSystemWatcher('**/res/values/dimens.xml');
+    const dW2 = vscode.workspace.createFileSystemWatcher('**/res/values-*/dimens.xml');
+    for (const w of [dW1, dW2]) {
+      w.onDidCreate(handleDimenChanged);
+      w.onDidChange(handleDimenChanged);
+      w.onDidDelete(uri => dimenIndex.removeFile(uri));
+    }
+
+    context.subscriptions.push(
+      // Kotlin → XML: `R.dimen.x` jumps to `<dimen name="x">`.
+      vscode.languages.registerDefinitionProvider(
+        [{ language: 'kotlin' }, { language: 'java' }],
+        new DimenResourceDefinitionProvider(dimenIndex),
+      ),
+      // XML → Kotlin: `<dimen name="x">` lists all `R.dimen.x` usages.
+      vscode.languages.registerDefinitionProvider(
+        { language: 'xml' },
+        new DimenXmlDefinitionProvider(rIndex),
+      ),
+      dW1, dW2,
+    );
   })();
 
   // ── Sprint 2: version catalog hover (libs.xxx) ────────────────────────────
@@ -803,16 +894,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // reindex, build.gradle watcher) never overlap on the same index.
   let gradleScanner: GradleSourcesScanner | undefined;
   let mavenScanner:  MavenSourcesScanner  | undefined;
+  let jdkScanner:    JdkSourcesScanner    | undefined;
   let _scanChain: Promise<void> = Promise.resolve();
+
+  // Library-sources status bar (separate from the main symbol-count item).
+  // Updated after each scan with the scanners' counts.
+  const sourcesBar = new SourcesStatusBar();
+  context.subscriptions.push(sourcesBar);
+  const sourcesMenu = new SourcesActionsMenu(sourcesBar, log, () => runJarScan());
+  context.subscriptions.push(sourcesMenu);
 
   /** Cancel any in-flight scans and queue a fresh one. */
   const runJarScan = () => {
     gradleScanner?.cancel();
     mavenScanner?.cancel();
+    jdkScanner?.cancel();
     if (!gradleScanner) return;
 
     _scanChain = _scanChain.then(async () => {
       statusBar.text = '$(sync~spin) Kotlin Jump: indexing library sources…';
+      sourcesBar.setState({ scanning: true, networkError: false });
       try {
         const cfg = vscode.workspace.getConfiguration('kotlinJump');
 
@@ -827,22 +928,53 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           }
         }
 
-        const [gradle, maven] = await Promise.all([
+        const [gradle, maven, jdk] = await Promise.all([
           gradleScanner!.scanAll(toolingJarPaths ?? undefined),
           mavenScanner!.scanAll(),
+          jdkScanner!.scanAll(),
         ]);
         const totalJars  = gradle.jars  + maven.jars;
-        const totalFiles = gradle.files + maven.files;
+        const totalFiles = gradle.files + maven.files + jdk.files;
 
         const { symbols: totalSymbols } = index.stats();
+        const jdkLabel = jdk.jdkHome ? ` + JDK${jdk.files > 0 ? '✓' : '⚠'}` : '';
         statusBar.text    = `$(symbol-class) Kotlin Jump: ${totalSymbols.toLocaleString()} symbols`;
-        statusBar.tooltip = `${totalSymbols.toLocaleString()} symbols (incl. ${totalFiles} library files from ${totalJars} JARs)`;
+        statusBar.tooltip = `${totalSymbols.toLocaleString()} symbols (incl. ${totalFiles} library files from ${totalJars} JARs${jdkLabel})`;
         _semanticTokens?.invalidate();
+
+        // Compute "missing" by diffing parsed coords vs indexed JARs.
+        // Best-effort, skipped on error so a parser hiccup doesn't break the bar.
+        let missingCoords = 0;
+        try {
+          const folders = vscode.workspace.workspaceFolders ?? [];
+          if (folders.length > 0) {
+            const resolver = new DependencyResolver();
+            const declared = await resolver.resolveAll(folders[0].uri.fsPath);
+            // A dep is "missing" if neither Gradle nor Maven scanners returned a
+            // matching JAR. Approximation: count of declared coords minus indexed
+            // JARs (gradle.jars + maven.jars). Negative clamped to 0.
+            missingCoords = Math.max(0, declared.length - totalJars);
+          }
+        } catch (e) {
+          log.warn(`[sources-bar] missing-coords compute failed: ${(e as Error).message}`);
+        }
+
+        sourcesBar.setState({
+          scanning:      false,
+          libsIndexed:   totalJars,
+          jdk:           jdk.jdkHome ? (jdk.files > 0 ? 'ok' : 'missing') : 'absent',
+          bundledStdlib: true,  // BundledStdlibProvider.load() is best-effort; assume ok if no error
+          missingCoords,
+          networkError:  false,
+        });
+        // Show the first-scan prompt once if cache is cold + coords found.
+        void sourcesMenu.maybeShowFirstScanPrompt();
       } catch (err) {
         log.warn(`[jarscan] ${err}`);
         const { symbols: s, files: f } = index.stats();
         statusBar.text    = `$(symbol-class) Kotlin Jump: ${s.toLocaleString()} symbols`;
         statusBar.tooltip = `${s.toLocaleString()} symbols in ${f} files`;
+        sourcesBar.setState({ scanning: false, networkError: true });
       }
     });
   };
@@ -1103,7 +1235,98 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   gradleScanner = new GradleSourcesScanner(index, log);
   mavenScanner  = new MavenSourcesScanner(index, log);
+  jdkScanner    = new JdkSourcesScanner(index, log);
+
+  // Load bundled Kotlin stdlib synchronously before the JAR scan kicks off
+  // so List/String/Sequence/etc. resolve from the moment Kotlin Jump is
+  // ready, even on a cold Gradle cache. Gradle/Maven scans (which may
+  // include a project-pinned stdlib of the same or a newer version) will
+  // overwrite this fallback when they index their own kotlin-stdlib JAR.
+  const bundledStdlib = new BundledStdlibProvider(index, log, context.extensionPath);
+  void bundledStdlib.load().catch((e: Error) => log.warn(`[bundled-stdlib] ${e.message}`));
+
   runJarScan();
+
+  // ── Inline feature toggles — buttons in editor/title + master toggle ──────
+  // Each Kotlin Jump inline feature (string folding, color folding, const val
+  // folding, hex color swatch, null assertion highlight) gets enable/disable/
+  // toggle commands wired to a setting. Context keys are published so the
+  // editor/title menu can swap the icon (enable vs disable) based on state.
+  // The master command flips all inline features off (or all on if all are
+  // currently off) — a one-click panic button.
+  (() => {
+    interface InlineFeature { setting: string; ctxKey: string; }
+    const FEATURES: InlineFeature[] = [
+      { setting: 'stringResourceFolding',  ctxKey: 'stringFoldingEnabled' },
+      { setting: 'colorResourceFolding',   ctxKey: 'colorFoldingEnabled' },
+      { setting: 'constValFolding',        ctxKey: 'constValFoldingEnabled' },
+      { setting: 'hexColorSwatch',         ctxKey: 'hexColorSwatchEnabled' },
+      { setting: 'nullAssertionHighlight', ctxKey: 'nullAssertionHighlightEnabled' },
+    ];
+
+    const syncContexts = (): void => {
+      const cfg = vscode.workspace.getConfiguration('kotlinJump');
+      for (const f of FEATURES) {
+        void vscode.commands.executeCommand(
+          'setContext',
+          `kotlinJump.${f.ctxKey}`,
+          cfg.get<boolean>(f.setting, true),
+        );
+      }
+    };
+    syncContexts();
+
+    const setOne = (setting: string, value: boolean): Thenable<void> =>
+      vscode.workspace.getConfiguration('kotlinJump')
+        .update(setting, value, vscode.ConfigurationTarget.Global);
+
+    // stringResourceFolding's enable/disable/toggle are already registered in
+    // the dedicated string-folding IIFE above — don't double-register.
+    const FIXED: Array<[string, string, boolean]> = [
+      ['enableColorFolding',            'colorResourceFolding',   true],
+      ['disableColorFolding',           'colorResourceFolding',   false],
+      ['enableConstValFolding',         'constValFolding',        true],
+      ['disableConstValFolding',        'constValFolding',        false],
+      ['enableHexColorSwatch',          'hexColorSwatch',         true],
+      ['disableHexColorSwatch',         'hexColorSwatch',         false],
+      ['enableNullAssertionHighlight',  'nullAssertionHighlight', true],
+      ['disableNullAssertionHighlight', 'nullAssertionHighlight', false],
+    ];
+    const TOGGLES: Array<[string, string]> = [
+      ['toggleColorFolding',           'colorResourceFolding'],
+      ['toggleConstValFolding',        'constValFolding'],
+      ['toggleHexColorSwatch',         'hexColorSwatch'],
+      ['toggleNullAssertionHighlight', 'nullAssertionHighlight'],
+    ];
+
+    const subs: vscode.Disposable[] = [];
+    for (const [cmd, setting, val] of FIXED) {
+      subs.push(vscode.commands.registerCommand(`kotlinJump.${cmd}`, () => setOne(setting, val)));
+    }
+    for (const [cmd, setting] of TOGGLES) {
+      subs.push(vscode.commands.registerCommand(`kotlinJump.${cmd}`, () => {
+        const current = vscode.workspace.getConfiguration('kotlinJump').get<boolean>(setting, true);
+        return setOne(setting, !current);
+      }));
+    }
+    // Master: if ANY feature is on, turn ALL off. Otherwise, turn ALL on.
+    // Asymmetric semantics make this a reliable "shut everything off" button
+    // while keeping a one-click restore from a clean-slate state.
+    subs.push(vscode.commands.registerCommand('kotlinJump.toggleAllInlineFeatures', async () => {
+      const cfg = vscode.workspace.getConfiguration('kotlinJump');
+      const anyOn = FEATURES.some(f => cfg.get<boolean>(f.setting, true));
+      const target = !anyOn;
+      for (const f of FEATURES) {
+        await cfg.update(f.setting, target, vscode.ConfigurationTarget.Global);
+      }
+    }));
+    subs.push(vscode.workspace.onDidChangeConfiguration(e => {
+      if (FEATURES.some(f => e.affectsConfiguration(`kotlinJump.${f.setting}`))) {
+        syncContexts();
+      }
+    }));
+    context.subscriptions.push(...subs);
+  })();
 
   // ── Chat Participant (F7) ─────────────────────────────────────────────────
   registerChatParticipant(context, index);

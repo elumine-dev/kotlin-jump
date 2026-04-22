@@ -68,6 +68,13 @@ export class SymbolIndex {
   private sortedOrig:  string[] = [];
   private dirty = true;
 
+  // Counter incremented on every `add()` / `removeByKey()`. `finalize()`
+  // skips the rebuild when nothing has changed since the last call —
+  // avoids redundant O(N log N) work when multiple scanners (Gradle,
+  // Maven, JDK, bundled stdlib) finish concurrently inside Promise.all
+  // and each invokes finalize(). Cf. plan §Cross-cutting.
+  private _modificationsSinceFinalize = 0;
+
   // ── String intern pool — one object per unique packageName in heap ────────
   private readonly pkgPool = new Map<string, string>();
 
@@ -151,6 +158,7 @@ export class SymbolIndex {
 
     this.byFile.set(key, fileEntries);
     this.dirty = true;
+    this._modificationsSinceFinalize++;
 
     // ── Populate inverted word index ─────────────────────────────────────────
     const fileWords = new Set<string>();
@@ -316,10 +324,16 @@ export class SymbolIndex {
   }
 
   // Call once after bulk indexing — builds sorted list in one O(N log N) pass
-  // instead of rebuilding lazily for every search() call during scan
+  // instead of rebuilding lazily for every search() call during scan.
+  //
+  // Idempotent: skips the rebuild when nothing has changed since the last
+  // finalize() call. Multiple scanners running concurrently can each call
+  // finalize() without triggering N redundant sorts on a 50K-symbol index.
   finalize(): void {
+    if (this._wordIndexReady && this._modificationsSinceFinalize === 0) return;
     this.rebuildSorted();
     this._wordIndexReady = true;
+    this._modificationsSinceFinalize = 0;
   }
 
   /**
@@ -445,6 +459,7 @@ export class SymbolIndex {
     this.sortedLower = [];
     this.sortedOrig  = [];
     this.dirty = true;
+    this._modificationsSinceFinalize++;
   }
 
   removeExternal(): void {
@@ -490,6 +505,7 @@ export class SymbolIndex {
       }
     }
     this.dirty = true;
+    this._modificationsSinceFinalize++;
 
     // ── Populate inverted word index (mirrors add() logic) ───────────────────
     const fileWords = new Set<string>();

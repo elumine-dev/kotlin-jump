@@ -218,6 +218,97 @@
         "category": "Kotlin Jump"
       },
       {
+        "command": "kotlinJump.enableColorFolding",
+        "title": "Enable R.color Inline Swatches",
+        "category": "Kotlin Jump",
+        "icon": "$(symbol-color)"
+      },
+      {
+        "command": "kotlinJump.disableColorFolding",
+        "title": "Disable R.color Inline Swatches",
+        "category": "Kotlin Jump",
+        "icon": "$(circle-large-outline)"
+      },
+      {
+        "command": "kotlinJump.toggleColorFolding",
+        "title": "Toggle R.color Inline Swatches",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlinJump.enableConstValFolding",
+        "title": "Enable Const Val Inline Folding",
+        "category": "Kotlin Jump",
+        "icon": "$(symbol-constant)"
+      },
+      {
+        "command": "kotlinJump.disableConstValFolding",
+        "title": "Disable Const Val Inline Folding",
+        "category": "Kotlin Jump",
+        "icon": "$(symbol-variable)"
+      },
+      {
+        "command": "kotlinJump.toggleConstValFolding",
+        "title": "Toggle Const Val Inline Folding",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlinJump.enableHexColorSwatch",
+        "title": "Enable Hex Color Swatches",
+        "category": "Kotlin Jump",
+        "icon": "$(paintcan)"
+      },
+      {
+        "command": "kotlinJump.disableHexColorSwatch",
+        "title": "Disable Hex Color Swatches",
+        "category": "Kotlin Jump",
+        "icon": "$(circle-slash)"
+      },
+      {
+        "command": "kotlinJump.toggleHexColorSwatch",
+        "title": "Toggle Hex Color Swatches",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlinJump.enableNullAssertionHighlight",
+        "title": "Enable Null Assertion (!!) Highlight",
+        "category": "Kotlin Jump",
+        "icon": "$(warning)"
+      },
+      {
+        "command": "kotlinJump.disableNullAssertionHighlight",
+        "title": "Disable Null Assertion (!!) Highlight",
+        "category": "Kotlin Jump",
+        "icon": "$(circle-slash)"
+      },
+      {
+        "command": "kotlinJump.toggleNullAssertionHighlight",
+        "title": "Toggle Null Assertion (!!) Highlight",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlinJump.toggleAllInlineFeatures",
+        "title": "Toggle All Inline Features",
+        "category": "Kotlin Jump",
+        "icon": "$(layers)"
+      },
+      {
+        "command": "kotlin-jump.sources.openActions",
+        "title": "Library Sources — Open Actions Menu",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.sources.downloadMissing",
+        "title": "Library Sources — Download Missing",
+        "category": "Kotlin Jump",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "kotlin-jump.sources.refresh",
+        "title": "Library Sources — Refresh Cache",
+        "category": "Kotlin Jump",
+        "icon": "$(refresh)"
+      },
+      {
         "command": "kotlin-jump.openWalkthrough",
         "title": "Get Started",
         "category": "Kotlin Jump"
@@ -270,14 +361,59 @@
     "menus": {
       "editor/title": [
         {
+          "command": "kotlinJump.toggleAllInlineFeatures",
+          "when": "editorLangId == kotlin || editorLangId == java",
+          "group": "navigation@1"
+        },
+        {
           "command": "kotlinJump.enableStringFolding",
           "when": "(editorLangId == kotlin || editorLangId == java) && !kotlinJump.stringFoldingEnabled",
-          "group": "navigation"
+          "group": "navigation@2"
         },
         {
           "command": "kotlinJump.disableStringFolding",
           "when": "(editorLangId == kotlin || editorLangId == java) && kotlinJump.stringFoldingEnabled",
-          "group": "navigation"
+          "group": "navigation@2"
+        },
+        {
+          "command": "kotlinJump.enableColorFolding",
+          "when": "(editorLangId == kotlin || editorLangId == java) && !kotlinJump.colorFoldingEnabled",
+          "group": "1_kotlinJumpInline@1"
+        },
+        {
+          "command": "kotlinJump.disableColorFolding",
+          "when": "(editorLangId == kotlin || editorLangId == java) && kotlinJump.colorFoldingEnabled",
+          "group": "1_kotlinJumpInline@1"
+        },
+        {
+          "command": "kotlinJump.enableConstValFolding",
+          "when": "(editorLangId == kotlin || editorLangId == java) && !kotlinJump.constValFoldingEnabled",
+          "group": "1_kotlinJumpInline@2"
+        },
+        {
+          "command": "kotlinJump.disableConstValFolding",
+          "when": "(editorLangId == kotlin || editorLangId == java) && kotlinJump.constValFoldingEnabled",
+          "group": "1_kotlinJumpInline@2"
+        },
+        {
+          "command": "kotlinJump.enableHexColorSwatch",
+          "when": "(editorLangId == kotlin || editorLangId == java) && !kotlinJump.hexColorSwatchEnabled",
+          "group": "1_kotlinJumpInline@3"
+        },
+        {
+          "command": "kotlinJump.disableHexColorSwatch",
+          "when": "(editorLangId == kotlin || editorLangId == java) && kotlinJump.hexColorSwatchEnabled",
+          "group": "1_kotlinJumpInline@3"
+        },
+        {
+          "command": "kotlinJump.enableNullAssertionHighlight",
+          "when": "(editorLangId == kotlin || editorLangId == java) && !kotlinJump.nullAssertionHighlightEnabled",
+          "group": "1_kotlinJumpInline@4"
+        },
+        {
+          "command": "kotlinJump.disableNullAssertionHighlight",
+          "when": "(editorLangId == kotlin || editorLangId == java) && kotlinJump.nullAssertionHighlightEnabled",
+          "group": "1_kotlinJumpInline@4"
         }
       ],
       "view/title": [
@@ -656,8 +792,8 @@
         },
         "kotlinJump.sourcesJarsMaxCount": {
           "type": "number",
-          "default": 50,
-          "markdownDescription": "Maximum number of `-sources.jar` files to index from the Gradle cache."
+          "default": 2000,
+          "markdownDescription": "Maximum number of `-sources.jar` files to index from the Gradle cache. When the cap is hit, JARs are prioritised by modification time (recently downloaded first) so the current workspace's dependencies win over stale residue from older projects."
         },
         "kotlinJump.gradleCacheDir": {
           "type": "string",
@@ -671,13 +807,33 @@
         },
         "kotlinJump.mavenSourcesMaxCount": {
           "type": "number",
-          "default": 50,
-          "markdownDescription": "Maximum number of `-sources.jar` files to index from the Maven local repository."
+          "default": 2000,
+          "markdownDescription": "Maximum number of `-sources.jar` files to index from the Maven local repository. When the cap is hit, JARs are prioritised by modification time (recently downloaded first)."
         },
         "kotlinJump.mavenLocalRepoDir": {
           "type": "string",
           "default": "",
           "markdownDescription": "Override the Maven local repository path. Leave empty to auto-detect `~/.m2/repository`."
+        },
+        "kotlinJump.jdkHome": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Override the JDK home for source indexing (`java.lang.*`, `java.util.*`, etc.). Leave empty to auto-detect via `JAVA_HOME` environment variable, then platform-specific defaults (macOS `/usr/libexec/java_home`, Linux `update-alternatives`, Windows `C:\\Program Files\\Java\\` and `C:\\Program Files\\Eclipse Adoptium\\`). The directory must contain `lib/src.zip` (standard in OpenJDK 9+)."
+        },
+        "kotlinJump.useBundledStdlib": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Load the bundled Kotlin stdlib sources JAR (~600 KB shipped with the extension) so `List`, `String`, `Sequence`, etc. are navigable from the first second — no Gradle build required. A project-specific stdlib version (from Gradle/Maven cache) takes precedence when present."
+        },
+        "kotlinJump.suppressFirstScanPrompt": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "If `true`, suppress the one-time prompt offering to download missing library sources after the first scan. Set automatically by clicking 'Don't show again' on the prompt."
+        },
+        "kotlinJump.fallbackToOnlineDocs": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "When a symbol can't be resolved locally, open the corresponding online documentation page (kotlinlang.org/api, javadoc.io, etc.) in the system browser. Off by default since it opens external tabs."
         },
         "kotlinJump.useGradleTooling": {
           "type": "boolean",
@@ -836,6 +992,15 @@
             }
           },
           {
+            "id": "librarySources",
+            "title": "Navigate into your dependencies — KDoc included",
+            "description": "Kotlin Jump indexes the **JDK** (`java.lang.*`, `java.util.*`) + a bundled **Kotlin stdlib** out of the box. For Compose, Coroutines, AndroidX and other libraries, click the **`$(library)`** item in the status bar to download `-sources.jar` files via direct HTTP. No JVM, no Gradle invocation, no terminal — just one click.\n\n[Open Library Sources actions](command:kotlin-jump.sources.openActions)",
+            "media": {
+              "image": "media/walkthrough/go-to-definition.gif",
+              "altText": "Cmd+Click into library JAR source"
+            }
+          },
+          {
             "id": "findUsages",
             "title": "Find Usages — the panel that changes everything",
             "description": "Press **Alt+F7** on any symbol to open a dedicated panel showing every usage across your project. Filter out test files or Compose previews in one click.\n\n[Open Find Usages](command:kotlin-jump.findUsages)",
@@ -929,9 +1094,10 @@
     "@types/node": "^20.0.0",
     "@types/picomatch": "^4.0.2",
     "@types/vscode": "^1.88.0",
+    "@vscode/test-electron": "^2.5.2",
     "esbuild": "^0.27.4",
-    "ovsx": "^0.10.11",
     "husky": "^9.1.7",
+    "ovsx": "^0.10.11",
     "typescript": "^5.3.3",
     "vitest": "^4.1.2"
   },

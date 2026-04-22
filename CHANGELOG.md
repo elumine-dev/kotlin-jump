@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.12.1
+
+Packaging fix — reduces VSIX size by excluding demo capture artifacts that were accidentally shipped in 1.12.0.
+
+### Fixes
+- Excluded `tmp-demo-e2e/` and `tmp-demo-frames/` from the published VSIX. These directories are gitignored but were missing from `.vscodeignore`, inflating the package by ~19 MB with demo capture artifacts that have no runtime purpose.
+
+### Notes
+- No changes to extension commands, settings, navigation, or any user-facing behavior since v1.12.0.
+
 ## 1.12.0
 
 **Library sources, reproducible everywhere — no JVM, no LSP, no setup.**

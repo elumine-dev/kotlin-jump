@@ -24,6 +24,12 @@ gson = "2.10.1"
 # Coroutines
 coroutines = "1.7.3"
 
+# Compose Multiplatform (JVM-compatible — no Android SDK required)
+compose-mp = "1.6.11"
+
+# Serialization
+serialization = "1.6.3"
+
 # Database
 room = "2.6.1"
 
@@ -78,6 +84,15 @@ gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
 coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
 coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
+
+# Compose Multiplatform (JVM)
+compose-mp-runtime    = { group = "org.jetbrains.compose.runtime",    name = "runtime",    version.ref = "compose-mp" }
+compose-mp-foundation = { group = "org.jetbrains.compose.foundation", name = "foundation", version.ref = "compose-mp" }
+compose-mp-material   = { group = "org.jetbrains.compose.material",   name = "material",   version.ref = "compose-mp" }
+
+# Serialization
+serialization-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-core", version.ref = "serialization" }
+serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
 
 # Room
 room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }

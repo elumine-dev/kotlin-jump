@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App -->
+    <string name="app_name">Démo Kotlin Jump</string>
+    <string name="app_version">Version 1.0.0</string>
+
+    <!-- Pokédex UI -->
+    <string name="title_pokedex">Pokédex</string>
+    <string name="title_team">Mon équipe</string>
+    <string name="title_battle">Combat</string>
+    <string name="label_pokemon_name">Nom du Pokémon</string>
+    <string name="label_pokemon_level">Niveau</string>
+    <string name="label_pokemon_type">Type</string>
+    <string name="label_pokemon_hp">PV</string>
+
+    <!-- Actions -->
+    <string name="action_add_pokemon">Ajouter au Pokédex</string>
+    <string name="action_start_battle">Démarrer le combat</string>
+    <string name="action_catch_pokemon">Attraper</string>
+    <string name="action_release_pokemon">Relâcher</string>
+    <string name="action_cancel">Annuler</string>
+    <string name="action_confirm">Confirmer</string>
+    <string name="action_retry">Réessayer</string>
+
+    <!-- Messages -->
+    <string name="msg_loading">Chargement…</string>
+    <string name="msg_empty_team">Votre équipe est vide. Attrapez des Pokémon !</string>
+    <string name="msg_battle_won">Victoire ! Vous avez gagné le combat.</string>
+    <string name="msg_battle_lost">Défaite… Votre équipe est KO.</string>
+    <string name="msg_battle_draw">Match nul !</string>
+    <string name="msg_pokemon_caught">%s a été attrapé !</string>
+    <string name="msg_invalid_name">Le nom ne peut pas être vide.</string>
+    <string name="msg_team_full">Votre équipe est pleine (6/6).</string>
+
+    <!-- Errors -->
+    <string name="error_network">Serveur injoignable. Vérifiez votre connexion.</string>
+    <string name="error_not_found">Pokémon introuvable.</string>
+    <string name="error_unknown">Une erreur inattendue est survenue.</string>
+
+    <!-- Users UI -->
+    <string name="title_users">Utilisateurs</string>
+    <string name="label_user_name">Nom</string>
+    <string name="label_user_email">Courriel</string>
+    <string name="label_user_role">Rôle</string>
+    <string name="role_admin">Administrateur</string>
+    <string name="role_editor">Éditeur</string>
+    <string name="role_viewer">Lecteur</string>
+
+    <!-- Pokémon types -->
+    <string name="type_fire">Feu</string>
+    <string name="type_water">Eau</string>
+    <string name="type_grass">Plante</string>
+    <string name="type_electric">Électrik</string>
+    <string name="type_psychic">Psy</string>
+    <string name="type_dragon">Dragon</string>
+
+    <!-- Format strings -->
+    <string name="msg_welcome_user">Bonjour, %s !</string>
+    <string name="msg_level_up">%s passe au niveau %d !</string>
+    <string name="msg_damage">%1$s inflige %2$d dégâts à %3$s !</string>
+    <string name="msg_reward">Vous avez gagné %d pièces !</string>
+</resources>

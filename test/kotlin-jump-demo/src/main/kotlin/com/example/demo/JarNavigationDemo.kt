@@ -1,26 +1,19 @@
 package com.example.demo
 
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.runBlocking
 
-// Cmd+Click on any coroutine function below → jumps into the kotlinx.coroutines JAR source.
-// Try: launch, withContext, delay, Dispatchers.IO
-class PokemonSyncService {
+// Cmd+Click on `runBlocking` or `MutableStateFlow` below →
+// jumps into the kotlinx.coroutines JAR source (Builders.kt /
+// StateFlow.kt). Both are real top-level kotlinx symbols with no
+// local stub in this workspace, so the regex resolver lands cleanly
+// in the JAR's KDoc-rich source instead of a fake declaration.
+class PokemonCounterService {
 
-    private val scope = CoroutineScope(Dispatchers.Default)
+    val counter = MutableStateFlow(0)
 
-    fun syncPokedex(onComplete: (Int) -> Unit) {
-        scope.launch {
-            val count = withContext(Dispatchers.IO) {
-                delay(100)
-                fetchFromServer()
-            }
-            onComplete(count)
-        }
+    fun loadInitial(): Int = runBlocking {
+        counter.value = 151
+        counter.value
     }
-
-    private suspend fun fetchFromServer(): Int = 151
 }

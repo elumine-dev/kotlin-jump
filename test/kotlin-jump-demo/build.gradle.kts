@@ -37,8 +37,27 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 plugins {
-    kotlin("jvm") version "1.9.25"
+    // Kotlin pinned to 1.9.24 (max version supported by Compose Multiplatform
+    // 1.6.11). Bumping above this requires a matching Compose bump — see
+    // https://github.com/JetBrains/compose-multiplatform/blob/master/VERSIONING.md#kotlin-compatibility
+    kotlin("jvm") version "1.9.24"
+    id("org.jetbrains.compose") version "1.6.11"
+    idea
     application
+}
+
+// Force Gradle to download `-sources.jar` for every dependency. Plain
+// `./gradlew dependencies` only resolves binary jars + poms; sources are
+// NOT pulled by default. The `idea` plugin's `isDownloadSources = true`
+// makes `./gradlew ideaModule` (or `idea`) materialise them into
+// ~/.gradle/caches/modules-2/files-2.1/<group>/<artifact>/<version>/
+// <hash>/<artifact>-<version>-sources.jar — exactly where Kotlin Jump's
+// GradleSourcesScanner walks.
+idea {
+    module {
+        isDownloadSources = true
+        isDownloadJavadoc = false
+    }
 }
 
 group = "com.example"
@@ -52,19 +71,35 @@ application {
     mainClass.set("com.example.app.AppKt")
 }
 
-repositories {
-    mavenCentral()
-}
+// Repositories declared in settings.gradle.kts (mavenCentral + google +
+// JetBrains Compose dev repo) so the same set is used for plugin
+// resolution and dependency resolution.
 
 dependencies {
     // ← hover sur libs.xxx pour voir group:name:version depuis gradle/libs.versions.toml
     implementation(libs.coroutines.core)
+
+    // Compose Multiplatform (JVM-pure — no Android SDK required) so the
+    // lib-jar-compose demo can Cmd+Click into @Composable / Text / Button /
+    // Modifier sources. The plugin pulls in the matching `-sources.jar`
+    // files via `./gradlew dependencies`.
+    implementation(libs.compose.mp.runtime)
+    implementation(libs.compose.mp.foundation)
+    implementation(libs.compose.mp.material)
+
+    // Kotlinx Serialization — extra third-party lib so the JAR demo
+    // surface isn't limited to coroutines + compose.
+    implementation(libs.serialization.core)
+    implementation(libs.serialization.json)
+
     testImplementation(libs.coroutines.core)
     testImplementation(libs.junit4)
     testImplementation(libs.junit5.api)
     testImplementation(libs.junit5.params)
     testRuntimeOnly(libs.junit5.engine)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation(libs.mockk)
+    testImplementation(libs.turbine)
 }
 
 tasks.test {

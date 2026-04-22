@@ -1,33 +1,26 @@
 {
-  "version": "1.11.0",
+  "version": "1.13.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Accurate changelog, hardened release pipeline",
-  "summary": "Maintenance release with no changes to extension behavior — corrects duplicate changelog entries and hardens the release pipeline for more reliable future publishes.",
+  "tagline": "Smarter resolution for builtins and KMP",
+  "summary": "v1.13.0 improves navigation accuracy for standard Kotlin and Java built-in types, and adds correct expect/actual resolution for Kotlin Multiplatform projects.",
   "highlights": [
     {
-      "title": "Duplicate Changelog Entries Fixed",
-      "description": "Duplicate sections for v1.7.0, v1.0.0, and v0.7.6 have been removed, making the published changelog accurate and readable.",
-      "kind": "fix"
+      "title": "Implicit Default Import Resolution",
+      "description": "Go to Definition now resolves standard Kotlin and Java types (String, List, Int, Thread, etc.) that are available without explicit imports — navigation no longer fails on unimported built-ins.",
+      "kind": "improvement"
     },
     {
-      "title": "Safer Release Process",
-      "description": "The release pipeline now performs a pre-flight tag check and applies changelog updates idempotently, reducing the risk of duplicate or malformed releases reaching users.",
+      "title": "Kotlin Multiplatform expect/actual Support",
+      "description": "The resolver recognizes expect and actual modifiers and prefers the actual implementation on FQN lookup, so navigation in KMP projects lands on the concrete implementation rather than the abstract declaration.",
       "kind": "improvement"
     }
   ],
   "sections": [
     {
-      "heading": "Notes",
+      "heading": "Improvements",
       "bullets": [
-        "No changes to extension commands, settings, navigation, or any user-facing behavior since v1.10.0.",
-        "This release corrects the published changelog and improves release infrastructure only."
-      ]
-    },
-    {
-      "heading": "Fixes",
-      "bullets": [
-        "Removed duplicate changelog sections for v1.7.0, v1.0.0, and v0.7.6 that were incorrectly present in the published history.",
-        "Release script now validates that no matching tag already exists before proceeding, preventing accidental double-publishes."
+        "Added implicit default import awareness for Kotlin (kotlin.*, kotlin.collections.*, kotlin.io.*, and related packages) and Java (java.lang.*) — Go to Definition now works on built-in types that appear without an import statement.",
+        "Added expect/actual modifier support for Kotlin Multiplatform projects; FQN lookups now prefer the actual declaration, giving more precise jump targets in multi-platform codebases."
       ]
     }
   ],

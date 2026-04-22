@@ -21,6 +21,38 @@ const cache = new Map<string, DocCache>();
 const RE_PACKAGE = /^\s*package\s+([\w.]+)/m;
 const RE_IMPORT  = /^\s*import\s+([\w.*]+)(?:\s+as\s+(\w+))?/gm;
 
+// Kotlin's default imports — verified against the compiler source (master):
+//   compiler/frontend.common/src/org/jetbrains/kotlin/resolve/DefaultImportsProvider.kt
+//   compiler/frontend.java/src/org/jetbrains/kotlin/resolve/jvm/platform/JvmDefaultImportsProvider.kt
+//
+// These behave as implicit `import <pkg>.*` in every .kt file. Without them,
+// Cmd+Click on `listOf` / `println` / `String` / `Int` / `Sequence` etc. fails
+// silently when the user hasn't typed a redundant `import kotlin.collections.*`.
+//
+// Order matches the compiler's priority chain: regular defaults first, then
+// `kotlin.jvm.*` (JVM regular default), then `java.lang.*` LAST because the
+// compiler classifies it as `defaultLowPriorityImports` — when `kotlin.String`
+// and `java.lang.String` both exist, the kotlin one must win.
+//
+// Note: `kotlin.math.*` is NOT a default import (despite a misleading mention
+// in the language specification page) — using `sin`, `cos`, etc. requires an
+// explicit `import kotlin.math.sin` in real Kotlin code.
+const KOTLIN_DEFAULT_IMPORTS: readonly string[] = [
+  'kotlin',
+  'kotlin.annotation',
+  'kotlin.collections',
+  'kotlin.ranges',
+  'kotlin.sequences',
+  'kotlin.text',
+  'kotlin.io',
+  'kotlin.comparisons',
+  'kotlin.jvm',
+  'java.lang',
+];
+
+// Java's sole implicit import — `java.lang.*` (JLS §7.3).
+const JAVA_DEFAULT_IMPORTS: readonly string[] = ['java.lang'];
+
 /**
  * Returns candidate FQNs for `simpleName` based on the document's imports.
  * Called on the Cmd+Click hot path — must be synchronous and fast.
@@ -90,6 +122,17 @@ function getCache(document: vscode.TextDocument): DocCache {
     } else {
       exact.push(imp);
     }
+  }
+
+  // Append language-specific implicit wildcard imports so resolution of
+  // stdlib symbols (e.g. `listOf`, `println`, `String`) doesn't require
+  // an explicit `import kotlin.collections.*` in every file.
+  const defaults =
+    document.languageId === 'kotlin' ? KOTLIN_DEFAULT_IMPORTS
+    : document.languageId === 'java' ? JAVA_DEFAULT_IMPORTS
+    : [];
+  for (const pkg of defaults) {
+    if (!wildcardPrefixes.includes(pkg)) wildcardPrefixes.push(pkg);
   }
 
   const entry: DocCache = {

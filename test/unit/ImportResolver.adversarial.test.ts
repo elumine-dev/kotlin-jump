@@ -96,3 +96,74 @@ describe('IR-1 — import alias : import X as Y', () => {
     expect(resolve('HashMap', doc)).toContain('java.util.HashMap');
   });
 });
+
+// ── IR-2 — Kotlin implicit default imports ────────────────────────────────────
+// Bug : le resolver ne connaissait que les imports explicites. Cmd+Click sur
+// `listOf`, `println`, `String`, `Sequence` dans un fichier .kt sans import
+// explicite retournait "no definition found" — alors que ces symboles sont
+// implicitement importés dans TOUS les .kt par le compilateur Kotlin.
+
+describe('IR-2 — Kotlin default imports (implicit wildcards)', () => {
+  it('listOf in a .kt file resolves via kotlin.collections without explicit import', () => {
+    const doc = mockDocument(
+      'file:///ir2/t1/Test.kt',
+      'package com.test\nval xs = listOf(1, 2, 3)',
+    );
+    expect(resolve('listOf', doc)).toContain('kotlin.collections.listOf');
+  });
+
+  it('println resolves via kotlin.io without explicit import', () => {
+    const doc = mockDocument(
+      'file:///ir2/t2/Test.kt',
+      'package com.test\nfun main() { println("hello") }',
+    );
+    expect(resolve('println', doc)).toContain('kotlin.io.println');
+  });
+
+  it('String resolves via kotlin without explicit import', () => {
+    const doc = mockDocument(
+      'file:///ir2/t3/Test.kt',
+      'package com.test\nval s: String = "hi"',
+    );
+    expect(resolve('String', doc)).toContain('kotlin.String');
+  });
+
+  it('resolveBest finds listOf via wildcard priority when stdlib is indexed', () => {
+    const doc = mockDocument(
+      'file:///ir2/t4/Test.kt',
+      'package com.test\nval xs = listOf(1)',
+    );
+    const sentinel = { id: 'listOfFromStdlib' };
+    const result = resolveBest('listOf', doc, fqn =>
+      fqn === 'kotlin.collections.listOf' ? sentinel : undefined,
+    );
+    expect(result.priority).toBe('wildcard');
+    expect(result.matches).toContain(sentinel);
+  });
+
+  it('Java file gets java.lang default only — kotlin.collections NOT implicit', () => {
+    const doc = mockDocument(
+      'file:///ir2/t5/Test.java',
+      'package com.test;\nclass T { Object o; }',
+    );
+    // Object is in java.lang — implicitly available in Java
+    expect(resolve('Object', doc)).toContain('java.lang.Object');
+    // listOf is Kotlin-specific — must NOT be auto-resolved for a .java file
+    expect(resolve('listOf', doc)).not.toContain('kotlin.collections.listOf');
+  });
+
+  it('explicit import coexists with defaults — explicit wins on priority', () => {
+    const doc = mockDocument(
+      'file:///ir2/t6/Test.kt',
+      'package com.test\nimport com.mylib.listOf\nval xs = listOf(1)',
+    );
+    // Both would resolve in candidates; the explicit com.mylib.listOf is exact priority
+    const result = resolveBest('listOf', doc, fqn =>
+      fqn === 'com.mylib.listOf' ? { src: 'explicit' }
+      : fqn === 'kotlin.collections.listOf' ? { src: 'default' }
+      : undefined,
+    );
+    expect(result.priority).toBe('exact');
+    expect(result.matches).toEqual([{ src: 'explicit' }]);
+  });
+});

@@ -10,31 +10,31 @@
     "label": "Cmd+Click → Go to Definition",
     "sublabel": "MAX_ATTEMPTS",
     "duration": 2500,
-    "t": 4130
+    "t": 3901
   },
   {
     "type": "caption",
     "label": "Cmd+Click. Land on the `const val`.",
     "duration": 2200,
-    "t": 8411
+    "t": 8157
   },
   {
     "type": "keystroke",
     "label": "⌘ + ⌥ + ←",
     "sublabel": "Navigate Back",
     "duration": 2000,
-    "t": 12091
+    "t": 11732
   },
   {
     "type": "caption",
     "label": "Select the block. Names come back. ✍️",
     "duration": 2400,
-    "t": 19696
+    "t": 19661
   },
   {
     "type": "caption",
     "label": "Folded for reading. Raw for editing. Best of both. 🎯",
     "duration": 2800,
-    "t": 25121
+    "t": 25064
   }
 ]

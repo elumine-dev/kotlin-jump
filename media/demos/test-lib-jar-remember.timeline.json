@@ -1,0 +1,21 @@
+[
+  {
+    "type": "caption",
+    "label": "Where is `remember` defined?",
+    "duration": 2200,
+    "t": 300
+  },
+  {
+    "type": "click",
+    "label": "Cmd+Click → Go to Definition (in Compose Runtime JAR)",
+    "sublabel": "remember",
+    "duration": 2500,
+    "t": 2500
+  },
+  {
+    "type": "caption",
+    "label": "Inside `Composables.kt`. Compose runtime resolved ✓",
+    "duration": 2400,
+    "t": 7378
+  }
+]

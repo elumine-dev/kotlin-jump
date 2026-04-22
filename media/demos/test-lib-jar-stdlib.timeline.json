@@ -1,0 +1,21 @@
+[
+  {
+    "type": "caption",
+    "label": "Where is `listOf` defined (stdlib)?",
+    "duration": 2200,
+    "t": 300
+  },
+  {
+    "type": "click",
+    "label": "Cmd+Click → Go to Definition (bundled Kotlin stdlib)",
+    "sublabel": "listOf",
+    "duration": 2500,
+    "t": 2501
+  },
+  {
+    "type": "caption",
+    "label": "Inside `Collections.kt`. Bundled stdlib resolved ✓",
+    "duration": 2400,
+    "t": 7378
+  }
+]

@@ -33,7 +33,7 @@ export class MavenSourcesScanner {
     const cfg = vscode.workspace.getConfiguration('kotlinJump');
     if (!cfg.get<boolean>('indexMavenSources', true)) return { jars: 0, files: 0 };
 
-    const maxCount = cfg.get<number>('mavenSourcesMaxCount', 50);
+    const maxCount = cfg.get<number>('mavenSourcesMaxCount', 2000);
     const override = cfg.get<string>('mavenLocalRepoDir', '').trim();
 
     const repoDir = override || path.join(os.homedir(), '.m2', 'repository');
@@ -79,36 +79,35 @@ export class MavenSourcesScanner {
   ): Promise<{ jarPath: string; moduleName: string }[]> {
     if (maxCount <= 0) return [];
 
-    const results: { jarPath: string; moduleName: string }[] = [];
-    await this.walkRepo(repoDir, repoDir, results, maxCount);
-    return results;
+    // Rank by mtime desc so recently-resolved artifacts win over stale
+    // residue when maxCount caps the total — otherwise a deep repo with
+    // thousands of forgotten JARs can starve the current workspace's deps.
+    const candidates: { jarPath: string; moduleName: string; mtime: number }[] = [];
+    await this.walkRepo(repoDir, repoDir, candidates);
+    candidates.sort((a, b) => b.mtime - a.mtime);
+    return candidates.slice(0, maxCount).map(({ jarPath, moduleName }) => ({ jarPath, moduleName }));
   }
 
   private async walkRepo(
     root:     string,
     dir:      string,
-    results:  { jarPath: string; moduleName: string }[],
-    maxCount: number,
-  ): Promise<boolean> {
+    results:  { jarPath: string; moduleName: string; mtime: number }[],
+  ): Promise<void> {
     let entries: string[];
-    try { entries = await fs.readdir(dir); } catch { return false; }
+    try { entries = await fs.readdir(dir); } catch { return; }
 
     for (const entry of entries) {
-      if (results.length >= maxCount) return true; // signal: cap reached
-
       const fullPath = path.join(dir, entry);
       let stat: Awaited<ReturnType<typeof fs.stat>>;
       try { stat = await fs.stat(fullPath); } catch { continue; }
 
       if (stat.isDirectory()) {
-        const capped = await this.walkRepo(root, fullPath, results, maxCount);
-        if (capped) return true;
+        await this.walkRepo(root, fullPath, results);
       } else if (entry.endsWith('-sources.jar') && !entry.endsWith('-samples-sources.jar')) {
         const moduleName = mavenModuleName(root, fullPath);
-        results.push({ jarPath: fullPath, moduleName });
+        results.push({ jarPath: fullPath, moduleName, mtime: stat.mtimeMs });
       }
     }
-    return false;
   }
 
   private async indexJar(info: { jarPath: string; moduleName: string }): Promise<number> {

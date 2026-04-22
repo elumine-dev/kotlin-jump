@@ -32,7 +32,7 @@ export class GradleSourcesScanner {
     const cfg = vscode.workspace.getConfiguration('kotlinJump');
     if (!cfg.get<boolean>('indexSourcesJars', true)) return { jars: 0, files: 0 };
 
-    const maxCount = cfg.get<number>('sourcesJarsMaxCount', 50);
+    const maxCount = cfg.get<number>('sourcesJarsMaxCount', 2000);
 
     let jars: { jarPath: string; moduleName: string }[];
 
@@ -84,11 +84,15 @@ export class GradleSourcesScanner {
   private async discoverJars(cacheDir: string, maxCount: number): Promise<{ jarPath: string; moduleName: string }[]> {
     if (maxCount <= 0) return [];                               // Bug 5 fix
 
-    const results: { jarPath: string; moduleName: string }[] = [];
+    // Collect all candidates first, then rank by mtime desc so recently-
+    // downloaded JARs (the ones the current workspace actually depends on)
+    // are indexed first when maxCount caps the total. Alphabetical walk
+    // without ranking silently starves any group that sorts after the cap
+    // (e.g. `org.jetbrains.kotlinx` behind hundreds of `androidx.*`).
+    const candidates: { jarPath: string; moduleName: string; mtime: number }[] = [];
     let groups: string[];
     try { groups = await fs.readdir(cacheDir); } catch { return []; }
 
-    outer:
     for (const group of groups) {
       const artifacts = await fs.readdir(path.join(cacheDir, group)).catch(() => [] as string[]);
       for (const artifact of artifacts) {
@@ -100,14 +104,17 @@ export class GradleSourcesScanner {
             const files = await fs.readdir(hashDir).catch(() => [] as string[]);
             for (const file of files) {
               if (!file.endsWith('-sources.jar') || file.endsWith('-samples-sources.jar')) continue;
-              results.push({ jarPath: path.join(hashDir, file), moduleName: `${group}:${artifact}:${version}` });
-              if (results.length >= maxCount) break outer;
+              const jarPath = path.join(hashDir, file);
+              const mtime   = await fs.stat(jarPath).then(s => s.mtimeMs).catch(() => 0);
+              candidates.push({ jarPath, moduleName: `${group}:${artifact}:${version}`, mtime });
             }
           }
         }
       }
     }
-    return results;
+
+    candidates.sort((a, b) => b.mtime - a.mtime);
+    return candidates.slice(0, maxCount).map(({ jarPath, moduleName }) => ({ jarPath, moduleName }));
   }
 
   private async indexJar(info: { jarPath: string; moduleName: string }): Promise<number> {

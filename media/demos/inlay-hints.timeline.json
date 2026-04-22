@@ -1,0 +1,26 @@
+[
+  {
+    "type": "caption",
+    "label": "What type is each `val` here?",
+    "duration": 2800,
+    "t": 300
+  },
+  {
+    "type": "caption",
+    "label": "Hover the `: Pokemon` inlay. Definition right there. 👀",
+    "duration": 2400,
+    "t": 7149
+  },
+  {
+    "type": "caption",
+    "label": "Pokemon revealed at the call site. No jump needed.",
+    "duration": 2800,
+    "t": 15393
+  },
+  {
+    "type": "caption",
+    "label": "Inlay hints read AND teach. No LSP needed. 🧠",
+    "duration": 2600,
+    "t": 19222
+  }
+]

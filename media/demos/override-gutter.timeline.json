@@ -1,0 +1,14 @@
+[
+  {
+    "type": "caption",
+    "label": "Tracing inheritance, both ways?",
+    "duration": 2600,
+    "t": 300
+  },
+  {
+    "type": "caption",
+    "label": "⬇ to implementations. ⬆ back to the contract.",
+    "duration": 2600,
+    "t": 5843
+  }
+]

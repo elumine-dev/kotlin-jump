@@ -1,0 +1,33 @@
+[
+  {
+    "type": "caption",
+    "label": "Looks like English UI text. But it’s all R.string keys.",
+    "duration": 2400,
+    "t": 300
+  },
+  {
+    "type": "caption",
+    "label": "Cursor on a line, the key returns. Edit, then move on. ✍️",
+    "duration": 2600,
+    "t": 4113
+  },
+  {
+    "type": "click",
+    "label": "Cmd+Click → Go to Definition",
+    "sublabel": "title_pokedex",
+    "duration": 2500,
+    "t": 6716
+  },
+  {
+    "type": "caption",
+    "label": "One click, you land in values/strings.xml. 🎯",
+    "duration": 2400,
+    "t": 12033
+  },
+  {
+    "type": "caption",
+    "label": "Same key, French version. 🇫🇷 Zero translation hunt.",
+    "duration": 2800,
+    "t": 15866
+  }
+]

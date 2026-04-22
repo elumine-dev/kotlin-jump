@@ -1,0 +1,21 @@
+[
+  {
+    "type": "caption",
+    "label": "What does `withContext` actually do?",
+    "duration": 2200,
+    "t": 300
+  },
+  {
+    "type": "keystroke",
+    "label": "⌘ + K  ⌘ + I",
+    "sublabel": "Show Hover",
+    "duration": 2500,
+    "t": 2505
+  },
+  {
+    "type": "caption",
+    "label": "KDoc straight from the JAR. No docs site. No LSP. 📖",
+    "duration": 2800,
+    "t": 5783
+  }
+]

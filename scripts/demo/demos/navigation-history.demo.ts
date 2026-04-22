@@ -55,7 +55,7 @@ export default async function record(stage: Stage): Promise<void> {
     duration:    1400,
   });
   await stage.pause(500);  // let the same-file scroll settle before caption
-  await stage.caption('Back to the SELECTs — top of the DAO', { duration: 1600 });
+  await stage.caption('Back to the SELECTs. Top of the DAO.', { duration: 1600 });
 
   await stage.navigate({
     shortcut:    '⌘ + ⌥ + ←',
@@ -65,7 +65,7 @@ export default async function record(stage: Stage): Promise<void> {
     duration:    1100,
   });
   await stage.pause(400);
-  await stage.caption('Across files — back in displayCard', { duration: 1600 });
+  await stage.caption('Across files. Back in displayCard.', { duration: 1600 });
 
   await stage.navigate({
     shortcut:    '⌘ + ⌥ + ←',
@@ -75,7 +75,7 @@ export default async function record(stage: Stage): Promise<void> {
     duration:    1100,
   });
   await stage.pause(500);  // same-file scroll up 22 lines — give it time
-  await stage.caption('And the very first stop — class header', { duration: 1600 });
+  await stage.caption('And the very first stop. Class header.', { duration: 1600 });
 
   // ── Forward: same history, opposite direction. One step is enough
   //    to make the point; we stop at displayCard instead of retracing
@@ -87,5 +87,6 @@ export default async function record(stage: Stage): Promise<void> {
     awaitEditor: { file: 'PokedexScreen.kt', line: 29 },
     duration:    1400,
   });
-  await stage.caption('Forward works the same way — line AND column', { duration: 2000 });
+  // Answer caption — distils the WOW (column-precise restore vs file-only native).
+  await stage.caption('Forward too. Line AND column, every step. ⏮⏭', { duration: 2000 });
 }

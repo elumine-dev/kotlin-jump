@@ -43,6 +43,7 @@
   "window.titleBarStyle": "custom",
   "window.title": "${activeEditorShort}${separator}KJ_DEMO_RECORDING_WINDOW",
   "explorer.compactFolders": false,
+  "explorer.autoReveal": false,
   "files.autoSave": "off",
   "telemetry.telemetryLevel": "off",
   "update.mode": "none",

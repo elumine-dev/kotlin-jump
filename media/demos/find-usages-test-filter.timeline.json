@@ -1,0 +1,53 @@
+[
+  {
+    "type": "caption",
+    "label": "Who calls `catch`? Prod, tests, or both?",
+    "duration": 2800,
+    "t": 300
+  },
+  {
+    "type": "keystroke",
+    "label": "⌥ + F7",
+    "sublabel": "Find Usages",
+    "duration": 2500,
+    "t": 3103
+  },
+  {
+    "type": "caption",
+    "label": "Prod calls mixed with test calls. 🧪 marks the tests.",
+    "duration": 3000,
+    "t": 6413
+  },
+  {
+    "type": "click",
+    "label": "Click → Hide tests",
+    "sublabel": "kotlin-jump.findUsages.toggleTests",
+    "duration": 2200,
+    "t": 9418
+  },
+  {
+    "type": "caption",
+    "label": "Tests hidden. Only production call sites remain.",
+    "duration": 2800,
+    "t": 12679
+  },
+  {
+    "type": "click",
+    "label": "Click → Show tests",
+    "sublabel": "kotlin-jump.findUsages.toggleTests",
+    "duration": 2200,
+    "t": 15480
+  },
+  {
+    "type": "caption",
+    "label": "Click again. Full list back. Zero re-scan.",
+    "duration": 2600,
+    "t": 18342
+  },
+  {
+    "type": "caption",
+    "label": "One panel. Every caller. One-click filter. 🎚️",
+    "duration": 2800,
+    "t": 20947
+  }
+]

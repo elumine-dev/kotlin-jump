@@ -1,0 +1,34 @@
+[
+  {
+    "type": "caption",
+    "label": "Reading `refreshUsers`. But how is it tested?",
+    "duration": 2200,
+    "t": 300
+  },
+  {
+    "type": "keystroke",
+    "label": "⌥ + ⇧ + T",
+    "sublabel": "Go to Test",
+    "duration": 2000,
+    "t": 2578
+  },
+  {
+    "type": "caption",
+    "label": "Straight onto the matching test. No file-tree hunt. 🧪",
+    "duration": 2600,
+    "t": 4000
+  },
+  {
+    "type": "keystroke",
+    "label": "⌥ + ⇧ + T",
+    "sublabel": "Back to Implementation",
+    "duration": 2000,
+    "t": 6666
+  },
+  {
+    "type": "caption",
+    "label": "Same keystroke. Back to the impl. Test ↔ impl, always. 🔄",
+    "duration": 2600,
+    "t": 7472
+  }
+]

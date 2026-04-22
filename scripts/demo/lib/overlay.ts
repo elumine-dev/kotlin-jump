@@ -50,7 +50,15 @@ export const BANNER_Y = 104;
 export const BANNER_W = 424;   // 8×53 — was 420, snapped to grid
 export const BANNER_H = 72;    // 8×9
 
-export const CARD_W   = 480;   // 8×60
+// CARD_W was 480 — too narrow for labels like
+// "Click → ⬇ 6 implementations → Go to Implementation" (~700 px at
+// fontsize 28). Text is drawn centered on the FULL frame
+// (`x=(w-text_w)/2`), so when text_w > CARD_W the label renders OUTSIDE
+// the blue card background and bleeds onto the editor code —
+// visually broken. 8×100 = 800 fits every demo label in this repo
+// with comfortable breathing room; still leaves 240 px margin
+// (120 per side) so short labels don't look lost.
+export const CARD_W   = 800;   // 8×100
 export const CARD_H   = 96;    // 8×12
 export const CARD_Y   = 560;   // 8×70
 
@@ -391,10 +399,9 @@ function appendCaption(
  * filtergraph (`:`, `'`, `,`, `%`).
  */
 function escapeForDrawtext(s: string): string {
-  return s
-    .replace(/\\/g, '\\\\\\\\')
-    .replace(/:/g,  '\\\\:')
-    .replace(/'/g,  "\\\\\\'")
-    .replace(/,/g,  '\\\\,')
-    .replace(/%/g,  '\\\\%');
+  // Use a replacement callback so every special char gets EXACTLY one
+  // leading backslash in the final filtergraph. Replacement-string
+  // literals (`'\\\\:'`, etc.) are easy to over-escape and silently
+  // produce `\\:` / `\\,`, which ffmpeg rejects in drawtext text=...
+  return s.replace(/[\\:',%]/g, ch => `\\${ch}`);
 }

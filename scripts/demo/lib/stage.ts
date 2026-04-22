@@ -55,8 +55,11 @@ export interface NavigateOpts {
   command:     string;
   /** Optional arguments spread into `executeCommand(id, ...args)`. */
   commandArgs?: unknown[];
-  /** File suffix + line the command must land on before the banner emits. */
-  awaitEditor: { file: string; line: number };
+  /** File suffix the command must land on before the banner emits. The
+   *  `line` field is optional — omit it when the command opens a file
+   *  without setting the caret to a known position (e.g. `goToTest`
+   *  using `vscode.open`). */
+  awaitEditor: { file: string; line?: number };
   /** Banner duration (ms). Default 2500 — matches keystroke(). */
   duration?:   number;
   /** Timeout for the waitForEditor probe (ms). Default 4000. */
@@ -153,6 +156,49 @@ export class Stage {
     await this.pause(200);
   }
 
+  /**
+   * Re-enable the status bar. Playbook §6: hidden by default so demos
+   * record clean editor chrome; turn it on for demos that need to show
+   * a status-bar item (e.g., "Kotlin Jump: Run Android", indexing
+   * progress).
+   */
+  async showStatusBar(): Promise<void> {
+    await vscode.workspace
+      .getConfiguration()
+      .update('workbench.statusBar.visible', true, vscode.ConfigurationTarget.Global)
+      .then(() => {}, () => {});
+    await this.pause(200);
+  }
+
+  /**
+   * Make a multi-line selection from `fromLine` to `toLine` (0-idx,
+   * both inclusive). Several kotlin-jump decoration providers (color
+   * folding, const-val folding, string-resource folding) LIFT their
+   * decorations on lines overlapped by any selection, so the raw code
+   * reappears. Use this to demonstrate that the inline visualisations
+   * step aside when the user wants to edit.
+   *
+   * Pair with `openFile` (or a point-selection reset) to dismiss the
+   * selection when the beat ends — the decorations return immediately.
+   */
+  async selectLines(
+    fromLine: number,
+    toLine: number,
+    opts: { fromColumn?: number; toColumn?: number } = {},
+  ): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) throw new Error('selectLines: no active editor');
+    const start = new vscode.Position(fromLine, opts.fromColumn ?? 0);
+    const lineText = editor.document.lineAt?.(toLine)?.text ?? '';
+    const end = new vscode.Position(toLine, opts.toColumn ?? lineText.length);
+    editor.selection = new vscode.Selection(start, end);
+    editor.revealRange(
+      new vscode.Range(start, end),
+      vscode.TextEditorRevealType.InCenterIfOutsideViewport,
+    );
+    await this.pause(200);
+  }
+
   // ── Actions ────────────────────────────────────────────────────────────────
 
   /**
@@ -195,6 +241,39 @@ export class Stage {
     editor.setDecorations(pulseDeco, [range]);
     await this.pause(500);
     pulseDeco.dispose();
+  }
+
+  /**
+   * Wait until a definition can be resolved at the given file/position.
+   * Used by lib-jar demos to block until the async JAR scan (kicked off
+   * at extension activation) has finished indexing the target JAR.
+   *
+   * Polls `vscode.executeDefinitionProvider` up to `timeoutMs`. Returns
+   * true on success, false on timeout. Caller can proceed either way —
+   * the subsequent `click` will surface a clearer error if the JAR
+   * never became available.
+   */
+  async waitForDefinition(
+    relativePath: string,
+    pos:  { line: number; column: number },
+    timeoutMs = 30_000,
+  ): Promise<boolean> {
+    const uri = vscode.Uri.file(path.join(this.opts.workspaceRoot, relativePath));
+    const position = new vscode.Position(pos.line, pos.column);
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      try {
+        const doc = await vscode.workspace.openTextDocument(uri);
+        const defs = await vscode.commands.executeCommand<vscode.Location[] | vscode.LocationLink[]>(
+          'vscode.executeDefinitionProvider',
+          doc.uri,
+          position,
+        );
+        if (defs && defs.length > 0) return true;
+      } catch { /* retry */ }
+      await this.pause(400);
+    }
+    return false;
   }
 
   async openFile(
@@ -288,7 +367,19 @@ export class Stage {
       remaining -= step;
       // Don't pause after the final step — let the caller's dwell start
       // immediately instead of adding an idle tail.
-      if (i < nSteps - 1) await this.pause(stepMs);
+      if (i < nSteps - 1) {
+        // Ease-in-out: stretch the first and last steps so the scroll
+        // starts and ends gently. `t` ranges 0 → 1 across nSteps; the
+        // distance from the midpoint (0.5) drives a 1.0× → 1.4× factor
+        // applied to stepMs. Capped by MAX_STEP_MS so we never exceed
+        // the smooth-scroll window. Net result: the same total distance
+        // moves with a more natural cinematic rhythm vs uniform linear.
+        const t           = nSteps > 1 ? i / (nSteps - 1) : 0;
+        const distFromMid = Math.abs(t - 0.5) * 2;     // 0 mid, 1 edges
+        const factor      = 1 + distFromMid * 0.4;     // 1× mid, 1.4× edges
+        const eased       = Math.min(MAX_STEP_MS, Math.round(stepMs * factor));
+        await this.pause(eased);
+      }
     }
 
     // Final column alignment — `cursorMove by: 'line'` preserves column but
@@ -335,6 +426,49 @@ export class Stage {
     // Longer dwell (was 450 ms). 850 ms puts the halo on ~10 frames at
     // 12 fps — enough that the viewer's eye certainly registers it.
     await this.pause(850);
+    deco.dispose();
+  }
+
+  /**
+   * Floating callout near a specific code position — short bold label
+   * (with leading arrow) appears just past the targeted character, holds
+   * for `duration` ms, then disposes.
+   *
+   * Use during pure-ambient demos to focus the viewer's eye on ONE
+   * specific detail at the moment a caption names what it is. Without
+   * this, the viewer's eye scans the whole viewport instead of locking
+   * onto the call site.
+   *
+   * Captured rendering note: only `after.contentText` survives the
+   * `extensionTestsPath` capture path (cf. stage.ts dim-surround note).
+   * That's why the callout uses an inline `after` decoration rather
+   * than a free-floating overlay.
+   *
+   * Example:
+   *   await stage.calloutAt({ line: 4, column: 22 }, 'swatch', 1800);
+   *   await stage.caption('Inline colour swatches…');
+   */
+  async calloutAt(
+    target: { line: number; column: number },
+    label: string,
+    duration = 1800,
+  ): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) return;
+    const deco = vscode.window.createTextEditorDecorationType({
+      after: {
+        contentText: `  ◀ ${label}`,
+        color:       '#007ACC',
+        fontWeight:  'bold',
+        margin:      '0 0 0 8px',
+      },
+    });
+    // Anchor at the END of the targeted character — the arrow then
+    // points BACK toward the symbol, mimicking a hand-drawn callout.
+    editor.setDecorations(deco, [
+      new vscode.Range(target.line, target.column, target.line, target.column),
+    ]);
+    await this.pause(duration);
     deco.dispose();
   }
 
@@ -420,6 +554,10 @@ export class Stage {
       sublabel: opts.label,
       duration: opts.duration ?? 2500,
     });
+    // Micro-pause so the banner renders BEFORE the next call (typically
+    // a `runCommand`) yanks the editor away. 250 ms is enough for two
+    // WebP frames at 12 fps + the banner fade-in (150 ms) to land.
+    await this.pause(250);
   }
 
   /**
@@ -456,19 +594,184 @@ export class Stage {
     return vscode.commands.executeCommand(commandId, ...args);
   }
 
-  /** Wait for the active editor to reach a specific file + line. Flashes the
-   *  landing line once the target is reached so the cursor jump is visible. */
-  async waitForEditor(fileSuffix: string, line: number, timeoutMs = 4000): Promise<void> {
+  /**
+   * Update a `kotlinJump.*` setting at Global scope. Use to demonstrate
+   * toggling features (e.g. string folding on/off) — providers that
+   * subscribe to `onDidChangeConfiguration` re-render automatically.
+   *
+   * Pair the toggle with a 400-600 ms pause so the re-render completes
+   * before the next demo beat narrates the new state.
+   */
+  async setSetting(key: string, value: unknown, ms = 600): Promise<void> {
+    await vscode.workspace
+      .getConfiguration('kotlinJump')
+      .update(key, value, vscode.ConfigurationTarget.Global);
+    await this.pause(ms);
+  }
+
+  /**
+   * Find-and-replace a literal substring on a single line, then settle.
+   *
+   * Use to demonstrate live edits (e.g. changing `@RequiresApi(21)` →
+   * `@RequiresApi(24)` so the inlay hint updates from "Lollipop (5.0)"
+   * to "Nougat (7.0)" in real time). The provider's onDidChangeText
+   * subscription re-renders within ~100 ms — no manual refresh needed.
+   *
+   * Throws if the literal is not found on the requested line — fail
+   * fast so the demo doesn't silently record a no-op edit.
+   */
+  async replaceText(line: number, find: string, replaceWith: string): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) throw new Error('replaceText: no active editor');
+    const text = editor.document.lineAt(line).text;
+    const idx  = text.indexOf(find);
+    if (idx < 0) throw new Error(`replaceText: "${find}" not found on line ${line}: ${text}`);
+    const range = new vscode.Range(line, idx, line, idx + find.length);
+    await editor.edit(eb => eb.replace(range, replaceWith));
+    // Settle so the provider's debounced re-render completes before
+    // the next demo beat.
+    await this.pause(400);
+  }
+
+  /**
+   * Human-paced find-and-replace: position cursor at the end of `find`,
+   * backspace one char at a time, then type `replaceWith` one char at
+   * a time. Between each keystroke the viewer sees the line mutate
+   * letter by letter — so live providers (inlay hints, folding
+   * resolvers) re-render multiple times, and the mutation LOOKS like
+   * someone typing instead of an atomic `editor.edit` flip.
+   *
+   * Tuned timings (per-char):
+   *   - `backspaceMs` defaults to 120 ms (~8 cps) — a touch faster than
+   *     typing, matching how people actually delete.
+   *   - `typeMs` defaults to 160 ms (~6 cps) — deliberate, readable
+   *     cadence that lands every char on its own WebP frame (@ 12 fps
+   *     ≈ 83 ms/frame).
+   *   - `settleMs` defaults to 700 ms — lets the provider's debounced
+   *     re-render complete so the final hint is visible before the
+   *     next beat.
+   *
+   * Throws if `find` is not on `line` (fail-fast like replaceText).
+   */
+  async typeReplace(
+    line: number,
+    find: string,
+    replaceWith: string,
+    opts: { backspaceMs?: number; typeMs?: number; settleMs?: number } = {},
+  ): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) throw new Error('typeReplace: no active editor');
+    const text = editor.document.lineAt(line).text;
+    const idx  = text.indexOf(find);
+    if (idx < 0) throw new Error(`typeReplace: "${find}" not found on line ${line}: ${text}`);
+
+    const backspaceMs = opts.backspaceMs ?? 120;
+    const typeMs      = opts.typeMs      ?? 160;
+    const settleMs    = opts.settleMs    ?? 700;
+
+    // Park the caret at the END of the literal so `deleteLeft` eats
+    // `find` right-to-left. Reveal if off-screen so the viewer can
+    // actually see the typing happen.
+    const endPos = new vscode.Position(line, idx + find.length);
+    editor.selection = new vscode.Selection(endPos, endPos);
+    editor.revealRange(
+      new vscode.Range(endPos, endPos),
+      vscode.TextEditorRevealType.InCenterIfOutsideViewport,
+    );
+    await this.pause(200);
+
+    for (let i = 0; i < find.length; i++) {
+      await vscode.commands.executeCommand('deleteLeft');
+      await this.pause(backspaceMs);
+    }
+
+    // Short beat between delete and type — mimics the real-world
+    // "I paused to think about the new value" moment.
+    await this.pause(180);
+
+    for (const ch of replaceWith) {
+      await vscode.commands.executeCommand('type', { text: ch });
+      await this.pause(typeMs);
+    }
+
+    // Final settle so the provider's debounced re-render lands before
+    // the next demo beat consumes the frame budget.
+    await this.pause(settleMs);
+  }
+
+  /**
+   * Trigger the action a Code Lens carries (its `command`), without
+   * actually clicking on it (Code Lens overlays are not editable text
+   * and `stage.click` cannot target them). Wraps a `runCommand` with
+   * a banner so the viewer sees what was "clicked".
+   *
+   * Example — opening the Find Usages panel that the `N usages`
+   * Code Lens would open:
+   *   await stage.clickLens('N usages → Find Usages',
+   *     'kotlin-jump.findUsages');
+   */
+  async clickLens(label: string, commandId: string, ...args: unknown[]): Promise<void> {
+    this.timeline.push({
+      type:     'click',
+      label:    `Click → ${label}`,
+      sublabel: commandId,
+      duration: 2200,
+    });
+    await this.pause(250);  // banner has time to render
+    await vscode.commands.executeCommand(commandId, ...args);
+    await this.pause(800);  // result has time to settle
+  }
+
+  /**
+   * Variant of `clickLens` for commands that BLOCK until the user
+   * interacts with a modal UI (QuickPick, input box). The command is
+   * fired WITHOUT awaiting so follow-up demo steps — like
+   * `workbench.action.acceptSelectedQuickOpenItem` — can actually run
+   * while the modal is still visible. Without this, `clickLens` stalls
+   * on `await showQuickPick(...)` and no further step fires.
+   *
+   * Example — clicking `⬇ N implementations` which opens a picker:
+   *   await stage.clickLensOpen('⬇ N implementations → Go to …',
+   *     'kotlin-jump.goToClassImpl', name, pkg);
+   *   await stage.pause(1800);  // viewer reads the picker
+   *   await stage.runCommand('workbench.action.acceptSelectedQuickOpenItem');
+   *   await stage.waitForEditor('SomeImpl.kt');
+   */
+  async clickLensOpen(label: string, commandId: string, ...args: unknown[]): Promise<void> {
+    this.timeline.push({
+      type:     'click',
+      label:    `Click → ${label}`,
+      sublabel: commandId,
+      duration: 2200,
+    });
+    await this.pause(250);
+    void vscode.commands.executeCommand(commandId, ...args);
+    // Short settle so the banner + the modal UI both render before
+    // whatever step the demo does next.
+    await this.pause(400);
+  }
+
+  /** Wait for the active editor to reach a specific file (and optionally a
+   *  specific line). Flashes the landing line once the target is reached.
+   *
+   *  Pass `line: undefined` (or omit it) when the target command opens a
+   *  file without setting the caret to a known position — typical of
+   *  `vscode.open` callers like `kotlin-jump.goToTest`, where the
+   *  destination caret depends on whether the file was previously open.
+   */
+  async waitForEditor(fileSuffix: string, line?: number, timeoutMs = 4000): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       const active = vscode.window.activeTextEditor;
-      if (active && active.document.fileName.endsWith(fileSuffix) && active.selection.active.line === line) {
-        void this.flashLanding(active, line);
-        return;
+      if (active && active.document.fileName.endsWith(fileSuffix)) {
+        if (line === undefined || active.selection.active.line === line) {
+          void this.flashLanding(active, line ?? active.selection.active.line);
+          return;
+        }
       }
       await new Promise(r => setTimeout(r, 100));
     }
-    throw new Error(`waitForEditor timeout: ${fileSuffix}:L${line}`);
+    throw new Error(`waitForEditor timeout: ${fileSuffix}${line !== undefined ? `:L${line}` : ''}`);
   }
 
   /** Narrative text overlay at the bottom of the frame. */

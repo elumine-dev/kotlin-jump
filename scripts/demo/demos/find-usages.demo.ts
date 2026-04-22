@@ -36,7 +36,7 @@ export default async function record(stage: Stage): Promise<void> {
     { line: 59, column: 18 },
   );
   await stage.pause(600);  // dwell on the landing line before narrating
-  await stage.caption('Two callers — pick one from the panel', { duration: 1800 });
+  await stage.caption('Two callers. Pick one from the panel.', { duration: 1800 });
 
   // ─── Part 2: exactly one caller → skip the panel, jump straight.
   //
@@ -60,7 +60,7 @@ export default async function record(stage: Stage): Promise<void> {
   // `s` of `show`, not on `ConfirmationDialog` or elsewhere.
   await stage.scrollThrough({ fromLine: 59, toLine: 65, column: 28, durationMs: 700 });
   await stage.dwellOn({ line: 65, column: 28 }, 800);
-  await stage.caption('Cursor on `show` — this call is in another file…', { duration: 1600 });
+  await stage.caption('Cursor on `show`. This call lives elsewhere…', { duration: 1600 });
 
   await stage.openFile(
     'src/main/kotlin/com/example/ui/ConfirmationDialog.kt',
@@ -70,7 +70,7 @@ export default async function record(stage: Stage): Promise<void> {
   // unambiguous that Alt+F7 targets the method, not the `ConfirmationDialog`
   // object name above it.
   await stage.dwellOn({ line: 9, column: 8 }, 900);
-  await stage.caption('On `show` — single caller. Alt+F7…', { duration: 1500 });
+  await stage.caption('On `show`. Single caller. Alt+F7…', { duration: 1500 });
 
   await stage.keystroke('⌥ + F7', { label: 'Find Usages' });
   await stage.runCommand('kotlin-jump.findUsages');
@@ -78,5 +78,6 @@ export default async function record(stage: Stage): Promise<void> {
   // Line 65 (0-indexed) = `ConfirmationDialog.show(pokemon)` at 1-indexed 66.
   await stage.waitForEditor('PokedexScreen.kt', 65);
   await stage.pause(900);
-  await stage.caption('Straight across files — no picker', { duration: 2000 });
+  // Answer caption — closes the contrast with the multi-caller case.
+  await stage.caption('One caller. Straight there. No picker. 🎯', { duration: 2000 });
 }

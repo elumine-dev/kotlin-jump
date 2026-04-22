@@ -242,11 +242,26 @@ See what matters, inline.
 
 ## 📦 Library Sources
 
-Go to Definition works inside your dependencies too.
+Go to Definition works inside your dependencies too — out of the box.
 
-Kotlin Jump indexes `-sources.jar` files from your Gradle cache (`~/.gradle`) and Maven local repo (`~/.m2`). Enables **Go to Definition** and **KDoc** for any library that ships sources — Compose, Coroutines, AndroidX, and more.
+Kotlin Jump indexes sources from **four locations** and surfaces a single **`$(library)` status bar item** showing the state at a glance:
 
-No extra setup. Runs automatically in the background.
+| Source | When |
+|---|---|
+| **Bundled Kotlin stdlib** (~600 KB shipped with the extension) | Always — `List`, `String`, `Sequence`, etc. work from the first second, even with a cold cache and offline |
+| **JDK `lib/src.zip`** | Auto-detected via `JAVA_HOME` (macOS `/usr/libexec/java_home`, Linux `update-alternatives`, Windows scan) — `java.lang.*`, `java.util.*` |
+| **Gradle cache** (`~/.gradle/caches/modules-2/files-2.1`) | Existing `-sources.jar` files, all configurations |
+| **Maven local repo** (`~/.m2/repository`) | Existing `-sources.jar` files |
+
+When library sources are missing from the local caches, click the status bar item → **"Download missing sources"**. Kotlin Jump fetches them via direct HTTP from Maven Central — **no JVM, no Gradle invocation, no terminal**. Downloaded JARs land in the standard Gradle cache layout, so they integrate seamlessly with your other tools.
+
+```
+$(library) KJ: 42 libs · JDK · stdlib ✓
+```
+
+Click the item for a menu of actions: download missing sources, refresh cache, open settings, view documentation.
+
+No language server. No background process. No JVM running in the extension.
 
 ---
 
@@ -376,7 +391,7 @@ Search **Kotlin Jump** in VS Code (`Cmd+Shift+X`) or install directly:
 Download the latest `.vsix` from [GitHub Releases](https://github.com/elumine-dev/kotlin-jump/releases/latest), then:
 
 ```bash
-code --install-extension kotlin-jump-1.11.0.vsix
+code --install-extension kotlin-jump-1.12.0.vsix
 ```
 
 ---
@@ -387,7 +402,7 @@ code --install-extension kotlin-jump-1.11.0.vsix
 git clone https://github.com/elumine-dev/kotlin-jump
 cd kotlin-jump && npm install
 node esbuild.js --production && npx @vscode/vsce package --no-dependencies
-code --install-extension kotlin-jump-1.11.0.vsix
+code --install-extension kotlin-jump-1.12.0.vsix
 ```
 
 ---

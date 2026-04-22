@@ -1,0 +1,21 @@
+[
+  {
+    "type": "caption",
+    "label": "Where is `MutableStateFlow` defined?",
+    "duration": 2200,
+    "t": 300
+  },
+  {
+    "type": "click",
+    "label": "Cmd+Click → Go to Definition (in kotlinx-coroutines JAR)",
+    "sublabel": "MutableStateFlow",
+    "duration": 2500,
+    "t": 2500
+  },
+  {
+    "type": "caption",
+    "label": "Inside `StateFlow.kt`. JAR navigation ✓",
+    "duration": 2400,
+    "t": 7370
+  }
+]

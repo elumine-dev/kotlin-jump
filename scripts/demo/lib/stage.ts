@@ -759,11 +759,20 @@ export class Stage {
    *  `vscode.open` callers like `kotlin-jump.goToTest`, where the
    *  destination caret depends on whether the file was previously open.
    */
-  async waitForEditor(fileSuffix: string, line?: number, timeoutMs = 4000): Promise<void> {
+  /**
+   * Wait for the active editor to land on a file whose `fileName` matches
+   * `target` — either a literal suffix (`endsWith`) or a RegExp (`.test`).
+   * Use RegExp when a symbol's definition may live in one of several files
+   * (KMP platform variants, overloads across files) — e.g. `/Builders(\.[^/]*)?\.kt$/`.
+   */
+  async waitForEditor(target: string | RegExp, line?: number, timeoutMs = 4000): Promise<void> {
+    const matches = (fileName: string) =>
+      typeof target === 'string' ? fileName.endsWith(target) : target.test(fileName);
+    const describe = typeof target === 'string' ? target : target.toString();
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       const active = vscode.window.activeTextEditor;
-      if (active && active.document.fileName.endsWith(fileSuffix)) {
+      if (active && matches(active.document.fileName)) {
         if (line === undefined || active.selection.active.line === line) {
           void this.flashLanding(active, line ?? active.selection.active.line);
           return;
@@ -771,7 +780,7 @@ export class Stage {
       }
       await new Promise(r => setTimeout(r, 100));
     }
-    throw new Error(`waitForEditor timeout: ${fileSuffix}${line !== undefined ? `:L${line}` : ''}`);
+    throw new Error(`waitForEditor timeout: ${describe}${line !== undefined ? `:L${line}` : ''}`);
   }
 
   /** Narrative text overlay at the bottom of the frame. */

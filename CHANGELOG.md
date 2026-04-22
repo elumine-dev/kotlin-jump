@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.13.0
+
+v1.13.0 improves navigation accuracy for standard Kotlin and Java built-in types, and adds correct expect/actual resolution for Kotlin Multiplatform projects.
+
+### Improvements
+- Added implicit default import awareness for Kotlin (kotlin.*, kotlin.collections.*, kotlin.io.*, and related packages) and Java (java.lang.*) — Go to Definition now works on built-in types that appear without an import statement.
+- Added expect/actual modifier support for Kotlin Multiplatform projects; FQN lookups now prefer the actual declaration, giving more precise jump targets in multi-platform codebases.
+
 ## 1.12.1
 
 Packaging fix — reduces VSIX size by excluding demo capture artifacts that were accidentally shipped in 1.12.0.

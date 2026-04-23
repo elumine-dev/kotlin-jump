@@ -1,1 +1,20 @@
-[]
+[
+  {
+    "t": 400,
+    "type": "caption",
+    "label": "Hit Run. Gradle builds. ADB installs. App launches. 📱",
+    "duration": 3000
+  },
+  {
+    "t": 4000,
+    "type": "caption",
+    "label": "No menu. No waiting.",
+    "duration": 2400
+  },
+  {
+    "t": 7000,
+    "type": "caption",
+    "label": "Gradle does the work.",
+    "duration": 2400
+  }
+]

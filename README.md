@@ -27,6 +27,10 @@
   </a>
 </p>
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/kotlin-jump-infographic.png" width="720" alt="Kotlin Jump at a glance — features, performance, and workflow" />
+</p>
+
 ---
 
 ## ⚡ Why this feels different

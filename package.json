@@ -1068,7 +1068,7 @@
             "title": "Query your codebase in natural language",
             "description": "Type **@kotlin-jump** in Copilot Chat to search your symbol index — find classes, trace usages, explore implementations, read KDoc.\n\n[Open Chat](command:workbench.action.chat.open)",
             "media": {
-              "image": "media/walkthrough/ai-assistant.gif",
+              "image": "media/demos/ai-assistant.webp",
               "altText": "AI assistant querying the symbol index"
             }
           }

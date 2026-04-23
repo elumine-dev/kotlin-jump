@@ -1,4 +1,5 @@
 import { TimelineEvent } from './timeline';
+import { renderCaptionPng } from './render-caption';
 
 /**
  * ffmpeg filter_complex builder for demo overlays.
@@ -162,6 +163,16 @@ export interface OverlayOptions {
   fontPath:     string;
   /** Absolute path to JetBrainsMono-Regular.ttf (code-like text: symbol names). */
   fontPathMono: string;
+  /**
+   * First ffmpeg input index assigned to caption PNGs (one per caption event).
+   *
+   * Captions are rendered to transparent PNGs via @napi-rs/canvas (Skia)
+   * because ffmpeg drawtext cannot render color emoji. The PNGs are then
+   * attached as additional ffmpeg inputs and composited via `overlay`. The
+   * caller must pass the PNG paths returned in `extraInputs` as inputs in the
+   * SAME order, starting at this index. Defaults to 1 (just after main video).
+   */
+  firstCaptionInputIdx?: number;
 }
 
 export interface OverlayFilterGraph {
@@ -172,6 +183,16 @@ export interface OverlayFilterGraph {
    *     the caller to produce the final `[final]` output).
    */
   chain: string;
+  /**
+   * Absolute PNG paths that MUST be attached as ffmpeg inputs (in order),
+   * starting at `OverlayOptions.firstCaptionInputIdx`. Each corresponds to
+   * one caption event; empty if the timeline has no captions.
+   *
+   * The caller must pass these as `-loop 1 -framerate 12 -i <path>` input
+   * pairs so the filter chain's `[N:v]` references resolve to a static
+   * looped stream that `overlay=enable=…` can composite.
+   */
+  extraInputs: string[];
 }
 
 /* ── Public API ──────────────────────────────────────────────────────────── */
@@ -188,6 +209,8 @@ export function buildOverlayFilterGraph(
   opts: OverlayOptions,
 ): OverlayFilterGraph {
   const segments: string[] = [];
+  const extraInputs: string[] = [];
+  const firstCapIdx = opts.firstCaptionInputIdx ?? 1;
   let inputLabel = 'base';
 
   events.forEach((ev, idx) => {
@@ -198,16 +221,20 @@ export function buildOverlayFilterGraph(
       case 'click':
         inputLabel = appendClick(segments, ev, inputLabel, idx, opts);
         break;
-      case 'caption':
-        inputLabel = appendCaption(segments, ev, inputLabel, idx, opts);
+      case 'caption': {
+        const captionInputIdx = firstCapIdx + extraInputs.length;
+        const result = appendCaption(segments, ev, inputLabel, idx, captionInputIdx);
+        inputLabel = result.outLabel;
+        extraInputs.push(result.pngPath);
         break;
+      }
     }
   });
 
   // The `null` filter is an identity pass-through; it exists solely to
   // normalise the output label regardless of how many events were rendered.
   segments.push(`[${inputLabel}]null[annot]`);
-  return { chain: segments.join(';') };
+  return { chain: segments.join(';'), extraInputs };
 }
 
 /**
@@ -359,36 +386,83 @@ function appendClick(
   return postT2;
 }
 
+/**
+ * Caption overlays used to rely on `drawtext` for text rendering, but ffmpeg
+ * 8.1 cannot render any color emoji font (SBIX and CBDT both rejected by
+ * libfreetype in drawtext), so emoji came out as tofu. We now pre-rasterise
+ * each caption to a transparent PNG via Skia (`render-caption.ts`) — pill
+ * background + Latin text + color emoji all baked in, with per-segment
+ * baseline adjustment so emoji align visually with Latin caps.
+ *
+ * The PNG is attached as an additional ffmpeg input (index
+ * `captionInputIdx`); this function emits the filter snippet that scales the
+ * 2× supersampled PNG back to native size, fades alpha in/out at the event
+ * boundaries, and overlays it on the running video stream.
+ */
 function appendCaption(
-  segments: string[],
-  ev: TimelineEvent,
-  inputLabel: string,
-  idx: number,
-  opts: OverlayOptions,
-): string {
-  const main   = escapeForDrawtext(ev.label);
-  const alpha  = alphaExpr(ev.t, ev.duration);
-  const enable = enableExpr(ev.t, ev.duration);
-
-  const srcLbl = `cap${idx}_bg_src`;
-  const postBg = `cap${idx}_bg`;
-  const postT1 = `cap${idx}_t1`;
-
+  segments:       string[],
+  ev:             TimelineEvent,
+  inputLabel:     string,
+  idx:            number,
+  captionInputIdx: number,
+): { outLabel: string; pngPath: string } {
   const barW = VIDEO_W - 2 * CAPTION_BAR_PAD;
   const barY = CAPTION_Y - 8;
 
-  segments.push(fadedColorSource(
-    CAPTION_BG_HEX, CAPTION_BG_ALPHA, barW, CAPTION_BAR_H, ev.t, ev.duration, srcLbl,
-  ));
+  // Render the pre-rasterised caption PNG (pill + text + emoji in one bitmap).
+  const pngPath = renderCaptionPng(ev.label, {
+    width:       barW,
+    height:      CAPTION_BAR_H,
+    fontSize:    22,
+    pillOpacity: parseFloat(CAPTION_BG_ALPHA),
+    pillRadius:  20,
+  });
+
+  const t0         = (ev.t / 1000).toFixed(3);
+  const t1         = ((ev.t + ev.duration) / 1000).toFixed(3);
+  const fadeSec    = (FADE_MS / 1000).toFixed(3);
+  const fadeOutSt  = ((ev.t + ev.duration - FADE_MS) / 1000).toFixed(3);
+  const enable     = enableExpr(ev.t, ev.duration);
+
+  const prepLbl = `cap${idx}_prep`;
+  const outLbl  = `cap${idx}_out`;
+
+  // The PNG is rendered by Skia at native size (barW × CAPTION_BAR_H), so no
+  // intermediate scale is needed — adding a lanczos pass here washed out
+  // antialiased Latin strokes while the emoji bitmaps stayed crisp.
+  //
+  // Two fixes here vs the earlier implementation:
+  //
+  //  1. `setpts=PTS-STARTPTS` on the caption stream. The scripted recorder
+  //     passes `-ss <rawOffset>` to the main video input (fast seek past
+  //     ffmpeg warmup), which resets [base]'s first-frame PTS to 0. The
+  //     caption inputs are `-loop 1 -framerate 12` streams that start at
+  //     their own t=0, but in some captures their PTS appeared to drift
+  //     during the main input's pre-roll — making `fade=t=in:st=X` fire at
+  //     the wrong moment and producing captions that rendered with broken
+  //     alpha (text invisible, emoji visible). Resetting the caption's
+  //     STARTPTS forces its t=0 to coincide with [base]'s t=0 after seek.
+  //
+  //  2. `format=rgba` (not `yuva420p`). Staying in RGBA eliminates a YUV
+  //     round-trip where white text (255,255,255) became Y=235 in limited
+  //     range and came back as RGB=235 when color-range tags got lost
+  //     through the filter chain — the classic peak-luminance-233 symptom.
   segments.push(
-    `[${inputLabel}][${srcLbl}]overlay=x=${CAPTION_BAR_PAD}:y=${barY}:eof_action=pass[${postBg}]`,
+    `[${captionInputIdx}:v]` +
+      `format=rgba,setpts=PTS-STARTPTS,` +
+      `fade=t=in:st=${t0}:d=${fadeSec}:alpha=1,` +
+      `fade=t=out:st=${fadeOutSt}:d=${fadeSec}:alpha=1` +
+      `[${prepLbl}]`,
   );
+  // Overlay composites the faded PNG onto the running video. `enable` gates
+  // the composition to the event window, so the caption is entirely absent
+  // from frames outside [t0, t1] even though the input stream loops forever.
   segments.push(
-    `[${postBg}]drawtext=fontfile='${opts.fontPath}':text='${main}'` +
-      `:x=(w-text_w)/2:y=${CAPTION_Y}:fontsize=22` +
-      `:fontcolor=${TEXT_PRIMARY}:enable='${enable}':alpha='${alpha}'[${postT1}]`,
+    `[${inputLabel}][${prepLbl}]overlay=` +
+      `x=${CAPTION_BAR_PAD}:y=${barY}:eof_action=pass:enable='${enable}'` +
+      `[${outLbl}]`,
   );
-  return postT1;
+  return { outLabel: outLbl, pngPath };
 }
 
 /* ── Escaping ────────────────────────────────────────────────────────────── */

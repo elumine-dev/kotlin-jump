@@ -1,12 +1,17 @@
 /**
  * Adversarial tests against the overlay filtergraph builder.
  *
- * Attack surface: every `label` / `sublabel` in a `TimelineEvent` ends up
+ * Attack surface: `label` / `sublabel` on keystroke + click events get
  * inlined into a `drawtext=text='…'` filter argument. ffmpeg's filter
  * syntax gives special meaning to `:` `'` `,` `%` `\` `;` `[` `]` — a
  * naïve escape function that misses any of those lets a label CLOSE the
  * surrounding filter string and inject another filter. That's the class
  * of bug this file hunts.
+ *
+ * Captions are NOT covered by these tests because they render through a
+ * Skia canvas (render-caption.ts) and the label is passed to `fillText()`,
+ * not inlined into the filter string. The PNG bitmap is then attached as
+ * a ffmpeg input — the label text never touches the filter parser.
  *
  * Strategy per project memory ("adversarial testing logic"):
  *   - Read the code as an attacker: WHAT characters does `escapeForDrawtext`
@@ -69,8 +74,10 @@ describe('ADV-overlay — special chars in event text', () => {
 
   for (const p of payloads) {
     it(`${p.label}: filter string stays balanced and ends at [annot]`, () => {
+      // Use keystroke (drawtext-based) so the adversarial payload actually
+      // reaches the filter string. Captions would detour through Skia.
       const evs: TimelineEvent[] = [
-        { type: 'caption', t: 0, label: p.text, duration: 2000 },
+        { type: 'keystroke', t: 0, label: p.text, sublabel: 'sub', duration: 2000 },
       ];
       const { chain } = buildOverlayFilterGraph(evs, OPTS);
 
@@ -88,7 +95,7 @@ describe('ADV-overlay — special chars in event text', () => {
     const evs: TimelineEvent[] = [
       // An attacker controls `label`. If escaping were broken, the text
       // value would close, a new option `enable='0'` would start.
-      { type: 'caption', t: 0, label: "BOOM' :enable='0' :alpha='0'", duration: 2000 },
+      { type: 'keystroke', t: 0, label: "BOOM' :enable='0' :alpha='0'", sublabel: 'x', duration: 2000 },
     ];
     const { chain } = buildOverlayFilterGraph(evs, OPTS);
     // Our legitimate alpha value contains `alpha='if(...'` — the attack
@@ -102,7 +109,7 @@ describe('ADV-overlay — special chars in event text', () => {
 
   it('empty label → drawtext with `text=\'\'` survives (no crash, segment present)', () => {
     const evs: TimelineEvent[] = [
-      { type: 'caption', t: 0, label: '', duration: 2000 },
+      { type: 'keystroke', t: 0, label: '', sublabel: 'x', duration: 2000 },
     ];
     const { chain } = buildOverlayFilterGraph(evs, OPTS);
     expect(chain).toContain("text=''");
@@ -141,7 +148,8 @@ describe('ADV-overlay — structural invariants under stress', () => {
     const overlayCount = (chain.match(/]overlay=/g) ?? []).length;
     expect(overlayCount).toBe(100);
 
-    // Every source has a complete fade-in/out pair.
+    // Every event source has a complete fade-in/out pair (captions fade their
+    // PNG stream, banner/card fade their color-source).
     const fadeInCount  = (chain.match(/fade=t=in:/g) ?? []).length;
     const fadeOutCount = (chain.match(/fade=t=out:/g) ?? []).length;
     expect(fadeInCount).toBe(100);
@@ -196,7 +204,8 @@ describe('ADV-overlay — structural invariants under stress', () => {
     const { chain } = buildOverlayFilterGraph(evs, OPTS);
     expect(chain).toMatch(/\[ks0_bg_src\]/);
     expect(chain).toMatch(/\[cl1_bg_src\]/);
-    expect(chain).toMatch(/\[cap2_bg_src\]/);
+    // Captions no longer use a color source; they prep a PNG stream into cap${idx}_prep.
+    expect(chain).toMatch(/\[cap2_prep\]/);
   });
 });
 
@@ -205,7 +214,7 @@ describe('ADV-overlay — structural invariants under stress', () => {
 describe('ADV-overlay — alpha expression reaches every drawtext and NO other filter', () => {
   it('drawtext gets alpha=\'…\'; overlay + color do NOT (they use tpad+fade instead)', () => {
     const evs: TimelineEvent[] = [
-      { type: 'caption', t: 0, label: 'x', duration: 1000 },
+      { type: 'keystroke', t: 0, label: 'x', sublabel: 'y', duration: 1000 },
     ];
     const { chain } = buildOverlayFilterGraph(evs, OPTS);
     // drawtext has alpha=

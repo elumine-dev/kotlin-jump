@@ -98,11 +98,16 @@ describe('DemoOverlay — dual-font', () => {
     expect(monoCount).toBe(0);
   });
 
-  it('caption uses Inter', () => {
+  it('caption renders via PNG overlay (Skia — Inter baked into the bitmap), not drawtext', () => {
     const ev: TimelineEvent = { type: 'caption', t: 0, label: 'A caption', duration: 2500 };
-    const { chain } = buildOverlayFilterGraph([ev], OPTS);
-    expect(chain).toContain(`fontfile='${FONT_INTER}'`);
-    expect(chain).not.toContain(`fontfile='${FONT_MONO}'`);
+    const { chain, extraInputs } = buildOverlayFilterGraph([ev], OPTS);
+    // No drawtext for captions anymore — the caption is a pre-rasterised PNG
+    // (needed because ffmpeg drawtext can't render color emoji).
+    expect(chain).not.toContain('drawtext=');
+    // Exactly one extra input (the caption PNG), referenced in the chain.
+    expect(extraInputs).toHaveLength(1);
+    expect(extraInputs[0]).toMatch(/\.png$/);
+    expect(chain).toContain('[1:v]');
   });
 });
 
@@ -132,10 +137,13 @@ describe('DemoOverlay — 8-px grid', () => {
     expect(chain).toContain('s=424x72');
   });
 
-  it('generated caption text sits at y=664', () => {
+  it('generated caption PNG is overlaid at CAPTION_Y - 8 (= 656) to anchor the pill on the grid', () => {
     const ev: TimelineEvent = { type: 'caption', t: 0, label: 'x', duration: 2500 };
     const { chain } = buildOverlayFilterGraph([ev], OPTS);
-    expect(chain).toMatch(/y=664(?!\d)/);
+    // Caption is now a PNG overlay (text is rasterised into the bitmap). The
+    // overlay y positions the pill's top edge — text inside the PNG is still
+    // aligned to CAPTION_Y by the renderer's baseline math.
+    expect(chain).toMatch(/overlay=x=\d+:y=656(?!\d)/);
   });
 });
 
@@ -159,21 +167,27 @@ describe('DemoOverlay — fade in/out', () => {
     expect(alphaExpr(0, 1000, 300)).toContain('/0.300');
   });
 
-  it('every background source is time-aligned via tpad + fade in/out (alpha baked-in)', () => {
+  it('every drawtext-based background source is time-aligned via tpad + fade in/out (alpha baked-in)', () => {
     const evs: TimelineEvent[] = [
       { type: 'keystroke', t: 0,    label: 'a', sublabel: 'b', duration: 2500 },
       { type: 'click',     t: 3000, label: 'c', sublabel: 'd', duration: 2500 },
       { type: 'caption',   t: 6000, label: 'e',                duration: 2500 },
     ];
     const { chain } = buildOverlayFilterGraph(evs, OPTS);
+    // Only banner + card use `color=c=` sources (2 total). Captions now
+    // stream a pre-rasterised PNG input instead, with its own fade chain.
     const sourceSegments = chain.split(';').filter(s => s.startsWith('color=c='));
-    expect(sourceSegments.length).toBe(3);
+    expect(sourceSegments.length).toBe(2);
     for (const seg of sourceSegments) {
       expect(seg).toContain('format=yuva420p');
       expect(seg).toContain('tpad=start_duration=');
       expect(seg).toMatch(/fade=t=in:st=[^,]+:d=0\.150:alpha=1/);
       expect(seg).toMatch(/fade=t=out:st=[^,]+:d=0\.150:alpha=1/);
     }
+    // The caption's PNG stream has its own fade-in/out on alpha before overlay.
+    const capPrep = chain.split(';').find(s => s.includes('cap2_prep'))!;
+    expect(capPrep).toMatch(/fade=t=in:st=6\.000:d=0\.150:alpha=1/);
+    expect(capPrep).toMatch(/fade=t=out:st=8\.350:d=0\.150:alpha=1/);
   });
 
   it('each overlay uses eof_action=pass so the base video survives after the source ends', () => {
@@ -202,8 +216,9 @@ describe('DemoOverlay — fade in/out', () => {
     const { chain } = buildOverlayFilterGraph(evs, OPTS);
     const drawtextCount      = (chain.match(/drawtext=/g) ?? []).length;
     const drawtextWithAlpha  = (chain.match(/drawtext=[^;]*:alpha='[^']+'/g) ?? []).length;
-    // 2 (banner) + 2 (card) + 1 (caption) = 5
-    expect(drawtextCount).toBe(5);
+    // 2 (banner) + 2 (card) = 4. Captions no longer emit drawtext (PNG overlay
+    // handles their text rendering with color-emoji support).
+    expect(drawtextCount).toBe(4);
     expect(drawtextWithAlpha).toBe(drawtextCount);
   });
 
@@ -221,12 +236,15 @@ describe('DemoOverlay — filter_complex graph', () => {
     expect(chain).toBe('[base]null[annot]');
   });
 
-  it('escapes drawtext punctuation with a single backslash so ffmpeg accepts the caption', () => {
+  it('escapes drawtext punctuation with a single backslash so ffmpeg accepts the text', () => {
+    // Captions no longer emit drawtext (they're rasterised via Skia), so this
+    // test now exercises the escape on a banner title — which still uses
+    // drawtext directly.
     const ev: TimelineEvent = {
-      type: 'caption', t: 0, label: 'Three lenses: usages, implementations, overrides.', duration: 2500,
+      type: 'keystroke', t: 0, label: 'Three lenses: usages, implementations, overrides.', sublabel: 'x', duration: 2500,
     };
     const { chain } = buildOverlayFilterGraph([ev], OPTS);
-    const seg = chain.split(';').find(s => s.includes('drawtext='))!;
+    const seg = chain.split(';').find(s => s.includes("drawtext=") && s.includes('Three lenses'))!;
     expect(seg).toContain("text='Three lenses\\: usages\\, implementations\\, overrides.'");
     expect(seg).not.toContain("text='Three lenses\\\\: usages\\\\, implementations\\\\, overrides.'");
   });
@@ -293,9 +311,6 @@ describe('DemoOverlay — font sizes', () => {
     expect(subSeg).toContain('fontsize=20');
   });
 
-  it('caption text is 22 pt (mobile-safe minimum)', () => {
-    const ev: TimelineEvent = { type: 'caption', t: 0, label: 'a caption', duration: 2500 };
-    const { chain } = buildOverlayFilterGraph([ev], OPTS);
-    expect(chain).toContain('fontsize=22');
-  });
+  // Caption font size is enforced inside render-caption.ts (Skia renders the
+  // PNG bitmap); see DemoRenderCaption.test.ts for coverage of the rasteriser.
 });

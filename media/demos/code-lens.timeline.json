@@ -9,19 +9,19 @@
     "type": "caption",
     "label": "Who touches this contract?",
     "duration": 2200,
-    "t": 2700
+    "t": 2701
   },
   {
     "type": "click",
     "label": "Click → N usages → Find Usages",
     "sublabel": "kotlin-jump.codeLensAction",
     "duration": 2200,
-    "t": 4900
+    "t": 4907
   },
   {
     "type": "caption",
     "label": "Every caller, one click. 🎯",
     "duration": 2200,
-    "t": 7573
+    "t": 7585
   }
 ]

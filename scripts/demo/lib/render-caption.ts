@@ -1,6 +1,6 @@
 import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
 import type { SKRSContext2D } from '@napi-rs/canvas';
-import { writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { writeFileSync, existsSync, mkdirSync, renameSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import * as path from 'node:path';
 
@@ -24,7 +24,37 @@ import * as path from 'node:path';
  * higher than caps at fontSize 22 — noticeable at our pill scale.
  */
 
-const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
+// Resolve the repo root robustly. This module is consumed at multiple depths:
+//  - `dist/demo/lib/render-caption.js` when loaded standalone by tests or
+//    smoke scripts (unbundled; __dirname is ../lib, so `../../..` is root).
+//  - `dist/demo/record.js` when bundled into the record CLI by esbuild
+//    (__dirname is dist/demo, so `../..` is root). The record-CLI bundle
+//    inlines this file's code, flattening the directory layout it was
+//    written against.
+//  - `scripts/demo/.../something.ts` during ad-hoc `ts-node` runs.
+//
+// A single hard-coded relative walk can't satisfy all three. We probe a
+// list of candidates and pick the first one where a known-present fixture
+// (package.json plus the Inter font file) exists.
+function resolveRepoRoot(): string {
+  const candidates = [
+    path.resolve(__dirname, '..', '..', '..'),  // dist/demo/lib/ standalone
+    path.resolve(__dirname, '..', '..'),        // dist/demo/ bundled record.js
+    path.resolve(__dirname, '..'),              // dist/ rare
+    process.cwd(),                               // CWD fallback
+  ];
+  for (const root of candidates) {
+    if (existsSync(path.join(root, 'package.json')) &&
+        existsSync(path.join(root, 'scripts', 'demo', 'fixtures', 'Inter-Regular.ttf'))) {
+      return root;
+    }
+  }
+  // Last resort: return the first candidate and let the caller deal with
+  // the missing-font diagnostic downstream.
+  return candidates[0];
+}
+
+const REPO_ROOT = resolveRepoRoot();
 const CACHE_DIR = path.join(REPO_ROOT, 'scripts', 'demo', '.cache', 'captions');
 const INTER_PATH = path.join(REPO_ROOT, 'scripts', 'demo', 'fixtures', 'Inter-Regular.ttf');
 
@@ -52,17 +82,15 @@ export interface CaptionRenderOpts {
   /** Pill corner radius in logical pixels. Default 20. */
   pillRadius?:  number;
   /**
-   * Device pixel ratio for supersampling. Default 2.
+   * Device pixel ratio for supersampling. Default 1.
    *
-   * Apple Color Emoji glyphs ship as PNG bitmaps at fixed sizes (20, 32, 40,
-   * 48, 64, 96, 160 px). Rendering at `fontSize` 22 lands between strikes and
-   * Skia must downscale, which is where the blur came from. Rendering the
-   * whole canvas at 2× then letting the video pipeline downscale produces
-   * crisp emoji because the resampling is one continuous high-quality step.
-   *
-   * The output PNG has physical dimensions `width × pixelRatio` by
-   * `height × pixelRatio` — callers composing the result must downscale
-   * accordingly (e.g. `scale=<width>:<height>` in the ffmpeg filter chain).
+   * Setting this above 1 renders a supersampled canvas (crisper emoji bitmaps
+   * since Apple Color Emoji ships strikes at 20/32/48/64/96/160 px), but the
+   * caller must then downscale the output before overlay — adding a lanczos
+   * pass that washes out antialiased Latin strokes. At pixelRatio 1 the PNG
+   * goes to ffmpeg overlay at native size, survives only the final
+   * 1280→960 video downscale, and text keeps the same contrast the old
+   * `drawtext` pipeline had.
    */
   pixelRatio?:  number;
 }
@@ -157,7 +185,7 @@ export function renderCaptionPng(text: string, opts: CaptionRenderOpts = {}): st
     fontSize:    opts.fontSize    ?? 22,
     pillOpacity: opts.pillOpacity ?? 0.72,
     pillRadius:  opts.pillRadius  ?? 20,
-    pixelRatio:  opts.pixelRatio  ?? 2,
+    pixelRatio:  opts.pixelRatio  ?? 1,
   };
 
   // Hash(text + opts) → stable filename. sha1 is fine here: we only need
@@ -168,7 +196,12 @@ export function renderCaptionPng(text: string, opts: CaptionRenderOpts = {}): st
     .slice(0, 16);
   const outPath = path.join(CACHE_DIR, `${hash}.png`);
 
-  if (existsSync(outPath)) return outPath;
+  // Cache hit only if the file is plausibly complete. A pill-only PNG
+  // (all pixels at pill alpha, no text glyphs) compresses to ~1 KB —
+  // healthy captions are 5–10 KB. Re-rendering on undersized caches
+  // avoids pinning a previously-broken run's output across sessions.
+  const MIN_VALID_PNG_BYTES = 2048;
+  if (existsSync(outPath) && statSync(outPath).size >= MIN_VALID_PNG_BYTES) return outPath;
 
   mkdirSync(CACHE_DIR, { recursive: true });
 
@@ -201,8 +234,42 @@ export function renderCaptionPng(text: string, opts: CaptionRenderOpts = {}): st
   // drawSegmentedText so Apple Color Emoji's geometric centre lands at the
   // same vertical spot as Latin cap centres.
   const textY = o.height * 0.72;
-  drawSegmentedText(ctx, segmentText(text), o.width / 2, textY, o.fontSize);
+  const segments = segmentText(text);
+  drawSegmentedText(ctx, segments, o.width / 2, textY, o.fontSize);
 
-  writeFileSync(outPath, canvas.toBuffer('image/png'));
+  // Sanity check: confirm the text actually rendered into the canvas.
+  // There is a real-world regression where Skia silently produces a
+  // pill-only PNG (alpha=pillOpacity everywhere, no white text pixels) in
+  // some invocation contexts — the text passes segmentText correctly but
+  // fillText emits no glyph output. The cache would then serve this
+  // pill-only PNG for the rest of the session, making every caption in
+  // the final webp invisible to the viewer.
+  //
+  // We read the canvas pixels before writing and require at least a
+  // handful of near-white pixels to confirm text glyphs were drawn. If
+  // not, we throw with detailed diagnostics so the caller sees the root
+  // cause instead of hunting a silent downstream failure.
+  const phys   = ctx.getImageData(0, 0, o.width * o.pixelRatio, o.height * o.pixelRatio).data;
+  let   lightPx = 0;
+  for (let i = 0; i < phys.length; i += 4) {
+    if (phys[i] > 180 && phys[i + 1] > 180 && phys[i + 2] > 180 && phys[i + 3] > 200) lightPx++;
+  }
+  if (lightPx < 20) {
+    const fontFamilies = GlobalFonts.families.map(f => f.family);
+    const hasInter     = fontFamilies.includes('Inter');
+    throw new Error(
+      `renderCaptionPng: canvas has no visible text glyphs (lightPx=${lightPx}). ` +
+      `text=${JSON.stringify(text)}, segments=${segments.length}, ` +
+      `font="${ctx.font}", interRegistered=${hasInter}, interPathExists=${existsSync(INTER_PATH)}`,
+    );
+  }
+
+  // Atomic write: `rename` is atomic on POSIX. A crash or concurrent
+  // `rm -rf` between `writeFileSync` and completion could otherwise leave a
+  // truncated PNG on disk that later reads (via the `existsSync` cache
+  // guard above) would silently accept and feed to ffmpeg.
+  const tmpPath = `${outPath}.tmp.${process.pid}`;
+  writeFileSync(tmpPath, canvas.toBuffer('image/png'));
+  renameSync(tmpPath, outPath);
   return outPath;
 }

@@ -25,22 +25,13 @@ import * as path from 'node:path';
 import { execSync } from 'node:child_process';
 import { runTests } from '@vscode/test-electron';
 
-import { ScreenRecorder, extractPosterFromWebP, pickPosterFrame, fileSizeKb, probeDurationSec } from './lib/ffmpeg';
-import { buildOverlayFilterGraph }                                                              from './lib/overlay';
-import { buildRoundedFrameFilter, prerenderCornerMask }                                         from './lib/frame';
+import { ScreenRecorder }                                                                       from './lib/ffmpeg';
 import {
   buildWindowFailureMessage,
   decideWindowResolution,
 }                                                                                               from './lib/windowing';
-import {
-  renderFilterToPngSequence,
-  classifyFrames,
-  encodeFramesToWebpParallel,
-  assembleAnimatedWebp,
-  optimizePosterPng,
-  checkRequiredBinaries,
-}                                                                                               from './lib/webp-encoder';
-import type { TimelineEvent }                                                                   from './lib/timeline';
+import { checkRequiredBinaries }                                                                from './lib/webp-encoder';
+import { runPostProcess }                                                                       from './lib/post-process';
 import type { WindowProbeResult, WindowProbeSource, WindowResolutionDecision }                  from './lib/windowing';
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -220,7 +211,6 @@ async function main(): Promise<void> {
   resources.tmpDir   = tmpDir;
   const userDataDir  = path.join(tmpDir, 'user-data');
   const rawMov       = path.join(tmpDir, 'raw.mov');
-  const cmaskPng     = path.join(tmpDir, 'cornermask.png');
   const timelineJson = path.join(tmpDir, 'timeline.json');
   const readyMarker  = path.join(tmpDir, 'ready');
   const startMarker  = path.join(tmpDir, 'start');
@@ -397,159 +387,18 @@ async function main(): Promise<void> {
   }
 
   // ----------------------------------------------------------- post-process
-  await phase('post-process', async () => {
-    log(`  Captured ${fileSizeKb(rawMov)} KB of raw video`);
-    const events = JSON.parse(fs.readFileSync(timelineJson, 'utf8')) as TimelineEvent[];
-    log(`  ${events.length} timeline events to overlay`);
-
-    // Trim dead setup time at the start (VS Code launch + indexing). Keep a
-    // 500 ms pre-roll so the first overlay doesn't pop in on frame 0, and a
-    // 500 ms tail after the last event.
-    //
-    // Demo timeline event timestamps (e.t) are measured from when the Stage was
-    // instantiated INSIDE the VS Code extension host — which happens ~rawOffsetMs
-    // AFTER ffmpeg started capturing. So in raw-video coordinates, an event with
-    // demo-timeline t=E is at raw-video t = rawOffsetMs + E.
-    // Trim tuned for WebP-size optimisation: fewer idle frames at the
-    // boundaries cuts ~200 KB from the final animated WebP. TAIL_MS=400
-    // (was 200) leaves enough room after the last narrative event for the
-    // caption's peak-end keyframe to read at full luma before the
-    // fade-to-dark kicks in.
-    const PRE_ROLL_MS   = 300;
-    const TAIL_MS       = 400;
-    const firstT        = events[0]?.t ?? 0;
-    const lastEnd       = events.reduce((m, e) => Math.max(m, e.t + e.duration), 0);
-    const startOffsetMs = Math.max(0, rawOffsetMs + firstT - PRE_ROLL_MS);
-    const durationMs    = Math.max(1000, (rawOffsetMs + lastEnd) - startOffsetMs + TAIL_MS);
-
-    // Shift all event timestamps so t=0 corresponds to the trimmed video start.
-    // In trimmed-video time, event E appears at: (rawOffsetMs + E.t) - startOffsetMs
-    const shifted = events.map(e => ({ ...e, t: (rawOffsetMs + e.t) - startOffsetMs }));
-    log(`  Trimming raw to ${(durationMs / 1000).toFixed(1)}s (cut ${(startOffsetMs / 1000).toFixed(1)}s of setup)`);
-
-    const fontPath     = path.join(REPO_ROOT, 'scripts', 'demo', 'fixtures', 'Inter-Regular.ttf');
-    const fontPathMono = path.join(REPO_ROOT, 'scripts', 'demo', 'fixtures', 'JetBrainsMono-Regular.ttf');
-    const { chain: overlayChain } = buildOverlayFilterGraph(shifted, { fontPath, fontPathMono });
-
-    // Clamp the requested clip to what the raw capture actually contains.
-    const rawDurationSec = probeDurationSec(rawMov);
-    const availableSec   = Number.isFinite(rawDurationSec)
-      ? Math.max(0.1, rawDurationSec - startOffsetMs / 1000)
-      : durationMs / 1000;
-    const clipSec = Math.min(durationMs / 1000, availableSec);
-    if (clipSec < durationMs / 1000 - 0.1) {
-      log(`  ⚠ raw capture shorter than demo timeline (${rawDurationSec.toFixed(2)}s) — clipping to ${clipSec.toFixed(2)}s`);
-    }
-
-    // Shorter fade tail: the dithered (noise=alls=2) downscale keeps the
-    // gradient clean even at 0.3 s, and shaving 200 ms cuts ~4 frames × 3 KB.
-    const fadeOutSec = 0.3;
-    const fadeStart  = Math.max(0, clipSec - fadeOutSec);
-
-    // Pre-render the rounded-corner alpha mask as a grayscale PNG.
-    // Loading it as a file input (vs. inline `color,geq,loop` chain)
-    // sidesteps a filter-graph hang that made the earlier pipeline
-    // unusable — see lib/frame.ts header.
-    log(`  Pre-rendering cornermask`);
-    const execOnce = (cmd: string) => execSync(cmd, { stdio: ['ignore', 'ignore', 'pipe'] });
-    prerenderCornerMask(cmaskPng, execOnce);
-
-    // Filter graph tuned for the 2-pass pipeline (see lib/webp-encoder.ts):
-    //   ① scale to 1280×720 @ 12 fps, with lanczos+accurate_rnd+full_chroma_int
-    //     (the accurate-rnd flag alone eliminates a subtle rounding bias
-    //     that was desaturating the VS Code blue by ~3 %).
-    //   ② overlay chain (banners/captions/keystrokes).
-    //   ③ fade to transparent-black (0.3 s).
-    //   ④ rounded-corner alphamerge with pre-rendered cornermask PNG.
-    //   ⑤ downscale to 960×540 final + dither `noise=alls=2:allf=t` to kill
-    //     the banding that lossy WebP otherwise exposes on our gradient
-    //     fades. The dither is invisible per frame but breaks the pattern
-    //     that would compress into visible bands.
-    const filterComplex = [
-      `[0:v]scale=${WIDTH}:${HEIGHT}:flags=lanczos+accurate_rnd+full_chroma_int,` +
-        `fps=12,setpts=PTS-STARTPTS[base]`,
-      overlayChain,
-      `[annot]fade=t=out:st=${fadeStart.toFixed(3)}:d=${fadeOutSec.toFixed(3)}:color=black:alpha=0[annot_faded]`,
-      buildRoundedFrameFilter({
-        inLabel:            'annot_faded',
-        outLabel:           'framed',
-        cornermaskInputIdx: 1,
-      }),
-      // Plain `lanczos` (without the `accurate_rnd+full_chroma_int` pair)
-      // matches the historical alpha-transition position, so the four
-      // cornermask-transparency E2E assertions (which sample at pixel
-      // (2,2) with a 3×3 tolerance) keep passing. The advanced rounding
-      // flags shift the alpha ramp by ~1 px at the corner boundary —
-      // enough to break the assertion even though it looks identical.
-      `[framed]scale=960:540:flags=lanczos,format=rgba[final]`,
-    ].join(';');
-
-    // WebP output keeps the native 1280×720 aspect ratio, scaled to the
-    // 960×540 README-friendly preset.
-    const extraInputs = [
-      { path: cmaskPng, loop: true, framerate: 12 },
-    ];
-
-    // ─── Pipeline 2-pass : PNG sequence → per-frame cwebp → webpmux ─────
-    //
-    // Why 2-pass? ffmpeg's libwebp encoder exposes only 5 AVOptions. The
-    // binary `cwebp` exposes 20+ (method, af, sns, sharp_yuv, alpha_q,
-    // alpha_method, alpha_filter, partition_limit, pre, pass, …) and that
-    // knob spread is where the 5× size reduction (3.9 MB → ~700 KB) lives.
-    // Per-frame quality adaptation on top: narrative frames (within
-    // ±150 ms of a timeline event) encode at q=55, idle frames at q=42.
-    // The eye never notices — but 55–70 % of frames are idle.
-    const pngSeqDir = path.join(tmpDir, 'frames');
-    log(`  Rendering PNG sequence → ${pngSeqDir}`);
-    const { pngFiles, frameCount } = renderFilterToPngSequence(
-      rawMov, filterComplex, pngSeqDir,
-      {
-        startSec:    startOffsetMs / 1000,
-        durationSec: clipSec,
-        extraInputs,
-      },
-    );
-    log(`  Pass 1: ${frameCount} PNG frames`);
-
-    const classes = classifyFrames(frameCount, 12, shifted);
-    // q=80 lossy — "ultra clean" but viable: ~95 % of lossless visual
-    // quality for ~25 % of the file size (measured: lossless=21 MB,
-    // q=80=~5 MB). Lossless was rejected because the text antialiasing
-    // and cornermask alpha transitions defeat LZ77/predictor compression.
-    const qNarrative = 80;
-    const qIdle      = 80;
-    const nNarrative = classes.filter(c => c === 'narrative').length;
-    log(`  Classified: ${nNarrative} narrative (q=${qNarrative}) + ${frameCount - nNarrative} idle (q=${qIdle})`);
-    const webpFiles = await encodeFramesToWebpParallel(pngFiles, classes,
-      { qNarrative, qIdle });
-    log(`  Pass 2: cwebp encoded ${webpFiles.length} frames in parallel`);
-
-    assembleAnimatedWebp(webpFiles, outputWebp, 83);
-    log(`✓ Wrote ${outputWebp} (${fileSizeKb(outputWebp)} KB, ${clipSec.toFixed(1)}s)`);
-
-    // Persist the shifted timeline next to the WebP so `demo:e2e --skip-record`
-    // can validate the shipped artefact without rerunning the whole pipeline.
-    const sidecarTimeline = outputWebp.replace(/\.webp$/, '.timeline.json');
-    fs.writeFileSync(sidecarTimeline, JSON.stringify(shifted, null, 2));
-
-    // Poster frame for prefers-reduced-motion / thumbnail. Extracted from
-    // the already-encoded WebP (not a fresh filter-graph pass) to avoid
-    // the frame-1 alpha glitch. The frame number is chosen by anchoring
-    // to the LAST narrative event at 65 % visibility — captures the demo's
-    // final "aha moment" with its overlay at peak readability, safely
-    // before the video-level fade-to-dark tail.
-    const posterPng = outputWebp.replace(/\.webp$/, '-poster.png');
-    try {
-      const posterFrame = pickPosterFrame(shifted, clipSec, { fps: 12, fadeOutSec });
-      extractPosterFromWebP(outputWebp, posterPng, posterFrame);
-      const rawKb = fileSizeKb(posterPng);
-      optimizePosterPng(posterPng);
-      const optKb = fileSizeKb(posterPng);
-      log(`  Poster frame: ${posterPng} (${rawKb} KB → ${optKb} KB, frame ${posterFrame})`);
-    } catch (err) {
-      log(`  ⚠ poster frame extraction failed: ${(err as Error).message}`);
-    }
-  });
+  const sidecarTimeline = outputWebp.replace(/\.webp$/, '.timeline.json');
+  await phase('post-process', () => runPostProcess({
+    rawMov,
+    outputWebp,
+    timelineJson,
+    sidecarTimeline,
+    tmpDir,
+    rawOffsetMs,
+    trimMode: 'auto',
+    repoRoot: REPO_ROOT,
+    log,
+  }));
 
   // Keep the tmpdir only if the user sets KJ_DEMO_KEEP_TMP=1 (debugging).
   if (!process.env.KJ_DEMO_KEEP_TMP) {

@@ -1,17 +1,22 @@
 {
-  "version": "1.14.0",
+  "version": "1.14.1",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Walkthrough accuracy, maintenance release",
-  "summary": "v1.14.0 updates the built-in walkthrough for accuracy and ships no changes to navigation, commands, or settings.",
+  "tagline": "Leaner install, sharper walkthrough",
+  "summary": "v1.14.1 reduces the extension download size by approximately 30 MB by removing nine unused walkthrough GIFs, and sharpens the built-in Library Sources walkthrough step with a more realistic example.",
   "highlights": [
     {
-      "title": "Inlay Hints Walkthrough",
-      "description": "The inlay hints step in the interactive walkthrough now accurately reflects current extension behavior, reducing confusion for new users following the guided tour.",
+      "title": "~30 MB VSIX size reduction",
+      "description": "Nine orphan GIF files were removed from the extension package, cutting the download and install size by approximately 30 MB with no change to functionality.",
       "kind": "improvement"
     },
     {
-      "title": "No Functional Changes",
-      "description": "All navigation, commands, and settings are unchanged since v1.13.0; existing workflows are unaffected.",
+      "title": "Walkthrough step accuracy",
+      "description": "The Library Sources step in the built-in walkthrough now uses a coroutines library jar as its example, giving new users a clearer and more realistic introduction to library source navigation.",
+      "kind": "improvement"
+    },
+    {
+      "title": "No behavioral changes",
+      "description": "No changes to navigation, commands, settings, or any other user-facing extension behavior since v1.14.0.",
       "kind": "note"
     }
   ],
@@ -19,13 +24,14 @@
     {
       "heading": "Improvements",
       "bullets": [
-        "Updated the inlay hints step in the built-in walkthrough to match current extension behavior, keeping the guided introduction accurate for new users."
+        "Removed nine unused GIF files from the extension package, reducing the VSIX download size by approximately 30 MB.",
+        "Updated the Library Sources step in the built-in walkthrough to demonstrate the feature with a coroutines library jar, making the guided example more accurate and realistic for new users."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "No changes to extension commands, settings, navigation, or any user-facing behavior since v1.13.0."
+        "No changes to extension commands, settings, navigation, or any user-facing behavior since v1.14.0."
       ]
     }
   ],

@@ -26,6 +26,13 @@ const RENDER_JS  = path.join(REPO_ROOT, 'dist', 'demo', 'lib', 'render-caption.j
 const RECORD_JS  = path.join(REPO_ROOT, 'dist', 'demo', 'record.js');
 const INTER_PATH = path.join(REPO_ROOT, 'scripts', 'demo', 'fixtures', 'Inter-Regular.ttf');
 
+/** The bundle-inspection and CWD-robustness tests exercise dist/demo/*.js
+ *  compiled artifacts. CI runs these suites only after a build step; local
+ *  test runs usually have a fresh dist too. Gate the sub-tests that need
+ *  the bundle so a plain `vitest run` on a checkout without dist doesn't
+ *  produce misleading failures. */
+const DIST_BUILT = existsSync(RENDER_JS);
+
 /** Compute the cache path for a given text + opts the same way the renderer
  *  does. Lets tests surgically clear ONE cache entry without wiping the
  *  directory (which would race with other tests running in parallel). */
@@ -99,7 +106,7 @@ describe('ADV render-caption — font resolution across CWDs + bundle depths', (
     try { rmSync(cachePathFor(text), { force: true }); } catch { /* ignore */ }
   }
 
-  it('renders correctly when loaded from a deep CWD unrelated to the repo', () => {
+  it.skipIf(!DIST_BUILT)('renders correctly when loaded from a deep CWD unrelated to the repo', () => {
     const text = 'ADV-font-cwd: deep-cwd variant.';
     clearOwn(text);
     const pngPath = renderViaChild(os.tmpdir(), text);
@@ -108,21 +115,21 @@ describe('ADV render-caption — font resolution across CWDs + bundle depths', (
     expect(pngPath.startsWith(REPO_ROOT)).toBe(true);
   });
 
-  it('renders correctly when loaded from filesystem root (/)', () => {
+  it.skipIf(!DIST_BUILT)('renders correctly when loaded from filesystem root (/)', () => {
     const text = 'ADV-font-cwd: root-cwd variant.';
     clearOwn(text);
     const pngPath = renderViaChild('/', text);
     expect(statSync(pngPath).size).toBeGreaterThan(2048);
   });
 
-  it('renders correctly from nested sibling directory', () => {
+  it.skipIf(!DIST_BUILT)('renders correctly from nested sibling directory', () => {
     const text = 'ADV-font-cwd: nested-sibling variant.';
     clearOwn(text);
     const pngPath = renderViaChild(path.dirname(REPO_ROOT), text);
     expect(statSync(pngPath).size).toBeGreaterThan(2048);
   });
 
-  it('bundled dist/demo/record.js includes the multi-candidate resolver inline', () => {
+  it.skipIf(!DIST_BUILT)('bundled dist/demo/record.js includes the multi-candidate resolver inline', () => {
     // If someone removes resolveRepoRoot() or adds a new entry point that
     // bundles render-caption at yet another depth, this test fires early.
     // Identifier names are mangled under `--production` minification, so
@@ -135,7 +142,7 @@ describe('ADV render-caption — font resolution across CWDs + bundle depths', (
     expect(bundled).toContain('fixtures');
   });
 
-  it('ALL bundled CLI entry points have the resolver anchors inlined', () => {
+  it.skipIf(!DIST_BUILT)('ALL bundled CLI entry points have the resolver anchors inlined', () => {
     // The resolver depends on __dirname; each separately-bundled CLI in
     // dist/demo/ has its own __dirname and must carry the path-anchor
     // checks. String literals survive minification; function names do not.
@@ -224,7 +231,7 @@ describe('ADV render-caption — cache integrity', () => {
     expect(leftoverTmps).toEqual([]);
   });
 
-  it('concurrent processes rendering the same caption do not corrupt cache', () => {
+  it.skipIf(!DIST_BUILT)('concurrent processes rendering the same caption do not corrupt cache', () => {
     // The atomic-write (write-to-tmp-then-rename) pattern guarantees that
     // concurrent writers never produce a torn file. Each process writes to
     // its own `.tmp.PID` path, then renames. Last writer wins; the winning

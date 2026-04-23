@@ -53,6 +53,18 @@ jobs:
           fi
           echo "✅ Version $PACKAGE_VERSION matches tag"
 
+      # ffmpeg is used by a handful of tests under test/unit/Demo*.test.ts to
+      # measure caption chroma and validate pipeline output. The Ubuntu runner
+      # image does not ship ffmpeg by default.
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
+      # Several demo tests exercise the bundled CLI (dist/demo/*.js). Build
+      # dev mode before tests so those artifacts exist; the production build
+      # step below re-builds with minification for packaging.
+      - name: Build (dev) for tests
+        run: node esbuild.js
+
       - name: Test
         run: npm test
 

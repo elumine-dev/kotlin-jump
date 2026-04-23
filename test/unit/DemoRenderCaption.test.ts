@@ -13,8 +13,14 @@
 
 import { describe, it, expect } from 'vitest';
 import { existsSync, statSync } from 'node:fs';
-import { execSync } from 'node:child_process';
+import { execSync, spawnSync } from 'node:child_process';
 import { renderCaptionPng } from '../../scripts/demo/lib/render-caption';
+
+/** True when ffmpeg is on PATH. CI environments without ffmpeg skip the
+ *  chroma assertions rather than fail; the rendering is still exercised
+ *  via renderCaptionPng itself, and the dedicated adversarial suite
+ *  covers the pixel-level regression lock independently. */
+const FFMPEG_AVAILABLE = spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0;
 
 /** Parse `ffmpeg signalstats` output to (UAVG, VAVG). */
 function measureChroma(pngPath: string): { u: number; v: number } {
@@ -34,7 +40,7 @@ describe('renderCaptionPng', () => {
     expect(statSync(p).size).toBeGreaterThan(500);
   });
 
-  it('renders emoji in color (UAVG/VAVG deviate from neutral 128)', () => {
+  it.skipIf(!FFMPEG_AVAILABLE)('renders emoji in color (UAVG/VAVG deviate from neutral 128)', () => {
     // Reference: plain Latin caption — must be pure monochrome.
     const monochrome = measureChroma(renderCaptionPng('Plain text only'));
     expect(Math.abs(monochrome.u - 128)).toBeLessThan(0.1);

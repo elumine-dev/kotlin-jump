@@ -81,6 +81,9 @@ async function main() {
       ? esbuild.context({
           ...sharedOptions,
           // Demo lib: VS Code API + Node built-ins, extension host runtime.
+          // @napi-rs/canvas ships a native .node binary esbuild can't bundle,
+          // so it must stay external and be required at runtime.
+          external:    [...sharedOptions.external, '@napi-rs/canvas'],
           entryPoints: demoLibEntryPoints,
           outdir:      'dist/demo/lib',
         })

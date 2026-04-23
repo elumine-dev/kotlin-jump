@@ -10,25 +10,25 @@
     "label": "⌥ + ⇧ + T",
     "sublabel": "Go to Test",
     "duration": 2000,
-    "t": 2542
+    "t": 2558
   },
   {
     "type": "caption",
     "label": "Straight onto the matching test. No file-tree hunt. 🧪",
     "duration": 2600,
-    "t": 3957
+    "t": 3980
   },
   {
     "type": "keystroke",
     "label": "⌥ + ⇧ + T",
     "sublabel": "Back to Implementation",
     "duration": 2000,
-    "t": 6609
+    "t": 6637
   },
   {
     "type": "caption",
     "label": "Same keystroke. Back to the impl. Test ↔ impl, always. 🔄",
     "duration": 2600,
-    "t": 7409
+    "t": 7436
   }
 ]

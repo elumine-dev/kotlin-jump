@@ -1,26 +1,31 @@
 {
-  "version": "1.13.0",
+  "version": "1.14.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Smarter resolution for builtins and KMP",
-  "summary": "v1.13.0 improves navigation accuracy for standard Kotlin and Java built-in types, and adds correct expect/actual resolution for Kotlin Multiplatform projects.",
+  "tagline": "Walkthrough accuracy, maintenance release",
+  "summary": "v1.14.0 updates the built-in walkthrough for accuracy and ships no changes to navigation, commands, or settings.",
   "highlights": [
     {
-      "title": "Implicit Default Import Resolution",
-      "description": "Go to Definition now resolves standard Kotlin and Java types (String, List, Int, Thread, etc.) that are available without explicit imports — navigation no longer fails on unimported built-ins.",
+      "title": "Inlay Hints Walkthrough",
+      "description": "The inlay hints step in the interactive walkthrough now accurately reflects current extension behavior, reducing confusion for new users following the guided tour.",
       "kind": "improvement"
     },
     {
-      "title": "Kotlin Multiplatform expect/actual Support",
-      "description": "The resolver recognizes expect and actual modifiers and prefers the actual implementation on FQN lookup, so navigation in KMP projects lands on the concrete implementation rather than the abstract declaration.",
-      "kind": "improvement"
+      "title": "No Functional Changes",
+      "description": "All navigation, commands, and settings are unchanged since v1.13.0; existing workflows are unaffected.",
+      "kind": "note"
     }
   ],
   "sections": [
     {
       "heading": "Improvements",
       "bullets": [
-        "Added implicit default import awareness for Kotlin (kotlin.*, kotlin.collections.*, kotlin.io.*, and related packages) and Java (java.lang.*) — Go to Definition now works on built-in types that appear without an import statement.",
-        "Added expect/actual modifier support for Kotlin Multiplatform projects; FQN lookups now prefer the actual declaration, giving more precise jump targets in multi-platform codebases."
+        "Updated the inlay hints step in the built-in walkthrough to match current extension behavior, keeping the guided introduction accurate for new users."
+      ]
+    },
+    {
+      "heading": "Notes",
+      "bullets": [
+        "No changes to extension commands, settings, navigation, or any user-facing behavior since v1.13.0."
       ]
     }
   ],

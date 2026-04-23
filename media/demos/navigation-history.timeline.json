@@ -10,51 +10,51 @@
     "label": "⌘ + ⌥ + ←",
     "sublabel": "Navigate Back",
     "duration": 1400,
-    "t": 7673
+    "t": 7700
   },
   {
     "type": "caption",
     "label": "Back to the SELECTs. Top of the DAO.",
     "duration": 1600,
-    "t": 8174
+    "t": 8200
   },
   {
     "type": "keystroke",
     "label": "⌘ + ⌥ + ←",
     "sublabel": "Navigate Back",
     "duration": 1100,
-    "t": 9789
+    "t": 9820
   },
   {
     "type": "caption",
     "label": "Across files. Back in displayCard.",
     "duration": 1600,
-    "t": 10189
+    "t": 10220
   },
   {
     "type": "keystroke",
     "label": "⌘ + ⌥ + ←",
     "sublabel": "Navigate Back",
     "duration": 1100,
-    "t": 11790
+    "t": 11822
   },
   {
     "type": "caption",
     "label": "And the very first stop. Class header.",
     "duration": 1600,
-    "t": 12290
+    "t": 12322
   },
   {
     "type": "keystroke",
     "label": "⌘ + ⌥ + →",
     "sublabel": "Navigate Forward",
     "duration": 1400,
-    "t": 13891
+    "t": 13924
   },
   {
     "type": "caption",
     "label": "Forward too. Line AND column, every step. ⏮⏭",
     "duration": 2000,
-    "t": 13891
+    "t": 13924
   }
 ]

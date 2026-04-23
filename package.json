@@ -1104,6 +1104,7 @@
     "prepare": "husky"
   },
   "devDependencies": {
+    "@napi-rs/canvas": "^0.1.60",
     "@types/node": "^20.0.0",
     "@types/picomatch": "^4.0.2",
     "@types/vscode": "^1.88.0",

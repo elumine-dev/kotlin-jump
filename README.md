@@ -342,7 +342,7 @@ Query your codebase in natural language.
 ```
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/walkthrough/ai-assistant.gif" width="720" />
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/ai-assistant.webp" width="720" />
 </p>
 
 **MCP Server** — Kotlin Jump also exposes a Model Context Protocol endpoint. External tools that support MCP (Claude Desktop, etc.) can query the symbol index directly without VS Code open.

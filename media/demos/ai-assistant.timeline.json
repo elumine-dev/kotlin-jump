@@ -1,0 +1,26 @@
+[
+  {
+    "t": 300,
+    "type": "caption",
+    "label": "Copilot Chat. Ask @kotlin-jump first. 💰",
+    "duration": 2400
+  },
+  {
+    "t": 3000,
+    "type": "caption",
+    "label": "Symbol index answers. 0 LLM tokens.",
+    "duration": 2600
+  },
+  {
+    "t": 6500,
+    "type": "caption",
+    "label": "Real KDoc — code blocks and all. Zero hallucination.",
+    "duration": 2800
+  },
+  {
+    "t": 10000,
+    "type": "caption",
+    "label": "Every answer. Zero cost. 🧠",
+    "duration": 2400
+  }
+]

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.14.1
+
+v1.14.1 reduces the extension download size by approximately 30 MB by removing nine unused walkthrough GIFs, and sharpens the built-in Library Sources walkthrough step with a more realistic example.
+
+### Improvements
+- Removed nine unused GIF files from the extension package, reducing the VSIX download size by approximately 30 MB.
+- Updated the Library Sources step in the built-in walkthrough to demonstrate the feature with a coroutines library jar, making the guided example more accurate and realistic for new users.
+
+### Notes
+- No changes to extension commands, settings, navigation, or any user-facing behavior since v1.14.0.
+
 ## 1.14.0
 
 v1.14.0 updates the built-in walkthrough for accuracy and ships no changes to navigation, commands, or settings.

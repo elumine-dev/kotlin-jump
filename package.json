@@ -996,8 +996,8 @@
             "title": "Navigate into your dependencies — KDoc included",
             "description": "Kotlin Jump indexes the **JDK** (`java.lang.*`, `java.util.*`) + a bundled **Kotlin stdlib** out of the box. For Compose, Coroutines, AndroidX and other libraries, click the **`$(library)`** item in the status bar to download `-sources.jar` files via direct HTTP. No JVM, no Gradle invocation, no terminal — just one click.\n\n[Open Library Sources actions](command:kotlin-jump.sources.openActions)",
             "media": {
-              "image": "media/demos/go-to-definition.webp",
-              "altText": "Cmd+Click into library JAR source"
+              "image": "media/demos/lib-jar-coroutines.webp",
+              "altText": "Cmd+Click into kotlinx.coroutines JAR source"
             }
           },
           {

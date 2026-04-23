@@ -10,25 +10,25 @@
     "label": "Click → $(layers) → Toggle All Inline Features",
     "sublabel": "kotlinJump.toggleAllInlineFeatures",
     "duration": 2200,
-    "t": 2704
+    "t": 2700
   },
   {
     "type": "caption",
     "label": "Master off. Pure code, ready to review or screenshot. 📸",
     "duration": 2800,
-    "t": 5100
+    "t": 5054
   },
   {
     "type": "click",
     "label": "Click → $(layers) → Toggle All Inline Features",
     "sublabel": "kotlinJump.toggleAllInlineFeatures",
     "duration": 2200,
-    "t": 7902
+    "t": 7854
   },
   {
     "type": "caption",
     "label": "Master on. All swatches back. One button. Both ways. 🔄",
     "duration": 2800,
-    "t": 10287
+    "t": 10199
   }
 ]

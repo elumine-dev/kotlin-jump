@@ -9,69 +9,69 @@
     "type": "caption",
     "label": "Who touches this contract?",
     "duration": 2400,
-    "t": 2902
+    "t": 2900
   },
   {
     "type": "click",
     "label": "Click → N usages → Find Usages",
     "sublabel": "kotlin-jump.codeLensAction",
     "duration": 2200,
-    "t": 5306
+    "t": 5300
   },
   {
     "type": "caption",
     "label": "Every caller, one click. 🎯",
     "duration": 2400,
-    "t": 8202
+    "t": 8171
   },
   {
     "type": "caption",
     "label": "Every concrete repo, right below.",
     "duration": 2400,
-    "t": 11534
+    "t": 11478
   },
   {
     "type": "click",
     "label": "Click → ⬇ 6 implementations → Go to Implementation",
     "sublabel": "kotlin-jump.goToClassImpl",
     "duration": 2200,
-    "t": 13936
+    "t": 13878
   },
   {
     "type": "caption",
     "label": "Six repos. Grab the caching one.",
     "duration": 2400,
-    "t": 16397
+    "t": 16328
   },
   {
     "type": "caption",
     "label": "Landed. Same contract, concrete impl. ✨",
     "duration": 2200,
-    "t": 19811
+    "t": 20214
   },
   {
     "type": "caption",
     "label": "Back to the contract, one click up.",
     "duration": 2400,
-    "t": 23439
+    "t": 23878
   },
   {
     "type": "click",
     "label": "Click → ⬆ overrides → Reveal Definition",
     "sublabel": "kotlin-jump.revealDefinitionAt",
     "duration": 2200,
-    "t": 25844
+    "t": 26281
   },
   {
     "type": "caption",
     "label": "Same method. Straight back to where it was declared.",
     "duration": 2400,
-    "t": 28138
+    "t": 28575
   },
   {
     "type": "caption",
     "label": "Three lenses. Three directions. All clickable. 🧭",
     "duration": 2800,
-    "t": 30541
+    "t": 30978
   }
 ]

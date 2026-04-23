@@ -10,78 +10,78 @@
     "label": "Cmd+Click → R.string → strings.xml",
     "sublabel": "title_pokedex",
     "duration": 2500,
-    "t": 3408
+    "t": 3400
   },
   {
     "type": "caption",
     "label": "Strings — straight into values/strings.xml.",
     "duration": 2200,
-    "t": 8213
+    "t": 8175
   },
   {
     "type": "keystroke",
     "label": "⌘ + ⌥ + ←",
     "sublabel": "Back to showcase",
     "duration": 1600,
-    "t": 10453
+    "t": 10389
   },
   {
     "type": "click",
     "label": "Cmd+Click → R.color → colors.xml",
     "sublabel": "primary",
     "duration": 2500,
-    "t": 11475
+    "t": 11398
   },
   {
     "type": "caption",
     "label": "Colors — the hex lives here.",
     "duration": 2200,
-    "t": 16285
+    "t": 16168
   },
   {
     "type": "keystroke",
     "label": "⌘ + ⌥ + ←",
     "sublabel": "Back to showcase",
     "duration": 1600,
-    "t": 18523
+    "t": 18380
   },
   {
     "type": "click",
     "label": "Cmd+Click → R.drawable → drawable file",
     "sublabel": "ic_pokeball",
     "duration": 2500,
-    "t": 19542
+    "t": 19395
   },
   {
     "type": "caption",
     "label": "Drawables — vector, png, webp, all resolved.",
     "duration": 2200,
-    "t": 24412
+    "t": 24227
   },
   {
     "type": "keystroke",
     "label": "⌘ + ⌥ + ←",
     "sublabel": "Back to showcase",
     "duration": 1600,
-    "t": 26650
+    "t": 26452
   },
   {
     "type": "click",
     "label": "Cmd+Click → R.dimen → dimens.xml",
     "sublabel": "spacing_md",
     "duration": 2500,
-    "t": 27671
+    "t": 27472
   },
   {
     "type": "caption",
     "label": "Dimens — spacing, sizes, paddings.",
     "duration": 2200,
-    "t": 32475
+    "t": 32264
   },
   {
     "type": "caption",
     "label": "Strings, colors, drawables, dimens. 🎯",
     "duration": 2800,
-    "t": 34674
+    "t": 34467
   }
 ]

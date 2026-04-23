@@ -9,18 +9,18 @@
     "type": "caption",
     "label": "Hover the `: Pokemon` inlay. Definition right there. 👀",
     "duration": 2400,
-    "t": 7149
+    "t": 6997
   },
   {
     "type": "caption",
     "label": "Pokemon revealed at the call site. No jump needed.",
     "duration": 2800,
-    "t": 15393
+    "t": 15206
   },
   {
     "type": "caption",
     "label": "Inlay hints read AND teach. No LSP needed. 🧠",
     "duration": 2600,
-    "t": 19222
+    "t": 19008
   }
 ]

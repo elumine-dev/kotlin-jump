@@ -9,18 +9,18 @@
     "type": "caption",
     "label": "Every symbol, mapped. No LSP, no spinner. 🗺️",
     "duration": 2600,
-    "t": 5552
+    "t": 5511
   },
   {
     "type": "caption",
     "label": "Click a method deep inside an enum. Straight to it.",
     "duration": 2400,
-    "t": 9571
+    "t": 9548
   },
   {
     "type": "caption",
     "label": "Sealed variants, typealiases, nested classes. All one click. ⚡",
     "duration": 2800,
-    "t": 13385
+    "t": 13382
   }
 ]

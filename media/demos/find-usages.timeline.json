@@ -16,31 +16,31 @@
     "type": "caption",
     "label": "Two callers. Pick one from the panel.",
     "duration": 1800,
-    "t": 5264
+    "t": 5479
   },
   {
     "type": "caption",
     "label": "Cursor on `show`. This call lives elsewhere…",
     "duration": 1600,
-    "t": 8356
+    "t": 8527
   },
   {
     "type": "caption",
     "label": "On `show`. Single caller. Alt+F7…",
     "duration": 1500,
-    "t": 11408
+    "t": 11542
   },
   {
     "type": "keystroke",
     "label": "⌥ + F7",
     "sublabel": "Find Usages",
     "duration": 2500,
-    "t": 12909
+    "t": 13042
   },
   {
     "type": "caption",
     "label": "One caller. Straight there. No picker. 🎯",
     "duration": 2000,
-    "t": 14350
+    "t": 15007
   }
 ]

@@ -10,12 +10,12 @@
     "label": "Cmd+Click → Go to Definition (in JAR)",
     "sublabel": "Test",
     "duration": 2500,
-    "t": 2501
+    "t": 2500
   },
   {
     "type": "caption",
     "label": "Inside the JAR. KDoc, signatures, all browsable. 🔍",
     "duration": 2800,
-    "t": 7376
+    "t": 7374
   }
 ]

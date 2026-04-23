@@ -10,12 +10,12 @@
     "label": "Cmd+Click → Go to Definition (bundled Kotlin stdlib)",
     "sublabel": "listOf",
     "duration": 2500,
-    "t": 2501
+    "t": 2500
   },
   {
     "type": "caption",
     "label": "Inside `Collections.kt`. Bundled stdlib resolved ✓",
     "duration": 2400,
-    "t": 7378
+    "t": 7384
   }
 ]

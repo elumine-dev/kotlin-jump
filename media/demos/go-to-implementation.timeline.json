@@ -10,12 +10,12 @@
     "label": "⌘ + F12",
     "sublabel": "Go to Implementation",
     "duration": 2400,
-    "t": 2742
+    "t": 2718
   },
   {
     "type": "caption",
     "label": "Straight to the override. 🎯",
     "duration": 2400,
-    "t": 3946
+    "t": 3918
   }
 ]

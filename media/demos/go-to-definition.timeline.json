@@ -10,12 +10,12 @@
     "label": "Cmd+Click → Go to Definition",
     "sublabel": "BattleResult",
     "duration": 2500,
-    "t": 2506
+    "t": 2499
   },
   {
     "type": "caption",
     "label": "There. Cross-file, cross-package. Under 1 ms. ⚡",
     "duration": 2400,
-    "t": 7113
+    "t": 7070
   }
 ]

@@ -9,30 +9,30 @@
     "type": "caption",
     "label": "Change the number → the hint updates live.",
     "duration": 2000,
-    "t": 4420
+    "t": 4400
   },
   {
     "type": "caption",
     "label": "Unknown API → no hint. No noise, no stale info.",
     "duration": 2400,
-    "t": 12999
+    "t": 12861
   },
   {
     "type": "caption",
     "label": "Same live hint on a runtime `SDK_INT` guard.",
     "duration": 2400,
-    "t": 21464
+    "t": 21243
   },
   {
     "type": "caption",
     "label": "And on a `when` branch. One provider, every shape.",
     "duration": 2400,
-    "t": 33635
+    "t": 33890
   },
   {
     "type": "caption",
     "label": "Live. Validated. Inline. Everywhere. ⚡",
     "duration": 2400,
-    "t": 43384
+    "t": 43616
   }
 ]

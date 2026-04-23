@@ -9,25 +9,25 @@
     "type": "caption",
     "label": "Cursor on a line, the key returns. Edit, then move on. ✍️",
     "duration": 2600,
-    "t": 4113
+    "t": 4099
   },
   {
     "type": "click",
     "label": "Cmd+Click → Go to Definition",
     "sublabel": "title_pokedex",
     "duration": 2500,
-    "t": 6716
+    "t": 6698
   },
   {
     "type": "caption",
     "label": "One click, you land in values/strings.xml. 🎯",
     "duration": 2400,
-    "t": 12033
+    "t": 11270
   },
   {
     "type": "caption",
     "label": "Same key, French version. 🇫🇷 Zero translation hunt.",
     "duration": 2800,
-    "t": 15866
+    "t": 15085
   }
 ]

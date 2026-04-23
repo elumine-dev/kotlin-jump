@@ -9,32 +9,32 @@
     "type": "caption",
     "label": "Cmd+Click a type. Cross-file. Under 1 ms.",
     "duration": 2200,
-    "t": 3922
+    "t": 3901
   },
   {
     "type": "click",
     "label": "Cmd+Click → Go to Definition",
     "sublabel": "BattleResult",
     "duration": 2500,
-    "t": 6125
+    "t": 6101
   },
   {
     "type": "keystroke",
     "label": "⌘ + ⌥ + ←",
     "sublabel": "Navigate Back",
     "duration": 2200,
-    "t": 10739
+    "t": 10748
   },
   {
     "type": "caption",
     "label": "Back — line AND column restored. Not just the file. 🎯",
     "duration": 2600,
-    "t": 11941
+    "t": 11948
   },
   {
     "type": "caption",
     "label": "Kotlin Jump. All inline. All instant. ⚡",
     "duration": 2600,
-    "t": 14547
+    "t": 14548
   }
 ]

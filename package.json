@@ -1056,8 +1056,8 @@
           },
           {
             "id": "inlayHints",
-            "title": "Parameter names and types — right in the code",
-            "description": "Inlay hints show parameter names and inferred types directly inline — no hovering, no interruptions. Configurable per setting.",
+            "title": "Types infer inline — KDoc one hover away",
+            "description": "The `: Pokemon` is the type — rendered inline, no explicit annotation. Hover any hint and the full class KDoc materialises right at the call site. No jump, no file-tree hunt. Parameter names at call sites work the same way (configurable per setting).",
             "media": {
               "image": "media/demos/inlay-hints.webp",
               "altText": "Inlay hints showing parameter names and types"

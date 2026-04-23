@@ -12,7 +12,10 @@ scripts/demo/recorder-ext/dist/
 scripts/demo/recorder-ext/node_modules/
 tmp-demo-e2e/
 tmp-demo-frames/
-media/walkthrough/*/raw.mov
+# media/walkthrough/ holds per-demo working dirs (raw.mov + timeline) for
+# kjdemo manual-record. The published artefacts (webp + poster + timeline)
+# live in media/demos/. The working dir is local-only.
+media/walkthrough/
 
 # IntelliJ project files (kotlin-jump-demo fixture)
 *.iml

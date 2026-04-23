@@ -75,6 +75,22 @@ export async function runPostProcess(opts: PostProcessOpts): Promise<void> {
   } = opts;
 
   log(`  Captured ${fileSizeKb(rawMov)} KB of raw video`);
+
+  // Diagnostic: dump raw.mov color metadata. Screencapture on some macOS
+  // versions produces color-space tags that can drift through the filter
+  // chain and dim Skia-rendered caption text. Logging these up-front makes
+  // regressions diagnosable post-mortem from the run log alone.
+  try {
+    const probe = execSync(
+      `ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,width,height,pix_fmt,color_space,color_transfer,color_primaries,color_range -of default=noprint_wrappers=1 "${rawMov}"`,
+      { encoding: 'utf8' },
+    );
+    log('  raw.mov metadata:');
+    for (const line of probe.trim().split('\n')) log('    ' + line);
+  } catch {
+    // Non-fatal: diagnostics only.
+  }
+
   const events = JSON.parse(fs.readFileSync(timelineJson, 'utf8')) as TimelineEvent[];
   log(`  ${events.length} timeline events to overlay`);
 
@@ -122,7 +138,14 @@ export async function runPostProcess(opts: PostProcessOpts): Promise<void> {
 
   const fontPath     = path.join(repoRoot, 'scripts', 'demo', 'fixtures', 'Inter-Regular.ttf');
   const fontPathMono = path.join(repoRoot, 'scripts', 'demo', 'fixtures', 'JetBrainsMono-Regular.ttf');
-  const { chain: overlayChain } = buildOverlayFilterGraph(shifted, { fontPath, fontPathMono });
+  // Captions render via pre-rasterised PNGs (Skia) because ffmpeg drawtext
+  // cannot render color emoji. Those PNGs are attached to ffmpeg as extra
+  // inputs starting at index 1 (just after the main video); the cornermask
+  // input follows them at `1 + captionPngs.length`.
+  const { chain: overlayChain, extraInputs: captionPngs } = buildOverlayFilterGraph(
+    shifted, { fontPath, fontPathMono, firstCaptionInputIdx: 1 },
+  );
+  const cornermaskInputIdx = 1 + captionPngs.length;
 
   // Clamp the requested clip to what the raw capture actually contains.
   const availableSec = Number.isFinite(rawDurationSec)
@@ -156,22 +179,44 @@ export async function runPostProcess(opts: PostProcessOpts): Promise<void> {
   //   ④ rounded-corner alphamerge with pre-rendered cornermask PNG.
   //   ⑤ downscale to 960×540 final.
   const filterComplex = [
-    `[0:v]scale=${WIDTH}:${HEIGHT}:flags=lanczos+accurate_rnd+full_chroma_int,` +
+    // Scale AND normalise the color space in one shot. Screencapture can
+    // produce raw.mov with ambiguous or wide-gamut tags (P3 smpte432,
+    // bt2020, untagged); downstream filters handled them inconsistently
+    // and the caption's YUV round-trip came back dimmed. Forcing an
+    // explicit BT.709/tv conversion here, then `setparams` to stamp the
+    // stream tags, makes everything deterministic.
+    `[0:v]scale=${WIDTH}:${HEIGHT}:flags=lanczos+accurate_rnd+full_chroma_int:in_color_matrix=auto:out_color_matrix=bt709:out_range=tv,` +
+      `format=yuv420p,` +
+      `setparams=range=tv:color_primaries=bt709:color_trc=bt709:colorspace=bt709,` +
       `fps=12,setpts=PTS-STARTPTS[base]`,
     overlayChain,
     `[annot]fade=t=out:st=${fadeStart.toFixed(3)}:d=${fadeOutSec.toFixed(3)}:color=black:alpha=0[annot_faded]`,
     buildRoundedFrameFilter({
       inLabel:            'annot_faded',
       outLabel:           'framed',
-      cornermaskInputIdx: 1,
+      cornermaskInputIdx,
     }),
     // Plain `lanczos` (without `accurate_rnd+full_chroma_int`) matches the
     // historical alpha-transition position so the 4 cornermask-transparency
     // E2E assertions keep passing (±1 px at the corner boundary otherwise).
-    `[framed]scale=960:540:flags=lanczos,format=rgba[final]`,
+    //
+    // `in_range=tv:out_range=pc` is the symmetric half of the BT.709/tv
+    // normalisation above: we ensure Y=235 (limited white) maps back to
+    // RGB=255 (full white) in the final RGBA output. Without this, the
+    // caption text peaked at ~233 in some captures — just below the
+    // threshold where it reads as solid white against the pill.
+    `[framed]scale=960:540:flags=lanczos:in_range=tv:out_range=pc,format=rgba[final]`,
   ].join(';');
 
+  // Order MUST match the input indices used in the filter graph:
+  //   input 0     = raw video (added by renderFilterToPngSequence)
+  //   inputs 1..N = caption PNGs (N = captionPngs.length)
+  //   input N+1   = cornermask PNG
+  // Each caption PNG is attached with `-loop 1 -framerate 12` so it is an
+  // infinite stream that the overlay filter can read at any `t`, matching
+  // the same treatment as the cornermask.
   const extraInputs = [
+    ...captionPngs.map(p => ({ path: p, loop: true, framerate: 12 })),
     { path: cmaskPng, loop: true, framerate: 12 },
   ];
 
@@ -187,6 +232,26 @@ export async function runPostProcess(opts: PostProcessOpts): Promise<void> {
   );
   log(`  Pass 1: ${frameCount} PNG frames`);
 
+  // Diagnostic: under KJ_DEMO_KEEP_TMP=1, save a mid-caption PNG frame
+  // BEFORE cwebp. If this frame has healthy text pixels but the final webp
+  // doesn't, the regression is in the cwebp encoding step; if this frame is
+  // already broken, it's the ffmpeg filter chain that's lossy.
+  if (process.env.KJ_DEMO_KEEP_TMP) {
+    const firstCap = shifted.find(e => e.type === 'caption');
+    if (firstCap && pngFiles.length > 0) {
+      const midSec     = (firstCap.t + firstCap.duration / 2) / 1000;
+      const frameIdx   = Math.min(pngFiles.length - 1, Math.max(0, Math.floor(midSec * 12)));
+      const diagFrame  = outputWebp.replace(/\.webp$/, `-diag-frame${frameIdx}.png`);
+      try {
+        fs.mkdirSync(path.dirname(diagFrame), { recursive: true });
+        fs.copyFileSync(pngFiles[frameIdx], diagFrame);
+        log(`  Diagnostic: caption mid-frame PNG (pre-cwebp) → ${diagFrame}`);
+      } catch (err) {
+        log(`  ⚠ diagnostic frame copy failed: ${(err as Error).message}`);
+      }
+    }
+  }
+
   const classes    = classifyFrames(frameCount, 12, shifted);
   const qNarrative = 80;
   const qIdle      = 80;
@@ -197,6 +262,19 @@ export async function runPostProcess(opts: PostProcessOpts): Promise<void> {
 
   assembleAnimatedWebp(webpFiles, outputWebp, 83);
   log(`✓ Wrote ${outputWebp} (${fileSizeKb(outputWebp)} KB, ${clipSec.toFixed(1)}s)`);
+
+  // Diagnostic: under KJ_DEMO_KEEP_TMP=1, stash the first caption PNG next
+  // to the webp so visual drift between the Skia-rendered source and the
+  // final webp can be compared at a glance. Gated so normal runs don't
+  // pollute media/demos/ with debug artifacts.
+  if (process.env.KJ_DEMO_KEEP_TMP) {
+    const firstCaption = captionPngs[0];
+    if (firstCaption) {
+      const diagCopy = outputWebp.replace(/\.webp$/, '-cap0.png');
+      fs.copyFileSync(firstCaption, diagCopy);
+      log(`  Diagnostic: first caption PNG → ${diagCopy}`);
+    }
+  }
 
   fs.mkdirSync(path.dirname(sidecarTimeline), { recursive: true });
   fs.writeFileSync(sidecarTimeline, JSON.stringify(shifted, null, 2));

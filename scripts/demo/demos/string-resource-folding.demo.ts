@@ -31,14 +31,15 @@ export default async function record(stage: Stage): Promise<void> {
   });
 
   // ── Beat 2: Cursor on the line — key returns ────────────────────────
-  // Line 51 (0-idx) = `val screenTitle = R.string.title_pokedex`.
-  // `title_pokedex` spans cols 22-34. Col 26 is inside the word so
-  // the folding provider lifts the overlay for THIS line only.
+  // Line 51 (0-idx) = `    val screenTitle   = R.string.title_pokedex`.
+  // `title_pokedex` starts at col 33; col 38 lands inside the key so
+  // the folding provider lifts the overlay for THIS line only AND the
+  // definition provider has a real Kotlin symbol to resolve.
   await stage.openFile(
     'src/main/kotlin/com/example/demo/InlayHintsDemo.kt',
-    { line: 51, column: 26 },
+    { line: 51, column: 38 },
   );
-  await stage.dwellOn({ line: 51, column: 26 }, 900);
+  await stage.dwellOn({ line: 51, column: 38 }, 900);
   await stage.caption('Cursor on a line, the key returns. Edit, then move on. ✍️', {
     duration: 2600,
   });
@@ -51,7 +52,7 @@ export default async function record(stage: Stage): Promise<void> {
     modifier: 'Cmd',
     label:    'Go to Definition',
   });
-  await stage.waitForEditor('values/strings.xml');
+  await stage.waitForEditor(/values\/strings\.xml$/);
   await stage.pause(1200);
   await stage.caption('One click, you land in values/strings.xml. 🎯', {
     duration: 2400,

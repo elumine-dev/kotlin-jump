@@ -1,26 +1,14 @@
 [
   {
     "type": "caption",
-    "label": "What type is each `val` here?",
-    "duration": 2800,
+    "label": "What type is `pikachu`?",
+    "duration": 2200,
     "t": 300
   },
   {
     "type": "caption",
-    "label": "Hover the `: Pokemon` inlay. Definition right there. 👀",
-    "duration": 2400,
-    "t": 6997
-  },
-  {
-    "type": "caption",
-    "label": "Pokemon revealed at the call site. No jump needed.",
+    "label": "Inline hint → full KDoc on hover. Zero jump. 🧠",
     "duration": 2800,
-    "t": 15206
-  },
-  {
-    "type": "caption",
-    "label": "Inlay hints read AND teach. No LSP needed. 🧠",
-    "duration": 2600,
-    "t": 19008
+    "t": 5013
   }
 ]

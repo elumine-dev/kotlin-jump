@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.15.0
+
+Adds a visual at-a-glance infographic to the marketplace listing; no changes to extension commands, settings, or navigation behavior.
+
+### Improvements
+- Added a visual infographic to the marketplace README to give users an at-a-glance overview of the extension's features before installing.
+
+### Notes
+- No changes to extension commands, settings, navigation, or any other user-facing behavior since v1.14.1.
+
 ## 1.14.1
 
 v1.14.1 reduces the extension download size by approximately 30 MB by removing nine unused walkthrough GIFs, and sharpens the built-in Library Sources walkthrough step with a more realistic example.

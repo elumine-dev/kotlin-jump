@@ -1,22 +1,17 @@
 {
-  "version": "1.14.1",
+  "version": "1.15.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Leaner install, sharper walkthrough",
-  "summary": "v1.14.1 reduces the extension download size by approximately 30 MB by removing nine unused walkthrough GIFs, and sharpens the built-in Library Sources walkthrough step with a more realistic example.",
+  "tagline": "Clearer marketplace presentation",
+  "summary": "Adds a visual at-a-glance infographic to the marketplace listing; no changes to extension commands, settings, or navigation behavior.",
   "highlights": [
     {
-      "title": "~30 MB VSIX size reduction",
-      "description": "Nine orphan GIF files were removed from the extension package, cutting the download and install size by approximately 30 MB with no change to functionality.",
+      "title": "At-a-Glance Infographic",
+      "description": "A new visual overview was added to the README and marketplace listing, making it easier to evaluate the extension's capabilities before installing.",
       "kind": "improvement"
     },
     {
-      "title": "Walkthrough step accuracy",
-      "description": "The Library Sources step in the built-in walkthrough now uses a coroutines library jar as its example, giving new users a clearer and more realistic introduction to library source navigation.",
-      "kind": "improvement"
-    },
-    {
-      "title": "No behavioral changes",
-      "description": "No changes to navigation, commands, settings, or any other user-facing extension behavior since v1.14.0.",
+      "title": "No Behavior Changes",
+      "description": "All navigation commands, settings, and editor features remain identical to v1.14.1.",
       "kind": "note"
     }
   ],
@@ -24,14 +19,13 @@
     {
       "heading": "Improvements",
       "bullets": [
-        "Removed nine unused GIF files from the extension package, reducing the VSIX download size by approximately 30 MB.",
-        "Updated the Library Sources step in the built-in walkthrough to demonstrate the feature with a coroutines library jar, making the guided example more accurate and realistic for new users."
+        "Added a visual infographic to the marketplace README to give users an at-a-glance overview of the extension's features before installing."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "No changes to extension commands, settings, navigation, or any user-facing behavior since v1.14.0."
+        "No changes to extension commands, settings, navigation, or any other user-facing behavior since v1.14.1."
       ]
     }
   ],

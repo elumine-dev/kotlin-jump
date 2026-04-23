@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.14.0
+
+v1.14.0 updates the built-in walkthrough for accuracy and ships no changes to navigation, commands, or settings.
+
+### Improvements
+- Updated the inlay hints step in the built-in walkthrough to match current extension behavior, keeping the guided introduction accurate for new users.
+
+### Notes
+- No changes to extension commands, settings, navigation, or any user-facing behavior since v1.13.0.
+
 ## 1.13.0
 
 v1.13.0 improves navigation accuracy for standard Kotlin and Java built-in types, and adds correct expect/actual resolution for Kotlin Multiplatform projects.

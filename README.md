@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/walkthrough/welcome.gif" width="720" alt="Kotlin Jump demo" />
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/welcome.webp" width="720" alt="Kotlin Jump demo" />
 </p>
 
 <p align="center">
@@ -77,7 +77,7 @@ Jump anywhere instantly.
 | `Alt+F7` | Find Usages |
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/walkthrough/go-to-definition.gif" width="720" />
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/go-to-definition.webp" width="720" />
 </p>
 
 Works across:
@@ -117,7 +117,7 @@ Fast, focused, built for real projects.
 - optimized for large codebases
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/walkthrough/find-usages.gif" width="720" />
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/find-usages-test-filter.webp" width="720" />
 </p>
 
 ---
@@ -131,7 +131,7 @@ Always-visible context.
 - **▶ Run** / **⏱ Debug** above `@Test` methods — Gradle-backed, wired into Test Explorer
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/walkthrough/code-lens.gif" width="720" />
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/code-lens.webp" width="720" />
 </p>
 
 No hover. No guessing.
@@ -153,8 +153,25 @@ Removes the tiny frictions you hit all day.
 | Right-click | Move File, Copy FQN |
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/walkthrough/test-nav.gif" width="720" />
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/test-nav.webp" width="720" />
 </p>
+
+---
+
+## 🧭 Navigation History
+
+Back and forward — with **line AND column restored**, not just the file.
+
+| Shortcut | Action |
+|---|---|
+| `Cmd+Alt+←` | Navigate Back |
+| `Cmd+Alt+→` | Navigate Forward |
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/navigation-history.webp" width="720" />
+</p>
+
+Every stop remembered exactly where you were — across files, across packages.
 
 ---
 
@@ -163,7 +180,7 @@ Removes the tiny frictions you hit all day.
 Build, install, launch — one click.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/walkthrough/android-run.gif" width="720" />
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/android-run.webp" width="720" />
 </p>
 
 No setup required. Detects your app module automatically, picks the right Gradle install task, and launches on the connected device or emulator.
@@ -220,10 +237,18 @@ Text(text = "OK")
 ```
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/walkthrough/string-folding.gif" width="720" />
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/string-resource-folding.webp" width="720" />
 </p>
 
 Android only.
+
+### 🌍 Locale grid on hover
+
+Hover any `R.string.*` reference to see **every translation side by side** — no hunt through `values-*/strings.xml`.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/string-locale-grid.webp" width="720" />
+</p>
 
 ---
 
@@ -235,7 +260,34 @@ See what matters, inline.
 - **Inferred types** on `val` / `var` — double-click to insert
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/walkthrough/inlay-hints.gif" width="720" />
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/inlay-hints.webp" width="720" />
+</p>
+
+---
+
+## 🦺 Kotlin Quality of Life
+
+Signals you didn't know you needed — right where the code lives.
+
+### ⚡ Suspend Call Markers
+
+Every `suspend` call is a potential pause. Every dispatcher switch is a potential thread hop. Kotlin Jump marks both — inline, live.
+
+- **⚡** — every suspend call in a coroutine body
+- **🧵 IO** · **🖥 Main** · **⚙ Default** — dispatcher badges on `withContext` and launchers
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/suspend-call-marker.webp" width="720" />
+</p>
+
+Know your pauses. Know your threads. Before the UI freezes.
+
+### 🟡 Null Assertion Highlight
+
+Every `!!` lit up in amber. Spot NPE risks at a glance during review.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/null-assertion-highlight.webp" width="720" />
 </p>
 
 ---
@@ -262,6 +314,20 @@ $(library) KJ: 42 libs · JDK · stdlib ✓
 Click the item for a menu of actions: download missing sources, refresh cache, open settings, view documentation.
 
 No language server. No background process. No JVM running in the extension.
+
+### Cmd+Click straight into `kotlinx.coroutines`
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/lib-jar-coroutines.webp" width="720" />
+</p>
+
+### KDoc on hover — from the JAR
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/lib-jar-kdoc-hover.webp" width="720" />
+</p>
+
+No docs site. No language server. KDoc extracted directly from the matching `-sources.jar`.
 
 ---
 

@@ -966,7 +966,7 @@
             "title": "Navigate Kotlin at the speed of thought",
             "description": "Kotlin Jump indexes your entire project in milliseconds — powered by a regex parser that is **109× faster** than any JVM or tree-sitter alternative. No setup, no waiting.",
             "media": {
-              "image": "media/walkthrough/welcome.gif",
+              "image": "media/demos/welcome.webp",
               "altText": "Kotlin Jump in action"
             }
           },
@@ -975,7 +975,7 @@
             "title": "Build, install, and launch Android — one click",
             "description": "The **$(play) Run** button builds, installs, and launches your app — no terminal required.\n\n**WiFi setup (one-time):**\n1. Phone: Settings → Developer options → **Wireless debugging** ON\n2. Click **$(add) Pair new device via WiFi…** below\n3. Phone: **Pair device with pairing code** → enter the 6-digit code\n4. Done — connect wirelessly from now on\n\n[Run Android](command:kotlin-jump.runAndroid) · [Pair via WiFi](command:kotlin-jump.pairAdbWifi) · [Connect via WiFi](command:kotlin-jump.connectAdbWifi)",
             "media": {
-              "image": "media/walkthrough/android-run.gif",
+              "image": "media/demos/android-run.webp",
               "altText": "Android Run button demo"
             },
             "completionEvents": [
@@ -987,7 +987,7 @@
             "title": "Go to Definition — even inside JARs",
             "description": "Press **F12** (or **Cmd+Click**) on any symbol to jump to its definition — across files, modules, and straight into JAR sources. No language server, no JVM spin-up.\n\n[Try it](command:editor.action.revealDefinition)",
             "media": {
-              "image": "media/walkthrough/go-to-definition.gif",
+              "image": "media/demos/go-to-definition.webp",
               "altText": "Go to Definition demo"
             }
           },
@@ -996,7 +996,7 @@
             "title": "Navigate into your dependencies — KDoc included",
             "description": "Kotlin Jump indexes the **JDK** (`java.lang.*`, `java.util.*`) + a bundled **Kotlin stdlib** out of the box. For Compose, Coroutines, AndroidX and other libraries, click the **`$(library)`** item in the status bar to download `-sources.jar` files via direct HTTP. No JVM, no Gradle invocation, no terminal — just one click.\n\n[Open Library Sources actions](command:kotlin-jump.sources.openActions)",
             "media": {
-              "image": "media/walkthrough/go-to-definition.gif",
+              "image": "media/demos/go-to-definition.webp",
               "altText": "Cmd+Click into library JAR source"
             }
           },
@@ -1005,8 +1005,8 @@
             "title": "Find Usages — the panel that changes everything",
             "description": "Press **Alt+F7** on any symbol to open a dedicated panel showing every usage across your project. Filter out test files or Compose previews in one click.\n\n[Open Find Usages](command:kotlin-jump.findUsages)",
             "media": {
-              "image": "media/walkthrough/find-usages.gif",
-              "altText": "Find Usages panel"
+              "image": "media/demos/find-usages-test-filter.webp",
+              "altText": "Find Usages panel with test filter toggle"
             },
             "completionEvents": [
               "onCommand:kotlin-jump.findUsages"
@@ -1017,7 +1017,7 @@
             "title": "Always-visible usage counts",
             "description": "See **N usages | M implementations** inline above every class and function — no hover required. Click any lens to open the Find Usages panel directly.",
             "media": {
-              "image": "media/walkthrough/code-lens.gif",
+              "image": "media/demos/code-lens.webp",
               "altText": "Code Lens showing N usages"
             }
           },
@@ -1026,7 +1026,7 @@
             "title": "Jump between test and implementation — Alt+Shift+T",
             "description": "Press **Alt+Shift+T** to instantly toggle between a class and its test file. Kotlin Jump infers the pairing from your Gradle source sets.\n\n[Try it](command:kotlin-jump.goToTest)",
             "media": {
-              "image": "media/walkthrough/test-nav.gif",
+              "image": "media/demos/test-nav.webp",
               "altText": "Test navigation demo"
             },
             "completionEvents": [
@@ -1034,11 +1034,20 @@
             ]
           },
           {
+            "id": "navigationHistory",
+            "title": "Navigate back — with the caret exactly where you left it",
+            "description": "Press **Cmd+Alt+←** to step back through every jump. Kotlin Jump restores the **line AND column** — not just the file, like VS Code's native back. Across files, packages, and module boundaries.\n\n| Shortcut | Action |\n|---|---|\n| `Cmd+Alt+←` | Navigate Back |\n| `Cmd+Alt+→` | Navigate Forward |",
+            "media": {
+              "image": "media/demos/navigation-history.webp",
+              "altText": "Navigation history with caret restoration"
+            }
+          },
+          {
             "id": "stringFolding",
             "title": "See your string values inline",
             "description": "String resource folding replaces `R.string.button_ok` with its actual value — **\"OK\"** — directly in the editor. Zero context switching to `strings.xml`.\n\n[Enable String Folding](command:kotlinJump.enableStringFolding)",
             "media": {
-              "image": "media/walkthrough/string-folding.gif",
+              "image": "media/demos/string-resource-folding.webp",
               "altText": "String resource folding demo"
             },
             "completionEvents": [
@@ -1050,7 +1059,7 @@
             "title": "Parameter names and types — right in the code",
             "description": "Inlay hints show parameter names and inferred types directly inline — no hovering, no interruptions. Configurable per setting.",
             "media": {
-              "image": "media/walkthrough/inlay-hints.gif",
+              "image": "media/demos/inlay-hints.webp",
               "altText": "Inlay hints showing parameter names and types"
             }
           },

@@ -17,6 +17,11 @@ tmp-demo-frames/
 # live in media/demos/. The working dir is local-only.
 media/walkthrough/
 
+# .publish --dry-run writes a full release preview here so VS Code can
+# render the embedded demo webps animated. Overwritten on every dry-run;
+# no value in versioning it.
+.release-preview.md
+
 # IntelliJ project files (kotlin-jump-demo fixture)
 *.iml
 *.ipr

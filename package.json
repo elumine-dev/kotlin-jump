@@ -927,7 +927,7 @@
         "kotlinJump.suspendCallMarkers": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Show inline markers for calls that resolve to `suspend` functions so coroutine boundaries are visible while reading code."
+          "markdownDescription": "Show inline coroutine annotations: ⚡ on every call that resolves to a `suspend` function, plus 🧵 IO / 🖥 Main / ⚙ Default / 🔀 Unconfined badges on `withContext(Dispatchers.X)`, `launch(Dispatchers.X)`, `async(Dispatchers.X)`, `flowOn(Dispatchers.X)`, `produce(...)`, and `actor(...)`. Turn this off to hide both the markers and the badges."
         },
         "kotlinJump.resourceDiagnostics": {
           "type": "boolean",

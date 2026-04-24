@@ -559,10 +559,48 @@ NODE
 }
 
 render_markdown_section() {
-  node - "$VERSION" "$STRUCTURED_FILE" "$SECTION_FILE" <<'NODE'
+  node - "$VERSION" "$STRUCTURED_FILE" "$SECTION_FILE" "$WHATS_NEW_FOR_SECTION" <<'NODE'
 const fs = require('fs');
-const [version, jsonPath, outPath] = process.argv.slice(2);
-const data = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+const [version, structuredPath, outPath, whatsNewPath] = process.argv.slice(2);
+const data = JSON.parse(fs.readFileSync(structuredPath, 'utf8'));
+
+// Read the freshly-rendered whats-new.json to know which highlights have
+// demo webps after auto-link + merge-preserve. We embed an <img> for each
+// one right under the section heading so scrolling the CHANGELOG on
+// GitHub / Marketplace plays the demo inline. The embed URL is pinned to
+// the release tag (`v${version}`), so historical CHANGELOG entries keep
+// pointing at the webp that shipped with THAT release even if `main`
+// later replaces the file — no silent webp rot.
+//
+// The `whatsNewPath` is passed separately (instead of hard-coding
+// media/whats-new.json) so --dry-run can preview against a temp file
+// without touching the committed JSON.
+let mediaByTitle = new Map();
+try {
+  const wn = JSON.parse(fs.readFileSync(whatsNewPath, 'utf8'));
+  for (const h of (wn.highlights || [])) {
+    if (h && typeof h.title === 'string' && typeof h.media === 'string') {
+      mediaByTitle.set(h.title, { media: h.media, alt: h.mediaAlt || h.title });
+    }
+  }
+} catch { /* no whats-new yet (first release ever) — skip embeds */ }
+
+// Skip the entire embed block when no highlight has a demo. Respects
+// "seulement s'il y en a" — a release without recorded demos gets plain
+// text, exactly like before this feature existed.
+const embeds = [];
+for (const h of (data.highlights || [])) {
+  const m = mediaByTitle.get(h?.title);
+  if (!m) continue;
+  const url = `https://raw.githubusercontent.com/elumine-dev/kotlin-jump/v${version}/media/demos/${m.media}`;
+  embeds.push(
+    '<p align="center">',
+    `  <img src="${url}" width="720" alt="${String(m.alt).replace(/"/g, '&quot;')}" />`,
+    '</p>',
+    '',
+  );
+}
+
 const headingOrder = new Map([
   ['Improvements', 0],
   ['Fixes', 1],
@@ -575,7 +613,7 @@ const noisyBulletPatterns = [
   /^updated version\b/i,
   /^prepared release\b/i,
 ];
-const lines = [`## ${version}`, '', data.summary.trim(), ''];
+const lines = [`## ${version}`, '', data.summary.trim(), '', ...embeds];
 const sections = [...data.sections].sort((a, b) => {
   const aRank = headingOrder.get(String(a?.heading ?? '').trim()) ?? 99;
   const bRank = headingOrder.get(String(b?.heading ?? '').trim()) ?? 99;
@@ -627,10 +665,15 @@ NODE
 }
 
 render_whats_new() {
-  node - "$VERSION" "$STRUCTURED_FILE" "$BASE_REF" <<'NODE'
+  # Optional $1 = output path (default: media/whats-new.json). Used by
+  # --dry-run to write to a temp preview file instead of the committed
+  # JSON, so render_markdown_section has a consistent source to embed
+  # demos from without mutating the shipped state.
+  local out_path="${1:-media/whats-new.json}"
+  node - "$VERSION" "$STRUCTURED_FILE" "$BASE_REF" "$out_path" <<'NODE'
 const fs = require('fs');
 const { execSync } = require('child_process');
-const [version, jsonPath, baseRef] = process.argv.slice(2);
+const [version, jsonPath, baseRef, outPath] = process.argv.slice(2);
 const data = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
 
 // ── Merge-preserve: keep user-authored `media` / `mediaAlt` ──────────────
@@ -792,7 +835,7 @@ const whatsNew = {
   },
 };
 
-fs.writeFileSync('media/whats-new.json', `${JSON.stringify(whatsNew, null, 2)}\n`);
+fs.writeFileSync(outPath, `${JSON.stringify(whatsNew, null, 2)}\n`);
 NODE
 }
 
@@ -810,6 +853,20 @@ draft_notes() {
     < "$PROMPT_FILE" > "$RAW_AI_FILE"
 
   extract_structured_output
+
+  # Render whats-new.json BEFORE the changelog section so the section
+  # renderer can look up which highlights got demo webps (auto-link +
+  # merge-preserve) and embed them inline. In dry-run, write the preview
+  # to WORK_DIR so the real media/whats-new.json stays untouched.
+  local whats_new_target
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    whats_new_target="$WORK_DIR/whats-new-preview.json"
+  else
+    whats_new_target="media/whats-new.json"
+  fi
+  render_whats_new "$whats_new_target"
+  export WHATS_NEW_FOR_SECTION="$whats_new_target"
+
   render_markdown_section
 
   if [[ "$DRY_RUN" -eq 1 ]]; then
@@ -818,7 +875,6 @@ draft_notes() {
   fi
 
   update_changelog
-  render_whats_new
 
   # HARD GATE — validate the fresh whats-new.json before letting the
   # release commit be created. Anything suspicious (missing media, leaked

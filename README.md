@@ -286,12 +286,12 @@ Every `suspend` call is a potential pause. Every dispatcher switch is a potentia
 
 Know your pauses. Know your threads. Before the UI freezes.
 
-### 🟡 Null Assertion Highlight
+### 🎨 R.drawable — Hover preview + gutter thumbnails
 
-Every `!!` lit up in amber. Spot NPE risks at a glance during review.
+Every `R.drawable.*` reference paints a miniature of the asset in the gutter. Hover the name to pop a 128 × 128 SVG preview, the file path, and every density / -night / -v24 variant — no more Cmd+Click-and-squint to remember which icon is which.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/null-assertion-highlight.webp" width="720" />
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/drawable-hover.webp" width="720" />
 </p>
 
 ---

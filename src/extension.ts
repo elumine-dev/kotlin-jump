@@ -121,6 +121,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     setTimeout(() => { void WhatsNewPanel.show(context); }, 400);
   }
 
+  // Companion hook: when KJ_OPEN_PREVIEW_MD points at a markdown file,
+  // auto-trigger `markdown.showPreviewToSide` so the rendered CHANGELOG
+  // section appears beside the webview in the SAME window — no second
+  // VS Code process, no Cmd+Shift+V keystroke required.
+  const previewMd = process.env.KJ_OPEN_PREVIEW_MD;
+  if (previewMd) {
+    setTimeout(() => {
+      void vscode.commands.executeCommand(
+        'markdown.showPreviewToSide',
+        vscode.Uri.file(previewMd),
+      );
+    }, 600);
+  }
+
   const index = new SymbolIndex();
   _index = index;
 

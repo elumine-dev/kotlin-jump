@@ -3,7 +3,12 @@ import * as vscode from 'vscode';
 interface WhatsNewHighlight {
   title: string;
   description?: string;
-  kind?: 'improvement' | 'fix' | 'note';
+  kind?: 'improvement' | 'fix' | 'note' | 'feature';
+  /** Optional filename under `media/demos/` (e.g. "suppress-hover.webp").
+   *  When present, the highlight card embeds the animated demo inline. */
+  media?: string;
+  /** Optional alt text for the demo image. Defaults to the title. */
+  mediaAlt?: string;
 }
 
 interface WhatsNewSection {
@@ -52,6 +57,10 @@ export class WhatsNewPanel {
       {
         enableScripts: false,
         retainContextWhenHidden: false,
+        // Allow loading animated demo webps from `media/demos/` inline in
+        // highlight cards. Scoped to the shipping media directory so the
+        // webview cannot reach anywhere else in the extension bundle.
+        localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'media', 'demos')],
       }
     );
 
@@ -61,7 +70,28 @@ export class WhatsNewPanel {
       WhatsNewPanel.current = undefined;
     });
 
-    panel.webview.html = this.buildHtml(data);
+    // Resolve each highlight's `media` filename into a webview-safe URI.
+    // Runtime defensive: ignore any `media` that is not a bare webp
+    // filename — a URL-shaped or path-shaped value is invalid input that
+    // the webview CSP would refuse anyway, so we strip it here rather
+    // than render a broken <img>. Release-time validation in
+    // `.github/scripts/validate-whats-new.mjs` enforces the same rule
+    // before shipping, so this is belt-and-braces for corrupted state
+    // (sideloaded VSIX, manually-edited JSON).
+    const resolvedData: WhatsNewData = {
+      ...data,
+      highlights: (data.highlights || []).map(h => {
+        if (!h.media || typeof h.media !== 'string') return h;
+        if (!/^[A-Za-z0-9][A-Za-z0-9\-_.]*\.webp$/.test(h.media)) return { ...h, media: undefined };
+        const abs = vscode.Uri.joinPath(context.extensionUri, 'media', 'demos', h.media);
+        return { ...h, media: panel.webview.asWebviewUri(abs).toString() };
+      }),
+    };
+
+    // Pass the webview's CSP source so the template can allow loading
+    // images from the webview-resource scheme (without it, the default
+    // `default-src 'none'` CSP blocks every <img>).
+    panel.webview.html = this.buildHtml(resolvedData, panel.webview.cspSource);
   }
 
   private static async readData(
@@ -91,7 +121,7 @@ export class WhatsNewPanel {
     }
   }
 
-  private static buildHtml(data: WhatsNewData): string {
+  private static buildHtml(data: WhatsNewData, cspSource: string = ''): string {
     const title = this.escapeHtml(data.title || "What's New in Kotlin Jump");
     const version = this.escapeHtml(data.version);
     const tagline = this.escapeHtml(
@@ -104,6 +134,9 @@ export class WhatsNewPanel {
       .map((highlight) => {
         const badgeLabel = this.getKindLabel(highlight.kind);
         const badgeClass = this.getKindClass(highlight.kind);
+        const mediaHtml  = highlight.media
+          ? `<img class="card-media" src="${this.escapeAttribute(highlight.media)}" alt="${this.escapeAttribute(highlight.mediaAlt || highlight.title)}" />`
+          : '';
 
         return `
           <article class="card">
@@ -114,6 +147,7 @@ export class WhatsNewPanel {
                 ? `<p>${this.escapeHtml(highlight.description)}</p>`
                 : ''
             }
+            ${mediaHtml}
           </article>
         `;
       })
@@ -155,7 +189,7 @@ export class WhatsNewPanel {
   <meta charset="UTF-8" />
   <meta
     http-equiv="Content-Security-Policy"
-    content="default-src 'none'; style-src 'unsafe-inline';"
+    content="default-src 'none'; style-src 'unsafe-inline'; img-src ${cspSource || 'https:'} data:;"
   />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${title}</title>
@@ -275,6 +309,15 @@ export class WhatsNewPanel {
       color: var(--vscode-descriptionForeground);
     }
 
+    .card-media {
+      display: block;
+      width: 100%;
+      height: auto;
+      margin-top: 12px;
+      border-radius: var(--kj-radius-md, 8px);
+      border: 1px solid var(--vscode-panel-border);
+    }
+
     .badge {
       display: inline-block;
       margin-bottom: 10px;
@@ -283,6 +326,11 @@ export class WhatsNewPanel {
       font-size: 11px;
       font-weight: 700;
       letter-spacing: 0.03em;
+    }
+
+    .badge-feature {
+      color: var(--vscode-charts-purple, var(--vscode-textLink-foreground));
+      background: color-mix(in srgb, var(--vscode-charts-purple, var(--vscode-textLink-foreground)) 18%, transparent);
     }
 
     .badge-improvement {
@@ -445,6 +493,8 @@ export class WhatsNewPanel {
 
   private static getKindLabel(kind?: WhatsNewHighlight['kind']): string {
     switch (kind) {
+      case 'feature':
+        return 'New';
       case 'improvement':
         return 'Improvement';
       case 'fix':
@@ -456,6 +506,8 @@ export class WhatsNewPanel {
 
   private static getKindClass(kind?: WhatsNewHighlight['kind']): string {
     switch (kind) {
+      case 'feature':
+        return 'badge-feature';
       case 'improvement':
         return 'badge-improvement';
       case 'fix':

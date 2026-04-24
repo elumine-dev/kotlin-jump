@@ -15,15 +15,20 @@ private fun loadDrawable(drawableRes: Int): Any? = null
 
 // ── 1. Propriétés top-level ───────────────────────────────────────────────────
 
-val APP_ICON    = R.drawable.ic_pokeball
-val TYPE_ICON   = R.drawable.ic_type_fire
+val APP_ICON       = R.drawable.ic_pokeball
+val TYPE_FIRE      = R.drawable.ic_type_fire
+val TYPE_WATER     = R.drawable.ic_type_water
+val TYPE_GRASS     = R.drawable.ic_type_grass
+val TYPE_ELECTRIC  = R.drawable.ic_type_electric
 
 // ── 2. val / var locaux ───────────────────────────────────────────────────────
 
 fun drawableLocal() {
     val pokeball = R.drawable.ic_pokeball
     var typeIcon = R.drawable.ic_type_fire
-    typeIcon     = R.drawable.ic_pokeball       // réassignation
+    typeIcon     = R.drawable.ic_type_water     // réassignation
+    typeIcon     = R.drawable.ic_type_grass
+    typeIcon     = R.drawable.ic_type_electric
     val typed: Int = R.drawable.ic_type_fire
 }
 

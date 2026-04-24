@@ -1,0 +1,26 @@
+[
+  {
+    "type": "caption",
+    "label": "Every `R.drawable.*` → thumbnail in the gutter.",
+    "duration": 1800,
+    "t": 300
+  },
+  {
+    "type": "caption",
+    "label": "Five types · five icons.",
+    "duration": 1800,
+    "t": 2391
+  },
+  {
+    "type": "caption",
+    "label": "Hover → SVG preview + path + variants.",
+    "duration": 2200,
+    "t": 4791
+  },
+  {
+    "type": "caption",
+    "label": "Gutter for orientation · hover for detail.",
+    "duration": 1600,
+    "t": 6992
+  }
+]

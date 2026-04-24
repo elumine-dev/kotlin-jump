@@ -69,6 +69,14 @@ export class ConstValFoldingProvider implements vscode.Disposable {
       let m: RegExpExecArray | null;
       while ((m = CONST_NAME_RE.exec(text))) {
         if (isInsideCommentOrString(text, m.index) && !isInsideStringInterpolation(text, m.index)) continue;
+        // Skip declaration-site identifiers: `val NAME =` / `var NAME =`
+        // (non-const declarations that happen to share the same name as a
+        // const val elsewhere in the file — happens when a wrapper `object`
+        // exposes the same key). Without this guard the provider rewrites
+        // `val CAMERA = ...` as `val "android.permission.CAMERA" = ...`,
+        // which looks like broken Kotlin to the reader.
+        const before = text.slice(0, m.index);
+        if (/\b(?:val|var)\s+$/.test(before)) continue;
         const entries = this.index.lookup(m[1]).filter(e => e.isConst && e.constValue);
         if (entries.length !== 1) continue; // skip ambiguous or unknown
         const val   = entries[0].constValue!;

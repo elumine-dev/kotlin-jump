@@ -136,3 +136,43 @@ describe('SP2-ADVER-CVF-8 — isConst=false → 0 décorations', () => {
     expect(decs(entries, ['val x = TIMEOUT_MS'])).toHaveLength(0);
   });
 });
+
+// ── SP2-ADVER-CVF-9 — ne pas folder le NOM de déclaration ────────────────────
+// Regression: Permissions.kt ships `val CAMERA = Manifest.permission.CAMERA`
+// in the same file that declares `const val CAMERA = "..."` (Android Manifest
+// stub). The provider used to fold the *declaration* identifier on the left,
+// rendering `val "android.permission.CAMERA" = "android.permission.CAMERA"` —
+// visually broken Kotlin. The identifier on the left of `val`/`var` must be
+// skipped, even when a const val with the same name exists elsewhere.
+
+describe('SP2-ADVER-CVF-9 — déclaration `val NAME =` préserve le nom', () => {
+  it('`val CAMERA = Manifest.permission.CAMERA` → fold à DROITE uniquement', () => {
+    const entries = [
+      { name: 'CAMERA', isConst: true, constValue: '"android.permission.CAMERA"' },
+    ];
+    const out = decs(entries, ['    val CAMERA            = Manifest.permission.CAMERA']);
+    // Exactly one decoration on the right-hand side, never on the left.
+    expect(out).toHaveLength(1);
+    const line = '    val CAMERA            = Manifest.permission.CAMERA';
+    const leftIdx  = line.indexOf('CAMERA');
+    const rightIdx = line.lastIndexOf('CAMERA');
+    expect(leftIdx).not.toBe(rightIdx);
+    // The single decoration must target the RIGHT CAMERA — its start
+    // position is never earlier than the right occurrence (the provider
+    // may widen left to swallow the `Manifest.permission.` qualifier).
+    const startChar = out[0].range.start.character;
+    expect(startChar).toBeGreaterThanOrEqual(leftIdx + 1);
+  });
+
+  it('`var X = ...` suit la même règle que val', () => {
+    const entries = [{ name: 'FOO', isConst: true, constValue: '"bar"' }];
+    const out = decs(entries, ['var FOO = FOO']);
+    expect(out).toHaveLength(1);
+    expect(out[0].range.start.character).toBeGreaterThanOrEqual('var FOO = '.length);
+  });
+
+  it('le nom de déclaration seul (sans usage à droite) → 0 décoration', () => {
+    const entries = [{ name: 'CAMERA', isConst: true, constValue: '"perm"' }];
+    expect(decs(entries, ['    val CAMERA: String'])).toHaveLength(0);
+  });
+});

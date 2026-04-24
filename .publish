@@ -1220,6 +1220,96 @@ push_release() {
   git push origin "$branch" --tags
 }
 
+# Post-push CI watcher. Blocks until both the CI and Release workflows
+# triggered by this push finish, then prints a pass/fail summary so the
+# maintainer always knows whether the Marketplace publish actually
+# happened — no silent "push succeeded but release workflow failed at
+# the Test step" scenarios (see v1.15.0 first-attempt incident).
+#
+# Silently skipped when:
+#   - the `gh` CLI is not installed (warning printed)
+#   - the user is not authenticated to GitHub (warning printed)
+# Either way, the release itself is already pushed at this point —
+# this is observability only.
+watch_ci_after_push() {
+  if ! command -v gh >/dev/null 2>&1; then
+    echo ""
+    echo "⚠ gh CLI not found — cannot auto-check CI status."
+    echo "  Install with 'brew install gh' + 'gh auth login' for future releases."
+    return 0
+  fi
+  if ! gh auth status >/dev/null 2>&1; then
+    echo ""
+    echo "⚠ gh CLI is installed but not authenticated — cannot auto-check CI."
+    echo "  Run 'gh auth login' so future releases can report CI outcomes."
+    return 0
+  fi
+
+  # GitHub needs a moment to register the freshly-pushed commits and
+  # start the workflows. Polling too early returns empty or unrelated
+  # old runs.
+  echo ""
+  echo "Waiting for GitHub to register the workflows..."
+  sleep 6
+
+  # Find the two runs triggered by this push: one CI run on main, one
+  # Release run on the tag. Both share the same head SHA (HEAD at
+  # push time). Filter by head_sha to avoid catching unrelated
+  # earlier runs.
+  local head_sha
+  head_sha="$(git rev-parse HEAD)"
+  local run_ids
+  run_ids="$(gh run list --limit 10 --json databaseId,headSha,name --jq ".[] | select(.headSha == \"$head_sha\") | .databaseId" 2>/dev/null || true)"
+
+  if [[ -z "$run_ids" ]]; then
+    echo "⚠ Could not locate workflow runs for HEAD ($head_sha)."
+    echo "  Check manually: gh run list --limit 5"
+    return 0
+  fi
+
+  # Wait for each run to finish. --exit-status makes `gh run watch`
+  # return non-zero on failure, which we capture per-run rather than
+  # propagating out — we want to REPORT all outcomes, not bail on
+  # the first failure.
+  local overall_ok=1
+  local -a failed_runs=()
+  while read -r rid; do
+    [[ -z "$rid" ]] && continue
+    if gh run watch "$rid" --exit-status --interval 5 >/dev/null 2>&1; then
+      :
+    else
+      overall_ok=0
+      failed_runs+=("$rid")
+    fi
+  done <<< "$run_ids"
+
+  # Print a clean pass/fail table for the workflows on this push.
+  echo ""
+  echo "──────────────────────────────────────────────────────────────"
+  echo "CI status for v$VERSION push (HEAD $head_sha):"
+  echo "──────────────────────────────────────────────────────────────"
+  gh run list --limit 10 --json databaseId,headSha,name,status,conclusion,displayTitle \
+    --jq ".[] | select(.headSha == \"$head_sha\") | \"\(.conclusion // .status)\t\(.name)\t\(.displayTitle)\"" \
+    | awk -F'\t' '{
+        ok  = ($1 == "success") ? "✅" : "❌"
+        printf "  %s %-10s %s\n", ok, $2, $3
+      }'
+  echo "──────────────────────────────────────────────────────────────"
+
+  if [[ $overall_ok -eq 1 ]]; then
+    echo "✅ All workflows succeeded. v$VERSION is live on the Marketplace"
+    echo "   within the next 30 min–2 h (cache propagation)."
+  else
+    echo "❌ One or more workflows failed. v$VERSION tag is on GitHub but"
+    echo "   the Marketplace publish likely did NOT happen."
+    echo ""
+    for rid in "${failed_runs[@]}"; do
+      echo "   Investigate: gh run view $rid --log-failed"
+    done
+    exit 1
+  fi
+}
+
 if [[ "$SKIP_NOTES" -eq 0 ]]; then
   draft_notes
 fi
@@ -1242,6 +1332,10 @@ fi
 
 if [[ "$DRY_RUN" -eq 0 && "$PUSH" -eq 1 ]]; then
   push_release
+  # Observability: watch CI + Release workflows triggered by this push
+  # and emit a clear pass/fail summary. Gated on --push so users who
+  # only --commit --tag locally don't sit through a timeout.
+  watch_ci_after_push
 fi
 
 if [[ "$NOTES_ONLY" -eq 0 && "$DRY_RUN" -eq 0 && "$PUSH" -eq 0 ]]; then

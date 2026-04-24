@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.16.0
+
+v1.16.0 adds hover documentation for @Suppress annotations, dispatcher-specific badges on coroutine suspend call markers, and default keyboard shortcuts for common navigation and editor actions.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/v1.16.0/media/demos/suppress-hover.webp" width="720" alt="Hover tooltip showing a plain-English explanation of a suppression ID" />
+</p>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/v1.16.0/media/demos/suspend-call-marker.webp" width="720" alt="Suspend call markers with dispatcher badges inline" />
+</p>
+
+### Features
+- Added hover documentation for @Suppress, @SuppressLint, and @SuppressWarnings annotation IDs — hovering over a suppression string shows a plain-English description of the Kotlin compiler warning, Android Lint check, or Java warning being silenced.
+- Added dispatcher-specific inlay badges to coroutine builder calls that name a dispatcher, so dispatched suspension points are visually distinct from plain suspend calls at a glance.
+- Registered default keyboard shortcuts for common actions: Find Usages (Alt+F7), Go to Test (Alt+Shift+T), Go to Composable Preview (Alt+Shift+P), Organize Imports (Shift+Alt+O), Rename (Ctrl/Cmd+R), Navigate Back/Forward (Ctrl/Cmd+Alt+←/→), Copy FQN (Shift+Alt+C), and Toggle Inline Features (Shift+Alt+I).
+
 ## 1.15.0
 
 Adds a visual at-a-glance infographic to the marketplace listing; no changes to extension commands, settings, or navigation behavior.

@@ -113,13 +113,22 @@ async function main(): Promise<void> {
     die(`compiled demo not found: ${compiledDemo}\nrun: npm run compile:demo`);
   }
 
+  // Peek at the compiled JS for an `estimatedDurationMs` export so the
+  // progress bar can size itself. We parse textually to avoid loading the
+  // demo into Node (it imports `vscode` which is only available inside
+  // the extension host). Missing export → elapsed-only ticker fallback.
+  const estimatedTotalMs = readEstimatedDurationMs(compiledDemo);
+
   // ------------------------------------------------------------------ resources
   const resources: Resources = {};
   let cleaned = false;
   const cleanup = async (reason: string): Promise<void> => {
     if (cleaned) return;                       // idempotent
     cleaned = true;
-    log(`cleanup: ${reason}`);
+    // Always stop the ticker before any log output — otherwise the
+    // "cleanup: X" line gets overwritten by the next tick draw.
+    stopTicker();
+    logv(`cleanup: ${reason}`);
     if (resources.watchdog) clearTimeout(resources.watchdog);
     if (resources.recorder) {
       try { await resources.recorder.stop(); } catch (e) { log(`  recorder.stop swallowed: ${(e as Error).message}`); }
@@ -215,6 +224,7 @@ async function main(): Promise<void> {
   const readyMarker  = path.join(tmpDir, 'ready');
   const startMarker  = path.join(tmpDir, 'start');
   const doneMarker   = path.join(tmpDir, 'done');
+  const progressLog  = path.join(tmpDir, 'progress.ndjson');
   const outputWebp   = path.join(REPO_ROOT, 'media', 'demos', `${name}.webp`);
 
   seedUserDataDir(userDataDir);
@@ -240,12 +250,14 @@ async function main(): Promise<void> {
       KJ_DEMO_READY:     readyMarker,
       KJ_DEMO_START:     startMarker,
       KJ_DEMO_DONE:      doneMarker,
+      KJ_DEMO_PROGRESS:  progressLog,
     },
   }).catch(err => { log(`✗ VS Code exited with error: ${err?.message ?? err}`); throw err; });
 
   // ---------------------------------------------------------------- wait ready
+  startTicker('booting VS Code');
   await phase('wait-ready', () => waitForFile(readyMarker, 60_000));
-  log(`  VS Code ready — positioning window and starting capture`);
+  logv(`  VS Code ready — positioning window and starting capture`);
 
   // The runner writes its Electron main-process PID to the ready marker
   // (`vscode-runner.ts:37`). That's our ground truth for window lookup —
@@ -253,7 +265,7 @@ async function main(): Promise<void> {
   // whatever VS Code version we're running against.
   const electronPid = readReadyMarkerPid(readyMarker);
   if (electronPid !== undefined) {
-    log(`  Target Electron pid: ${electronPid} (from ready marker)`);
+    logv(`  Target Electron pid: ${electronPid} (from ready marker)`);
   } else {
     log(`  ⚠ could not read PID from ready marker — falling back to title-based window lookup`);
   }
@@ -275,8 +287,7 @@ async function main(): Promise<void> {
       }),
     );
     windowAvailable = true;
-    log(`  ${windowDecision.summary}`);
-    logVSCodeLikeProcesses();
+    logv(`  ${windowDecision.summary}`);
   } catch (err) {
     logVSCodeLikeProcesses();
     if (!ALLOW_WINDOW_FALLBACK) {
@@ -305,14 +316,11 @@ async function main(): Promise<void> {
     log(`  Using fallback capture region (0,0) ${WIDTH}×${HEIGHT}`);
   }
 
-  // Capture region: default to the detected rect, but allow override via env
-  // vars in case the user prefers to manually arrange their display and
-  // doesn't care about window positioning.
   const captureX = parseInt(process.env.KJ_DEMO_CAPTURE_X ?? String(rect.x), 10);
   const captureY = parseInt(process.env.KJ_DEMO_CAPTURE_Y ?? String(rect.y), 10);
   const captureW = parseInt(process.env.KJ_DEMO_CAPTURE_W ?? String(rect.w), 10);
   const captureH = parseInt(process.env.KJ_DEMO_CAPTURE_H ?? String(rect.h), 10);
-  log(`  Capture region: (${captureX},${captureY}) ${captureW}×${captureH} [global coords]`);
+  logv(`  Capture region: (${captureX},${captureY}) ${captureW}×${captureH} [global coords]`);
 
   // ----------------------------------------------------------- start recorder
   const recorder = new ScreenRecorder(rawMov, { x: captureX, y: captureY, width: captureW, height: captureH });
@@ -355,21 +363,34 @@ async function main(): Promise<void> {
   const demoStartedAt = Date.now();
   fs.writeFileSync(startMarker, '');
   const rawOffsetMs = demoStartedAt - ffmpegStartedAt;
-  log(`  Demo timeline t=0 is at raw video t=${rawOffsetMs}ms (ffmpeg warmup + demo launch)`);
+  logv(`  Demo timeline t=0 is at raw video t=${rawOffsetMs}ms (ffmpeg warmup + demo launch)`);
 
   // ----------------------------------------------------------- run demo
-  await phase('run-demo', async () => {
-    await Promise.race([
-      waitForFile(doneMarker, 120_000),
-      vscodeDone.then(() => { throw new Error('VS Code exited before writing done marker'); }),
-    ]);
-  });
+  if (estimatedTotalMs !== undefined) {
+    log(`▶ Recording ${(estimatedTotalMs / 1000).toFixed(1)}s... (Ctrl+C to abort)`);
+  } else {
+    log(`▶ Recording... (Ctrl+C to abort)`);
+  }
+  startTicker('recording', estimatedTotalMs);
+  const stopProgressTail = tailProgressLog(progressLog, demoStartedAt);
+  try {
+    await phase('run-demo', async () => {
+      await Promise.race([
+        waitForFile(doneMarker, 120_000),
+        vscodeDone.then(() => { throw new Error('VS Code exited before writing done marker'); }),
+      ]);
+    });
+  } finally {
+    stopProgressTail();
+  }
 
   // ----------------------------------------------------------- stop capture
+  startTicker('finalizing capture');
   await phase('stop-capture', async () => {
     await recorder.stop();
-    await vscodeDone.catch(err => log(`  (VS Code shutdown: ${err?.message ?? err})`));
+    await vscodeDone.catch(err => logv(`  (VS Code shutdown: ${err?.message ?? err})`));
   });
+  stopTicker();
 
   if (!fs.existsSync(timelineJson)) {
     log(`✗ No timeline written — demo probably crashed. Raw video kept at ${rawMov}`);
@@ -387,7 +408,12 @@ async function main(): Promise<void> {
   }
 
   // ----------------------------------------------------------- post-process
+  startTicker('encoding WebP');
   const sidecarTimeline = outputWebp.replace(/\.webp$/, '.timeline.json');
+  // Route post-process's internal chatter through `logv` — its "Pass 1:
+  // 124 PNG frames" / "Shadow filter applied" messages are diagnostic
+  // only. The ticker already communicates "encoding is happening"; the
+  // final "✓ Wrote …" line still surfaces through the unfiltered `log`.
   await phase('post-process', () => runPostProcess({
     rawMov,
     outputWebp,
@@ -397,15 +423,18 @@ async function main(): Promise<void> {
     rawOffsetMs,
     trimMode: 'auto',
     repoRoot: REPO_ROOT,
-    log,
+    log: logv,
   }));
+  stopTicker();
 
-  // Keep the tmpdir only if the user sets KJ_DEMO_KEEP_TMP=1 (debugging).
+  const stat = fs.statSync(outputWebp);
+  log(`✓ ${path.relative(REPO_ROOT, outputWebp)} · ${(stat.size / 1024 / 1024).toFixed(1)} MB`);
+
   if (!process.env.KJ_DEMO_KEEP_TMP) {
     fs.rmSync(tmpDir, { recursive: true, force: true });
     resources.tmpDir = undefined;
   } else {
-    log(`  (kept tmp dir: ${tmpDir})`);
+    logv(`  (kept tmp dir: ${tmpDir})`);
   }
 
   await cleanup('done');
@@ -613,7 +642,7 @@ function logVSCodeLikeProcesses(): void {
       { encoding: 'utf8' },
     ).trim();
     if (!procs) return;
-    log(`  VS Code-like processes:\n${procs.split('\n').map(l => '    ' + l).join('\n')}`);
+    logv(`  VS Code-like processes:\n${procs.split('\n').map(l => '    ' + l).join('\n')}`);
   } catch { /* ignore */ }
 }
 
@@ -628,7 +657,7 @@ function logVSCodeLikeProcesses(): void {
  */
 function positionVSCodeWindow(pid?: number, preferredMode: WindowProbeSource = 'pid'): WindowRect {
   if (process.platform !== 'darwin') {
-    log(`  (window positioning only implemented on macOS — using default)`);
+    logv(`  (window positioning only implemented on macOS — using default)`);
     return { x: 0, y: 0, w: WIDTH, h: HEIGHT, scale: 1 };
   }
 
@@ -731,7 +760,7 @@ function positionVSCodeWindow(pid?: number, preferredMode: WindowProbeSource = '
     try {
       logicalRect = attemptPosition(mode);
       positionedBy = mode;
-      log(`  Window positioned at (${logicalRect.x},${logicalRect.y}) size ${logicalRect.w}×${logicalRect.h} (logical)`);
+      logv(`  Window positioned at (${logicalRect.x},${logicalRect.y}) size ${logicalRect.w}×${logicalRect.h} (logical)`);
       break;
     } catch (err) {
       lastError = formatExecError(err);
@@ -745,13 +774,13 @@ function positionVSCodeWindow(pid?: number, preferredMode: WindowProbeSource = '
     );
   }
   if (positionedBy === 'title' && pid !== undefined) {
-    log(`  Window resolution: title_fallback`);
+    logv(`  Window resolution: title_fallback`);
   } else {
-    log(`  Window resolution: pid`);
+    logv(`  Window resolution: pid`);
   }
 
   const scale = detectRetinaScale();
-  log(`  Display scale: ${scale}x`);
+  logv(`  Display scale: ${scale}x`);
   return { ...logicalRect, scale };
 }
 
@@ -789,12 +818,13 @@ async function waitForFile(file: string, timeoutMs: number): Promise<void> {
  */
 async function phase<T>(name: string, fn: () => Promise<T> | T): Promise<T> {
   const start = Date.now();
-  log(`[phase=${name}] start`);
+  logv(`[phase=${name}] start`);
   try {
     const r = await fn();
-    log(`[phase=${name}] ok (${Date.now() - start}ms)`);
+    logv(`[phase=${name}] ok (${Date.now() - start}ms)`);
     return r;
   } catch (e) {
+    // Failures are always visible — the user needs them to diagnose.
     log(`[phase=${name}] FAIL (${Date.now() - start}ms): ${(e as Error).message}`);
     throw e;
   }
@@ -804,13 +834,171 @@ function sleep(ms: number): Promise<void> {
   return new Promise(r => setTimeout(r, ms));
 }
 
+const IS_TTY  = process.stdout.isTTY === true;
+
+// ── Live ticker state ────────────────────────────────────────────────────────
+// Single-line carriage-return progress bar that updates every 250 ms. When
+// the total duration is known (demo exports `estimatedDurationMs`), the
+// ticker shows a filled bar like manual-record: `[███░░░░░] 2.3s/10.6s`.
+// When unknown (booting, encoding), it falls back to `▸ label…` + elapsed.
+// Non-TTY environments (CI, piped output) skip the ticker entirely — a
+// running carriage return in a log file is unreadable.
+const BAR_WIDTH = 30;
+let tickerInterval: ReturnType<typeof setInterval> | undefined;
+let tickerStartedAt = 0;
+let tickerLabel     = 'recording';
+let tickerTotalMs:    number | undefined;
+let lastTickerWidth = 0;
+
+function startTicker(label: string, totalMs?: number): void {
+  if (!IS_TTY) return;
+  if (tickerInterval) clearInterval(tickerInterval);
+  tickerStartedAt = Date.now();
+  tickerLabel     = label;
+  tickerTotalMs   = totalMs;
+  tickerInterval = setInterval(() => drawTicker(), 250);
+  drawTicker();
+}
+function stopTicker(): void {
+  if (!tickerInterval) return;
+  clearInterval(tickerInterval);
+  tickerInterval = undefined;
+  wipeTickerLine();
+}
+function drawTicker(): void {
+  if (!IS_TTY || !tickerInterval) return;
+  const elapsedMs = Date.now() - tickerStartedAt;
+  let line: string;
+  if (tickerTotalMs !== undefined && tickerTotalMs > 0) {
+    const clamped = Math.min(elapsedMs, tickerTotalMs);
+    const filled  = Math.round((clamped / tickerTotalMs) * BAR_WIDTH);
+    const bar     = '█'.repeat(filled) + '░'.repeat(BAR_WIDTH - filled);
+    const eSec    = (elapsedMs / 1000).toFixed(1);
+    const tSec    = (tickerTotalMs / 1000).toFixed(1);
+    line = `  [${bar}] ${eSec}s/${tSec}s`;
+  } else {
+    const eSec = (elapsedMs / 1000).toFixed(1);
+    line = `  [${eSec}s] ▸ ${tickerLabel}…`;
+  }
+  // Pad to the previous width so we fully overwrite any longer prior line.
+  const padded = line.length < lastTickerWidth
+    ? line + ' '.repeat(lastTickerWidth - line.length)
+    : line;
+  process.stdout.write(`\r${padded}`);
+  lastTickerWidth = line.length;
+}
+function wipeTickerLine(): void {
+  if (!IS_TTY || lastTickerWidth === 0) return;
+  process.stdout.write(`\r${' '.repeat(lastTickerWidth)}\r`);
+  lastTickerWidth = 0;
+}
+
 function log(msg: string): void {
+  wipeTickerLine();
   // eslint-disable-next-line no-console
   console.log(`[demo] ${msg}`);
+  if (tickerInterval) drawTicker();
+}
+
+function logv(msg: string): void {
+  if (!VERBOSE) return;
+  log(msg);
 }
 
 function die(msg: string): never {
   // eslint-disable-next-line no-console
   console.error(`[demo] ${msg}`);
   process.exit(1);
+}
+
+/**
+ * Extract the `estimatedDurationMs` value from a compiled demo JS file.
+ * Returns undefined when the demo does not export one — the caller falls
+ * back to an elapsed-only ticker.
+ *
+ * Textual extraction because the demo module can only run inside the VS
+ * Code extension host (it imports `vscode`).
+ */
+function readEstimatedDurationMs(compiledDemoPath: string): number | undefined {
+  try {
+    const src = fs.readFileSync(compiledDemoPath, 'utf8');
+    const m = /estimatedDurationMs\s*=\s*(\d[\d_]*)/.exec(src);
+    if (!m) return undefined;
+    const n = parseInt(m[1].replace(/_/g, ''), 10);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Tail the Stage's NDJSON progress log and mirror each beat into the
+ * terminal. Each line lands the moment the in-host demo emits it, so
+ * the user running `kjdemo` sees what's actually happening inside VS
+ * Code without staring at the window. Stops when the returned disposer
+ * is invoked.
+ *
+ * Format per line, with elapsed-from-demo-start timestamp:
+ *   [3.4s] caption   Five types · five icons.
+ *   [5.6s] callout   💧 ic_type_water.xml
+ *   [6.2s] scroll    lines 17–21 · 1600 ms
+ *   [7.8s] dwell     line 19 col 38 · 600 ms
+ */
+function tailProgressLog(progressPath: string, demoStartedAt: number): () => void {
+  let offset = 0;
+  let stopped = false;
+
+  const drain = (): void => {
+    if (stopped) return;
+    if (!fs.existsSync(progressPath)) return;
+    let stat;
+    try { stat = fs.statSync(progressPath); } catch { return; }
+    if (stat.size <= offset) return;
+    let chunk = '';
+    try {
+      const fd = fs.openSync(progressPath, 'r');
+      const buf = Buffer.alloc(stat.size - offset);
+      fs.readSync(fd, buf, 0, buf.length, offset);
+      fs.closeSync(fd);
+      chunk = buf.toString('utf8');
+      offset = stat.size;
+    } catch { return; }
+    for (const raw of chunk.split('\n')) {
+      const line = raw.trim();
+      if (!line) continue;
+      let ev: { t_ms?: number; kind?: string; [k: string]: unknown };
+      try { ev = JSON.parse(line); } catch { continue; }
+      printBeat(ev, demoStartedAt);
+    }
+  };
+
+  const interval = setInterval(drain, 100);
+  return () => {
+    stopped = true;
+    clearInterval(interval);
+    drain(); // final flush — emit any beats that landed after run-demo ended
+  };
+}
+
+function printBeat(ev: Record<string, unknown>, demoStartedAt: number): void {
+  const elapsedSec = ((Date.now() - demoStartedAt) / 1000).toFixed(1);
+  const kind = String(ev.kind ?? '?').padEnd(8);
+  let detail = '';
+  switch (ev.kind) {
+    case 'caption':
+      detail = String(ev.text ?? '');
+      break;
+    case 'callout':
+      detail = `${ev.text ?? ''} (line ${ev.line}, col ${ev.column})`;
+      break;
+    case 'scroll':
+      detail = `lines ${ev.fromLine}–${ev.toLine} · ${ev.duration} ms`;
+      break;
+    case 'dwell':
+      detail = `line ${ev.line}${ev.column !== undefined ? ` col ${ev.column}` : ''} · ${ev.duration} ms`;
+      break;
+    default:
+      detail = JSON.stringify(ev).slice(0, 200);
+  }
+  log(`  [${elapsedSec}s] ${kind} ${detail}`);
 }

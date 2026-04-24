@@ -75,8 +75,41 @@ export interface NavigateOpts {
  */
 export class Stage {
   readonly timeline = new Timeline();
+  private readonly beatStartMs = Date.now();
+  // Optional progress log path — when set (via `KJ_DEMO_PROGRESS`), every
+  // user-visible beat (caption, calloutAt, scrollThrough, …) appends a
+  // one-line NDJSON record here. The orchestrator (record.ts) tails the
+  // file and mirrors each event into the terminal as it happens, so the
+  // user knows what's playing without watching the VS Code window.
+  private readonly progressLogPath: string | undefined =
+    process.env.KJ_DEMO_PROGRESS && process.env.KJ_DEMO_PROGRESS.length > 0
+      ? process.env.KJ_DEMO_PROGRESS
+      : undefined;
 
-  constructor(private readonly opts: StageOptions) {}
+  constructor(private readonly opts: StageOptions) {
+    if (this.progressLogPath) {
+      try {
+        const fsSync = require('node:fs');
+        // Start with an empty file so a stale log from a previous run
+        // can't confuse the tailer.
+        fsSync.writeFileSync(this.progressLogPath, '');
+      } catch { /* non-fatal: progress feed is advisory */ }
+    }
+  }
+
+  /** Emit a live-progress record to the NDJSON file tailed by record.ts. */
+  private emitBeat(kind: string, data: Record<string, unknown>): void {
+    if (!this.progressLogPath) return;
+    try {
+      const fsSync = require('node:fs');
+      const line = JSON.stringify({
+        t_ms: Date.now() - this.beatStartMs,
+        kind,
+        ...data,
+      });
+      fsSync.appendFileSync(this.progressLogPath, line + '\n');
+    } catch { /* non-fatal */ }
+  }
 
   // ── Setup ──────────────────────────────────────────────────────────────────
 
@@ -329,6 +362,7 @@ export class Stage {
     if (!editor) throw new Error('scrollThrough(): no active editor');
 
     const { fromLine, toLine, column = 0, durationMs = 1200 } = opts;
+    this.emitBeat('scroll', { fromLine, toLine, column, duration: durationMs });
     const startPos = new vscode.Position(fromLine, 0);
     editor.selection = new vscode.Selection(startPos, startPos);
     editor.revealRange(
@@ -453,6 +487,12 @@ export class Stage {
     label: string,
     duration = 1800,
   ): Promise<void> {
+    this.emitBeat('callout', {
+      text:     label,
+      line:     target.line,
+      column:   target.column,
+      duration,
+    });
     const editor = vscode.window.activeTextEditor;
     if (!editor) return;
     const deco = vscode.window.createTextEditorDecorationType({
@@ -483,6 +523,7 @@ export class Stage {
    * specific method name).
    */
   async dwellOn(target: { line: number; column?: number }, ms: number): Promise<void> {
+    this.emitBeat('dwell', { line: target.line, column: target.column, duration: ms });
     const ed = vscode.window.activeTextEditor;
     if (ed) {
       if (target.column !== undefined) {
@@ -791,6 +832,7 @@ export class Stage {
       label:    text,
       duration,
     });
+    this.emitBeat('caption', { text, duration });
     await this.pause(duration);
   }
 

@@ -684,22 +684,23 @@ const data = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
 //
 // Matching uses a two-stage fuzzy match tuned on real release data.
 // Exact title is too brittle: Claude rephrases across releases
-// ("Dispatcher badges on coroutine builders" → "Suspend call markers
-// now include dispatcher badges"). Combined title+description Jaccard
-// is too noisy: long descriptions dilute strong title signal below any
-// sensible threshold.
+// ("@Suppress / @SuppressLint explained on hover" → "@Suppress Hover
+// Docs") and exact-match loses the hand-wired media.
 //
 // So we check in order:
 //   1. exact title match (fast-path, same-release re-run)
-//   2. title-only Jaccard ≥ 0.5 (strong signal — nouns line up)
-//   3. title+description Jaccard ≥ 0.25 (catches cases where title
-//      was nearly rewritten but the description still describes the
-//      same feature)
+//   2. title-only Jaccard ≥ 0.4 (strong signal — at least 2 of the
+//      distinctive nouns line up; observed 0.4 for real v1.16.0
+//      rephrasings, ≤ 0.33 for unrelated-highlight collisions on
+//      current features — Android pairs, semantic vs syntax
+//      highlighting, code lens vs find usages)
+//   3. title+description Jaccard ≥ 0.2 (catches cases where titles
+//      diverged further but the feature body still overlaps)
 //
 // Every fuzzy decision is logged to stderr so a bad match is visible
 // at release time, not silently applied.
-const TITLE_ONLY_THRESHOLD  = 0.5;
-const TITLE_DESC_THRESHOLD  = 0.25;
+const TITLE_ONLY_THRESHOLD  = 0.4;
+const TITLE_DESC_THRESHOLD  = 0.2;
 const MERGE_STOPWORDS = new Set([
   'the', 'and', 'for', 'with', 'from', 'that', 'this', 'new', 'into',
   'your', 'out', 'get', 'has', 'have', 'via', 'but', 'now', 'any',

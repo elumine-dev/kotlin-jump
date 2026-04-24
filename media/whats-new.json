@@ -1,36 +1,25 @@
 {
-  "version": "1.16.0",
+  "version": "1.16.1",
   "title": "What's New in Kotlin Jump",
-  "tagline": "@Suppress hover, dispatcher badges, default keybindings",
-  "summary": "v1.16.0 adds hover documentation for @Suppress annotations, dispatcher-specific badges on coroutine suspend call markers, and default keyboard shortcuts for common navigation and editor actions.",
+  "tagline": "Release notes corrections, no behavior changes",
+  "summary": "Maintenance patch correcting v1.16.0 release note text and version references; no changes to extension functionality.",
   "highlights": [
     {
-      "title": "@Suppress Hover Docs",
-      "description": "Hovering over any suppression ID inside @Suppress, @SuppressLint, or @SuppressWarnings now shows a plain-English explanation of the warning being silenced — no need to look it up externally.",
-      "kind": "feature",
-      "media": "suppress-hover.webp",
-      "mediaAlt": "Hover tooltip showing a plain-English explanation of a suppression ID"
+      "title": "Clarified Release Notes",
+      "kind": "note",
+      "description": "The v1.16.0 changelog entries were reworded for precision — descriptions of suppression hover docs, dispatcher-aware suspend badges, and keyboard shortcuts are now clearer and more accurate."
     },
     {
-      "title": "Dispatcher Badges",
-      "description": "Suspend call markers now display a dispatcher-specific badge on coroutine builder invocations that name a dispatcher, making it immediately clear which dispatcher each suspension point is tied to.",
+      "title": "Release Process Reliability",
       "kind": "improvement",
-      "media": "suspend-call-marker.webp",
-      "mediaAlt": "Suspend call markers with dispatcher badges inline"
-    },
-    {
-      "title": "Default Keybindings",
-      "description": "Common Kotlin Jump actions now have default keyboard shortcuts — Find Usages, Go to Test, Navigate Back/Forward, Organize Imports, and more — reducing reliance on the command palette.",
-      "kind": "feature"
+      "description": "The publish workflow now automatically monitors CI after each push and reports pass/fail status, reducing the risk of a defective build reaching the marketplace undetected."
     }
   ],
   "sections": [
     {
-      "heading": "Features",
+      "heading": "Notes",
       "bullets": [
-        "Added hover documentation for @Suppress, @SuppressLint, and @SuppressWarnings annotation IDs — hovering over a suppression string shows a plain-English description of the Kotlin compiler warning, Android Lint check, or Java warning being silenced.",
-        "Added dispatcher-specific inlay badges to coroutine builder calls that name a dispatcher, so dispatched suspension points are visually distinct from plain suspend calls at a glance.",
-        "Registered default keyboard shortcuts for common actions: Find Usages (Alt+F7), Go to Test (Alt+Shift+T), Go to Composable Preview (Alt+Shift+P), Organize Imports (Shift+Alt+O), Rename (Ctrl/Cmd+R), Navigate Back/Forward (Ctrl/Cmd+Alt+←/→), Copy FQN (Shift+Alt+C), and Toggle Inline Features (Shift+Alt+I)."
+        "No changes to extension commands, settings, navigation, or any other user-facing behavior since v1.16.0."
       ]
     }
   ],

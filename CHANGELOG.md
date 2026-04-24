@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.17.0
+
+1.17.0 adds drawable resource previews — hover over any R.drawable reference to see a rendered thumbnail tooltip, and VectorDrawable XML is converted to SVG so both raster and vector assets display correctly.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/v1.17.0/media/demos/drawable-hover.webp" width="720" alt="Gutter Drawable Thumbnails" />
+</p>
+
+### Fixes
+- Fixed the What's New panel opening two VS Code windows instead of one when previewing release notes.
+- Fixed the What's New panel loading stale content; the webview now reads the current release JSON on every open.
+
+### Features
+- Added drawable resource indexing that tracks all res/drawable entries across density qualifiers and reacts to file changes in real time.
+- Added a hover provider for R.drawable references that renders a thumbnail preview — VectorDrawable XML files are converted to SVG inline, so no external renderer is needed.
+- Added gutter thumbnail decorations alongside any line that references a drawable resource, giving a persistent visual cue without opening the asset file.
+
 ## 1.16.1
 
 Maintenance patch correcting v1.16.0 release note text and version references; no changes to extension functionality.

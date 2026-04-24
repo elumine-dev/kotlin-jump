@@ -919,6 +919,11 @@
           "default": true,
           "markdownDescription": "Show a colored `■` swatch inline before hex color literals (`0xAARRGGBB` and `\"#RRGGBB\"` strings)."
         },
+        "kotlinJump.drawableThumbnails": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Paint a miniature of the referenced Android asset in the gutter next to every `R.drawable.xxx` / `R.mipmap.xxx` call — matches the Android Studio thumbnail behaviour."
+        },
         "kotlinJump.overrideGutterIcons": {
           "type": "boolean",
           "default": true,

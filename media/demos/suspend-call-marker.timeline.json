@@ -9,18 +9,18 @@
     "type": "caption",
     "label": "⚡ marks every pause point. 6 suspends in 8 lines here.",
     "duration": 2600,
-    "t": 5745
+    "t": 5759
   },
   {
     "type": "caption",
     "label": "Badges tell you the thread: 🧵 IO, 🖥 Main, ⚙ Default.",
     "duration": 2800,
-    "t": 10557
+    "t": 10590
   },
   {
     "type": "caption",
     "label": "Know your pauses. Know your threads. Before the UI freezes.",
     "duration": 3000,
-    "t": 13357
+    "t": 13389
   }
 ]

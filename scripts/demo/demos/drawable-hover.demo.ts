@@ -5,6 +5,13 @@ import { Stage } from '../lib/stage';
 // reads this value at start-up to size its `[███░░░] X.Ys/N.Ns` bar.
 export const estimatedDurationMs = 10_600;
 
+// KEEP THE JSDoc BELOW SHORT. The whats-new auto-linker (see
+// .github/scripts/whats-new-auto-link.mjs) scores demo ↔ highlight
+// via Jaccard on JSDoc + filename tokens; expanding the JSDoc dilutes
+// the token set under the 0.15 threshold and silently drops the
+// CHANGELOG <img> embed. Design rationale for 5 Pokémon types /
+// 3-beats / 10 s budget lives in the commit history (b398062+).
+
 /**
  * R.drawable hover preview + gutter thumbnails.
  *

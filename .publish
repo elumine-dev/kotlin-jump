@@ -677,23 +677,75 @@ const [version, jsonPath, baseRef, outPath] = process.argv.slice(2);
 const data = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
 
 // ── Merge-preserve: keep user-authored `media` / `mediaAlt` ──────────────
-// When a highlight in the existing whats-new.json has the same title as one
-// just drafted by Claude, copy its `media` / `mediaAlt` fields onto the new
-// highlight. Lets a maintainer hand-wire a demo webp once and have it stick
-// across re-drafts. Claude is now allowed to emit these fields too but is
-// instructed not to (it doesn't know which webps were hand-recorded).
-let priorByTitle = new Map();
+// When a highlight in the existing whats-new.json describes the same
+// feature as one just drafted by Claude, copy its `media` / `mediaAlt`
+// fields onto the new highlight. Lets a maintainer hand-wire a demo
+// webp once and have it stick across re-drafts.
+//
+// Matching is FUZZY on title + description tokens (Jaccard ≥ 0.4).
+// Exact-title matching is too brittle: Claude often re-phrases titles
+// across releases ("Dispatcher badges on coroutine builders" →
+// "Dispatcher badges on suspend call markers") and exact-match would
+// silently drop the hand-wired webp. Threshold 0.4 clears typical
+// same-feature rephrasings (observed 0.5–0.8) and rejects
+// unrelated-highlight collisions (observed ≤ 0.15).
+const FUZZY_MERGE_THRESHOLD = 0.4;
+const MERGE_STOPWORDS = new Set([
+  'the', 'and', 'for', 'with', 'from', 'that', 'this', 'new', 'into',
+  'your', 'out', 'get', 'has', 'have', 'via', 'but', 'now', 'any',
+  'are', 'was', 'will', 'were', 'kotlin', 'jump',
+]);
+function mergeTokens(s) {
+  return new Set(String(s ?? '').toLowerCase()
+    .replace(/[^\w\s-]/g, ' ').split(/[\s\-_]+/)
+    .filter(t => t.length >= 3 && !MERGE_STOPWORDS.has(t)));
+}
+function mergeJaccard(a, b) {
+  if (a.size === 0 || b.size === 0) return 0;
+  let inter = 0;
+  for (const x of a) if (b.has(x)) inter++;
+  return inter / new Set([...a, ...b]).size;
+}
+
+let priorList = [];
 try {
   const prior = JSON.parse(fs.readFileSync('media/whats-new.json', 'utf8'));
   for (const h of (prior.highlights || [])) {
-    if (h && typeof h.title === 'string') priorByTitle.set(h.title, h);
+    if (!h || typeof h.title !== 'string') continue;
+    priorList.push({
+      data:   h,
+      tokens: new Set([...mergeTokens(h.title), ...mergeTokens(h.description || '')]),
+    });
   }
 } catch {
   // First release (or prior file missing / malformed) — nothing to merge.
 }
 
+function findPriorForMerge(newH) {
+  // Exact title wins (cheap, obvious). Otherwise fuzzy-match on tokens.
+  const exact = priorList.find(p => p.data.title === newH.title);
+  if (exact) return exact.data;
+  const newTokens = new Set([
+    ...mergeTokens(newH.title),
+    ...mergeTokens(newH.description || ''),
+  ]);
+  let best = null;
+  for (const p of priorList) {
+    const score = mergeJaccard(newTokens, p.tokens);
+    if (score >= FUZZY_MERGE_THRESHOLD && (!best || score > best.score)) {
+      best = { data: p.data, score };
+    }
+  }
+  if (best) {
+    process.stderr.write(
+      `[whats-new] merge-preserve fuzzy match: "${newH.title}" ↔ "${best.data.title}" (jaccard=${best.score.toFixed(2)})\n`,
+    );
+  }
+  return best ? best.data : null;
+}
+
 const mergedHighlights = (data.highlights || []).slice(0, 3).map(h => {
-  const prev = priorByTitle.get(h.title);
+  const prev = findPriorForMerge(h);
   if (!prev) return h;
   return {
     ...h,
@@ -839,6 +891,85 @@ fs.writeFileSync(outPath, `${JSON.stringify(whatsNew, null, 2)}\n`);
 NODE
 }
 
+build_dry_run_preview() {
+  # In dry-run we want Kevin to SEE the release — including the embedded
+  # demo webps — before deciding to commit. Terminal output prints the
+  # raw markdown, which renders webp only as an <img> tag (no animation).
+  # So we:
+  #
+  #   1. Compose a single "release preview" markdown that bundles the
+  #      CHANGELOG section, the full whats-new.json as a readable JSON
+  #      block, and a plain-text list of auto-linked demos.
+  #   2. Write it to WORK_DIR/release-preview.md (persistent for the
+  #      run's lifetime; removed when the user exits).
+  #   3. If `code` is on PATH, open the file AND auto-trigger the
+  #      markdown preview (Cmd+Shift+V). VS Code renders webp animated,
+  #      so the reviewer sees the exact visual the user will see.
+  #   4. Always print the terminal output too (tail-friendly when
+  #      piping or logging).
+
+  local preview="$WORK_DIR/release-preview.md"
+  local section_md
+  section_md="$(cat "$SECTION_FILE")"
+
+  local whats_new_pretty="(no whats-new preview was generated)"
+  if [[ -n "${WHATS_NEW_FOR_SECTION:-}" && -f "$WHATS_NEW_FOR_SECTION" ]]; then
+    whats_new_pretty="$(cat "$WHATS_NEW_FOR_SECTION")"
+  fi
+
+  cat > "$preview" <<PREVIEW
+# Release preview — v$VERSION (dry-run)
+
+> This file is a dry-run preview. Nothing has been written to
+> CHANGELOG.md, committed, tagged, or pushed.
+> To see the embedded demo webps animated, press **Cmd+Shift+V** to
+> open the markdown preview.
+> To run the real release after confirming this preview, invoke
+> \`./.publish --version $VERSION --commit --tag --push\`.
+
+---
+
+## CHANGELOG section (as it will be prepended to CHANGELOG.md)
+
+$section_md
+
+---
+
+## What's New JSON (as it will ship in media/whats-new.json)
+
+The VS Code "What's New" panel renders from this file. Each
+\`highlights[].media\` is validated by
+\`.github/scripts/validate-whats-new.mjs\` before the release can commit.
+
+\`\`\`json
+$whats_new_pretty
+\`\`\`
+PREVIEW
+
+  echo ""
+  echo "──────────────────────────────────────────────────────────────"
+  echo "DRY-RUN preview written to:"
+  echo "  $preview"
+  echo ""
+
+  if have_cmd code; then
+    # Open the file. VS Code's CLI accepts -r to reuse the window so the
+    # preview lands in the user's current session instead of a fresh one.
+    code -r "$preview" >/dev/null 2>&1 || code "$preview" >/dev/null 2>&1 || true
+    echo "Opened in VS Code. Hit Cmd+Shift+V for a rendered preview"
+    echo "(webp demos will animate in the markdown preview pane)."
+  else
+    echo "Tip: install the VS Code 'code' CLI (Cmd+Shift+P → Shell Command:"
+    echo "Install 'code' command in PATH) so future dry-runs open the"
+    echo "preview automatically."
+  fi
+
+  echo "──────────────────────────────────────────────────────────────"
+  echo ""
+  # Terminal fallback: always print the section so CI or logs catch it.
+  cat "$SECTION_FILE"
+}
+
 draft_notes() {
   need_cmd claude
 
@@ -870,7 +1001,7 @@ draft_notes() {
   render_markdown_section
 
   if [[ "$DRY_RUN" -eq 1 ]]; then
-    cat "$SECTION_FILE"
+    build_dry_run_preview
     return
   fi
 

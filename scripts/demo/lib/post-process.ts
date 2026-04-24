@@ -205,7 +205,30 @@ export async function runPostProcess(opts: PostProcessOpts): Promise<void> {
     // RGB=255 (full white) in the final RGBA output. Without this, the
     // caption text peaked at ~233 in some captures — just below the
     // threshold where it reads as solid white against the pill.
-    `[framed]scale=960:540:flags=lanczos:in_range=tv:out_range=pc,format=rgba[final]`,
+    `[framed]scale=960:540:flags=lanczos:in_range=tv:out_range=pc,format=rgba[framed_small]`,
+
+    // Synthetic drop shadow around the rounded window. Macos `screencapture
+    // -o` produces native window shadows for stills, but we capture via
+    // `screencapture -v` (animated) which does not. We replicate the effect
+    // here so every demo ships with the same depth-cue the README hero
+    // shot gets.
+    //
+    // Pipeline:
+    //   ① pad the 960×540 rounded frame into a 1040×620 canvas with a
+    //     40 px transparent margin on every side — the margin is the
+    //     real-estate the blurred shadow paints into
+    //   ② split the padded stream so we can feed the same pixels to the
+    //     shadow render AND to the final overlay composite
+    //   ③ build the shadow: replace RGB with black, scale alpha to 0.55
+    //     (shadow opacity), then gaussian-blur with sigma 18 so the
+    //     silhouette diffuses softly outward
+    //   ④ overlay the original padded frame on top of the shadow, 4 px
+    //     lower — the small downward offset mimics a top-left light
+    //     source and reads as "drop shadow" rather than "glow"
+    `[framed_small]pad=iw+80:ih+80:40:40:color=black@0[padded]`,
+    `[padded]split=2[shadow_src][top]`,
+    `[shadow_src]format=rgba,geq=r=0:g=0:b=0:a='alpha(X,Y)*0.55',gblur=sigma=18:steps=3[shadow]`,
+    `[shadow][top]overlay=0:4:format=auto[final]`,
   ].join(';');
 
   // Order MUST match the input indices used in the filter graph:

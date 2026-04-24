@@ -943,9 +943,22 @@ build_dry_run_preview() {
   # WORK_DIR trap cleanup. VS Code opens it via `code -r`; if we wrote
   # into WORK_DIR, the file would be rm -rf'd the moment .publish exits,
   # leaving `code` pointing at a deleted path.
+  # Write to a repo-local path (gitignored) so the file survives the
+  # WORK_DIR trap cleanup. VS Code opens it via `code -r`; if we wrote
+  # into WORK_DIR, the file would be rm -rf'd the moment .publish exits,
+  # leaving `code` pointing at a deleted path.
   local preview="$ROOT_DIR/.release-preview.md"
+
+  # The committed CHANGELOG section uses
+  # `https://raw.githubusercontent.com/.../v<version>/media/demos/...`
+  # URLs so old entries keep pointing at the webp that shipped with
+  # THAT tag. But the tag doesn't exist yet during a dry-run — so the
+  # URLs 404 and the preview shows broken <img> icons. Swap them for
+  # repo-relative paths (media/demos/<file>.webp) before writing into
+  # the preview: VS Code's markdown preview renders repo-relative
+  # images just fine, so the maintainer sees the actual animated webp.
   local section_md
-  section_md="$(cat "$SECTION_FILE")"
+  section_md="$(sed -E "s|https://raw\\.githubusercontent\\.com/elumine-dev/kotlin-jump/v${VERSION}/media/demos/([A-Za-z0-9._-]+)|media/demos/\\1|g" "$SECTION_FILE")"
 
   local whats_new_pretty="(no whats-new preview was generated)"
   if [[ -n "${WHATS_NEW_FOR_SECTION:-}" && -f "$WHATS_NEW_FOR_SECTION" ]]; then
@@ -991,8 +1004,25 @@ PREVIEW
     # Open the file. VS Code's CLI accepts -r to reuse the window so the
     # preview lands in the user's current session instead of a fresh one.
     code -r "$preview" >/dev/null 2>&1 || code "$preview" >/dev/null 2>&1 || true
-    echo "Opened in VS Code. Hit Cmd+Shift+V for a rendered preview"
-    echo "(webp demos will animate in the markdown preview pane)."
+    echo "Opened preview in VS Code — hit Cmd+Shift+V for the markdown render."
+    echo ""
+
+    # The markdown preview is useful but not the same visual the shipped
+    # extension gives users. For that, launch a dev host against the
+    # current source and auto-fire the What's New command via the
+    # KJ_OPEN_WHATS_NEW env hook (see src/extension.ts).
+    echo "Launching a dev host to preview the real What's New webview —"
+    echo "  this is exactly what users see after an update. Close the new"
+    echo "  VS Code window when you're done."
+    # Build so dist/extension.js reflects the current source.
+    (cd "$ROOT_DIR" && node esbuild.js >/dev/null 2>&1) || true
+    # --disable-extensions so the installed Marketplace copy does NOT
+    # win over the dev-path one; --user-data-dir keeps this invocation
+    # isolated from the user's regular profile.
+    KJ_OPEN_WHATS_NEW=1 code --disable-extensions \
+      --extensionDevelopmentPath="$ROOT_DIR" \
+      --user-data-dir="/tmp/kj-publish-whatsnew" \
+      "$ROOT_DIR/test/kotlin-jump-demo" >/dev/null 2>&1 &
   else
     echo "Tip: install the VS Code 'code' CLI (Cmd+Shift+P → Shell Command:"
     echo "Install 'code' command in PATH) so future dry-runs open the"

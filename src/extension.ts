@@ -110,6 +110,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   }
   void context.globalState.update('lastSeenVersion', version);
 
+  // Release-time preview hook: when `.publish --dry-run` launches a dev
+  // host with KJ_OPEN_WHATS_NEW=1, auto-open the What's New panel so the
+  // maintainer sees the exact UX users will get — without clicking
+  // through the command palette. No-op in every other context.
+  if (process.env.KJ_OPEN_WHATS_NEW === '1') {
+    setTimeout(() => { void WhatsNewPanel.show(context); }, 400);
+  }
+
   const index = new SymbolIndex();
   _index = index;
 

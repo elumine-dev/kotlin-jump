@@ -497,11 +497,17 @@ describe('DEMO-SMP-1 — CoroutinesDemo.kt : ⚡ sur les call sites suspend', ()
     }
   });
 
-  it('✓ ⚡ label présent sur tous les hints', () => {
+  it('✓ label valide (⚡ ou dispatcher badge) sur tous les hints', () => {
+    // Post v1.16: SuspendMarkerProvider also emits dispatcher badges
+    // (🧵 IO / 🖥 Main / ⚙ Default / 🔀 Unconfined) on coroutine builders
+    // that pass `Dispatchers.X` directly. CoroutinesDemo.kt exercises both
+    // the plain ⚡ marker and the dispatcher badges, so this test accepts
+    // either as valid output.
     const hints = hintsForFile();
     expect(hints.length).toBeGreaterThan(0);
+    const validLabels = new Set(['⚡', '🧵 IO', '🖥 Main', '⚙ Default', '🔀 Unconfined']);
     for (const h of hints) {
-      expect(h.label).toBe('⚡');
+      expect(validLabels.has(String(h.label)), `unexpected label: ${String(h.label)}`).toBe(true);
     }
   });
 

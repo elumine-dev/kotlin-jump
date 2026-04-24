@@ -45,6 +45,7 @@ import { registerChatParticipant } from './ai/KotlinJumpChatParticipant';
 import { StringResourceIndex } from './indexer/StringResourceIndex';
 import { StringResourceFoldingProvider } from './providers/StringResourceFoldingProvider';
 import { StringResourceHoverProvider } from './providers/StringResourceHoverProvider';
+import { SuppressHoverProvider } from './providers/SuppressHoverProvider';
 import { StringResourceDefinitionProvider } from './providers/StringResourceDefinitionProvider';
 import { StringXmlDefinitionProvider } from './providers/StringXmlDefinitionProvider';
 import { ColorXmlDefinitionProvider } from './providers/ColorXmlDefinitionProvider';
@@ -163,6 +164,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (!enabled) return { dispose: () => {} };
       return vscode.languages.registerHoverProvider(KT_JAVA, new KotlinHoverProvider(index));
     })(),
+    // @Suppress / @SuppressLint / @SuppressWarnings hover — independent of
+    // the symbol-based hover above (runs on string literals, not
+    // identifiers), so we register it unconditionally so users see the
+    // descriptions even when hoverEnabled is turned off for the symbol
+    // hover.
+    ...(!isCompanion ? [vscode.languages.registerHoverProvider(KT_JAVA, new SuppressHoverProvider())] : []),
     vscode.languages.registerReferenceProvider(KT_JAVA, new KotlinReferenceProvider(index, log)),
     vscode.languages.registerImplementationProvider(KT_JAVA, new KotlinImplementationProvider(index)),
     vscode.languages.registerTypeHierarchyProvider(KT_JAVA, new KotlinTypeHierarchyProvider(index)),

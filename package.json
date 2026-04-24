@@ -117,6 +117,30 @@
         "key": "ctrl+r",
         "mac": "cmd+r",
         "when": "editorTextFocus && (editorLangId == kotlin || editorLangId == java)"
+      },
+      {
+        "command": "kotlinJump.navigateBack",
+        "key": "ctrl+alt+left",
+        "mac": "cmd+alt+left",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "kotlinJump.navigateForward",
+        "key": "ctrl+alt+right",
+        "mac": "cmd+alt+right",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "kotlinJump.toggleAllInlineFeatures",
+        "key": "shift+alt+i",
+        "mac": "shift+alt+i",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "kotlin-jump.copyFqn",
+        "key": "shift+alt+c",
+        "mac": "shift+alt+c",
+        "when": "editorTextFocus && (editorLangId == kotlin || editorLangId == java)"
       }
     ],
     "commands": [
@@ -1084,6 +1108,7 @@
     "release:notes": "./.publish --notes-only",
     "release:prepare": "./.publish",
     "test": "vitest run",
+    "validate:whats-new": "node .github/scripts/validate-whats-new.mjs",
     "test:watch": "vitest",
     "pretest:integration": "npm run compile",
     "test:integration": "vscode-test",

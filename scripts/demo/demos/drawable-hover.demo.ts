@@ -6,29 +6,12 @@ import { Stage } from '../lib/stage';
 export const estimatedDurationMs = 10_600;
 
 /**
- * Demo: R.drawable.xxx — rich hover preview + gutter thumbnails.
+ * R.drawable hover preview + gutter thumbnails.
  *
- * Two user-facing features live in one scene:
+ * Every `R.drawable.xxx` reference paints a miniature in the gutter;
+ * hovering the name pops a 128-px SVG preview with path and variants.
  *
- *   1. **Gutter thumbnail** — every `R.drawable.xxx` reference paints
- *      a tiny rendering of the asset in the editor gutter. Scanning
- *      a file becomes spatial instead of textual; your eye sees which
- *      icon goes where without reading a single name.
- *
- *   2. **Rich hover** — hovering the drawable name pops a tooltip
- *      with a 128-px SVG render, the full res-qualifier path, and
- *      a list of every density / -night / -v24 variant that ships
- *      alongside the default one.
- *
- * Fixture: `DrawableResourceDemo.kt` references five vector XMLs:
- * `ic_pokeball`, `ic_type_fire`, `ic_type_water`, `ic_type_grass`,
- * `ic_type_electric`. Enough variety that the viewer can see the
- * gutter column populate with distinct thumbnails, then watch the
- * hover pop a full-size preview per drawable.
- *
- * ~10 s (budget aligned with suppress-hover 13 s / code-lens 10 s —
- * the repo norm for hover-style demos). Three beats + closer is the
- * maximum density before the viewer's eye gives up on the captions.
+ * ~10 s.
  */
 export default async function record(stage: Stage): Promise<void> {
   await stage.waitForIndexReady();

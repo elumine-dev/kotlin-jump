@@ -63,6 +63,9 @@ import { ColorResourceIndex } from './indexer/ColorResourceIndex';
 import { DimenResourceIndex } from './indexer/DimenResourceIndex';
 import { DimenResourceDefinitionProvider } from './providers/DimenResourceDefinitionProvider';
 import { DimenXmlDefinitionProvider } from './providers/DimenXmlDefinitionProvider';
+import { DrawableResourceIndex } from './indexer/DrawableResourceIndex';
+import { DrawableHoverProvider } from './providers/DrawableHoverProvider';
+import { DrawableGutterThumbnailProvider } from './providers/DrawableGutterThumbnailProvider';
 import { VersionCatalogIndex } from './indexer/VersionCatalogIndex';
 import { ColorFoldingProvider } from './providers/ColorFoldingProvider';
 import { ColorResourceDefinitionProvider } from './providers/ColorResourceDefinitionProvider';
@@ -840,6 +843,39 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         new DimenXmlDefinitionProvider(rIndex),
       ),
       dW1, dW2,
+    );
+  })();
+
+  // ── R.drawable / R.mipmap — rich hover + gutter thumbnail ──────────────────
+  (() => {
+    const drawableIndex = new DrawableResourceIndex();
+
+    const dwW1 = vscode.workspace.createFileSystemWatcher('**/res/drawable*/*');
+    const dwW2 = vscode.workspace.createFileSystemWatcher('**/res/mipmap*/*');
+    const gutter = new DrawableGutterThumbnailProvider(drawableIndex, context.globalStorageUri);
+
+    // Initial scan. No refresh-wiring needed here — the index fires
+    // `onDidChange` whenever addFile/removeFile mutates it, and the
+    // gutter provider's constructor subscribed to it. Late arrivals
+    // from this async Promise therefore trigger their own repaint.
+    vscode.workspace.findFiles(
+      '**/res/{drawable,mipmap}*/*.{xml,png,webp,svg,jpg,jpeg,gif,bmp}',
+      `{${excludeList.join(',')}}`,
+    ).then(uris => { for (const u of uris) drawableIndex.addFile(u); });
+
+    for (const w of [dwW1, dwW2]) {
+      w.onDidCreate(uri => drawableIndex.addFile(uri));
+      w.onDidChange(uri => { drawableIndex.addFile(uri); gutter.invalidatePath(uri); });
+      w.onDidDelete(uri => { drawableIndex.removeFile(uri); gutter.invalidatePath(uri); });
+    }
+
+    context.subscriptions.push(
+      vscode.languages.registerHoverProvider(
+        [{ language: 'kotlin' }, { language: 'java' }],
+        new DrawableHoverProvider(drawableIndex),
+      ),
+      gutter,
+      dwW1, dwW2,
     );
   })();
 

@@ -31,6 +31,13 @@ jobs:
       - name: Build (dev) for tests
         run: node esbuild.js
 
+      # Validate the user-visible release notes (media/whats-new.json)
+      # early, before tests even run. This catches broken media
+      # references, oversized fields, LLM leak patterns, and version
+      # drift so a regression cannot sneak through CI.
+      - name: Validate whats-new.json
+        run: node .github/scripts/validate-whats-new.mjs
+
       - name: Test
         run: npm test
 

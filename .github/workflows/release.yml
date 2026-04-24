@@ -65,6 +65,13 @@ jobs:
       - name: Build (dev) for tests
         run: node esbuild.js
 
+      # Gate: the tagged release's whats-new.json must match the tag's
+      # version AND pass every validation rule. If anything fails, the
+      # workflow aborts before publishing — users never see a broken
+      # "What's New" panel for this release.
+      - name: Validate whats-new.json
+        run: node .github/scripts/validate-whats-new.mjs --version "${GITHUB_REF#refs/tags/v}"
+
       - name: Test
         run: npm test
 

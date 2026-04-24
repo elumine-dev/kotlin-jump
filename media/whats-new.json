@@ -1,31 +1,45 @@
 {
-  "version": "1.15.0",
+  "version": "1.16.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Clearer marketplace presentation",
-  "summary": "Adds a visual at-a-glance infographic to the marketplace listing; no changes to extension commands, settings, or navigation behavior.",
+  "tagline": "Coroutine clarity, readable @Suppress, full-column nav history",
+  "summary": "Three changes: coroutine builders now carry dispatcher badges (🧵 IO · 🖥 Main · ⚙ Default), every @Suppress / @SuppressLint / @SuppressWarnings ID explains itself on hover, and Cmd+Alt+←/→ finally restores the exact column across navigation jumps — in every language, not just Kotlin/Java.",
   "highlights": [
     {
-      "title": "At-a-Glance Infographic",
-      "description": "A new visual overview was added to the README and marketplace listing, making it easier to evaluate the extension's capabilities before installing.",
-      "kind": "improvement"
+      "title": "Dispatcher badges on coroutine builders",
+      "description": "Any withContext(Dispatchers.X), launch(Dispatchers.X), async(Dispatchers.X), or flowOn(Dispatchers.X) now shows an inline badge — 🧵 IO, 🖥 Main, ⚙ Default, or 🔀 Unconfined — so you see which thread the block runs on without scrolling up. The ⚡ suspend marker still appears on every suspend call.",
+      "kind": "feature",
+      "media": "suspend-call-marker.webp",
+      "mediaAlt": "Suspend call markers with dispatcher badges inline"
     },
     {
-      "title": "No Behavior Changes",
-      "description": "All navigation commands, settings, and editor features remain identical to v1.14.1.",
-      "kind": "note"
+      "title": "@Suppress / @SuppressLint explained on hover",
+      "description": "Hover any ID inside @Suppress(\"UNCHECKED_CAST\") or @SuppressLint(\"MissingPermission\") to see a plain-English description of what the warning means, its category, and a link to the official docs. Ships with ~40 of the most common Kotlin, Android Lint, and javac suppression IDs. Multi-argument annotations work too — every ID is independently hoverable.",
+      "kind": "feature",
+      "media": "suppress-hover.webp",
+      "mediaAlt": "Hover tooltip showing a plain-English explanation of a suppression ID"
+    },
+    {
+      "title": "Cmd+Alt+←/→ now restores the exact column, everywhere",
+      "description": "The README has advertised Cmd+Alt+←/→ as navigation history since day one, but the shortcut was never bound — users hit VS Code's native navigateBack, which only restores files, not the column. v1.16.0 ships the binding. Works in every editor, every language, every file type — not just Kotlin/Java. Your exact cursor position (line AND column) is now preserved across every jump.",
+      "kind": "feature"
     }
   ],
   "sections": [
     {
-      "heading": "Improvements",
+      "heading": "New features",
       "bullets": [
-        "Added a visual infographic to the marketplace README to give users an at-a-glance overview of the extension's features before installing."
+        "Dispatcher badges on withContext / launch / async / flowOn / produce / actor when they receive Dispatchers.IO / .Main / .Main.immediate / .Default / .Unconfined as a direct argument. Inline hints are synchronous and regex-based — no dataflow — so assigning a dispatcher to a variable first still renders as a plain call.",
+        "Hover on any ID inside @Suppress(...), @SuppressLint(...), or @SuppressWarnings(...) shows a short description, the category (Kotlin / Android Lint / javac), and a doc link. Unknown IDs stay silent rather than noisy.",
+        "Cmd+Alt+← / Cmd+Alt+→ (Ctrl+Alt on Windows/Linux) are now bound to Kotlin Jump's column-restoring navigation history in every editor. VS Code's native navigateBack only restores the file — the new binding restores line AND column across jumps. The binding is only active when an editor has focus, so terminals, sidebars, and the command palette keep their native behavior.",
+        "Shift+Alt+I toggles every inline annotation Kotlin Jump ships — string-resource folding, color swatches, const-val folding, !! highlights, hex swatches — in one keystroke. Useful for screenshots, pair programming, or catching a regression behind the overlay.",
+        "Shift+Alt+C copies the fully-qualified name of the symbol under the cursor in Kotlin and Java files. Pastes `com.example.pkg.Class.method` straight into a ticket, chat, or search."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "No changes to extension commands, settings, navigation, or any other user-facing behavior since v1.14.1."
+        "The README previously advertised dispatcher badges and the Cmd+Alt+←/→ shortcut as already existing; v1.16.0 finally makes both features match the documentation. If you were confused by their absence in earlier releases, this release closes the gap.",
+        "The dispatcher badges and @Suppress hover are lightweight — pure regex plus a static dictionary. No new workers, no new indexes, no measurable cost at scan time."
       ]
     }
   ],

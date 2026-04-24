@@ -1,0 +1,26 @@
+[
+  {
+    "type": "caption",
+    "label": "Every `@Suppress` silences a specific warning. Remember what?",
+    "duration": 2600,
+    "t": 300
+  },
+  {
+    "type": "caption",
+    "label": "Hover the ID. Plain-English description + doc link.",
+    "duration": 2600,
+    "t": 2902
+  },
+  {
+    "type": "caption",
+    "label": "Multi-arg? Every ID is hoverable on its own.",
+    "duration": 2400,
+    "t": 7811
+  },
+  {
+    "type": "caption",
+    "label": "Works for Kotlin, Android Lint, and `@SuppressWarnings` too.",
+    "duration": 2600,
+    "t": 10211
+  }
+]

@@ -1267,33 +1267,44 @@ watch_ci_after_push() {
     return 0
   fi
 
-  # Wait for each run to finish. --exit-status makes `gh run watch`
-  # return non-zero on failure, which we capture per-run rather than
-  # propagating out — we want to REPORT all outcomes, not bail on
-  # the first failure.
-  local overall_ok=1
-  local -a failed_runs=()
+  # Wait for each run to reach a terminal state. We intentionally don't
+  # use `--exit-status` here — it can return non-zero in edge cases even
+  # for already-successful runs (e.g. race where the run finishes between
+  # enumeration and watch start). Instead we re-read the conclusion from
+  # `gh run list` after all runs settle, which is the authoritative field.
   while read -r rid; do
     [[ -z "$rid" ]] && continue
-    if gh run watch "$rid" --exit-status --interval 5 >/dev/null 2>&1; then
-      :
-    else
-      overall_ok=0
-      failed_runs+=("$rid")
-    fi
+    gh run watch "$rid" --interval 5 >/dev/null 2>&1 || true
   done <<< "$run_ids"
+
+  # Authoritative pass/fail evaluation: read conclusion per run.
+  local status_table
+  status_table="$(gh run list --limit 10 --json databaseId,headSha,name,status,conclusion,displayTitle \
+    --jq ".[] | select(.headSha == \"$head_sha\") | \"\(.conclusion // .status)\t\(.name)\t\(.displayTitle)\"")"
+
+  local overall_ok=1
+  local -a failed_runs=()
+  while IFS=$'\t' read -r conclusion name title; do
+    [[ -z "$conclusion" ]] && continue
+    if [[ "$conclusion" != "success" ]]; then
+      overall_ok=0
+      local fail_rid
+      fail_rid="$(gh run list --limit 10 --json databaseId,headSha,name \
+        --jq ".[] | select(.headSha == \"$head_sha\" and .name == \"$name\") | .databaseId" \
+        | head -1)"
+      [[ -n "$fail_rid" ]] && failed_runs+=("$fail_rid")
+    fi
+  done <<< "$status_table"
 
   # Print a clean pass/fail table for the workflows on this push.
   echo ""
   echo "──────────────────────────────────────────────────────────────"
   echo "CI status for v$VERSION push (HEAD $head_sha):"
   echo "──────────────────────────────────────────────────────────────"
-  gh run list --limit 10 --json databaseId,headSha,name,status,conclusion,displayTitle \
-    --jq ".[] | select(.headSha == \"$head_sha\") | \"\(.conclusion // .status)\t\(.name)\t\(.displayTitle)\"" \
-    | awk -F'\t' '{
-        ok  = ($1 == "success") ? "✅" : "❌"
-        printf "  %s %-10s %s\n", ok, $2, $3
-      }'
+  echo "$status_table" | awk -F'\t' '{
+      ok  = ($1 == "success") ? "✅" : "❌"
+      printf "  %s %-10s %s\n", ok, $2, $3
+    }'
   echo "──────────────────────────────────────────────────────────────"
 
   if [[ $overall_ok -eq 1 ]]; then

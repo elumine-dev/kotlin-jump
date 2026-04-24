@@ -21,6 +21,7 @@ media/walkthrough/
 # render the embedded demo webps animated. Overwritten on every dry-run;
 # no value in versioning it.
 .release-preview.md
+.release-preview.whats-new.json
 
 # IntelliJ project files (kotlin-jump-demo fixture)
 *.iml

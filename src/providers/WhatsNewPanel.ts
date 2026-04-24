@@ -98,11 +98,15 @@ export class WhatsNewPanel {
     context: vscode.ExtensionContext
   ): Promise<WhatsNewData | undefined> {
     try {
-      const uri = vscode.Uri.joinPath(
-        context.extensionUri,
-        'media',
-        'whats-new.json'
-      );
+      // Dry-run preview override: `./.publish --dry-run` writes the
+      // freshly-drafted whats-new JSON to a temp path and exports
+      // KJ_WHATS_NEW_JSON so the dev host reads THAT instead of the
+      // shipped file. Without this, the preview webview would show the
+      // previous release's content.
+      const overridePath = process.env.KJ_WHATS_NEW_JSON;
+      const uri = overridePath
+        ? vscode.Uri.file(overridePath)
+        : vscode.Uri.joinPath(context.extensionUri, 'media', 'whats-new.json');
       const raw = await vscode.workspace.fs.readFile(uri);
       const data = JSON.parse(Buffer.from(raw).toString('utf8')) as WhatsNewData;
 

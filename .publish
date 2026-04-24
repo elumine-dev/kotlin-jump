@@ -1020,7 +1020,20 @@ PREVIEW
     # --disable-extensions so the installed Marketplace copy does NOT
     # win over the dev-path one; --user-data-dir keeps this invocation
     # isolated from the user's regular profile.
-    KJ_OPEN_WHATS_NEW=1 code --disable-extensions \
+    #
+    # The webview reads `media/whats-new.json` by default, but during a
+    # dry-run that file is still the LAST release's content. Copy the
+    # freshly-drafted preview to a stable repo-local path (survives the
+    # WORK_DIR trap cleanup) and point the extension at it via
+    # KJ_WHATS_NEW_JSON — WhatsNewPanel.readData honours that override.
+    local whats_new_override="$ROOT_DIR/.release-preview.whats-new.json"
+    if [[ -n "${WHATS_NEW_FOR_SECTION:-}" && -f "$WHATS_NEW_FOR_SECTION" ]]; then
+      cp "$WHATS_NEW_FOR_SECTION" "$whats_new_override"
+    else
+      rm -f "$whats_new_override"
+    fi
+    KJ_OPEN_WHATS_NEW=1 KJ_WHATS_NEW_JSON="$whats_new_override" \
+      code --disable-extensions \
       --extensionDevelopmentPath="$ROOT_DIR" \
       --user-data-dir="/tmp/kj-publish-whatsnew" \
       "$ROOT_DIR/test/kotlin-jump-demo" >/dev/null 2>&1 &

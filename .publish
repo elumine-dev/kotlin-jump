@@ -682,14 +682,24 @@ const data = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
 // fields onto the new highlight. Lets a maintainer hand-wire a demo
 // webp once and have it stick across re-drafts.
 //
-// Matching is FUZZY on title + description tokens (Jaccard ≥ 0.4).
-// Exact-title matching is too brittle: Claude often re-phrases titles
-// across releases ("Dispatcher badges on coroutine builders" →
-// "Dispatcher badges on suspend call markers") and exact-match would
-// silently drop the hand-wired webp. Threshold 0.4 clears typical
-// same-feature rephrasings (observed 0.5–0.8) and rejects
-// unrelated-highlight collisions (observed ≤ 0.15).
-const FUZZY_MERGE_THRESHOLD = 0.4;
+// Matching uses a two-stage fuzzy match tuned on real release data.
+// Exact title is too brittle: Claude rephrases across releases
+// ("Dispatcher badges on coroutine builders" → "Suspend call markers
+// now include dispatcher badges"). Combined title+description Jaccard
+// is too noisy: long descriptions dilute strong title signal below any
+// sensible threshold.
+//
+// So we check in order:
+//   1. exact title match (fast-path, same-release re-run)
+//   2. title-only Jaccard ≥ 0.5 (strong signal — nouns line up)
+//   3. title+description Jaccard ≥ 0.25 (catches cases where title
+//      was nearly rewritten but the description still describes the
+//      same feature)
+//
+// Every fuzzy decision is logged to stderr so a bad match is visible
+// at release time, not silently applied.
+const TITLE_ONLY_THRESHOLD  = 0.5;
+const TITLE_DESC_THRESHOLD  = 0.25;
 const MERGE_STOPWORDS = new Set([
   'the', 'and', 'for', 'with', 'from', 'that', 'this', 'new', 'into',
   'your', 'out', 'get', 'has', 'have', 'via', 'but', 'now', 'any',
@@ -713,8 +723,9 @@ try {
   for (const h of (prior.highlights || [])) {
     if (!h || typeof h.title !== 'string') continue;
     priorList.push({
-      data:   h,
-      tokens: new Set([...mergeTokens(h.title), ...mergeTokens(h.description || '')]),
+      data:        h,
+      titleTokens: mergeTokens(h.title),
+      fullTokens:  new Set([...mergeTokens(h.title), ...mergeTokens(h.description || '')]),
     });
   }
 } catch {
@@ -722,26 +733,46 @@ try {
 }
 
 function findPriorForMerge(newH) {
-  // Exact title wins (cheap, obvious). Otherwise fuzzy-match on tokens.
+  // Stage 1: exact title match.
   const exact = priorList.find(p => p.data.title === newH.title);
   if (exact) return exact.data;
-  const newTokens = new Set([
-    ...mergeTokens(newH.title),
+
+  const newTitleTokens = mergeTokens(newH.title);
+  const newFullTokens  = new Set([
+    ...newTitleTokens,
     ...mergeTokens(newH.description || ''),
   ]);
+
+  // Stage 2: strong title-only match.
   let best = null;
   for (const p of priorList) {
-    const score = mergeJaccard(newTokens, p.tokens);
-    if (score >= FUZZY_MERGE_THRESHOLD && (!best || score > best.score)) {
-      best = { data: p.data, score };
+    const score = mergeJaccard(newTitleTokens, p.titleTokens);
+    if (score >= TITLE_ONLY_THRESHOLD && (!best || score > best.score)) {
+      best = { data: p.data, score, kind: 'title' };
     }
   }
   if (best) {
     process.stderr.write(
-      `[whats-new] merge-preserve fuzzy match: "${newH.title}" ↔ "${best.data.title}" (jaccard=${best.score.toFixed(2)})\n`,
+      `[whats-new] merge-preserve title match: "${newH.title}" ↔ "${best.data.title}" (jaccard=${best.score.toFixed(2)})\n`,
     );
+    return best.data;
   }
-  return best ? best.data : null;
+
+  // Stage 3: softer title+description match.
+  for (const p of priorList) {
+    const score = mergeJaccard(newFullTokens, p.fullTokens);
+    if (score >= TITLE_DESC_THRESHOLD && (!best || score > best.score)) {
+      best = { data: p.data, score, kind: 'full' };
+    }
+  }
+  if (best) {
+    process.stderr.write(
+      `[whats-new] merge-preserve full-text match: "${newH.title}" ↔ "${best.data.title}" (jaccard=${best.score.toFixed(2)})\n`,
+    );
+    return best.data;
+  }
+
+  return null;
 }
 
 const mergedHighlights = (data.highlights || []).slice(0, 3).map(h => {
@@ -908,7 +939,11 @@ build_dry_run_preview() {
   #   4. Always print the terminal output too (tail-friendly when
   #      piping or logging).
 
-  local preview="$WORK_DIR/release-preview.md"
+  # Write to a repo-local path (gitignored) so the file survives the
+  # WORK_DIR trap cleanup. VS Code opens it via `code -r`; if we wrote
+  # into WORK_DIR, the file would be rm -rf'd the moment .publish exits,
+  # leaving `code` pointing at a deleted path.
+  local preview="$ROOT_DIR/.release-preview.md"
   local section_md
   section_md="$(cat "$SECTION_FILE")"
 
@@ -952,7 +987,7 @@ PREVIEW
   echo "  $preview"
   echo ""
 
-  if have_cmd code; then
+  if command -v code >/dev/null 2>&1; then
     # Open the file. VS Code's CLI accepts -r to reuse the window so the
     # preview lands in the user's current session instead of a fresh one.
     code -r "$preview" >/dev/null 2>&1 || code "$preview" >/dev/null 2>&1 || true

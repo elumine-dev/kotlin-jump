@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.17.1
+
+Fixes local-scope handling across six providers, adds a declaration-to-usages jump, corrects code lens behavior, and improves const-val folding performance.
+
+### Improvements
+- Const-val folding decorations are now cached by document version and lookups are memoized, eliminating scroll lag on large files.
+- Local scope resolution now checks function parameters and block-level bindings before falling back to the workspace index, improving definition accuracy throughout.
+
+### Fixes
+- Rename and hover providers now recognize local variables and parameters, preventing workspace-wide symbol rewrites when renaming a local and showing accurate hover information.
+- Go to Definition on a plain string literal or comment text no longer returns a spurious result.
+- Named-argument left-hand sides (e.g., `name =` in a function call) now resolve to the correct parameter declaration.
+- Navigation history Back command preserves the cursor column; Forward remains available after navigating across files.
+- The const-val folding provider no longer folds the identifier on the declaration line of a val or var.
+
 ## 1.17.0
 
 1.17.0 adds drawable resource previews — hover over any R.drawable reference to see a rendered thumbnail tooltip, and VectorDrawable XML is converted to SVG so both raster and vector assets display correctly.

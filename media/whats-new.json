@@ -1,41 +1,41 @@
 {
-  "version": "1.17.0",
+  "version": "1.17.1",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Drawable thumbnails, hover and gutter",
-  "summary": "1.17.0 adds drawable resource previews — hover over any R.drawable reference to see a rendered thumbnail tooltip, and VectorDrawable XML is converted to SVG so both raster and vector assets display correctly.",
+  "tagline": "Local scope correctness across the board",
+  "summary": "Fixes local-scope handling across six providers, adds a declaration-to-usages jump, corrects code lens behavior, and improves const-val folding performance.",
   "highlights": [
     {
-      "title": "Drawable Hover Previews",
-      "kind": "feature",
-      "description": "Hovering over a drawable resource reference now renders a thumbnail directly in the editor tooltip, so you can confirm the right asset without leaving the code."
+      "title": "Local Scope Correctness",
+      "description": "Rename, hover, references, and definitions now distinguish local variables and parameters from workspace-wide symbols — preventing accidental project-wide rewrites when renaming a local and eliminating wrong hover information.",
+      "kind": "fix"
     },
     {
-      "title": "Gutter Drawable Thumbnails",
-      "kind": "feature",
-      "description": "Lines that reference drawable resources display a small rendered thumbnail in the editor gutter, giving an at-a-glance visual of every referenced image or icon.",
-      "media": "drawable-hover.webp",
-      "mediaAlt": "Gutter Drawable Thumbnails"
+      "title": "Declaration-to-Usages Jump",
+      "description": "Triggering Go to Definition on a local val, var, parameter, for-loop variable, or lambda binding now navigates directly to its usage(s) rather than returning no result.",
+      "kind": "feature"
     },
     {
-      "title": "VectorDrawable SVG Rendering",
-      "kind": "feature",
-      "description": "VectorDrawable XML files are automatically converted to SVG on the fly, so vector assets render accurately in both hover tooltips and gutter thumbnails without any extra tooling."
+      "title": "Code Lens Reliability",
+      "description": "Usage counts now appear on interface and abstract method lenses (matching IntelliJ behavior), the smartNavigation setting is respected on single-result clicks, and smart-nav off correctly opens Peek References.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Features",
+      "heading": "Fixes",
       "bullets": [
-        "Added drawable resource indexing that tracks all res/drawable entries across density qualifiers and reacts to file changes in real time.",
-        "Added a hover provider for R.drawable references that renders a thumbnail preview — VectorDrawable XML files are converted to SVG inline, so no external renderer is needed.",
-        "Added gutter thumbnail decorations alongside any line that references a drawable resource, giving a persistent visual cue without opening the asset file."
+        "Rename and hover providers now recognize local variables and parameters, preventing workspace-wide symbol rewrites when renaming a local and showing accurate hover information.",
+        "Go to Definition on a plain string literal or comment text no longer returns a spurious result.",
+        "Named-argument left-hand sides (e.g., `name =` in a function call) now resolve to the correct parameter declaration.",
+        "Navigation history Back command preserves the cursor column; Forward remains available after navigating across files.",
+        "The const-val folding provider no longer folds the identifier on the declaration line of a val or var."
       ]
     },
     {
-      "heading": "Fixes",
+      "heading": "Improvements",
       "bullets": [
-        "Fixed the What's New panel opening two VS Code windows instead of one when previewing release notes.",
-        "Fixed the What's New panel loading stale content; the webview now reads the current release JSON on every open."
+        "Const-val folding decorations are now cached by document version and lookups are memoized, eliminating scroll lag on large files.",
+        "Local scope resolution now checks function parameters and block-level bindings before falling back to the workspace index, improving definition accuracy throughout."
       ]
     }
   ],

@@ -235,6 +235,97 @@ fun process(xs: List<Int>) {
   });
 });
 
+// ── Smart-nav: cursor on a declaration jumps to usages ──────────────────────
+
+describe('local-scope-defn — cursor on declaration → jump to usage(s)', () => {
+  it('Cmd+Click on `name` declaration in `for (name in names)` → jumps to the single usage', async () => {
+    const code = `package com.example.compose
+
+@Composable
+fun PokemonCard(name: String, level: Int) { }
+
+@Composable
+fun PokemonList(names: List<String>) {
+    for (name in names) {
+        PokemonCard(name = name, level = 50)
+    }
+}`;
+    const idx = new SymbolIndex();
+    addFile(idx, 'file:///src/Pokemon.kt', code);
+    const provider = new KotlinDefinitionProvider(idx);
+    const doc = mockDocument('file:///src/Pokemon.kt', code);
+    const lines = code.split('\n');
+    // Line 7 is `    for (name in names) {`. Click on the binding `name`.
+    const declLine = 7;
+    const declCol  = lines[declLine].indexOf('name');
+    const result = await provider.provideDefinition(doc, new Position(declLine, declCol + 1));
+    const loc = (Array.isArray(result) ? result[0] : result) as Location;
+    expect(loc).toBeDefined();
+    // Single usage is on line 8: `        PokemonCard(name = name, level = 50)`
+    // The RHS `name` (second occurrence on that line).
+    expect(loc.range.start.line).toBe(8);
+    const usageCol = lines[8].indexOf('name', lines[8].indexOf('name') + 1);
+    expect(loc.range.start.character).toBe(usageCol);
+  });
+
+  it('Cmd+Click on a function parameter declaration → jumps to its single usage', async () => {
+    const code = `package com.example
+fun greet(target: String) {
+    println("Hello, $target!")
+}`;
+    const idx = new SymbolIndex();
+    addFile(idx, 'file:///src/Greet.kt', code);
+    const provider = new KotlinDefinitionProvider(idx);
+    const doc = mockDocument('file:///src/Greet.kt', code);
+    const lines = code.split('\n');
+    const declLine = 1;
+    const declCol  = lines[declLine].indexOf('target');
+    const result = await provider.provideDefinition(doc, new Position(declLine, declCol + 1));
+    const loc = (Array.isArray(result) ? result[0] : result) as Location;
+    expect(loc).toBeDefined();
+    expect(loc.range.start.line).toBe(2);
+  });
+
+  it('multiple usages → returns array, VS Code shows picker', async () => {
+    const code = `package com.example
+fun build(value: String): String {
+    val a = value
+    val b = value
+    return a + b
+}`;
+    const idx = new SymbolIndex();
+    addFile(idx, 'file:///src/Build.kt', code);
+    const provider = new KotlinDefinitionProvider(idx);
+    const doc = mockDocument('file:///src/Build.kt', code);
+    const lines = code.split('\n');
+    const declCol = lines[1].indexOf('value');
+    const result = await provider.provideDefinition(doc, new Position(1, declCol + 1));
+    expect(Array.isArray(result)).toBe(true);
+    const arr = result as Location[];
+    expect(arr.length).toBe(2);
+    expect(arr[0].range.start.line).toBe(2);
+    expect(arr[1].range.start.line).toBe(3);
+  });
+
+  it('declaration with zero usages → returns the declaration itself (no false jump)', async () => {
+    const code = `package com.example
+fun unused(orphan: String) {
+    println("nothing")
+}`;
+    const idx = new SymbolIndex();
+    addFile(idx, 'file:///src/Orphan.kt', code);
+    const provider = new KotlinDefinitionProvider(idx);
+    const doc = mockDocument('file:///src/Orphan.kt', code);
+    const lines = code.split('\n');
+    const declCol = lines[1].indexOf('orphan');
+    const result = await provider.provideDefinition(doc, new Position(1, declCol + 1));
+    const loc = (Array.isArray(result) ? result[0] : result) as Location;
+    expect(loc).toBeDefined();
+    // No usage → fall back to the declaration itself.
+    expect(loc.range.start.line).toBe(1);
+  });
+});
+
 describe('local-scope-defn — non-local words still fall through to the index', () => {
   it('a top-level type referenced inside the function still resolves via the index', async () => {
     // `Modifier` and `Text` etc. are NOT local — the resolver must

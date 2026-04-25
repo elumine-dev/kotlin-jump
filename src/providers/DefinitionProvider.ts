@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { SymbolIndex } from '../indexer/SymbolIndex';
 import { resolveBest } from '../util/ImportResolver';
+import { isInsideCommentOrString, isInsideStringInterpolation } from '../util/textUtils';
 import { Logger } from '../util/logger';
 
 const WORD_RE = /[A-Za-z_]\w*/;
@@ -62,7 +63,26 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
     // is unambiguous — a parameter shadows everything else by Kotlin's
     // scoping rules.
     const localLoc = resolveLocalScope(document, position, word);
-    if (localLoc) { log('step-1 local scope hit'); return localLoc; }
+    if (localLoc) {
+      // Smart-nav: if the resolved location IS the cursor's exact word,
+      // the user clicked on the DECLARATION itself (param, for-binding,
+      // local val/var). VS Code's default behaviour would stay put — not
+      // useful. Pivot to "go to usage(s)" instead, mirroring IntelliJ's
+      // click-on-decl behaviour. Single usage → jump there; multiple →
+      // VS Code shows a picker.
+      const cursorOnDecl =
+        localLoc.range.start.line      === position.line &&
+        localLoc.range.start.character === wordRange.start.character;
+      if (cursorOnDecl) {
+        const usages = findLocalUsages(document, position, word);
+        if (usages.length > 0) {
+          log(`step-1 cursor on decl → ${usages.length} usage(s)`);
+          return usages.length === 1 ? usages[0] : usages;
+        }
+      }
+      log('step-1 local scope hit');
+      return localLoc;
+    }
 
     // ── 0. Qualified access: e.g. TypeA.VALUE or TypeB.VALUE ─────────────────
     const qualLocs = this.lookupQualified(word, wordRange, document, allow);
@@ -741,6 +761,86 @@ function paramLocationInSignature(
   }
   void endLine; // silence unused
   return undefined;
+}
+
+/**
+ * Find all in-file usages of `word` after the cursor's position,
+ * excluding the binding occurrence itself. Used when the user clicks
+ * on the declaration of a local symbol — instead of staying put on
+ * the declaration, we navigate them to where the binding is consumed.
+ *
+ * Strategy:
+ *  - Word-boundary regex match across each line from cursor to EOF.
+ *  - Skip occurrences inside line comments (`//`) and string literals
+ *    that are NOT inside `${ … }` interpolation. String content like
+ *    `"name"` is text, not a code reference. But `"$name"` IS code.
+ *  - Skip the cursor's own line if the match column equals the cursor's
+ *    word start (that's the declaration).
+ */
+function findLocalUsages(
+  document: vscode.TextDocument,
+  position: vscode.Position,
+  word: string,
+): vscode.Location[] {
+  const out: vscode.Location[] = [];
+  const re = new RegExp(`\\b${escapeRegex(word)}\\b`, 'g');
+  const declCol = document.getWordRangeAtPosition(position)?.start.character;
+  const lastLine = Math.min(document.lineCount - 1, position.line + 1000);
+  for (let i = position.line; i <= lastLine; i++) {
+    const text = document.lineAt(i).text;
+    re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text))) {
+      // Skip the declaration itself.
+      if (i === position.line && m.index === declCol) continue;
+      // Skip comments and plain string content. Short-form
+      // interpolation `$word` and full-form `${word}` are CODE and
+      // must NOT be skipped — they are real usages of the binding.
+      if (isInsideCommentOrString(text, m.index)) {
+        const isShortInterp = m.index >= 1 && text[m.index - 1] === '$';
+        const isFullInterp  = isInsideStringInterpolation(text, m.index);
+        if (!isShortInterp && !isFullInterp) continue;
+      }
+      // Skip named-argument LHS — `Foo(word = …)`. The label refers to
+      // the called function's parameter, not to this binding.
+      if (looksLikeNamedArgLhs(text, m.index, word.length)) continue;
+      out.push(new vscode.Location(
+        document.uri,
+        new vscode.Range(
+          new vscode.Position(i, m.index),
+          new vscode.Position(i, m.index + word.length),
+        ),
+      ));
+    }
+  }
+  return out;
+}
+
+/** True when `text[wordStart..wordStart+wordLen]` is followed (after
+ *  whitespace) by a single `=` and is inside an open paren earlier on
+ *  the same line. Cheap heuristic — the multi-line case is rare for
+ *  smart-nav and falls back to "no match" if missed. */
+function looksLikeNamedArgLhs(text: string, wordStart: number, wordLen: number): boolean {
+  let probe = wordStart + wordLen;
+  while (probe < text.length && text[probe] === ' ') probe++;
+  if (text[probe] !== '=') return false;
+  const next = text[probe + 1];
+  if (next === '=' || next === '>') return false; // ==, =>
+  // Inside an unmatched `(` earlier on this line?
+  let depth = 0;
+  for (let c = wordStart - 1; c >= 0; c--) {
+    const ch = text[c];
+    if (ch === ')')      depth++;
+    else if (ch === '(') {
+      if (depth === 0) return true;
+      depth--;
+    }
+  }
+  return false;
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function countChar(s: string, ch: string): number {

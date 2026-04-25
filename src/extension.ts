@@ -420,15 +420,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const navigated = await usagesPanel.search(editor.document, editor.selection.active, args);
       if (navigated) {
         await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
-      } else if (!smartNav) {
-        // smartNavigation OFF — multi-result lens click OR a cursor-
-        // invocation both fall back to the native Peek References UI.
-        // The custom panel is the smartNavigation experience; turning
-        // smartNav off should never push the user into it. Single-
-        // result lens clicks already direct-jumped above.
+      } else if (!smartNav && !args) {
+        // Multiple results, no code-lens context → fall back to native references
         await vscode.commands.executeCommand('editor.action.goToReferences');
+      } else if (!smartNav && args) {
+        // Code lens click with multiple results → show panel
+        await vscode.commands.executeCommand('kotlinJump.findUsages.focus');
       }
-      // smartNav ON: panel was already focused at line 418 — done.
     }),
 
     vscode.commands.registerCommand('kotlin-jump.findUsages.toggleTests', () => {

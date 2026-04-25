@@ -113,9 +113,14 @@ export class StringResourceFoldingProvider implements vscode.Disposable {
       }
 
       // Pass 2 — standalone R.string.key (skip positions already rendered in pass 1)
+      // The `isInsideCommentOrString` check is critical: without it,
+      // a comment like `// TODO: replace R.string.legacy_title` would
+      // get folded to the resolved value, making the comment text
+      // look like real code.
       R_STRING_RE.lastIndex = 0;
       while ((m = R_STRING_RE.exec(text))) {
         if (formattedCols.has(m.index)) continue;
+        if (isInsideCommentOrString(text, m.index)) continue;
         const entry = this.index.getValue(m[1]);
         if (!entry) continue;
         opts.push(buildStringDecoration(i, m.index, m[0].length, entry.value));
@@ -123,6 +128,7 @@ export class StringResourceFoldingProvider implements vscode.Disposable {
 
       R_PLURALS_RE.lastIndex = 0;
       while ((m = R_PLURALS_RE.exec(text))) {
+        if (isInsideCommentOrString(text, m.index)) continue;
         const entry = this.index.getPluralsValue(m[1]);
         if (!entry) continue;
         opts.push(buildStringDecoration(i, m.index, m[0].length, entry.value));
@@ -130,6 +136,7 @@ export class StringResourceFoldingProvider implements vscode.Disposable {
 
       R_ARRAY_RE.lastIndex = 0;
       while ((m = R_ARRAY_RE.exec(text))) {
+        if (isInsideCommentOrString(text, m.index)) continue;
         const entry = this.index.getArrayValue(m[1]);
         if (!entry) continue;
         opts.push(buildStringDecoration(i, m.index, m[0].length, entry.value));

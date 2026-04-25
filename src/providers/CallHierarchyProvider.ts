@@ -2,7 +2,8 @@ import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { SymbolKind } from '../indexer/KotlinParser';
 import { scanForUsages, isExcluded, resolveSearchTarget } from './FindUsagesEngine';
-import { isInsideCommentOrString } from '../util/textUtils';
+import { isInsideCommentOrString, isInsideStringInterpolation } from '../util/textUtils';
+import { resolveLocalScope } from './DefinitionProvider';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 // Matches: method(, method<T>(, method {, obj.method(
@@ -78,6 +79,19 @@ export class KotlinCallHierarchyProvider implements vscode.CallHierarchyProvider
     if (!wordRange) return null;
     const word = document.getText(wordRange);
     if (word.length < 2) return null;
+
+    // Plain string / comment guard.
+    if (document.languageId === 'kotlin' || document.languageId === 'java') {
+      const lineText = document.lineAt(position.line).text;
+      const start    = wordRange.start.character;
+      if (isInsideCommentOrString(lineText, start)) {
+        const isShortInterp = start >= 1 && lineText[start - 1] === '$';
+        const isFullInterp  = isInsideStringInterpolation(lineText, start);
+        if (!isShortInterp && !isFullInterp) return null;
+      }
+    }
+    // Local-scope guard: parameters / locals are not call hierarchy roots.
+    if (resolveLocalScope(document, position, word)) return null;
 
     // Try exact match on this line first (cursor is on a declaration)
     const fileSymbols = this.index.getFileSymbols(document.uri.toString());

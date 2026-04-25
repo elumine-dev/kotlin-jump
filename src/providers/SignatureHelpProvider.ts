@@ -3,6 +3,7 @@ import { SymbolIndex } from '../indexer/SymbolIndex';
 import { resolveBest } from '../util/ImportResolver';
 import { readSignature, extractKDoc, parseParams, KtParam } from '../util/SignatureReader';
 import { isInsideCommentOrString } from '../util/textUtils';
+import { resolveLocalScope } from './DefinitionProvider';
 
 // Cache: fqn → { sig, params, kdoc } — avoids reopening declaration docs on every keypress
 interface SigCache { sig: string; params: KtParam[]; kdoc: string | null }
@@ -40,6 +41,11 @@ export class KotlinSignatureHelpProvider implements vscode.SignatureHelpProvider
     if (!callContext) return null;
 
     const { functionName, activeParameter } = callContext;
+
+    // Skip when the call resolves to a LOCAL binding (e.g. local
+    // lambda or function variable shadowing a workspace fn). Showing
+    // the workspace function's signature would mislead.
+    if (resolveLocalScope(document, position, functionName)) return null;
 
     // Resolve the function entry
     const entry = (() => {

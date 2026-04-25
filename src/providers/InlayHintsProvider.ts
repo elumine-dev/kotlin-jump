@@ -4,6 +4,7 @@ import { resolveBest } from '../util/ImportResolver';
 import { readSignature, parseParams, extractReturnType, KtParam } from '../util/SignatureReader';
 import { isInsideCommentOrString } from '../util/textUtils';
 import { Logger, NullLogger } from '../util/logger';
+import { resolveLocalScope } from './DefinitionProvider';
 
 // Matches a potential function/constructor call: lowercase-or-uppercase word followed by `(`
 // We match both cases because constructors start with uppercase (e.g. `Column(`)
@@ -116,6 +117,13 @@ export class KotlinInlayHintsProvider implements vscode.InlayHintsProvider {
           // Skip very short names — too noisy and almost never useful
           if (name.length < 2) continue;
 
+          // Skip when the call name is a LOCAL binding (e.g.
+          // `val send: (Int, Int) -> Unit = { … }; send(1, 2)`).
+          // Showing parameter names from the workspace `send(...)` of
+          // the same name would be wrong info.
+          const callPos = new vscode.Position(lineNum, match.index);
+          if (resolveLocalScope(document, callPos, name)) continue;
+
           const entry = this.resolveCallEntry(name, document);
           if (!entry) {
             this.log.debug(`[InlayHints] pass1 line ${lineNum} — ${name}() → no entry (unknown or ambiguous)`);
@@ -213,6 +221,8 @@ export class KotlinInlayHintsProvider implements vscode.InlayHintsProvider {
 
             if (isInsideCommentOrString(text, callOffset)) {
               this.log.debug(`[InlayHints] pass2 line ${lineNum} — "${callName}" is inside string/comment, skip`);
+            } else if (resolveLocalScope(document, new vscode.Position(lineNum, callOffset), callName)) {
+              this.log.debug(`[InlayHints] pass2 line ${lineNum} — "${callName}" is a local binding, skip`);
             } else {
               const entry = this.resolveCallEntry(callName, document);
               if (!entry) {

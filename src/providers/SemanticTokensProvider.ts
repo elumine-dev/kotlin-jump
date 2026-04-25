@@ -3,6 +3,7 @@ import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { SymbolKind } from '../indexer/KotlinParser';
 import { resolveBest } from '../util/ImportResolver';
 import { isInsideCommentOrString } from '../util/textUtils';
+import { resolveLocalScope } from './DefinitionProvider';
 
 // ── Legend arrays (order = index) ────────────────────────────────────────────
 
@@ -315,6 +316,13 @@ export class KotlinSemanticTokensProvider
           wordCache.set(word, entry);
         }
         if (!entry) continue;
+
+        // Local-scope shadows the workspace symbol. Without this guard
+        // a parameter named `repository` would be coloured as the
+        // workspace top-level `val repository`, which is wrong info.
+        // Cheap because we only pay it when an entry is otherwise
+        // about to be emitted — most words skip out before this point.
+        if (resolveLocalScope(doc, new vscode.Position(li, col), word)) continue;
 
         const type = kindToTypeIndex(entry.kind, entry.depth);
         if (type === undefined) continue;

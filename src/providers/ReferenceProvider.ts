@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import { SymbolIndex } from '../indexer/SymbolIndex';
 import { scanForUsages, isExcluded } from './FindUsagesEngine';
 import { Logger } from '../util/logger';
+import { resolveLocalScope, findLocalUsages } from './DefinitionProvider';
+import { isInsideCommentOrString, isInsideStringInterpolation } from '../util/textUtils';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 
@@ -18,6 +20,30 @@ export class KotlinReferenceProvider implements vscode.ReferenceProvider {
     if (!wordRange) return null;
     const word = document.getText(wordRange);
     if (word.length < 2) return null;
+
+    // Plain string / comment guard.
+    if (document.languageId === 'kotlin' || document.languageId === 'java') {
+      const lineText = document.lineAt(position.line).text;
+      const start    = wordRange.start.character;
+      if (isInsideCommentOrString(lineText, start)) {
+        const isShortInterp = start >= 1 && lineText[start - 1] === '$';
+        const isFullInterp  = isInsideStringInterpolation(lineText, start);
+        if (!isShortInterp && !isFullInterp) return null;
+      }
+    }
+
+    // Local-scope: scope references to within the enclosing function.
+    // Without this guard, "Find All References" on a parameter `name`
+    // returned every workspace symbol named `name` — pollution that
+    // hid the actual usages of the local binding.
+    const localDecl = resolveLocalScope(document, position, word);
+    if (localDecl) {
+      const usages = findLocalUsages(document, localDecl.range.start, word);
+      const out: vscode.Location[] = [];
+      if (context.includeDeclaration) out.push(localDecl);
+      out.push(...usages);
+      return out.length > 0 ? out : null;
+    }
 
     if (this.index.lookup(word).length === 0) return null;
 

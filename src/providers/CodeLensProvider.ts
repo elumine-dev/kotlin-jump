@@ -97,19 +97,23 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
         || (CLASS_LIKE.has(entry.kind) && (entry.isTestClass || classesWithTests.has(entry.fqn)));
       if (!isTestContext && !entry.isOverride && !entry.isPrivate) {
         const isFun = entry.kind === 'fun' || entry.kind === 'composable';
-        // OverrideGutterProvider shows ⬇ for abstract/interface fun — skip to avoid duplicate lens
-        if (isFun && (enclosingClass?.kind === 'interface' || entry.isAbstract)) continue;
-        // OverrideGutterProvider shows ⬇ for interface/abstract class/sealed class declarations
-        // Use if-guard (not continue) to preserve classStack push below for nested members
+        // For interface / abstract members, OverrideGutterProvider already
+        // shows the ⬇ "N implementations" arrow. We must NOT add a normal
+        // lens (it would duplicate the implementation count) but we DO want
+        // a usage count above the same line — IntelliJ shows both side by
+        // side ("1 Usage  1 Implementation"), and a previous version of
+        // this provider shipped without the usage count which made the
+        // interface/method declarations feel orphaned.
+        const isAbstractFun  = isFun && (enclosingClass?.kind === 'interface' || entry.isAbstract);
         const isAbstractType = entry.kind === 'interface' || entry.kind === 'sealedClass'
           || (entry.kind === 'class' && entry.isAbstract);
-        if (!isAbstractType) {
+        if (isAbstractFun || isAbstractType) {
           const lens = new vscode.CodeLens(range) as KotlinCodeLens;
-          lens.data = { entry, enclosingKind: enclosingClass?.kind };
+          lens.data = { entry, enclosingKind: enclosingClass?.kind, usageOnly: true };
           lenses.push(lens);
         } else {
           const lens = new vscode.CodeLens(range) as KotlinCodeLens;
-          lens.data = { entry, enclosingKind: enclosingClass?.kind, usageOnly: true };
+          lens.data = { entry, enclosingKind: enclosingClass?.kind };
           lenses.push(lens);
         }
       }

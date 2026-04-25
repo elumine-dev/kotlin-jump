@@ -190,19 +190,24 @@ class SpecialMove : MoveStrategy() {
 
   afterEach(() => { workspace.fs.readFile = origReadFile; });
 
-  it('CL-A — abstract fun execute → PAS de lens dans provideCodeLenses', () => {
+  it('CL-A — abstract fun execute → usage-only lens (impl count via OverrideGutter)', () => {
     const doc = mockDocument(ABSTRACT_URI, ABSTRACT_CODE);
     const lenses = provider.provideCodeLenses(doc);
-    // execute est abstract → OverrideGutterProvider le gère, CodeLensProvider doit le skip
     const executeEntry = index.lookup('execute').find(e => e.isAbstract)!;
-    expect(lenses.some(l => l.range.start.line === executeEntry.line)).toBe(false);
+    const lens = lenses.find(l => l.range.start.line === executeEntry.line);
+    expect(lens).toBeDefined();
+    // Marked usageOnly so resolveCodeLens reports `N usage(s)` only;
+    // OverrideGutterProvider supplies the implementation count.
+    expect(((lens as any).data as any).usageOnly).toBe(true);
   });
 
-  it('CL-A — abstract fun describe → PAS de lens dans provideCodeLenses', () => {
+  it('CL-A — abstract fun describe → usage-only lens', () => {
     const doc = mockDocument(ABSTRACT_URI, ABSTRACT_CODE);
     const lenses = provider.provideCodeLenses(doc);
     const describeEntry = index.lookup('describe').find(e => e.isAbstract)!;
-    expect(lenses.some(l => l.range.start.line === describeEntry.line)).toBe(false);
+    const lens = lenses.find(l => l.range.start.line === describeEntry.line);
+    expect(lens).toBeDefined();
+    expect(((lens as any).data as any).usageOnly).toBe(true);
   });
 
   it('CL-A — méthode concrète (isEffective) reçoit toujours un lens usage', async () => {
@@ -297,13 +302,16 @@ class PokemonTrainer(val obs: PokemonObserver) {
     expect(impls.length).toBe(2); // AuditObserver + $anon$N
   });
 
-  it('CL-B — interface method onCaught → PAS de lens dans provideCodeLenses (délégué à OverrideGutterProvider)', () => {
+  it('CL-B — interface method onCaught → usage-only lens (impl count via OverrideGutter)', () => {
     const doc = mockDocument(OBSERVER_URI, OBSERVER_CODE);
     const lenses = provider.provideCodeLenses(doc);
     const entry = index.lookup('onCaught').find(e => !e.isOverride)!;
     expect(entry).toBeDefined();
-    // onCaught est dans une interface → OverrideGutterProvider le gère avec ⬇, CodeLensProvider skip
-    expect(lenses.some(l => l.range.start.line === entry.line)).toBe(false);
+    const lens = lenses.find(l => l.range.start.line === entry.line);
+    expect(lens).toBeDefined();
+    // Avoids duplicating the implementation count owned by
+    // OverrideGutterProvider; surfaces "N usage(s)" alongside.
+    expect(((lens as any).data as any).usageOnly).toBe(true);
   });
 });
 
@@ -457,5 +465,41 @@ describe('CL-F — interface reçoit un lens usageOnly dans KotlinCodeLensProvid
     // Aucun lens normal (data sans usageOnly)
     const normal = lenses.filter(l => l.data && !l.data.usageOnly);
     expect(normal).toHaveLength(0);
+  });
+});
+
+// ── CL-G : chaque méthode d'interface reçoit un usage-lens (pas seulement la classe) ─
+
+describe("CL-G — chaque suspend fun d'une interface a son propre usage-lens", () => {
+  // Reproducer of Kevin's screenshot: ApiService with 3 methods.
+  // IntelliJ shows "1 Usage  1 Implementation" above each fun.
+  // Pre-fix Kotlin Jump emitted only the OverrideGutter ⬇ implementation
+  // count and skipped the usage count entirely.
+  const URI = 'file:///g/ApiService.kt';
+  const CODE = `package com.example
+
+interface ApiService {
+    suspend fun fetchUser(id: String): User
+    suspend fun updateUser(user: User)
+    suspend fun deleteUser(id: String)
+}`;
+
+  it('chacune des 3 méthodes reçoit un lens usageOnly distinct', () => {
+    const index = new SymbolIndex();
+    addKt(index, URI, CODE);
+    const provider = new KotlinCodeLensProvider(index);
+    const doc = mockDocument(URI, CODE);
+    const lenses = provider.provideCodeLenses(doc) as any[];
+
+    const expectMethodLens = (name: string) => {
+      const entry = index.lookup(name).find(e => !e.isOverride);
+      expect(entry, `index miss: ${name}`).toBeDefined();
+      const lens = lenses.find(l => l.range.start.line === entry!.line);
+      expect(lens, `no lens for ${name}`).toBeDefined();
+      expect((lens as any).data.usageOnly).toBe(true);
+    };
+    expectMethodLens('fetchUser');
+    expectMethodLens('updateUser');
+    expectMethodLens('deleteUser');
   });
 });

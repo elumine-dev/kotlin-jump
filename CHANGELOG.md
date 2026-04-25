@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.17.2
+
+Marketplace metadata release — refines the listing for better discoverability (description, keywords, categories, badges) and converts the README header for the migration cohort coming from Android Studio. No changes to extension commands, settings, navigation, or any user-facing behavior since v1.17.1.
+
+### Notes
+- No changes to extension commands, settings, navigation, or any other user-facing behavior since v1.17.1.
+- Updated Marketplace listing metadata (description, keywords, categories, qna, badges) to improve discoverability for the Android Kotlin developer cohort.
+- Refreshed README hero and added a rate CTA; reordered features to surface Android-specific capabilities earlier.
+
 ## 1.17.1
 
 Fixes local-scope handling across six providers, adds a declaration-to-usages jump, corrects code lens behavior, and improves const-val folding performance.

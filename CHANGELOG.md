@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.17.3
+
+Fixes the broken Marketplace install/rating badges in the README and Marketplace listing — the previous shields.io endpoints were silently returning a "retired badge" placeholder. Migrated to the Microsoft-hosted vsmarketplacebadges.dev provider.
+
+### Notes
+- No changes to extension commands, settings, navigation, or any other user-facing behavior since v1.17.2.
+- Badge URLs migrated from `img.shields.io/visual-studio-marketplace/{i,r}/...` (deprecated) to `vsmarketplacebadges.dev/{installs-short,rating-short}/...` (Microsoft-hosted).
+
 ## 1.17.2
 
 Marketplace metadata release — refines the listing for better discoverability (description, keywords, categories, badges) and converts the README header for the migration cohort coming from Android Studio. No changes to extension commands, settings, navigation, or any user-facing behavior since v1.17.1.

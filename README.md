@@ -11,8 +11,8 @@
 </p>
 
 <p align="center">
-  <a href="https://marketplace.visualstudio.com/items?itemName=elumine.kotlin-jump"><img src="https://img.shields.io/visual-studio-marketplace/i/elumine.kotlin-jump?label=installs&color=7F52FF&style=flat-square" alt="VS Code installs" /></a>
-  <a href="https://marketplace.visualstudio.com/items?itemName=elumine.kotlin-jump&ssr=false#review-details"><img src="https://img.shields.io/visual-studio-marketplace/r/elumine.kotlin-jump?label=rating&color=7F52FF&style=flat-square" alt="Rating" /></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=elumine.kotlin-jump"><img src="https://vsmarketplacebadges.dev/installs-short/elumine.kotlin-jump.png" alt="VS Code installs" /></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=elumine.kotlin-jump&ssr=false#review-details"><img src="https://vsmarketplacebadges.dev/rating-short/elumine.kotlin-jump.png" alt="Rating" /></a>
   <a href="https://open-vsx.org/extension/elumine/kotlin-jump"><img src="https://img.shields.io/open-vsx/dt/elumine/kotlin-jump?label=Open%20VSX&color=c160c0&style=flat-square" alt="Open VSX downloads" /></a>
   <a href="https://github.com/elumine-dev/kotlin-jump/blob/main/LICENSE"><img src="https://img.shields.io/github/license/elumine-dev/kotlin-jump?style=flat-square&color=blue" alt="MIT License" /></a>
 </p>
@@ -487,7 +487,7 @@ Search **Kotlin Jump** in VS Code (`Cmd+Shift+X`) or install directly:
 Download the latest `.vsix` from [GitHub Releases](https://github.com/elumine-dev/kotlin-jump/releases/latest), then:
 
 ```bash
-code --install-extension kotlin-jump-1.17.2.vsix
+code --install-extension kotlin-jump-1.17.3.vsix
 ```
 
 ---
@@ -498,7 +498,7 @@ code --install-extension kotlin-jump-1.17.2.vsix
 git clone https://github.com/elumine-dev/kotlin-jump
 cd kotlin-jump && npm install
 node esbuild.js --production && npx @vscode/vsce package --no-dependencies
-code --install-extension kotlin-jump-1.17.2.vsix
+code --install-extension kotlin-jump-1.17.3.vsix
 ```
 
 ---

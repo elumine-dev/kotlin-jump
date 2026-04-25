@@ -1,5 +1,5 @@
 {
-  "version": "1.17.2",
+  "version": "1.17.3",
   "title": "What's New in Kotlin Jump",
   "tagline": "Local scope correctness across the board",
   "summary": "Fixes local-scope handling across six providers, adds a declaration-to-usages jump, corrects code lens behavior, and improves const-val folding performance.",

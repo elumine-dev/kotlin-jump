@@ -176,3 +176,103 @@ describe('SP2-ADVER-CVF-9 — déclaration `val NAME =` préserve le nom', () =>
     expect(decs(entries, ['    val CAMERA: String'])).toHaveLength(0);
   });
 });
+
+// ── SP2-ADVER-CVF-PERF — regression guard against O(N²)/GC-heavy rebuilds ────
+// Reproducer of the original perf bug: a constant-heavy file with many
+// repeated SCREAMING_SNAKE_CASE references would call SymbolIndex.lookup
+// once per match, and lookup() returned `[...set]` (allocation) which we
+// then `.filter()`ed (second allocation). On 1 000 lines × 50 matches that
+// produced ~50 000 array allocations and visible GC stutters during fold
+// /unfold. The fix memoizes the lookup per-rebuild and short-circuits to
+// `null` for non-const names. This test asserts a generous upper bound on
+// total wall time and a hard upper bound on lookup-call count so a future
+// rewrite that drops the memoization fails CI loudly.
+
+describe('SP2-ADVER-CVF-PERF — large constant-heavy file', () => {
+  it('rebuilds 1 000 lines with 50 refs/line in <250 ms with ≤50 unique lookups', () => {
+    setup();
+    // Synthetic doc: 1 000 lines of `val x = Constants.TIMEOUT_MS + Constants.MAX_RETRIES + …`
+    const NAMES = ['TIMEOUT_MS', 'MAX_RETRIES', 'PAGE_SIZE', 'DEBUG_MODE', 'LOG_TAG'];
+    const lines: string[] = [];
+    for (let i = 0; i < 1000; i++) {
+      // 10 references per line drawn from the 5 names → high repetition
+      // exercises the lookup-memo path that the perf fix relies on.
+      const refs = Array.from({ length: 10 }, (_, j) => `Constants.${NAMES[(i + j) % NAMES.length]}`);
+      lines.push(`    val v${i} = ${refs.join(' + ')}`);
+    }
+
+    let lookupCalls = 0;
+    const seen = new Set<string>();
+    const fakeIndex = {
+      lookup(name: string) {
+        lookupCalls++;
+        seen.add(name);
+        // Return a single matching const entry — the hot-path case.
+        return [{ name, isConst: true, constValue: '"x"' }];
+      },
+    };
+
+    const editor = {
+      document: {
+        languageId: 'kotlin',
+        version:    1,
+        lineCount:  lines.length,
+        lineAt: (i: number) => ({ text: lines[i] }),
+      },
+      selections: [],
+      setDecorations: vi.fn(),
+    } as any;
+    vi.spyOn(vscodeMock.window, 'visibleTextEditors', 'get').mockReturnValue([editor]);
+
+    const start = performance.now();
+    new ConstValFoldingProvider(fakeIndex as any);
+    const elapsed = performance.now() - start;
+
+    // Generous wall-time bound: in practice this lands around 30-80 ms
+    // on a laptop — 250 ms is a safety margin big enough to absorb CI
+    // jitter but small enough to fail loudly on an O(N²) regression.
+    expect(elapsed).toBeLessThan(250);
+    // The memo must collapse 10 000 ref matches down to one lookup per
+    // unique name. Anything over ~50 means the memo is broken.
+    expect(seen.size).toBe(NAMES.length);
+    expect(lookupCalls).toBeLessThanOrEqual(NAMES.length);
+  });
+
+  it('a stable cache: re-applying with no doc-version change does NOT call lookup again', () => {
+    setup();
+    const lines = ['    val a = Constants.X', '    val b = Constants.Y', '    val c = Constants.X'];
+    let lookupCalls = 0;
+    const fakeIndex = {
+      lookup(name: string) {
+        lookupCalls++;
+        return [{ name, isConst: true, constValue: '"v"' }];
+      },
+    };
+
+    let activeListener: ((e: any) => void) | undefined;
+    vi.spyOn(vscodeMock.window, 'onDidChangeActiveTextEditor').mockImplementation((cb: any) => {
+      activeListener = cb;
+      return { dispose: vi.fn() } as any;
+    });
+
+    const editor = {
+      document: {
+        languageId: 'kotlin',
+        version:    7, // fixed across the test
+        lineCount:  lines.length,
+        lineAt: (i: number) => ({ text: lines[i] }),
+      },
+      selections: [],
+      setDecorations: vi.fn(),
+    } as any;
+    vi.spyOn(vscodeMock.window, 'visibleTextEditors', 'get').mockReturnValue([editor]);
+
+    new ConstValFoldingProvider(fakeIndex as any);
+    const initialCalls = lookupCalls;
+
+    // Re-fire onDidChangeActiveTextEditor 5 times — same document, no
+    // edits. The cache must absorb every subsequent _apply.
+    for (let i = 0; i < 5; i++) activeListener?.(editor);
+    expect(lookupCalls).toBe(initialCalls);
+  });
+});

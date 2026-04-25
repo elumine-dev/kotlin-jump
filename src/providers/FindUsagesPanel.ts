@@ -102,14 +102,11 @@ export class FindUsagesPanel
       raw = raw.filter(r => !(r.uriString === declUri && r.line === target.line));
     }
 
-    // Exclude an explicit position (code lens click). A single result
-    // ALWAYS direct-jumps — IntelliJ's "1 usage → just take me there"
-    // behaviour, applied regardless of the smartNavigation setting. The
-    // smartNavigation flag controls only the multi-result UX (custom
-    // panel vs. native Peek References).
+    // Exclude an explicit position (code lens click) and short-circuit to direct nav
     if (exclude?.excludeUri !== undefined) {
       raw = raw.filter(r => !(r.uriString === exclude.excludeUri && r.line === exclude.excludeLine));
 
+      // Single result → navigate directly instead of showing the panel
       if (raw.length === 1) {
         const r = raw[0];
         await vscode.commands.executeCommand('vscode.open', r.uri, {

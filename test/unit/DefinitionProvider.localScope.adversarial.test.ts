@@ -259,6 +259,55 @@ fun greet(target: String) {
     expect(loc!.range.start.line).toBe(2);
   });
 
+  it('Cmd+Click on a word that lives only inside a string literal returns null', async () => {
+    // Reproducer: `Text(text = "Level $level")` — clicking on the word
+    // `Level` (plain string content) must NOT navigate, even if the
+    // workspace happens to contain a top-level symbol with that name.
+    const code = `package com.example
+const val Level = 99
+fun render(level: Int) {
+    println("Level $level")
+}`;
+    const { provider, doc } = setupP(code);
+    const line = code.split('\n')[3]; // `    println("Level $level")`
+    const c = line.indexOf('Level');
+    const r = await provider.provideDefinition(doc, new Position(3, c + 1));
+    // Plain-string content → null. The provider must not return the
+    // top-level `const val Level` declaration just because the word
+    // happens to match.
+    expect(r).toBeNull();
+  });
+
+  it('Cmd+Click on `$level` (short interpolation) DOES navigate to the local param', async () => {
+    const code = `package com.example
+const val Level = 99
+fun render(level: Int) {
+    println("Level $level")
+}`;
+    const { provider, doc } = setupP(code);
+    const line = code.split('\n')[3];
+    // The `level` after `$` — start of the interpolation reference.
+    const c = line.indexOf('$level') + 1;
+    const r = await provider.provideDefinition(doc, new Position(3, c + 1));
+    const loc = locOf(r);
+    expect(loc).toBeDefined();
+    expect(loc!.range.start.line).toBe(2); // local param `level`
+  });
+
+  it('Cmd+Click inside a line comment returns null', async () => {
+    const code = `package com.example
+const val Level = 99
+fun render() {
+    // The Level constant is defined above — but clicking here is text
+    println("done")
+}`;
+    const { provider, doc } = setupP(code);
+    const line = code.split('\n')[3];
+    const c = line.indexOf('Level');
+    const r = await provider.provideDefinition(doc, new Position(3, c + 1));
+    expect(r).toBeNull();
+  });
+
   it('full interpolation `${ word }` IS a usage', async () => {
     const code = `package com.example
 fun greet(target: String) {

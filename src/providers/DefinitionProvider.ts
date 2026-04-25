@@ -34,6 +34,26 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
     const word = document.getText(wordRange);
     if (word.length < 2) { this.log?.info(`provideDefinition: word too short "${word}"`); return null; }
 
+    // ── -3. Plain string / comment guard ─────────────────────────────────────
+    // Words inside a string literal or comment are not code — they are text.
+    // Cmd+Click on `Level` in `Text(text = "Level $level")` must NOT jump
+    // anywhere; only `$level` (short interpolation) and `${level}` (full
+    // interpolation) are real references. Without this guard the workspace
+    // index happily returns any same-named symbol as a "definition".
+    if (
+      (document.languageId === 'kotlin' || document.languageId === 'java') &&
+      isInsideCommentOrString(document.lineAt(position.line).text, wordRange.start.character)
+    ) {
+      const lineText = document.lineAt(position.line).text;
+      const wordStart = wordRange.start.character;
+      const isShortInterp = wordStart >= 1 && lineText[wordStart - 1] === '$';
+      const isFullInterp  = isInsideStringInterpolation(lineText, wordStart);
+      if (!isShortInterp && !isFullInterp) {
+        this.log?.info(`provideDefinition: cursor in plain string/comment, not navigable`);
+        return null;
+      }
+    }
+
     const log = (msg: string) => this.log?.info(`defn(${word}): ${msg}`);
     log(`file=${document.uri.path} line=${position.line} col=${position.character}`);
 

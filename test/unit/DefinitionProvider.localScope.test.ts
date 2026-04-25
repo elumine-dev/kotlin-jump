@@ -145,6 +145,96 @@ describe('local-scope-defn — local val / var declarations', () => {
   });
 });
 
+// ── for-loop bindings ────────────────────────────────────────────────────────
+
+const POKEMON_LIST = `package com.example.ui
+
+import androidx.compose.runtime.Composable
+
+@Composable
+fun PokemonList(names: List<String>) {
+    Column {
+        for (name in names) {
+            PokemonCard(name = name, level = 50)
+        }
+    }
+}`;
+
+const POISON_FOR_LIST = `package com.example.poison
+
+const val name  = "global"
+const val names = listOf<String>()`;
+
+function setupForList() {
+  const index = new SymbolIndex();
+  addFile(index, 'file:///src/com/example/ui/PokemonList.kt', POKEMON_LIST);
+  addFile(index, 'file:///src/com/example/poison/Poison.kt', POISON_FOR_LIST);
+  return new KotlinDefinitionProvider(index);
+}
+
+describe('local-scope-defn — for-loop and lambda bindings', () => {
+  it('Cmd+Click on `name` (RHS of named-arg) inside `for (name in names)` → loop binding', async () => {
+    const provider = setupForList();
+    const doc = mockDocument('file:///src/com/example/ui/PokemonList.kt', POKEMON_LIST);
+    // Line 8: `            PokemonCard(name = name, level = 50)`
+    // We want the SECOND `name` — the value side of the named arg.
+    const line = POKEMON_LIST.split('\n')[8];
+    const secondName = line.indexOf('name', line.indexOf('name') + 1);
+    const result = await provider.provideDefinition(doc, new Position(8, secondName + 1));
+    const loc = (Array.isArray(result) ? result[0] : result) as Location;
+    expect(loc).toBeDefined();
+    // Loop binding lives on line 7: `        for (name in names) {`
+    expect(loc.range.start.line).toBe(7);
+    expect(loc.uri.toString()).toBe('file:///src/com/example/ui/PokemonList.kt');
+  });
+
+  it('Cmd+Click on `names` inside the `for (name in names)` → fun parameter', async () => {
+    const provider = setupForList();
+    const doc = mockDocument('file:///src/com/example/ui/PokemonList.kt', POKEMON_LIST);
+    const line = POKEMON_LIST.split('\n')[7];
+    const namesCol = line.indexOf('names');
+    const result = await provider.provideDefinition(doc, new Position(7, namesCol + 1));
+    const loc = (Array.isArray(result) ? result[0] : result) as Location;
+    expect(loc).toBeDefined();
+    // PokemonList signature on line 5: `fun PokemonList(names: List<String>) {`
+    expect(loc.range.start.line).toBe(5);
+  });
+
+  it('does not pick up the global poison `const val name` for a for-loop binding', async () => {
+    const provider = setupForList();
+    const doc = mockDocument('file:///src/com/example/ui/PokemonList.kt', POKEMON_LIST);
+    const line = POKEMON_LIST.split('\n')[8];
+    const secondName = line.indexOf('name', line.indexOf('name') + 1);
+    const result = await provider.provideDefinition(doc, new Position(8, secondName + 1));
+    const locs = Array.isArray(result) ? result : [result];
+    for (const loc of locs) {
+      expect((loc as Location).uri.toString()).not.toContain('poison');
+    }
+  });
+
+  it('lambda parameter resolves locally — `xs.forEach { item -> use(item) }`', async () => {
+    const code = `package com.example.ui
+
+fun process(xs: List<Int>) {
+    xs.forEach { item ->
+        println(item)
+    }
+}`;
+    const index = new SymbolIndex();
+    addFile(index, 'file:///src/com/example/ui/Process.kt', code);
+    const provider = new KotlinDefinitionProvider(index);
+    const doc = mockDocument('file:///src/com/example/ui/Process.kt', code);
+    // Line 4: `        println(item)` — cursor on `item`.
+    const line = code.split('\n')[4];
+    const itemCol = line.indexOf('item');
+    const result = await provider.provideDefinition(doc, new Position(4, itemCol + 1));
+    const loc = (Array.isArray(result) ? result[0] : result) as Location;
+    expect(loc).toBeDefined();
+    // Binding on line 3: `    xs.forEach { item ->`
+    expect(loc.range.start.line).toBe(3);
+  });
+});
+
 describe('local-scope-defn — non-local words still fall through to the index', () => {
   it('a top-level type referenced inside the function still resolves via the index', async () => {
     // `Modifier` and `Text` etc. are NOT local — the resolver must

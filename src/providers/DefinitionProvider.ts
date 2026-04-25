@@ -366,38 +366,46 @@ function resolveLocalScope(
 
   const MAX_SCAN_LINES = 400;
 
-  // Step 1 — find the line that opens the enclosing function. We walk
-  // backwards balancing `{`/`}` so a sibling block above doesn't trick
-  // us into picking the wrong function.
+  // Step 1 — find the line that opens the enclosing function. Walk
+  // backward balancing `{`/`}`. Every time we cross an opening brace
+  // (depth would go negative) we have found AN enclosing scope, but
+  // it may be a sibling block (`for { … }`, `Column { … }`, lambda
+  // body) rather than the function itself. So we record the crossing
+  // line, RESET the balance, and keep walking until we find a line
+  // that actually declares a function.
   const start = Math.max(0, position.line - MAX_SCAN_LINES);
+  const FUN_RE = /\bfun\s+(?:<[^>]*>\s*)?(?:[A-Z]\w+\s*\.\s*)?(\w+)\s*\(/;
   let braceDepth = 0;
   let funLine = -1;
   let funLineText = '';
   for (let i = position.line; i >= start; i--) {
     const text = document.lineAt(i).text;
-    // Balance from RIGHT to LEFT so we don't double-count line we're on.
+    // Balance from RIGHT to LEFT.
     for (let c = text.length - 1; c >= 0; c--) {
       const ch = text[c];
       if (ch === '}')      braceDepth++;
       else if (ch === '{') braceDepth--;
     }
     if (braceDepth < 0) {
-      // We crossed an opening `{` that has no matching close before
-      // the cursor — this is the body opener of the enclosing fun.
-      // Look for `fun NAME(` on this line OR a line above (multi-line
-      // signatures). Walk up while still seeing `(` /  signature
-      // continuation.
+      // Crossed a `{`. Is THIS line (or a continuation above for
+      // multi-line signatures) a `fun NAME(`?
       let probe = i;
       while (probe >= start) {
         const probeText = document.lineAt(probe).text;
-        const m = /\bfun\s+(?:<[^>]*>\s*)?(?:[A-Z]\w+\s*\.\s*)?(\w+)\s*\(/.exec(probeText);
-        if (m) { funLine = probe; funLineText = probeText; break; }
-        // Multi-line signature opener: this line has `(` but no `fun` —
-        // continue backwards.
-        if (!probeText.includes('(')) break;
+        if (FUN_RE.test(probeText)) {
+          funLine = probe;
+          funLineText = probeText;
+          break;
+        }
+        // Multi-line signature continuation: keep walking up only if
+        // we still see signature characters (no `{` already seen above).
+        if (!probeText.includes('(') || probeText.includes('{')) break;
         probe--;
       }
-      break;
+      if (funLine >= 0) break;
+      // Not a function — this was a sibling block. Reset depth so the
+      // next opener we cross is checked the same way.
+      braceDepth = 0;
     }
   }
   if (funLine < 0) return undefined;
@@ -413,24 +421,63 @@ function resolveLocalScope(
     sigEndLine = i;
   }
 
-  // Step 2 — local val/var declarations between sigEndLine+1 and the cursor.
-  // Walk forward; first match BEFORE the cursor wins.
-  const declRe = /\b(?:val|var)\s+(\w+)\b/g;
+  // Step 2 — bindings between sigEndLine and the cursor: local val/var,
+  // for-loop bindings (`for (x in xs)`), and lambda parameters
+  // (`{ x ->` / `{ x, y ->`). Walk forward; the LATEST binding before
+  // the cursor wins because it shadows any earlier same-name binding.
+  // We over-approximate scope (a `for` body is treated as in-scope
+  // until end-of-function rather than end-of-loop) — cheap, correct in
+  // practice for typical code, and never returns a false positive
+  // outside the enclosing function.
+  type Binding = { line: number; col: number };
+  let bestBinding: Binding | undefined;
+  const recordIfMatch = (i: number, t: string, name: string, nameStart: number): void => {
+    if (name !== word) return;
+    if (i === position.line && nameStart >= position.character) return; // cursor not after this binding
+    bestBinding = { line: i, col: nameStart };
+  };
+
+  const VAL_VAR_RE = /\b(?:val|var)\s+(\w+)\b/g;
+  // `for (x in xs)` and `for ((a, b) in xs)`. Also catches `for (x: T in xs)`.
+  const FOR_RE     = /\bfor\s*\(\s*(?:\(\s*(\w+)\s*,\s*(\w+)\s*\)|(\w+))(?:\s*:\s*[\w<>?,\s.]+)?\s+in\b/g;
+  // Lambda params: `{ x ->`, `{ x, y ->`, `{ (a, b) ->`. Inline string
+  // matchers — we don't try to handle `it` since it's keyword-magic.
+  const LAMBDA_RE  = /\{\s*(?:\(\s*(\w+)\s*,\s*(\w+)\s*\)|(\w+)(?:\s*,\s*\w+)*)\s*->/g;
+
   for (let i = sigEndLine; i <= position.line && i < document.lineCount; i++) {
     const t = document.lineAt(i).text;
-    declRe.lastIndex = 0;
+    VAL_VAR_RE.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while ((m = declRe.exec(t))) {
-      // Skip the cursor's own line if the declaration is AT or AFTER the cursor column.
-      if (i === position.line && m.index >= position.character) break;
-      if (m[1] === word) {
-        const col = m.index + m[0].indexOf(word);
-        return new vscode.Location(
-          document.uri,
-          new vscode.Range(new vscode.Position(i, col), new vscode.Position(i, col + word.length)),
-        );
+    while ((m = VAL_VAR_RE.exec(t))) {
+      recordIfMatch(i, t, m[1], m.index + m[0].indexOf(m[1]));
+    }
+    FOR_RE.lastIndex = 0;
+    while ((m = FOR_RE.exec(t))) {
+      // Group 1+2 = destructuring; group 3 = single var.
+      const candidates = m[3] ? [m[3]] : [m[1], m[2]];
+      for (const name of candidates) {
+        const nameIdx = t.indexOf(name, m.index);
+        if (nameIdx >= 0) recordIfMatch(i, t, name, nameIdx);
       }
     }
+    LAMBDA_RE.lastIndex = 0;
+    while ((m = LAMBDA_RE.exec(t))) {
+      const candidates = m[3] ? splitTopLevel(m[0].slice(1, m[0].indexOf('->')), ',').map(s => s.trim()) : [m[1], m[2]];
+      for (const raw of candidates) {
+        const name = raw.replace(/[()\s]/g, '');
+        const nameIdx = t.indexOf(name, m.index);
+        if (nameIdx >= 0) recordIfMatch(i, t, name, nameIdx);
+      }
+    }
+  }
+  if (bestBinding) {
+    return new vscode.Location(
+      document.uri,
+      new vscode.Range(
+        new vscode.Position(bestBinding.line, bestBinding.col),
+        new vscode.Position(bestBinding.line, bestBinding.col + word.length),
+      ),
+    );
   }
 
   // Step 3 — parameter names from the (possibly multi-line) signature.

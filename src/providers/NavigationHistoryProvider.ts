@@ -113,9 +113,15 @@ export class NavigationHistoryProvider implements vscode.Disposable {
 
     // Late-arriving event from our own navigation (fired after setTimeout(0) cleared
     // _isNavigating) — eat it so we don't push a spurious history entry.
+    // We do NOT clear `_navigatingToUri` here: VS Code may still fire one
+    // or more Command-kind selection events for this file (cursor restore,
+    // viewport restore) AFTER this editor-changed event, and those need
+    // the same guard so they aren't pushed as user navigations — pushing
+    // them would silently truncate the forward stack and break Forward
+    // immediately after Back. The 500 ms timer in `_navigateTo` is the
+    // single point of truth for clearing the guard.
     if (this._navigatingToUri === newUri) {
-      this._navigatingToUri = undefined;
-      this._lastActiveUri   = newUri;
+      this._lastActiveUri = newUri;
       return;
     }
 
@@ -221,10 +227,23 @@ export class NavigationHistoryProvider implements vscode.Disposable {
       const uri    = vscode.Uri.parse(entry.uri);
       const pos    = new vscode.Position(entry.line, entry.character);
       const doc    = await vscode.workspace.openTextDocument(uri);
-      const editor = await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: false });
+      // Pass `selection` to showTextDocument so VS Code applies the
+      // cursor + viewport ATOMICALLY with the document open. The
+      // previous flow ( showTextDocument → editor.selection = pos )
+      // raced with VS Code's own view-state restore, occasionally
+      // landing the cursor at the file's saved position (often col 0)
+      // instead of the entry's stored column. The setter and
+      // revealRange below remain as belt-and-braces in case the host
+      // ignores the option (older VS Code versions).
+      const range  = new vscode.Range(pos, pos);
+      const editor = await vscode.window.showTextDocument(doc, {
+        preview:        false,
+        preserveFocus:  false,
+        selection:      range,
+      });
       editor.selection = new vscode.Selection(pos, pos);
       editor.revealRange(
-        new vscode.Range(pos, pos),
+        range,
         vscode.TextEditorRevealType.InCenterIfOutsideViewport,
       );
     } catch {
@@ -233,7 +252,10 @@ export class NavigationHistoryProvider implements vscode.Disposable {
       this._lastActiveUri = entry.uri;
       this._lastKnownPositions.set(entry.uri, { line: entry.line, character: entry.character });
       setTimeout(() => { this._isNavigating = false; }, 0);
-      // Safety: if _onEditorChanged never fires (same-file navigation), clear the guard.
+      // Single point of truth for clearing _navigatingToUri. The
+      // 500 ms window is generous enough to absorb VS Code's
+      // post-show Command-kind selection events for both same-file
+      // and cross-file navigations.
       setTimeout(() => { if (this._navigatingToUri === entry.uri) this._navigatingToUri = undefined; }, 500);
     }
   }

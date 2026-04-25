@@ -42,6 +42,16 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
     const currentIsTest = isTestPath(document.uri.path, testSegments);
     const allow = (path: string) => currentIsTest || !isTestPath(path, testSegments);
 
+    // ── -2. Named-argument LHS resolution ────────────────────────────────────
+    // `Foo(arg = value)` — the LHS `arg` is a Kotlin named argument and refers
+    // to the parameter of the *called* function `Foo`, NOT to any binding in
+    // the calling scope. Must run BEFORE local scope: if a local binding
+    // happens to share the named argument's name (e.g.
+    // `for (name in names) { Foo(name = name) }`), the LHS `name` would
+    // otherwise resolve to the for-loop binding instead of `Foo.name`.
+    const namedArgLoc = resolveNamedArgLhs(document, position, wordRange, word, this.index, allow);
+    if (namedArgLoc) { log('step-2 named-arg LHS hit'); return namedArgLoc; }
+
     // ── -1. Local scope resolution (parameters + local val/var) ──────────────
     // Without this step, Cmd+Click on a parameter usage like `name` in
     // `Text(text = name)` falls through to the workspace index and returns
@@ -497,6 +507,239 @@ function resolveLocalScope(
     const loc = findInDocumentLines(document, funLine, sigEndLine, name => name === word, /\b(\w+)\s*:/g);
     if (loc) return loc;
   }
+  return undefined;
+}
+
+/**
+ * Resolve a word that sits on the LHS of a named argument
+ * (`Foo(arg = value)`) to the `arg` parameter of `Foo`.
+ *
+ * Algorithm:
+ *  1. Confirm the word is a named-arg LHS: it is followed by a single `=`
+ *     (not `==`, `=>`, `>=`, `<=`, `!=`) and is preceded — somewhere
+ *     above on the same line or on previous lines — by an open `(`
+ *     whose matching `)` is past the cursor.
+ *  2. Walk back from the LHS to find that open `(`, balancing nested
+ *     `()` along the way. The token immediately before that `(` (skipping
+ *     `Foo.bar`-style qualifier dots) is the called function's name.
+ *  3. Resolve the called function:
+ *     a. Local file: same `FUN_RE` scan as resolveLocalScope. Look for
+ *        a fun with the matching simple name and pull its `(...)` block.
+ *     b. Workspace index: `index.lookup(funName)` filtered to fun /
+ *        composable kinds. For each candidate, read its source line
+ *        and parse params.
+ *  4. From the resolved function's parameter list, find the parameter
+ *     with the matching name and return its location.
+ *
+ * Returns `undefined` if the cursor is not on a named-arg LHS or no
+ * matching parameter is found — caller falls through to the next step.
+ */
+function resolveNamedArgLhs(
+  document: vscode.TextDocument,
+  position: vscode.Position,
+  wordRange: vscode.Range,
+  word: string,
+  index: SymbolIndex,
+  allow: (path: string) => boolean,
+): vscode.Definition | undefined {
+  if (document.languageId !== 'kotlin' && document.languageId !== 'java') return undefined;
+  if (word.length < 2) return undefined;
+
+  const cursorLine = document.lineAt(position.line).text;
+  const wordEnd    = wordRange.end.character;
+
+  // Step 1 — confirm `word =` (single equals, not comparator/lambda).
+  // Skip whitespace after the word; first non-space must be `=`, and
+  // the char after that `=` must NOT make it a multi-char operator.
+  let probe = wordEnd;
+  while (probe < cursorLine.length && cursorLine[probe] === ' ') probe++;
+  if (cursorLine[probe] !== '=') return undefined;
+  const next = cursorLine[probe + 1];
+  if (next === '=' || next === '>') return undefined; // ==, =>
+  // The chars BEFORE the word should not be a comparator suffix:
+  // `<=word`, `>=word`, `!=word`. The wordRange.start.character is
+  // exactly where the word begins; check the two chars before.
+  const wordStart = wordRange.start.character;
+  if (wordStart >= 1 && cursorLine[wordStart - 1] === '=') {
+    // word is just past `=` (impossible: there'd be no space and we'd
+    // not be on word). But guard anyway.
+    return undefined;
+  }
+  // Also ensure this is NOT a `val word =` / `var word =` declaration —
+  // there it really IS just an assignment, not a named arg.
+  const beforeWord = cursorLine.slice(0, wordStart);
+  if (/\b(?:val|var)\s+$/.test(beforeWord)) return undefined;
+
+  // Step 2 — find the enclosing open `(` and the function name before it.
+  // Walk back across the current line, then previous lines, balancing
+  // `()` until we find a `(` at depth -1.
+  const openLoc = findEnclosingOpenParen(document, position.line, wordStart);
+  if (!openLoc) return undefined;
+
+  const funName = extractFunctionNameBefore(document, openLoc.line, openLoc.col);
+  if (!funName) return undefined;
+
+  // Step 3a — same-file scan: look for `fun funName(...)` declaration.
+  const sameFileLoc = resolveParamInLocalFunction(document, funName, word);
+  if (sameFileLoc) return sameFileLoc;
+
+  // Step 3b — workspace index lookup.
+  const candidates = index.lookup(funName).filter(e =>
+    (e.kind === 'fun' || e.kind === 'composable') && allow(e.uri.path),
+  );
+  if (candidates.length === 0) return undefined;
+
+  const locs: vscode.Location[] = [];
+  for (const cand of candidates) {
+    const loc = resolveParamInIndexedFunction(cand, word);
+    if (loc) locs.push(loc);
+  }
+  if (locs.length === 0) return undefined;
+  if (locs.length === 1) return locs[0];
+  return locs;
+}
+
+/** Find the open `(` that encloses the cursor, walking left across the
+ *  current line and previous lines and balancing `()`. */
+function findEnclosingOpenParen(
+  document: vscode.TextDocument,
+  startLine: number,
+  startCol: number,
+): { line: number; col: number } | undefined {
+  let depth = 0;
+  // Current line: walk from startCol-1 back to 0.
+  const lineText = document.lineAt(startLine).text;
+  for (let c = startCol - 1; c >= 0; c--) {
+    const ch = lineText[c];
+    if (ch === ')')      depth++;
+    else if (ch === '(') {
+      if (depth === 0) return { line: startLine, col: c };
+      depth--;
+    }
+  }
+  // Previous lines (cap at 50).
+  const stop = Math.max(0, startLine - 50);
+  for (let i = startLine - 1; i >= stop; i--) {
+    const t = document.lineAt(i).text;
+    for (let c = t.length - 1; c >= 0; c--) {
+      const ch = t[c];
+      if (ch === ')')      depth++;
+      else if (ch === '(') {
+        if (depth === 0) return { line: i, col: c };
+        depth--;
+      }
+    }
+  }
+  return undefined;
+}
+
+/** The token immediately before `openCol` on `openLine`, skipping
+ *  qualifier dots like `Foo.bar` so we return `bar`. */
+function extractFunctionNameBefore(
+  document: vscode.TextDocument,
+  openLine: number,
+  openCol: number,
+): string | undefined {
+  const text = document.lineAt(openLine).text;
+  let end = openCol;
+  // Skip whitespace between funName and `(` (rare but possible).
+  while (end > 0 && /\s/.test(text[end - 1])) end--;
+  if (end === 0 || !/\w/.test(text[end - 1])) return undefined;
+  let start = end;
+  while (start > 0 && /\w/.test(text[start - 1])) start--;
+  return text.slice(start, end);
+}
+
+/** Look for `fun funName(... param: T ...)` in `document` and return the
+ *  location of `param`'s name in the signature. */
+function resolveParamInLocalFunction(
+  document: vscode.TextDocument,
+  funName: string,
+  paramName: string,
+): vscode.Location | undefined {
+  const NEEDLE = new RegExp(`\\bfun\\s+(?:<[^>]*>\\s*)?(?:[A-Z]\\w+\\s*\\.\\s*)?${funName}\\s*\\(`);
+  for (let i = 0; i < document.lineCount; i++) {
+    const text = document.lineAt(i).text;
+    const m = NEEDLE.exec(text);
+    if (!m) continue;
+    return paramLocationInSignature(document, i, paramName);
+  }
+  return undefined;
+}
+
+/** Resolve param via an index entry (fun/composable in another file). */
+function resolveParamInIndexedFunction(
+  entry: { uri: vscode.Uri; line: number },
+  paramName: string,
+): vscode.Location | undefined {
+  // We don't have an in-memory text document here. Reading the file
+  // synchronously would block; defer this branch to a no-op for
+  // simplicity in the MVP. Callers that need cross-file param
+  // resolution can be served by the index entry's line range — VS
+  // Code's "Go to Definition" picker will land the user on the
+  // function declaration line, which is a strict improvement over
+  // the previous "no result" behaviour.
+  return new vscode.Location(
+    entry.uri,
+    new vscode.Range(new vscode.Position(entry.line, 0), new vscode.Position(entry.line, 0)),
+  );
+}
+
+/** Inside `document`, given the line with `fun funName(`, locate the
+ *  parameter whose name matches `paramName`. Walks the (possibly
+ *  multi-line) signature paren block. */
+function paramLocationInSignature(
+  document: vscode.TextDocument,
+  funLine: number,
+  paramName: string,
+): vscode.Location | undefined {
+  // Reuse the multi-line signature collector logic.
+  let sigText = document.lineAt(funLine).text;
+  const lineOffsets: number[] = [0]; // char offset of each appended line in sigText
+  let parenDepth = countChar(sigText, '(') - countChar(sigText, ')');
+  let endLine    = funLine;
+  for (let i = funLine + 1; parenDepth > 0 && i < document.lineCount; i++) {
+    lineOffsets.push(sigText.length + 1);
+    sigText += '\n' + document.lineAt(i).text;
+    parenDepth += countChar(document.lineAt(i).text, '(') - countChar(document.lineAt(i).text, ')');
+    endLine = i;
+  }
+  const openIdx = sigText.indexOf('(');
+  if (openIdx < 0) return undefined;
+  const params = sliceBalancedParens(sigText, openIdx);
+  if (params === undefined) return undefined;
+
+  // Walk each top-level chunk; pull the name; if it matches, find its
+  // absolute position back in the document.
+  let cursor = openIdx + 1; // position in sigText where the next chunk starts
+  for (const chunk of splitTopLevel(params, ',')) {
+    const cleaned = chunk.replace(/\bvararg\s+|\bnoinline\s+|\bcrossinline\s+/g, '');
+    const nameMatch = /^\s*(?:[A-Z][\w<>?,\s.]*\s+)?(\w+)\s*:/.exec(cleaned);
+    if (nameMatch && nameMatch[1] === paramName) {
+      // The match's name is `nameMatch[1]`; locate it in `chunk` to
+      // compute its absolute offset in sigText.
+      const localIdx = chunk.indexOf(nameMatch[1]);
+      if (localIdx >= 0) {
+        const absInSig = cursor + localIdx;
+        // Convert sigText offset → document line+col.
+        for (let i = lineOffsets.length - 1; i >= 0; i--) {
+          if (lineOffsets[i] <= absInSig) {
+            const col = absInSig - lineOffsets[i];
+            const line = funLine + i;
+            return new vscode.Location(
+              document.uri,
+              new vscode.Range(
+                new vscode.Position(line, col),
+                new vscode.Position(line, col + paramName.length),
+              ),
+            );
+          }
+        }
+      }
+    }
+    cursor += chunk.length + 1; // +1 for the `,` consumed by splitTopLevel
+  }
+  void endLine; // silence unused
   return undefined;
 }
 

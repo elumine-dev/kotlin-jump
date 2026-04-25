@@ -12,6 +12,12 @@ function revealedLines(sels: readonly vscode.Selection[]): Set<number> {
   return s;
 }
 
+interface CachedDecorations {
+  version:        number;
+  optsByLine:     Map<number, vscode.DecorationOptions[]>;
+  swatchesByLine: Map<number, vscode.DecorationOptions[]>;
+}
+
 export class ConstValFoldingProvider implements vscode.Disposable {
   private readonly _hideType  = vscode.window.createTextEditorDecorationType({
     textDecoration: 'none; font-size: 0px;',
@@ -20,31 +26,60 @@ export class ConstValFoldingProvider implements vscode.Disposable {
   private readonly _subs: vscode.Disposable[];
   private _docDebounce: ReturnType<typeof setTimeout> | undefined;
   private _selDebounce: ReturnType<typeof setTimeout> | undefined;
+  // Per-document decoration cache, keyed by document.version so a doc edit
+  // invalidates automatically. Selection changes (cursor up/down) only
+  // re-emit the cached buckets — they NEVER trigger the heavy regex +
+  // index pass, which was the source of perceived fold/unfold lag.
+  private readonly _cache = new WeakMap<vscode.TextDocument, CachedDecorations>();
 
   constructor(private readonly index: SymbolIndex) {
     this._subs = [
       vscode.window.onDidChangeActiveTextEditor(e => {
-        if (e) this._update(e, new Set());
+        if (e) this._apply(e, revealedLines(e.selections));
       }),
       vscode.workspace.onDidChangeTextDocument(e => {
         const ed = vscode.window.activeTextEditor;
         if (ed?.document !== e.document) return;
+        // Doc changed — drop the cache so the next _apply rebuilds.
+        this._cache.delete(e.document);
         clearTimeout(this._docDebounce);
-        this._docDebounce = setTimeout(() => this._update(ed, revealedLines(ed.selections)), 100);
+        this._docDebounce = setTimeout(() => this._apply(ed, revealedLines(ed.selections)), 100);
       }),
       vscode.window.onDidChangeTextEditorSelection(e => {
         clearTimeout(this._selDebounce);
-        this._selDebounce = setTimeout(() => this._update(e.textEditor, revealedLines(e.selections)), 30);
+        // Bumped 30→80 ms: rapid arrow navigation no longer steamrolls the
+        // event loop with redundant repaints. The cache makes each
+        // repaint cheap, but firing fewer of them is even cheaper.
+        this._selDebounce = setTimeout(() => this._apply(e.textEditor, revealedLines(e.selections)), 80);
       }),
     ];
     this.invalidateAll();
   }
 
   invalidateAll(): void {
-    for (const ed of vscode.window.visibleTextEditors) this._update(ed, revealedLines(ed.selections));
+    for (const ed of vscode.window.visibleTextEditors) this._apply(ed, revealedLines(ed.selections));
   }
 
-  private _update(ed: vscode.TextEditor, revealed: Set<number>): void {
+  /** Rebuild the cache for `doc` from scratch. Called on first visit and
+   *  whenever the document version advances. */
+  private _rebuild(doc: vscode.TextDocument): CachedDecorations {
+    const optsByLine     = new Map<number, vscode.DecorationOptions[]>();
+    const swatchesByLine = new Map<number, vscode.DecorationOptions[]>();
+
+    for (let i = 0; i < doc.lineCount; i++) {
+      const text = doc.lineAt(i).text;
+      if (/\bconst\s+val\b/.test(text)) continue;
+      const lineOpts = this._scanLine(i, text);
+      if (lineOpts.opts.length      > 0) optsByLine.set(i,     lineOpts.opts);
+      if (lineOpts.swatches.length  > 0) swatchesByLine.set(i, lineOpts.swatches);
+    }
+    const cache: CachedDecorations = { version: doc.version, optsByLine, swatchesByLine };
+    this._cache.set(doc, cache);
+    return cache;
+  }
+
+  /** Push cached decorations to the editor, omitting lines under the cursor. */
+  private _apply(ed: vscode.TextEditor, revealed: Set<number>): void {
     const lang = ed.document.languageId;
     if (lang !== 'kotlin' && lang !== 'java') {
       ed.setDecorations(this._hideType, []);
@@ -58,16 +93,31 @@ export class ConstValFoldingProvider implements vscode.Disposable {
       return;
     }
 
-    const opts: vscode.DecorationOptions[] = [];
+    let cache = this._cache.get(ed.document);
+    if (!cache || cache.version !== ed.document.version) {
+      cache = this._rebuild(ed.document);
+    }
+
+    const opts:     vscode.DecorationOptions[] = [];
     const swatches: vscode.DecorationOptions[] = [];
-    for (let i = 0; i < ed.document.lineCount; i++) {
-      if (revealed.has(i)) continue;
-      const text = ed.document.lineAt(i).text;
-      // Skip declaration lines — don't fold the const val itself
-      if (/\bconst\s+val\b/.test(text)) continue;
-      CONST_NAME_RE.lastIndex = 0;
-      let m: RegExpExecArray | null;
-      while ((m = CONST_NAME_RE.exec(text))) {
+    for (const [line, lineOpts] of cache.optsByLine) {
+      if (revealed.has(line)) continue;
+      opts.push(...lineOpts);
+    }
+    for (const [line, lineSwatches] of cache.swatchesByLine) {
+      if (revealed.has(line)) continue;
+      swatches.push(...lineSwatches);
+    }
+    ed.setDecorations(this._swatchType, swatches);
+    ed.setDecorations(this._hideType, opts);
+  }
+
+  private _scanLine(i: number, text: string): { opts: vscode.DecorationOptions[]; swatches: vscode.DecorationOptions[] } {
+    const opts:     vscode.DecorationOptions[] = [];
+    const swatches: vscode.DecorationOptions[] = [];
+    CONST_NAME_RE.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = CONST_NAME_RE.exec(text))) {
         if (isInsideCommentOrString(text, m.index) && !isInsideStringInterpolation(text, m.index)) continue;
         // Skip declaration-site identifiers: `val NAME =` / `var NAME =`
         // (non-const declarations that happen to share the same name as a
@@ -131,11 +181,9 @@ export class ConstValFoldingProvider implements vscode.Disposable {
               },
             },
           });
-        }
       }
     }
-    ed.setDecorations(this._swatchType, swatches);
-    ed.setDecorations(this._hideType, opts);
+    return { opts, swatches };
   }
 
   dispose(): void {

@@ -1,7 +1,7 @@
 {
   "name": "kotlin-jump",
-  "displayName": "Kotlin Jump",
-  "description": "Fast Kotlin & Java navigation — Go to Definition, Find Usages, Go to Implementation. No language server needed.",
+  "displayName": "Kotlin Jump — Fast Kotlin & Android Navigation",
+  "description": "Fast Kotlin & Android navigation — Find Usages, Go to Definition, Compose, R.string, Android Run. No JVM, no language server. The Android Studio experience inside VS Code.",
   "version": "1.17.1",
   "publisher": "elumine",
   "license": "MIT",
@@ -32,24 +32,44 @@
   },
   "categories": [
     "Programming Languages",
+    "Testing",
+    "AI",
     "Other"
   ],
   "keywords": [
     "kotlin",
     "android",
-    "navigation",
-    "go to definition",
-    "find usages",
-    "go to implementation",
+    "android studio",
     "jetpack compose",
-    "java",
+    "intellij",
+    "find usages",
+    "go to definition",
+    "kotlin lsp",
     "gradle",
-    "intellij"
+    "java"
   ],
   "galleryBanner": {
     "color": "#7F52FF",
     "theme": "dark"
   },
+  "qna": "https://github.com/elumine-dev/kotlin-jump/issues",
+  "badges": [
+    {
+      "url": "https://img.shields.io/visual-studio-marketplace/i/elumine.kotlin-jump?label=installs&color=7F52FF",
+      "href": "https://marketplace.visualstudio.com/items?itemName=elumine.kotlin-jump",
+      "description": "VS Code Marketplace installs"
+    },
+    {
+      "url": "https://img.shields.io/visual-studio-marketplace/r/elumine.kotlin-jump?label=rating&color=7F52FF",
+      "href": "https://marketplace.visualstudio.com/items?itemName=elumine.kotlin-jump&ssr=false#review-details",
+      "description": "VS Code Marketplace rating"
+    },
+    {
+      "url": "https://img.shields.io/open-vsx/dt/elumine/kotlin-jump?label=Open%20VSX%20downloads&color=c160c0",
+      "href": "https://open-vsx.org/extension/elumine/kotlin-jump",
+      "description": "Open VSX downloads"
+    }
+  ],
   "activationEvents": [
     "onLanguage:kotlin",
     "workspaceContains:**/*.kt",

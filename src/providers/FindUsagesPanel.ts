@@ -102,12 +102,16 @@ export class FindUsagesPanel
       raw = raw.filter(r => !(r.uriString === declUri && r.line === target.line));
     }
 
-    // Exclude an explicit position (code lens click) and short-circuit to direct nav
+    // Exclude an explicit position (code lens click). When the user has
+    // opted into Smart Navigation we further short-circuit a single-result
+    // hit to a direct jump — IntelliJ's "1 usage → just take me there"
+    // behaviour. With Smart Navigation OFF, the click should always open
+    // the panel so the user is never surprised by an auto-jump.
     if (exclude?.excludeUri !== undefined) {
       raw = raw.filter(r => !(r.uriString === exclude.excludeUri && r.line === exclude.excludeLine));
 
-      // Single result → navigate directly instead of showing the panel
-      if (raw.length === 1) {
+      const smartNav = vscode.workspace.getConfiguration('kotlinJump').get<boolean>('smartNavigation', false);
+      if (smartNav && raw.length === 1) {
         const r = raw[0];
         await vscode.commands.executeCommand('vscode.open', r.uri, {
           preview: true,

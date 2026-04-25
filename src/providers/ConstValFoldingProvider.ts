@@ -30,7 +30,7 @@ export class ConstValFoldingProvider implements vscode.Disposable {
   // invalidates automatically. Selection changes (cursor up/down) only
   // re-emit the cached buckets — they NEVER trigger the heavy regex +
   // index pass, which was the source of perceived fold/unfold lag.
-  private readonly _cache = new WeakMap<vscode.TextDocument, CachedDecorations>();
+  private _cache = new WeakMap<vscode.TextDocument, CachedDecorations>();
 
   constructor(private readonly index: SymbolIndex) {
     this._subs = [
@@ -52,6 +52,17 @@ export class ConstValFoldingProvider implements vscode.Disposable {
         // repaint cheap, but firing fewer of them is even cheaper.
         this._selDebounce = setTimeout(() => this._apply(e.textEditor, revealedLines(e.selections)), 80);
       }),
+      // SymbolIndex doesn't expose an onDidChange event yet — but it
+      // updates whenever a Kotlin/Java file is parsed (initial scan,
+      // edits, saves). When a foreign file saves, our local cache may
+      // now be stale (e.g. user just typed `const val NEW = …` in
+      // Constants.kt and switched to a file that references it). Drop
+      // ALL caches; they rebuild lazily on next selection/edit.
+      vscode.workspace.onDidSaveTextDocument(saved => {
+        if (saved.languageId !== 'kotlin' && saved.languageId !== 'java') return;
+        this._cache = new WeakMap();
+        this.invalidateAll();
+      }),
     ];
     this.invalidateAll();
   }
@@ -61,21 +72,48 @@ export class ConstValFoldingProvider implements vscode.Disposable {
   }
 
   /** Rebuild the cache for `doc` from scratch. Called on first visit and
-   *  whenever the document version advances. */
+   *  whenever the document version advances. Per-rebuild memoization
+   *  caches the index lookup result for each name — without it,
+   *  `SymbolIndex.lookup()` allocates `[...set]` on every call and the
+   *  `.filter()` allocates again, which on a 1 000-line constant-heavy
+   *  file produced ~50 000 redundant array allocations and visible GC
+   *  pauses. */
   private _rebuild(doc: vscode.TextDocument): CachedDecorations {
     const optsByLine     = new Map<number, vscode.DecorationOptions[]>();
     const swatchesByLine = new Map<number, vscode.DecorationOptions[]>();
+    const lookupMemo     = new Map<string, /* constValue */ string | null>();
 
     for (let i = 0; i < doc.lineCount; i++) {
       const text = doc.lineAt(i).text;
       if (/\bconst\s+val\b/.test(text)) continue;
-      const lineOpts = this._scanLine(i, text);
+      const lineOpts = this._scanLine(i, text, lookupMemo);
       if (lineOpts.opts.length      > 0) optsByLine.set(i,     lineOpts.opts);
       if (lineOpts.swatches.length  > 0) swatchesByLine.set(i, lineOpts.swatches);
     }
     const cache: CachedDecorations = { version: doc.version, optsByLine, swatchesByLine };
     this._cache.set(doc, cache);
     return cache;
+  }
+
+  /** Resolve a SCREAMING_SNAKE_CASE name to its const value (or `null`
+   *  for "no unique const val with that name"). Result is memoized for
+   *  the lifetime of the current rebuild — same name across many lines
+   *  produces a single index lookup. */
+  private _resolveConstValue(name: string, memo: Map<string, string | null>): string | null {
+    const cached = memo.get(name);
+    if (cached !== undefined) return cached;
+    const entries = this.index.lookup(name);
+    let unique: string | null = null;
+    let found = 0;
+    for (const e of entries) {
+      if (!e.isConst || !e.constValue) continue;
+      found++;
+      if (found > 1) { unique = null; break; }
+      unique = e.constValue;
+    }
+    const value = found === 1 ? unique : null;
+    memo.set(name, value);
+    return value;
   }
 
   /** Push cached decorations to the editor, omitting lines under the cursor. */
@@ -112,24 +150,20 @@ export class ConstValFoldingProvider implements vscode.Disposable {
     ed.setDecorations(this._hideType, opts);
   }
 
-  private _scanLine(i: number, text: string): { opts: vscode.DecorationOptions[]; swatches: vscode.DecorationOptions[] } {
+  private _scanLine(i: number, text: string, lookupMemo: Map<string, string | null>): { opts: vscode.DecorationOptions[]; swatches: vscode.DecorationOptions[] } {
     const opts:     vscode.DecorationOptions[] = [];
     const swatches: vscode.DecorationOptions[] = [];
     CONST_NAME_RE.lastIndex = 0;
     let m: RegExpExecArray | null;
     while ((m = CONST_NAME_RE.exec(text))) {
         if (isInsideCommentOrString(text, m.index) && !isInsideStringInterpolation(text, m.index)) continue;
-        // Skip declaration-site identifiers: `val NAME =` / `var NAME =`
-        // (non-const declarations that happen to share the same name as a
-        // const val elsewhere in the file — happens when a wrapper `object`
-        // exposes the same key). Without this guard the provider rewrites
-        // `val CAMERA = ...` as `val "android.permission.CAMERA" = ...`,
-        // which looks like broken Kotlin to the reader.
+        // Skip declaration-site identifiers: `val NAME =` / `var NAME =`.
+        // Cheap regex on the prefix BEFORE doing any allocation-heavy
+        // index lookup — this is on the hottest path.
         const before = text.slice(0, m.index);
         if (/\b(?:val|var)\s+$/.test(before)) continue;
-        const entries = this.index.lookup(m[1]).filter(e => e.isConst && e.constValue);
-        if (entries.length !== 1) continue; // skip ambiguous or unknown
-        const val   = entries[0].constValue!;
+        const val = this._resolveConstValue(m[1], lookupMemo);
+        if (val === null) continue;
         const short = val.length > MAX_LABEL_LEN ? val.slice(0, MAX_LABEL_LEN) + '…' : val;
         const isStr = val.startsWith('"') || val.startsWith("'");
 

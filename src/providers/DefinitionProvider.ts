@@ -394,7 +394,13 @@ function resolveLocalScope(
   if (document.languageId !== 'kotlin' && document.languageId !== 'java') return undefined;
   if (word.length < 2) return undefined;
 
-  const MAX_SCAN_LINES = 400;
+  const MAX_SCAN_LINES = 5000;
+
+  // Permissive `fun NAME(` matcher: `[^(]*?` non-greedily skips the
+  // generic-parameter list (with arbitrarily nested `<>`), the
+  // optional receiver (`String.`), and any other signature noise
+  // until the actual identifier right before `(`.
+  const FUN_RE = /\bfun\b[^(]*?\b(\w+)\s*\(/;
 
   // Step 1 — find the line that opens the enclosing function. Walk
   // backward balancing `{`/`}`. Every time we cross an opening brace
@@ -404,38 +410,48 @@ function resolveLocalScope(
   // line, RESET the balance, and keep walking until we find a line
   // that actually declares a function.
   const start = Math.max(0, position.line - MAX_SCAN_LINES);
-  const FUN_RE = /\bfun\s+(?:<[^>]*>\s*)?(?:[A-Z]\w+\s*\.\s*)?(\w+)\s*\(/;
   let braceDepth = 0;
   let funLine = -1;
   let funLineText = '';
-  for (let i = position.line; i >= start; i--) {
-    const text = document.lineAt(i).text;
-    // Balance from RIGHT to LEFT.
-    for (let c = text.length - 1; c >= 0; c--) {
-      const ch = text[c];
-      if (ch === '}')      braceDepth++;
-      else if (ch === '{') braceDepth--;
-    }
-    if (braceDepth < 0) {
-      // Crossed a `{`. Is THIS line (or a continuation above for
-      // multi-line signatures) a `fun NAME(`?
-      let probe = i;
-      while (probe >= start) {
-        const probeText = document.lineAt(probe).text;
-        if (FUN_RE.test(probeText)) {
-          funLine = probe;
-          funLineText = probeText;
-          break;
-        }
-        // Multi-line signature continuation: keep walking up only if
-        // we still see signature characters (no `{` already seen above).
-        if (!probeText.includes('(') || probeText.includes('{')) break;
-        probe--;
+
+  // Single-expression body fast path: `fun NAME(...): T = expr` has no
+  // body braces, so the brace-balance walker will never trigger. If
+  // the cursor's own line declares a function, that's the enclosing
+  // function — no walking needed.
+  const cursorLineText = document.lineAt(position.line).text;
+  if (FUN_RE.test(cursorLineText)) {
+    funLine = position.line;
+    funLineText = cursorLineText;
+  } else {
+    for (let i = position.line; i >= start; i--) {
+      const text = document.lineAt(i).text;
+      // Balance from RIGHT to LEFT.
+      for (let c = text.length - 1; c >= 0; c--) {
+        const ch = text[c];
+        if (ch === '}')      braceDepth++;
+        else if (ch === '{') braceDepth--;
       }
-      if (funLine >= 0) break;
-      // Not a function — this was a sibling block. Reset depth so the
-      // next opener we cross is checked the same way.
-      braceDepth = 0;
+      if (braceDepth < 0) {
+        // Crossed a `{`. Walk up looking for `fun NAME(` — handles
+        // multi-line signatures by continuing past param-decl lines.
+        // Stops if we cross a `}` (sibling function close above).
+        let probe = i;
+        while (probe >= start) {
+          const probeText = document.lineAt(probe).text;
+          if (FUN_RE.test(probeText)) {
+            funLine = probe;
+            funLineText = probeText;
+            break;
+          }
+          // Tolerate `}` on the FIRST iteration (the `{` line itself
+          // may have a sibling `}` like `} else {`). Bail on later
+          // iterations — we'd be entering a previous function.
+          if (probe < i && probeText.includes('}')) break;
+          probe--;
+        }
+        if (funLine >= 0) break;
+        braceDepth = 0;
+      }
     }
   }
   if (funLine < 0) return undefined;
@@ -817,23 +833,38 @@ function findLocalUsages(
 }
 
 /** True when `text[wordStart..wordStart+wordLen]` is followed (after
- *  whitespace) by a single `=` and is inside an open paren earlier on
- *  the same line. Cheap heuristic — the multi-line case is rare for
- *  smart-nav and falls back to "no match" if missed. */
+ *  whitespace) by a single `=` AND the IMMEDIATELY enclosing opener
+ *  to its left is an unmatched `(` (call args), not an unmatched `{`
+ *  (lambda body). Distinguishes:
+ *
+ *    Foo(name = x)              ← named-arg LHS, return true
+ *    Foo { x -> name = x }      ← assignment in lambda, return false
+ *    withContext(IO) { x = 5 }  ← assignment in lambda, return false
+ *
+ *  Single-line heuristic — multi-line named-args that span lines
+ *  fall through to "not a named-arg" silently. Acceptable: smart-nav
+ *  may then surface the LHS as an extra usage in the picker, which is
+ *  noise, not a wrong jump. */
 function looksLikeNamedArgLhs(text: string, wordStart: number, wordLen: number): boolean {
   let probe = wordStart + wordLen;
   while (probe < text.length && text[probe] === ' ') probe++;
   if (text[probe] !== '=') return false;
   const next = text[probe + 1];
   if (next === '=' || next === '>') return false; // ==, =>
-  // Inside an unmatched `(` earlier on this line?
-  let depth = 0;
+  // Walk back balancing BOTH parens and braces. Whichever opener we
+  // encounter unmatched first decides the enclosing scope.
+  let parenDepth = 0;
+  let braceDepth = 0;
   for (let c = wordStart - 1; c >= 0; c--) {
     const ch = text[c];
-    if (ch === ')')      depth++;
+    if (ch === ')')      parenDepth++;
     else if (ch === '(') {
-      if (depth === 0) return true;
-      depth--;
+      if (parenDepth === 0) return true; // unmatched ( = call args
+      parenDepth--;
+    } else if (ch === '}') braceDepth++;
+    else if (ch === '{') {
+      if (braceDepth === 0) return false; // unmatched { = lambda body
+      braceDepth--;
     }
   }
   return false;

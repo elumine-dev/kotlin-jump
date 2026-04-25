@@ -1,16 +1,20 @@
-# 🚀 Kotlin Jump
-
-<p align="center">
-  <img src="media/logo-128.png" width="96" alt="Kotlin Jump logo" />
-</p>
-
-<p align="center">
-  <strong>Kotlin navigation in VS Code that actually feels instant.</strong><br/>
-  No LSP. No JVM. No delay.
-</p>
+# Kotlin Jump
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/welcome.webp" width="720" alt="Kotlin Jump demo" />
+</p>
+
+<p align="center">
+  <strong>The Android Studio experience inside VS Code.</strong><br/>
+  Fast Kotlin & Android navigation — Find Usages, Go to Definition, Compose, R.string, Android Run.<br/>
+  No JVM. No language server.
+</p>
+
+<p align="center">
+  <a href="https://marketplace.visualstudio.com/items?itemName=elumine.kotlin-jump"><img src="https://img.shields.io/visual-studio-marketplace/i/elumine.kotlin-jump?label=installs&color=7F52FF&style=flat-square" alt="VS Code installs" /></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=elumine.kotlin-jump&ssr=false#review-details"><img src="https://img.shields.io/visual-studio-marketplace/r/elumine.kotlin-jump?label=rating&color=7F52FF&style=flat-square" alt="Rating" /></a>
+  <a href="https://open-vsx.org/extension/elumine/kotlin-jump"><img src="https://img.shields.io/open-vsx/dt/elumine/kotlin-jump?label=Open%20VSX&color=c160c0&style=flat-square" alt="Open VSX downloads" /></a>
+  <a href="https://github.com/elumine-dev/kotlin-jump/blob/main/LICENSE"><img src="https://img.shields.io/github/license/elumine-dev/kotlin-jump?style=flat-square&color=blue" alt="MIT License" /></a>
 </p>
 
 <p align="center">
@@ -25,10 +29,6 @@
   <a href="https://marketplace.visualstudio.com/items?itemName=elumine.kotlin-jump">
     <img src="https://img.shields.io/badge/Install-VS_Code-blue?style=for-the-badge&logo=visualstudiocode" alt="Install Kotlin Jump" />
   </a>
-</p>
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/kotlin-jump-infographic.png" width="720" alt="Kotlin Jump at a glance — features, performance, and workflow" />
 </p>
 
 ---
@@ -52,6 +52,16 @@ Kotlin Jump skips all of that.
 Just instant navigation across your project.
 
 Once you get used to it, everything else feels slow.
+
+---
+
+## ✨ What's new
+
+- **🎨 Drawable previews** _(v1.17)_ — hover any `R.drawable.*` for an inline thumbnail; the gutter shows a mini render alongside every reference.
+- **⚡ Dispatcher-aware suspend markers** _(v1.16)_ — `withContext(Dispatchers.IO)` shows 🧵 inline; thread context at a glance, before the UI freezes.
+- **⌨️ Default keyboard shortcuts** _(v1.16)_ — `Alt+F7`, `Alt+Shift+T`, `Cmd+Alt+←/→`, `Shift+Alt+O`. IntelliJ-like out of the box.
+
+[Full changelog →](CHANGELOG.md)
 
 ---
 
@@ -126,6 +136,85 @@ Fast, focused, built for real projects.
 
 ---
 
+## 📱 Android Run Button
+
+Build, install, launch — one click.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/android-run.webp" width="720" />
+</p>
+
+No setup required. Detects your app module automatically, picks the right Gradle install task, and launches on the connected device or emulator.
+
+No device connected? It finds your AVDs and offers to start one.
+
+**Monorepos and multi-flavor projects** — add `kotlinJump.androidProjects` to `.vscode/settings.json`.
+
+Also needed if your `applicationId` lives in a **build-logic convention plugin** — the auto-detector can't read it.
+
+```jsonc
+// .vscode/settings.json
+{
+  "kotlinJump.androidProjects": [
+    {
+      "name": "Mobile",
+      "module": "mobile/app",
+      "package": "com.example.mobile.debug",
+      "variant": "Debug"
+    },
+    {
+      "name": "TV",
+      "module": "tv/app",
+      "package": "com.example.tv.debug",
+      "variant": "TvDebug"
+    }
+  ]
+}
+```
+
+| Field | Description |
+|---|---|
+| `name` | Label shown in button and picker |
+| `module` | Path to app module — `"app"` or `"mobile/app"` |
+| `package` | Debug application ID |
+| `variant` | Build variant → `install{Variant}` (default: `"Debug"`) |
+
+A `$(chevron-down)` button appears next to Run when multiple apps are configured. Click to switch.
+
+Reset: **Cmd+Shift+P → Kotlin Jump: Reset Android Run Config**
+
+> 💡 **Saving time on every Cmd+R?** Help other Android devs find Kotlin Jump → [**⭐ Rate it on the Marketplace**](https://marketplace.visualstudio.com/items?itemName=elumine.kotlin-jump&ssr=false#review-details). 30 seconds, real impact.
+
+---
+
+## 🧵 String Resource Folding
+
+Stop jumping to `strings.xml`.
+
+```kotlin
+Text(text = R.string.button_ok)
+
+// becomes
+
+Text(text = "OK")
+```
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/string-resource-folding.webp" width="720" />
+</p>
+
+Android only.
+
+### 🌍 Locale grid on hover
+
+Hover any `R.string.*` reference to see **every translation side by side** — no hunt through `values-*/strings.xml`.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/string-locale-grid.webp" width="720" />
+</p>
+
+---
+
 ## 🔢 Code Lens
 
 Always-visible context.
@@ -176,83 +265,6 @@ Back and forward — with **line AND column restored**, not just the file.
 </p>
 
 Every stop remembered exactly where you were — across files, across packages.
-
----
-
-## 📱 Android Run Button
-
-Build, install, launch — one click.
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/android-run.webp" width="720" />
-</p>
-
-No setup required. Detects your app module automatically, picks the right Gradle install task, and launches on the connected device or emulator.
-
-No device connected? It finds your AVDs and offers to start one.
-
-**Monorepos and multi-flavor projects** — add `kotlinJump.androidProjects` to `.vscode/settings.json`.
-
-Also needed if your `applicationId` lives in a **build-logic convention plugin** — the auto-detector can't read it.
-
-```jsonc
-// .vscode/settings.json
-{
-  "kotlinJump.androidProjects": [
-    {
-      "name": "Mobile",
-      "module": "mobile/app",
-      "package": "com.example.mobile.debug",
-      "variant": "Debug"
-    },
-    {
-      "name": "TV",
-      "module": "tv/app",
-      "package": "com.example.tv.debug",
-      "variant": "TvDebug"
-    }
-  ]
-}
-```
-
-| Field | Description |
-|---|---|
-| `name` | Label shown in button and picker |
-| `module` | Path to app module — `"app"` or `"mobile/app"` |
-| `package` | Debug application ID |
-| `variant` | Build variant → `install{Variant}` (default: `"Debug"`) |
-
-A `$(chevron-down)` button appears next to Run when multiple apps are configured. Click to switch.
-
-Reset: **Cmd+Shift+P → Kotlin Jump: Reset Android Run Config**
-
----
-
-## 🧵 String Resource Folding
-
-Stop jumping to `strings.xml`.
-
-```kotlin
-Text(text = R.string.button_ok)
-
-// becomes
-
-Text(text = "OK")
-```
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/string-resource-folding.webp" width="720" />
-</p>
-
-Android only.
-
-### 🌍 Locale grid on hover
-
-Hover any `R.string.*` reference to see **every translation side by side** — no hunt through `values-*/strings.xml`.
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/string-locale-grid.webp" width="720" />
-</p>
 
 ---
 
@@ -443,6 +455,20 @@ Fast by design.
 - String folding → Android only
 
 Kotlin Jump focuses on one thing: **navigation speed**.
+
+---
+
+## ⭐ Like Kotlin Jump?
+
+If it shaved minutes off your day, **even 30 seconds of your time would mean a lot** — every rating helps other Android & Kotlin devs find this.
+
+<p align="center">
+  <a href="https://marketplace.visualstudio.com/items?itemName=elumine.kotlin-jump&ssr=false#review-details">
+    <img src="https://img.shields.io/badge/⭐_Rate_on_Marketplace-7F52FF?style=for-the-badge" alt="Rate Kotlin Jump on the VS Code Marketplace" />
+  </a>
+</p>
+
+Found a bug or have a feature idea? [**Open an issue**](https://github.com/elumine-dev/kotlin-jump/issues) — answers usually within 24 h.
 
 ---
 

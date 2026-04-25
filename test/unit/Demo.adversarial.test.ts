@@ -332,13 +332,12 @@ describe('DEMO-CL-1 — ApiService.kt : CodeLensProvider → usageOnly lens uniq
     provider = new KotlinCodeLensProvider(index);
   });
 
-  it('✓ ApiService (interface) → 1 lens usageOnly dans CodeLensProvider', () => {
+  it('✓ ApiService (interface) → lens usageOnly sur la déclaration', () => {
     const lenses = provider.provideCodeLenses(makeDoc(demoUri(MAIN, 'ApiService.kt'))) as any[];
-    const usageOnly = lenses.filter(l => l.data?.usageOnly === true);
-    expect(usageOnly).toHaveLength(1);
-    // La lens usageOnly doit être sur la ligne de l'interface
     const apiEntry = index.lookup('ApiService')[0]!;
-    expect(usageOnly[0].range.start.line).toBe(apiEntry.line);
+    const onIface = lenses.filter(l => l.range.start.line === apiEntry.line);
+    expect(onIface).toHaveLength(1);
+    expect(onIface[0].data.usageOnly).toBe(true);
   });
 
   it('✗ CodeLensProvider NE génère PAS de lens normal pour ApiService (c\'est une interface)', () => {
@@ -347,12 +346,14 @@ describe('DEMO-CL-1 — ApiService.kt : CodeLensProvider → usageOnly lens uniq
     expect(normal).toHaveLength(0);
   });
 
-  it('✗ méthodes d\'interface (fetchUser, updateUser, deleteUser) → 0 lens CodeLensProvider', () => {
+  it('✓ méthodes d\'interface (fetchUser, updateUser, deleteUser) → lens usageOnly chacune', () => {
     const lenses = provider.provideCodeLenses(makeDoc(demoUri(MAIN, 'ApiService.kt'))) as any[];
-    const fetchEntry = index.lookup('fetchUser').find(e => !e.isOverride);
-    if (fetchEntry) {
-      const lens = lenses.find(l => l.range.start.line === fetchEntry.line);
-      expect(lens).toBeUndefined();
+    for (const name of ['fetchUser', 'updateUser', 'deleteUser']) {
+      const entry = index.lookup(name).find(e => !e.isOverride);
+      if (!entry) continue;
+      const lens = lenses.find(l => l.range.start.line === entry.line);
+      expect(lens, `lens missing for ${name}`).toBeDefined();
+      expect((lens as any).data.usageOnly).toBe(true);
     }
   });
 });

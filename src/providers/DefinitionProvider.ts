@@ -42,6 +42,18 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
     const currentIsTest = isTestPath(document.uri.path, testSegments);
     const allow = (path: string) => currentIsTest || !isTestPath(path, testSegments);
 
+    // ── -1. Local scope resolution (parameters + local val/var) ──────────────
+    // Without this step, Cmd+Click on a parameter usage like `name` in
+    // `Text(text = name)` falls through to the workspace index and returns
+    // every top-level/class-level symbol named `name` — dozens of false
+    // positives in any non-trivial codebase. The fix: when the cursor sits
+    // inside a function, first try to resolve the word against that
+    // function's own parameters and earlier locals. If found, that win
+    // is unambiguous — a parameter shadows everything else by Kotlin's
+    // scoping rules.
+    const localLoc = resolveLocalScope(document, position, word);
+    if (localLoc) { log('step-1 local scope hit'); return localLoc; }
+
     // ── 0. Qualified access: e.g. TypeA.VALUE or TypeB.VALUE ─────────────────
     const qualLocs = this.lookupQualified(word, wordRange, document, allow);
     log(`step0 qualLocs=${qualLocs.length} → ${qualLocs.map(l => l.uri.path).join(', ') || 'none'}`);
@@ -318,6 +330,189 @@ export function isAndroidResourceRef(line: string, wordStart: number): boolean {
   let k = j - 2;
   while (k > 0 && /\w/.test(line[k - 1])) k--;
   return line.slice(k, j - 1) === 'R';
+}
+
+/**
+ * Resolve a word in the local scope of the function/lambda enclosing
+ * `position`. Returns a Location pointing at the parameter or local
+ * `val`/`var` declaration, or `undefined` if the word isn't local.
+ *
+ * Algorithm:
+ *  1. Walk backward from `position.line`, balancing braces, until we
+ *     find a `fun NAME(` opener at depth 0 (the enclosing function),
+ *     OR run past `MAX_SCAN_LINES` (cap blast radius on huge files).
+ *  2. Inside the function body (between `{` and the cursor), match
+ *     `val NAME` / `var NAME` declarations preceding the cursor.
+ *  3. Inside the function header (the parenthesised parameter list),
+ *     match `NAME: Type` patterns.
+ *
+ * The first hit wins. Parameter declarations always shadow same-name
+ * locals declared LATER, so we return the local if the cursor is past
+ * its declaration; otherwise the parameter.
+ *
+ * Skipped (out of scope, future work): nested lambda parameters with
+ * `it`, destructuring `(a, b) ->`, `for (x in xs)` loop bindings,
+ * `lambda.let { x -> }`. Those will fall through to the workspace
+ * index and may still produce false positives — better than nothing,
+ * worse than a real scope analyser.
+ */
+function resolveLocalScope(
+  document: vscode.TextDocument,
+  position: vscode.Position,
+  word: string,
+): vscode.Location | undefined {
+  if (document.languageId !== 'kotlin' && document.languageId !== 'java') return undefined;
+  if (word.length < 2) return undefined;
+
+  const MAX_SCAN_LINES = 400;
+
+  // Step 1 — find the line that opens the enclosing function. We walk
+  // backwards balancing `{`/`}` so a sibling block above doesn't trick
+  // us into picking the wrong function.
+  const start = Math.max(0, position.line - MAX_SCAN_LINES);
+  let braceDepth = 0;
+  let funLine = -1;
+  let funLineText = '';
+  for (let i = position.line; i >= start; i--) {
+    const text = document.lineAt(i).text;
+    // Balance from RIGHT to LEFT so we don't double-count line we're on.
+    for (let c = text.length - 1; c >= 0; c--) {
+      const ch = text[c];
+      if (ch === '}')      braceDepth++;
+      else if (ch === '{') braceDepth--;
+    }
+    if (braceDepth < 0) {
+      // We crossed an opening `{` that has no matching close before
+      // the cursor — this is the body opener of the enclosing fun.
+      // Look for `fun NAME(` on this line OR a line above (multi-line
+      // signatures). Walk up while still seeing `(` /  signature
+      // continuation.
+      let probe = i;
+      while (probe >= start) {
+        const probeText = document.lineAt(probe).text;
+        const m = /\bfun\s+(?:<[^>]*>\s*)?(?:[A-Z]\w+\s*\.\s*)?(\w+)\s*\(/.exec(probeText);
+        if (m) { funLine = probe; funLineText = probeText; break; }
+        // Multi-line signature opener: this line has `(` but no `fun` —
+        // continue backwards.
+        if (!probeText.includes('(')) break;
+        probe--;
+      }
+      break;
+    }
+  }
+  if (funLine < 0) return undefined;
+
+  // Collect signature text across continuation lines until balanced `(...)`.
+  let sigText = funLineText;
+  let parenDepth = countChar(sigText, '(') - countChar(sigText, ')');
+  let sigEndLine = funLine;
+  for (let i = funLine + 1; parenDepth > 0 && i <= position.line && i < document.lineCount; i++) {
+    const t = document.lineAt(i).text;
+    sigText += '\n' + t;
+    parenDepth += countChar(t, '(') - countChar(t, ')');
+    sigEndLine = i;
+  }
+
+  // Step 2 — local val/var declarations between sigEndLine+1 and the cursor.
+  // Walk forward; first match BEFORE the cursor wins.
+  const declRe = /\b(?:val|var)\s+(\w+)\b/g;
+  for (let i = sigEndLine; i <= position.line && i < document.lineCount; i++) {
+    const t = document.lineAt(i).text;
+    declRe.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = declRe.exec(t))) {
+      // Skip the cursor's own line if the declaration is AT or AFTER the cursor column.
+      if (i === position.line && m.index >= position.character) break;
+      if (m[1] === word) {
+        const col = m.index + m[0].indexOf(word);
+        return new vscode.Location(
+          document.uri,
+          new vscode.Range(new vscode.Position(i, col), new vscode.Position(i, col + word.length)),
+        );
+      }
+    }
+  }
+
+  // Step 3 — parameter names from the (possibly multi-line) signature.
+  // Only consider names INSIDE the outermost parentheses of the function
+  // signature: `fun foo(a: Int, b: String)`.
+  const openIdx = sigText.indexOf('(');
+  if (openIdx < 0) return undefined;
+  const params  = sliceBalancedParens(sigText, openIdx);
+  if (params === undefined) return undefined;
+  // Param syntax: `[modifiers] NAME: TYPE [= default]`. Greedy match each
+  // top-level `,`-separated chunk and pull the name from before the colon.
+  for (const chunk of splitTopLevel(params, ',')) {
+    const cleaned = chunk.replace(/\bvararg\s+|\bnoinline\s+|\bcrossinline\s+/g, '').trim();
+    const nameMatch = /^(?:[A-Z][\w<>?,\s.]*\s+)?(\w+)\s*:/.exec(cleaned);
+    if (!nameMatch || nameMatch[1] !== word) continue;
+    // Find the absolute position of this name in funLineText / multi-line sig.
+    const loc = findInDocumentLines(document, funLine, sigEndLine, name => name === word, /\b(\w+)\s*:/g);
+    if (loc) return loc;
+  }
+  return undefined;
+}
+
+function countChar(s: string, ch: string): number {
+  let n = 0;
+  for (let i = 0; i < s.length; i++) if (s[i] === ch) n++;
+  return n;
+}
+
+/** Returns the substring inside a balanced `(...)` starting at `openIdx`,
+ *  or `undefined` if the parens are unbalanced. */
+function sliceBalancedParens(s: string, openIdx: number): string | undefined {
+  let depth = 0;
+  for (let i = openIdx; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '(')      depth++;
+    else if (ch === ')') {
+      depth--;
+      if (depth === 0) return s.slice(openIdx + 1, i);
+    }
+  }
+  return undefined;
+}
+
+/** Split `s` on `sep` only at top level (depth 0 of `()` / `<>` / `[]`). */
+function splitTopLevel(s: string, sep: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let buf = '';
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '(' || ch === '<' || ch === '[') depth++;
+    else if (ch === ')' || ch === '>' || ch === ']') depth--;
+    if (ch === sep && depth === 0) { out.push(buf); buf = ''; continue; }
+    buf += ch;
+  }
+  if (buf) out.push(buf);
+  return out;
+}
+
+/** Walk lines [from..to] looking for `re` matches; first match satisfying
+ *  `pred(name)` returns its document location. */
+function findInDocumentLines(
+  document: vscode.TextDocument,
+  from: number,
+  to: number,
+  pred: (name: string) => boolean,
+  re: RegExp,
+): vscode.Location | undefined {
+  for (let i = from; i <= to; i++) {
+    const text = document.lineAt(i).text;
+    re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text))) {
+      if (pred(m[1])) {
+        return new vscode.Location(
+          document.uri,
+          new vscode.Range(new vscode.Position(i, m.index), new vscode.Position(i, m.index + m[1].length)),
+        );
+      }
+    }
+  }
+  return undefined;
 }
 
 function withAliasTargets(

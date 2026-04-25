@@ -406,7 +406,7 @@ export function isAndroidResourceRef(line: string, wordStart: number): boolean {
  * index and may still produce false positives — better than nothing,
  * worse than a real scope analyser.
  */
-function resolveLocalScope(
+export function resolveLocalScope(
   document: vscode.TextDocument,
   position: vscode.Position,
   word: string,
@@ -813,7 +813,7 @@ function paramLocationInSignature(
  *  - Skip the cursor's own line if the match column equals the cursor's
  *    word start (that's the declaration).
  */
-function findLocalUsages(
+export function findLocalUsages(
   document: vscode.TextDocument,
   position: vscode.Position,
   word: string,

@@ -3,6 +3,8 @@ import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { SymbolKind as KtKind } from '../indexer/KotlinParser';
 import { resolveBest } from '../util/ImportResolver';
 import { readSignature, extractKDoc, formatKDoc } from '../util/SignatureReader';
+import { isInsideCommentOrString, isInsideStringInterpolation } from '../util/textUtils';
+import { resolveLocalScope } from './DefinitionProvider';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 
@@ -19,6 +21,30 @@ export class KotlinHoverProvider implements vscode.HoverProvider {
 
     const word = document.getText(wordRange);
     if (word.length < 2) return null;
+
+    // Plain string / comment guard — text inside a string literal or
+    // comment is NOT a code reference. Without this check, hovering
+    // `Level` in `"Level $level"` would show the workspace's
+    // top-level `Level` constant — wrong info, very visible.
+    if (document.languageId === 'kotlin' || document.languageId === 'java') {
+      const lineText  = document.lineAt(position.line).text;
+      const wordStart = wordRange.start.character;
+      if (isInsideCommentOrString(lineText, wordStart)) {
+        const isShortInterp = wordStart >= 1 && lineText[wordStart - 1] === '$';
+        const isFullInterp  = isInsideStringInterpolation(lineText, wordStart);
+        if (!isShortInterp && !isFullInterp) return null;
+      }
+    }
+
+    // Local-scope guard — when the word is a function parameter, local
+    // val/var, for-loop binding, or lambda parameter, the workspace
+    // index can only return WRONG info (a top-level symbol that
+    // happens to share the name). Suppress the hover entirely rather
+    // than mislead. Cmd+Click still navigates correctly to the local
+    // declaration through DefinitionProvider's same logic.
+    if (resolveLocalScope(document, position, word)) {
+      return null;
+    }
 
     // Prefer import-resolved entry for precision; fall back only when unambiguous
     let entry: SymbolEntry | undefined;

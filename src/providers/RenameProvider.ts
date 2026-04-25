@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { scanForUsages, scanImports, UsageResult, isExcluded, resolveSearchTarget } from './FindUsagesEngine';
+import { resolveLocalScope, findLocalUsages } from './DefinitionProvider';
+import { isInsideCommentOrString, isInsideStringInterpolation } from '../util/textUtils';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 
@@ -64,6 +66,28 @@ export class KotlinRenameProvider implements vscode.RenameProvider {
     if (!wordRange) return null;
     const word = document.getText(wordRange);
     if (word.length < 2) return null;
+
+    // Refuse rename on plain string / comment text — these are not
+    // symbols. Allow short ($word) and full ${word} interpolation.
+    if (document.languageId === 'kotlin' || document.languageId === 'java') {
+      const lineText = document.lineAt(position.line).text;
+      const start    = wordRange.start.character;
+      if (isInsideCommentOrString(lineText, start)) {
+        const isShortInterp = start >= 1 && lineText[start - 1] === '$';
+        const isFullInterp  = isInsideStringInterpolation(lineText, start);
+        if (!isShortInterp && !isFullInterp) return null;
+      }
+    }
+
+    // A local symbol (parameter, val/var, for/lambda binding) is
+    // renameable even if the workspace index has no entry for the
+    // word. Also: when a local exists, we MUST allow rename and
+    // scope it locally — otherwise provideRenameEdits would scan the
+    // workspace and rewrite every same-named symbol. That was the
+    // data-loss bug Kevin is guarding against.
+    if (resolveLocalScope(document, position, word)) {
+      return { range: wordRange, placeholder: word };
+    }
     if (this.index.lookup(word).length === 0) return null;
     return { range: wordRange, placeholder: word };
   }
@@ -78,6 +102,27 @@ export class KotlinRenameProvider implements vscode.RenameProvider {
     if (!wordRange) return null;
     const word = document.getText(wordRange);
     if (word.length < 2) return null;
+
+    // Local-scoped rename: cursor is on a parameter / local val/var /
+    // for/lambda binding. Edit ONLY the declaration + its in-function
+    // usages. NEVER fan out to the workspace — that was the original
+    // data-loss bug (renaming a local `name` would rewrite every
+    // workspace `name` symbol).
+    const localDecl = resolveLocalScope(document, position, word);
+    if (localDecl) {
+      // Place the cursor at the declaration to drive findLocalUsages
+      // forward-scan from there.
+      const declPos    = localDecl.range.start;
+      const declUsages = findLocalUsages(document, declPos, word);
+      const edit = new vscode.WorkspaceEdit();
+      // Declaration itself.
+      edit.replace(document.uri, localDecl.range, newName, META_OCCURRENCES);
+      // Each usage.
+      for (const usage of declUsages) {
+        edit.replace(document.uri, usage.range, newName, META_OCCURRENCES);
+      }
+      return edit;
+    }
 
     const decls = this.index.lookup(word);
     if (decls.length === 0) return null;

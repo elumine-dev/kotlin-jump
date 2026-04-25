@@ -28,3 +28,6 @@ media/walkthrough/
 *.ipr
 *.iws
 .idea/
+
+# Android Gradle local config — must never be checked in
+local.properties

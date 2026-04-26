@@ -1,22 +1,12 @@
 {
-  "version": "1.17.7",
+  "version": "1.17.8",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Local scope correctness across the board",
-  "summary": "Fixes local-scope handling across six providers, adds a declaration-to-usages jump, corrects code lens behavior, and improves const-val folding performance.",
+  "tagline": "Accurate inlay hint navigation",
+  "summary": "Fixes Cmd+Click on parameter inlay hints to navigate to the correct parameter declaration.",
   "highlights": [
     {
-      "title": "Local Scope Correctness",
-      "description": "Rename, hover, references, and definitions now distinguish local variables and parameters from workspace-wide symbols, preventing accidental project-wide rewrites when renaming a local and eliminating wrong hover information.",
-      "kind": "fix"
-    },
-    {
-      "title": "Declaration-to-Usages Jump",
-      "description": "Triggering Go to Definition on a local val, var, parameter, for-loop variable, or lambda binding now navigates directly to its usage(s) rather than returning no result.",
-      "kind": "feature"
-    },
-    {
-      "title": "Code Lens Reliability",
-      "description": "Usage counts now appear on interface and abstract method lenses (matching IntelliJ behavior), the smartNavigation setting is respected on single-result clicks, and smart-nav off correctly opens Peek References.",
+      "title": "Parameter Hint Navigation",
+      "description": "Cmd+Click on a parameter name inlay hint now jumps directly to the parameter declaration instead of misfiring or producing no result.",
       "kind": "fix"
     }
   ],
@@ -24,18 +14,13 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Rename and hover providers now recognize local variables and parameters, preventing workspace-wide symbol rewrites when renaming a local and showing accurate hover information.",
-        "Go to Definition on a plain string literal or comment text no longer returns a spurious result.",
-        "Named-argument left-hand sides (e.g., `name =` in a function call) now resolve to the correct parameter declaration.",
-        "Navigation history Back command preserves the cursor column; Forward remains available after navigating across files.",
-        "The const-val folding provider no longer folds the identifier on the declaration line of a val or var."
+        "Fixed Cmd+Click on parameter inlay hints — the action now navigates to the actual parameter declaration rather than resolving to the wrong symbol or doing nothing."
       ]
     },
     {
-      "heading": "Improvements",
+      "heading": "Notes",
       "bullets": [
-        "Const-val folding decorations are now cached by document version and lookups are memoized, eliminating scroll lag on large files.",
-        "Local scope resolution now checks function parameters and block-level bindings before falling back to the workspace index, improving definition accuracy throughout."
+        "This is a focused single-fix release. No other commands, settings, navigation behavior, or UI changed since v1.17.7."
       ]
     }
   ],

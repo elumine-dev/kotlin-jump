@@ -744,7 +744,7 @@ function resolveParamInIndexedFunction(
 /** Inside `document`, given the line with `fun funName(`, locate the
  *  parameter whose name matches `paramName`. Walks the (possibly
  *  multi-line) signature paren block. */
-function paramLocationInSignature(
+export function paramLocationInSignature(
   document: vscode.TextDocument,
   funLine: number,
   paramName: string,
@@ -769,7 +769,13 @@ function paramLocationInSignature(
   // absolute position back in the document.
   let cursor = openIdx + 1; // position in sigText where the next chunk starts
   for (const chunk of splitTopLevel(params, ',')) {
-    const cleaned = chunk.replace(/\bvararg\s+|\bnoinline\s+|\bcrossinline\s+/g, '');
+    // Strip Kotlin parameter modifiers (`val`/`var` for data-class
+    // primary constructors, plus inline modifiers) so the name regex
+    // sees just `NAME: TYPE`.
+    const cleaned = chunk.replace(
+      /\b(?:vararg|noinline|crossinline|val|var|const\s+val|@\w+(?:\([^)]*\))?\s*)\s+/g,
+      '',
+    );
     const nameMatch = /^\s*(?:[A-Z][\w<>?,\s.]*\s+)?(\w+)\s*:/.exec(cleaned);
     if (nameMatch && nameMatch[1] === paramName) {
       // The match's name is `nameMatch[1]`; locate it in `chunk` to

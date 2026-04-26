@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FICHIER DE TEST VISUEL
+
+  BUG #1 — Plurals hover lies about quantity="other" when it isn't there
+
+  Open VisualBugsDemo.kt in another editor pane, hover `R.plurals.tickets_only_one`
+  (NOT `pokemon_count`). The plurals below intentionally has only `one` and `few`
+  — NO `other` quantity.
+
+  The hover popup will say "**plural** (quantity=other)" then show an EMPTY
+  code block — because StringResourceIndex defaults `value=''` when no `other`
+  exists, but the hover header is hardcoded to "(quantity=other)".
+
+  Expected: the hover should pick a real quantity that exists (e.g. "one") and
+  display its value, OR say "no `other` quantity defined".
+-->
+<resources>
+
+    <!-- ── BUG #1 reproducer — plurals WITHOUT `other` ────────────────────── -->
+    <plurals name="tickets_only_one">
+        <item quantity="one">%d ticket left</item>
+        <item quantity="few">%d tickets left</item>
+        <!-- intentionally NO `other` — that's the trigger -->
+    </plurals>
+
+    <!-- ── BUG #2 reproducer — plurals folding (used by VisualBugsDemo.kt) ── -->
+    <plurals name="pokemon_count">
+        <item quantity="one">%d Pokémon</item>
+        <item quantity="other">%d Pokémon</item>
+    </plurals>
+
+    <!-- ── BUG #2bis reproducer — string-array folding ─────────────────────── -->
+    <string-array name="pokemon_types">
+        <item>Fire</item>
+        <item>Water</item>
+        <item>Grass</item>
+    </string-array>
+
+</resources>

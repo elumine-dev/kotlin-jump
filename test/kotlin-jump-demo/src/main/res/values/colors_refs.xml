@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FICHIER DE TEST VISUEL
+
+  BUG #3 — `@color/X` references render a gray fallback swatch
+
+  Open ColorResourceDemo.kt (or any Kotlin file) and reference `R.color.brand`
+  (defined below — points at @color/primary which is bright red #FF0000).
+
+  ColorFoldingProvider's `toCSS()` returns `#808080` for any value that doesn't
+  start with `#`. So `@color/primary` → gray dot, even though the resolved
+  color is bright red.
+
+  Expected: follow the `@color/X` reference one hop and show the real color.
+  Acceptable fallback: don't show a swatch at all if unresolvable (better than
+  a misleading gray).
+-->
+<resources>
+
+    <!-- Source colors with literal hex — these render correctly. -->
+    <color name="primary">#FF0000</color>
+    <color name="accent">#00FF00</color>
+
+    <!-- ── BUG #3 reproducers — value is a @color/X reference ──────────────── -->
+    <color name="brand">@color/primary</color>
+    <color name="highlight">@color/accent</color>
+
+    <!-- For comparison: this one points at a non-existent color. -->
+    <color name="orphan_ref">@color/does_not_exist</color>
+
+</resources>

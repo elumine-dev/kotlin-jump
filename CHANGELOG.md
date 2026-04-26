@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.17.4
+
+Removes the README "Limitations" section that was misrepresenting the extension's capabilities (it claimed "no full refactoring" while rename, move file, organize imports, and auto-import are all shipped) and was placed immediately before the rate/install CTAs, suppressing conversion at the worst possible moment.
+
+### Notes
+- No changes to extension commands, settings, navigation, or any other user-facing behavior since v1.17.3.
+- Removed README "Limitations" section. The single legitimate caveat (String folding is Android-only) is already stated in the String Resource Folding section itself, and completion guidance is covered by the Companion Mode section.
+
 ## 1.17.3
 
 Fixes the broken Marketplace install/rating badges in the README and Marketplace listing — the previous shields.io endpoints were silently returning a "retired badge" placeholder. Migrated to the Microsoft-hosted vsmarketplacebadges.dev provider.

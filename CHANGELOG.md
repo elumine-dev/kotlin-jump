@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.17.5
+
+README rewrite focused on conversion: removes redundant sections (Get Started, Performance, How it works, Build from source) that were duplicating header content or speaking to post-install audiences, condenses Android Run setup and Library Sources into tighter prose, kills the configuration jsonc dump, and trims emoji noise on section headings. Net result: ~30 % shorter for the same feature coverage, with a denser ratio of demos per scroll.
+
+### Notes
+- No changes to extension commands, settings, navigation, or any other user-facing behavior since v1.17.4.
+- README slimmed from 499 to ~355 lines (~43 % fewer words).
+- Android monorepo / multi-flavor configuration moved to the new `ANDROID-SETUP.md`.
+- Build-from-source instructions moved to the new `CONTRIBUTING.md`.
+- "What's new" section renamed to "Recent" and refreshed with concrete labels (no version numbers in headings).
+
 ## 1.17.4
 
 Removes the README "Limitations" section that was misrepresenting the extension's capabilities (it claimed "no full refactoring" while rename, move file, organize imports, and auto-import are all shipped) and was placed immediately before the rate/install CTAs, suppressing conversion at the worst possible moment.

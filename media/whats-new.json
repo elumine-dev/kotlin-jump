@@ -1,12 +1,12 @@
 {
-  "version": "1.17.9",
+  "version": "1.17.10",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Parameter hint navigation without side effects",
-  "summary": "Fixes Cmd+Click on parameter inlay hints to navigate directly to the declaration without triggering the Find Usages panel as a side effect.",
+  "tagline": "Null assertion highlight, Kotlin files only",
+  "summary": "Fixes null assertion highlighting to exclude Java files, where !! is a boolean double-negation, not a Kotlin null-assertion operator.",
   "highlights": [
     {
-      "title": "Parameter Hint Click Fix",
-      "description": "Cmd+Click on a parameter inlay hint now navigates cleanly to the parameter declaration — the Find Usages panel no longer opens as an unintended side effect.",
+      "title": "Null Assertion Scope Fix",
+      "description": "The !! highlight now applies only in Kotlin files — Java files no longer produce false positives from boolean double-negation expressions such as !!condition.",
       "kind": "fix"
     }
   ],
@@ -14,13 +14,13 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Cmd+Click on a parameter inlay hint now performs navigation only — it jumps to the parameter declaration without also opening the Find Usages panel."
+        "Null assertion highlighting (!! operator) no longer triggers in Java files, where !! is a boolean double-negation rather than a null-assertion operator."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "This is a focused single-fix release. No other commands, settings, navigation behavior, or UI changed since v1.17.8."
+        "This is a focused single-fix release. No commands, settings, navigation behavior, or other UI changed since v1.17.9."
       ]
     }
   ],

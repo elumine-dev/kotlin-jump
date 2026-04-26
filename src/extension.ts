@@ -637,12 +637,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     rW.onDidCreate(handleRChanged);
     rW.onDidDelete(uri => rIndex.removeFile(uri.toString()));
 
-    // Initial scan of all strings.xml files
+    // Initial scan of every XML under values*/. Real Android projects
+    // routinely split <string>/<plurals>/<string-array> across files
+    // (`strings_errors.xml`, `strings_premium.xml`, …). The previous
+    // glob only matched the literal `strings.xml`; everything else was
+    // silently invisible — no fold, no hover, no diagnostic. The
+    // parser below skips files with no `<string>`/`<plurals>`/
+    // `<string-array>` tag, so colors.xml / dimens.xml cost nothing.
     vscode.workspace.findFiles(
-      '**/res/values*/strings.xml',
+      '**/res/values*/*.xml',
       `{${excludeList.join(',')}}`,
     ).then(uris => {
-      log.info(`[StringFolding] found ${uris.length} strings.xml file(s)`);
+      log.info(`[StringFolding] found ${uris.length} values*.xml file(s)`);
       for (const u of uris) log.debug(`[StringFolding]   ${u.fsPath}`);
       return Promise.all(uris.map(async u => {
         const bytes = await vscode.workspace.fs.readFile(u);
@@ -657,18 +663,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     if (vscode.window.activeTextEditor) foldingProvider.invalidateAll();
 
     const handleChanged = async (uri: vscode.Uri) => {
-      log.info(`[StringFolding] strings.xml changed — reindexing ${uri.fsPath}`);
+      log.info(`[StringFolding] values xml changed — reindexing ${uri.fsPath}`);
       const bytes = await vscode.workspace.fs.readFile(uri);
       stringIndex.reindexFile(uri, new TextDecoder().decode(bytes));
       foldingProvider.invalidateAll();
     };
     const handleDeleted = (uri: vscode.Uri) => {
-      log.info(`[StringFolding] strings.xml deleted — removing ${uri.fsPath}`);
+      log.info(`[StringFolding] values xml deleted — removing ${uri.fsPath}`);
       stringIndex.removeFile(uri);
       foldingProvider.invalidateAll();
     };
-    const strW1 = vscode.workspace.createFileSystemWatcher('**/res/values/strings.xml');
-    const strW2 = vscode.workspace.createFileSystemWatcher('**/res/values-*/strings.xml');
+    const strW1 = vscode.workspace.createFileSystemWatcher('**/res/values/*.xml');
+    const strW2 = vscode.workspace.createFileSystemWatcher('**/res/values-*/*.xml');
     for (const w of [strW1, strW2]) {
       w.onDidCreate(handleChanged);
       w.onDidChange(handleChanged);

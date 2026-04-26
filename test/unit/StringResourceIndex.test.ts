@@ -161,6 +161,48 @@ describe('StringResourceIndex — plurals', () => {
     idx.reindexFile(DEFAULT_URI, `<resources><plurals name="count"><item quantity="one">one</item></plurals></resources>`);
     expect(idx.getPluralsValue('count')?.uri.toString()).toBe(DEFAULT_URI.toString());
   });
+
+  it('picks `other` value when present (Android runtime fallback)', () => {
+    const idx = new StringResourceIndex();
+    idx.reindexFile(DEFAULT_URI, `<resources>
+  <plurals name="pokemon_count">
+    <item quantity="one">%d Pokemon</item>
+    <item quantity="other">%d Pokemons</item>
+  </plurals>
+</resources>`);
+    const entry = idx.getPluralsValue('pokemon_count');
+    expect(entry?.chosenQuantity).toBe('other');
+    expect(entry?.value).toBe('%d Pokemons');
+    expect(entry?.quantities?.size).toBe(2);
+  });
+
+  it('falls back to `one` when `other` is missing (incomplete file)', () => {
+    const idx = new StringResourceIndex();
+    idx.reindexFile(DEFAULT_URI, `<resources>
+  <plurals name="tickets_only_one">
+    <item quantity="one">%d ticket left</item>
+    <item quantity="few">%d tickets left</item>
+  </plurals>
+</resources>`);
+    const entry = idx.getPluralsValue('tickets_only_one');
+    expect(entry?.chosenQuantity).toBe('one');
+    expect(entry?.value).toBe('%d ticket left');
+    expect(entry?.quantities?.size).toBe(2);
+    expect(entry?.quantities?.has('other')).toBe(false);
+    expect(entry?.quantities?.has('few')).toBe(true);
+  });
+
+  it('respects fallback order when `one` is also missing', () => {
+    const idx = new StringResourceIndex();
+    idx.reindexFile(DEFAULT_URI, `<resources>
+  <plurals name="exotic">
+    <item quantity="many">many</item>
+    <item quantity="few">few</item>
+  </plurals>
+</resources>`);
+    // priority: other > one > few > many — `few` wins over `many`.
+    expect(idx.getPluralsValue('exotic')?.chosenQuantity).toBe('few');
+  });
 });
 
 // ── String arrays ─────────────────────────────────────────────────────────────

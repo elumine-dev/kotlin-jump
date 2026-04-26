@@ -58,6 +58,40 @@ describe('StringResourceHoverProvider — R.plurals hover', () => {
     expect(provider.provideHover(doc, pos)).toBeUndefined();
   });
 
+  it('header reports `quantity=other` when `other` is declared', () => {
+    const provider = buildProvider(`<resources>
+  <plurals name="pokemon_count">
+    <item quantity="one">%d Pokemon</item>
+    <item quantity="other">%d Pokemons</item>
+  </plurals>
+</resources>`);
+    const line = 'getQuantityString(R.plurals.pokemon_count, n)';
+    const doc  = makeDocument([line]);
+    const pos  = new Position(0, line.indexOf('R.plurals.pokemon_count') + 5);
+
+    const md = provider.provideHover(doc, pos)!.contents[0].value;
+    expect(md).toContain('(quantity=other)');
+    expect(md).not.toContain('no `other` quantity defined');
+  });
+
+  it('falls back to declared quantity when `other` is missing, and flags the gap', () => {
+    const provider = buildProvider(`<resources>
+  <plurals name="tickets_only_one">
+    <item quantity="one">%d ticket left</item>
+    <item quantity="few">%d tickets left</item>
+  </plurals>
+</resources>`);
+    const line = 'getQuantityString(R.plurals.tickets_only_one, n)';
+    const doc  = makeDocument([line]);
+    const pos  = new Position(0, line.indexOf('R.plurals.tickets_only_one') + 5);
+
+    const md = provider.provideHover(doc, pos)!.contents[0].value;
+    expect(md).toContain('(quantity=one)');
+    expect(md).not.toContain('(quantity=other)');
+    expect(md).toContain('%d ticket left');
+    expect(md).toContain('no `other` quantity defined');
+  });
+
   it('R.plurals.foo does NOT trigger R.string hover (separate lookup)', () => {
     const provider = buildProvider(`<resources>
   <string name="pokemon_count">this is a string, not a plural</string>

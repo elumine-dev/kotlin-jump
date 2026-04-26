@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.17.8
+
+Fixes Cmd+Click on parameter inlay hints to navigate to the correct parameter declaration.
+
+### Fixes
+- Fixed Cmd+Click on parameter inlay hints — the action now navigates to the actual parameter declaration rather than resolving to the wrong symbol or doing nothing.
+
+### Notes
+- This is a focused single-fix release. No other commands, settings, navigation behavior, or UI changed since v1.17.7.
+
 ## 1.17.7
 
 Removes em-dashes from the extension `displayName`, `description`, the in-VS Code "What's New" panel, and the supporting Markdown files. The Marketplace listing now reads in plain human punctuation across the title, tagline, and onboarding copy.

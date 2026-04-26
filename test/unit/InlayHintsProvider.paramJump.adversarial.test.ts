@@ -80,6 +80,16 @@ describe('ADV-INLAY-PARAM-JUMP', () => {
     //   2: `    val name: String,`
     expect(loc.range.start.line).toBe(2);
     expect(loc.range.start.character).toBe(code.split('\n')[2].indexOf('name'));
+
+    // The label part also exposes a command so Cmd+Click bypasses
+    // the Definition pipeline (which would side-trigger the smart-
+    // navigation Find Usages panel after landing on a workspace
+    // declaration). The command must navigate to the same target.
+    const cmd = labelPart.command;
+    expect(cmd).toBeDefined();
+    expect(cmd.command).toBe('vscode.open');
+    const showOpts = cmd.arguments?.[1] as { selection?: any };
+    expect(showOpts?.selection?.start?.line).toBe(2);
   });
 
   it('Cmd+Click on `email =` inlay points at `val email: String` (different line)', async () => {

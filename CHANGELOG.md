@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.17.9
+
+Fixes Cmd+Click on parameter inlay hints to navigate directly to the declaration without triggering the Find Usages panel as a side effect.
+
+### Fixes
+- Cmd+Click on a parameter inlay hint now performs navigation only — it jumps to the parameter declaration without also opening the Find Usages panel.
+
+### Notes
+- This is a focused single-fix release. No other commands, settings, navigation behavior, or UI changed since v1.17.8.
+
 ## 1.17.8
 
 Fixes Cmd+Click on parameter inlay hints to navigate to the correct parameter declaration.

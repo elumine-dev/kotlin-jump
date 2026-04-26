@@ -2,7 +2,7 @@
   "name": "kotlin-jump",
   "displayName": "Kotlin Jump: Fast Kotlin & Android Navigation",
   "description": "Fast Kotlin & Android navigation. Find Usages, Go to Definition, Compose, R.string, Android Run. No JVM, no language server. The Android Studio experience inside VS Code.",
-  "version": "1.17.8",
+  "version": "1.17.9",
   "publisher": "elumine",
   "license": "MIT",
   "icon": "media/logo.png",

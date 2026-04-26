@@ -4,7 +4,16 @@ import { resolveBest } from '../util/ImportResolver';
 import { readSignature, parseParams, extractReturnType, KtParam } from '../util/SignatureReader';
 import { isInsideCommentOrString } from '../util/textUtils';
 import { Logger, NullLogger } from '../util/logger';
-import { resolveLocalScope } from './DefinitionProvider';
+import { resolveLocalScope, paramLocationInSignature } from './DefinitionProvider';
+
+interface CachedParams {
+  params:    KtParam[];
+  /** Per-index location of the parameter NAME in the declaring file —
+   *  what we set on InlayHintLabelPart.location so Cmd+Click on the
+   *  hint jumps to the parameter declaration (e.g. `val name: String,`
+   *  in a data class), not to the function/constructor name. */
+  locations: vscode.Location[];
+}
 
 // Matches a potential function/constructor call: lowercase-or-uppercase word followed by `(`
 // We match both cases because constructors start with uppercase (e.g. `Column(`)
@@ -23,8 +32,9 @@ const FUN_DECL_RE = /^\s*(?:(?:public|private|protected|internal|override|open|a
 const CALL_KINDS = new Set(['fun', 'composable', 'class', 'dataClass'] as const);
 
 export class KotlinInlayHintsProvider implements vscode.InlayHintsProvider {
-  // Cache: fqn → parsed params (avoids reopening declaration docs on every keystroke)
-  private readonly paramCache = new Map<string, KtParam[]>();
+  // Cache: fqn → parsed params + per-param Locations (avoids reopening
+  // declaration docs on every keystroke).
+  private readonly paramCache = new Map<string, CachedParams>();
   // Cache: fqn → extracted return type (null = cached miss)
   private readonly returnTypeCache = new Map<string, string | null>();
 
@@ -130,21 +140,27 @@ export class KotlinInlayHintsProvider implements vscode.InlayHintsProvider {
             continue;
           }
 
-          // Get params from cache or parse them
-          let params = this.paramCache.get(entry.fqn);
-          if (!params) {
+          // Get params + per-param Locations from cache or compute them
+          let cached = this.paramCache.get(entry.fqn);
+          if (!cached) {
             try {
               const declDoc = await vscode.workspace.openTextDocument(entry.uri);
               if (token.isCancellationRequested) break;
               const sig = readSignature(declDoc, entry);
-              params = sig ? parseParams(sig) : [];
+              const params = sig ? parseParams(sig) : [];
+              const locations = params.map(p =>
+                paramLocationInSignature(declDoc, entry.line, p.name) ??
+                new vscode.Location(entry.uri, new vscode.Position(entry.line, entry.character)),
+              );
+              cached = { params, locations };
               this.log.debug(`[InlayHints] pass1 — ${entry.fqn} sig="${sig}" params=[${params.map(p => p.name).join(', ')}]`);
             } catch (err) {
               this.log.warn(`[InlayHints] pass1 — openTextDocument failed for ${entry.fqn}: ${err}`);
-              params = [];
+              cached = { params: [], locations: [] };
             }
-            this.paramCache.set(entry.fqn, params);
+            this.paramCache.set(entry.fqn, cached);
           }
+          const params = cached.params;
 
           if (params.length === 0) {
             this.log.debug(`[InlayHints] pass1 line ${lineNum} — ${name}() → 0 params, skip`);
@@ -173,7 +189,7 @@ export class KotlinInlayHintsProvider implements vscode.InlayHintsProvider {
 
             const param = params[i];
             const labelPart = new vscode.InlayHintLabelPart(`${param.name}:`);
-            labelPart.location = new vscode.Location(
+            labelPart.location = cached.locations[i] ?? new vscode.Location(
               entry.uri,
               new vscode.Position(entry.line, entry.character),
             );

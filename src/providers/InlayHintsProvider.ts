@@ -189,10 +189,29 @@ export class KotlinInlayHintsProvider implements vscode.InlayHintsProvider {
 
             const param = params[i];
             const labelPart = new vscode.InlayHintLabelPart(`${param.name}:`);
-            labelPart.location = cached.locations[i] ?? new vscode.Location(
+            const targetLoc = cached.locations[i] ?? new vscode.Location(
               entry.uri,
               new vscode.Position(entry.line, entry.character),
             );
+            // Bypass the Definition pipeline on Cmd+Click — `vscode.open`
+            // navigates directly without going through provideDefinition,
+            // which previously side-triggered the smart-nav listener and
+            // popped the Find Usages panel on top of the navigation.
+            // We keep `location` set so VS Code's hover-link still shows
+            // a peek preview without firing the panel.
+            labelPart.location = targetLoc;
+            labelPart.command  = {
+              title:     `Go to ${param.name}`,
+              command:   'vscode.open',
+              arguments: [
+                targetLoc.uri,
+                {
+                  selection:     targetLoc.range,
+                  preserveFocus: false,
+                  preview:       true,
+                } as vscode.TextDocumentShowOptions,
+              ],
+            };
             labelPart.tooltip = new vscode.MarkdownString(`**${param.name}**: \`${param.type}\``);
 
             const hint = new vscode.InlayHint(

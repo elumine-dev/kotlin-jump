@@ -446,18 +446,6 @@ Fast by design.
 
 ---
 
-## ⚠️ Limitations
-
-- No code completion (not an LSP)
-- No full refactoring
-- Overloaded functions → selection list
-- Extension functions → indexed by name only
-- String folding → Android only
-
-Kotlin Jump focuses on one thing: **navigation speed**.
-
----
-
 ## ⭐ Like Kotlin Jump?
 
 If it shaved minutes off your day, **even 30 seconds of your time would mean a lot** — every rating helps other Android & Kotlin devs find this.
@@ -487,7 +475,7 @@ Search **Kotlin Jump** in VS Code (`Cmd+Shift+X`) or install directly:
 Download the latest `.vsix` from [GitHub Releases](https://github.com/elumine-dev/kotlin-jump/releases/latest), then:
 
 ```bash
-code --install-extension kotlin-jump-1.17.3.vsix
+code --install-extension kotlin-jump-1.17.4.vsix
 ```
 
 ---
@@ -498,7 +486,7 @@ code --install-extension kotlin-jump-1.17.3.vsix
 git clone https://github.com/elumine-dev/kotlin-jump
 cd kotlin-jump && npm install
 node esbuild.js --production && npx @vscode/vsce package --no-dependencies
-code --install-extension kotlin-jump-1.17.3.vsix
+code --install-extension kotlin-jump-1.17.4.vsix
 ```
 
 ---

@@ -99,6 +99,16 @@ export function isInsideStringInterpolation(line: string, pos: number): boolean 
       }
       i++; continue;
     }
+    // Block comment: `/* "${X}" */` looks like an interpolation if
+    // we naively follow the `"` — but the string is dead text. Skip
+    // the whole comment region so `pos` inside it returns false.
+    if (line[i] === '/' && i + 1 < line.length && line[i + 1] === '*') {
+      const closeIdx = line.indexOf('*/', i + 2);
+      if (closeIdx === -1) return false;
+      if (pos >= i && pos < closeIdx + 2) return false;
+      i = closeIdx + 2;
+      continue;
+    }
     if (line[i] === '/' && i + 1 < line.length && line[i + 1] === '/') break;
     if (line[i] === '"' || line[i] === '\'') { inStr = line[i]; i++; continue; }
     i++;

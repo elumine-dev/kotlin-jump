@@ -128,6 +128,22 @@ describe('SP2-ADVER-CVF-7b — "plain TIMEOUT_MS" sans ${} → 0 décorations (s
   });
 });
 
+describe('SP2-ADVER-CVF-7c — `${TIMEOUT_MS}` dans block comment /* */ → 0 décorations', () => {
+  it('interpolation morte dans /* */ ne doit PAS être foldée', () => {
+    const entries = [{ name: 'TIMEOUT_MS', isConst: true, constValue: '5000' }];
+    const line    = '/* old: was "${TIMEOUT_MS}ms" — to remove */';
+    expect(decs(entries, [line])).toHaveLength(0);
+  });
+
+  it('interpolation vivante après un block comment fermé reste foldée', () => {
+    const entries = [{ name: 'TIMEOUT_MS', isConst: true, constValue: '5000' }];
+    const line    = '/* nope */ val s = "${TIMEOUT_MS}ms"';
+    const result  = decs(entries, [line]);
+    expect(result).toHaveLength(1);
+    expect(result[0].renderOptions.before.contentText).toBe('5000');
+  });
+});
+
 // ── SP2-ADVER-CVF-8 ───────────────────────────────────────────────────────────
 
 describe('SP2-ADVER-CVF-8 — isConst=false → 0 décorations', () => {

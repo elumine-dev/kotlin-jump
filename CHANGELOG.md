@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.17.6
+
+Removes 26 em-dashes from the README that gave the listing an AI-generated feel. Replaced with periods, commas, or sentence breaks depending on context. The copy now reads like a human wrote it.
+
+### Notes
+- No changes to extension commands, settings, navigation, or any other user-facing behavior since v1.17.5.
+- Pure copy edit: 26 em-dashes (`—`) replaced with natural punctuation.
+
 ## 1.17.5
 
 README rewrite focused on conversion: removes redundant sections (Get Started, Performance, How it works, Build from source) that were duplicating header content or speaking to post-install audiences, condenses Android Run setup and Library Sources into tighter prose, kills the configuration jsonc dump, and trims emoji noise on section headings. Net result: ~30 % shorter for the same feature coverage, with a denser ratio of demos per scroll.

@@ -45,9 +45,9 @@ Kotlin Jump skips all of that. **No LSP. No JVM. No waiting.**
 
 ## ✨ Recent
 
-- **🎨 Drawable previews** — hover any `R.drawable.*` for an inline thumbnail; gutter mini next to every reference.
-- **🧵 Coroutine thread badges** — `🧵 IO` · `🖥 Main` next to every dispatched call.
-- **⌨️ IntelliJ keymap built-in** — `Alt+F7`, `Alt+Shift+T`, `Cmd+Alt+←/→` work the moment you install.
+- **🎨 Drawable previews.** Hover any `R.drawable.*` for an inline thumbnail; gutter mini next to every reference.
+- **🧵 Coroutine thread badges.** `🧵 IO` · `🖥 Main` next to every dispatched call.
+- **⌨️ IntelliJ keymap built-in.** `Alt+F7`, `Alt+Shift+T`, `Cmd+Alt+←/→` work the moment you install.
 
 [Full changelog →](CHANGELOG.md)
 
@@ -72,7 +72,7 @@ Jump anywhere instantly.
   <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/go-to-definition.webp" width="720" />
 </p>
 
-Kotlin, Java, Compose, AndroidX — same speed across your project AND your dependency JARs.
+Kotlin, Java, Compose, AndroidX. Same speed across your project and your dependency JARs.
 
 ---
 
@@ -108,7 +108,7 @@ Alt+F7. Every usage, grouped by file, with previews.
 
 ## 📱 Android Run Button
 
-Build, install, launch — one click.
+Build, install, launch. One click.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/android-run.webp" width="720" />
@@ -144,7 +144,7 @@ Android only.
 
 ### 🌍 Locale grid on hover
 
-Hover any `R.string.*` reference to see **every translation side by side** — no hunt through `values-*/strings.xml`.
+Hover any `R.string.*` reference to see **every translation side by side**. No hunt through `values-*/strings.xml`.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/string-locale-grid.webp" width="720" />
@@ -156,9 +156,9 @@ Hover any `R.string.*` reference to see **every translation side by side** — n
 
 Always-visible context.
 
-- **N usages** — click to open Find Usages
-- **M implementations** — click to list all implementors
-- **▶ Run** / **⏱ Debug** above `@Test` methods — Gradle-backed, wired into Test Explorer
+- **N usages.** Click to open Find Usages.
+- **M implementations.** Click to list all implementors.
+- **▶ Run** / **⏱ Debug** above `@Test` methods. Gradle-backed, wired into Test Explorer.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/code-lens.webp" width="720" />
@@ -190,7 +190,7 @@ Removes the tiny frictions you hit all day.
 
 ## Navigation History
 
-Back and forward — with **line AND column restored**, not just the file.
+Back and forward, with **line and column restored**, not just the file.
 
 | Shortcut | Action |
 |---|---|
@@ -209,8 +209,8 @@ The way IntelliJ does it. Without IntelliJ.
 
 See what matters, inline.
 
-- **Parameter names** at call sites — clickable to navigate to the declaration
-- **Inferred types** on `val` / `var` — double-click to insert
+- **Parameter names** at call sites. Clickable to navigate to the declaration.
+- **Inferred types** on `val` / `var`. Double-click to insert.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/inlay-hints.webp" width="720" />
@@ -220,14 +220,14 @@ See what matters, inline.
 
 ## Kotlin Quality of Life
 
-Signals you didn't know you needed — right where the code lives.
+Signals you didn't know you needed, right where the code lives.
 
 ### ⚡ Suspend Call Markers
 
-Every `suspend` call is a potential pause. Every dispatcher switch is a potential thread hop. Kotlin Jump marks both — inline, live.
+Every `suspend` call is a potential pause. Every dispatcher switch is a potential thread hop. Kotlin Jump marks both, inline and live.
 
-- **⚡** — every suspend call in a coroutine body
-- **🧵 IO** · **🖥 Main** · **⚙ Default** — dispatcher badges on `withContext` and launchers
+- **⚡** on every suspend call in a coroutine body.
+- **🧵 IO** · **🖥 Main** · **⚙ Default** dispatcher badges on `withContext` and launchers.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/suspend-call-marker.webp" width="720" />
@@ -235,9 +235,9 @@ Every `suspend` call is a potential pause. Every dispatcher switch is a potentia
 
 Know your pauses. Know your threads. Before the UI freezes.
 
-### 🎨 R.drawable — Hover preview + gutter thumbnails
+### 🎨 R.drawable hover preview + gutter thumbnails
 
-Hover any `R.drawable.*` to preview the asset — densities, themes, vector or raster. The gutter shows a mini render of every reference, always.
+Hover any `R.drawable.*` to preview the asset across densities, themes, vector or raster. The gutter shows a mini render of every reference, always.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/drawable-hover.webp" width="720" />
@@ -247,9 +247,9 @@ Hover any `R.drawable.*` to preview the asset — densities, themes, vector or r
 
 ## 📦 Library Sources
 
-Go to Definition works inside your dependencies too — out of the box.
+Go to Definition works inside your dependencies too. Out of the box.
 
-Kotlin stdlib ships bundled (~600 KB). Compose, Coroutines, AndroidX and other JARs are indexed from your Gradle/Maven cache automatically — or downloaded directly from Maven Central in one click.
+Kotlin stdlib ships bundled (~600 KB). Compose, Coroutines, AndroidX and other JARs are indexed from your Gradle/Maven cache automatically, or downloaded directly from Maven Central in one click.
 
 ```
 $(library) KJ: 42 libs · JDK · stdlib ✓
@@ -263,7 +263,7 @@ $(library) KJ: 42 libs · JDK · stdlib ✓
   <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/lib-jar-coroutines.webp" width="720" />
 </p>
 
-### KDoc on hover — from the JAR
+### KDoc on hover, straight from the JAR
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/lib-jar-kdoc-hover.webp" width="720" />
@@ -287,7 +287,7 @@ Query your codebase in natural language.
   <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/ai-assistant.webp" width="720" />
 </p>
 
-Also exposes an **MCP endpoint** for Claude Desktop and other AI tools — query the index without VS Code open.
+Also exposes an **MCP endpoint** for Claude Desktop and other AI tools, so you can query the index without VS Code open.
 
 No setup. Works immediately.
 
@@ -309,7 +309,7 @@ Every Kotlin construct: classes, data/sealed classes, objects, enums, functions,
 
 ## Companion Mode
 
-Already using the **JetBrains Kotlin LSP**? Kotlin Jump detects it automatically and disables overlapping providers (hover, outline, rename, semantic tokens) — keeping only its fast navigation layer.
+Already using the **JetBrains Kotlin LSP**? Kotlin Jump detects it automatically and disables overlapping providers (hover, outline, rename, semantic tokens), keeping only its fast navigation layer.
 
 Auto-detected. Tweak via the `kotlinJump.companionMode` setting if needed.
 
@@ -317,13 +317,13 @@ Auto-detected. Tweak via the `kotlinJump.companionMode` setting if needed.
 
 ## Configuration
 
-Search **Kotlin Jump** in VS Code settings (`Cmd+,`). All defaults work out of the box — no tweaks required for 95 % of projects.
+Search **Kotlin Jump** in VS Code settings (`Cmd+,`). All defaults work out of the box. No tweaks required for 95 % of projects.
 
 ---
 
 ## ⭐ Like Kotlin Jump?
 
-If it shaved minutes off your day, **even 30 seconds of your time would mean a lot** — every rating helps other Android & Kotlin devs find this.
+If it shaved minutes off your day, **even 30 seconds of your time would mean a lot**. Every rating helps other Android & Kotlin devs find this.
 
 <p align="center">
   <a href="https://marketplace.visualstudio.com/items?itemName=elumine.kotlin-jump&ssr=false#review-details">
@@ -331,7 +331,7 @@ If it shaved minutes off your day, **even 30 seconds of your time would mean a l
   </a>
 </p>
 
-Found a bug or have a feature idea? [**Open an issue**](https://github.com/elumine-dev/kotlin-jump/issues) — answers usually within 24 h.
+Found a bug or have a feature idea? [**Open an issue**](https://github.com/elumine-dev/kotlin-jump/issues). Answers usually within 24 h.
 
 ---
 
@@ -344,7 +344,7 @@ Search **Kotlin Jump** in VS Code (`Cmd+Shift+X`), or [install directly from the
 For offline / air-gapped installs, grab the latest `.vsix` from [GitHub Releases](https://github.com/elumine-dev/kotlin-jump/releases/latest):
 
 ```bash
-code --install-extension kotlin-jump-1.17.5.vsix
+code --install-extension kotlin-jump-1.17.6.vsix
 ```
 
 ### Build from source
@@ -352,7 +352,7 @@ code --install-extension kotlin-jump-1.17.5.vsix
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full dev setup, or quickstart:
 
 ```bash
-code --install-extension kotlin-jump-1.17.5.vsix
+code --install-extension kotlin-jump-1.17.6.vsix
 ```
 
 ---

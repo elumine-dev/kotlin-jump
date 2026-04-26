@@ -142,7 +142,11 @@ export class NullAssertionProvider implements vscode.Disposable {
     const lang = editor.document.languageId;
     const enabled = vscode.workspace.getConfiguration('kotlinJump')
       .get<boolean>('nullAssertionHighlight', true);
-    if ((lang !== 'kotlin' && lang !== 'java') || !enabled) {
+    // Kotlin only — `!!` does not exist as a null-assertion in Java; in Java
+    // it is just a boolean double-negation. Highlighting it with the same
+    // amber NPE-warning paint mis-leads Java readers into thinking they're
+    // looking at unsafe code when they aren't.
+    if (lang !== 'kotlin' || !enabled) {
       this._lineDecos.clear();
       editor.setDecorations(this._decorType, []);
       return;

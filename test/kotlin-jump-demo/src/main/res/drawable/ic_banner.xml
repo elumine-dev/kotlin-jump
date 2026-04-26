@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FICHIER DE TEST VISUEL
+
+  BUG #7 — Vector hover squashes non-square drawables
+
+  This vector has a 240×80 viewport (3:1 banner aspect ratio). Open any Kotlin
+  file that references `R.drawable.ic_banner` and hover the name.
+
+  DrawableHoverProvider hard-codes `width="128" height="128"` on the <img> tag
+  in the popup. The hover therefore renders this banner squashed into a
+  128×128 square — visibly distorted.
+
+  Expected: respect the source aspect ratio. Either drop the explicit height,
+  or compute it from viewBox so a 240×80 vector renders at e.g. 128×42.
+
+  To reproduce:
+    1. In any Kotlin file: `val banner = R.drawable.ic_banner`
+    2. Hover on `ic_banner`.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="240dp"
+    android:height="80dp"
+    android:viewportWidth="240"
+    android:viewportHeight="80">
+
+    <!-- Background -->
+    <path
+        android:fillColor="#7F52FF"
+        android:pathData="M0,0 L240,0 L240,80 L0,80 Z" />
+
+    <!-- "K" letter -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M20,20 L30,20 L30,40 L48,20 L60,20 L42,40 L60,60 L48,60 L30,40 L30,60 L20,60 Z" />
+
+    <!-- "J" letter -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M70,20 L80,20 L80,52 A8,8 0 0,1 72,60 L60,60 L60,52 L72,52 L70,52 Z" />
+
+    <!-- Accent stripe at the right -->
+    <path
+        android:fillColor="#FFC107"
+        android:pathData="M200,20 L220,20 L220,60 L200,60 Z" />
+</vector>

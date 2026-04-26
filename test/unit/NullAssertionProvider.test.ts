@@ -61,10 +61,12 @@ describe('NullAssertionProvider — golden path', () => {
     expect(decs).toHaveLength(1);
   });
 
-  it('works in Java files', () => {
-    // Java does not have !! but we still process it (no harm)
-    const decs = decorationsFor(['Object x = obj!!;'], 'java');
-    expect(decs).toHaveLength(1);
+  it('does NOT decorate `!!` in Java — it is a boolean double-negation, not a null-assert', () => {
+    // Reproducer: `if (!!flag)` in Java is canonical-boolean coercion.
+    // Painting it amber would make Java readers think they're looking at
+    // unsafe Kotlin code. Provider must skip Java entirely.
+    const decs = decorationsFor(['if (!!flag) { return true; }'], 'java');
+    expect(decs).toHaveLength(0);
   });
 });
 

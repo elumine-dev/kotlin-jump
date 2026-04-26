@@ -4,7 +4,20 @@ interface StringEntry {
   value: string;
   uri: UriLike;
   line: number;
+  // Plurals only: every `<item quantity="X">` collected from the block,
+  // plus the quantity whose value populated `value` above. Android resolves
+  // missing categories to `other` at runtime, so we mirror that priority —
+  // but when even `other` is absent (the file is incomplete), we surface
+  // the next available category instead of the empty string.
+  quantities?: Map<string, string>;
+  chosenQuantity?: string;
 }
+
+// Android resolution order when the runtime category isn't declared:
+// `other` is the universal fallback. We extend that with `one` → `few`
+// → `many` → `two` → `zero` so an incomplete file (no `other`) still
+// produces a meaningful hover/fold instead of nothing.
+const QUANTITY_PRIORITY = ['other', 'one', 'few', 'many', 'two', 'zero'] as const;
 
 export class StringResourceIndex {
   private readonly files        = new Map<string, Map<string, StringEntry>>();
@@ -26,13 +39,20 @@ export class StringResourceIndex {
     }
 
     const RE_PLURALS = /<plurals\s+name="([^"]+)"[^>]*>([\s\S]*?)<\/plurals>/g;
+    const RE_PLURAL_ITEM = /<item\s+quantity="([^"]+)"[^>]*>([\s\S]*?)<\/item>/g;
     while ((m = RE_PLURALS.exec(content))) {
       const name  = m[1];
       const block = m[2];
       const line  = content.slice(0, m.index).split('\n').length - 1;
-      const itemM = /<item\s+quantity="other"[^>]*>([\s\S]*?)<\/item>/.exec(block);
-      const value = itemM ? unescapeXml(stripCdata(itemM[1].trim())) : '';
-      plurals.set(name, { value, uri, line });
+      const quantities = new Map<string, string>();
+      RE_PLURAL_ITEM.lastIndex = 0;
+      let qm: RegExpExecArray | null;
+      while ((qm = RE_PLURAL_ITEM.exec(block))) {
+        quantities.set(qm[1], unescapeXml(stripCdata(qm[2].trim())));
+      }
+      const chosen = QUANTITY_PRIORITY.find(q => quantities.has(q));
+      const value  = chosen ? quantities.get(chosen)! : '';
+      plurals.set(name, { value, uri, line, quantities, chosenQuantity: chosen });
     }
 
     const RE_ARRAY = /<string-array\s+name="([^"]+)"[^>]*>([\s\S]*?)<\/string-array>/g;

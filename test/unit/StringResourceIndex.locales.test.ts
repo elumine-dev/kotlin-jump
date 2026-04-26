@@ -93,14 +93,16 @@ describe('StringResourceIndex — plurals value capture', () => {
     expect(idx.getPluralsValue('count')?.value).toBe('%d items');
   });
 
-  it('returns empty string when no "other" quantity exists', () => {
+  it('falls back to next-priority quantity when "other" is missing', () => {
     const idx = new StringResourceIndex();
     idx.reindexFile(DEFAULT, `<resources>
   <plurals name="count">
     <item quantity="one">one only</item>
   </plurals>
 </resources>`);
-    expect(idx.getPluralsValue('count')?.value).toBe('');
+    const entry = idx.getPluralsValue('count');
+    expect(entry?.value).toBe('one only');
+    expect(entry?.chosenQuantity).toBe('one');
   });
 });
 

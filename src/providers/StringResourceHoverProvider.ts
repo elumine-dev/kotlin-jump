@@ -67,9 +67,15 @@ export class StringResourceHoverProvider implements vscode.HoverProvider {
       if (!entry) return;
 
       const md = new vscode.MarkdownString();
-      md.appendMarkdown('**plural** (quantity=other)\n\n');
+      const quantity = entry.chosenQuantity ?? 'other';
+      md.appendMarkdown(`**plural** (quantity=${quantity})\n\n`);
       md.appendCodeblock(entry.value, 'text');
       appendFormatHint(md, entry.value);
+      if (entry.quantities && !entry.quantities.has('other')) {
+        md.appendMarkdown(
+          '\n\n*Note:* no `other` quantity defined — Android requires it as a fallback.',
+        );
+      }
       appendSourceLine(md, key, entry);
 
       return new vscode.Hover(md, new vscode.Range(position.line, start, position.line, end));

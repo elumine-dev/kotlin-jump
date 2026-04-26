@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isInsideCommentOrString } from '../../src/util/textUtils';
+import { isInsideCommentOrString, isInsideStringInterpolation } from '../../src/util/textUtils';
 
 // ── isInsideCommentOrString — normal code ─────────────────────────────────────
 
@@ -182,5 +182,55 @@ describe('isInsideCommentOrString — edge cases', () => {
     // In Kotlin, `'"'` is a char literal containing a double quote
     // '(0)"(1)'(2)
     expect(isInsideCommentOrString('\'"\'', 1)).toBe(true); // the " at index 1 is inside '...'
+  });
+});
+
+// ── isInsideStringInterpolation ───────────────────────────────────────────────
+
+describe('isInsideStringInterpolation — happy path', () => {
+  it('returns true for a name inside `${...}` in a real string', () => {
+    const line = 'val s = "Hello ${NAME}!"';
+    const idx  = line.indexOf('NAME');
+    expect(isInsideStringInterpolation(line, idx)).toBe(true);
+  });
+
+  it('returns false for plain string content (no `${...}`)', () => {
+    const line = 'val s = "Hello NAME!"';
+    const idx  = line.indexOf('NAME');
+    expect(isInsideStringInterpolation(line, idx)).toBe(false);
+  });
+
+  it('returns false for code outside any string', () => {
+    const line = 'val NAME = 1';
+    const idx  = line.indexOf('NAME');
+    expect(isInsideStringInterpolation(line, idx)).toBe(false);
+  });
+});
+
+describe('isInsideStringInterpolation — comment guards', () => {
+  it('returns false when the `${...}` lives inside a /* */ block comment', () => {
+    // The bug: previously returned true because the helper walked past
+    // `/*` and treated the inner `"` as a real string opener.
+    const line = '/* old: was "${TIMEOUT_MS}ms" — to remove */';
+    const idx  = line.indexOf('TIMEOUT_MS');
+    expect(isInsideStringInterpolation(line, idx)).toBe(false);
+  });
+
+  it('returns false for an unclosed `/*` even if it contains `${...}`', () => {
+    const line = '/* trailing "${X}';
+    const idx  = line.indexOf('X');
+    expect(isInsideStringInterpolation(line, idx)).toBe(false);
+  });
+
+  it('still returns true when an interpolation comes AFTER a closed block comment', () => {
+    const line = '/* nope */ val s = "${X}"';
+    const idx  = line.indexOf('${X}') + 2;
+    expect(isInsideStringInterpolation(line, idx)).toBe(true);
+  });
+
+  it('returns false inside a // line comment', () => {
+    const line = '// "${X}"';
+    const idx  = line.indexOf('X');
+    expect(isInsideStringInterpolation(line, idx)).toBe(false);
   });
 });

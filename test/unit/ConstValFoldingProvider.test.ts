@@ -83,6 +83,20 @@ describe('SP2-CVF-2 — 2 entries (ambiguïté) → 0 décorations', () => {
     );
     expect(result).toHaveLength(0);
   });
+
+  it('2 entries, même valeur → 1 décoration (pas de conflit réel)', () => {
+    // Cas réel : `Constants.TIMEOUT_MS = 5000` ET `private const val TIMEOUT_MS = 5000`
+    // dans un autre fichier. Les deux s'accordent → on peut folder sans mentir.
+    const result = decs(
+      [
+        { name: 'TIMEOUT_MS', isConst: true, constValue: '5000' },
+        { name: 'TIMEOUT_MS', isConst: true, constValue: '5000' },
+      ],
+      ['val x = TIMEOUT_MS'],
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0].renderOptions.before.contentText).toBe('5000');
+  });
 });
 
 // ── SP2-CVF-3 ─────────────────────────────────────────────────────────────────

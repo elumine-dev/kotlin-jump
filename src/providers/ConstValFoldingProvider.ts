@@ -96,22 +96,23 @@ export class ConstValFoldingProvider implements vscode.Disposable {
   }
 
   /** Resolve a SCREAMING_SNAKE_CASE name to its const value (or `null`
-   *  for "no unique const val with that name"). Result is memoized for
-   *  the lifetime of the current rebuild — same name across many lines
-   *  produces a single index lookup. */
+   *  for "ambiguous"). Two declarations with the SAME literal value are
+   *  not ambiguous — both render the same fold, so we accept them. We
+   *  only bail when values disagree (e.g. `DevConfig.PORT = 8080` vs
+   *  `ProdConfig.PORT = 9090` — folding either would lie). Memoized for
+   *  the rebuild's lifetime. */
   private _resolveConstValue(name: string, memo: Map<string, string | null>): string | null {
     const cached = memo.get(name);
     if (cached !== undefined) return cached;
     const entries = this.index.lookup(name);
     let unique: string | null = null;
-    let found = 0;
+    let conflict = false;
     for (const e of entries) {
       if (!e.isConst || !e.constValue) continue;
-      found++;
-      if (found > 1) { unique = null; break; }
-      unique = e.constValue;
+      if (unique === null) unique = e.constValue;
+      else if (unique !== e.constValue) { conflict = true; break; }
     }
-    const value = found === 1 ? unique : null;
+    const value = conflict ? null : unique;
     memo.set(name, value);
     return value;
   }

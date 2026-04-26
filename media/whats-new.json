@@ -1,12 +1,12 @@
 {
-  "version": "1.17.6",
+  "version": "1.17.7",
   "title": "What's New in Kotlin Jump",
   "tagline": "Local scope correctness across the board",
   "summary": "Fixes local-scope handling across six providers, adds a declaration-to-usages jump, corrects code lens behavior, and improves const-val folding performance.",
   "highlights": [
     {
       "title": "Local Scope Correctness",
-      "description": "Rename, hover, references, and definitions now distinguish local variables and parameters from workspace-wide symbols — preventing accidental project-wide rewrites when renaming a local and eliminating wrong hover information.",
+      "description": "Rename, hover, references, and definitions now distinguish local variables and parameters from workspace-wide symbols, preventing accidental project-wide rewrites when renaming a local and eliminating wrong hover information.",
       "kind": "fix"
     },
     {

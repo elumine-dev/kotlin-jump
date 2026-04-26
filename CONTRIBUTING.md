@@ -19,4 +19,4 @@ npm run test:integration   # VS Code integration tests
 ## Issues & PRs
 
 - Bugs and feature requests: [github.com/elumine-dev/kotlin-jump/issues](https://github.com/elumine-dev/kotlin-jump/issues)
-- Pull requests welcome — small, focused changes preferred.
+- Pull requests welcome. Small, focused changes preferred.

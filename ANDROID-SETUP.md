@@ -2,7 +2,7 @@
 
 ## Monorepos and multi-flavor projects
 
-When the auto-detector can't find your app module — or you have multiple apps in one workspace — declare them explicitly in `.vscode/settings.json`.
+When the auto-detector can't find your app module, or you have multiple apps in one workspace, declare them explicitly in `.vscode/settings.json`.
 
 This is also needed when your `applicationId` lives in a **build-logic convention plugin** (the auto-detector doesn't read those).
 
@@ -29,7 +29,7 @@ This is also needed when your `applicationId` lives in a **build-logic conventio
 | Field | Description |
 |---|---|
 | `name` | Label shown in button and picker |
-| `module` | Path to app module — `"app"` or `"mobile/app"` |
+| `module` | Path to app module (e.g. `"app"` or `"mobile/app"`) |
 | `package` | Debug application ID |
 | `variant` | Build variant → `install{Variant}` (default: `"Debug"`) |
 

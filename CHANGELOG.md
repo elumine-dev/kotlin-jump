@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.17.7
+
+Removes em-dashes from the extension `displayName`, `description`, the in-VS Code "What's New" panel, and the supporting Markdown files. The Marketplace listing now reads in plain human punctuation across the title, tagline, and onboarding copy.
+
+### Notes
+- No changes to extension commands, settings, navigation, or any other user-facing behavior since v1.17.6.
+- `displayName` em-dash separator switched to a colon: `Kotlin Jump: Fast Kotlin & Android Navigation`.
+- `description` em-dashes replaced with periods.
+- `media/whats-new.json` and the supporting `ANDROID-SETUP.md` / `CONTRIBUTING.md` files cleaned in the same pass.
+
 ## 1.17.6
 
 Removes 26 em-dashes from the README that gave the listing an AI-generated feel. Replaced with periods, commas, or sentence breaks depending on context. The copy now reads like a human wrote it.

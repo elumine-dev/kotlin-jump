@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.17.10
+
+Fixes null assertion highlighting to exclude Java files, where !! is a boolean double-negation, not a Kotlin null-assertion operator.
+
+### Fixes
+- Null assertion highlighting (!! operator) no longer triggers in Java files, where !! is a boolean double-negation rather than a null-assertion operator.
+
+### Notes
+- This is a focused single-fix release. No commands, settings, navigation behavior, or other UI changed since v1.17.9.
+
 ## 1.17.9
 
 Fixes Cmd+Click on parameter inlay hints to navigate directly to the declaration without triggering the Find Usages panel as a side effect.

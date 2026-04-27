@@ -650,19 +650,32 @@ export class SymbolIndex {
 
   // Returns names containing ALL trigrams in `lower`. Returns null when any
   // trigram has no bucket — impossible to find a match, skip scoring entirely.
+  //
+  // Optimisation: collect every bucket first, sort by size ascending, then
+  // intersect smallest-first. The Set we materialise has at most |smallest|
+  // entries — for a query like "ApiDataController", the rarest trigram
+  // ("api"+"con"+"…") might bucket 30 names while a common one ("ata")
+  // buckets 3000. Without the sort we'd clone the 3000-entry bucket and
+  // shrink it; with the sort we clone 30 and probe the 3000 via O(1) `has`.
   private trigramCandidates(lower: string): Set<string> | null {
-    let candidates: Set<string> | null = null;
-    for (let i = 0; i <= lower.length - 3; i++) {
+    const triCount = lower.length - 2;
+    if (triCount <= 0) return null;
+    // Collect bucket refs without copying. Bail immediately on any miss.
+    const buckets: Set<string>[] = new Array(triCount);
+    for (let i = 0; i < triCount; i++) {
       const bucket = this.byTrigram.get(lower.slice(i, i + 3));
       if (!bucket || bucket.size === 0) return null;
-      if (candidates === null) {
-        candidates = new Set(bucket);
-      } else {
-        for (const name of candidates) {
-          if (!bucket.has(name)) candidates.delete(name);
-        }
-        if (candidates.size === 0) return null;
+      buckets[i] = bucket;
+    }
+    // Sort ascending so the materialised Set is as small as possible.
+    buckets.sort((a, b) => a.size - b.size);
+    const candidates = new Set(buckets[0]);
+    for (let i = 1; i < buckets.length; i++) {
+      const probe = buckets[i];
+      for (const name of candidates) {
+        if (!probe.has(name)) candidates.delete(name);
       }
+      if (candidates.size === 0) return null;
     }
     return candidates;
   }

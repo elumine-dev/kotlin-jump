@@ -592,3 +592,54 @@ describe('StringResourceFoldingProvider — format() arg substitution', () => {
     expect(decs[0].range.end.character).toBe(rEnd);
   });
 });
+
+// ── Plurals + arrays render distinctly from R.string ─────────────────────────
+//
+// Bug recensement #2 / #2bis: R.plurals.X and R.array.X used to render
+// identically to R.string.X (quoted, string color), making the three
+// kinds visually indistinguishable.
+
+describe('StringResourceFoldingProvider — distinct decorations for plurals + arrays', () => {
+  it('R.plurals.X folds with `× "value"` marker (multiplier glyph)', () => {
+    const { provider } = buildProvider(`<resources>
+  <plurals name="pokemon_count">
+    <item quantity="other">%d Pokémon</item>
+  </plurals>
+</resources>`);
+    const editor = makeEditor(['val s = R.plurals.pokemon_count'], 'kotlin', -1);
+    vi.spyOn(vscodeMock.window, 'visibleTextEditors', 'get').mockReturnValue([editor]);
+    provider.invalidateAll();
+    const [, decs] = editor.setDecorations.mock.lastCall!;
+    expect(decs).toHaveLength(1);
+    expect(decs[0].renderOptions.before.contentText).toBe('× "%d Pokémon"');
+  });
+
+  it('R.array.X folds to bare `[a, b, c]` — no surrounding quotes', () => {
+    const { provider } = buildProvider(`<resources>
+  <string-array name="pokemon_types">
+    <item>Fire</item>
+    <item>Water</item>
+    <item>Grass</item>
+  </string-array>
+</resources>`);
+    const editor = makeEditor(['val s = R.array.pokemon_types'], 'kotlin', -1);
+    vi.spyOn(vscodeMock.window, 'visibleTextEditors', 'get').mockReturnValue([editor]);
+    provider.invalidateAll();
+    const [, decs] = editor.setDecorations.mock.lastCall!;
+    expect(decs).toHaveLength(1);
+    // Brackets are part of the value; outer quotes are NOT added.
+    expect(decs[0].renderOptions.before.contentText).toBe('[Fire, Water, Grass]');
+  });
+
+  it('R.string.X still folds with surrounding quotes (regression guard)', () => {
+    const { provider } = buildProvider(
+      `<resources><string name="hello">World</string></resources>`,
+    );
+    const editor = makeEditor(['val s = R.string.hello'], 'kotlin', -1);
+    vi.spyOn(vscodeMock.window, 'visibleTextEditors', 'get').mockReturnValue([editor]);
+    provider.invalidateAll();
+    const [, decs] = editor.setDecorations.mock.lastCall!;
+    expect(decs).toHaveLength(1);
+    expect(decs[0].renderOptions.before.contentText).toBe('"World"');
+  });
+});

@@ -131,7 +131,7 @@ export class StringResourceFoldingProvider implements vscode.Disposable {
         if (isInsideCommentOrString(text, m.index)) continue;
         const entry = this.index.getPluralsValue(m[1]);
         if (!entry) continue;
-        opts.push(buildStringDecoration(i, m.index, m[0].length, entry.value));
+        opts.push(buildPluralsDecoration(i, m.index, m[0].length, entry.value));
       }
 
       R_ARRAY_RE.lastIndex = 0;
@@ -139,7 +139,7 @@ export class StringResourceFoldingProvider implements vscode.Disposable {
         if (isInsideCommentOrString(text, m.index)) continue;
         const entry = this.index.getArrayValue(m[1]);
         if (!entry) continue;
-        opts.push(buildStringDecoration(i, m.index, m[0].length, entry.value));
+        opts.push(buildArrayDecoration(i, m.index, m[0].length, entry.value));
       }
     }
 
@@ -254,6 +254,51 @@ function buildStringDecoration(
       before: {
         contentText: `"${short}"`,
         color: new vscode.ThemeColor('debugTokenExpression.string'),
+      },
+    },
+  };
+}
+
+// Plurals fold to the chosen quantity's string. Prefix with the
+// multiplier marker `×` so the reader sees "this is a plural form,
+// here's the representative text" — distinct from a regular string.
+function buildPluralsDecoration(
+  line: number,
+  start: number,
+  length: number,
+  value: string,
+): vscode.DecorationOptions {
+  const short = value.length > MAX_LABEL_LEN
+    ? value.slice(0, MAX_LABEL_LEN) + '…' : value;
+  return {
+    range: new vscode.Range(line, start, line, start + length),
+    renderOptions: {
+      before: {
+        contentText: `× "${short}"`,
+        color: new vscode.ThemeColor('debugTokenExpression.string'),
+      },
+    },
+  };
+}
+
+// Arrays already fold to bracketed syntax (`[a, b, c]`). Wrapping that
+// in extra quotes makes it look like the literal string "[a, b, c]"
+// — confusing. Keep brackets, drop quotes, and color as a number/value
+// so it visually reads as a structured collection rather than text.
+function buildArrayDecoration(
+  line: number,
+  start: number,
+  length: number,
+  value: string,
+): vscode.DecorationOptions {
+  const short = value.length > MAX_LABEL_LEN
+    ? value.slice(0, MAX_LABEL_LEN) + '…' : value;
+  return {
+    range: new vscode.Range(line, start, line, start + length),
+    renderOptions: {
+      before: {
+        contentText: short,
+        color: new vscode.ThemeColor('debugTokenExpression.value'),
       },
     },
   };

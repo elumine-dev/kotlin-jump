@@ -32,6 +32,13 @@ export class ScreenRecorder {
 
   start(): void {
     const { x, y, width, height } = this.region;
+    // `screencapture -v` does NOT consistently overwrite an existing
+    // file across macOS versions — some refuse the recording with a
+    // silent stderr while the old `.mov` stays on disk. The driver's
+    // `if (!fs.existsSync(rawPath))` post-check then passes (the file
+    // is the OLD one) and post-process runs on stale content. Remove
+    // the file up-front so a fresh capture is the only outcome.
+    try { fs.unlinkSync(this.rawPath); } catch { /* did not exist */ }
     const args = [
       '-v',                              // video mode
       '-R', `${x},${y},${width},${height}`,

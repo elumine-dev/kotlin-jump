@@ -14,6 +14,7 @@ import * as path from 'node:path';
 
 import { checkRequiredBinaries } from './lib/webp-encoder';
 import { runPostProcess }        from './lib/post-process';
+import { publishWalkthroughToDemos } from './lib/publish-to-demos';
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
@@ -92,6 +93,13 @@ async function main(): Promise<void> {
   log(`Re-rendered:`);
   log(`  ${outputWebp}`);
   log(`  ${outputWebp.replace(/\.webp$/, '-poster.png')}`);
+
+  // Mirror the freshly-rendered output into media/demos/ so the release
+  // pipeline picks up the new content. Same convention as the initial
+  // record run.
+  log(``);
+  log(`Published to media/demos/:`);
+  publishWalkthroughToDemos({ name, walkthroughDir: dir, repoRoot: REPO_ROOT, log });
 
   cleanup();
 }

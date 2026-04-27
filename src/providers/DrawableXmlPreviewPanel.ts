@@ -1,7 +1,125 @@
 import * as vscode from 'vscode';
 import { vectorXmlToSvg } from '../util/vectorToSvg';
+import { SymbolIndex } from '../indexer/SymbolIndex';
+import { scanForUsagesWithTarget, isExcluded } from './FindUsagesEngine';
 
 const DRAWABLE_PATH_RE = /\/res\/drawable[^/]*\//;
+const VECTOR_OPEN_RE = /<vector\b/;
+
+/**
+ * CodeLens above the <vector> opening tag of any drawable XML.
+ *
+ *   $(symbol-color) Open Vector Preview     |     N references
+ *   <vector …>
+ *
+ * Two lenses on the same line:
+ *
+ *   1. Open Preview — re-opens the side preview panel after dismissal.
+ *      Always emitted synchronously in `provideCodeLenses`.
+ *   2. References   — count of `R.drawable.<name>` usages workspace-wide.
+ *      Resolved asynchronously in `resolveCodeLens` so the lens shows
+ *      up immediately ("…") and the count fills in once the scan
+ *      completes. Click opens the standard references peek with every
+ *      usage location.
+ */
+export class DrawableXmlPreviewLensProvider implements vscode.CodeLensProvider {
+  constructor(private readonly index: SymbolIndex) {}
+
+  provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
+    if (document.languageId !== 'xml') return [];
+    if (!DRAWABLE_PATH_RE.test(document.uri.path)) return [];
+
+    const text = document.getText();
+    const m = VECTOR_OPEN_RE.exec(text);
+    if (!m) return [];
+    const pos = document.positionAt(m.index);
+    const range = new vscode.Range(pos.line, 0, pos.line, 0);
+    const drawableName = drawableNameOf(document.uri);
+    return [
+      new vscode.CodeLens(range, {
+        title: '$(symbol-color) Open Vector Preview',
+        command: 'kotlinJump.vectorPreview.show',
+        tooltip: 'Open the side-by-side rendered preview for this <vector>.',
+      }),
+      // Placeholder lens. resolveCodeLens fills in the count + a real
+      // command that opens the references peek with the actual hits.
+      // Tagging the lens via a custom symbol on the range so resolve
+      // can recognise its own placeholders.
+      Object.assign(new vscode.CodeLens(range), {
+        _kjDrawableName: drawableName,
+        _kjDocUri: document.uri,
+      }) as vscode.CodeLens,
+    ];
+  }
+
+  async resolveCodeLens(
+    lens: vscode.CodeLens,
+    token: vscode.CancellationToken,
+  ): Promise<vscode.CodeLens | undefined> {
+    const meta = lens as vscode.CodeLens & { _kjDrawableName?: string; _kjDocUri?: vscode.Uri };
+    if (!meta._kjDrawableName || !meta._kjDocUri) return lens;
+
+    const name = meta._kjDrawableName;
+    const docUri = meta._kjDocUri;
+    const locations = await this.findDrawableUsages(name, token);
+
+    lens.command = {
+      title: locations.length === 0 ? 'No references'
+           : locations.length === 1 ? '1 reference'
+           : `${locations.length} references`,
+      command: 'editor.action.showReferences',
+      // showReferences signature: (uri, position, locations).
+      // We anchor the peek at the start of the file so VS Code's "no
+      // results" message attributes correctly when the count is 0.
+      arguments: [docUri, new vscode.Position(0, 0), locations],
+      tooltip: 'Show every R.drawable usage of this resource workspace-wide.',
+    };
+    return lens;
+  }
+
+  /**
+   * Find every `R.drawable.<name>` reference. We pre-narrow file
+   * candidates via the inverted word index (the symbol name appears in
+   * code somewhere), then post-filter so unrelated `<name>` tokens
+   * (e.g. an identically-named property) don't pollute the count.
+   */
+  private async findDrawableUsages(
+    name: string,
+    token: vscode.CancellationToken,
+  ): Promise<vscode.Location[]> {
+    if (this.index.lookup(name).length === 0
+        && !this.index.getFilesContainingWord(name)) {
+      // No file even mentions the word — the workspace genuinely has
+      // zero usages. Avoids a no-op full scan.
+      // (lookup() handles symbols, word index handles raw textual hits.)
+    }
+    const uriStrings = this.index.fileUriStrings().filter(u => !isExcluded(u));
+    const raw = await scanForUsagesWithTarget(name, undefined, this.index, uriStrings, token);
+    if (token.isCancellationRequested) return [];
+
+    // Keep only the matches preceded by `R.drawable.` (or `R.mipmap.`,
+    // since Android lets you reference drawables from mipmaps too).
+    const out: vscode.Location[] = [];
+    for (const r of raw) {
+      const before = r.lineText.slice(Math.max(0, r.character - 11), r.character);
+      if (before === 'R.drawable.' || before === 'R.mipmap.') {
+        // Only "R.mipmap." is 10 chars — re-check.
+      }
+      // Cleaner check: regex on the slice ending exactly at r.character.
+      const head = r.lineText.slice(0, r.character);
+      if (/\bR\.(?:drawable|mipmap)\.$/.test(head)) {
+        out.push(new vscode.Location(r.uri, new vscode.Position(r.line, r.character)));
+      }
+    }
+    return out;
+  }
+}
+
+/** `…/res/drawable/ic_banner.xml` → `ic_banner`. */
+function drawableNameOf(uri: vscode.Uri): string {
+  const file = uri.path.split('/').pop() ?? '';
+  return file.replace(/\.xml$/i, '');
+}
 
 /**
  * Auto-opening side-by-side preview panel for Android <vector> drawables.

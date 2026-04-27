@@ -67,7 +67,7 @@ import { DrawableResourceIndex } from './indexer/DrawableResourceIndex';
 import { DrawableHoverProvider } from './providers/DrawableHoverProvider';
 import { DrawableGutterThumbnailProvider } from './providers/DrawableGutterThumbnailProvider';
 import { DrawableXmlInlinePreviewProvider } from './providers/DrawableXmlInlinePreviewProvider';
-import { DrawableXmlPreviewPanel } from './providers/DrawableXmlPreviewPanel';
+import { DrawableXmlPreviewPanel, DrawableXmlPreviewLensProvider } from './providers/DrawableXmlPreviewPanel';
 import { VersionCatalogIndex } from './indexer/VersionCatalogIndex';
 import { ColorFoldingProvider } from './providers/ColorFoldingProvider';
 import { ColorResourceDefinitionProvider } from './providers/ColorResourceDefinitionProvider';
@@ -913,7 +913,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         // Auto-opening side preview — opens beside the editor on
         // first focus of any vector drawable XML, lives across
         // file switches, dismissable. The `kotlinJump.vectorPreview.show`
-        // command lets the user re-open it after dismissal.
+        // command lets the user re-open it after dismissal, and the
+        // CodeLens above `<vector>` exposes the same command so the
+        // affordance is always discoverable in-context.
         const sidePreview = new DrawableXmlPreviewPanel();
         return [
           xmlPreview,
@@ -921,6 +923,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           vscode.languages.registerHoverProvider(
             { language: 'xml', pattern: '**/res/drawable*/*.xml' },
             xmlPreview,
+          ),
+          vscode.languages.registerCodeLensProvider(
+            { language: 'xml', pattern: '**/res/drawable*/*.xml' },
+            new DrawableXmlPreviewLensProvider(index),
           ),
           vscode.commands.registerCommand('kotlinJump.vectorPreview.show', () => sidePreview.show()),
         ];

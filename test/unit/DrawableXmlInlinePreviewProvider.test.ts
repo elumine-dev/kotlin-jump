@@ -7,6 +7,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscodeMock from './__mocks__/vscode';
 import { DrawableXmlInlinePreviewProvider } from '../../src/providers/DrawableXmlInlinePreviewProvider';
+import { DrawableXmlPreviewLensProvider } from '../../src/providers/DrawableXmlPreviewPanel';
 import { Position } from './__mocks__/vscode';
 
 // The provider needs a storage dir + a few VS Code event listeners.
@@ -98,5 +99,60 @@ describe('DrawableXmlInlinePreviewProvider', () => {
       const hover = provider.provideHover(doc, new Position(1, 5));
       expect(hover, `expected match for ${dir}`).toBeDefined();
     }
+  });
+});
+
+// ── CodeLens "Open Vector Preview" + "N references" ─────────────────────────
+describe('DrawableXmlPreviewLensProvider', () => {
+  // SymbolIndex stub: enough surface for the lens provider's
+  // `findDrawableUsages` path. Real Find Usages logic is exercised
+  // separately in FindUsagesEngine tests; here we just verify the
+  // provider's contract (right number of lenses, right command IDs).
+  const stubIndex = {
+    lookup: () => [],
+    getFilesContainingWord: () => null,
+    fileUriStrings: () => [] as string[],
+  } as any;
+  const lens = new DrawableXmlPreviewLensProvider(stubIndex);
+
+  it('returns Open Preview + a placeholder references lens above <vector>', () => {
+    const doc = makeDoc(VECTOR_XML);
+    const lenses = lens.provideCodeLenses(doc) as any[];
+    expect(lenses).toHaveLength(2);
+    expect(lenses[0].command.command).toBe('kotlinJump.vectorPreview.show');
+    // Same line as <vector> opener (line 1 in the fixture).
+    expect(lenses[0].range.start.line).toBe(1);
+    // Second lens is unresolved (no .command yet) and tagged with the
+    // drawable name + uri so resolveCodeLens can fill in the count.
+    expect(lenses[1].command).toBeUndefined();
+    expect(lenses[1]._kjDrawableName).toBe('ic_banner');
+  });
+
+  it('resolveCodeLens fills in the references count + showReferences command', async () => {
+    const doc = makeDoc(VECTOR_XML);
+    const [, placeholder] = lens.provideCodeLenses(doc) as any[];
+    const resolved = await lens.resolveCodeLens(
+      placeholder,
+      { isCancellationRequested: false } as any,
+    );
+    expect(resolved).toBeDefined();
+    expect(resolved!.command!.command).toBe('editor.action.showReferences');
+    // Empty workspace stub → 0 references.
+    expect(resolved!.command!.title).toBe('No references');
+  });
+
+  it('returns no lenses for non-vector drawable XML (selector)', () => {
+    const doc = makeDoc(NON_VECTOR_XML);
+    expect(lens.provideCodeLenses(doc)).toHaveLength(0);
+  });
+
+  it('returns no lenses outside res/drawable*/', () => {
+    const doc = makeDoc(VECTOR_XML, { path: '/project/build.xml' });
+    expect(lens.provideCodeLenses(doc)).toHaveLength(0);
+  });
+
+  it('returns no lenses for non-XML language', () => {
+    const doc = makeDoc(VECTOR_XML, { lang: 'kotlin' });
+    expect(lens.provideCodeLenses(doc)).toHaveLength(0);
   });
 });

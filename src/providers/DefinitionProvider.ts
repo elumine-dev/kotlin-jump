@@ -7,6 +7,21 @@ import { Logger } from '../util/logger';
 const WORD_RE = /[A-Za-z_]\w*/;
 const ALIAS_TYPE_RE = /\b([A-Z]\w+)\b/g;
 const RE_PKG = /^\s*package\s+([\w.]+)/m;
+
+// Cached `\bword\b` patterns — `findLocalUsages` is called on every
+// Cmd+Click and would otherwise compile a fresh RegExp per invocation.
+// Bounded to avoid memory growth on workspaces with thousands of unique
+// identifiers.
+const _wordRegexCache = new Map<string, RegExp>();
+function wordRegex(word: string): RegExp {
+  let re = _wordRegexCache.get(word);
+  if (!re) {
+    re = new RegExp(`\\b${escapeRegex(word)}\\b`, 'g');
+    if (_wordRegexCache.size >= 256) _wordRegexCache.clear(); // simple bound
+    _wordRegexCache.set(word, re);
+  }
+  return re;
+}
 const DEFAULT_TEST_SEGMENTS: string[] = [];
 
 const CLASS_LIKE_KINDS = new Set([
@@ -122,7 +137,16 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
 
     // ── 1. Try FQN match via resolved imports (most precise) ─────────────────
     const resolved = resolveBest(word, document, fqn => this.index.lookupFqn(fqn));
-    const resolvedEntries = resolved.matches.filter(e => allow(e.uri.path));
+    const docUriStr = document.uri.toString();
+    // Top-level `private` in Kotlin = file-private. Three top-level
+    // `private fun foo` declarations across the workspace are unrelated
+    // and must not cross-resolve. Class members (`depth > 0`) keep their
+    // existing lenient behavior — the resolver can still navigate to a
+    // private member in another file from within the same package
+    // (matches the current test contract for `colorResource`).
+    const isReachable = (e: { isPrivate?: boolean; depth?: number; uri: vscode.Uri }) =>
+      !e.isPrivate || (e.depth ?? 0) > 0 || e.uri.toString() === docUriStr;
+    const resolvedEntries = resolved.matches.filter(e => allow(e.uri.path) && isReachable(e));
     log(`step1 priority=${resolved.priority} resolvedEntries=${resolvedEntries.length} → ${resolvedEntries.map(e => e.fqn).join(', ') || 'none'}`);
     if (resolvedEntries.length > 0) {
       const declEntry = resolvedEntries.find(e => isAtDeclaration(e, document.uri, position));
@@ -161,7 +185,7 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
     }
 
     // ── 2. Fallback: simple name lookup (same package or stdlib-like names) ──
-    const filtered = this.index.lookup(word).filter(e => allow(e.uri.path));
+    const filtered = this.index.lookup(word).filter(e => allow(e.uri.path) && isReachable(e));
     log(`step2 filtered=${filtered.length} → ${filtered.map(e => e.fqn).join(', ') || 'none'}`);
     if (filtered.length === 0) return null;
 
@@ -825,7 +849,7 @@ export function findLocalUsages(
   word: string,
 ): vscode.Location[] {
   const out: vscode.Location[] = [];
-  const re = new RegExp(`\\b${escapeRegex(word)}\\b`, 'g');
+  const re = wordRegex(word);
   const declCol = document.getWordRangeAtPosition(position)?.start.character;
   const lastLine = Math.min(document.lineCount - 1, position.line + 1000);
   for (let i = position.line; i <= lastLine; i++) {

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { SymbolIndex } from '../indexer/SymbolIndex';
-import { scanForUsages, resolveSearchTarget, DEFAULT_TEST_SEGMENTS, UsageResult } from './FindUsagesEngine';
+import { scanForUsagesWithTarget, resolveSearchTarget, DEFAULT_TEST_SEGMENTS, UsageResult } from './FindUsagesEngine';
 import { isTestPath } from '../util/testFilter';
 
 // ── Tree node types ───────────────────────────────────────────────────────────
@@ -86,11 +86,18 @@ export class FindUsagesPanel
 
     const target = resolveSearchTarget(word, document, this.index);
 
-    let raw = await scanForUsages(
+    // `private` has no cross-file callers in valid code — scan ONLY the
+    // declaring file. Saves ~all of the perceived Cmd+Click latency on
+    // large projects (matches `scanForUsagesWithTarget`'s own restriction).
+    const uriStrings = target?.isPrivate
+      ? [target.uri.toString()]
+      : this.index.fileUriStrings();
+
+    let raw = await scanForUsagesWithTarget(
       word,
-      document,
+      target,
       this.index,
-      this.index.fileUriStrings(),
+      uriStrings,
       token,
     );
 
@@ -224,7 +231,10 @@ export class FindUsagesPanel
     if (!this.showTests)    hidden.push('tests');
     if (!this.showPreviews) hidden.push('previews');
     const suffix = hidden.length > 0 ? ` · ${hidden.join(' + ')} hidden` : '';
-    this.treeView.description = `${total} usages of "${this.currentWord}"${suffix}`;
+    const countText = total === 0 ? 'no usages'
+                    : total === 1 ? '1 usage'
+                    : `${total} usages`;
+    this.treeView.description = `${countText} of "${this.currentWord}"${suffix}`;
   }
 }
 

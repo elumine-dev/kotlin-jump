@@ -264,7 +264,12 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
   private async _scanUsages(entry: SymbolEntry, token: vscode.CancellationToken): Promise<UsageResult[]> {
     // Apply the same exclude filter as ReferenceProvider so counts are consistent.
     // Pass entry as pre-resolved target — no openTextDocument() needed.
-    const uriStrings = this.index.fileUriStrings().filter(u => !isExcluded(u));
+    // `private` has no cross-file callers in valid code — scan only the
+    // declaring file. The lens count is then unambiguous and the
+    // background scan finishes in a few ms.
+    const uriStrings = entry.isPrivate
+      ? [entry.uri.toString()]
+      : this.index.fileUriStrings().filter(u => !isExcluded(u));
     return scanForUsagesWithTarget(entry.name, entry, this.index, uriStrings, token);
   }
 }

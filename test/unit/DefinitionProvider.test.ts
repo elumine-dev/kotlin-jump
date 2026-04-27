@@ -725,3 +725,50 @@ class ProfileViewModel {
     expect(result).toBeNull();
   });
 });
+
+// ── Regression: cross-file private symbols must not resolve ──────────────────
+//
+// Three workspace files each declare a top-level `private fun foo`. They are
+// independent and must not navigate to each other.
+
+describe('DefinitionProvider — cross-file private isolation', () => {
+  const URI_A = 'file:///a/A.kt';
+  const URI_B = 'file:///b/B.kt';
+  const URI_C = 'file:///c/C.kt';
+  const CODE_A = `package com.example.a
+private fun helper(x: Int): Int = x + 1
+fun callA() = helper(10)`;
+  const CODE_B = `package com.example.b
+private fun helper(x: Int): Int = x * 2
+fun callB() = helper(20)`;
+  const CODE_C = `package com.example.c
+private fun helper(x: Int): Int = x * 10
+fun callC() = helper(30)`;
+
+  it('Cmd+Click on `helper` declaration in A returns A only — not B or C', () => {
+    const idx = new SymbolIndex();
+    idx.add(parse(URI_A, CODE_A));
+    idx.add(parse(URI_B, CODE_B));
+    idx.add(parse(URI_C, CODE_C));
+    const provider = new KotlinDefinitionProvider(idx);
+    const doc = mockDocument(URI_A, CODE_A);
+    const result = provider.provideDefinition(doc, positionOf(CODE_A, 'helper', 1));
+    // Either a single Location or an array; in both cases the URI must be A.
+    const locs = Array.isArray(result) ? result : result ? [result] : [];
+    expect(locs.length).toBe(1);
+    expect((locs[0] as any).uri.toString()).toBe(URI_A);
+  });
+
+  it('Cmd+Click on the call `helper(10)` in A returns A — not B or C', () => {
+    const idx = new SymbolIndex();
+    idx.add(parse(URI_A, CODE_A));
+    idx.add(parse(URI_B, CODE_B));
+    idx.add(parse(URI_C, CODE_C));
+    const provider = new KotlinDefinitionProvider(idx);
+    const doc = mockDocument(URI_A, CODE_A);
+    const result = provider.provideDefinition(doc, positionOf(CODE_A, 'helper', 2));
+    const locs = Array.isArray(result) ? result : result ? [result] : [];
+    expect(locs.length).toBe(1);
+    expect((locs[0] as any).uri.toString()).toBe(URI_A);
+  });
+});

@@ -608,7 +608,8 @@ class SettingsViewModel {
   it('file A results include declaration line AND usage inside login()', async () => {
     const doc = mockDocument(URI_A, CODE_A);
     const results = await scanForUsages('clickStream', doc, index, [URI_A, URI_B, URI_C], token as any);
-    // Expect at least 2: the `val clickStream = ...` declaration and `clickStream.tryEmit` usage
+    // Engine returns BOTH (RenameProvider needs the declaration). The
+    // FindUsagesPanel applies its own declaration-exclusion filter.
     expect(results.length).toBeGreaterThanOrEqual(2);
   });
 

@@ -1,26 +1,44 @@
 {
-  "version": "1.17.10",
+  "version": "1.18.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Null assertion highlight, Kotlin files only",
-  "summary": "Fixes null assertion highlighting to exclude Java files, where !! is a boolean double-negation, not a Kotlin null-assertion operator.",
+  "tagline": "Drawable previews, color swatches, performance gains",
+  "summary": "Kotlin Jump 1.18.0 adds live vector drawable previews with gutter thumbnails, hover, CodeLens, and a side panel, brings hex color swatches to XML resource files, and ships multi-phase startup and memory performance improvements alongside a batch of precision fixes.",
   "highlights": [
     {
-      "title": "Null Assertion Scope Fix",
-      "description": "The !! highlight now applies only in Kotlin files — Java files no longer produce false positives from boolean double-negation expressions such as !!condition.",
-      "kind": "fix"
+      "title": "Vector Drawable Previews",
+      "description": "Any <vector> XML file now shows a gutter thumbnail, an inline hover preview, a CodeLens with an Open Preview action and live reference count, and an auto-opening side-by-side panel — all without leaving the editor.",
+      "kind": "feature",
+      "media": "vector-preview.webp",
+      "mediaAlt": "Vector Drawable Preview"
+    },
+    {
+      "title": "XML Color Swatches",
+      "description": "Hex color swatches now resolve and display inline in colors*.xml resource files, giving the same visual decoration previously available only in Kotlin source.",
+      "kind": "feature"
+    },
+    {
+      "title": "Startup and Memory Gains",
+      "description": "Index snapshots are now gzip-compressed for faster warm startup, and parser-level optimizations eliminate per-document allocations and reduce GC pressure on large projects.",
+      "kind": "improvement"
     }
   ],
   "sections": [
     {
-      "heading": "Fixes",
+      "heading": "Improvements",
       "bullets": [
-        "Null assertion highlighting (!! operator) no longer triggers in Java files, where !! is a boolean double-negation rather than a null-assertion operator."
+        "Index snapshots are now written as gzip-compressed files, reducing disk I/O and cutting the time to restore a warm index on subsequent startups.",
+        "Eliminated per-document allocations in the parser hot path and interned repeated kind and supertype strings to reduce GC pressure on large projects.",
+        "Widened stat concurrency during the initial scan, improved trigram cache hit rate, and cached hot regex and path lookups in the usages engine to reduce repeated-search latency."
       ]
     },
     {
-      "heading": "Notes",
+      "heading": "Fixes",
       "bullets": [
-        "This is a focused single-fix release. No commands, settings, navigation behavior, or other UI changed since v1.17.9."
+        "Fixed the vector preview CodeLens to remain clickable after first activation; the references panel now closes automatically when a reference is picked.",
+        "Fixed R.drawable.<name> usage search to scan the full workspace directly, so the reference count shown in the CodeLens is accurate.",
+        "Fixed color folding to skip <color> tags inside XML comments, and fixed @color/X resolution to scan every values*/*.xml folder including locale and variant directories.",
+        "Fixed folding decorations for R.plurals and R.array to use distinct visuals so they are no longer confused with R.string.",
+        "Fixed Find Usages to correctly isolate file-private symbols, fixed const-val folding to respect block comments, and fixed plurals indexing to cover all values*.xml files."
       ]
     }
   ],

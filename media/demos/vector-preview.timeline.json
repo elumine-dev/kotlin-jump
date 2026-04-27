@@ -1,26 +1,44 @@
 [
   {
+    "t": 0,
     "type": "caption",
-    "label": "Open a vector → preview pops in beside it.",
-    "duration": 2400,
-    "t": 300
+    "label": "Open the source → preview beside it.",
+    "duration": 2500
   },
   {
+    "t": 2000,
     "type": "caption",
-    "label": "Edit a colour → preview redraws live. ⚡",
-    "duration": 2600,
-    "t": 3640
+    "label": "Hover the tag for a peek.",
+    "duration": 2500
   },
   {
+    "t": 4000,
     "type": "caption",
-    "label": "Every keystroke. No rebuild.",
-    "duration": 2400,
-    "t": 7237
+    "label": "Click count → jump to usage.",
+    "duration": 2500
   },
   {
+    "t": 6000,
     "type": "caption",
-    "label": "Vector + live preview, side by side. 🎨",
-    "duration": 2600,
-    "t": 10439
+    "label": "VS Code picker — pick green.",
+    "duration": 2500
+  },
+  {
+    "t": 8500,
+    "type": "caption",
+    "label": "Back to red.",
+    "duration": 2500
+  },
+  {
+    "t": 10500,
+    "type": "caption",
+    "label": "Close + reopen via the lens.",
+    "duration": 2500
+  },
+  {
+    "t": 12000,
+    "type": "caption",
+    "label": "References at the ready.",
+    "duration": 2500
   }
 ]

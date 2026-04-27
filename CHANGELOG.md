@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.18.0
+
+Kotlin Jump 1.18.0 adds live vector drawable previews with gutter thumbnails, hover, CodeLens, and a side panel, brings hex color swatches to XML resource files, and ships multi-phase startup and memory performance improvements alongside a batch of precision fixes.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/v1.18.0/media/demos/vector-preview.webp" width="720" alt="Vector Drawable Preview" />
+</p>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/v1.18.0/media/demos/private-file-isolation.webp" width="720" alt="File-Private Isolation in Find Usages" />
+</p>
+
+### Improvements
+- Index snapshots are now written as gzip-compressed files, reducing disk I/O and cutting the time to restore a warm index on subsequent startups.
+- Eliminated per-document allocations in the parser hot path and interned repeated kind and supertype strings to reduce GC pressure on large projects.
+- Widened stat concurrency during the initial scan, improved trigram cache hit rate, and cached hot regex and path lookups in the usages engine to reduce repeated-search latency.
+
+### Fixes
+- Fixed the vector preview CodeLens to remain clickable after first activation; the references panel now closes automatically when a reference is picked.
+- Fixed R.drawable.<name> usage search to scan the full workspace directly, so the reference count shown in the CodeLens is accurate.
+- Fixed color folding to skip <color> tags inside XML comments, and fixed @color/X resolution to scan every values*/*.xml folder including locale and variant directories.
+- Fixed folding decorations for R.plurals and R.array to use distinct visuals so they are no longer confused with R.string.
+- Fixed Find Usages to correctly isolate file-private symbols, fixed const-val folding to respect block comments, and fixed plurals indexing to cover all values*.xml files.
+
 ## 1.17.10
 
 Fixes null assertion highlighting to exclude Java files, where !! is a boolean double-negation, not a Kotlin null-assertion operator.

@@ -90,10 +90,42 @@ export function getExcludeMatchers(): ((path: string) => boolean)[] {
   return _matchers;
 }
 
+// Path extraction is on the hot scan path: a workspace open invokes
+// `isExcluded(...)` once per indexed file (5K+ on real projects).
+// `vscode.Uri.parse` allocates an object and re-decodes the path every
+// time. We cache the decoded path per uriString — the same URI is
+// checked many times across one Cmd+Click + Find Usages flow. Bounded
+// to avoid heap growth in long-running sessions where files come and go.
+const _pathCache = new Map<string, string>();
+const _PATH_CACHE_LIMIT = 16384; // ~3 MB worst case at ~200 B/entry
+
+function pathOf(uriString: string): string {
+  let p = _pathCache.get(uriString);
+  if (p !== undefined) return p;
+  // Fast path for `file://...` (the common case): skip Uri.parse, just
+  // decode percent-escapes. `decodeURIComponent` throws on malformed
+  // `%XX` — fall back to `Uri.parse` (more tolerant) on failure rather
+  // than crashing the scan loop. Real-world VS Code emits well-formed
+  // URIs so the catch should be cold-path.
+  if (uriString.startsWith('file://')) {
+    try {
+      p = decodeURIComponent(uriString.slice(7));
+    } catch {
+      p = vscode.Uri.parse(uriString).path;
+    }
+  } else {
+    p = vscode.Uri.parse(uriString).path;
+  }
+  if (_pathCache.size >= _PATH_CACHE_LIMIT) _pathCache.clear();
+  _pathCache.set(uriString, p);
+  return p;
+}
+
 export function isExcluded(uriString: string): boolean {
   const matchers = getExcludeMatchers();
   if (matchers.length === 0) return false;
-  return matchers.some(m => m(vscode.Uri.parse(uriString).path));
+  const p = pathOf(uriString);
+  return matchers.some(m => m(p));
 }
 
 export interface UsageResult {
@@ -104,12 +136,6 @@ export interface UsageResult {
   lineText: string;  // raw line (not trimmed)
 }
 
-/**
- * Scans `uriStrings` for usages of `word`, disambiguating via FQN when possible.
- *
- * Callers are responsible for pre-filtering `uriStrings` (e.g. applying
- * kotlinJump.excludeFromReferences globs) before passing them in.
- */
 /**
  * Determines which specific declaration of `word` the given document is most
  * likely referencing. Returns `undefined` when ambiguous.
@@ -128,6 +154,18 @@ export function resolveSearchTarget(
 ): SymbolEntry | undefined {
   const decls = index.lookup(word);
   if (decls.length === 0) return undefined;
+
+  // Same-file preference. When several files in the same package each declare
+  // a top-level `private fun foo`, they all share the FQN `pkg.foo`. The FQN
+  // map only keeps one of them, so `resolveBest` would silently pick whichever
+  // was indexed last — sending Find Usages and Cmd+Click to an unrelated file.
+  // If the cursor's own file declares the symbol, that declaration is THE
+  // target by construction.
+  if (decls.length > 1) {
+    const docUriStr = document.uri.toString();
+    const sameFile = decls.find(d => d.uri.toString() === docUriStr);
+    if (sameFile) return sameFile;
+  }
 
   let target: SymbolEntry | undefined;
   const resolved = resolveBest(word, document, fqn => index.lookupFqn(fqn));
@@ -173,6 +211,13 @@ export async function scanForUsagesWithTarget(
 
   // ── Pre-filter via word index or private restriction ─────────────────────
   let effectiveUris = uriStrings;
+  // `private` (top-level OR class member) has no cross-file callers in
+  // valid Kotlin/Java — restrict to the declaring file. Note this is
+  // STRICTER than the lenient rule used by the Definition resolver, which
+  // stays lenient on class members (`depth > 0`) so Cmd+Click on
+  // `instance.privateMember` from another file still resolves (helpful
+  // UX, even if the call wouldn't compile). Find Usages picks the
+  // conservative scope: only places where the call could actually compile.
   if (target?.isPrivate) {
     effectiveUris = uriStrings.filter(u => u === target.uri.toString());
     log?.info(`[findUsages] "${word}" is private → declaring file only (was ${uriStrings.length} files)`);
@@ -325,6 +370,19 @@ export async function scanImports(
   return results;
 }
 
+// Cached `^\s*package\s+pkg(?:\s|;|$)` patterns. Find Usages calls
+// `fileCouldReference` once per candidate file (potentially hundreds);
+// each invocation rebuilt a fresh RegExp for the same package name.
+const _packageRegexCache = new Map<string, RegExp>();
+function packageRegex(pkg: string): RegExp {
+  let re = _packageRegexCache.get(pkg);
+  if (!re) {
+    re = new RegExp(`^\\s*package\\s+${escapeRegex(pkg)}(?:\\s|;|$)`, 'm');
+    _packageRegexCache.set(pkg, re);
+  }
+  return re;
+}
+
 /**
  * Returns true if a file could plausibly reference the target symbol.
  * Checks: same package, explicit FQN import, or wildcard package import.
@@ -337,7 +395,7 @@ export function fileCouldReference(text: string, target: SymbolEntry, index?: Sy
   const { fqn, packageName: pkg } = target;
   if (pkg) {
     // Anchor to start of line (multiline ^) so a `// package foo` comment never matches.
-    if (new RegExp(`^\\s*package\\s+${escapeRegex(pkg)}(?:\\s|;|$)`, 'm').test(text)) return true;
+    if (packageRegex(pkg).test(text)) return true;
   }
   if (importedExactly(text, fqn)) return true;
   // For member FQNs (pkg.Class.method), also check import of the containing class

@@ -127,7 +127,14 @@ export class KotlinRenameProvider implements vscode.RenameProvider {
     const decls = this.index.lookup(word);
     if (decls.length === 0) return null;
 
-    const uriStrings = this.index.fileUriStrings().filter(u => !isExcluded(u));
+    // `private` symbols have no cross-file callers in valid code — rename
+    // only needs to touch the declaring file. `scanImports` would never
+    // find an import of a private symbol anyway. Skip the workspace
+    // URI parse + picomatch entirely.
+    const target = resolveSearchTarget(word, document, this.index);
+    const uriStrings = target?.isPrivate
+      ? [target.uri.toString()]
+      : this.index.fileUriStrings().filter(u => !isExcluded(u));
 
     // Both scans run in parallel
     const [codeResults, importResults] = await Promise.all([

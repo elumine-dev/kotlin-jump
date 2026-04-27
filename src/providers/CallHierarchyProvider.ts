@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { SymbolKind } from '../indexer/KotlinParser';
-import { scanForUsages, isExcluded, resolveSearchTarget } from './FindUsagesEngine';
+import { scanForUsagesWithTarget, isExcluded, resolveSearchTarget } from './FindUsagesEngine';
 import { isInsideCommentOrString, isInsideStringInterpolation } from '../util/textUtils';
 import { resolveLocalScope } from './DefinitionProvider';
 
@@ -112,10 +112,16 @@ export class KotlinCallHierarchyProvider implements vscode.CallHierarchyProvider
     token: vscode.CancellationToken,
   ): Promise<vscode.CallHierarchyIncomingCall[]> {
     const doc = await vscode.workspace.openTextDocument(item.uri);
-    const uriStrings = this.index.fileUriStrings().filter(u => !isExcluded(u));
-    const results = await scanForUsages(
+    // Resolve the target up-front. `private` has no cross-file callers in
+    // valid code — scan only the declaring file. Skips the workspace-wide
+    // URI parse + picomatch glob filter.
+    const target = resolveSearchTarget(item.name, doc, this.index);
+    const uriStrings = target?.isPrivate
+      ? [target.uri.toString()]
+      : this.index.fileUriStrings().filter(u => !isExcluded(u));
+    const results = await scanForUsagesWithTarget(
       item.name,
-      doc,
+      target,
       this.index,
       uriStrings,
       token,

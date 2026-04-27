@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { SymbolIndex } from '../indexer/SymbolIndex';
-import { scanForUsages, isExcluded } from './FindUsagesEngine';
+import { resolveSearchTarget, scanForUsagesWithTarget, isExcluded } from './FindUsagesEngine';
 import { Logger } from '../util/logger';
 import { resolveLocalScope, findLocalUsages } from './DefinitionProvider';
 import { isInsideCommentOrString, isInsideStringInterpolation } from '../util/textUtils';
@@ -45,20 +45,33 @@ export class KotlinReferenceProvider implements vscode.ReferenceProvider {
       return out.length > 0 ? out : null;
     }
 
-    if (this.index.lookup(word).length === 0) return null;
+    const decls = this.index.lookup(word);
+    if (decls.length === 0) return null;
 
-    // Pre-filter URI list before any I/O (pure CPU — picomatch pre-compiled)
-    const uriStrings = this.index.fileUriStrings().filter(u => !isExcluded(u));
+    // Resolve target FIRST. `private` (top-level or class member) has no
+    // cross-file callers in valid code — the engine restricts to the
+    // declaring file. Mirror that restriction here so we skip the
+    // workspace-wide URI parse + picomatch glob filter (~2 s of perceived
+    // latency on large projects).
+    const target = resolveSearchTarget(word, document, this.index);
+    const uriStrings = target?.isPrivate
+      ? [target.uri.toString()]
+      : this.index.fileUriStrings().filter(u => !isExcluded(u));
 
-    const raw = await scanForUsages(word, document, this.index, uriStrings, token, this.log);
+    const raw = await scanForUsagesWithTarget(
+      word, target, this.index, uriStrings, token, this.log,
+    );
     if (raw.length === 0) return null;
 
-    // Optionally exclude declaration sites
-    const decls = this.index.lookup(word);
+    // Always exclude declaration sites — "Find Usages" means call sites, not
+    // the definition. VS Code's `context.includeDeclaration` defaults to true
+    // for the references peek, which would otherwise show the declaration as
+    // the first hit (visually redundant: the user already sits on it).
+    void context;
     const declKeys = new Set(decls.map(e => `${e.uri.toString()}:${e.line}:${e.character}`));
 
     const locations = raw
-      .filter(r => context.includeDeclaration || !declKeys.has(`${r.uriString}:${r.line}:${r.character}`))
+      .filter(r => !declKeys.has(`${r.uriString}:${r.line}:${r.character}`))
       .map(r => new vscode.Location(r.uri, new vscode.Position(r.line, r.character)));
 
     return locations.length > 0 ? locations : null;

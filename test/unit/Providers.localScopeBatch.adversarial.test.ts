@@ -120,3 +120,46 @@ describe('ADV — SignatureHelpProvider local guard', () => {
     expect(r).toBeNull();
   });
 });
+
+// ── ADV — ReferenceProvider workspace declaration exclusion ──────────────────
+
+describe('ADV — ReferenceProvider excludes the declaration site', () => {
+  const FILE = `package com.example.demo
+
+private fun getQuantityString(id: Int, q: Int): String = "id-q"
+
+private fun showCount() = getQuantityString(1, 2)
+private fun ticketsLeft() = getQuantityString(3, 4)
+`;
+  const URI = 'file:///demo.kt';
+
+  it('Cmd+Click on the declaration → call sites only (no declaration line)', async () => {
+    const idx = new SymbolIndex();
+    addFile(idx, URI, FILE);
+    const origReadFile = vscode.workspace.fs.readFile;
+    (vscode.workspace.fs as any).readFile = async (uri: any) => {
+      const s = typeof uri.toString === 'function' ? uri.toString() : String(uri);
+      return Buffer.from(s === URI ? FILE : '');
+    };
+
+    try {
+      const provider = new KotlinReferenceProvider(idx);
+      const doc = mockDocument(URI, FILE);
+      const declLine  = FILE.split('\n').findIndex(l => l.includes('private fun getQuantityString'));
+      const col       = FILE.split('\n')[declLine].indexOf('getQuantityString');
+
+      const result = await provider.provideReferences(
+        doc, new Position(declLine, col + 1),
+        { includeDeclaration: true } as any,
+        { isCancellationRequested: false } as any,
+      ) as Location[] | null;
+
+      expect(result).not.toBeNull();
+      expect(result!.length).toBe(2);
+      // Location.range here is actually a Position (mock + provider both pass Position).
+      expect(result!.some(loc => (loc.range as any).line === declLine)).toBe(false);
+    } finally {
+      (vscode.workspace.fs as any).readFile = origReadFile;
+    }
+  });
+});

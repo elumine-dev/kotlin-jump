@@ -35,6 +35,7 @@ import {
 }                                                        from './lib/manual-window';
 import type { WindowRect }                               from './lib/manual-window';
 import { promptTimelineEvents }                          from './lib/timeline-repl';
+import { publishWalkthroughToDemos }                     from './lib/publish-to-demos';
 
 const REPO_ROOT  = path.resolve(__dirname, '..', '..');
 const WIDTH      = 1280;
@@ -287,6 +288,13 @@ async function main(): Promise<void> {
   log(`  ${timelineJson}  (edit + re-render with: kjdemo manual-render ${name})`);
   log(`  ${outputWebp}  (${fileSizeKb(outputWebp)} KB)`);
   log(`  ${outputWebp.replace(/\.webp$/, '-poster.png')}`);
+
+  // Publish the rendered artefacts to media/demos/ — that's where
+  // `./.publish` and media/whats-new.json look for them. raw.mov stays
+  // behind in walkthrough/ for re-renders.
+  log(``);
+  log(`Published to media/demos/:`);
+  publishWalkthroughToDemos({ name, walkthroughDir: outputDir, repoRoot: REPO_ROOT, log });
 
   if (!process.env.KJ_DEMO_KEEP_TMP) {
     fs.rmSync(tmpDir, { recursive: true, force: true });

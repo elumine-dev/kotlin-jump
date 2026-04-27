@@ -903,12 +903,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         new DrawableHoverProvider(drawableIndex),
       ),
       // Inline `<vector>` preview when the drawable XML is open in
-      // the editor. Restricted to `res/drawable*/*.xml` paths so the
-      // hover never fires on unrelated XMLs (manifests, build files…).
-      vscode.languages.registerHoverProvider(
-        { language: 'xml', pattern: '**/res/drawable*/*.xml' },
-        new DrawableXmlInlinePreviewProvider(),
-      ),
+      // the editor. The provider exposes BOTH:
+      //  - an always-visible gutter icon at the `<vector>` line, kept
+      //    in sync with the file's content (subscriptions internal),
+      //  - a hover registered below for the larger 256×256 popup.
+      ...((): vscode.Disposable[] => {
+        const xmlPreview = new DrawableXmlInlinePreviewProvider(context.globalStorageUri);
+        return [
+          xmlPreview,
+          vscode.languages.registerHoverProvider(
+            { language: 'xml', pattern: '**/res/drawable*/*.xml' },
+            xmlPreview,
+          ),
+        ];
+      })(),
       gutter,
       dwW1, dwW2,
     );

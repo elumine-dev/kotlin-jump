@@ -1,36 +1,60 @@
+import * as crypto from 'node:crypto';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { vectorXmlToSvg } from '../util/vectorToSvg';
 
+const DRAWABLE_PATH_RE = /\/res\/drawable[^/]*\//;
+const VECTOR_OPEN_RE   = /<vector\b/;
+
 /**
- * Hover provider for Android <vector> drawables. Hovering the
- * <vector> opening tag in any res/drawable*\/*.xml pops up a 256×256
- * rendered preview beside the cursor.
+ * Always-visible inline preview for Android <vector> drawables. When a
+ * drawable XML containing a <vector> is open in the editor, a small
+ * rendered thumbnail appears in the gutter beside the <vector> line —
+ * no hover required. Hover the same line for a 256×256 popup variant.
  *
- * The XML is converted to SVG via the workspace's existing
- * `vectorXmlToSvg` helper (also used by the gutter thumbnail and
- * R.drawable hover providers, so identical rendering across surfaces).
- * Non-vector XML drawables (selectors, shapes, layer-list, …) silently
- * decline to render — there's no faithful raster conversion path for
- * those, and a "drawable type:" line on hover would compete with
- * VS Code's native XML hovers.
+ * Converts the XML to SVG via the workspace's existing `vectorXmlToSvg`
+ * helper (also used by the R.drawable gutter thumbnails and hover) so
+ * the rendering is identical across every surface. Non-vector
+ * drawables (selectors, shapes, layer-list…) silently decline.
  */
-export class DrawableXmlInlinePreviewProvider implements vscode.HoverProvider {
+export class DrawableXmlInlinePreviewProvider implements vscode.HoverProvider, vscode.Disposable {
+  private readonly cacheDir: string;
+  // One decoration type per cached SVG file — VS Code requires the
+  // gutter icon to be baked into the type, not into the per-line
+  // decoration option. Reusing the same type across lines is cheap;
+  // creating one per line would not be.
+  private readonly typeByCachePath = new Map<string, vscode.TextEditorDecorationType>();
+  private readonly subs: vscode.Disposable[] = [];
+  private flushTimer: ReturnType<typeof setTimeout> | undefined;
+
+  constructor(storageUri: vscode.Uri) {
+    this.cacheDir = path.join(storageUri.fsPath, 'vector-xml-preview');
+    fs.mkdirSync(this.cacheDir, { recursive: true });
+
+    this.subs.push(
+      vscode.window.onDidChangeActiveTextEditor(() => this.scheduleFlush()),
+      vscode.window.onDidChangeVisibleTextEditors(() => this.scheduleFlush()),
+      vscode.workspace.onDidChangeTextDocument(e => {
+        if (vscode.window.visibleTextEditors.some(ed => ed.document === e.document)) {
+          this.scheduleFlush();
+        }
+      }),
+    );
+
+    this.flush();
+  }
+
+  // ── Hover (popup variant) ────────────────────────────────────────────
   provideHover(
     document: vscode.TextDocument,
     position: vscode.Position,
   ): vscode.Hover | undefined {
     if (document.languageId !== 'xml') return;
-
-    // Cheap path filter: only fire inside `res/drawable*/`. Saves the
-    // full-document parse on unrelated XMLs (build files, manifests…).
-    if (!/\/res\/drawable[^/]*\//.test(document.uri.path)) return;
+    if (!DRAWABLE_PATH_RE.test(document.uri.path)) return;
 
     const text = document.getText();
-    // Locate the `<vector` opening tag. If the cursor isn't on its
-    // line, defer to other hovers — keeps mid-document attribute hovers
-    // (VS Code's built-in colour picker on `android:fillColor=` etc.)
-    // unaffected.
-    const vectorMatch = /<vector\b/.exec(text);
+    const vectorMatch = VECTOR_OPEN_RE.exec(text);
     if (!vectorMatch) return;
     const vectorLine = document.positionAt(vectorMatch.index).line;
     if (position.line !== vectorLine) return;
@@ -45,10 +69,87 @@ export class DrawableXmlInlinePreviewProvider implements vscode.HoverProvider {
     md.appendMarkdown(`<img src="${dataUri}" width="256" height="256" alt="vector preview" />\n\n`);
     md.appendMarkdown(`*${document.uri.path.split('/').pop()}*`);
 
-    // Anchor the hover at the `<vector>` token range so VS Code highlights
-    // it on hover — same affordance the user sees on `R.drawable.x`.
     const start = document.positionAt(vectorMatch.index);
     const end = document.positionAt(vectorMatch.index + vectorMatch[0].length);
     return new vscode.Hover(md, new vscode.Range(start, end));
+  }
+
+  // ── Always-visible gutter icon ───────────────────────────────────────
+  private scheduleFlush(): void {
+    clearTimeout(this.flushTimer);
+    this.flushTimer = setTimeout(() => this.flush(), 80);
+  }
+
+  private async flush(): Promise<void> {
+    for (const editor of vscode.window.visibleTextEditors) {
+      const doc = editor.document;
+      if (doc.languageId !== 'xml' || !DRAWABLE_PATH_RE.test(doc.uri.path)) {
+        // Clear any stale decorations on this editor.
+        for (const type of this.typeByCachePath.values()) editor.setDecorations(type, []);
+        continue;
+      }
+      await this.applyForEditor(editor);
+    }
+  }
+
+  private async applyForEditor(editor: vscode.TextEditor): Promise<void> {
+    const doc = editor.document;
+    const text = doc.getText();
+    const vectorMatch = VECTOR_OPEN_RE.exec(text);
+    if (!vectorMatch) return;
+
+    const svg = vectorXmlToSvg(text);
+    if (!svg) {
+      // Drawable XML but not a vector — clear any prior decoration on
+      // this editor so a stale icon doesn't survive an edit that
+      // converted a vector into another drawable type.
+      for (const type of this.typeByCachePath.values()) editor.setDecorations(type, []);
+      return;
+    }
+
+    const cachePath = this.cachePathFor(doc.uri, svg);
+    const type = this.decorationTypeFor(cachePath);
+
+    const startPos = doc.positionAt(vectorMatch.index);
+    const endPos   = doc.positionAt(vectorMatch.index + vectorMatch[0].length);
+
+    // Apply only to THIS type for this editor; clear others so a file
+    // that previously rendered a different SVG doesn't keep its old
+    // gutter icon alongside the new one.
+    for (const [otherCache, otherType] of this.typeByCachePath) {
+      if (otherCache === cachePath) continue;
+      editor.setDecorations(otherType, []);
+    }
+    editor.setDecorations(type, [{ range: new vscode.Range(startPos, endPos) }]);
+  }
+
+  private cachePathFor(uri: vscode.Uri, svg: string): string {
+    // Hash the content so an edit that changes the SVG bytes lands on
+    // a fresh cache entry — the gutter icon updates automatically as
+    // the user types.
+    const h = crypto.createHash('sha1').update(uri.path).update('\0').update(svg).digest('hex').slice(0, 16);
+    const p = path.join(this.cacheDir, `${h}.svg`);
+    if (!fs.existsSync(p)) {
+      try { fs.writeFileSync(p, svg); } catch { /* ignore — flush() will retry */ }
+    }
+    return p;
+  }
+
+  private decorationTypeFor(cachePath: string): vscode.TextEditorDecorationType {
+    let type = this.typeByCachePath.get(cachePath);
+    if (type) return type;
+    type = vscode.window.createTextEditorDecorationType({
+      gutterIconPath: vscode.Uri.file(cachePath),
+      gutterIconSize: 'contain',
+    });
+    this.typeByCachePath.set(cachePath, type);
+    return type;
+  }
+
+  dispose(): void {
+    clearTimeout(this.flushTimer);
+    for (const t of this.typeByCachePath.values()) t.dispose();
+    this.typeByCachePath.clear();
+    for (const s of this.subs) s.dispose();
   }
 }

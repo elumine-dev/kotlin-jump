@@ -2,9 +2,20 @@
  * Tests for DrawableXmlInlinePreviewProvider — inline hover preview of
  * `<vector>` drawables when their source XML is open.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import * as vscodeMock from './__mocks__/vscode';
 import { DrawableXmlInlinePreviewProvider } from '../../src/providers/DrawableXmlInlinePreviewProvider';
 import { Position } from './__mocks__/vscode';
+
+// The provider needs a storage dir + a few VS Code event listeners.
+// Stub them so the constructor runs cleanly inside vitest.
+const STORAGE_URI = { fsPath: path.join(os.tmpdir(), 'kj-vector-xml-preview-test') };
+vi.spyOn(vscodeMock.window as any, 'onDidChangeActiveTextEditor').mockReturnValue({ dispose: () => {} });
+vi.spyOn(vscodeMock.window as any, 'onDidChangeVisibleTextEditors').mockReturnValue({ dispose: () => {} });
+vi.spyOn(vscodeMock.workspace as any, 'onDidChangeTextDocument').mockReturnValue({ dispose: () => {} });
+Object.defineProperty(vscodeMock.window as any, 'visibleTextEditors', { configurable: true, get: () => [] });
 
 const VECTOR_XML = `<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -43,7 +54,7 @@ function makeDoc(text: string, opts: { lang?: string; path?: string } = {}) {
 }
 
 describe('DrawableXmlInlinePreviewProvider', () => {
-  const provider = new DrawableXmlInlinePreviewProvider();
+  const provider = new DrawableXmlInlinePreviewProvider(STORAGE_URI as any);
 
   it('shows an SVG preview when hovering the `<vector>` tag line', () => {
     const doc = makeDoc(VECTOR_XML);

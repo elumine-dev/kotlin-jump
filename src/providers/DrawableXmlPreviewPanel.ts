@@ -63,17 +63,34 @@ export class DrawableXmlPreviewLensProvider implements vscode.CodeLensProvider {
     const docUri = meta._kjDocUri;
     const locations = await this.findDrawableUsages(name, token);
 
-    lens.command = {
-      title: locations.length === 0 ? 'No references'
-           : locations.length === 1 ? '1 reference'
-           : `${locations.length} references`,
-      command: 'editor.action.showReferences',
-      // showReferences signature: (uri, position, locations).
-      // We anchor the peek at the start of the file so VS Code's "no
-      // results" message attributes correctly when the count is 0.
-      arguments: [docUri, new vscode.Position(0, 0), locations],
-      tooltip: 'Show every R.drawable usage of this resource workspace-wide.',
-    };
+    // Single result → jump straight there. Multiple → references peek.
+    // Zero → no command (the lens still shows "No references" so the
+    // user knows the scan ran). Mirrors the smart-navigation rule the
+    // rest of the extension uses for Cmd+Click and Find Usages.
+    const count = locations.length;
+    if (count === 0) {
+      lens.command = {
+        title: 'No references',
+        command: '', // VS Code renders an unclickable lens
+        tooltip: 'No R.drawable / R.mipmap usage found workspace-wide.',
+      };
+    } else if (count === 1) {
+      const loc = locations[0];
+      lens.command = {
+        title: '1 reference',
+        command: 'kotlinJump.vectorPreview.gotoSingleRef',
+        arguments: [loc.uri, loc.range.start],
+        tooltip: 'Jump to the only R.drawable / R.mipmap usage of this resource.',
+      };
+    } else {
+      lens.command = {
+        title: `${count} references`,
+        command: 'editor.action.showReferences',
+        // showReferences signature: (uri, position, locations).
+        arguments: [docUri, new vscode.Position(0, 0), locations],
+        tooltip: 'Show every R.drawable / R.mipmap usage of this resource.',
+      };
+    }
     return lens;
   }
 

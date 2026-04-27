@@ -929,6 +929,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             new DrawableXmlPreviewLensProvider(index),
           ),
           vscode.commands.registerCommand('kotlinJump.vectorPreview.show', () => sidePreview.show()),
+          // Jump straight to the single `R.drawable.<name>` usage when
+          // the references CodeLens has exactly one hit. Range is a
+          // Position pair (line/character) — `Selection` synthesised
+          // here so VS Code highlights the token on arrival.
+          vscode.commands.registerCommand(
+            'kotlinJump.vectorPreview.gotoSingleRef',
+            async (uri: vscode.Uri, pos: vscode.Position) => {
+              const sel = new vscode.Range(pos, pos);
+              await vscode.commands.executeCommand('vscode.open', uri, {
+                preview: false,
+                selection: sel,
+              } as vscode.TextDocumentShowOptions);
+            },
+          ),
         ];
       })(),
       gutter,

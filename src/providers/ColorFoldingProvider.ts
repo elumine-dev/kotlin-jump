@@ -56,7 +56,12 @@ export class ColorFoldingProvider implements vscode.Disposable {
         if (isInsideCommentOrString(text, m.index) && !isInsideStringInterpolation(text, m.index)) continue;
         const entry = this.index.getValue(m[1]);
         if (!entry) continue;
-        const cssColor = toCSS(entry.value);
+        const resolved = resolveColorRef(entry.value, this.index);
+        // Skip the swatch entirely when the value can't be resolved to
+        // a real hex literal — a gray fallback is worse than nothing
+        // (it implies the color IS gray, which is misleading).
+        if (resolved === null) continue;
+        const cssColor = toCSS(resolved);
         opts.push({
           range: new vscode.Range(i, m.index, i, m.index),
           renderOptions: {
@@ -81,6 +86,23 @@ export class ColorFoldingProvider implements vscode.Disposable {
     this._decorType.dispose();
     for (const s of this._subs) s.dispose();
   }
+}
+
+// Resolve `@color/X` references one hop. Android lets a `<color>` value
+// be either a literal hex (`#FF0000`) or a reference to another color
+// (`@color/primary`). We follow exactly one hop: enough for the common
+// "brand → primary" indirection, while bounded against accidental
+// reference cycles (`a → b → a`). Returns the literal hex on success
+// or `null` when unresolvable (target missing or not a hex).
+function resolveColorRef(value: string, index: ColorResourceIndex): string | null {
+  const v = value.trim();
+  if (v.startsWith('#')) return v;
+  const ref = /^@(?:android:)?color\/([A-Za-z_]\w*)$/.exec(v);
+  if (!ref) return null;
+  const target = index.getValue(ref[1]);
+  if (!target) return null;
+  const t = target.value.trim();
+  return t.startsWith('#') ? t : null; // chain of references: don't recurse.
 }
 
 function toCSS(v: string): string {

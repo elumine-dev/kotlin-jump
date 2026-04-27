@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { vectorXmlToSvg } from '../util/vectorToSvg';
 import { SymbolIndex } from '../indexer/SymbolIndex';
-import { scanForUsagesWithTarget, isExcluded } from './FindUsagesEngine';
+import { isExcluded } from './FindUsagesEngine';
 
 const DRAWABLE_PATH_RE = /\/res\/drawable[^/]*\//;
 const VECTOR_OPEN_RE = /<vector\b/;
@@ -78,41 +78,57 @@ export class DrawableXmlPreviewLensProvider implements vscode.CodeLensProvider {
   }
 
   /**
-   * Find every `R.drawable.<name>` reference. We pre-narrow file
-   * candidates via the inverted word index (the symbol name appears in
-   * code somewhere), then post-filter so unrelated `<name>` tokens
-   * (e.g. an identically-named property) don't pollute the count.
+   * Find every `R.drawable.<name>` (and `R.mipmap.<name>`) reference
+   * across the workspace.
+   *
+   * We can't lean on the symbol-name index here: drawable resources
+   * never appear as Kotlin/Java symbols, so `byName` and `byWord` are
+   * both empty for `ic_banner` even when the codebase references it
+   * a hundred times. Direct scan it is — concurrent reads, with a
+   * `text.includes(prefix)` fast-path so files that don't even mention
+   * the resource name skip the per-line regex entirely.
    */
   private async findDrawableUsages(
     name: string,
     token: vscode.CancellationToken,
   ): Promise<vscode.Location[]> {
-    if (this.index.lookup(name).length === 0
-        && !this.index.getFilesContainingWord(name)) {
-      // No file even mentions the word — the workspace genuinely has
-      // zero usages. Avoids a no-op full scan.
-      // (lookup() handles symbols, word index handles raw textual hits.)
-    }
+    const drawablePrefix = `R.drawable.${name}`;
+    const mipmapPrefix   = `R.mipmap.${name}`;
     const uriStrings = this.index.fileUriStrings().filter(u => !isExcluded(u));
-    const raw = await scanForUsagesWithTarget(name, undefined, this.index, uriStrings, token);
-    if (token.isCancellationRequested) return [];
-
-    // Keep only the matches preceded by `R.drawable.` (or `R.mipmap.`,
-    // since Android lets you reference drawables from mipmaps too).
+    const re = new RegExp(`\\bR\\.(?:drawable|mipmap)\\.${escapeRegex(name)}\\b`, 'g');
     const out: vscode.Location[] = [];
-    for (const r of raw) {
-      const before = r.lineText.slice(Math.max(0, r.character - 11), r.character);
-      if (before === 'R.drawable.' || before === 'R.mipmap.') {
-        // Only "R.mipmap." is 10 chars — re-check.
+
+    // Concurrency cap mirrors FindUsagesEngine's IO worker pool: keeps
+    // file system pressure low on huge workspaces while still hiding
+    // I/O latency.
+    const CONCURRENCY = 32;
+    let cursor = 0;
+    const worker = async (): Promise<void> => {
+      while (cursor < uriStrings.length && !token.isCancellationRequested) {
+        const uriStr = uriStrings[cursor++];
+        const uri = vscode.Uri.parse(uriStr);
+        try {
+          const bytes = await vscode.workspace.fs.readFile(uri);
+          const text = Buffer.from(bytes).toString('utf8');
+          if (!text.includes(drawablePrefix) && !text.includes(mipmapPrefix)) continue;
+          const lines = text.split('\n');
+          for (let i = 0; i < lines.length; i++) {
+            re.lastIndex = 0;
+            let m: RegExpExecArray | null;
+            while ((m = re.exec(lines[i])) !== null) {
+              out.push(new vscode.Location(uri, new vscode.Position(i, m.index)));
+            }
+          }
+        } catch { /* skip unreadable */ }
       }
-      // Cleaner check: regex on the slice ending exactly at r.character.
-      const head = r.lineText.slice(0, r.character);
-      if (/\bR\.(?:drawable|mipmap)\.$/.test(head)) {
-        out.push(new vscode.Location(r.uri, new vscode.Position(r.line, r.character)));
-      }
-    }
+    };
+    await Promise.all(Array.from({ length: CONCURRENCY }, worker));
     return out;
   }
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /** `…/res/drawable/ic_banner.xml` → `ic_banner`. */

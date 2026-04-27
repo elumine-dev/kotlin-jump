@@ -80,6 +80,7 @@ export class ColorFoldingProvider implements vscode.Disposable {
         // the resolver returning the input verbatim.
         XML_COLOR_RE.lastIndex = 0;
         while ((m = XML_COLOR_RE.exec(text))) {
+          if (isInsideXmlComment(text, m.index)) continue;
           const value = m[2];
           // Anchor at the value's first column inside the line.
           const valueOffsetInMatch = m[0].indexOf('>', m[0].indexOf('name="')) + 1;
@@ -99,6 +100,17 @@ export class ColorFoldingProvider implements vscode.Disposable {
     this._decorType.dispose();
     for (const s of this._subs) s.dispose();
   }
+}
+
+// True when `pos` falls inside an `<!-- ... -->` comment region on the
+// same line. Single-line check is enough — multi-line XML comments are
+// rare in colors.xml fixtures, and the regex itself only matches
+// single-line `<color>...</color>` declarations.
+function isInsideXmlComment(text: string, pos: number): boolean {
+  const open = text.lastIndexOf('<!--', pos);
+  if (open === -1) return false;
+  const close = text.indexOf('-->', open + 4);
+  return close === -1 || pos < close + 3;
 }
 
 // Single source of truth for the swatch DecorationOption — keeps the

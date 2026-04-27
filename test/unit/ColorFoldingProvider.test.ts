@@ -254,3 +254,16 @@ describe('SP2-CFP-XML — <color name="X">VALUE</color> in XML files', () => {
     expect(result[1].renderOptions.before.backgroundColor).toBe('#00FF00');
   });
 });
+
+// Regression: XML comments must not produce swatches.
+describe('SP2-CFP-XML-comment — `<!-- <color>... -->` ignored', () => {
+  it('color tag inside XML comment produces no swatch', () => {
+    const idx = indexWith({ primary: '#FF0000' });
+    const result = decs(
+      idx,
+      ['<!-- <color name="primary">#FF0000</color> -->'],
+      'xml',
+    );
+    expect(result).toHaveLength(0);
+  });
+});

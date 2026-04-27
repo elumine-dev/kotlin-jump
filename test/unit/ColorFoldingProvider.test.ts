@@ -210,8 +210,47 @@ describe('SP2-CFP-BORDER — borderColor ThemeColor editor.foreground', () => {
 
 // ── SP2-CFP-12 : XML ──────────────────────────────────────────────────────────
 
-describe('SP2-CFP-12 — languageId xml → 0 décorations', () => {
-  it('fichier XML ignoré', () => {
+describe('SP2-CFP-12 — XML file with no <color> tag → 0 décorations', () => {
+  it('Kotlin-style `R.color.primary` text in an XML file does not get a swatch', () => {
+    // We only render swatches on actual `<color name="X">` declarations,
+    // not arbitrary text that happens to contain `R.color.X`.
     expect(decs(indexWith({ primary: '#7F52FF' }), ['R.color.primary'], 'xml')).toHaveLength(0);
+  });
+});
+
+// ── XML <color> declarations get swatches in colors*.xml ────────────────────
+
+describe('SP2-CFP-XML — <color name="X">VALUE</color> in XML files', () => {
+  it('literal hex value renders a swatch at the value column', () => {
+    const idx = indexWith({ primary: '#FF0000' });
+    const result = decs(idx, ['    <color name="primary">#FF0000</color>'], 'xml');
+    expect(result).toHaveLength(1);
+    expect(result[0].renderOptions.before.backgroundColor).toBe('#FF0000');
+  });
+
+  it('@color/X reference resolves through the index — red brand', () => {
+    const idx = indexWith({ primary: '#FF0000', brand: '@color/primary' });
+    const result = decs(idx, ['    <color name="brand">@color/primary</color>'], 'xml');
+    expect(result).toHaveLength(1);
+    expect(result[0].renderOptions.before.backgroundColor).toBe('#FF0000');
+  });
+
+  it('reference to non-existent color → no swatch (no misleading gray)', () => {
+    const idx = indexWith({ orphan: '@color/does_not_exist' });
+    const result = decs(idx, ['    <color name="orphan">@color/does_not_exist</color>'], 'xml');
+    expect(result).toHaveLength(0);
+  });
+
+  it('multiple <color> tags on consecutive lines each get their swatch', () => {
+    const idx = indexWith({ primary: '#FF0000', accent: '#00FF00' });
+    const result = decs(idx, [
+      '<resources>',
+      '  <color name="primary">#FF0000</color>',
+      '  <color name="accent">#00FF00</color>',
+      '</resources>',
+    ], 'xml');
+    expect(result).toHaveLength(2);
+    expect(result[0].renderOptions.before.backgroundColor).toBe('#FF0000');
+    expect(result[1].renderOptions.before.backgroundColor).toBe('#00FF00');
   });
 });

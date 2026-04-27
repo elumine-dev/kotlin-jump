@@ -95,7 +95,7 @@ private val orphanColor   = R.color.orphan_ref   // points at non-existent     �
 // (ratio 3:1 — banner). Le popup hover force `width=128 height=128` :
 // l'image apparaît SQUASHÉE en carré, distordue.
 // Tu devrais voir : banner large (3:1) preserving aspect ratio.
-private val banner = R.drawable.ic_banner
+private val banner = R.drawable.ic_pokeball
 
 
 // ─────────────────────────────────────────────────────────────────────────────

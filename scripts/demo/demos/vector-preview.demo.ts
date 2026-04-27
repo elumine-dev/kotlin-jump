@@ -1,41 +1,51 @@
 import { Stage } from '../lib/stage';
 
 /**
- * Demo: hover the <vector> tag in a drawable XML to preview the
- * rendered SVG. ~12 s.
+ * Demo: open a `<vector>` drawable, watch the side panel auto-open
+ * beside the source, then live-edit a colour and see the preview
+ * redraw without leaving the editor. ~16 s.
  *
- * Story: an Android dev opens `res/drawable/ic_banner.xml`, sees the
- * raw <path> data, and wonders what it actually looks like. Hovering
- * the <vector> opening tag pops up a 256×256 SVG render of the
- * vector — no Android Studio, no preview pane, no rebuild.
+ * Story: an Android dev opens `res/drawable/ic_pokeball.xml`, sees
+ * the rendered Pokéball pop in beside the XML, tweaks one colour,
+ * the preview catches up in ~120 ms — no rebuild, no Android Studio.
  */
 export default async function record(stage: Stage): Promise<void> {
   await stage.waitForIndexReady();
 
   // ── Setup ──────────────────────────────────────────────────────────
-  // ic_banner.xml is the canonical fixture: a non-square 240×80 vector
-  // that exercises the SVG path conversion + viewport handling.
+  // Land the cursor on the <vector> opening line so the auto-side-
+  // preview activates immediately and the CodeLens above is visible.
   await stage.openFile(
-    'src/main/res/drawable/ic_banner.xml',
-    { line: 20, column: 1 },  // 0-indexed: <vector at file line 21 (1-idx)
+    'src/main/res/drawable/ic_pokeball.xml',
+    { line: 13, column: 0 },
   );
-  await stage.dwellOn({ line: 20, column: 1 }, 1000);
-  await stage.caption('XML brut. Tu vois des <path> data, pas une image.', {
+  await stage.pause(900); // let the side panel slide in
+  await stage.caption('Open a vector → preview pops in beside it.', {
     duration: 2400,
   });
 
-  // ── Trigger the hover via the underlying command ───────────────────
-  // VS Code's `editor.action.showHover` opens the hover popup at the
-  // current cursor position. The recorder doesn't simulate a real
-  // mouse hover — invoking the command produces the same UI.
-  await stage.runCommand('editor.action.showHover');
-  await stage.pause(2000);  // hover + image render
-  await stage.caption('Survole `<vector>` → vignette SVG rendue.', {
+  // ── Beat 2: live colour edit ───────────────────────────────────────
+  // Change the red top half (#EE1515) to a Pokémon-blue tone. The
+  // side preview catches up after the 120 ms debounce — short enough
+  // that the recording shows code + preview moving together.
+  // Lines are 0-indexed in the API: file line 22 = stage line 21.
+  await stage.replaceText(21, '#EE1515', '#3B4CCA');
+  await stage.pause(500); // preview redraws within ~120 ms
+  await stage.caption('Edit a colour → preview redraws live. ⚡', {
     duration: 2600,
   });
 
-  await stage.pause(1500);
-  await stage.caption('Aucun rebuild. Aucun Android Studio. ⚡', {
+  // ── Beat 3: second edit, drive the point home ──────────────────────
+  // File line 42 (inner white) → 0-indexed line 41.
+  await stage.replaceText(41, '#FFFFFF', '#FBE13E');
+  await stage.pause(500);
+  await stage.caption('Every keystroke. No rebuild.', {
+    duration: 2400,
+  });
+
+  // ── Beat 4: closer ─────────────────────────────────────────────────
+  await stage.pause(800);
+  await stage.caption('Vector + live preview, side by side. 🎨', {
     duration: 2600,
   });
 }

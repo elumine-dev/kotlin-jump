@@ -3,6 +3,10 @@ import { ColorResourceIndex } from '../indexer/ColorResourceIndex';
 import { isInsideCommentOrString, isInsideStringInterpolation } from '../util/textUtils';
 
 const R_COLOR_RE = /\bR\.color\.([A-Za-z_]\w*)\b/g;
+// `<color name="X">VALUE</color>` — captures the name (group 1) and the
+// raw value text (group 2). The value can be either a literal hex or a
+// `@color/Y` reference; we resolve that downstream.
+const XML_COLOR_RE = /<color\s+name="([^"]+)"[^>]*>([^<]*)<\/color>/g;
 
 function revealedLines(sels: readonly vscode.Selection[]): Set<number> {
   const s = new Set<number>();
@@ -41,7 +45,9 @@ export class ColorFoldingProvider implements vscode.Disposable {
 
   private _update(ed: vscode.TextEditor, revealed: Set<number>): void {
     const lang = ed.document.languageId;
-    if (lang !== 'kotlin' && lang !== 'java') { ed.setDecorations(this._decorType, []); return; }
+    const isCode = lang === 'kotlin' || lang === 'java';
+    const isXml  = lang === 'xml';
+    if (!isCode && !isXml) { ed.setDecorations(this._decorType, []); return; }
     const enabled = vscode.workspace.getConfiguration('kotlinJump')
       .get<boolean>('colorResourceFolding', true);
     if (!enabled) { ed.setDecorations(this._decorType, []); return; }
@@ -50,31 +56,38 @@ export class ColorFoldingProvider implements vscode.Disposable {
     for (let i = 0; i < ed.document.lineCount; i++) {
       if (revealed.has(i)) continue;
       const text = ed.document.lineAt(i).text;
-      R_COLOR_RE.lastIndex = 0;
       let m: RegExpExecArray | null;
-      while ((m = R_COLOR_RE.exec(text))) {
-        if (isInsideCommentOrString(text, m.index) && !isInsideStringInterpolation(text, m.index)) continue;
-        const entry = this.index.getValue(m[1]);
-        if (!entry) continue;
-        const resolved = resolveColorRef(entry.value, this.index);
-        // Skip the swatch entirely when the value can't be resolved to
-        // a real hex literal — a gray fallback is worse than nothing
-        // (it implies the color IS gray, which is misleading).
-        if (resolved === null) continue;
-        const cssColor = toCSS(resolved);
-        opts.push({
-          range: new vscode.Range(i, m.index, i, m.index),
-          renderOptions: {
-            before: {
-              contentText: '\u00A0',
-              backgroundColor: cssColor,
-              margin: '0 4px 0 0',
-              border: '1px solid',
-              borderColor: new vscode.ThemeColor('editor.foreground'),
-              textDecoration: 'none; display: inline-block; width: 0.65em; height: 0.65em; vertical-align: middle;',
-            },
-          },
-        });
+
+      if (isCode) {
+        R_COLOR_RE.lastIndex = 0;
+        while ((m = R_COLOR_RE.exec(text))) {
+          if (isInsideCommentOrString(text, m.index) && !isInsideStringInterpolation(text, m.index)) continue;
+          const entry = this.index.getValue(m[1]);
+          if (!entry) continue;
+          const resolved = resolveColorRef(entry.value, this.index);
+          // Skip the swatch entirely when the value can't be resolved
+          // to a real hex literal — a gray fallback is worse than
+          // nothing (it implies the color IS gray, misleading).
+          if (resolved === null) continue;
+          opts.push(buildSwatch(i, m.index, toCSS(resolved)));
+        }
+      } else {
+        // XML pass — `<color name="X">VALUE</color>`. Anchor the swatch
+        // at the value's first column so it sits adjacent to the value
+        // text, not at the line's left margin. Same resolution rule as
+        // the Kotlin path: follow `@color/Y` one hop, skip when
+        // unresolvable. Literal hex values render their own swatch via
+        // the resolver returning the input verbatim.
+        XML_COLOR_RE.lastIndex = 0;
+        while ((m = XML_COLOR_RE.exec(text))) {
+          const value = m[2];
+          // Anchor at the value's first column inside the line.
+          const valueOffsetInMatch = m[0].indexOf('>', m[0].indexOf('name="')) + 1;
+          const valueStart = m.index + valueOffsetInMatch;
+          const resolved = resolveColorRef(value, this.index);
+          if (resolved === null) continue;
+          opts.push(buildSwatch(i, valueStart, toCSS(resolved)));
+        }
       }
     }
     ed.setDecorations(this._decorType, opts);
@@ -86,6 +99,24 @@ export class ColorFoldingProvider implements vscode.Disposable {
     this._decorType.dispose();
     for (const s of this._subs) s.dispose();
   }
+}
+
+// Single source of truth for the swatch DecorationOption — keeps the
+// inline-block sizing identical between Kotlin and XML callers.
+function buildSwatch(line: number, col: number, cssColor: string): vscode.DecorationOptions {
+  return {
+    range: new vscode.Range(line, col, line, col),
+    renderOptions: {
+      before: {
+        contentText: ' ',
+        backgroundColor: cssColor,
+        margin: '0 4px 0 0',
+        border: '1px solid',
+        borderColor: new vscode.ThemeColor('editor.foreground'),
+        textDecoration: 'none; display: inline-block; width: 0.65em; height: 0.65em; vertical-align: middle;',
+      },
+    },
+  };
 }
 
 // Resolve `@color/X` references one hop. Android lets a `<color>` value

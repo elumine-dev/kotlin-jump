@@ -66,6 +66,7 @@ import { DimenXmlDefinitionProvider } from './providers/DimenXmlDefinitionProvid
 import { DrawableResourceIndex } from './indexer/DrawableResourceIndex';
 import { DrawableHoverProvider } from './providers/DrawableHoverProvider';
 import { DrawableGutterThumbnailProvider } from './providers/DrawableGutterThumbnailProvider';
+import { DrawableXmlInlinePreviewProvider } from './providers/DrawableXmlInlinePreviewProvider';
 import { VersionCatalogIndex } from './indexer/VersionCatalogIndex';
 import { ColorFoldingProvider } from './providers/ColorFoldingProvider';
 import { ColorResourceDefinitionProvider } from './providers/ColorResourceDefinitionProvider';
@@ -900,6 +901,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       vscode.languages.registerHoverProvider(
         [{ language: 'kotlin' }, { language: 'java' }],
         new DrawableHoverProvider(drawableIndex),
+      ),
+      // Inline `<vector>` preview when the drawable XML is open in
+      // the editor. Restricted to `res/drawable*/*.xml` paths so the
+      // hover never fires on unrelated XMLs (manifests, build files…).
+      vscode.languages.registerHoverProvider(
+        { language: 'xml', pattern: '**/res/drawable*/*.xml' },
+        new DrawableXmlInlinePreviewProvider(),
       ),
       gutter,
       dwW1, dwW2,

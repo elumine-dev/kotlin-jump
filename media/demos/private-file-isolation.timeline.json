@@ -1,0 +1,27 @@
+[
+  {
+    "type": "caption",
+    "label": "Trois fichiers du même package, même nom, tous `private`.",
+    "duration": 2600,
+    "t": 300
+  },
+  {
+    "type": "caption",
+    "label": "Top-level `private` = file-private. PluralArrayDemo n'existe pas pour ce symbole.",
+    "duration": 2800,
+    "t": 2901
+  },
+  {
+    "type": "keystroke",
+    "label": "⌥ + F7",
+    "sublabel": "Find Usages",
+    "duration": 2500,
+    "t": 5732
+  },
+  {
+    "type": "caption",
+    "label": "Deux callers. Tous dans VisualBugsDemo.kt. 🔒",
+    "duration": 2800,
+    "t": 8212
+  }
+]

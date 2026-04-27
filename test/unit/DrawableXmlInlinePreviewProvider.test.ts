@@ -128,7 +128,7 @@ describe('DrawableXmlPreviewLensProvider', () => {
     expect(lenses[1]._kjDrawableName).toBe('ic_banner');
   });
 
-  it('resolveCodeLens with 0 references → unclickable "No references" lens', async () => {
+  it('resolveCodeLens with 0 references → "No references" lens shows + clicks to empty peek', async () => {
     const doc = makeDoc(VECTOR_XML);
     const [, placeholder] = lens.provideCodeLenses(doc) as any[];
     const resolved = await lens.resolveCodeLens(
@@ -137,8 +137,12 @@ describe('DrawableXmlPreviewLensProvider', () => {
     );
     expect(resolved).toBeDefined();
     expect(resolved!.command!.title).toBe('No references');
-    // Empty command id → VS Code renders the lens as static text.
-    expect(resolved!.command!.command).toBe('');
+    // Auto-close wrapper with an empty Location[] keeps the lens
+    // visible (an empty command id used to hide it) and pops the
+    // standard "no results" peek if the user does click — the peek
+    // self-dismisses on the next editor change.
+    expect(resolved!.command!.command).toBe('kotlinJump.vectorPreview.showRefsAutoClose');
+    expect(resolved!.command!.arguments![2]).toEqual([]);
   });
 
   it('resolveCodeLens with 1 reference → "1 reference" + direct-jump command', async () => {
@@ -176,7 +180,7 @@ describe('DrawableXmlPreviewLensProvider', () => {
       { isCancellationRequested: false } as any,
     );
     expect(resolved!.command!.title).toBe('3 references');
-    expect(resolved!.command!.command).toBe('editor.action.showReferences');
+    expect(resolved!.command!.command).toBe('kotlinJump.vectorPreview.showRefsAutoClose');
   });
 
   it('returns no lenses for non-vector drawable XML (selector)', () => {

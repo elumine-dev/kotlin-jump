@@ -1,0 +1,20 @@
+[
+  {
+    "type": "caption",
+    "label": "XML brut. Tu vois des <path> data, pas une image.",
+    "duration": 2400,
+    "t": 300
+  },
+  {
+    "type": "caption",
+    "label": "Survole `<vector>` → vignette SVG rendue.",
+    "duration": 2600,
+    "t": 4714
+  },
+  {
+    "type": "caption",
+    "label": "Aucun rebuild. Aucun Android Studio. ⚡",
+    "duration": 2600,
+    "t": 8814
+  }
+]

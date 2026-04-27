@@ -38,6 +38,8 @@ const browserStubs = {
   'child_process':  './src/browser/child-process-stub',
   'fs':             './src/browser/fs-stub',
   'fs/promises':    './src/browser/fs-stub',
+  'zlib':           './src/browser/zlib-stub',
+  'util':           './src/browser/util-stub',
 };
 
 async function main() {

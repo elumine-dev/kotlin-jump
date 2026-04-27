@@ -67,6 +67,7 @@ import { DrawableResourceIndex } from './indexer/DrawableResourceIndex';
 import { DrawableHoverProvider } from './providers/DrawableHoverProvider';
 import { DrawableGutterThumbnailProvider } from './providers/DrawableGutterThumbnailProvider';
 import { DrawableXmlInlinePreviewProvider } from './providers/DrawableXmlInlinePreviewProvider';
+import { DrawableXmlPreviewPanel } from './providers/DrawableXmlPreviewPanel';
 import { VersionCatalogIndex } from './indexer/VersionCatalogIndex';
 import { ColorFoldingProvider } from './providers/ColorFoldingProvider';
 import { ColorResourceDefinitionProvider } from './providers/ColorResourceDefinitionProvider';
@@ -909,12 +910,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       //  - a hover registered below for the larger 256×256 popup.
       ...((): vscode.Disposable[] => {
         const xmlPreview = new DrawableXmlInlinePreviewProvider(context.globalStorageUri);
+        // Auto-opening side preview — opens beside the editor on
+        // first focus of any vector drawable XML, lives across
+        // file switches, dismissable. The `kotlinJump.vectorPreview.show`
+        // command lets the user re-open it after dismissal.
+        const sidePreview = new DrawableXmlPreviewPanel();
         return [
           xmlPreview,
+          sidePreview,
           vscode.languages.registerHoverProvider(
             { language: 'xml', pattern: '**/res/drawable*/*.xml' },
             xmlPreview,
           ),
+          vscode.commands.registerCommand('kotlinJump.vectorPreview.show', () => sidePreview.show()),
         ];
       })(),
       gutter,

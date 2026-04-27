@@ -170,6 +170,11 @@
         "category": "Kotlin Jump"
       },
       {
+        "command": "kotlinJump.vectorPreview.show",
+        "title": "Show Vector Preview",
+        "category": "Kotlin Jump"
+      },
+      {
         "command": "kotlin-jump.reindex",
         "title": "Kotlin Jump: Re-index workspace",
         "category": "Kotlin Jump"
@@ -943,6 +948,11 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Paint a miniature of the referenced Android asset in the gutter next to every `R.drawable.xxx` / `R.mipmap.xxx` call — matches the Android Studio thumbnail behaviour."
+        },
+        "kotlinJump.vectorPreview.autoOpen": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Automatically open a side-by-side rendered preview of `<vector>` drawables when their source XML becomes the active editor. Re-open via *Kotlin Jump: Show Vector Preview* if dismissed."
         },
         "kotlinJump.overrideGutterIcons": {
           "type": "boolean",

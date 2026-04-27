@@ -1,41 +1,50 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Pokéball — iconic shape used by the demo workspace.
+
+  Open this file: the Kotlin Jump side preview slides in beside the
+  source and renders the rendered SVG live. Tweak any of the colours
+  below with VS Code's built-in colour picker (click the swatch next
+  to any hex literal) — the preview redraws in ~120 ms.
+
+  Geometry: 200×200 viewport so the preview fills the panel cleanly,
+  and each half/band/button is its own <path> so colour edits are the
+  most visible diff a viewer can make.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp"
-    android:height="24dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
 
-    <!-- Outer circle -->
+    <!-- Top half — Poké red. -->
     <path
-        android:fillColor="#FF0000"
-        android:pathData="M12,2 A10,10 0 0,1 22,12 L12,12 A0,0 0 0,0 12,12 Z" />
+        android:fillColor="#EE1515"
+        android:pathData="M100,15 A85,85 0 0,1 185,100 L15,100 A85,85 0 0,1 100,15 Z" />
+
+    <!-- Bottom half — off-white. -->
+    <path
+        android:fillColor="#F0F0F0"
+        android:pathData="M15,100 L185,100 A85,85 0 0,1 100,185 A85,85 0 0,1 15,100 Z" />
+
+    <!-- Equator band — solid black across the diameter. -->
+    <path
+        android:fillColor="#1A1A1A"
+        android:pathData="M15,93 L185,93 L185,107 L15,107 Z" />
+
+    <!-- Outer ring of the centre button. -->
+    <path
+        android:fillColor="#1A1A1A"
+        android:pathData="M100,72 A28,28 0 1,1 99.99,72 Z" />
+
+    <!-- Inner white of the centre button. -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M12,12 L22,12 A10,10 0 0,1 12,22 Z" />
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M2,12 A10,10 0 0,1 12,2 L12,12 Z" />
-    <path
-        android:fillColor="#FF0000"
-        android:pathData="M12,12 L12,22 A10,10 0 0,1 2,12 Z" />
+        android:pathData="M100,80 A20,20 0 1,1 99.99,80 Z" />
 
-    <!-- Center divider line -->
+    <!-- Tiny red dot in the centre — the "open me" cue. -->
     <path
-        android:strokeColor="#333333"
-        android:strokeWidth="1.5"
-        android:pathData="M2,12 L22,12" />
+        android:fillColor="#EE1515"
+        android:pathData="M100,93 A7,7 0 1,1 99.99,93 Z" />
 
-    <!-- Center button -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:strokeColor="#333333"
-        android:strokeWidth="1.5"
-        android:pathData="M12,9 A3,3 0 1,0 12,15 A3,3 0 1,0 12,9 Z" />
-
-    <!-- Outer border -->
-    <path
-        android:fillColor="@android:color/transparent"
-        android:strokeColor="#333333"
-        android:strokeWidth="1.5"
-        android:pathData="M12,2 A10,10 0 1,0 12,22 A10,10 0 1,0 12,2 Z" />
 </vector>

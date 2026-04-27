@@ -26,13 +26,14 @@
 
     <!-- Background -->
     <path
-        android:fillColor="#7F52FF"
+        android:fillColor="#818356"
         android:pathData="M0,0 L240,0 L240,80 L0,80 Z" />
 
     <!-- "K" letter -->
     <path
         android:fillColor="#FFFFFF"
         android:pathData="M20,20 L30,20 L30,40 L48,20 L60,20 L42,40 L60,60 L48,60 L30,40 L30,60 L20,60 Z" />
+
 
     <!-- "J" letter -->
     <path

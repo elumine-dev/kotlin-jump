@@ -1,20 +1,26 @@
 [
   {
     "type": "caption",
-    "label": "XML brut. Tu vois des <path> data, pas une image.",
+    "label": "Open a vector → preview pops in beside it.",
     "duration": 2400,
     "t": 300
   },
   {
     "type": "caption",
-    "label": "Survole `<vector>` → vignette SVG rendue.",
+    "label": "Edit a colour → preview redraws live. ⚡",
     "duration": 2600,
-    "t": 4714
+    "t": 3640
   },
   {
     "type": "caption",
-    "label": "Aucun rebuild. Aucun Android Studio. ⚡",
+    "label": "Every keystroke. No rebuild.",
+    "duration": 2400,
+    "t": 7237
+  },
+  {
+    "type": "caption",
+    "label": "Vector + live preview, side by side. 🎨",
     "duration": 2600,
-    "t": 8814
+    "t": 10439
   }
 ]

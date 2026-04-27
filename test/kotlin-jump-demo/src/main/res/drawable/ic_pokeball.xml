@@ -19,7 +19,7 @@
 
     <!-- Top half — Poké red. -->
     <path
-        android:fillColor="#EE1515"
+        android:fillColor="#ee1515"
         android:pathData="M100,15 A85,85 0 0,1 185,100 L15,100 A85,85 0 0,1 100,15 Z" />
 
     <!-- Bottom half — off-white. -->

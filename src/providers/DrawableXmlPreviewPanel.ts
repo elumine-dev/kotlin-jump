@@ -22,8 +22,46 @@ const VECTOR_OPEN_RE = /<vector\b/;
  *      completes. Click opens the standard references peek with every
  *      usage location.
  */
-export class DrawableXmlPreviewLensProvider implements vscode.CodeLensProvider {
-  constructor(private readonly index: SymbolIndex) {}
+export class DrawableXmlPreviewLensProvider implements vscode.CodeLensProvider, vscode.Disposable {
+  // Workspace scan is cheap to run, but it's still N file reads — and
+  // VS Code calls `resolveCodeLens` whenever the doc state changes, so
+  // we'd repeat the scan dozens of times per session. Cache per
+  // drawable name; invalidate on SAVE (never on every keystroke).
+  //
+  // Why save and not every edit:
+  //   - The scan reads via `vscode.workspace.fs.readFile`, which sees
+  //     the on-disk content. In-memory unsaved edits are invisible to
+  //     it, so the cached count CAN'T be wrong before a save.
+  //   - `onDidChangeTextDocument` fires on every keystroke; clearing
+  //     the cache there would trigger a full workspace scan on every
+  //     character typed in any Kotlin/Java file that's open at the
+  //     same time as a drawable XML. Worst-case behaviour, killed
+  //     before it ships.
+  private readonly _refsCache = new Map<string, vscode.Location[]>();
+  private readonly _onDidChangeCodeLenses = new vscode.EventEmitter<void>();
+  readonly onDidChangeCodeLenses = this._onDidChangeCodeLenses.event;
+  private readonly _subs: vscode.Disposable[];
+
+  constructor(private readonly index: SymbolIndex) {
+    this._subs = [
+      // Invalidate on save of any language that can host an
+      // `R.drawable.X` reference. Saves are infrequent — typing
+      // freely doesn't bust the cache.
+      vscode.workspace.onDidSaveTextDocument(doc => {
+        const lang = doc.languageId;
+        if (lang !== 'kotlin' && lang !== 'java' && lang !== 'kotlinscript') return;
+        if (this._refsCache.size === 0) return;
+        this._refsCache.clear();
+        this._onDidChangeCodeLenses.fire();
+      }),
+    ];
+  }
+
+  dispose(): void {
+    for (const s of this._subs) s.dispose();
+    this._onDidChangeCodeLenses.dispose();
+    this._refsCache.clear();
+  }
 
   provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
     if (document.languageId !== 'xml') return [];
@@ -61,17 +99,28 @@ export class DrawableXmlPreviewLensProvider implements vscode.CodeLensProvider {
 
     const name = meta._kjDrawableName;
     const docUri = meta._kjDocUri;
-    const locations = await this.findDrawableUsages(name, token);
+    let locations = this._refsCache.get(name);
+    if (!locations) {
+      locations = await this.findDrawableUsages(name, token);
+      if (token.isCancellationRequested) return lens;
+      this._refsCache.set(name, locations);
+    }
 
     // Single result → jump straight there. Multiple → references peek.
-    // Zero → no command (the lens still shows "No references" so the
-    // user knows the scan ran). Mirrors the smart-navigation rule the
-    // rest of the extension uses for Cmd+Click and Find Usages.
+    // Zero → still use `showReferences` with an empty array so the
+    // lens stays visible and the click feels intentional ("nothing to
+    // show, you just confirmed it"). An empty `command.command`
+    // string used to hide the lens entirely.
     const count = locations.length;
     if (count === 0) {
+      // No-op-but-clickable lens. Use the auto-close wrapper too so the
+      // empty peek (with its "no results" message) self-dismisses on
+      // first navigation event — same UX contract as the populated
+      // case below.
       lens.command = {
         title: 'No references',
-        command: '', // VS Code renders an unclickable lens
+        command: 'kotlinJump.vectorPreview.showRefsAutoClose',
+        arguments: [docUri, new vscode.Position(0, 0), [] as vscode.Location[]],
         tooltip: 'No R.drawable / R.mipmap usage found workspace-wide.',
       };
     } else if (count === 1) {
@@ -85,8 +134,7 @@ export class DrawableXmlPreviewLensProvider implements vscode.CodeLensProvider {
     } else {
       lens.command = {
         title: `${count} references`,
-        command: 'editor.action.showReferences',
-        // showReferences signature: (uri, position, locations).
+        command: 'kotlinJump.vectorPreview.showRefsAutoClose',
         arguments: [docUri, new vscode.Position(0, 0), locations],
         tooltip: 'Show every R.drawable / R.mipmap usage of this resource.',
       };
@@ -195,10 +243,35 @@ export class DrawableXmlPreviewPanel implements vscode.Disposable {
     this.evaluate();
   }
 
-  /** Manual command target — re-opens the panel after the user dismissed it. */
+  /** Manual command target — re-opens the panel after the user dismissed it.
+   *  Defensive against active-editor weirdness: if `activeTextEditor` doesn't
+   *  point at a vector drawable XML (focus got eaten by a previous click,
+   *  the preview's `preserveFocus` race, etc.), fall back to any visible
+   *  drawable XML editor before giving up. The CodeLens above `<vector>`
+   *  was a dead button without this guard. */
   show(): void {
     this.dismissed = false;
-    this.evaluate(/* force= */ true);
+    const active = vscode.window.activeTextEditor;
+    if (active && this.isVectorDrawableXml(active.document)) {
+      this.openOrReuse(active);
+      this.render(active.document);
+      return;
+    }
+    for (const ed of vscode.window.visibleTextEditors) {
+      if (this.isVectorDrawableXml(ed.document)) {
+        this.openOrReuse(ed);
+        this.render(ed.document);
+        return;
+      }
+    }
+    void vscode.window.showInformationMessage(
+      'Open a vector drawable XML to preview it.',
+    );
+  }
+
+  /** Manual command target — closes the panel programmatically (used by the demo). */
+  close(): void {
+    this.panel?.dispose();
   }
 
   // ── Reactivity ─────────────────────────────────────────────────────

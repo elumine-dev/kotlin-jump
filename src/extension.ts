@@ -929,6 +929,43 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             new DrawableXmlPreviewLensProvider(index),
           ),
           vscode.commands.registerCommand('kotlinJump.vectorPreview.show', () => sidePreview.show()),
+          vscode.commands.registerCommand('kotlinJump.vectorPreview.close', () => sidePreview.close()),
+          // Wrapper around `editor.action.showReferences` that auto-closes
+          // the peek the moment the user clicks a result. The native peek
+          // is sticky-by-design ("keep browsing"), but when invoked from
+          // our drawable XML CodeLens the typical flow is "open peek →
+          // pick one ref → land in code". The peek staying anchored on
+          // the now-background XML feels like a stuck modal. We listen
+          // for the next `onDidChangeActiveTextEditor` (= user picked a
+          // location) and dismiss the peek with `closeReferenceSearch`.
+          vscode.commands.registerCommand(
+            'kotlinJump.vectorPreview.showRefsAutoClose',
+            async (uri: vscode.Uri, pos: vscode.Position, locs: vscode.Location[]) => {
+              const initialUri = vscode.window.activeTextEditor?.document.uri.toString();
+              let listener: vscode.Disposable | undefined;
+              let timeout: ReturnType<typeof setTimeout> | undefined;
+              const cleanup = (): void => {
+                listener?.dispose();
+                listener = undefined;
+                if (timeout) clearTimeout(timeout);
+              };
+              listener = vscode.window.onDidChangeActiveTextEditor(e => {
+                // Peek navigation lands in a different editor than the
+                // anchor file. Same-file selection (rare for our use)
+                // is ignored to avoid closing on accidental focus jumps.
+                if (!e || e.document.uri.toString() === initialUri) return;
+                cleanup();
+                void vscode.commands.executeCommand('closeReferenceSearch');
+              });
+              // Safety net — if the user dismisses the peek with Escape
+              // (no editor change), drop the listener after a minute so
+              // we don't keep a dangling subscription forever.
+              timeout = setTimeout(cleanup, 60_000);
+              await vscode.commands.executeCommand(
+                'editor.action.showReferences', uri, pos, locs,
+              );
+            },
+          ),
           // Jump straight to the single `R.drawable.<name>` usage when
           // the references CodeLens has exactly one hit. Range is a
           // Position pair (line/character) — `Selection` synthesised

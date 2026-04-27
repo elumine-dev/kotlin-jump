@@ -128,7 +128,7 @@ describe('DrawableXmlPreviewLensProvider', () => {
     expect(lenses[1]._kjDrawableName).toBe('ic_banner');
   });
 
-  it('resolveCodeLens fills in the references count + showReferences command', async () => {
+  it('resolveCodeLens with 0 references → unclickable "No references" lens', async () => {
     const doc = makeDoc(VECTOR_XML);
     const [, placeholder] = lens.provideCodeLenses(doc) as any[];
     const resolved = await lens.resolveCodeLens(
@@ -136,9 +136,47 @@ describe('DrawableXmlPreviewLensProvider', () => {
       { isCancellationRequested: false } as any,
     );
     expect(resolved).toBeDefined();
-    expect(resolved!.command!.command).toBe('editor.action.showReferences');
-    // Empty workspace stub → 0 references.
     expect(resolved!.command!.title).toBe('No references');
+    // Empty command id → VS Code renders the lens as static text.
+    expect(resolved!.command!.command).toBe('');
+  });
+
+  it('resolveCodeLens with 1 reference → "1 reference" + direct-jump command', async () => {
+    // Build a fake provider whose `findDrawableUsages` returns a single
+    // location. Easier than wiring the real workspace scan from a test.
+    const oneRefLens = new DrawableXmlPreviewLensProvider(stubIndex);
+    const fakeLoc = {
+      uri: { toString: () => 'file:///app/Foo.kt' } as any,
+      range: { start: { line: 4, character: 12 } } as any,
+    };
+    (oneRefLens as any).findDrawableUsages = async () => [fakeLoc];
+    const doc = makeDoc(VECTOR_XML);
+    const [, placeholder] = oneRefLens.provideCodeLenses(doc) as any[];
+    const resolved = await oneRefLens.resolveCodeLens(
+      placeholder,
+      { isCancellationRequested: false } as any,
+    );
+    expect(resolved!.command!.title).toBe('1 reference');
+    expect(resolved!.command!.command).toBe('kotlinJump.vectorPreview.gotoSingleRef');
+    expect(resolved!.command!.arguments![0]).toBe(fakeLoc.uri);
+  });
+
+  it('resolveCodeLens with N references → "N references" + showReferences peek', async () => {
+    const multiLens = new DrawableXmlPreviewLensProvider(stubIndex);
+    const locs = [
+      { uri: 'a' as any, range: { start: { line: 1, character: 0 } } as any },
+      { uri: 'b' as any, range: { start: { line: 2, character: 0 } } as any },
+      { uri: 'c' as any, range: { start: { line: 3, character: 0 } } as any },
+    ];
+    (multiLens as any).findDrawableUsages = async () => locs;
+    const doc = makeDoc(VECTOR_XML);
+    const [, placeholder] = multiLens.provideCodeLenses(doc) as any[];
+    const resolved = await multiLens.resolveCodeLens(
+      placeholder,
+      { isCancellationRequested: false } as any,
+    );
+    expect(resolved!.command!.title).toBe('3 references');
+    expect(resolved!.command!.command).toBe('editor.action.showReferences');
   });
 
   it('returns no lenses for non-vector drawable XML (selector)', () => {

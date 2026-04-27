@@ -26,8 +26,15 @@ export class HexColorFoldingProvider implements vscode.Disposable {
         else { this._lineDecos.clear(); this._rawState = []; }
       }),
       vscode.workspace.onDidChangeTextDocument(e => {
-        if (this._editor && e.document === this._editor.document)
-          this._applyChanges(e);
+        if (!this._editor || e.document !== this._editor.document) return;
+        // Match `_fullScan`'s language guard — without it, typing inside
+        // an XML drawable's `android:fillColor="#818356"` would re-add
+        // an inline swatch right next to VS Code's native colour-picker
+        // square, doubling the affordance. The provider is Kotlin/Java
+        // only by design.
+        const lang = e.document.languageId;
+        if (lang !== 'kotlin' && lang !== 'java') return;
+        this._applyChanges(e);
       }),
       vscode.workspace.onDidChangeConfiguration(e => {
         if (e.affectsConfiguration('kotlinJump.hexColorSwatch'))

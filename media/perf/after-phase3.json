@@ -1,0 +1,208 @@
+{
+  "label": "after-phase3",
+  "timestamp": "2026-04-27T02:03:44.418Z",
+  "fixture": {
+    "files": 56,
+    "symbols": 1938
+  },
+  "scenarios": [
+    {
+      "name": "definition.private",
+      "runs": 200,
+      "minMs": 0.005,
+      "p50Ms": 0.005,
+      "p95Ms": 0.022,
+      "maxMs": 0.351,
+      "totalMs": 2.016
+    },
+    {
+      "name": "definition.public-fun",
+      "runs": 200,
+      "minMs": 0.004,
+      "p50Ms": 0.004,
+      "p95Ms": 0.007,
+      "maxMs": 0.017,
+      "totalMs": 0.942
+    },
+    {
+      "name": "definition.class",
+      "runs": 200,
+      "minMs": 0.01,
+      "p50Ms": 0.013,
+      "p95Ms": 0.03,
+      "maxMs": 0.04,
+      "totalMs": 3.569
+    },
+    {
+      "name": "definition.object",
+      "runs": 200,
+      "minMs": 0.021,
+      "p50Ms": 0.023,
+      "p95Ms": 0.067,
+      "maxMs": 0.216,
+      "totalMs": 6.054
+    },
+    {
+      "name": "definition.public-const",
+      "runs": 200,
+      "minMs": 0.008,
+      "p50Ms": 0.018,
+      "p95Ms": 0.024,
+      "maxMs": 0.079,
+      "totalMs": 3.04
+    },
+    {
+      "name": "references.private",
+      "runs": 50,
+      "minMs": 0.018,
+      "p50Ms": 0.027,
+      "p95Ms": 0.038,
+      "maxMs": 0.052,
+      "totalMs": 1.36
+    },
+    {
+      "name": "references.public-fun",
+      "runs": 50,
+      "minMs": 0.048,
+      "p50Ms": 0.052,
+      "p95Ms": 0.073,
+      "maxMs": 0.08,
+      "totalMs": 2.84
+    },
+    {
+      "name": "references.class",
+      "runs": 50,
+      "minMs": 0.044,
+      "p50Ms": 0.045,
+      "p95Ms": 0.047,
+      "maxMs": 0.122,
+      "totalMs": 2.322
+    },
+    {
+      "name": "references.object",
+      "runs": 50,
+      "minMs": 0.056,
+      "p50Ms": 0.057,
+      "p95Ms": 0.071,
+      "maxMs": 0.108,
+      "totalMs": 2.953
+    },
+    {
+      "name": "references.public-const",
+      "runs": 50,
+      "minMs": 0.055,
+      "p50Ms": 0.061,
+      "p95Ms": 0.082,
+      "maxMs": 0.218,
+      "totalMs": 3.376
+    },
+    {
+      "name": "resolveTarget.private",
+      "runs": 500,
+      "minMs": 0,
+      "p50Ms": 0,
+      "p95Ms": 0,
+      "maxMs": 0.012,
+      "totalMs": 0.23
+    },
+    {
+      "name": "resolveTarget.public-fun",
+      "runs": 500,
+      "minMs": 0.001,
+      "p50Ms": 0.001,
+      "p95Ms": 0.001,
+      "maxMs": 0.01,
+      "totalMs": 0.434
+    },
+    {
+      "name": "resolveTarget.class",
+      "runs": 500,
+      "minMs": 0,
+      "p50Ms": 0.001,
+      "p95Ms": 0.001,
+      "maxMs": 0.003,
+      "totalMs": 0.303
+    },
+    {
+      "name": "resolveTarget.object",
+      "runs": 500,
+      "minMs": 0,
+      "p50Ms": 0,
+      "p95Ms": 0.001,
+      "maxMs": 0.008,
+      "totalMs": 0.31
+    },
+    {
+      "name": "resolveTarget.public-const",
+      "runs": 500,
+      "minMs": 0,
+      "p50Ms": 0,
+      "p95Ms": 0,
+      "maxMs": 0,
+      "totalMs": 0.11
+    },
+    {
+      "name": "scan.private",
+      "runs": 50,
+      "minMs": 0.014,
+      "p50Ms": 0.014,
+      "p95Ms": 0.02,
+      "maxMs": 0.022,
+      "totalMs": 0.745
+    },
+    {
+      "name": "scan.public-fun",
+      "runs": 50,
+      "minMs": 0.04,
+      "p50Ms": 0.04,
+      "p95Ms": 0.041,
+      "maxMs": 0.042,
+      "totalMs": 2.019
+    },
+    {
+      "name": "scan.class",
+      "runs": 50,
+      "minMs": 0.031,
+      "p50Ms": 0.031,
+      "p95Ms": 0.038,
+      "maxMs": 0.122,
+      "totalMs": 1.687
+    },
+    {
+      "name": "scan.object",
+      "runs": 50,
+      "minMs": 0.029,
+      "p50Ms": 0.029,
+      "p95Ms": 0.038,
+      "maxMs": 0.085,
+      "totalMs": 1.563
+    },
+    {
+      "name": "scan.public-const",
+      "runs": 50,
+      "minMs": 0.035,
+      "p50Ms": 0.039,
+      "p95Ms": 0.053,
+      "maxMs": 0.065,
+      "totalMs": 2.141
+    },
+    {
+      "name": "snapshot.save",
+      "runs": 20,
+      "minMs": 2.23,
+      "p50Ms": 2.334,
+      "p95Ms": 2.907,
+      "maxMs": 2.907,
+      "totalMs": 49.364
+    },
+    {
+      "name": "snapshot.load",
+      "runs": 20,
+      "minMs": 0.406,
+      "p50Ms": 0.443,
+      "p95Ms": 0.713,
+      "maxMs": 0.713,
+      "totalMs": 9.487
+    }
+  ]
+}

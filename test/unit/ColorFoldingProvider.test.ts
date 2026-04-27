@@ -98,8 +98,49 @@ describe('SP2-CFP-3..7 — toCSS() via renderOptions.before.backgroundColor', ()
     expect(decs(indexWith({ c: '#F00' }), ['R.color.c'])[0].renderOptions.before.backgroundColor).toBe('#F00');
   });
 
-  it('SP2-CFP-7: valeur non-hex → fallback #808080', () => {
-    expect(decs(indexWith({ c: 'transparent' }), ['R.color.c'])[0].renderOptions.before.backgroundColor).toBe('#808080');
+  it('SP2-CFP-7: valeur non-hex non-référence → AUCUNE décoration (pas de fallback gris)', () => {
+    // Was: fallback #808080. New behavior: skip the swatch entirely.
+    // A grey dot was misleading — it implied the color IS grey when in
+    // fact we could not resolve it.
+    expect(decs(indexWith({ c: 'transparent' }), ['R.color.c'])).toHaveLength(0);
+  });
+});
+
+// ── @color/X reference resolution (one hop) ──────────────────────────────────
+
+describe('SP2-CFP-REF — @color/X references resolve one hop', () => {
+  it('R.color.brand pointing at @color/primary (#FF0000) → red swatch', () => {
+    const result = decs(
+      indexWith({ brand: '@color/primary', primary: '#FF0000' }),
+      ['R.color.brand'],
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0].renderOptions.before.backgroundColor).toBe('#FF0000');
+  });
+
+  it('@android:color/X reference also resolves through the index', () => {
+    const result = decs(
+      indexWith({ accent: '@android:color/holo_green', holo_green: '#00FF00' }),
+      ['R.color.accent'],
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0].renderOptions.before.backgroundColor).toBe('#00FF00');
+  });
+
+  it('reference to non-existent color → no swatch (avoids misleading gray)', () => {
+    expect(decs(
+      indexWith({ orphan: '@color/does_not_exist' }),
+      ['R.color.orphan'],
+    )).toHaveLength(0);
+  });
+
+  it('chained reference (a → b → c) is NOT followed — bounded depth', () => {
+    // Refusing to recurse keeps cycles bounded and the implementation
+    // O(1) per resolve. Two-hop references show no swatch.
+    expect(decs(
+      indexWith({ a: '@color/b', b: '@color/c', c: '#0000FF' }),
+      ['R.color.a'],
+    )).toHaveLength(0);
   });
 });
 

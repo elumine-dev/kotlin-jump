@@ -804,13 +804,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       } catch { /* skip */ }
     };
 
+    // Scan every XML under values*/ — Android lets you split <color>
+    // declarations across files (`colors_brand.xml`, `colors_dark.xml`,
+    // …). The literal `colors.xml` glob silently missed those, so any
+    // `R.color.X` referencing a non-`colors.xml` file landed on a
+    // gray fallback swatch + "Cannot resolve" diagnostic. The parser
+    // skips files with no `<color>` tag, so strings.xml / dimens.xml
+    // pay zero indexing cost.
     vscode.workspace.findFiles(
-      '**/res/values*/colors.xml',
+      '**/res/values*/*.xml',
       `{${excludeList.join(',')}}`,
     ).then(uris => Promise.all(uris.map(handleColorChanged)));
 
-    const cW1 = vscode.workspace.createFileSystemWatcher('**/res/values/colors.xml');
-    const cW2 = vscode.workspace.createFileSystemWatcher('**/res/values-*/colors.xml');
+    const cW1 = vscode.workspace.createFileSystemWatcher('**/res/values/*.xml');
+    const cW2 = vscode.workspace.createFileSystemWatcher('**/res/values-*/*.xml');
     for (const w of [cW1, cW2]) {
       w.onDidCreate(handleColorChanged);
       w.onDidChange(handleColorChanged);

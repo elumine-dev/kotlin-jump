@@ -7,6 +7,20 @@ import { Logger } from '../util/logger';
 const WORD_RE = /[A-Za-z_]\w*/;
 const ALIAS_TYPE_RE = /\b([A-Z]\w+)\b/g;
 const RE_PKG = /^\s*package\s+([\w.]+)/m;
+const RE_PKG_LINE = /^\s*package\s+([\w.]+)/;
+
+// Extract the file's `package` declaration without allocating the entire
+// document text. The clause is required by Kotlin/Java to be the first
+// non-comment, non-blank statement, so 50 lines is a generous upper bound
+// even for files with extensive header banners.
+function packageOfDocument(doc: { lineCount: number; lineAt: (n: number) => { text: string } }): string {
+  const max = Math.min(doc.lineCount, 50);
+  for (let i = 0; i < max; i++) {
+    const m = RE_PKG_LINE.exec(doc.lineAt(i).text);
+    if (m) return m[1];
+  }
+  return '';
+}
 
 // Cached `\bword\b` patterns — `findLocalUsages` is called on every
 // Cmd+Click and would otherwise compile a fresh RegExp per invocation.
@@ -171,7 +185,11 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
       // package. E.g. caller in com.example.ui → com.example.Button wins over
       // com.other.Button. Only applies when there is a unique winner.
       if (resolved.priority === 'wildcard') {
-        const filePackage = RE_PKG.exec(document.getText())?.[1] ?? '';
+        // The `package <name>` declaration is always within the first
+        // few lines — scan only those instead of allocating the full
+        // document text. On a 5K-line file this drops ~50 KB allocs +
+        // the regex walk per Cmd+Click.
+        const filePackage = packageOfDocument(document);
         if (filePackage) {
           const winner = wildcardTiebreak(resolvedEntries, filePackage);
           if (winner) {

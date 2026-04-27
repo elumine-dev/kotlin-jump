@@ -42,9 +42,14 @@ const browserStubs = {
   'util':           './src/browser/util-stub',
 };
 
+// Perf benchmark scripts (DEV ONLY — excluded from VSIX).
+const perfEntryPoints = ['scripts/perf-bench.ts', 'scripts/perf-diff.ts']
+  .filter(fs.existsSync);
+
 async function main() {
   const buildDemo = demoLibEntryPoints.length > 0 || demoEntryPoints.length > 0;
-  const [extCtx, browserCtx, workerCtx, serverCtx, e2eCtx, demoLibCtx, demoCtx, recordCtx, recorderExtCtx] = await Promise.all([
+  const buildPerf = perfEntryPoints.length > 0;
+  const [extCtx, browserCtx, workerCtx, serverCtx, e2eCtx, demoLibCtx, demoCtx, recordCtx, recorderExtCtx, perfCtx] = await Promise.all([
     esbuild.context({
       ...sharedOptions,
       entryPoints: ['src/extension.ts'],
@@ -125,9 +130,22 @@ async function main() {
           outfile:     'scripts/demo/recorder-ext/dist/extension.js',
         })
       : Promise.resolve(undefined),
+    // Perf benchmark scripts (dev tooling, never shipped). Headless —
+    // the `vscode` module is aliased to the unit-test mock so providers
+    // run outside the extension host.
+    buildPerf
+      ? esbuild.context({
+          ...sharedOptions,
+          external:    [],
+          alias:       { vscode: './test/unit/__mocks__/vscode.ts' },
+          entryPoints: perfEntryPoints,
+          outdir:      'dist/perf',
+          banner:      { js: '#!/usr/bin/env node' },
+        })
+      : Promise.resolve(undefined),
   ]);
 
-  const allCtx = [extCtx, browserCtx, workerCtx, serverCtx, e2eCtx, demoLibCtx, demoCtx, recordCtx, recorderExtCtx].filter(Boolean);
+  const allCtx = [extCtx, browserCtx, workerCtx, serverCtx, e2eCtx, demoLibCtx, demoCtx, recordCtx, recorderExtCtx, perfCtx].filter(Boolean);
   if (watch) {
     await Promise.all(allCtx.map(c => c.watch()));
     console.log('[esbuild] watching…');

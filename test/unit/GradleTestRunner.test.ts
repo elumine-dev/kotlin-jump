@@ -252,3 +252,75 @@ describe('parseJUnitXml — adversarial', () => {
     expect(results.has('Bar.b')).toBe(true);
   });
 });
+
+// ── findGradleModuleByPath — module path derivation from file location ─────
+
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { afterEach, beforeEach } from 'vitest';
+import { findGradleModuleByPath } from '../../src/testing/GradleTestRunner';
+
+describe('findGradleModuleByPath', () => {
+  let tmpRoot: string;
+  beforeEach(() => { tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'gradle-mod-')); });
+  afterEach(() => { fs.rmSync(tmpRoot, { recursive: true, force: true }); });
+
+  function touch(rel: string): string {
+    const abs = path.join(tmpRoot, rel);
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.writeFileSync(abs, '');
+    return abs;
+  }
+
+  it('M1. simple module: app/src/test/Foo.kt + app/build.gradle.kts → :app', () => {
+    touch('settings.gradle.kts');
+    touch('app/build.gradle.kts');
+    const file = touch('app/src/test/kotlin/Foo.kt');
+    expect(findGradleModuleByPath(file, tmpRoot)).toBe(':app');
+  });
+
+  it('M2. sub-module: app/sub/src/test/Foo.kt + app/sub/build.gradle.kts → :app:sub', () => {
+    touch('settings.gradle.kts');
+    touch('app/sub/build.gradle.kts');
+    const file = touch('app/sub/src/test/kotlin/Foo.kt');
+    expect(findGradleModuleByPath(file, tmpRoot)).toBe(':app:sub');
+  });
+
+  it('M3. file at root + build.gradle at root → empty (root project)', () => {
+    touch('build.gradle.kts');
+    const file = touch('src/test/kotlin/Foo.kt');
+    expect(findGradleModuleByPath(file, tmpRoot)).toBe('');
+  });
+
+  it('M4. no build.gradle anywhere up to root → empty', () => {
+    const file = touch('src/test/kotlin/Foo.kt');
+    expect(findGradleModuleByPath(file, tmpRoot)).toBe('');
+  });
+
+  it('M5. module 2 levels deep: services/api → :services:api', () => {
+    touch('settings.gradle.kts');
+    touch('services/api/build.gradle.kts');
+    const file = touch('services/api/src/main/kotlin/Foo.kt');
+    expect(findGradleModuleByPath(file, tmpRoot)).toBe(':services:api');
+  });
+
+  it('M6. Groovy build.gradle (no .kts) is also recognised', () => {
+    touch('settings.gradle');
+    touch('app/build.gradle');
+    const file = touch('app/src/test/kotlin/Foo.kt');
+    expect(findGradleModuleByPath(file, tmpRoot)).toBe(':app');
+  });
+
+  it('M7. file outside projectRoot → empty (guard against infinite walk-up)', () => {
+    const otherRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'gradle-other-'));
+    try {
+      const fileOutside = path.join(otherRoot, 'src', 'test', 'Foo.kt');
+      fs.mkdirSync(path.dirname(fileOutside), { recursive: true });
+      fs.writeFileSync(fileOutside, '');
+      expect(findGradleModuleByPath(fileOutside, tmpRoot)).toBe('');
+    } finally {
+      fs.rmSync(otherRoot, { recursive: true, force: true });
+    }
+  });
+});

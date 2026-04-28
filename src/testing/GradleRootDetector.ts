@@ -35,6 +35,17 @@ export const GRADLE_MARKERS = [
   'build.gradle',
 ] as const;
 
+/**
+ * A `settings.gradle(.kts)` *definitively* marks a Gradle build root (per Gradle's own
+ * https://docs.gradle.org/current/userguide/multi_project_builds.html walk-up rule).
+ */
+const SETTINGS_MARKERS = ['settings.gradle.kts', 'settings.gradle'] as const;
+/**
+ * A bare `build.gradle(.kts)` is only *provisionally* a root — it may belong to a
+ * module if a settings file exists higher up the tree.
+ */
+const BUILD_MARKERS = ['build.gradle.kts', 'build.gradle'] as const;
+
 /** Directories always skipped when scanning depth-1 — never contain a Gradle root. */
 export const SCAN_EXCLUDE_DIRS: ReadonlySet<string> = new Set([
   'node_modules', '.git', '.gradle', '.idea', '.vscode', '.vscode-test',
@@ -128,31 +139,51 @@ export function detectGradleRoot(ctx: DetectorContext, log?: Logger): DetectionR
 
 // ── Internals ────────────────────────────────────────────────────────────────
 
+function hasSettingsMarker(dir: string): boolean {
+  return SETTINGS_MARKERS.some(m => fs.existsSync(path.join(dir, m)));
+}
+
+function hasBuildMarker(dir: string): boolean {
+  return BUILD_MARKERS.some(m => fs.existsSync(path.join(dir, m)));
+}
+
 function hasGradleMarker(dir: string): boolean {
   try {
-    const st = fs.statSync(dir);
-    if (!st.isDirectory()) return false;
+    if (!fs.statSync(dir).isDirectory()) return false;
   } catch { return false; }
-  return GRADLE_MARKERS.some(m => fs.existsSync(path.join(dir, m)));
+  return hasSettingsMarker(dir) || hasBuildMarker(dir);
 }
 
 /**
- * Walks up from `startPath` until a directory with a Gradle marker is found.
- * Stops at the filesystem root or when leaving all workspace folders behind.
+ * Walks up from `startPath` looking for the canonical Gradle build root.
+ *
+ * Per Gradle's own rule (https://docs.gradle.org/current/userguide/multi_project_builds.html),
+ * a `settings.gradle(.kts)` *definitively* marks a build root. A `build.gradle(.kts)` may
+ * belong to a module — we only treat it as the root if no settings file exists higher up
+ * the tree (within the workspace boundary).
+ *
+ * Stays strictly within `workspaceFolders` (never escalates above the open folder).
  */
 function walkUpToGradleRoot(startPath: string, workspaceFolders: readonly string[]): string | undefined {
   let current = fs.existsSync(startPath) && fs.statSync(startPath).isDirectory()
     ? startPath
     : path.dirname(startPath);
 
-  while (current && current !== path.dirname(current)) {
-    if (hasGradleMarker(current)) return current;
+  let fallbackBuildRoot: string | undefined;
 
-    // Stop once we've climbed above every workspace folder
-    if (workspaceFolders.length > 0 && !isWithinAny(current, workspaceFolders)) return undefined;
-    current = path.dirname(current);
+  while (current) {
+    if (workspaceFolders.length > 0 && !isWithinAny(current, workspaceFolders)) break;
+
+    if (hasSettingsMarker(current)) return current;
+    if (!fallbackBuildRoot && hasBuildMarker(current)) {
+      fallbackBuildRoot = current;
+    }
+
+    const next = path.dirname(current);
+    if (next === current) break;
+    current = next;
   }
-  return undefined;
+  return fallbackBuildRoot;
 }
 
 function isWithinAny(p: string, roots: readonly string[]): boolean {

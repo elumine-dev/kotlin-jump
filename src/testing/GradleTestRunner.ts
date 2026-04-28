@@ -123,7 +123,18 @@ export class GradleTestRunner {
     // Android modules use testDebugUnitTest; plain Kotlin/JVM modules use test
     const testTask = resolveTestTask(modulePath, gradleModule, log);
 
-    const gradlew = resolveGradleWrapper(projectRoot);
+    let gradlew: string;
+    try {
+      gradlew = resolveGradleWrapper(projectRoot);
+    } catch (err) {
+      if (err instanceof GradleWrapperNotFoundError) {
+        log.error(`[test:runner] ${err.message}`);
+        run.appendOutput(`\r\n${C.red}✗ ${err.message.split('\n').join('\r\n  ')}${C.reset}\r\n`);
+        for (const s of specs) run.errored(s.item, new vscode.TestMessage(err.message));
+        return;
+      }
+      throw err;
+    }
     const task = gradleModule ? `${gradleModule}:${testTask}` : testTask;
     const filters = buildTestFilters(specs);
     const args = [task, ...filters];
@@ -282,9 +293,16 @@ function resolveGradleModulePath(
  * Walk up from `filePath` to `projectRoot` looking for the nearest build.gradle(.kts).
  * Returns the Gradle module path (e.g. ":rubicon:app") or "" for the root project.
  */
-function findGradleModuleByPath(filePath: string, projectRoot: string): string {
+export function findGradleModuleByPath(filePath: string, projectRoot: string): string {
   const fs = require('fs') as typeof import('fs');
+  const normalizedRoot = path.resolve(projectRoot);
   let dir = path.dirname(filePath);
+  const normalizedDir = path.resolve(dir);
+
+  // Garde : si le fichier est hors du projectRoot, retourner root direct (évite remontée hors-arbo).
+  if (normalizedDir !== normalizedRoot && !normalizedDir.startsWith(normalizedRoot + path.sep)) {
+    return '';
+  }
 
   while (dir.length >= projectRoot.length && dir !== path.dirname(dir)) {
     if (dir === projectRoot) break; // reached project root — it's the root module
@@ -330,19 +348,32 @@ function groupByModule(specs: TestSpec[]): Map<string, TestSpec[]> {
   return map;
 }
 
+export class GradleWrapperNotFoundError extends Error {
+  constructor(public readonly attempted: string[], public readonly projectRoot: string) {
+    super(
+      `gradlew not found. Tried:\n  ${attempted.join('\n  ')}\n\n` +
+      `Detected project root: ${projectRoot}\n` +
+      `Open the folder containing settings.gradle(.kts), or set 'kotlinJump.gradleProjectRoot'.`
+    );
+    this.name = 'GradleWrapperNotFoundError';
+  }
+}
+
 export function resolveGradleWrapper(projectRoot: string): string {
   const cfg = vscode.workspace.getConfiguration('kotlinJump');
   const configured = cfg.get<string>('gradleWrapper', './gradlew');
-  const wrapper = path.isAbsolute(configured)
-    ? configured
-    : path.join(projectRoot, configured);
+  const base = path.isAbsolute(configured) ? configured : path.join(projectRoot, configured);
 
-  // Use .bat on Windows
-  if (process.platform === 'win32' && !wrapper.endsWith('.bat')) {
-    const bat = wrapper + '.bat';
-    try { require('fs').accessSync(bat); return bat; } catch { /* fall through */ }
+  // Platform-aware candidate ordering: Windows prefers .bat, Unix prefers bare wrapper.
+  const bat = base.endsWith('.bat') ? base : base + '.bat';
+  const bare = base.endsWith('.bat') ? base.slice(0, -4) : base;
+  const candidates = process.platform === 'win32' ? [bat, bare] : [bare, bat];
+
+  const fs = require('fs') as typeof import('fs');
+  for (const c of candidates) {
+    try { fs.accessSync(c); return c; } catch { /* try next */ }
   }
-  return wrapper;
+  throw new GradleWrapperNotFoundError(candidates, projectRoot);
 }
 
 export function findProjectRoot(log?: Logger): string | undefined {

@@ -1044,7 +1044,14 @@ async function detectAndroidProject(
     vscode.window.showErrorMessage('Kotlin Jump: No Gradle project found in the workspace.');
     return undefined;
   }
-  const gradlew = resolveGradleWrapper(projectRoot);
+  let gradlew: string;
+  try {
+    gradlew = resolveGradleWrapper(projectRoot);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    vscode.window.showErrorMessage(`Kotlin Jump: ${msg}`);
+    return undefined;
+  }
 
   // ── Explicit project list (highest priority) ──────────────────────────────
   const explicitProjects = vscode.workspace

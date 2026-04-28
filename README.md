@@ -344,7 +344,7 @@ Search **Kotlin Jump** in VS Code (`Cmd+Shift+X`), or [install directly from the
 For offline / air-gapped installs, grab the latest `.vsix` from [GitHub Releases](https://github.com/elumine-dev/kotlin-jump/releases/latest):
 
 ```bash
-code --install-extension kotlin-jump-1.18.0.vsix
+code --install-extension kotlin-jump-1.18.1.vsix
 ```
 
 ### Build from source
@@ -352,7 +352,7 @@ code --install-extension kotlin-jump-1.18.0.vsix
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full dev setup, or quickstart:
 
 ```bash
-code --install-extension kotlin-jump-1.18.0.vsix
+code --install-extension kotlin-jump-1.18.1.vsix
 ```
 
 ---

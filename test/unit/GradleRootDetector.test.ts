@@ -239,3 +239,235 @@ describe('detectGradleRoot — guards', () => {
     }
   });
 });
+
+// ── Walk-up Tier 2 — multi-module bug fix coverage ────────────────────────────
+// Issue #1: walk-up used to stop at the first build.gradle*, which in multi-module
+// projects is the MODULE not the project root. The fix distinguishes settings.gradle*
+// (definitive root) from build.gradle* (provisional / module).
+//
+// References:
+//   - Gradle: https://docs.gradle.org/current/userguide/multi_project_builds.html
+//     "Gradle walks up […] and stops searching as soon as it finds a settings file."
+//   - IntelliJ IDEA: https://www.jetbrains.com/help/idea/work-with-gradle-projects.html
+
+describe('detectGradleRoot — Tier 2 walk-up (settings vs build distinction)', () => {
+
+  // ── Multi-module (the bug) ──────────────────────────────────────────────────
+
+  it('W1. multi-module: walk-up passes app/build.gradle.kts, returns root with settings.gradle.kts', () => {
+    touch('settings.gradle.kts');
+    touch('app/build.gradle.kts');
+    const editor = touch('app/src/test/kotlin/com/example/FooTest.kt');
+    const r = detectGradleRoot(ctx({ activeEditorPath: editor }));
+    expect(r).toEqual({ kind: 'resolved', root: tmpRoot, via: 'active-editor' });
+  });
+
+  it('W2. multi-module Groovy: settings.gradle (no .kts) is treated as definitive', () => {
+    touch('settings.gradle');
+    touch('app/build.gradle.kts');
+    const editor = touch('app/src/test/Foo.kt');
+    const r = detectGradleRoot(ctx({ activeEditorPath: editor }));
+    expect(r).toEqual({ kind: 'resolved', root: tmpRoot, via: 'active-editor' });
+  });
+
+  it('W3. multi-module mixed: settings.gradle.kts at root, Groovy build.gradle in module', () => {
+    touch('settings.gradle.kts');
+    touch('app/build.gradle');
+    const editor = touch('app/src/test/Foo.kt');
+    const r = detectGradleRoot(ctx({ activeEditorPath: editor }));
+    expect(r.kind).toBe('resolved');
+    if (r.kind === 'resolved') expect(r.root).toBe(tmpRoot);
+  });
+
+  it('W4. nested sub-modules: walks past lib/sub/build.gradle and lib/build.gradle', () => {
+    touch('settings.gradle.kts');
+    touch('lib/build.gradle.kts');
+    touch('lib/sub/build.gradle.kts');
+    const editor = touch('lib/sub/src/test/kotlin/Foo.kt');
+    const r = detectGradleRoot(ctx({ activeEditorPath: editor }));
+    expect(r.kind).toBe('resolved');
+    if (r.kind === 'resolved') expect(r.root).toBe(tmpRoot);
+  });
+
+  it('W5. build.gradle at root + in modules: still returns root via settings', () => {
+    touch('settings.gradle.kts');
+    touch('build.gradle.kts');           // root build file
+    touch('app/build.gradle.kts');       // module build file
+    const editor = touch('app/src/test/Foo.kt');
+    const r = detectGradleRoot(ctx({ activeEditorPath: editor }));
+    expect(r.kind).toBe('resolved');
+    if (r.kind === 'resolved') expect(r.root).toBe(tmpRoot);
+  });
+
+  // ── Single-module ───────────────────────────────────────────────────────────
+
+  it('W6. single-module without settings: build.gradle.kts is the root (provisional fallback)', () => {
+    touch('build.gradle.kts');
+    const editor = touch('src/test/kotlin/Foo.kt');
+    const r = detectGradleRoot(ctx({ activeEditorPath: editor }));
+    expect(r.kind).toBe('resolved');
+    if (r.kind === 'resolved') expect(r.root).toBe(tmpRoot);
+  });
+
+  it('W7. single-module with settings: returns the settings dir', () => {
+    touch('settings.gradle.kts');
+    touch('build.gradle.kts');
+    const editor = touch('src/test/kotlin/Foo.kt');
+    const r = detectGradleRoot(ctx({ activeEditorPath: editor }));
+    expect(r.kind).toBe('resolved');
+    if (r.kind === 'resolved') expect(r.root).toBe(tmpRoot);
+  });
+
+  it('W8. Groovy-only (build.gradle, no .kts) acts the same as .kts', () => {
+    touch('build.gradle');
+    const editor = touch('src/test/Foo.kt');
+    const r = detectGradleRoot(ctx({ activeEditorPath: editor }));
+    expect(r.kind).toBe('resolved');
+    if (r.kind === 'resolved') expect(r.root).toBe(tmpRoot);
+  });
+
+  // ── Classic traps ───────────────────────────────────────────────────────────
+
+  it('W9. buildSrc/: file inside has build.gradle.kts but real root is one level up', () => {
+    touch('settings.gradle.kts');
+    touch('buildSrc/build.gradle.kts');  // buildSrc has its own build, no settings
+    const editor = touch('buildSrc/src/main/kotlin/MyPlugin.kt');
+    const r = detectGradleRoot(ctx({ activeEditorPath: editor }));
+    expect(r.kind).toBe('resolved');
+    // Algorithm walks past buildSrc/build.gradle.kts and finds root settings.gradle.kts
+    if (r.kind === 'resolved') expect(r.root).toBe(tmpRoot);
+  });
+
+  it('W10. build-logic/ composite: settings.gradle.kts in build-logic wins (closest)', () => {
+    touch('settings.gradle.kts');
+    touch('build-logic/settings.gradle.kts');
+    touch('build-logic/convention/build.gradle.kts');
+    const editor = touch('build-logic/convention/src/main/kotlin/MyPlugin.kt');
+    const r = detectGradleRoot(ctx({ activeEditorPath: editor }));
+    // Per Gradle convention, included builds have their own gradlew rooted at their settings.
+    expect(r.kind).toBe('resolved');
+    if (r.kind === 'resolved') expect(r.root).toBe(path.join(tmpRoot, 'build-logic'));
+  });
+
+  it('W11a. composite includeBuild — file in main build returns outer settings', () => {
+    touch('settings.gradle.kts');
+    touch('included/settings.gradle.kts');
+    touch('build.gradle.kts');
+    const editor = touch('src/test/Foo.kt');
+    const r = detectGradleRoot(ctx({ activeEditorPath: editor }));
+    expect(r.kind).toBe('resolved');
+    if (r.kind === 'resolved') expect(r.root).toBe(tmpRoot);
+  });
+
+  it('W11b. composite includeBuild — file in included build returns included settings', () => {
+    touch('settings.gradle.kts');
+    touch('included/settings.gradle.kts');
+    touch('included/build.gradle.kts');
+    const editor = touch('included/src/test/Foo.kt');
+    const r = detectGradleRoot(ctx({ activeEditorPath: editor }));
+    expect(r.kind).toBe('resolved');
+    if (r.kind === 'resolved') expect(r.root).toBe(path.join(tmpRoot, 'included'));
+  });
+
+  // ── Workspace boundary (Q1: strict — never escalate above workspace) ────────
+
+  it('W12. workspace = module: walk stays inside, returns module dir as fallback', () => {
+    // Simulate user opening just app/ (not the project root). Parent has settings,
+    // but the workspace boundary stops us at app/ — we never escape.
+    const moduleDir = mkdir('app');
+    touch('settings.gradle.kts');        // outside the workspace
+    touch('app/build.gradle.kts');
+    const editor = touch('app/src/test/Foo.kt');
+    const r = detectGradleRoot(ctx({
+      workspaceFolders: [moduleDir],
+      activeEditorPath: editor,
+    }));
+    expect(r.kind).toBe('resolved');
+    // Returns app/ via the build.gradle fallback — not the parent (Q1 = strict).
+    if (r.kind === 'resolved') expect(r.root).toBe(moduleDir);
+  });
+
+  it('W13. file outside workspace → undefined (Tier 2), falls through to other tiers', () => {
+    touch('settings.gradle.kts');
+    // editor is in a sibling tree NOT covered by the workspace folder
+    const otherDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gradle-other-'));
+    const editor = path.join(otherDir, 'Foo.kt');
+    fs.writeFileSync(editor, '');
+    try {
+      const r = detectGradleRoot(ctx({ activeEditorPath: editor }));
+      // Tier 2 returns undefined, Tier 3 picks up workspace root with settings
+      expect(r).toEqual({ kind: 'resolved', root: tmpRoot, via: 'workspace-root' });
+    } finally {
+      fs.rmSync(otherDir, { recursive: true, force: true });
+    }
+  });
+
+  it('W14. no markers anywhere — walk-up returns undefined, falls to not-found', () => {
+    const editor = touch('src/main/kotlin/Foo.kt');
+    const r = detectGradleRoot(ctx({ activeEditorPath: editor }));
+    expect(r).toEqual({ kind: 'not-found' });
+  });
+
+  // ── Special start positions ─────────────────────────────────────────────────
+
+  it('W15. activeEditorPath IS a settings.gradle.kts file → finds root immediately', () => {
+    const editor = touch('settings.gradle.kts');
+    const r = detectGradleRoot(ctx({ activeEditorPath: editor }));
+    expect(r).toEqual({ kind: 'resolved', root: tmpRoot, via: 'active-editor' });
+  });
+
+  it('W16. activeEditorPath does not exist on disk → uses dirname, still works', () => {
+    touch('settings.gradle.kts');
+    touch('app/build.gradle.kts');
+    // Path that DOES NOT exist but whose dirname does
+    const editor = path.join(tmpRoot, 'app', 'src', 'test', 'Deleted.kt');
+    const r = detectGradleRoot(ctx({ activeEditorPath: editor }));
+    expect(r.kind).toBe('resolved');
+    if (r.kind === 'resolved') expect(r.root).toBe(tmpRoot);
+  });
+});
+
+// ── Tier interaction tests ────────────────────────────────────────────────────
+
+describe('detectGradleRoot — tier priority interactions', () => {
+
+  it('S1. Tier 4 monorepo deep: services/backend/settings.gradle.kts found at depth 2', () => {
+    touch('services/backend/settings.gradle.kts');
+    const r = detectGradleRoot(ctx());
+    expect(r).toEqual({
+      kind: 'resolved',
+      root: path.join(tmpRoot, 'services/backend'),
+      via: 'depth-1-scan',
+    });
+  });
+
+  it('S2. Tier 4 multi-Gradle peers (compose-samples pattern) → ambiguous', () => {
+    touch('projA/settings.gradle.kts');
+    touch('projB/settings.gradle.kts');
+    const r = detectGradleRoot(ctx());
+    expect(r.kind).toBe('ambiguous');
+  });
+
+  it('S3. Tier 2 wins over Tier 4 ambiguity — active editor disambiguates', () => {
+    touch('projA/settings.gradle.kts');
+    touch('projB/settings.gradle.kts');
+    const editor = touch('projB/src/test/Foo.kt');
+    const r = detectGradleRoot(ctx({ activeEditorPath: editor }));
+    expect(r.kind).toBe('resolved');
+    if (r.kind === 'resolved') expect(r.root).toBe(path.join(tmpRoot, 'projB'));
+  });
+
+  it('S4. multi-root workspace: walk-up finds the right one based on active editor', () => {
+    const w1 = mkdir('ws1');
+    const w2 = mkdir('ws2');
+    touch('ws1/settings.gradle.kts');
+    touch('ws2/settings.gradle.kts');
+    const editor = touch('ws2/app/src/test/Foo.kt');
+    const r = detectGradleRoot(ctx({
+      workspaceFolders: [w1, w2],
+      activeEditorPath: editor,
+    }));
+    expect(r.kind).toBe('resolved');
+    if (r.kind === 'resolved') expect(r.root).toBe(w2);
+  });
+});

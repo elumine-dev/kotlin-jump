@@ -1082,7 +1082,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           const folders  = vscode.workspace.workspaceFolders ?? [];
           const timeout  = cfg.get<number>('gradleToolingTimeoutMs', 30_000);
           for (const folder of folders) {
-            toolingJarPaths = await resolveSourceJarPaths(folder.uri.fsPath, timeout);
+            toolingJarPaths = await resolveSourceJarPaths(folder.uri.fsPath, timeout, log);
             if (toolingJarPaths) break;
           }
         }

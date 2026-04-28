@@ -1,24 +1,22 @@
 {
-  "version": "1.18.0",
+  "version": "1.18.1",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Drawable previews, color swatches, performance gains",
-  "summary": "Kotlin Jump 1.18.0 adds live vector drawable previews with gutter thumbnails, hover, CodeLens, and a side panel, brings hex color swatches to XML resource files, and ships multi-phase startup and memory performance improvements alongside a batch of precision fixes.",
+  "tagline": "Reliable Gradle detection, any layout",
+  "summary": "Improves Gradle project root detection across all workspace layouts, adds automatic Windows wrapper fallback, and sharpens settings documentation for non-standard configurations.",
   "highlights": [
     {
-      "title": "Vector Drawable Previews",
-      "description": "Any <vector> XML file now shows a gutter thumbnail, an inline hover preview, a CodeLens with an Open Preview action and live reference count, and an auto-opening side-by-side panel — all without leaving the editor.",
-      "kind": "feature",
-      "media": "vector-preview.webp",
-      "mediaAlt": "Vector Drawable Preview"
+      "title": "Smarter Root Detection",
+      "description": "Detection now walks up from the active editor stopping at the first settings.gradle(.kts) — matching Gradle's own build-root discovery rule — so sub-module opens and flat-style layouts resolve to the correct root instead of a nested module directory.",
+      "kind": "improvement"
     },
     {
-      "title": "XML Color Swatches",
-      "description": "Hex color swatches now resolve and display inline in colors*.xml resource files, giving the same visual decoration previously available only in Kotlin source.",
-      "kind": "feature"
+      "title": "Windows Wrapper Fallback",
+      "description": "On Windows, ./gradlew automatically resolves to gradlew.bat without any extra configuration, so tests and Android Run work out of the box on that platform.",
+      "kind": "fix"
     },
     {
-      "title": "Startup and Memory Gains",
-      "description": "Index snapshots are now gzip-compressed for faster warm startup, and parser-level optimizations eliminate per-document allocations and reduce GC pressure on large projects.",
+      "title": "Multi-Project Picker",
+      "description": "Workspaces containing more than one Gradle root now show a project picker instead of silently picking the wrong one; the choice is persisted for the session so subsequent runs are instant.",
       "kind": "improvement"
     }
   ],
@@ -26,19 +24,23 @@
     {
       "heading": "Improvements",
       "bullets": [
-        "Index snapshots are now written as gzip-compressed files, reducing disk I/O and cutting the time to restore a warm index on subsequent startups.",
-        "Eliminated per-document allocations in the parser hot path and interned repeated kind and supertype strings to reduce GC pressure on large projects.",
-        "Widened stat concurrency during the initial scan, improved trigram cache hit rate, and cached hot regex and path lookups in the usages engine to reduce repeated-search latency."
+        "Gradle root detection walks up from the active editor and stops at the first settings.gradle(.kts), treating a standalone build.gradle as a provisional fallback only when no settings file exists higher up the tree — the same rule Gradle itself uses.",
+        "On Windows, the gradlew wrapper resolver tries gradlew.bat before the bare script, so no manual kotlinJump.gradleWrapper change is needed on that platform.",
+        "When detection finds more than one Gradle root in the workspace, a QuickPick prompt appears; the chosen project is remembered for the session and used by both Test Explorer and Android Run.",
+        "The Android Run status bar button now shows four actionable states — resolved, ambiguous, setting-invalid, and wrapper-missing — each with a tooltip and a command that opens the relevant fix."
       ]
     },
     {
-      "heading": "Fixes",
+      "heading": "Settings Documentation",
       "bullets": [
-        "Fixed the vector preview CodeLens to remain clickable after first activation; the references panel now closes automatically when a reference is picked.",
-        "Fixed R.drawable.<name> usage search to scan the full workspace directly, so the reference count shown in the CodeLens is accurate.",
-        "Fixed color folding to skip <color> tags inside XML comments, and fixed @color/X resolution to scan every values*/*.xml folder including locale and variant directories.",
-        "Fixed folding decorations for R.plurals and R.array to use distinct visuals so they are no longer confused with R.string.",
-        "Fixed Find Usages to correctly isolate file-private symbols, fixed const-val folding to respect block comments, and fixed plurals indexing to cover all values*.xml files."
+        "kotlinJump.gradleWrapper now documents that the path is relative to the detected gradleProjectRoot, not the workspace folder, preventing a common misconfiguration.",
+        "kotlinJump.gradleProjectRoot now includes explicit guidance for sub-module layouts (e.g. opening app/ instead of the project root), flat-style projects (e.g. master/), and a clearer description of how auto-detection tiers work."
+      ]
+    },
+    {
+      "heading": "Notes",
+      "bullets": [
+        "No changes to navigation, indexing, code folding, inlay hints, or any other non-Gradle feature since v1.18.0."
       ]
     }
   ],

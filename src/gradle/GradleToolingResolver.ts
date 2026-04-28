@@ -4,6 +4,8 @@ import * as fsSync from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { promisify } from 'util';
+import { detectProjectRoot } from '../testing/GradleTestRunner';
+import type { Logger } from '../util/logger';
 
 const execFileAsync = promisify(execFile);
 
@@ -68,8 +70,14 @@ allprojects {
 export async function resolveSourceJarPaths(
   workspaceRoot: string,
   timeoutMs = 30_000,
+  log?: Logger,
 ): Promise<string[] | null> {
-  const gradlew = findGradleWrapper(workspaceRoot);
+  // Use the detected Gradle project root (falls back to the workspace folder).
+  // Handles structures where gradlew is not at the workspace root (e.g. koin/projects/).
+  const detection = detectProjectRoot(log);
+  const projectRoot = detection.kind === 'resolved' ? detection.root : workspaceRoot;
+
+  const gradlew = findGradleWrapper(projectRoot);
   if (!gradlew) return null;
 
   const initScript = await writeInitScript();
@@ -79,7 +87,7 @@ export async function resolveSourceJarPaths(
     const { stdout } = await execFileAsync(
       gradlew,
       ['-q', '--init-script', initScript, '--no-daemon', 'kotlinJumpListSources'],
-      { cwd: workspaceRoot, timeout: timeoutMs },
+      { cwd: projectRoot, timeout: timeoutMs },
     );
 
     const paths = stdout
@@ -97,10 +105,17 @@ export async function resolveSourceJarPaths(
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function findGradleWrapper(workspaceRoot: string): string | null {
-  const name = process.platform === 'win32' ? 'gradlew.bat' : 'gradlew';
-  const candidate = path.join(workspaceRoot, name);
-  return fsSync.existsSync(candidate) ? candidate : null;
+function findGradleWrapper(projectRoot: string): string | null {
+  // Platform-aware ordering: Windows prefers .bat, Unix prefers bare wrapper.
+  // Tries both so Git Bash on Windows or Unix-with-only-.bat layouts still work.
+  const candidates = process.platform === 'win32'
+    ? ['gradlew.bat', 'gradlew']
+    : ['gradlew', 'gradlew.bat'];
+  for (const name of candidates) {
+    const c = path.join(projectRoot, name);
+    if (fsSync.existsSync(c)) return c;
+  }
+  return null;
 }
 
 async function writeInitScript(): Promise<string | null> {

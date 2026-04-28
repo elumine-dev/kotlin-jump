@@ -2,7 +2,7 @@
   "name": "kotlin-jump",
   "displayName": "Kotlin Jump: Fast Kotlin & Android Navigation",
   "description": "Fast Kotlin & Android navigation. Find Usages, Go to Definition, Compose, R.string, Android Run. No JVM, no language server. The Android Studio experience inside VS Code.",
-  "version": "1.18.0",
+  "version": "1.18.1",
   "publisher": "elumine",
   "license": "MIT",
   "icon": "media/logo.png",
@@ -676,7 +676,7 @@
         "kotlinJump.gradleWrapper": {
           "type": "string",
           "default": "./gradlew",
-          "markdownDescription": "Path to the Gradle wrapper relative to the workspace root. Used when running tests from the **Test Explorer**."
+          "markdownDescription": "Path to the Gradle wrapper, **relative to the detected `gradleProjectRoot`** (not the workspace folder). On Windows, `./gradlew` automatically falls back to `./gradlew.bat`. Used when running tests from the **Test Explorer**."
         },
         "kotlinJump.androidVariant": {
           "type": "string",
@@ -727,7 +727,7 @@
         "kotlinJump.gradleProjectRoot": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Explicit path to the Gradle project root. **Absolute** or **workspace-relative**.\n\nOverrides auto-detection entirely when set.\n\nExamples:\n```json\n\"kotlinJump.gradleProjectRoot\": \"test/kotlin-jump-demo\"\n\"kotlinJump.gradleProjectRoot\": \"/Users/me/code/my-app\"\n```\n\nLeave empty (default) to use automatic detection:\n1. Walks up from the active editor's file\n2. Checks workspace folder roots\n3. Scans up to 2 levels deep (handles monorepos like `kotlin-nav/test/kotlin-jump-demo`)\n\nRun **Kotlin Jump: Diagnose Gradle Detection** to see which tier resolved the project."
+          "markdownDescription": "Explicit path to the Gradle project root (the directory containing `settings.gradle.kts` or `settings.gradle`). **Absolute** or **workspace-relative**.\n\nOverrides auto-detection entirely when set. **Set this** if you opened a sub-module (e.g. `app/`) instead of the project root, or if you have an unconventional layout (e.g. `master/` flat-style).\n\nExamples:\n```json\n\"kotlinJump.gradleProjectRoot\": \"test/kotlin-jump-demo\"\n\"kotlinJump.gradleProjectRoot\": \"/Users/me/code/my-app\"\n\"kotlinJump.gradleProjectRoot\": \"master\"\n```\n\nLeave empty (default) to use automatic detection:\n1. Walks up from the active editor's file (stops at the first `settings.gradle*`; matches Gradle's own root-discovery rule)\n2. Checks workspace folder roots\n3. Scans up to 2 levels deep (handles monorepos like `kotlin-nav/test/kotlin-jump-demo`)\n\nRun **Kotlin Jump: Diagnose Gradle Detection** to see which tier resolved the project."
         },
         "kotlinJump.testTaskOverrides": {
           "type": "object",
@@ -1168,6 +1168,7 @@
     "@types/node": "^20.0.0",
     "@types/picomatch": "^4.0.2",
     "@types/vscode": "^1.88.0",
+    "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
     "esbuild": "^0.27.4",
     "husky": "^9.1.7",

@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.18.1
+
+Improves Gradle project root detection across all workspace layouts, adds automatic Windows wrapper fallback, and sharpens settings documentation for non-standard configurations.
+
+### Improvements
+- Gradle root detection walks up from the active editor and stops at the first settings.gradle(.kts), treating a standalone build.gradle as a provisional fallback only when no settings file exists higher up the tree — the same rule Gradle itself uses.
+- On Windows, the gradlew wrapper resolver tries gradlew.bat before the bare script, so no manual kotlinJump.gradleWrapper change is needed on that platform.
+- When detection finds more than one Gradle root in the workspace, a QuickPick prompt appears; the chosen project is remembered for the session and used by both Test Explorer and Android Run.
+- The Android Run status bar button now shows four actionable states — resolved, ambiguous, setting-invalid, and wrapper-missing — each with a tooltip and a command that opens the relevant fix.
+
+### Notes
+- No changes to navigation, indexing, code folding, inlay hints, or any other non-Gradle feature since v1.18.0.
+
+### Settings Documentation
+- kotlinJump.gradleWrapper now documents that the path is relative to the detected gradleProjectRoot, not the workspace folder, preventing a common misconfiguration.
+- kotlinJump.gradleProjectRoot now includes explicit guidance for sub-module layouts (e.g. opening app/ instead of the project root), flat-style projects (e.g. master/), and a clearer description of how auto-detection tiers work.
+
 ## 1.18.0
 
 Kotlin Jump 1.18.0 adds live vector drawable previews with gutter thumbnails, hover, CodeLens, and a side panel, brings hex color swatches to XML resource files, and ships multi-phase startup and memory performance improvements alongside a batch of precision fixes.

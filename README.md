@@ -27,8 +27,16 @@
 
 <p align="center">
   <a href="https://marketplace.visualstudio.com/items?itemName=elumine.kotlin-jump">
-    <img src="https://img.shields.io/badge/Install-VS_Code-blue?style=for-the-badge&logo=visualstudiocode" alt="Install Kotlin Jump" />
+    <img src="https://img.shields.io/badge/Install-VS_Code-blue?style=for-the-badge&logo=visualstudiocode" alt="Install for VS Code" />
   </a>
+  &nbsp;
+  <a href="https://open-vsx.org/extension/elumine/kotlin-jump">
+    <img src="https://img.shields.io/badge/Install-Open_VSX-c160c0?style=for-the-badge" alt="Install for Cursor, VSCodium, Windsurf, and other VS Code forks" />
+  </a>
+</p>
+
+<p align="center">
+  <sub>Open VSX serves <strong>Cursor</strong>, <strong>VSCodium</strong>, <strong>Windsurf</strong>, <strong>Gitpod</strong>, and most other VS Code forks.</sub>
 </p>
 
 ---
@@ -120,7 +128,7 @@ No device connected? Finds your AVDs and offers to start one.
 
 Working in a monorepo or with several product flavors? See [Android setup →](ANDROID-SETUP.md).
 
-> 💡 **Saving time on every Cmd+R?** Help other Android devs find Kotlin Jump → [**⭐ Rate it on the Marketplace**](https://marketplace.visualstudio.com/items?itemName=elumine.kotlin-jump&ssr=false#review-details). 30 seconds, real impact.
+> 💡 **Saving time on every Cmd+R?** Help other Android devs find Kotlin Jump → rate it on [**⭐ Marketplace**](https://marketplace.visualstudio.com/items?itemName=elumine.kotlin-jump&ssr=false#review-details) or [**⭐ Open VSX**](https://open-vsx.org/extension/elumine/kotlin-jump). 30 seconds, real impact.
 
 ---
 
@@ -329,6 +337,10 @@ If it shaved minutes off your day, **even 30 seconds of your time would mean a l
   <a href="https://marketplace.visualstudio.com/items?itemName=elumine.kotlin-jump&ssr=false#review-details">
     <img src="https://img.shields.io/badge/⭐_Rate_on_Marketplace-7F52FF?style=for-the-badge" alt="Rate Kotlin Jump on the VS Code Marketplace" />
   </a>
+  &nbsp;
+  <a href="https://open-vsx.org/extension/elumine/kotlin-jump">
+    <img src="https://img.shields.io/badge/⭐_Rate_on_Open_VSX-c160c0?style=for-the-badge" alt="Rate Kotlin Jump on Open VSX" />
+  </a>
 </p>
 
 Found a bug or have a feature idea? [**Open an issue**](https://github.com/elumine-dev/kotlin-jump/issues). Answers usually within 24 h.
@@ -337,7 +349,7 @@ Found a bug or have a feature idea? [**Open an issue**](https://github.com/elumi
 
 ## 🔽 Install
 
-Search **Kotlin Jump** in VS Code (`Cmd+Shift+X`), or [install directly from the Marketplace](https://marketplace.visualstudio.com/items?itemName=elumine.kotlin-jump).
+Search **Kotlin Jump** in your editor's Extensions tab (`Cmd+Shift+X`), or install directly from [Marketplace](https://marketplace.visualstudio.com/items?itemName=elumine.kotlin-jump) (VS Code) or [Open VSX](https://open-vsx.org/extension/elumine/kotlin-jump) (Cursor, VSCodium, Windsurf).
 
 ### VSIX
 

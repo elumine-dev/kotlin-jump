@@ -249,3 +249,189 @@ describe('KJD-DGT-4 — robustness', () => {
     expect(() => provider.dispose()).not.toThrow();
   });
 });
+
+// ── KJD-DGT-5 — cache invalidation across saves ──────────────────────────────
+// Bug: after editing ic_pokeball.xml and saving, the gutter thumbnails on
+// R.drawable.ic_pokeball references in OTHER files kept showing stale colors.
+// Root cause: cache filename was path-based, so the gutter icon URI never
+// changed across saves — VS Code's internal image cache kept the old bitmap.
+// Fix: encode the source mtime in the cache filename so each version of the
+// source maps to a distinct on-disk path (and a distinct URI for VS Code).
+
+describe('KJD-DGT-5 — cache invalidation across saves (real fs, mtime-keyed)', () => {
+  function realSourceXml(name: string, content: string): { uri: any; fsPath: string } {
+    // Path must include `/res/drawable/` for the dirty-XML detection regex
+    // to match. Use a unique parent dir per fixture to avoid collisions.
+    const fsPath = path.join(tmpDir, `proj-${name}`, 'res', 'drawable', `${name}.xml`);
+    fs.mkdirSync(path.dirname(fsPath), { recursive: true });
+    fs.writeFileSync(fsPath, content);
+    const uri = { path: fsPath, fsPath, toString: () => `file://${fsPath}` };
+    (globalThis as any).__fakeFiles[fsPath] = Buffer.from(content);
+    return { uri, fsPath };
+  }
+
+  it('encodes source mtime in the cache filename', async () => {
+    const idx = new DrawableResourceIndex();
+    const { uri: u } = realSourceXml('ic_one', VEC_XML);
+    idx.addFile(u);
+
+    const provider = new DrawableGutterThumbnailProvider(idx, tmpStorage);
+    const editor = mockEditor(['val x = R.drawable.ic_one']);
+    await flush(provider, editor);
+
+    const cached = fs.readdirSync(path.join(tmpDir, 'drawable-thumbs'));
+    expect(cached).toHaveLength(1);
+    // Filename pattern: <16 hex>-<mtimeMs>.svg
+    expect(cached[0]).toMatch(/^[0-9a-f]{16}-\d+\.svg$/);
+    provider.dispose();
+  });
+
+  it('changing source content + mtime produces a NEW cache filename and retires the old', async () => {
+    const idx = new DrawableResourceIndex();
+    const { uri: u, fsPath } = realSourceXml('ic_two', VEC_XML);
+    idx.addFile(u);
+
+    const provider = new DrawableGutterThumbnailProvider(idx, tmpStorage);
+    const editor = mockEditor(['val x = R.drawable.ic_two']);
+    await flush(provider, editor);
+
+    const cacheDir = path.join(tmpDir, 'drawable-thumbs');
+    const firstList = fs.readdirSync(cacheDir);
+    expect(firstList).toHaveLength(1);
+    const firstPath = path.join(cacheDir, firstList[0]);
+
+    // Simulate a save: rewrite the XML with a different colour AND bump
+    // the mtime forward (some filesystems have 1s mtime granularity, so
+    // an immediate rewrite can land in the same mtime bucket).
+    const updated = VEC_XML.replace('#FF0', '#0FF');
+    fs.writeFileSync(fsPath, updated);
+    (globalThis as any).__fakeFiles[fsPath] = Buffer.from(updated);
+    const future = (Date.now() + 5000) / 1000;
+    fs.utimesSync(fsPath, future, future);
+
+    // Trigger an invalidation (matches what the file watcher / save listener
+    // does in production).
+    provider.invalidatePath({ path: fsPath, toString: () => `file://${fsPath}` } as any);
+    await new Promise(r => setTimeout(r, 60));
+
+    const secondList = fs.readdirSync(cacheDir);
+    expect(secondList).toHaveLength(1);
+    expect(secondList[0]).not.toBe(firstList[0]);     // different filename
+    expect(fs.existsSync(firstPath)).toBe(false);     // old cache file deleted
+    provider.dispose();
+  });
+
+  it('reads dirty editor text instead of disk when the XML is open with unsaved edits', async () => {
+    const idx = new DrawableResourceIndex();
+    const stalePath = path.join(tmpDir, 'proj-dirty', 'res', 'drawable', 'ic_dirty.xml');
+    fs.mkdirSync(path.dirname(stalePath), { recursive: true });
+    fs.writeFileSync(stalePath, VEC_XML);
+    const stalePathU = { path: stalePath, fsPath: stalePath, toString: () => `file://${stalePath}` };
+    idx.addFile(stalePathU);
+    (globalThis as any).__fakeFiles[stalePath] = Buffer.from(VEC_XML);
+
+    // Capture the listener registrations so we can fire change events at will.
+    const listeners: Array<(e: any) => void> = [];
+    (vscode as any).workspace.onDidChangeTextDocument = (cb: any) => {
+      listeners.push(cb);
+      return { dispose: () => {} };
+    };
+
+    const newSvg = VEC_XML.replace('#FF0', '#F0F');
+    const dirtyDoc = {
+      uri: { ...stalePathU },
+      isDirty: true,
+      version: 7,
+      getText: () => newSvg,
+    };
+    (vscode as any).workspace.textDocuments = [dirtyDoc];
+
+    const provider = new DrawableGutterThumbnailProvider(idx, tmpStorage);
+    // Simulate the editor firing the dirty-doc event so the provider's
+    // listener marks the URI as dirty in its O(1) Set.
+    for (const l of listeners) l({ document: dirtyDoc });
+
+    const editor = mockEditor(['val x = R.drawable.ic_dirty']);
+    await flush(provider, editor);
+
+    // Cache filename should use doc.version, not mtime
+    const cached = fs.readdirSync(path.join(tmpDir, 'drawable-thumbs'));
+    expect(cached).toHaveLength(1);
+    expect(cached[0]).toMatch(/^[0-9a-f]{16}-doc7\.svg$/);
+
+    // And the cached SVG must reflect the IN-MEMORY text, not the on-disk text.
+    const cachedSvg = fs.readFileSync(path.join(tmpDir, 'drawable-thumbs', cached[0]), 'utf8');
+    expect(cachedSvg).toContain('#F0F');                  // from dirty doc
+    expect(cachedSvg).not.toContain('#FF0');              // disk version, must be ignored
+    provider.dispose();
+  });
+
+  it('hot path performs zero disk writes when the cache is verified (no perf regression)', async () => {
+    const idx = new DrawableResourceIndex();
+    const { uri: u } = realSourceXml('ic_hot', VEC_XML);
+    idx.addFile(u);
+
+    const provider = new DrawableGutterThumbnailProvider(idx, tmpStorage);
+    const editor = mockEditor(['val x = R.drawable.ic_hot']);
+    await flush(provider, editor);                                        // primes the cache
+
+    const cacheDir   = path.join(tmpDir, 'drawable-thumbs');
+    const list1      = fs.readdirSync(cacheDir);
+    expect(list1).toHaveLength(1);
+    const cacheFile  = path.join(cacheDir, list1[0]);
+    const mtimeBefore = fs.statSync(cacheFile).mtimeMs;
+    const inoBefore   = fs.statSync(cacheFile).ino;
+
+    // Hammer the provider with 5 hot-path flushes — same content, no save.
+    // The cache file's mtime AND inode must be unchanged: no rewrite, no
+    // atomic-rename swap, no fs.writeFile under the hood.
+    for (let i = 0; i < 5; i++) await flush(provider, editor);
+
+    const list2 = fs.readdirSync(cacheDir);
+    expect(list2).toEqual(list1);                                         // no new entries
+    const mtimeAfter = fs.statSync(cacheFile).mtimeMs;
+    const inoAfter   = fs.statSync(cacheFile).ino;
+    expect(mtimeAfter).toBe(mtimeBefore);                                 // never re-written
+    expect(inoAfter).toBe(inoBefore);                                     // never atomic-renamed
+    provider.dispose();
+  });
+
+  it('invalidatePath also clears the dirty marker so a stale dirty render does not survive a save', async () => {
+    const idx = new DrawableResourceIndex();
+    const fsPath = path.join(tmpDir, 'proj-iv', 'res', 'drawable', 'ic_iv.xml');
+    fs.mkdirSync(path.dirname(fsPath), { recursive: true });
+    fs.writeFileSync(fsPath, VEC_XML);
+    const u = { path: fsPath, fsPath, toString: () => `file://${fsPath}` };
+    idx.addFile(u);
+    (globalThis as any).__fakeFiles[fsPath] = Buffer.from(VEC_XML);
+
+    const listeners: Array<(e: any) => void> = [];
+    (vscode as any).workspace.onDidChangeTextDocument = (cb: any) => {
+      listeners.push(cb); return { dispose: () => {} };
+    };
+
+    const provider = new DrawableGutterThumbnailProvider(idx, tmpStorage);
+
+    // Mark dirty
+    const dirtyDoc = { uri: u, isDirty: true, version: 3, getText: () => VEC_XML.replace('#FF0', '#ABC') };
+    (vscode as any).workspace.textDocuments = [dirtyDoc];
+    for (const l of listeners) l({ document: dirtyDoc });
+
+    // Simulate save: file watcher (or save listener) calls invalidatePath
+    provider.invalidatePath({ path: fsPath, toString: () => `file://${fsPath}` } as any);
+
+    // Now a flush with the doc still flagged "isDirty=false" (saved state)
+    // should fall back to the disk path, NOT keep using the dirty render.
+    const savedDoc = { uri: u, isDirty: false, version: 4, getText: () => VEC_XML };
+    (vscode as any).workspace.textDocuments = [savedDoc];
+
+    const editor = mockEditor(['val x = R.drawable.ic_iv']);
+    await flush(provider, editor);
+    const cached = fs.readdirSync(path.join(tmpDir, 'drawable-thumbs'));
+    expect(cached).toHaveLength(1);
+    // Filename must be mtime-versioned, not doc-versioned, after invalidate
+    expect(cached[0]).toMatch(/^[0-9a-f]{16}-\d+\.svg$/);
+    expect(cached[0]).not.toMatch(/-doc\d+\.svg$/);
+    provider.dispose();
+  });
+});

@@ -493,7 +493,7 @@ describe('AUDIT — XSS via alt-attribute when filename contains HTML metacharac
 });
 
 describe('AUDIT — cache staleness recovers when source mtime advances', () => {
-  it('regenerates the cache file when the source is newer', async () => {
+  it('regenerates a fresh cache file (with a new mtime-versioned filename) when the source is newer', async () => {
     // Real files on disk so statSync can compare mtimes authentically.
     const srcDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kj-stale-'));
     try {
@@ -512,21 +512,25 @@ describe('AUDIT — cache staleness recovers when source mtime advances', () => 
       const provider = new DrawableGutterThumbnailProvider(idx, { fsPath: cacheRoot } as any);
       const editor = mockEditor(['val x = R.drawable.ic']);
       await flush(provider, editor);
-      const firstFiles = fs.readdirSync(path.join(cacheRoot, 'drawable-thumbs'));
-      const cachePath = path.join(cacheRoot, 'drawable-thumbs', firstFiles[0]);
-      const firstMtime = fs.statSync(cachePath).mtimeMs;
+      const cacheDir = path.join(cacheRoot, 'drawable-thumbs');
+      const firstFiles = fs.readdirSync(cacheDir);
+      expect(firstFiles).toHaveLength(1);
+      const firstName = firstFiles[0];
 
-      // Age the cache backwards and touch the source forward so the
-      // cache is clearly stale.
-      fs.utimesSync(cachePath, new Date(Date.now() - 60_000), new Date(Date.now() - 60_000));
+      // Bump the source mtime forward (clearly past the previous mtime
+      // bucket) and rewrite the content. The provider must produce a NEW
+      // mtime-versioned cache filename and retire the old one.
       fs.writeFileSync(srcPath, VEC.replace('#000', '#F00'));
-      // Force source mtime to be NOW.
-      const now = new Date();
-      fs.utimesSync(srcPath, now, now);
+      const future = (Date.now() + 5000) / 1000;
+      fs.utimesSync(srcPath, future, future);
 
-      await flush(provider, editor);
-      const secondMtime = fs.statSync(cachePath).mtimeMs;
-      expect(secondMtime).toBeGreaterThan(firstMtime);
+      provider.invalidatePath({ path: srcPath, toString: () => `file://${srcPath}` } as any);
+      await new Promise(r => setTimeout(r, 60));
+
+      const secondFiles = fs.readdirSync(cacheDir);
+      expect(secondFiles).toHaveLength(1);
+      expect(secondFiles[0]).not.toBe(firstName);                 // new filename → new gutter URI
+      expect(fs.existsSync(path.join(cacheDir, firstName))).toBe(false); // old retired
       provider.dispose();
     } finally {
       try { fs.rmSync(srcDir, { recursive: true, force: true }); } catch {}

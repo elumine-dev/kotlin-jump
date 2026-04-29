@@ -898,6 +898,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       w.onDidDelete(uri => { drawableIndex.removeFile(uri); gutter.invalidatePath(uri); });
     }
 
+    // Backup invalidation channel: `fs.watch`-based file system watchers
+    // can miss save events on macOS / NFS / SMB mounts (well-documented Node
+    // limitation). The editor's `onDidSaveTextDocument` is delivered in-process
+    // and is reliable. Wiring both means a save fires invalidation even when
+    // the watcher silently drops the change.
+    context.subscriptions.push(
+      vscode.workspace.onDidSaveTextDocument(doc => {
+        if (!/\/res\/(drawable|mipmap)[^/]*\/[^/]+\.(xml|png|webp|svg|jpg|jpeg|gif|bmp)$/i.test(doc.uri.path)) return;
+        drawableIndex.addFile(doc.uri);
+        gutter.invalidatePath(doc.uri);
+      }),
+    );
+
     context.subscriptions.push(
       vscode.languages.registerHoverProvider(
         [{ language: 'kotlin' }, { language: 'java' }],

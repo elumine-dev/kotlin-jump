@@ -40,6 +40,10 @@ export class DrawableGutterThumbnailProvider implements vscode.Disposable {
   // Skips the double `statSync` on every subsequent flush, which dominates
   // per-flush cost on files with hundreds of R.drawable references.
   private readonly verifiedCachePaths = new Set<string>();
+  // Drawable XMLs currently open with unsaved edits, indexed by URI string
+  // for O(1) lookup on the hot path. Maintained via change/save/close
+  // listeners — `vscode.workspace.textDocuments` would be O(N) per render.
+  private readonly dirtyXmlUris = new Set<string>();
   private readonly subs: vscode.Disposable[] = [];
   private flushTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -70,6 +74,20 @@ export class DrawableGutterThumbnailProvider implements vscode.Disposable {
       vscode.workspace.onDidChangeConfiguration(e => {
         if (e.affectsConfiguration('kotlinJump.drawableThumbnails')) this.refreshAllEditors();
       }),
+      // Track dirty drawable XMLs so the hot path can do an O(1) Set check
+      // instead of scanning `vscode.workspace.textDocuments` per reference.
+      vscode.workspace.onDidChangeTextDocument(e => {
+        if (!isDrawableXmlPath(e.document.uri.path)) return;
+        const key = e.document.uri.toString();
+        if (e.document.isDirty) this.dirtyXmlUris.add(key);
+        else this.dirtyXmlUris.delete(key);
+      }),
+      vscode.workspace.onDidSaveTextDocument(d => {
+        this.dirtyXmlUris.delete(d.uri.toString());
+      }),
+      vscode.workspace.onDidCloseTextDocument(d => {
+        this.dirtyXmlUris.delete(d.uri.toString());
+      }),
     );
 
     this.refreshAllEditors();
@@ -89,6 +107,10 @@ export class DrawableGutterThumbnailProvider implements vscode.Disposable {
   /** Invalidate a cache entry when the underlying drawable file changed. */
   invalidatePath(uri: vscode.Uri): void {
     const sourceKey = uri.path;
+    // Even when we never cached this file (e.g. user saved a drawable that
+    // no Kotlin file references), wipe the dirty marker so a later flush
+    // doesn't keep rendering from the now-saved buffer's old version.
+    this.dirtyXmlUris.delete(uri.toString());
     const cachePath = this.cachePathBySource.get(sourceKey);
     if (!cachePath) { this.refreshAllEditors(); return; }
     try { fs.unlinkSync(cachePath); } catch { /* already gone */ }
@@ -176,40 +198,80 @@ export class DrawableGutterThumbnailProvider implements vscode.Disposable {
   }
 
   private async ensureCached(variant: DrawableVariant): Promise<string | undefined> {
-    const cacheExt  = variant.ext === 'xml' ? 'svg' : variant.ext;
-    const cacheName = `${sanitizeForCache(variant.uri.path)}.${cacheExt}`;
-    const cachePath = path.join(this.cacheDir, cacheName);
+    const cacheExt   = variant.ext === 'xml' ? 'svg' : variant.ext;
+    const sourceKey  = variant.uri.path;
     const sourcePath = (variant.uri as vscode.Uri).fsPath;
 
-    // Fast path: once a cache entry has been confirmed fresh this
-    // session, trust the file watcher to invalidate it. Skips two
-    // `statSync` calls per reference per flush — the difference between
-    // ~1 ms and ~100 ms on a file with hundreds of R.drawable refs.
-    if (this.verifiedCachePaths.has(cachePath)) {
-      this.cachePathBySource.set(variant.uri.path, cachePath);
-      return cachePath;
+    // Hot path #1: previously-resolved cache that's still verified. Trust
+    // the file watcher + save listener to clear this entry when the source
+    // changes. Zero fs ops, identical cost to the historical implementation.
+    if (!this.dirtyXmlUris.has((variant.uri as vscode.Uri).toString())) {
+      const cached = this.cachePathBySource.get(sourceKey);
+      if (cached && this.verifiedCachePaths.has(cached)) return cached;
     }
 
-    // First-access check: compare cache mtime to source mtime. If the
-    // source is not on disk (virtual FS, tests), trust the cache —
-    // the watcher's `invalidatePath` is the authoritative freshness
-    // signal and the mtime compare is only a belt-and-braces.
-    if (fs.existsSync(cachePath)) {
-      try {
-        const srcStat   = fs.statSync(sourcePath);
-        const cacheStat = fs.statSync(cachePath);
-        if (cacheStat.mtimeMs >= srcStat.mtimeMs) {
-          this.cachePathBySource.set(variant.uri.path, cachePath);
+    // Live preview: the source has unsaved edits in an open editor. Render
+    // from the in-memory text and version the cache filename with `doc.version`,
+    // so VS Code sees a NEW URI for each edit. (VS Code's gutter icon image
+    // cache is keyed by URI; reusing the same URI with different bytes leaves
+    // the previous icon on screen — root cause of "even after save sometimes
+    // it doesn't update".)
+    if (variant.ext === 'xml' && this.dirtyXmlUris.has((variant.uri as vscode.Uri).toString())) {
+      const dirtyDoc = vscode.workspace.textDocuments.find(
+        d => d.isDirty && d.uri.toString() === (variant.uri as vscode.Uri).toString(),
+      );
+      if (dirtyDoc) {
+        const cacheName = `${sanitizeForCache(sourceKey)}-doc${dirtyDoc.version}.${cacheExt}`;
+        const cachePath = path.join(this.cacheDir, cacheName);
+
+        if (this.verifiedCachePaths.has(cachePath)) {
+          this.cachePathBySource.set(sourceKey, cachePath);
+          return cachePath;
+        }
+        if (fs.existsSync(cachePath)) {
+          this.cachePathBySource.set(sourceKey, cachePath);
           this.verifiedCachePaths.add(cachePath);
           return cachePath;
         }
-        // Fall through to regenerate — cache is older than source.
-      } catch {
-        this.cachePathBySource.set(variant.uri.path, cachePath);
+        this.retirePrevious(sourceKey, cachePath);
+
+        const svg = vectorXmlToSvg(dirtyDoc.getText());
+        if (!svg) return undefined;
+        writeAtomic(cachePath, Buffer.from(svg));
+        this.cachePathBySource.set(sourceKey, cachePath);
         this.verifiedCachePaths.add(cachePath);
         return cachePath;
       }
+      // Marked dirty but no document found — fall through to disk path.
     }
+
+    // Saved-file path: encode the source mtime in the cache filename so each
+    // version of the source maps to a distinct on-disk path (and therefore a
+    // distinct gutter icon URI for VS Code).
+    let srcMtime = 0;
+    try {
+      srcMtime = Math.floor(fs.statSync(sourcePath).mtimeMs);
+    } catch {
+      // Source unavailable (virtual FS / tests). mtime=0 collapses all
+      // versions to the same filename — acceptable when there's no real disk.
+    }
+    const cacheName = `${sanitizeForCache(sourceKey)}-${srcMtime}.${cacheExt}`;
+    const cachePath = path.join(this.cacheDir, cacheName);
+
+    if (this.verifiedCachePaths.has(cachePath)) {
+      this.cachePathBySource.set(sourceKey, cachePath);
+      return cachePath;
+    }
+
+    // Existence is sufficient freshness here: mtime is encoded in the
+    // filename, so the file's existence implies the contents match.
+    if (fs.existsSync(cachePath)) {
+      this.cachePathBySource.set(sourceKey, cachePath);
+      this.verifiedCachePaths.add(cachePath);
+      return cachePath;
+    }
+
+    this.retirePrevious(sourceKey, cachePath);
 
     try {
       const bytes = await vscode.workspace.fs.readFile(variant.uri as vscode.Uri);
@@ -219,14 +281,14 @@ export class DrawableGutterThumbnailProvider implements vscode.Disposable {
         const svg = vectorXmlToSvg(xml);
         if (!svg) return undefined;
         writeAtomic(cachePath, Buffer.from(svg));
-        this.cachePathBySource.set(variant.uri.path, cachePath);
+        this.cachePathBySource.set(sourceKey, cachePath);
         this.verifiedCachePaths.add(cachePath);
         return cachePath;
       }
 
       if (bytes.byteLength > MAX_CACHE_BYTES) return undefined;
       writeAtomic(cachePath, Buffer.from(bytes));
-      this.cachePathBySource.set(variant.uri.path, cachePath);
+      this.cachePathBySource.set(sourceKey, cachePath);
       this.verifiedCachePaths.add(cachePath);
       return cachePath;
     } catch {
@@ -234,12 +296,34 @@ export class DrawableGutterThumbnailProvider implements vscode.Disposable {
     }
   }
 
+  /**
+   * When the cache version changes (mtime bump after save, or doc.version
+   * bump during a live edit), retire the prior cache file + decoration type
+   * so the directory doesn't grow unbounded across saves.
+   */
+  private retirePrevious(sourceKey: string, newCachePath: string): void {
+    const previous = this.cachePathBySource.get(sourceKey);
+    if (!previous || previous === newCachePath) return;
+    try { fs.unlinkSync(previous); } catch { /* already gone */ }
+    this.typeByCachePath.get(previous)?.dispose();
+    this.typeByCachePath.delete(previous);
+    this.verifiedCachePaths.delete(previous);
+  }
+
   dispose(): void {
     clearTimeout(this.flushTimer);
     for (const t of this.typeByCachePath.values()) t.dispose();
     this.typeByCachePath.clear();
+    this.cachePathBySource.clear();
+    this.verifiedCachePaths.clear();
+    this.dirtyXmlUris.clear();
     for (const s of this.subs) s.dispose();
   }
+}
+
+/** Returns true for paths that look like an Android drawable/mipmap XML. */
+function isDrawableXmlPath(p: string): boolean {
+  return /\/res\/(drawable|mipmap)[^/]*\/[^/]+\.xml$/i.test(p);
 }
 
 /** Prefer vectors, then SVGs, then default-density rasters — quality over coverage. */

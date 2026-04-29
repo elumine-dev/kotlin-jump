@@ -6,6 +6,8 @@ doc/**
 .gitignore
 .vscodeignore
 .publish
+.release-preview.md
+.release-preview.whats-new.json
 .vscode-test.mjs
 tsconfig.json
 vitest.config.ts
@@ -13,10 +15,16 @@ esbuild.js
 publish.sh
 .husky/**
 .kotlin-jump-dev-mode
+.idea/**
+.claude/**
+ANDROID-SETUP.md
+CLAUDE.md
 **/*.map
 **/*.wasm
 *.vsix
 node_modules/**
+
+# Static media not used at runtime
 media/logo-*.png
 media/logo.svg
 media/icon-v1.*
@@ -24,12 +32,26 @@ media/icon.svg
 media/README.txt
 media/Demo.gif
 media/Demo-original.gif
+media/kotlin-jump-infographic.png
+media/walkthrough/**
+media/perf/**
+media/ax-debug-harvest/**
+
 # Demo recording tooling — DEV ONLY, never ship
-# NOTE: media/demos/*.webp ARE shipped (referenced by README/whats-new),
-#       only the recording scripts + dev-only sidecars are excluded.
 scripts/**
 dist/demo/**
-media/demos/*.timeline.json
-media/demos/*-poster.png
 tmp-demo-e2e/**
 tmp-demo-frames/**
+
+# assets/demos/ : sidecars + demos NOT consumed by VSIX runtime.
+# Only the 11 walkthrough webps + any whats-new highlight media should ship.
+# README/CHANGELOG load the rest via raw.githubusercontent.com directly.
+assets/demos/*.timeline.json
+assets/demos/*-poster.png
+assets/demos/drawable-hover.webp
+assets/demos/lib-jar-kdoc-hover.webp
+assets/demos/string-locale-grid.webp
+assets/demos/suspend-call-marker.webp
+assets/demos/private-file-isolation.webp
+assets/demos/suppress-hover.webp
+assets/demos/vector-preview.webp

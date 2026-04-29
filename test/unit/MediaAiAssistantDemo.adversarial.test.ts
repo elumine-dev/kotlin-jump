@@ -1,5 +1,5 @@
 /**
- * Adversarial integration tests for `media/demos/ai-assistant.webp`.
+ * Adversarial integration tests for `assets/demos/ai-assistant.webp`.
  *
  * The demo is shipped on the Marketplace (walkthrough → `aiAssistant` step) and
  * embedded in the README, so silent regressions on size, format, animation
@@ -24,7 +24,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 const REPO_ROOT  = path.resolve(__dirname, '..', '..');
-const ASSET_REL  = 'media/demos/ai-assistant.webp';
+const ASSET_REL  = 'assets/demos/ai-assistant.webp';
 const ASSET_PATH = path.join(REPO_ROOT, ASSET_REL);
 const README     = path.join(REPO_ROOT, 'README.md');
 const PACKAGE    = path.join(REPO_ROOT, 'package.json');
@@ -113,7 +113,7 @@ const MAX_FRAMES = 500;
 
 // ── Adversarial integration tests ───────────────────────────────────────────
 
-describe('media/demos/ai-assistant.webp — adversarial integration', () => {
+describe('assets/demos/ai-assistant.webp — adversarial integration', () => {
 
   // ── ADV-1. File size budget ─────────────────────────────────────────────────
 
@@ -185,7 +185,7 @@ describe('media/demos/ai-assistant.webp — adversarial integration', () => {
 
     // README — exactly one <img> embedding the asset on the main branch
     const readmeMatches = readme.match(
-      /raw\.githubusercontent\.com\/[^"]+\/main\/media\/demos\/ai-assistant\.webp/g,
+      /raw\.githubusercontent\.com\/[^"]+\/main\/assets\/demos\/ai-assistant\.webp/g,
     );
     expect(readmeMatches?.length ?? 0).toBeGreaterThanOrEqual(1);
 
@@ -207,9 +207,9 @@ describe('media/demos/ai-assistant.webp — adversarial integration', () => {
       const lines = ignore.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
       const blocksAsset = lines.some(pat =>
         pat === ASSET_REL ||
-        pat === 'media/**' ||
-        pat === 'media/demos/**' ||
-        pat === 'media/demos/*.webp' ||
+        pat === 'assets/**' ||
+        pat === 'assets/demos/**' ||
+        pat === 'assets/demos/*.webp' ||
         pat === '**/ai-assistant.webp',
       );
       expect(blocksAsset, '.vscodeignore must not exclude the demo asset').toBe(false);

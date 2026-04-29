@@ -4,7 +4,7 @@ interface WhatsNewHighlight {
   title: string;
   description?: string;
   kind?: 'improvement' | 'fix' | 'note' | 'feature';
-  /** Optional filename under `media/demos/` (e.g. "suppress-hover.webp").
+  /** Optional filename under `assets/demos/` (e.g. "suppress-hover.webp").
    *  When present, the highlight card embeds the animated demo inline. */
   media?: string;
   /** Optional alt text for the demo image. Defaults to the title. */
@@ -57,10 +57,10 @@ export class WhatsNewPanel {
       {
         enableScripts: false,
         retainContextWhenHidden: false,
-        // Allow loading animated demo webps from `media/demos/` inline in
+        // Allow loading animated demo webps from `assets/demos/` inline in
         // highlight cards. Scoped to the shipping media directory so the
         // webview cannot reach anywhere else in the extension bundle.
-        localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'media', 'demos')],
+        localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'assets', 'demos')],
       }
     );
 
@@ -83,7 +83,7 @@ export class WhatsNewPanel {
       highlights: (data.highlights || []).map(h => {
         if (!h.media || typeof h.media !== 'string') return h;
         if (!/^[A-Za-z0-9][A-Za-z0-9\-_.]*\.webp$/.test(h.media)) return { ...h, media: undefined };
-        const abs = vscode.Uri.joinPath(context.extensionUri, 'media', 'demos', h.media);
+        const abs = vscode.Uri.joinPath(context.extensionUri, 'assets', 'demos', h.media);
         return { ...h, media: panel.webview.asWebviewUri(abs).toString() };
       }),
     };

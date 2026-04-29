@@ -1167,6 +1167,63 @@ check_no_demo_tooling_in_vsix() {
   echo "  VSIX isolation check: OK (no demo tooling leaked)"
 }
 
+# Hard ceiling on shipped VSIX size. Triggered if someone re-introduces
+# raw recordings, infographics, or any other large media. Tune the limit
+# upward only after verifying the new content is genuinely runtime-needed.
+check_vsix_size() {
+  local vsix_file
+  vsix_file="$(ls -t ./*.vsix 2>/dev/null | head -n 1 || true)"
+  if [[ -z "$vsix_file" ]]; then
+    return 0
+  fi
+  local size
+  size="$(stat -f%z "$vsix_file" 2>/dev/null || stat -c%s "$vsix_file" 2>/dev/null || echo 0)"
+  local limit_mb=80
+  local limit=$(( limit_mb * 1024 * 1024 ))
+  if (( size > limit )); then
+    local size_mb=$(( size / 1024 / 1024 ))
+    echo "ERROR: VSIX size $size_mb MB exceeds limit $limit_mb MB ($vsix_file)." >&2
+    echo "       Audit .vscodeignore — likely a new recording slipped through." >&2
+    exit 1
+  fi
+  local size_mb=$(( size / 1024 / 1024 ))
+  echo "  VSIX size check: OK ($size_mb MB ≤ $limit_mb MB)"
+}
+
+# Block recordings that are README-only from leaking into the VSIX.
+# These webps live in assets/demos/ for raw.githubusercontent.com hosting
+# but must never ship — only walkthrough + whats-new media should.
+check_no_readme_only_demos_in_vsix() {
+  local vsix_file
+  vsix_file="$(ls -t ./*.vsix 2>/dev/null | head -n 1 || true)"
+  if [[ -z "$vsix_file" ]]; then
+    return 0
+  fi
+  local readme_only=(
+    drawable-hover
+    lib-jar-kdoc-hover
+    string-locale-grid
+    suspend-call-marker
+    private-file-isolation
+    suppress-hover
+    vector-preview
+  )
+  local contents
+  contents="$(unzip -l "$vsix_file" 2>/dev/null || true)"
+  local leaked=()
+  for name in "${readme_only[@]}"; do
+    if echo "$contents" | grep -q "assets/demos/${name}.webp"; then
+      leaked+=("$name")
+    fi
+  done
+  if (( ${#leaked[@]} > 0 )); then
+    echo "ERROR: README-only demos leaked into VSIX (${leaked[*]})." >&2
+    echo "       Fix .vscodeignore — these webps must NOT ship." >&2
+    exit 1
+  fi
+  echo "  README-only demo isolation: OK"
+}
+
 verify_release() {
   check_walkthrough_coverage
   ensure_local_dependencies
@@ -1180,6 +1237,8 @@ verify_release() {
   echo "Packaging..."
   npx @vscode/vsce package --no-dependencies
   check_no_demo_tooling_in_vsix
+  check_no_readme_only_demos_in_vsix
+  check_vsix_size
 }
 
 stage_release_changes() {

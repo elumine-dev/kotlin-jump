@@ -31,7 +31,7 @@ const __dirname  = path.dirname(__filename);
 const REPO_ROOT  = path.resolve(__dirname, '..', '..');
 
 const WHATS_NEW_PATH = path.join(REPO_ROOT, 'media', 'whats-new.json');
-const DEMOS_DIR      = path.join(REPO_ROOT, 'media', 'demos');
+const DEMOS_DIR      = path.join(REPO_ROOT, 'assets', 'demos');
 const PACKAGE_JSON   = path.join(REPO_ROOT, 'package.json');
 
 // Limits cross-checked with WhatsNewPanel.buildHtml (cards slice to 3).
@@ -162,13 +162,13 @@ if (!Array.isArray(data.highlights)) {
       if (typeof h.media !== 'string') {
         err(`${prefix}.media must be a string`);
       } else if (PLAUSIBLE_URL_RE.test(h.media)) {
-        err(`${prefix}.media "${h.media}" looks like a URL — must be a bare filename relative to media/demos/`);
+        err(`${prefix}.media "${h.media}" looks like a URL — must be a bare filename relative to assets/demos/`);
       } else if (!MEDIA_FILENAME_RE.test(h.media)) {
         err(`${prefix}.media "${h.media}" is not a valid webp filename (lowercase, alphanumeric, ends .webp)`);
       } else {
         const abs = path.join(DEMOS_DIR, h.media);
         if (!existsSync(abs)) {
-          err(`${prefix}.media "${h.media}" does not exist in media/demos/`);
+          err(`${prefix}.media "${h.media}" does not exist in assets/demos/`);
         } else if (statSync(abs).size < 1024) {
           err(`${prefix}.media "${h.media}" is suspiciously small (<1 KB) — probably a broken recording`);
         }

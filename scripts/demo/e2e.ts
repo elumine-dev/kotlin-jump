@@ -62,7 +62,7 @@ function main(): void {
 
   if (demoArg.endsWith('.demo.ts')) {
     name       = path.basename(demoArg, '.demo.ts');
-    webpPath   = path.join(REPO_ROOT, 'media', 'demos', `${name}.webp`);
+    webpPath   = path.join(REPO_ROOT, 'assets', 'demos', `${name}.webp`);
     demoTsPath = path.resolve(demoArg);
   } else if (demoArg.endsWith('.webp')) {
     name     = path.basename(demoArg, '.webp');

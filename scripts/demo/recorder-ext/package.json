@@ -1,6 +1,6 @@
 {
   "name":        "kotlin-jump-demo-recorder",
-  "displayName": "Kotlin Jump — Demo Recorder (dev only)",
+  "displayName": "Kotlin Jump: Demo Recorder (dev only)",
   "description": "Adds a '▶ Record demo' CodeLens to *.demo.ts files. DEV-ONLY, never published.",
   "version":     "0.0.0",
   "publisher":   "elumine-dev-internal",

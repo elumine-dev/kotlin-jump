@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <strong>The Android Studio experience inside VS Code.</strong><br/>
+  <strong>The Android Studio experience for Kotlin & Java in VS Code.</strong><br/>
   Fast navigation. Deep refactor. Full Android workflow.<br/>
   No JVM. No language server.
 </p>

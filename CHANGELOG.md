@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.18.3
+
+Adds plain-English hover for @Suppress codes, fixes Cmd+Click on inlay hints to jump to the parameter declaration rather than the function name, and standardizes all user-facing UI text.
+
+### Improvements
+- Hovering over a @Suppress, @SuppressLint, or @SuppressWarnings code now displays a plain-English description of what that suppression disables, with coverage for Kotlin compiler diagnostics, Android Lint checks, and Java warnings.
+- Cmd+Click on a parameter inlay hint now resolves to the correct parameter declaration rather than the function or constructor name, making navigation from call sites precise.
+- All user-facing strings in tooltips, quick-pick labels, status bar text, and menu items were standardized for consistent, clean prose across the extension.
+
+### Notes
+- The in-editor walkthrough now mentions KDoc hover, the string locale grid, and suspend call markers in existing steps, making those features easier to discover after install.
+- The Marketplace and Open VSX display name was updated to include Android Studio to improve search discoverability for Android developers.
+- No changes to indexing, code folding, Gradle integration, Android Run, or Find Usages behavior since v1.18.2.
+
 ## 1.18.2
 
 Drawable gutter thumbnails now refresh reliably when files are edited or saved.

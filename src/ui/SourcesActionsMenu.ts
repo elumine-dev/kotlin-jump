@@ -93,7 +93,7 @@ export class SourcesActionsMenu implements vscode.Disposable {
     });
 
     const picked = await vscode.window.showQuickPick(items, {
-      title: 'Kotlin Jump — Library Sources',
+      title: 'Kotlin Jump: Library Sources',
       placeHolder: 'Choose an action',
     });
     if (!picked) return;
@@ -137,7 +137,7 @@ export class SourcesActionsMenu implements vscode.Disposable {
     await vscode.window.withProgress(
       {
         location:    vscode.ProgressLocation.Notification,
-        title:       `Kotlin Jump — downloading ${coordsAll.length} library sources`,
+        title:       `Kotlin Jump: downloading ${coordsAll.length} library sources`,
         cancellable: true,
       },
       async (progress, token) => {
@@ -147,7 +147,7 @@ export class SourcesActionsMenu implements vscode.Disposable {
           const pct = Math.round((update.current / update.total) * 100);
           progress.report({
             increment: (1 / update.total) * 100,
-            message:   `${pct}% — ${formatCoords(update.coords)}`,
+            message:   `${pct}% · ${formatCoords(update.coords)}`,
           });
         });
 

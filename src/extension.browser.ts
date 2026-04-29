@@ -418,7 +418,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           uri: u,
         }));
         const picked = await vscode.window.showQuickPick(items, {
-          placeHolder: `Multiple matches — pick ${isTest ? 'implementation' : 'test'} file`,
+          placeHolder: `Multiple matches. Pick ${isTest ? 'implementation' : 'test'} file`,
         });
         if (!picked) return;
         target = picked.uri;
@@ -471,7 +471,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           entry: e,
         }));
         const picked = await vscode.window.showQuickPick(items, {
-          placeHolder: `Multiple matches — pick ${isComposable ? 'preview' : 'composable'}`,
+          placeHolder: `Multiple matches. Pick ${isComposable ? 'preview' : 'composable'}`,
         });
         if (!picked) return;
         target = picked.entry;
@@ -838,7 +838,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           fqn: entry.fqn,
         }));
         const picked = await vscode.window.showQuickPick(items, {
-          placeHolder: `Multiple matches for ${word} — pick the FQN to copy`,
+          placeHolder: `Multiple matches for ${word}. Pick the FQN to copy`,
         });
         if (!picked) return;
         fqn = picked.fqn;
@@ -965,7 +965,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const elapsed = Date.now() - t0;
   const { files, symbols } = index.stats();
   statusBar.text    = `$(symbol-class) Kotlin Jump: ${symbols.toLocaleString()} symbols`;
-  statusBar.tooltip = `${symbols.toLocaleString()} symbols in ${files} files — ${elapsed}ms`;
+  statusBar.tooltip = `${symbols.toLocaleString()} symbols in ${files} files (${elapsed}ms)`;
   log.info(`Index ready: ${symbols} symbols in ${files} files (${elapsed}ms)`);
   _semanticTokens?.invalidate();
 

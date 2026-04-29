@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { SymbolIndex } from './indexer/SymbolIndex';
 import { FileScanner } from './indexer/FileScanner';
 import { FileWatcher } from './watcher/FileWatcher';
-import { KotlinDefinitionProvider, getPendingDeclNav, clearPendingDeclNav } from './providers/DefinitionProvider';
+import { KotlinDefinitionProvider, getPendingDeclNav, clearPendingDeclNav, navigateFromInlay, isInlayNavSuppressed } from './providers/DefinitionProvider';
 import { KotlinDocumentSymbolProvider } from './providers/DocumentSymbolProvider';
 import { KotlinHoverProvider } from './providers/HoverProvider';
 import { KotlinReferenceProvider } from './providers/ReferenceProvider';
@@ -298,6 +298,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       },
     ),
 
+    // Inlay-hint navigation wrapper. Implementation lives in
+    // DefinitionProvider.ts (`navigateFromInlay`) so unit tests can verify
+    // the pending-state clearing contract without booting the full extension.
+    vscode.commands.registerCommand('kotlin-jump._navigateInlay', navigateFromInlay),
+
     vscode.commands.registerCommand('kotlin-jump.goToClassImpl',
       async (name: string, packageName: string) => {
         const CLASS_LIKE_SET = new Set(['class', 'dataClass', 'sealedClass', 'enum', 'object', 'interface', 'annotation']);
@@ -562,6 +567,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // On hover: VS Code shows the link but doesn't navigate → no selection change.
     // On click: VS Code navigates to self → selection change with kind=Command.
     vscode.window.onDidChangeTextEditorSelection(e => {
+      // Inlay-hint navigation just landed (or is in flight): suppress the
+      // smart-nav consumption entirely during the post-nav race window.
+      // VS Code re-fires provideDefinition at the new cursor for link
+      // decorations, which sets pending — without this guard the listener
+      // would consume that state and pop the Find Usages panel on top.
+      if (isInlayNavSuppressed()) {
+        clearPendingDeclNav();
+        return;
+      }
       const pending = getPendingDeclNav();
       if (!pending) return;
       if (e.kind !== vscode.TextEditorSelectionChangeKind.Command) {
@@ -1307,16 +1321,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       runJarScan();
     }),
 
-    // ── Watcher build.gradle — mise à jour des sources JAR en live ───────────
+    // build.gradle watcher: keep JAR sources up to date live.
     (() => {
       let debounceId: ReturnType<typeof setTimeout> | undefined;
       const gradleWatcher = vscode.workspace.createFileSystemWatcher('**/build.gradle{,.kts}');
       const onGradleChange = () => {
         if (debounceId) clearTimeout(debounceId);
-        // Délai 30s : laisser Gradle terminer le téléchargement des nouveaux JARs
+        // 30s delay: give Gradle time to finish downloading new JARs.
         debounceId = setTimeout(async () => {
           const action = await vscode.window.showInformationMessage(
-            'Kotlin Jump: Gradle files changed — new library sources may be available.',
+            'Kotlin Jump: Gradle files changed. New library sources may be available.',
             'Index now',
             'Later',
           );

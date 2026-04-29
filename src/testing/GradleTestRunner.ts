@@ -299,7 +299,7 @@ export function findGradleModuleByPath(filePath: string, projectRoot: string): s
   let dir = path.dirname(filePath);
   const normalizedDir = path.resolve(dir);
 
-  // Garde : si le fichier est hors du projectRoot, retourner root direct (évite remontée hors-arbo).
+  // Guard: if the file is outside projectRoot, return root directly to avoid walking out of the tree.
   if (normalizedDir !== normalizedRoot && !normalizedDir.startsWith(normalizedRoot + path.sep)) {
     return '';
   }

@@ -1,7 +1,7 @@
 {
   "name": "kotlin-jump",
   "displayName": "Kotlin Jump: Fast Kotlin & Android Studio Navigation",
-  "description": "Fast Kotlin & Android navigation. Find Usages, Go to Definition, Compose, R.string, Android Run. No JVM, no language server. The Android Studio experience inside VS Code.",
+  "description": "Fast Kotlin & Android Studio navigation. Find Usages, Go to Definition, Compose, R.string, Android Run. No JVM, no language server. The Android Studio experience inside VS Code.",
   "version": "1.18.2",
   "publisher": "elumine",
   "license": "MIT",
@@ -38,13 +38,16 @@
   ],
   "keywords": [
     "kotlin",
-    "android",
     "android studio",
+    "android",
     "jetpack compose",
-    "intellij",
+    "compose",
+    "kotlin lsp",
     "find usages",
     "go to definition",
-    "kotlin lsp",
+    "kotlin gradle",
+    "coroutines",
+    "intellij",
     "gradle",
     "java"
   ],
@@ -1018,7 +1021,7 @@
       {
         "id": "kotlinJumpGettingStarted",
         "title": "Get Started with Kotlin Jump",
-        "description": "Fast Kotlin & Java navigation. No JVM, no language server required.",
+        "description": "Fast Kotlin & Android Studio navigation. No JVM, no language server required.",
         "steps": [
           {
             "id": "welcome",

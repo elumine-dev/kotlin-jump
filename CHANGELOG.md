@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.18.2
+
+Drawable gutter thumbnails now refresh reliably when files are edited or saved.
+
+### Fixes
+- Fixed drawable gutter thumbnails to refresh reliably on every file edit and save, so the preview in the gutter always reflects the current state of the drawable.
+
+### Notes
+- No changes to navigation, indexing, code folding, inlay hints, Gradle integration, or any other feature since v1.18.1.
+
 ## 1.18.1
 
 Improves Gradle project root detection across all workspace layouts, adds automatic Windows wrapper fallback, and sharpens settings documentation for non-standard configurations.

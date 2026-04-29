@@ -1,46 +1,26 @@
 {
-  "version": "1.18.1",
+  "version": "1.18.2",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Reliable Gradle detection, any layout",
-  "summary": "Improves Gradle project root detection across all workspace layouts, adds automatic Windows wrapper fallback, and sharpens settings documentation for non-standard configurations.",
+  "tagline": "Reliable drawable gutter thumbnail refresh",
+  "summary": "Drawable gutter thumbnails now refresh reliably when files are edited or saved.",
   "highlights": [
     {
-      "title": "Smarter Root Detection",
-      "description": "Detection now walks up from the active editor stopping at the first settings.gradle(.kts) — matching Gradle's own build-root discovery rule — so sub-module opens and flat-style layouts resolve to the correct root instead of a nested module directory.",
-      "kind": "improvement"
-    },
-    {
-      "title": "Windows Wrapper Fallback",
-      "description": "On Windows, ./gradlew automatically resolves to gradlew.bat without any extra configuration, so tests and Android Run work out of the box on that platform.",
+      "title": "Gutter Thumbnail Reliability",
+      "description": "Vector drawable previews in the gutter now update correctly after every edit and save — stale thumbnails no longer persist when you modify a drawable file.",
       "kind": "fix"
-    },
-    {
-      "title": "Multi-Project Picker",
-      "description": "Workspaces containing more than one Gradle root now show a project picker instead of silently picking the wrong one; the choice is persisted for the session so subsequent runs are instant.",
-      "kind": "improvement"
     }
   ],
   "sections": [
     {
-      "heading": "Improvements",
+      "heading": "Fixes",
       "bullets": [
-        "Gradle root detection walks up from the active editor and stops at the first settings.gradle(.kts), treating a standalone build.gradle as a provisional fallback only when no settings file exists higher up the tree — the same rule Gradle itself uses.",
-        "On Windows, the gradlew wrapper resolver tries gradlew.bat before the bare script, so no manual kotlinJump.gradleWrapper change is needed on that platform.",
-        "When detection finds more than one Gradle root in the workspace, a QuickPick prompt appears; the chosen project is remembered for the session and used by both Test Explorer and Android Run.",
-        "The Android Run status bar button now shows four actionable states — resolved, ambiguous, setting-invalid, and wrapper-missing — each with a tooltip and a command that opens the relevant fix."
-      ]
-    },
-    {
-      "heading": "Settings Documentation",
-      "bullets": [
-        "kotlinJump.gradleWrapper now documents that the path is relative to the detected gradleProjectRoot, not the workspace folder, preventing a common misconfiguration.",
-        "kotlinJump.gradleProjectRoot now includes explicit guidance for sub-module layouts (e.g. opening app/ instead of the project root), flat-style projects (e.g. master/), and a clearer description of how auto-detection tiers work."
+        "Fixed drawable gutter thumbnails to refresh reliably on every file edit and save, so the preview in the gutter always reflects the current state of the drawable."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "No changes to navigation, indexing, code folding, inlay hints, or any other non-Gradle feature since v1.18.0."
+        "No changes to navigation, indexing, code folding, inlay hints, Gradle integration, or any other feature since v1.18.1."
       ]
     }
   ],

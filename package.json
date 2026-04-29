@@ -1053,7 +1053,7 @@
           {
             "id": "librarySources",
             "title": "Navigate into your dependencies",
-            "description": "Kotlin Jump indexes the **JDK** (`java.lang.*`, `java.util.*`) + a bundled **Kotlin stdlib** out of the box. For Compose, Coroutines, AndroidX and other libraries, click the **`$(library)`** item in the status bar to download `-sources.jar` files via direct HTTP. No JVM, no Gradle invocation, no terminal. One click.\n\n[Open Library Sources actions](command:kotlin-jump.sources.openActions)",
+            "description": "Kotlin Jump indexes the **JDK** (`java.lang.*`, `java.util.*`) + a bundled **Kotlin stdlib** out of the box. For Compose, Coroutines, AndroidX and other libraries, click the **`$(library)`** item in the status bar to download `-sources.jar` files via direct HTTP. No JVM, no Gradle invocation, no terminal. One click.\n\nHovering any library symbol also shows its KDoc inline, no file open needed.\n\n[Open Library Sources actions](command:kotlin-jump.sources.openActions)",
             "media": {
               "image": "assets/demos/lib-jar-coroutines.webp",
               "altText": "Cmd+Click into kotlinx.coroutines JAR source"
@@ -1104,7 +1104,7 @@
           {
             "id": "stringFolding",
             "title": "See your string values inline",
-            "description": "String resource folding replaces `R.string.button_ok` with its actual value, **\"OK\"**, directly in the editor. Zero context switching to `strings.xml`.\n\n[Enable String Folding](command:kotlinJump.enableStringFolding)",
+            "description": "String resource folding replaces `R.string.button_ok` with its actual value, **\"OK\"**, directly in the editor. Zero context switching to `strings.xml`.\n\nHover any `R.string.*` reference to see every locale side by side.\n\n[Enable String Folding](command:kotlinJump.enableStringFolding)",
             "media": {
               "image": "assets/demos/string-resource-folding.webp",
               "altText": "String resource folding demo"
@@ -1125,7 +1125,7 @@
           {
             "id": "inlayHints",
             "title": "Inline type hints with KDoc on hover",
-            "description": "The `: Pokemon` is the type, rendered inline, no explicit annotation. Hover any hint and the full class KDoc appears at the call site. No jump, no file tree hunt. Parameter names at call sites work the same way (configurable per setting).",
+            "description": "The `: Pokemon` is the type, rendered inline, no explicit annotation. Hover any hint and the full class KDoc appears at the call site. No jump, no file tree hunt. Parameter names at call sites work the same way (configurable per setting). Suspend calls and dispatcher hops are marked inline the same way (⚡, 🧵 IO, 🖥 Main).",
             "media": {
               "image": "assets/demos/inlay-hints.webp",
               "altText": "Inlay hints showing parameter names and types"

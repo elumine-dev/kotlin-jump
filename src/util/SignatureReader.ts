@@ -134,7 +134,7 @@ export function formatKDoc(lines: string[]): string | null {
     const param = /^@param\s+(\w+)\s*(.*)/.exec(line);
     if (param) {
       if (!inParam) { result.push(''); inParam = true; }
-      result.push(`- \`${param[1]}\` — ${param[2]}`);
+      result.push(`- \`${param[1]}\`: ${param[2]}`);
       continue;
     }
 

@@ -91,7 +91,7 @@ export class SourcesStatusBar implements vscode.Disposable {
   private buildTooltip(suffix: string): string {
     const s = this.state;
     const lines = [
-      `Kotlin Jump — Library Sources`,
+      `Kotlin Jump: Library Sources`,
       ``,
       `Indexed:        ${s.libsIndexed} library/-ies`,
       `JDK:            ${s.jdk === 'ok' ? '✓ src.zip indexed' : s.jdk === 'missing' ? '⚠ detected but no src.zip' : '✗ no JDK detected'}`,

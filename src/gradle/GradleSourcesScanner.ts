@@ -132,7 +132,7 @@ export class GradleSourcesScanner {
           const parsed    = name.endsWith('.java') ? parseJava(uriString, text) : parse(uriString, text);
           this.index.add(parsed, info.moduleName);
           count++;
-        } catch { /* entrée corrompue — on ignore */ }
+        } catch { /* corrupted entry, skip */ }
       }
     } finally {
       await zip.close().catch(() => {});

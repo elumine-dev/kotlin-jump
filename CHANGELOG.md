@@ -15,10 +15,10 @@ Drawable gutter thumbnails now refresh reliably when files are edited or saved.
 Improves Gradle project root detection across all workspace layouts, adds automatic Windows wrapper fallback, and sharpens settings documentation for non-standard configurations.
 
 ### Improvements
-- Gradle root detection walks up from the active editor and stops at the first settings.gradle(.kts), treating a standalone build.gradle as a provisional fallback only when no settings file exists higher up the tree — the same rule Gradle itself uses.
+- Gradle root detection walks up from the active editor and stops at the first settings.gradle(.kts), treating a standalone build.gradle as a provisional fallback only when no settings file exists higher up the tree. The same rule Gradle itself uses.
 - On Windows, the gradlew wrapper resolver tries gradlew.bat before the bare script, so no manual kotlinJump.gradleWrapper change is needed on that platform.
 - When detection finds more than one Gradle root in the workspace, a QuickPick prompt appears; the chosen project is remembered for the session and used by both Test Explorer and Android Run.
-- The Android Run status bar button now shows four actionable states — resolved, ambiguous, setting-invalid, and wrapper-missing — each with a tooltip and a command that opens the relevant fix.
+- The Android Run status bar button now shows four actionable states (resolved, ambiguous, setting-invalid, and wrapper-missing) each with a tooltip and a command that opens the relevant fix.
 
 ### Notes
 - No changes to navigation, indexing, code folding, inlay hints, or any other non-Gradle feature since v1.18.0.
@@ -66,7 +66,7 @@ Fixes null assertion highlighting to exclude Java files, where !! is a boolean d
 Fixes Cmd+Click on parameter inlay hints to navigate directly to the declaration without triggering the Find Usages panel as a side effect.
 
 ### Fixes
-- Cmd+Click on a parameter inlay hint now performs navigation only — it jumps to the parameter declaration without also opening the Find Usages panel.
+- Cmd+Click on a parameter inlay hint now performs navigation only. It jumps to the parameter declaration without also opening the Find Usages panel.
 
 ### Notes
 - This is a focused single-fix release. No other commands, settings, navigation behavior, or UI changed since v1.17.8.
@@ -76,7 +76,7 @@ Fixes Cmd+Click on parameter inlay hints to navigate directly to the declaration
 Fixes Cmd+Click on parameter inlay hints to navigate to the correct parameter declaration.
 
 ### Fixes
-- Fixed Cmd+Click on parameter inlay hints — the action now navigates to the actual parameter declaration rather than resolving to the wrong symbol or doing nothing.
+- Fixed Cmd+Click on parameter inlay hints. The action now navigates to the actual parameter declaration rather than resolving to the wrong symbol or doing nothing.
 
 ### Notes
 - This is a focused single-fix release. No other commands, settings, navigation behavior, or UI changed since v1.17.7.
@@ -120,7 +120,7 @@ Removes the README "Limitations" section that was misrepresenting the extension'
 
 ## 1.17.3
 
-Fixes the broken Marketplace install/rating badges in the README and Marketplace listing — the previous shields.io endpoints were silently returning a "retired badge" placeholder. Migrated to the Microsoft-hosted vsmarketplacebadges.dev provider.
+Fixes the broken Marketplace install/rating badges in the README and Marketplace listing. The previous shields.io endpoints were silently returning a "retired badge" placeholder. Migrated to the Microsoft-hosted vsmarketplacebadges.dev provider.
 
 ### Notes
 - No changes to extension commands, settings, navigation, or any other user-facing behavior since v1.17.2.
@@ -128,7 +128,7 @@ Fixes the broken Marketplace install/rating badges in the README and Marketplace
 
 ## 1.17.2
 
-Marketplace metadata release — refines the listing for better discoverability (description, keywords, categories, badges) and converts the README header for the migration cohort coming from Android Studio. No changes to extension commands, settings, navigation, or any user-facing behavior since v1.17.1.
+Marketplace metadata release. Refines the listing for better discoverability (description, keywords, categories, badges) and converts the README header for the migration cohort coming from Android Studio. No changes to extension commands, settings, navigation, or any user-facing behavior since v1.17.1.
 
 ### Notes
 - No changes to extension commands, settings, navigation, or any other user-facing behavior since v1.17.1.
@@ -152,7 +152,7 @@ Fixes local-scope handling across six providers, adds a declaration-to-usages ju
 
 ## 1.17.0
 
-1.17.0 adds drawable resource previews — hover over any R.drawable reference to see a rendered thumbnail tooltip, and VectorDrawable XML is converted to SVG so both raster and vector assets display correctly.
+1.17.0 adds drawable resource previews. Hover over any R.drawable reference to see a rendered thumbnail tooltip, and VectorDrawable XML is converted to SVG so both raster and vector assets display correctly.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/v1.17.0/media/demos/drawable-hover.webp" width="720" alt="Gutter Drawable Thumbnails" />
@@ -164,7 +164,7 @@ Fixes local-scope handling across six providers, adds a declaration-to-usages ju
 
 ### Features
 - Added drawable resource indexing that tracks all res/drawable entries across density qualifiers and reacts to file changes in real time.
-- Added a hover provider for R.drawable references that renders a thumbnail preview — VectorDrawable XML files are converted to SVG inline, so no external renderer is needed.
+- Added a hover provider for R.drawable references that renders a thumbnail preview. VectorDrawable XML files are converted to SVG inline, so no external renderer is needed.
 - Added gutter thumbnail decorations alongside any line that references a drawable resource, giving a persistent visual cue without opening the asset file.
 
 ## 1.16.1
@@ -187,7 +187,7 @@ Version 1.16.0 adds hover documentation for suppression annotations, dispatcher-
 </p>
 
 ### Features
-- Added hover documentation for @Suppress, @SuppressLint, and @SuppressWarnings annotation IDs — hovering over a suppression string shows a plain-English description of the warning or lint check being silenced.
+- Added hover documentation for @Suppress, @SuppressLint, and @SuppressWarnings annotation IDs. Hovering over a suppression string shows a plain-English description of the warning or lint check being silenced.
 - Added dispatcher-specific inlay badges to coroutine builder calls that specify a dispatcher (e.g. Dispatchers.IO, Dispatchers.Main), so dispatched suspension points are visually distinct from plain suspend calls at a glance.
 - Registered default keyboard shortcuts for: Find Usages (Alt+F7), Go to Test (Alt+Shift+T), Go to Composable Preview (Alt+Shift+P), Organize Imports (Shift+Alt+O), Rename (Ctrl/Cmd+R), Navigate Back/Forward (Ctrl/Cmd+Alt+←/→), Copy FQN (Shift+Alt+C), and Toggle Inline Features (Shift+Alt+I).
 
@@ -227,12 +227,12 @@ v1.14.0 updates the built-in walkthrough for accuracy and ships no changes to na
 v1.13.0 improves navigation accuracy for standard Kotlin and Java built-in types, and adds correct expect/actual resolution for Kotlin Multiplatform projects.
 
 ### Improvements
-- Added implicit default import awareness for Kotlin (kotlin.*, kotlin.collections.*, kotlin.io.*, and related packages) and Java (java.lang.*) — Go to Definition now works on built-in types that appear without an import statement.
+- Added implicit default import awareness for Kotlin (kotlin.*, kotlin.collections.*, kotlin.io.*, and related packages) and Java (java.lang.*). Go to Definition now works on built-in types that appear without an import statement.
 - Added expect/actual modifier support for Kotlin Multiplatform projects; FQN lookups now prefer the actual declaration, giving more precise jump targets in multi-platform codebases.
 
 ## 1.12.1
 
-Packaging fix — reduces VSIX size by excluding demo capture artifacts that were accidentally shipped in 1.12.0.
+Packaging fix. Reduces VSIX size by excluding demo capture artifacts that were accidentally shipped in 1.12.0.
 
 ### Fixes
 - Excluded `tmp-demo-e2e/` and `tmp-demo-frames/` from the published VSIX. These directories are gitignored but were missing from `.vscodeignore`, inflating the package by ~19 MB with demo capture artifacts that have no runtime purpose.
@@ -242,20 +242,20 @@ Packaging fix — reduces VSIX size by excluding demo capture artifacts that wer
 
 ## 1.12.0
 
-**Library sources, reproducible everywhere — no JVM, no LSP, no setup.**
+**Library sources, reproducible everywhere. No JVM, no LSP, no setup.**
 
-- **Bundled Kotlin stdlib** (~600 KB shipped) — `List`, `String`, `Sequence`, etc. navigable from minute zero, even on a cold Gradle cache or offline. Project-pinned versions take precedence when present.
-- **JDK source indexing** — `java.lang.*`, `java.util.*` and the rest of the JDK become navigable via `JAVA_HOME` auto-detection (macOS `/usr/libexec/java_home`, Linux `update-alternatives`, Windows scan). Multi-JDK aware (prefers JDK 17+).
-- **HTTP source download** — when a library's `-sources.jar` is missing from the local cache, click the new **`$(library)` status bar item** → "Download missing sources". Direct HTTPS fetch from Maven Central. No `./gradlew dependencies`, no JVM, no terminal.
-- **Status bar UX** — dedicated item showing indexed-libs count, JDK badge, stdlib badge, missing count. Click for an actions menu.
-- **Inline-feature toolbar buttons** — five new editor-toolbar buttons (color folding, const val folding, hex color swatches, !! highlight, master `$(layers)` toggle) join the existing string-folding 👁 button.
-- **6 new settings** — `kotlinJump.jdkHome`, `kotlinJump.useBundledStdlib`, `kotlinJump.suppressFirstScanPrompt`, `kotlinJump.fallbackToOnlineDocs`, plus the per-feature toggles. All have sensible defaults.
+- **Bundled Kotlin stdlib** (~600 KB shipped). `List`, `String`, `Sequence`, etc. navigable from minute zero, even on a cold Gradle cache or offline. Project-pinned versions take precedence when present.
+- **JDK source indexing**. `java.lang.*`, `java.util.*` and the rest of the JDK become navigable via `JAVA_HOME` auto-detection (macOS `/usr/libexec/java_home`, Linux `update-alternatives`, Windows scan). Multi-JDK aware (prefers JDK 17+).
+- **HTTP source download**. When a library's `-sources.jar` is missing from the local cache, click the new **`$(library)` status bar item** → "Download missing sources". Direct HTTPS fetch from Maven Central. No `./gradlew dependencies`, no JVM, no terminal.
+- **Status bar UX**. Dedicated item showing indexed-libs count, JDK badge, stdlib badge, missing count. Click for an actions menu.
+- **Inline-feature toolbar buttons**. Five new editor-toolbar buttons (color folding, const val folding, hex color swatches, !! highlight, master `$(layers)` toggle) join the existing string-folding 👁 button.
+- **6 new settings**. `kotlinJump.jdkHome`, `kotlinJump.useBundledStdlib`, `kotlinJump.suppressFirstScanPrompt`, `kotlinJump.fallbackToOnlineDocs`, plus the per-feature toggles. All have sensible defaults.
 
 Backward-compatible: existing settings (`gradleCacheDir`, `indexSourcesJars`, `companionMode`) are respected.
 
 ## 1.11.0
 
-Maintenance release with no changes to extension behavior — corrects duplicate changelog entries and hardens the release pipeline for more reliable future publishes.
+Maintenance release with no changes to extension behavior. Corrects duplicate changelog entries and hardens the release pipeline for more reliable future publishes.
 
 ### Fixes
 - Removed duplicate changelog sections for v1.7.0, v1.0.0, and v0.7.6 that were incorrectly present in the published history.
@@ -280,7 +280,7 @@ Kotlin Jump 1.10.0 adds Android Studio-style navigation history, inline resource
 
 ### Notes
 - Added a dedicated browser entrypoint with browser-safe stubs, bringing web-hosted installs closer to feature parity with the desktop extension for supported features.
-- Expanded the CI test suite with a comprehensive real-world Kotlin/Android project covering coroutines, sealed classes, annotations, resource files, and multiple test frameworks — improving confidence in parser correctness across a wider range of code patterns.
+- Expanded the CI test suite with a comprehensive real-world Kotlin/Android project covering coroutines, sealed classes, annotations, resource files, and multiple test frameworks. Improving confidence in parser correctness across a wider range of code patterns.
 
 ## 1.9.1
 
@@ -298,12 +298,12 @@ Maintenance release that resyncs package-lock.json with npm@10 for consistent CI
 Adds wireless Android device connection and pairing via mDNS, and reduces annotation scan CPU overhead with incremental processing.
 
 ### Improvements
-- Added a Connect via ADB WiFi command that uses mDNS (dns-sd) to discover Android devices on the local network and connects wirelessly — removes the need for a USB cable after first setup.
+- Added a Connect via ADB WiFi command that uses mDNS (dns-sd) to discover Android devices on the local network and connects wirelessly. Removes the need for a USB cable after first setup.
 - Added a Pair via ADB WiFi flow with guided step-by-step instructions for first-time wireless pairing.
-- HexColorFoldingProvider and NullAssertionProvider now perform incremental line scanning — only lines that changed are reprocessed on each edit, reducing CPU overhead in files with many annotations.
+- HexColorFoldingProvider and NullAssertionProvider now perform incremental line scanning. Only lines that changed are reprocessed on each edit, reducing CPU overhead in files with many annotations.
 
 ### Fixes
-- Fixed a race condition where ADB WiFi connection failed because IP resolution had not yet completed — the extension now connects using the stable .local mDNS hostname.
+- Fixed a race condition where ADB WiFi connection failed because IP resolution had not yet completed. The extension now connects using the stable .local mDNS hostname.
 - Fixed device detection to prefer the HOST:PORT address format and fall back to the adb-XXXX-YYYY serial, preventing misidentified or dropped device connections.
 
 ## 1.8.0
@@ -311,12 +311,12 @@ Adds wireless Android device connection and pairing via mDNS, and reduces annota
 Adds wireless ADB connection and pairing from VS Code, fixes device detection reliability, and reduces CPU overhead during editing with incremental annotation scanning.
 
 ### Improvements
-- Added a Connect via ADB WiFi command that discovers Android devices on the local network using mDNS (dns-sd) and connects wirelessly — removes the need for a USB cable after first setup.
+- Added a Connect via ADB WiFi command that discovers Android devices on the local network using mDNS (dns-sd) and connects wirelessly. Removes the need for a USB cable after first setup.
 - Added a guided Pair via ADB WiFi flow with step-by-step instructions for first-time wireless pairing, so the process works even without prior adb experience.
-- HexColorFoldingProvider and NullAssertionProvider now perform incremental line scanning — only lines that changed are reprocessed on each edit, cutting CPU overhead in files with many annotations.
+- HexColorFoldingProvider and NullAssertionProvider now perform incremental line scanning. Only lines that changed are reprocessed on each edit, cutting CPU overhead in files with many annotations.
 
 ### Fixes
-- Fixed a race condition where ADB WiFi connection failed because IP address resolution had not completed — the extension now connects using the stable .local mDNS hostname instead.
+- Fixed a race condition where ADB WiFi connection failed because IP address resolution had not completed. The extension now connects using the stable .local mDNS hostname instead.
 - Fixed device detection to prefer the HOST:PORT address format and fall back to the adb-XXXX-YYYY serial, preventing misidentified or dropped device connections.
 
 ## 1.7.1
@@ -324,11 +324,11 @@ Adds wireless ADB connection and pairing from VS Code, fixes device detection re
 Version 1.7.1 reduces CPU overhead during active editing by debouncing decoration scans and caching per-document symbol lookups in semantic highlighting.
 
 ### Notes
-- No new commands, settings, or navigation features in this release — all changes are performance and reliability improvements to existing visual annotations.
+- No new commands, settings, or navigation features in this release. All changes are performance and reliability improvements to existing visual annotations.
 - Adversarial and performance test suites were added for the affected providers, increasing confidence that decoration and semantic highlighting remain correct under edge conditions.
 
 ### Performance
-- Debounced keystroke-driven scans in NullAssertionProvider, HexColorFoldingProvider, and StringResourceFoldingProvider — rapid typing no longer triggers a full document scan on every character.
+- Debounced keystroke-driven scans in NullAssertionProvider, HexColorFoldingProvider, and StringResourceFoldingProvider. Rapid typing no longer triggers a full document scan on every character.
 - Added a per-document word cache in SemanticTokensProvider so symbols that appear multiple times in the same file are resolved only once per render pass.
 
 ## 1.6.1
@@ -336,7 +336,7 @@ Version 1.7.1 reduces CPU overhead during active editing by debouncing decoratio
 1.6.1 adds a one-click Android Run button, visual Kotlin code annotations (hex swatches, !! highlighting, @RequiresApi hints), extended string resource intelligence, and extends availability to VS Codium via the Open VSX Registry.
 
 ### Improvements
-- Added a Run button to the status bar that builds, installs, and launches the Android app on the connected device or emulator in one click — no terminal, no manual adb commands.
+- Added a Run button to the status bar that builds, installs, and launches the Android app on the connected device or emulator in one click. No terminal, no manual adb commands.
 - Auto-detects the app module and Gradle install task, supports multi-flavor and multi-app projects via `kotlinJump.androidProjects`, and offers to boot an AVD if no device is connected.
 - Added hex color swatches alongside color literals in Kotlin and Java files so color values are visible without a separate color picker.
 - Added highlighting for !! null-assertion operators to make unsafe dereferences immediately visible during code review.
@@ -346,7 +346,7 @@ Version 1.7.1 reduces CPU overhead during active editing by debouncing decoratio
 - Fixed extension activation failure on VS Code versions predating 1.87, where an unguarded vscode.chat API call prevented the extension from loading entirely.
 
 ### Packaging and Docs
-- Published to the Open VSX Registry — Kotlin Jump is now available for VS Codium and other VS Code-compatible editors.
+- Published to the Open VSX Registry. Kotlin Jump is now available for VS Codium and other VS Code-compatible editors.
 - Updated the README with an Android Run walkthrough and an animated step-by-step demo.
 
 ## 1.7.0
@@ -354,7 +354,7 @@ Version 1.7.1 reduces CPU overhead during active editing by debouncing decoratio
 Kotlin Jump 1.7.0 adds a one-click Android Run button, visual code annotations for hex colors and null assertions, richer string resource intelligence, and fixes a crash that prevented loading on older VS Code versions.
 
 ### Improvements
-- Added a Run button in the status bar that builds, installs, and launches an Android app on the connected device or emulator in one click — no terminal, no manual adb commands.
+- Added a Run button in the status bar that builds, installs, and launches an Android app on the connected device or emulator in one click. No terminal, no manual adb commands.
 - Auto-detects the app module and Gradle install task; supports multi-flavor and multi-app workspaces via `kotlinJump.androidProjects`; offers to start an AVD if no device is connected, so the first Run click always works.
 - Added hex color swatches alongside color literals in Kotlin and Java files, making color values visible without a separate color picker.
 - Added highlighting for `!!` null-assertion operators so unsafe dereferences stand out immediately during code review.
@@ -364,7 +364,7 @@ Kotlin Jump 1.7.0 adds a one-click Android Run button, visual code annotations f
 - Fixed an activation failure on VS Code versions predating 1.87, where an unguarded `vscode.chat` API call prevented the extension from loading entirely.
 
 ### Packaging and Docs
-- Kotlin Jump is now published to the Open VSX Registry — available for VS Codium and other VS Code-compatible editors.
+- Kotlin Jump is now published to the Open VSX Registry. Available for VS Codium and other VS Code-compatible editors.
 - Updated the README with an Android Run walkthrough and an animated step-by-step demo.
 
 ## 1.6.0
@@ -372,26 +372,26 @@ Kotlin Jump 1.7.0 adds a one-click Android Run button, visual code annotations f
 1.6.0 ships instant XML↔Kotlin string resource navigation via a pre-built index and fixes KDoc hover at declaration sites.
 
 ### Improvements
-- Replaced per-navigation file scanning with a pre-built RResourceIndex, making jumps from R.string.* references to their XML definitions — and back — instant regardless of how many resource files the project contains.
+- Replaced per-navigation file scanning with a pre-built RResourceIndex, making jumps from R.string.* references to their XML definitions (and back) instant regardless of how many resource files the project contains.
 - Added two-way string resource navigation: jump from an R.string.* reference in Kotlin or Java to its XML definition, and from an XML string entry back to all Kotlin and Java usages.
 
 ### Fixes
 - Suppressed KDoc hover at a symbol's own declaration site, where it was redundant and visually noisy.
-- Fixed base method lookup depth in KDoc resolution — hover now correctly surfaces inherited documentation from the nearest supertype rather than stopping prematurely.
+- Fixed base method lookup depth in KDoc resolution. Hover now correctly surfaces inherited documentation from the nearest supertype rather than stopping prematurely.
 
 ### Notes
-- Added adversarial test suites covering navigation providers, the hover provider, and the resource index — these are internal but directly increase confidence that navigation results remain correct across malformed inputs and edge conditions.
+- Added adversarial test suites covering navigation providers, the hover provider, and the resource index. These are internal but directly increase confidence that navigation results remain correct across malformed inputs and edge conditions.
 
 ## 1.5.1
 
-Documentation-only release: the README was fully rewritten with complete feature coverage, updated copy, and eight animated GIFs — no changes to extension behavior.
+Documentation-only release: the README was fully rewritten with complete feature coverage, updated copy, and eight animated GIFs. No changes to extension behavior.
 
 ### Notes
 - No changes to extension behavior, commands, settings, parsing, or navigation logic. This release is documentation only.
 
 ### Packaging and Docs
 - Rewrote the README with complete, accurate coverage of all major features: Go to Definition, Find Usages, Code Lens, Test Navigation, onboarding walkthrough, AI assistant, String Folding, and Inlay Hints.
-- Added eight animated GIFs to the README — one per feature area — so users can see each capability in action before installing.
+- Added eight animated GIFs to the README (one per feature area) so users can see each capability in action before installing.
 - Added dedicated sections for the Code Lens, walkthrough, and AI assistant features, which lacked dedicated documentation in previous versions.
 
 ## 1.5.0
@@ -399,7 +399,7 @@ Documentation-only release: the README was fully rewritten with complete feature
 1.5.0 ships an interactive 8-step onboarding walkthrough and fixes a cluster of Go to Implementation, Code Lens, and Find Usages accuracy issues.
 
 ### Improvements
-- Added an 8-step interactive walkthrough that opens automatically on first install; each step includes an animated demo covering Go to Definition, Find Usages, Code Lens, Test Navigation, String Folding, Inlay Hints, and the AI assistant — reopen anytime with "Kotlin Jump: Open Walkthrough" from the command palette.
+- Added an 8-step interactive walkthrough that opens automatically on first install; each step includes an animated demo covering Go to Definition, Find Usages, Code Lens, Test Navigation, String Folding, Inlay Hints, and the AI assistant. Reopen anytime with "Kotlin Jump: Open Walkthrough" from the command palette.
 
 ### Fixes
 - Go to Implementation now resolves correctly from call sites and navigates directly to the target without opening the interface file as an intermediate step.
@@ -414,25 +414,25 @@ Documentation-only release: the README was fully rewritten with complete feature
 
 ### Improvements
 - Added a "What's New" panel: appears once per version update and shows the release summary with highlights and links; reopen anytime with "Kotlin Jump: See What's New" from the command palette.
-- Type hierarchy subtypes are now sorted by kind — interfaces first, then sealed, concrete, data classes, objects, and enums — and each subtype item shows how many parent methods it overrides (e.g. "overrides 2/5"). Sealed class lists show an exhaustive count ("3/3 exhaustive").
+- Type hierarchy subtypes are now sorted by kind (interfaces first, then sealed, concrete, data classes, objects, and enums) and each subtype item shows how many parent methods it overrides (e.g. "overrides 2/5"). Sealed class lists show an exhaustive count ("3/3 exhaustive").
 - Implementation counts in CodeLens and type hierarchy now apply a same-name collision guard, preventing inflated counts when identically named classes exist in different packages.
-- Import aliases (e.g. `import com.example.Foo as Bar`) are now recognized in symbol resolution — navigation and rename work correctly when the alias name is used in code.
+- Import aliases (e.g. `import com.example.Foo as Bar`) are now recognized in symbol resolution. Navigation and rename work correctly when the alias name is used in code.
 - Rename now uses import context to identify the precise class declaration when multiple classes share the same simple name, preventing the wrong .kt file from being renamed.
 
 ### Fixes
 - Call hierarchy outgoing calls now include functions called inside expression-body (`fun f() = expr`) and inline-block (`fun f() { call() }`) declarations, which were previously not scanned.
 
 ### Notes
-- Ten new adversarial and fuzz test suites were added covering call hierarchy, code lens, import resolution, the Java and Kotlin parsers, rename, symbol index, type hierarchy, and organize imports — increasing confidence in correctness across edge conditions.
+- Ten new adversarial and fuzz test suites were added covering call hierarchy, code lens, import resolution, the Java and Kotlin parsers, rename, symbol index, type hierarchy, and organize imports. Increasing confidence in correctness across edge conditions.
 
 ## 1.4.0
 
 Clicking a usage-count CodeLens now opens the Find Usages panel immediately by reusing the already-computed scan, and repeated searches are faster thanks to in-memory file content caching.
 
 ### Improvements
-- Clicking a usage-count CodeLens with `kotlinJump.smartNavigation` enabled now populates the Find Usages panel from the cached scan results instead of rescanning the workspace — the panel opens instantly rather than re-reading every file a second time.
+- Clicking a usage-count CodeLens with `kotlinJump.smartNavigation` enabled now populates the Find Usages panel from the cached scan results instead of rescanning the workspace. The panel opens instantly rather than re-reading every file a second time.
 - File content is now cached in memory across Find Usages calls within a session, so repeated searches on the same files avoid redundant disk reads on large codebases.
-- Find Usages now correctly disambiguates member symbols — enum entries, companion constants, and similarly named members in different classes — by checking which parent class is visible in the calling file, reducing false positives in search results.
+- Find Usages now correctly disambiguates member symbols. Enum entries, companion constants, and similarly named members in different classes. By checking which parent class is visible in the calling file, reducing false positives in search results.
 - Editing a file now triggers surgical CodeLens cache eviction: only the usage counts for symbols defined in the changed file are invalidated and recomputed, rather than clearing the entire cache on every save.
 
 ### Notes
@@ -443,12 +443,12 @@ Clicking a usage-count CodeLens now opens the Find Usages panel immediately by r
 Adds string resource hover tooltips and a one-click editor title bar toggle for string folding in Kotlin and Java files.
 
 ### Improvements
-- Added hover tooltips for R.string.* references — hovering over a resource reference now shows its resolved string value from strings.xml, so you can inspect resource values without switching files.
-- Added string folding toggle buttons to the editor title bar — an eye icon appears for open Kotlin and Java files, letting you enable or disable string resource folding with a single click rather than through the command palette or settings. The icon updates to reflect the current folding state.
+- Added hover tooltips for R.string.* references. Hovering over a resource reference now shows its resolved string value from strings.xml, so you can inspect resource values without switching files.
+- Added string folding toggle buttons to the editor title bar. An eye icon appears for open Kotlin and Java files, letting you enable or disable string resource folding with a single click rather than through the command palette or settings. The icon updates to reflect the current folding state.
 
 ## 1.2.0
 
-Adds R.string.* resource value folding — inline string previews directly in Kotlin source, no language server required.
+Adds R.string.* resource value folding. Inline string previews directly in Kotlin source, no language server required.
 
 ### Improvements
 - Added string resource folding: `R.string.foo` references are replaced inline with their actual string values from `strings.xml`, matching Android Studio's Resource Value Folding behaviour. The real code reappears when your cursor is on the line.
@@ -461,7 +461,7 @@ Adds inferred-type inlay hints enabled by default and overhauled parameter-name 
 
 ### Improvements
 - Added inferred-type inlay hints: variable and expression types now appear inline as you write Kotlin and Java code, so you can follow code flow without manually tracing declarations. Enabled by default; toggle with `kotlinJump.inlayHints.inferredTypes`.
-- Overhauled parameter-name hints — the underlying logic was rewritten for better accuracy, with hints appearing in more valid cases and fewer false positives.
+- Overhauled parameter-name hints. The underlying logic was rewritten for better accuracy, with hints appearing in more valid cases and fewer false positives.
 
 ### Notes
 - Removed residual `.wasm` artifacts from the VSIX package, keeping the installed extension clean following the parser removal in 1.0.2.
@@ -471,7 +471,7 @@ Adds inferred-type inlay hints enabled by default and overhauled parameter-name 
 Removes the WASM tree-sitter dependency, shrinking the extension and eliminating a startup cost with no change to features or navigation behavior.
 
 ### Improvements
-- Removed the bundled WASM tree-sitter parser and its ~3 MB dependency — the extension is smaller to install and activates faster. All navigation features continue to use the regex parser, which is 109× faster than the WASM alternative.
+- Removed the bundled WASM tree-sitter parser and its ~3 MB dependency. The extension is smaller to install and activates faster. All navigation features continue to use the regex parser, which is 109× faster than the WASM alternative.
 
 ### Notes
 - No commands, settings, or navigation behaviors have changed in this release.
@@ -481,7 +481,7 @@ Removes the WASM tree-sitter dependency, shrinking the extension and eliminating
 Patch release with expanded test coverage and source updates across the parser, indexer, MCP server, and AI integration layers; no new commands or settings.
 
 ### Notes
-- Source changes were made to the Kotlin and Java parsers, symbol indexer, MCP server, chat participant, and signature utilities — no new commands or settings were introduced.
+- Source changes were made to the Kotlin and Java parsers, symbol indexer, MCP server, chat participant, and signature utilities. No new commands or settings were introduced.
 - The test suite was substantially expanded: new adversarial and edge-case test files were added covering the Kotlin parser, Java parser, MCP server, chat participant, and KDoc extraction, increasing confidence in correctness across edge conditions.
 - No functional changes to commands, settings, or extension behaviour are documented for this release beyond what is reflected in the source modifications above.
 
@@ -490,12 +490,12 @@ Patch release with expanded test coverage and source updates across the parser, 
 Kotlin Jump 1.0.0 adds a VS Code chat participant, an MCP server for external AI tool integration, and a native JUnit test runner.
 
 ### Improvements
-- Added a chat participant for VS Code's built-in chat panel — use `/search`, `/usages`, `/implementations`, and `/doc` to query your Kotlin codebase in natural language, powered by the extension's own symbol index, without leaving the editor.
+- Added a chat participant for VS Code's built-in chat panel. Use `/search`, `/usages`, `/implementations`, and `/doc` to query your Kotlin codebase in natural language, powered by the extension's own symbol index, without leaving the editor.
 - Added an MCP server: AI assistants that support the Model Context Protocol (e.g. Claude Desktop) can now query Kotlin Jump's symbol index directly for code navigation and documentation lookup from outside VS Code.
-- Added a native test runner: JUnit 4 and 5 tests now appear in VS Code's Test Explorer with full run and debug support via Gradle — no separate test plugin required. Annotations are detected automatically during indexing.
+- Added a native test runner: JUnit 4 and 5 tests now appear in VS Code's Test Explorer with full run and debug support via Gradle. No separate test plugin required. Annotations are detected automatically during indexing.
 
 ### Fixes
-- Fixed navigation across submodules in multi-module Gradle projects that use Groovy-style `include` syntax — affected projects no longer fail to resolve cross-module symbols.
+- Fixed navigation across submodules in multi-module Gradle projects that use Groovy-style `include` syntax. Affected projects no longer fail to resolve cross-module symbols.
 
 ### Notes
 - This release requires VS Code 1.115.0 or later (previously 1.102.0). Update VS Code before upgrading the extension.
@@ -505,7 +505,7 @@ Kotlin Jump 1.0.0 adds a VS Code chat participant, an MCP server for external AI
 Adds symbol-aware code folding and smart selection expansion for Kotlin files.
 
 ### Improvements
-- Added symbol-aware code folding for Kotlin files — classes, functions, the import block, and KDoc comments now fold as discrete units, replacing VS Code's indentation-based folding which can misalign on Kotlin syntax.
+- Added symbol-aware code folding for Kotlin files. Classes, functions, the import block, and KDoc comments now fold as discrete units, replacing VS Code's indentation-based folding which can misalign on Kotlin syntax.
 - Added smart selection ranges: expanding or shrinking the selection (Shift+Alt+Right / Shift+Alt+Left) now follows Kotlin symbol boundaries instead of relying on generic bracket matching.
 - Folding can be disabled per-workspace with the new `kotlinJump.foldingEnabled` setting.
 
@@ -518,7 +518,7 @@ Adds inlay hints and signature help, and fixes false positives in Find Usages an
 - Added signature help: invoking a function now shows an active-parameter popup with the full signature, making it easier to fill in arguments without leaving the editor.
 
 ### Fixes
-- Fixed Find Usages returning false positives — symbol names appearing inside comments or as substrings of unrelated identifiers no longer show up in the usages list.
+- Fixed Find Usages returning false positives. Symbol names appearing inside comments or as substrings of unrelated identifiers no longer show up in the usages list.
 - Fixed symbol indexing bugs in the Kotlin parser that could cause Go to Definition or Find Usages to miss symbols or resolve to the wrong declaration.
 
 ## 0.8.0
@@ -534,9 +534,9 @@ Adds auto-import suggestions and document highlight support for Kotlin and Java 
 Adds Go to Definition and KDoc for library symbols by indexing sources JARs from Gradle and Maven caches.
 
 ### Improvements
-- Go to Definition and KDoc now work for library symbols — Compose, Coroutines, AndroidX, and any dependency with a -sources.jar in your Gradle or Maven cache — without a language server.
+- Go to Definition and KDoc now work for library symbols. Compose, Coroutines, AndroidX, and any dependency with a -sources.jar in your Gradle or Maven cache. Without a language server.
 - Source files inside JARs can now be opened directly in the editor, letting you read library source code when navigating to a library symbol.
-- Added kotlinJump.useGradleTooling to resolve source JARs via ./gradlew instead of scanning the full Gradle cache — indexes only the project's actual dependencies, producing a smaller and more targeted index at the cost of a slower first run.
+- Added kotlinJump.useGradleTooling to resolve source JARs via ./gradlew instead of scanning the full Gradle cache. Indexes only the project's actual dependencies, producing a smaller and more targeted index at the cost of a slower first run.
 
 ### Notes
 - Library source indexing is on by default and capped at 50 JARs each for Gradle and Maven caches; adjust the limits with kotlinJump.sourcesJarsMaxCount and kotlinJump.mavenSourcesMaxCount, or override cache paths via kotlinJump.gradleCacheDir and kotlinJump.mavenLocalRepoDir.
@@ -546,8 +546,8 @@ Adds Go to Definition and KDoc for library symbols by indexing sources JARs from
 Adds Move File and Organize Imports commands for Kotlin and Java files.
 
 ### Improvements
-- Added a Move File command for Kotlin files, accessible from the editor right-click menu — lets you move or rename a Kotlin file directly from the editor without switching to the file explorer.
-- Added an Organize Imports command (Shift+Alt+O) for Kotlin and Java files — removes unused imports using a heuristic that checks whether the imported name or alias appears in the file body; wildcard imports are always kept. Available from the command palette and the editor right-click menu.
+- Added a Move File command for Kotlin files, accessible from the editor right-click menu. Lets you move or rename a Kotlin file directly from the editor without switching to the file explorer.
+- Added an Organize Imports command (Shift+Alt+O) for Kotlin and Java files. Removes unused imports using a heuristic that checks whether the imported name or alias appears in the file body; wildcard imports are always kept. Available from the command palette and the editor right-click menu.
 - Added a kotlinJump.organizeImports.removeUnused setting (enabled by default) to opt out of unused-import removal while still running the Organize Imports command.
 
 ## 0.7.6
@@ -555,7 +555,7 @@ Adds Move File and Organize Imports commands for Kotlin and Java files.
 Adds a Move File command for Kotlin files, available from the editor context menu.
 
 ### Improvements
-- Added a Move File command ("Move File…") for Kotlin files, accessible from the editor right-click menu — lets you move or rename a Kotlin file directly from the editor without leaving the keyboard.
+- Added a Move File command ("Move File…") for Kotlin files, accessible from the editor right-click menu. Lets you move or rename a Kotlin file directly from the editor without leaving the keyboard.
 
 ## 0.7.5
 
@@ -573,7 +573,7 @@ Expands Java method indexing and fixes two navigation edge cases in Call Hierarc
 Extends Java navigation to methods, fields, and enum entries, and fixes Go to Definition false positives for library symbols.
 
 ### Improvements
-- Java methods, fields, and enum entries are now indexed, making Go to Definition and Find Usages work for individual Java members — not just class declarations — in mixed Kotlin/Java projects.
+- Java methods, fields, and enum entries are now indexed, making Go to Definition and Find Usages work for individual Java members (not just class declarations) in mixed Kotlin/Java projects.
 
 ### Fixes
 - Fixed Go to Definition returning false results when the cursor is on a symbol that resolves to an unindexed library class; the extension now correctly declines to navigate rather than jumping to an unrelated location.
@@ -613,7 +613,7 @@ Fixes outgoing Call Hierarchy for expression-body functions with default paramet
 Adds a standalone LSP server for Neovim, Helix, and Zed; a smarter rename provider with import and file rename support; KMP source set awareness; and companion mode for coexisting with JetBrains Kotlin LSP.
 
 ### Improvements
-- Added a standalone LSP server so Neovim, Helix, Zed, and other LSP-compatible editors can use Kotlin Jump's navigation — Go to Definition, Find Usages, and Go to Implementation — without VS Code.
+- Added a standalone LSP server so Neovim, Helix, Zed, and other LSP-compatible editors can use Kotlin Jump's navigation (Go to Definition, Find Usages, and Go to Implementation) without VS Code.
 - Added companion mode: when the JetBrains Kotlin LSP is detected in the workspace, Kotlin Jump automatically disables its overlapping providers so the two extensions coexist without producing duplicate results.
 - Upgraded the rename provider to update import statements across files and rename the file itself when renaming a top-level declaration, making symbol renames more complete and less error-prone.
 - Added Kotlin Multiplatform source set detection so module display names in Find Usages results correctly reflect KMP source sets (e.g., commonMain, androidMain) rather than showing generic module paths.
@@ -623,7 +623,7 @@ Adds a standalone LSP server for Neovim, Helix, and Zed; a smarter rename provid
 
 ## 0.6.0
 
-Adds a tree-sitter WASM parser for more accurate Kotlin navigation, Go to Composable Preview for Jetpack Compose, and expanded settings for tuning indexing behavior — plus a fix for member symbol disambiguation in Go to Definition and Find Usages.
+Adds a tree-sitter WASM parser for more accurate Kotlin navigation, Go to Composable Preview for Jetpack Compose, and expanded settings for tuning indexing behavior. Plus a fix for member symbol disambiguation in Go to Definition and Find Usages.
 
 ### Improvements
 - Integrated a tree-sitter WASM Kotlin parser that resolves symbols more accurately across complex Kotlin patterns, reducing incorrect or missing results in Go to Definition and Find Usages.
@@ -638,7 +638,7 @@ Adds a tree-sitter WASM parser for more accurate Kotlin navigation, Go to Compos
 Adds semantic token highlighting and a TextMate syntax grammar for Kotlin, letting compatible themes color Kotlin-specific constructs like Composable functions, extension functions, and sealed classes.
 
 ### Improvements
-- Added semantic token highlighting so compatible VS Code themes can apply distinct colors to Kotlin-specific constructs — including Composable functions, extension functions, sealed classes, and inline, infix, operator, and override members — giving Kotlin code more accurate, expressive coloring than generic token types allow.
+- Added semantic token highlighting so compatible VS Code themes can apply distinct colors to Kotlin-specific constructs. Including Composable functions, extension functions, sealed classes, and inline, infix, operator, and override members. Giving Kotlin code more accurate, expressive coloring than generic token types allow.
 - Added a TextMate grammar for Kotlin, providing consistent baseline syntax highlighting across all themes even without semantic token support.
 - Added Kotlin language configuration, enabling standard editor behaviors such as bracket matching, comment toggling, and auto-closing pairs in Kotlin files.
 
@@ -647,8 +647,8 @@ Adds semantic token highlighting and a TextMate syntax grammar for Kotlin, letti
 Adds native Call Hierarchy and Type Hierarchy navigation, and fixes Find Usages false positives from comments, strings, and generated files.
 
 ### Improvements
-- Added Call Hierarchy support — navigate incoming calls (who calls a function) and outgoing calls (what a function calls) using VS Code's native Call Hierarchy panel, with no language server required.
-- Added Type Hierarchy support — explore class supertypes and subtypes with enriched detail in VS Code's native Type Hierarchy panel; also fixes parsing of single-letter supertype names so short class names resolve correctly.
+- Added Call Hierarchy support. Navigate incoming calls (who calls a function) and outgoing calls (what a function calls) using VS Code's native Call Hierarchy panel, with no language server required.
+- Added Type Hierarchy support. Explore class supertypes and subtypes with enriched detail in VS Code's native Type Hierarchy panel; also fixes parsing of single-letter supertype names so short class names resolve correctly.
 
 ### Fixes
 - Find Usages no longer returns false matches from comments, string literals, or kapt-generated metadata files, reducing noise and improving result accuracy across large codebases.
@@ -674,7 +674,7 @@ Maintenance release updating build tooling with no changes to extension behavior
 
 ## 0.2.4
 
-Internal quality release adding Compose and ViewModel parser test coverage, a minor KotlinParser fix, and CI upgrades — no changes to extension behavior.
+Internal quality release adding Compose and ViewModel parser test coverage, a minor KotlinParser fix, and CI upgrades. No changes to extension behavior.
 
 ### Improvements
 - Added unit tests for Jetpack Compose and ViewModel parsing patterns, improving confidence that these Kotlin code styles are parsed correctly.
@@ -711,7 +711,7 @@ This patch release improves release preparation reliability so automated publish
 Patch release with import resolution fixes and expanded edge-case test coverage across navigation providers.
 
 ### Fixes
-- Reworked import resolution logic in ImportResolver — largest change in this release
+- Reworked import resolution logic in ImportResolver. Largest change in this release
 - Updated DefinitionProvider, FindUsagesEngine, and HoverProvider with bug fixes
 - Extended edge-case test coverage with 71 new test lines
 
@@ -733,24 +733,24 @@ Release polish for the Kotlin Jump rename and packaging flow.
 Initial release.
 
 ### Navigation
-- **Go to Definition** (Cmd+Click / F12) — FQN import resolution, typealias follow-through, test path isolation
-- **Go to Implementation** (Cmd+F12) — interface → implementing classes, interface method → overrides
-- **Find Usages** (Alt+F7) — custom panel with test/preview toggle filters, direct navigation on single result
-- **Find All References** (Shift+F12) — configurable exclusion patterns via `excludeFromReferences`
-- **Go to Test** (Alt+Shift+T) — toggle between class and test file by naming convention
-- **Smart declaration navigation** — Cmd+Click on declaration: interface → implementations, method → overrides, no override → usages
+- **Go to Definition** (Cmd+Click / F12). FQN import resolution, typealias follow-through, test path isolation
+- **Go to Implementation** (Cmd+F12). Interface → implementing classes, interface method → overrides
+- **Find Usages** (Alt+F7). Custom panel with test/preview toggle filters, direct navigation on single result
+- **Find All References** (Shift+F12). Configurable exclusion patterns via `excludeFromReferences`
+- **Go to Test** (Alt+Shift+T). Toggle between class and test file by naming convention
+- **Smart declaration navigation**. Cmd+Click on declaration: interface → implementations, method → overrides, no override → usages
 
 ### Editor features
-- **Hover** — full signature, KDoc, package, module, sealed class subtypes, enum entries
-- **Document Outline** (Cmd+Shift+O) — symbol hierarchy with visibility markers
-- **Workspace Symbol Search** (Cmd+T) — fuzzy matching with kind filters (`@class:`, `@fun:`, `@compose:`)
-- **Copy FQN** — right-click context menu command
+- **Hover**. Full signature, KDoc, package, module, sealed class subtypes, enum entries
+- **Document Outline** (Cmd+Shift+O). Symbol hierarchy with visibility markers
+- **Workspace Symbol Search** (Cmd+T). Fuzzy matching with kind filters (`@class:`, `@fun:`, `@compose:`)
+- **Copy FQN**. Right-click context menu command
 
 ### Performance
-- Regex-based parsing on 4 worker threads — no language server
-- Persistent snapshot — restores index on restart, re-parses only changed files
+- Regex-based parsing on 4 worker threads. No language server
+- Persistent snapshot. Restores index on restart, re-parses only changed files
 - All lookups < 1ms from 4 O(1) maps (byName, byFqn, byFile, bySuper)
 
 ### Supported languages
 - Kotlin (`.kt`, `.kts`)
-- Java (`.java`) — classes, interfaces, enums, records
+- Java (`.java`). Classes, interfaces, enums, records

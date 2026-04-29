@@ -1,1 +1,2 @@
+node .github/scripts/check-no-dashes.mjs
 npm test

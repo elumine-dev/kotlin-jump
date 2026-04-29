@@ -38,6 +38,13 @@ jobs:
       - name: Validate whats-new.json
         run: node .github/scripts/validate-whats-new.mjs
 
+      # Reject em-dashes / en-dashes in user-facing copy. Hyphens in
+      # compounds are also banned per feedback_no_dashes but require
+      # manual review to avoid false positives on file paths and
+      # identifiers, so they are not enforced here.
+      - name: Check no banned dashes in copy
+        run: node .github/scripts/check-no-dashes.mjs
+
       - name: Test
         run: npm test
 

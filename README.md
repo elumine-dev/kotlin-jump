@@ -1,7 +1,7 @@
 # Kotlin Jump
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/welcome.webp" width="720" alt="Kotlin Jump demo" />
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/welcome.webp" width="720" alt="Kotlin Jump demo" />
 </p>
 
 <p align="center">
@@ -69,7 +69,7 @@ Jump anywhere instantly.
 | `Alt+F7` | Find Usages |
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/go-to-definition.webp" width="720" />
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/go-to-definition.webp" width="720" />
 </p>
 
 Kotlin, Java, Compose, AndroidX. Same speed across your project and your dependency JARs.
@@ -101,7 +101,7 @@ Alt+F7. Every usage, grouped by file, with previews.
 - optimized for large codebases
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/find-usages-test-filter.webp" width="720" />
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/find-usages-test-filter.webp" width="720" />
 </p>
 
 ---
@@ -111,7 +111,7 @@ Alt+F7. Every usage, grouped by file, with previews.
 Build, install, launch. One click.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/android-run.webp" width="720" />
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/android-run.webp" width="720" />
 </p>
 
 No setup. Detects your app module, picks the right Gradle install task, launches on the connected device or emulator.
@@ -137,7 +137,7 @@ Text(text = "OK")
 ```
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/string-resource-folding.webp" width="720" />
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/string-resource-folding.webp" width="720" />
 </p>
 
 Android only.
@@ -147,7 +147,7 @@ Android only.
 Hover any `R.string.*` reference to see **every translation side by side**. No hunt through `values-*/strings.xml`.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/string-locale-grid.webp" width="720" />
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/string-locale-grid.webp" width="720" />
 </p>
 
 ---
@@ -161,7 +161,7 @@ Always-visible context.
 - **▶ Run** / **⏱ Debug** above `@Test` methods. Gradle-backed, wired into Test Explorer.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/code-lens.webp" width="720" />
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/code-lens.webp" width="720" />
 </p>
 
 No hover. No guessing.
@@ -183,7 +183,7 @@ Removes the tiny frictions you hit all day.
 | Right-click | Move File, Copy FQN |
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/test-nav.webp" width="720" />
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/test-nav.webp" width="720" />
 </p>
 
 ---
@@ -198,7 +198,7 @@ Back and forward, with **line and column restored**, not just the file.
 | `Cmd+Alt+→` | Navigate Forward |
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/navigation-history.webp" width="720" />
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/navigation-history.webp" width="720" />
 </p>
 
 The way IntelliJ does it. Without IntelliJ.
@@ -213,7 +213,7 @@ See what matters, inline.
 - **Inferred types** on `val` / `var`. Double-click to insert.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/inlay-hints.webp" width="720" />
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/inlay-hints.webp" width="720" />
 </p>
 
 ---
@@ -230,7 +230,7 @@ Every `suspend` call is a potential pause. Every dispatcher switch is a potentia
 - **🧵 IO** · **🖥 Main** · **⚙ Default** dispatcher badges on `withContext` and launchers.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/suspend-call-marker.webp" width="720" />
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/suspend-call-marker.webp" width="720" />
 </p>
 
 Know your pauses. Know your threads. Before the UI freezes.
@@ -240,7 +240,7 @@ Know your pauses. Know your threads. Before the UI freezes.
 Hover any `R.drawable.*` to preview the asset across densities, themes, vector or raster. The gutter shows a mini render of every reference, always.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/drawable-hover.webp" width="720" />
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/drawable-hover.webp" width="720" />
 </p>
 
 ---
@@ -260,13 +260,13 @@ $(library) KJ: 42 libs · JDK · stdlib ✓
 ### Cmd+Click straight into `kotlinx.coroutines`
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/lib-jar-coroutines.webp" width="720" />
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/lib-jar-coroutines.webp" width="720" />
 </p>
 
 ### KDoc on hover, straight from the JAR
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/lib-jar-kdoc-hover.webp" width="720" />
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/lib-jar-kdoc-hover.webp" width="720" />
 </p>
 
 KDoc extracted directly from the matching `-sources.jar`.
@@ -284,7 +284,7 @@ Query your codebase in natural language.
 ```
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/media/demos/ai-assistant.webp" width="720" />
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/ai-assistant.webp" width="720" />
 </p>
 
 Also exposes an **MCP endpoint** for Claude Desktop and other AI tools, so you can query the index without VS Code open.

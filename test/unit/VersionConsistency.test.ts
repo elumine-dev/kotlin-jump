@@ -146,23 +146,23 @@ describe('Version consistency — whats-new.json internal invariants', () => {
     }
   });
 
-  it('every highlight.media points at an existing media/demos/<name>.webp', () => {
+  it('every highlight.media points at an existing assets/demos/<name>.webp', () => {
     // Catches typos and demos renamed without a whats-new update. The
     // webview would otherwise render a broken <img> tag for that card.
     for (const h of (data.highlights || [])) {
       if (!h.media) continue;
-      const abs = path.join(REPO_ROOT, 'media', 'demos', h.media);
+      const abs = path.join(REPO_ROOT, 'assets', 'demos', h.media);
       expect(
         existsSync(abs),
-        `highlight "${h.title}" references media/demos/${h.media}, which does not exist`,
+        `highlight "${h.title}" references assets/demos/${h.media}, which does not exist`,
       ).toBe(true);
     }
   });
 
   it('media filenames are plain filenames, not paths', () => {
-    // The WhatsNewPanel prefixes `media/demos/` itself. If a user writes
-    // "media/demos/foo.webp" in the field, the resolved path would be
-    // "media/demos/media/demos/foo.webp" — broken.
+    // The WhatsNewPanel prefixes `assets/demos/` itself. If a user writes
+    // "assets/demos/foo.webp" in the field, the resolved path would be
+    // "assets/demos/assets/demos/foo.webp" — broken.
     for (const h of (data.highlights || [])) {
       if (!h.media) continue;
       expect(

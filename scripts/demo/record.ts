@@ -225,7 +225,7 @@ async function main(): Promise<void> {
   const startMarker  = path.join(tmpDir, 'start');
   const doneMarker   = path.join(tmpDir, 'done');
   const progressLog  = path.join(tmpDir, 'progress.ndjson');
-  const outputWebp   = path.join(REPO_ROOT, 'media', 'demos', `${name}.webp`);
+  const outputWebp   = path.join(REPO_ROOT, 'assets', 'demos', `${name}.webp`);
 
   seedUserDataDir(userDataDir);
 

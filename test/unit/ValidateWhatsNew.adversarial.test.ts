@@ -41,11 +41,12 @@ function makeFixtureRepo(data: unknown, opts: { version?: string; planted?: stri
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'kj-validate-wn-'));
   // Mirror the structure the validator expects relative to `__dirname`:
   //   <tmp>/.github/scripts/validate-whats-new.mjs  (real validator, copied)
-  //   <tmp>/media/whats-new.json                   (fixture)
-  //   <tmp>/media/demos/*.webp                     (fake webp files for media fields)
-  //   <tmp>/package.json                           (for version cross-check)
+  //   <tmp>/media/whats-new.json                    (fixture)
+  //   <tmp>/assets/demos/*.webp                     (fake webp files for media fields)
+  //   <tmp>/package.json                            (for version cross-check)
   mkdirSync(path.join(tmp, '.github', 'scripts'), { recursive: true });
-  mkdirSync(path.join(tmp, 'media', 'demos'),     { recursive: true });
+  mkdirSync(path.join(tmp, 'media'),               { recursive: true });
+  mkdirSync(path.join(tmp, 'assets', 'demos'),     { recursive: true });
 
   copyFileSync(VALIDATOR, path.join(tmp, '.github', 'scripts', 'validate-whats-new.mjs'));
 
@@ -61,7 +62,7 @@ function makeFixtureRepo(data: unknown, opts: { version?: string; planted?: stri
 
   // Plant webp stubs (≥ 1 KB each so they clear the size threshold).
   for (const name of (opts.planted || [])) {
-    const p = path.join(tmp, 'media', 'demos', name);
+    const p = path.join(tmp, 'assets', 'demos', name);
     writeFileSync(p, Buffer.alloc(2048, 0x99));
   }
 
@@ -238,7 +239,7 @@ describe('ADV-validate-whats-new — media field integrity', () => {
       highlights: [{ title: 'A', media: 'tiny.webp' }],
     });
     // Overwrite the planted file with a truly tiny one.
-    writeFileSync(path.join(tmp, 'media', 'demos', 'tiny.webp'), Buffer.alloc(100, 0x00));
+    writeFileSync(path.join(tmp, 'assets', 'demos', 'tiny.webp'), Buffer.alloc(100, 0x00));
     const r = runValidator(tmp);
     expect(r.exit).toBe(1);
     expect(r.stderr).toMatch(/suspiciously small|does not exist/);

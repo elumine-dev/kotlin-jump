@@ -3,7 +3,7 @@ import * as path from 'node:path';
 
 /**
  * Copy the manual-recording artefacts (.webp + poster + timeline) from
- * `media/walkthrough/<name>/` to the canonical `media/demos/` location
+ * `media/walkthrough/<name>/` to the canonical `assets/demos/` location
  * the release pipeline (`./.publish`) expects.
  *
  * Filename conventions match the auto-recorder's output and what
@@ -26,7 +26,7 @@ export function publishWalkthroughToDemos(opts: {
   log:        (msg: string) => void;
 }): void {
   const { name, walkthroughDir, repoRoot, log } = opts;
-  const demosDir = path.join(repoRoot, 'media', 'demos');
+  const demosDir = path.join(repoRoot, 'assets', 'demos');
   fs.mkdirSync(demosDir, { recursive: true });
 
   const moves: Array<{ src: string; dest: string }> = [

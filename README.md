@@ -47,7 +47,7 @@ Kotlin Jump skips all of that. **No LSP. No JVM. No waiting.**
 
 - **🎨 Drawable previews.** Hover any `R.drawable.*` for an inline thumbnail; gutter mini next to every reference.
 - **🧵 Coroutine thread badges.** `🧵 IO` · `🖥 Main` next to every dispatched call.
-- **⌨️ IntelliJ keymap built-in.** `Alt+F7`, `Alt+Shift+T`, `Cmd+Alt+←/→` work the moment you install.
+- **⌨️ IntelliJ keymap bundled.** `Alt+F7`, `Alt+Shift+T`, `Cmd+Alt+←/→` work the moment you install.
 
 [Full changelog →](CHANGELOG.md)
 
@@ -118,7 +118,7 @@ No setup. Detects your app module, picks the right Gradle install task, launches
 
 No device connected? Finds your AVDs and offers to start one.
 
-Working in a monorepo or with multi-flavor builds? See [Android setup →](ANDROID-SETUP.md).
+Working in a monorepo or with several product flavors? See [Android setup →](ANDROID-SETUP.md).
 
 > 💡 **Saving time on every Cmd+R?** Help other Android devs find Kotlin Jump → [**⭐ Rate it on the Marketplace**](https://marketplace.visualstudio.com/items?itemName=elumine.kotlin-jump&ssr=false#review-details). 30 seconds, real impact.
 
@@ -341,7 +341,7 @@ Search **Kotlin Jump** in VS Code (`Cmd+Shift+X`), or [install directly from the
 
 ### VSIX
 
-For offline / air-gapped installs, grab the latest `.vsix` from [GitHub Releases](https://github.com/elumine-dev/kotlin-jump/releases/latest):
+For offline installs (machines without internet access), grab the latest `.vsix` from [GitHub Releases](https://github.com/elumine-dev/kotlin-jump/releases/latest):
 
 ```bash
 code --install-extension kotlin-jump-1.18.2.vsix

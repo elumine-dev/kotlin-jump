@@ -122,6 +122,41 @@ export const SUPPRESS_DESCRIPTIONS: Record<string, SuppressionDescription> = {
     kind: 'Android Log warning',
     text: 'The TAG string passed to `Log.*` exceeds 23 characters — older Android releases truncate it silently.',
   },
+  'USELESS_CAST': {
+    kind: 'Kotlin warning',
+    text: 'Cast that the compiler can prove is redundant. The value already has the target type, often via a smart-cast performed earlier in the scope.',
+    docUrl: KOTLIN_DOCS,
+  },
+  'USELESS_ELVIS': {
+    kind: 'Kotlin warning',
+    text: 'Elvis operator (`?:`) on a value the compiler knows is non-null. The right-hand side will never be evaluated.',
+    docUrl: KOTLIN_DOCS,
+  },
+  'UNREACHABLE_CODE': {
+    kind: 'Kotlin warning',
+    text: 'Code following a `throw`, `return`, or non-terminating expression. The compiler proved it can never run.',
+    docUrl: KOTLIN_DOCS,
+  },
+  'UNNECESSARY_NOT_NULL_ASSERTION': {
+    kind: 'Kotlin warning',
+    text: '`!!` applied to a value the compiler already knows is non-null. The assertion adds no safety and can be removed.',
+    docUrl: KOTLIN_DOCS,
+  },
+  'NON_EXHAUSTIVE_WHEN_STATEMENT': {
+    kind: 'Kotlin warning',
+    text: 'A `when` statement on a sealed class / enum is missing branches and has no `else`. Will become an error in future Kotlin versions.',
+    docUrl: KOTLIN_DOCS,
+  },
+  'INVISIBLE_REFERENCE': {
+    kind: 'Kotlin warning',
+    text: 'Access to a symbol marked `internal` or `private` from outside its visibility scope. Common in tests that need to reach into module internals.',
+    docUrl: KOTLIN_DOCS,
+  },
+  'INVISIBLE_MEMBER': {
+    kind: 'Kotlin warning',
+    text: 'Access to a member declared `internal` or `private` from outside its visibility scope. Member-level pendant of `INVISIBLE_REFERENCE`.',
+    docUrl: KOTLIN_DOCS,
+  },
 
   // ── Android Lint ─────────────────────────────────────────────────────
 
@@ -214,6 +249,41 @@ export const SUPPRESS_DESCRIPTIONS: Record<string, SuppressionDescription> = {
     kind: 'Android Lint',
     text: 'A dependency references classes from a package not available on Android (e.g. `java.awt`).',
     docUrl: LINT_DOCS + 'InvalidPackage.md.html',
+  },
+  'ContentDescription': {
+    kind: 'Android Lint',
+    text: 'Accessibility: an `ImageView` or `ImageButton` has no `android:contentDescription`. Screen readers will skip it.',
+    docUrl: LINT_DOCS + 'ContentDescription.md.html',
+  },
+  'HandlerLeak': {
+    kind: 'Android Lint',
+    text: 'Non-static inner `Handler` retains an implicit reference to its outer class. Long-lived messages keep the Activity / Service alive after it should be collected.',
+    docUrl: LINT_DOCS + 'HandlerLeak.md.html',
+  },
+  'StaticFieldLeak': {
+    kind: 'Android Lint',
+    text: 'A `static` field holds a `Context`, `View`, or other lifecycle-bound object. The reference outlives the Activity / Fragment and leaks it.',
+    docUrl: LINT_DOCS + 'StaticFieldLeak.md.html',
+  },
+  'RestrictedApi': {
+    kind: 'Android Lint',
+    text: 'Call to an API marked with `@RestrictTo`. The library author intended it to stay internal — relying on it can break across versions.',
+    docUrl: LINT_DOCS + 'RestrictedApi.md.html',
+  },
+  'AppCompatCustomView': {
+    kind: 'Android Lint',
+    text: 'A custom view inherits from a non-AppCompat parent (e.g. `Button` instead of `AppCompatButton`). Theming and tint propagation will be inconsistent.',
+    docUrl: LINT_DOCS + 'AppCompatCustomView.md.html',
+  },
+  'ObsoleteSdkInt': {
+    kind: 'Android Lint',
+    text: 'A `Build.VERSION.SDK_INT` check is always true (or always false) given the project\'s `minSdk`. Dead branch — remove it.',
+    docUrl: LINT_DOCS + 'ObsoleteSdkInt.md.html',
+  },
+  'MissingInflatedId': {
+    kind: 'Android Lint',
+    text: '`findViewById` references an id that is not declared in the inflated layout. Will return `null` at runtime and crash on the next access.',
+    docUrl: LINT_DOCS + 'MissingInflatedId.md.html',
   },
 
   // ── javac / @SuppressWarnings ────────────────────────────────────────

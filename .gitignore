@@ -31,3 +31,6 @@ media/walkthrough/
 
 # Android Gradle local config — must never be checked in
 local.properties
+
+# AX harvest dumps (large diagnostic JSON, not versioned)
+media/ax-debug-harvest/

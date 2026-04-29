@@ -36,6 +36,10 @@ import {
 import type { WindowRect }                               from './lib/manual-window';
 import { promptTimelineEvents }                          from './lib/timeline-repl';
 import { publishWalkthroughToDemos }                     from './lib/publish-to-demos';
+import { EventRecorder }                                 from './lib/event-recorder';
+import type { DetectedEvent }                            from './lib/event-recorder';
+import { enableAccessibilitySupport }                    from './lib/vscode-settings';
+import type { AccessibilityToggleHandle }                from './lib/vscode-settings';
 
 const REPO_ROOT  = path.resolve(__dirname, '..', '..');
 const WIDTH      = 1280;
@@ -52,13 +56,15 @@ const GLOBAL_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_DURATION_SEC = 15;
 
 interface Resources {
-  tmpDir?:        string;
-  recorder?:      ScreenRecorder;
-  lockFd?:        number;
-  lockFile?:      string;
-  watchdog?:      NodeJS.Timeout;
-  userWindowPid?: number;
-  originalRect?:  WindowRect;
+  tmpDir?:               string;
+  recorder?:             ScreenRecorder;
+  eventRecorder?:        EventRecorder;
+  accessibilityToggle?:  AccessibilityToggleHandle;
+  lockFd?:               number;
+  lockFile?:             string;
+  watchdog?:             NodeJS.Timeout;
+  userWindowPid?:        number;
+  originalRect?:         WindowRect;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-floating-promises
@@ -113,6 +119,16 @@ async function main(): Promise<void> {
     // animation gets baked into the tail of raw.mov.
     if (resources.recorder) {
       try { await resources.recorder.stop(); } catch (e) { log(`  recorder.stop swallowed: ${(e as Error).message}`); }
+    }
+
+    if (resources.eventRecorder) {
+      try { await resources.eventRecorder.stop(Date.now()); }
+      catch (e) { log(`  eventRecorder.stop swallowed: ${(e as Error).message}`); }
+    }
+
+    if (resources.accessibilityToggle) {
+      try { resources.accessibilityToggle.restore(); }
+      catch (e) { log(`  accessibility restore swallowed: ${(e as Error).message}`); }
     }
 
     if (resources.tmpDir) {
@@ -181,6 +197,16 @@ async function main(): Promise<void> {
   resources.userWindowPid = userWindow.pid;
   resources.originalRect  = userWindow.originalRect;
 
+  // Toggle editor.accessibilitySupport: "on" early so VS Code has time to
+  // pick it up before recording starts. Without it, Monaco's AX text APIs
+  // (selection range, string-for-range) return nothing — needed by the
+  // event-tap binary to detect the *word* clicked in the editor.
+  // Restored byte-for-byte at cleanup.
+  const accToggle = enableAccessibilitySupport(userWindow.pid, log);
+  if (accToggle) {
+    resources.accessibilityToggle = accToggle;
+  }
+
   // ───────────────────────────────────────────────── confirm + position
   const target: WindowRect = { x: WINDOW_X, y: WINDOW_Y, w: WIDTH, h: HEIGHT };
   const confirmed = await confirmResize(userWindow.originalRect, target, log);
@@ -205,6 +231,26 @@ async function main(): Promise<void> {
   // ───────────────────────────────────────────────── tmp dir for post-process
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kj-demo-manual-'));
   resources.tmpDir = tmpDir;
+
+  // ───────────────────────────────────────────────── arm event tap (soft-fail)
+  // Spin up the input-event capture before screencapture so it's hot by the
+  // time the warmup completes. If accessibility is denied or build fails, log
+  // the issue and continue without event hints — the REPL will just be the
+  // legacy free-form input.
+  let eventRecorder: EventRecorder | undefined;
+  try {
+    eventRecorder = new EventRecorder(REPO_ROOT);
+    // Register BEFORE start(). start() awaits the binary's "ready" marker
+    // (~3s timeout); a SIGINT during that wait would otherwise leave the
+    // Swift process orphaned because cleanup() couldn't see it yet.
+    resources.eventRecorder = eventRecorder;
+    await eventRecorder.start();
+    log(`  ✓ Event tap armed`);
+  } catch (e) {
+    log(`  ⚠ Event hints unavailable: ${(e as Error).message}`);
+    resources.eventRecorder = undefined;
+    eventRecorder = undefined;
+  }
 
   // ───────────────────────────────────────────────── record
   const recorder = new ScreenRecorder(rawMov, {
@@ -231,10 +277,26 @@ async function main(): Promise<void> {
     }
   });
 
+  // Anchor t=0 of the raw.mov video. screencapture has finished its
+  // ScreenCaptureKit warmup and is now writing frames — this wall clock is
+  // the closest proxy available for the first-frame timestamp.
+  const recordingT0Ms = Date.now();
+
   log(`  ▶ Recording ${durationSec}s... (Ctrl+C to abort)`);
   await recordWithProgress(durationSec);
 
   await phase('stop-capture', async () => { await recorder.stop(); });
+
+  let detectedEvents: DetectedEvent[] = [];
+  if (eventRecorder) {
+    try {
+      detectedEvents = await eventRecorder.stop(recordingT0Ms);
+      resources.eventRecorder = undefined;
+      log(`  ✓ Detected ${detectedEvents.length} input event(s) during capture`);
+    } catch (e) {
+      log(`  ⚠ Event tap stop failed: ${(e as Error).message}`);
+    }
+  }
 
   if (!fs.existsSync(rawMov)) {
     log(`✗ Raw capture missing at ${rawMov}`);
@@ -264,8 +326,15 @@ async function main(): Promise<void> {
     } catch { /* QuickLook optional */ }
   }
 
+  // Sidecar — useful for debugging and re-rendering with manual-render.
+  if (detectedEvents.length > 0) {
+    const detectedJson = path.join(outputDir, 'events-detected.json');
+    fs.writeFileSync(detectedJson, JSON.stringify(detectedEvents, null, 2));
+    log(`  ✓ Wrote ${detectedJson}`);
+  }
+
   // ───────────────────────────────────────────────── REPL for annotations
-  const events = await promptTimelineEvents(rawDurationSec, log);
+  const events = await promptTimelineEvents(rawDurationSec, log, detectedEvents);
   log(`  ✓ ${events.length} event${events.length === 1 ? '' : 's'}. Writing timeline.json`);
   fs.writeFileSync(timelineJson, JSON.stringify(events, null, 2));
 

@@ -333,7 +333,11 @@ suite('Adversarial E2E — Comptes et Précision', function () {
 // ─────────────────────────────────────────────────────────────────────────────
 
 suite('Régression générale — Invariants sur tous les fichiers', function () {
-  this.timeout(120_000);
+  // 180 s — REG-2/REG-3 are intrinsically slow (each iterates dozens of files
+  // and asks for `executeCodeLensProvider` per file). 120 s was tight on VS
+  // Code 1.117 and started timing out on 1.118+. Bump the budget to give
+  // post-1.118 builds headroom; the test itself scales with project size.
+  this.timeout(180_000);
 
   suiteSetup(async () => {
     await vscode.extensions.getExtension('elumine.kotlin-jump')?.activate();
@@ -365,10 +369,12 @@ suite('Régression générale — Invariants sur tous les fichiers', function ()
 
     const violations: string[] = [];
     for (const uri of files) {
-      const doc = await vscode.workspace.openTextDocument(uri);
-      await vscode.window.showTextDocument(doc, { preview: false });
-      // Attendre un minimum pour que les lenses se chargent
-      await new Promise(r => setTimeout(r, 400));
+      // `executeCodeLensProvider` resolves against the URI directly — no
+      // need to show the document in a visible editor. Skipping the show
+      // step shaves ~200-500 ms per file (× 20 files = up to 10 s) and
+      // avoids racing the active-editor change events of other suites.
+      await vscode.workspace.openTextDocument(uri);
+      await new Promise(r => setTimeout(r, 150));
       const lenses = await getLenses(uri);
       for (const lens of lenses) {
         const title = lens.command?.title ?? '';
@@ -404,9 +410,8 @@ suite('Régression générale — Invariants sur tous les fichiers', function ()
 
     const violations: string[] = [];
     for (const uri of files) {
-      const doc = await vscode.workspace.openTextDocument(uri);
-      await vscode.window.showTextDocument(doc, { preview: false });
-      await new Promise(r => setTimeout(r, 400));
+      await vscode.workspace.openTextDocument(uri);
+      await new Promise(r => setTimeout(r, 150));
       const lenses = await getLenses(uri);
       for (const lens of lenses) {
         const title = lens.command?.title ?? '';

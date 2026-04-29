@@ -193,16 +193,20 @@ export class KotlinInlayHintsProvider implements vscode.InlayHintsProvider {
               entry.uri,
               new vscode.Position(entry.line, entry.character),
             );
-            // Bypass the Definition pipeline on Cmd+Click — `vscode.open`
-            // navigates directly without going through provideDefinition,
-            // which previously side-triggered the smart-nav listener and
-            // popped the Find Usages panel on top of the navigation.
-            // We keep `location` set so VS Code's hover-link still shows
-            // a peek preview without firing the panel.
+            // Bypass the Definition pipeline on Cmd+Click via a wrapper that
+            // also clears `_pendingDeclNav`. Plain `vscode.open` was not
+            // enough: VS Code re-fires `provideDefinition` at the new cursor
+            // post-navigation (for link decoration / peek preview), and that
+            // call lands AT the parameter declaration → sets pending → the
+            // selection-change listener consumed it and popped Find Usages.
+            // The wrapper command (`kotlin-jump._navigateInlay`) clears the
+            // pending state on entry AND exit, neutralising the race.
+            // We keep `location` set so VS Code's hover-link still shows a
+            // peek preview without firing the panel.
             labelPart.location = targetLoc;
             labelPart.command  = {
               title:     `Go to ${param.name}`,
-              command:   'vscode.open',
+              command:   'kotlin-jump._navigateInlay',
               arguments: [
                 targetLoc.uri,
                 {

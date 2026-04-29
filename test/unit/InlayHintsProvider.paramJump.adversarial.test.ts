@@ -84,10 +84,13 @@ describe('ADV-INLAY-PARAM-JUMP', () => {
     // The label part also exposes a command so Cmd+Click bypasses
     // the Definition pipeline (which would side-trigger the smart-
     // navigation Find Usages panel after landing on a workspace
-    // declaration). The command must navigate to the same target.
+    // declaration). The command must navigate to the same target —
+    // and additionally clear `_pendingDeclNav` to neutralise VS Code's
+    // post-navigation provideDefinition refire that previously popped
+    // Find Usages on top of the navigation.
     const cmd = labelPart.command;
     expect(cmd).toBeDefined();
-    expect(cmd.command).toBe('vscode.open');
+    expect(cmd.command).toBe('kotlin-jump._navigateInlay');
     const showOpts = cmd.arguments?.[1] as { selection?: any };
     expect(showOpts?.selection?.start?.line).toBe(2);
   });

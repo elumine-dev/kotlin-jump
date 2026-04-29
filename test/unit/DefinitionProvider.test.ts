@@ -651,6 +651,85 @@ fun Screen() { LazyColumn { } }`;
     expect(Array.isArray(result)).toBe(true);
     expect((result as any[]).length).toBe(2);
   });
+
+  // ── Group 4: same-package member must beat default-wildcard JAR member ────
+  // Reported bug (BattleEngine.kt): cmd+click on `attacker.type` returned
+  // `Pokemon.type` AND `java.lang.StackFrameInfo.type` AND `kotlin.reflect.*`
+  // candidates. Cause: java.lang and kotlin.collections are KOTLIN_DEFAULT_IMPORTS
+  // wildcards, so `isEnclosingClassVisible` happily said `StackFrameInfo` was
+  // reachable. Fix: when same-package members exist, drop wildcard-only ones.
+
+  it('same-package member wins against java.lang member with the same name (default wildcard)', () => {
+    const idx = makeIndex(
+      ['file:///data/Pokemon.kt',
+        `package com.example.data\n` +
+        `data class Pokemon(val type: String, val level: Int)`],
+      // Pretend the JDK source jar is indexed — represents the user's setup.
+      ['file:///jar/StackFrameInfo.kt',
+        `package java.lang\n` +
+        `class StackFrameInfo {\n    val type: Any = 0\n}`],
+    );
+    const callerCode =
+      `package com.example.data\n` +
+      `class BattleEngine {\n` +
+      `    fun fight(attacker: Pokemon) = attacker.type\n` +
+      `}`;
+    const result = goTo(provider(idx), 'file:///data/BattleEngine.kt', callerCode, 'type', 1);
+    // Single hit expected (Pokemon.type) — not an array of two locations.
+    expect(Array.isArray(result), 'must not return a multi-candidate picker').toBe(false);
+    expect(result).not.toBeNull();
+    expect((result as any).uri.path).toContain('Pokemon.kt');
+  });
+
+  it('same-package member wins against kotlin.reflect member (default wildcard)', () => {
+    const idx = makeIndex(
+      ['file:///data/Pokemon.kt',
+        `package com.example.data\n` +
+        `data class Pokemon(val type: String)`],
+      ['file:///jar/TypesJVM.kt',
+        // Real Kotlin stdlib has top-level + class members called `type`
+        `package kotlin.reflect.jvm.internal\n` +
+        `class TypesJVM {\n    val type: String = ""\n}`],
+    );
+    const callerCode =
+      `package com.example.data\n` +
+      `class Use {\n    fun read(p: Pokemon) = p.type\n}`;
+    const result = goTo(provider(idx), 'file:///data/Use.kt', callerCode, 'type', 1);
+    expect(Array.isArray(result)).toBe(false);
+    expect((result as any).uri.path).toContain('Pokemon.kt');
+  });
+
+  it('with NO same-package candidate, wildcard member is still returned (no over-filter)', () => {
+    // Caller has no same-package `type`, only the wildcard one is reachable.
+    // Behaviour must NOT regress to null.
+    const idx = makeIndex(
+      ['file:///jar/StackFrameInfo.kt',
+        `package java.lang\nclass StackFrameInfo { val type: Any = 0 }`],
+    );
+    const callerCode =
+      `package com.example.app\n` +
+      `import java.lang.StackFrameInfo\n` +
+      `fun read(s: StackFrameInfo) = s.type`;
+    const result = goTo(provider(idx), 'file:///app/U.kt', callerCode, 'type', 1);
+    // Either a Location or array — the point is: not null.
+    expect(result).not.toBeNull();
+  });
+
+  it('exact-imported member also wins over default-wildcard noise', () => {
+    const idx = makeIndex(
+      ['file:///foo/Foo.kt',
+        `package com.example.foo\nclass Foo { val type: String = "" }`],
+      ['file:///jar/StackFrameInfo.kt',
+        `package java.lang\nclass StackFrameInfo { val type: Any = 0 }`],
+    );
+    const callerCode =
+      `package com.example.app\n` +
+      `import com.example.foo.Foo\n` +
+      `fun use(f: Foo) = f.type`;
+    const result = goTo(provider(idx), 'file:///app/U.kt', callerCode, 'type', 1);
+    expect(Array.isArray(result), 'must not include the java.lang noise').toBe(false);
+    expect((result as any).uri.path).toContain('Foo.kt');
+  });
 });
 
 // ── Regression: unindexed library symbols must not show unrelated results ────

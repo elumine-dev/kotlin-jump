@@ -46,6 +46,61 @@ const CLASS_LIKE_KINDS = new Set([
 let _pendingDeclNav: { uri: string; line: number; word: string } | undefined;
 export function getPendingDeclNav() { return _pendingDeclNav; }
 export function clearPendingDeclNav() { _pendingDeclNav = undefined; }
+/** Test-only: forge a pending state to simulate the post-navigation race
+ *  guarded by `navigateFromInlay`. Production code must NEVER call this. */
+export function _setPendingDeclNavForTest(p: { uri: string; line: number; word: string } | undefined): void {
+  _pendingDeclNav = p;
+}
+
+/**
+ * When the user cmd+clicks an inlay hint, the wrapper opens a temporal
+ * suppression window: the smart-nav selection-change listener must IGNORE
+ * any `_pendingDeclNav` state during this window.
+ *
+ * Why a window and not just clear-before-and-after: VS Code re-fires
+ * `provideDefinition` for the new cursor a few hundred milliseconds AFTER
+ * the navigation lands (for link decorations / peek hints / hover preview).
+ * That call lands AT the parameter declaration, sets `_pendingDeclNav`,
+ * and the selection-change event from the navigation itself can still be
+ * pending. Without a guard, the listener consumes the freshly-set pending
+ * and fires `goToReferences` — opening the Find Usages peek panel on top
+ * of the navigation. The window covers that whole post-navigation race.
+ */
+let _inlayNavSuppressUntilMs = 0;
+const INLAY_NAV_SUPPRESS_MS = 800;
+export function isInlayNavSuppressed(now = Date.now()): boolean {
+  return now < _inlayNavSuppressUntilMs;
+}
+/** Test-only: read the current suppression deadline. */
+export function _getInlayNavSuppressUntilMsForTest(): number {
+  return _inlayNavSuppressUntilMs;
+}
+/** Test-only: forcibly set or clear the suppression deadline. */
+export function _setInlayNavSuppressUntilMsForTest(v: number): void {
+  _inlayNavSuppressUntilMs = v;
+}
+
+/**
+ * Inlay-hint navigation wrapper. Bypasses the Definition pipeline, clears
+ * `_pendingDeclNav`, and arms a suppression window so the smart-nav listener
+ * ignores any pending state set by VS Code's post-navigation refire.
+ *
+ * Wired to `kotlin-jump._navigateInlay` in extension.ts; exported here so
+ * unit tests can exercise the contract.
+ */
+export async function navigateFromInlay(
+  uri: vscode.Uri,
+  opts: vscode.TextDocumentShowOptions,
+): Promise<void> {
+  clearPendingDeclNav();
+  _inlayNavSuppressUntilMs = Date.now() + INLAY_NAV_SUPPRESS_MS;
+  await vscode.commands.executeCommand('vscode.open', uri, opts);
+  clearPendingDeclNav();
+  // Re-arm the deadline AFTER open returns: vscode.open's duration is unbounded
+  // (slow disks, large files). Anchoring to "open completed + N ms" guarantees
+  // we cover the post-nav refire window irrespective of how long open() took.
+  _inlayNavSuppressUntilMs = Date.now() + INLAY_NAV_SUPPRESS_MS;
+}
 
 export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
   constructor(private readonly index: SymbolIndex, private readonly log?: Logger) {}
@@ -227,8 +282,21 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
     // If that class is not imported (or same-package), the member should not
     // appear as a result — TypeB.VALUE must not show up when only
     // TypeA is imported.
-    const visibleByImport = filtered.filter(e => isEnclosingClassVisible(e, document));
-    log(`step2 visibleByImport=${visibleByImport.length} → ${visibleByImport.map(e => e.fqn).join(', ') || 'none'}`);
+    //
+    // Priority chain: same-package + exact-imported beats wildcard. Default
+    // wildcards (`java.lang.*`, `kotlin.collections.*`, etc.) would otherwise
+    // surface noise like `java.lang.StackFrameInfo.type` for every `.type`
+    // access, drowning out the real target. We only fall back to wildcards
+    // when no near-by candidate exists.
+    const classified = filtered
+      .map(e => ({ entry: e, vis: enclosingVisibility(e, document) }))
+      .filter(c => c.vis !== 'none');
+    const near = classified.filter(c => c.vis === 'samePackage' || c.vis === 'exact');
+    const wildcard = classified.filter(c => c.vis === 'wildcard');
+    const visibleByImport = near.length > 0
+      ? near.map(c => c.entry)
+      : wildcard.map(c => c.entry);
+    log(`step2 near=${near.length} wildcard=${wildcard.length} visibleByImport=${visibleByImport.length} → ${visibleByImport.map(e => e.fqn).join(', ') || 'none'}`);
     if (visibleByImport.length === 1) return withAliasTargets(visibleByImport[0], this.index, allow);
     if (visibleByImport.length > 1) {
       // Tiebreak: when the cursor is inside the file that declares one of the candidates
@@ -361,19 +429,41 @@ function isTestPath(uriPath: string, segments: string[]): boolean {
 // (explicitly imported or in the same package). Used to filter out members
 // of classes that aren't imported — e.g. TypeB.VALUE should not
 // appear as a candidate when only TypeA is imported.
-function isEnclosingClassVisible(
+/** Priority of how the enclosing class of a candidate member becomes visible
+ *  to the caller's document. Higher tiers beat lower ones in step 2 — when
+ *  same-package and wildcard candidates both exist for the same simple name,
+ *  the same-package one wins.
+ *  - 'samePackage': enclosing class is a top-level symbol of `entry`.
+ *  - 'exact':       enclosing class appears in an exact `import`.
+ *  - 'wildcard':    enclosing class only reachable via a wildcard (incl. the
+ *                   Kotlin compiler's default `java.lang.*`, `kotlin.collections.*`
+ *                   etc.). This is the noisy tier that pulls in JDK/stdlib
+ *                   members for any common name like `type`, `size`, `value`.
+ *  - 'none':        enclosing class is not visible from this document. */
+type EnclosingVisibility = 'samePackage' | 'exact' | 'wildcard' | 'none';
+
+function enclosingVisibility(
   entry: { fqn: string; packageName?: string },
   document: vscode.TextDocument,
-): boolean {
+): EnclosingVisibility {
   const lastDot = entry.fqn.lastIndexOf('.');
-  if (lastDot === -1) return true; // top-level symbol, always visible
+  if (lastDot === -1) return 'samePackage'; // top-level symbol, treated as native to caller
 
   const parentFqn  = entry.fqn.slice(0, lastDot);
   const parentDot  = parentFqn.lastIndexOf('.');
   const parentName = parentDot === -1 ? parentFqn : parentFqn.slice(parentDot + 1);
 
   const result = resolveBest(parentName, document, fqn => fqn === parentFqn ? true : undefined);
-  return result.matches.length > 0;
+  // resolveBest returns priority='none' iff matches is empty (ImportResolver.ts:91),
+  // so we can pass the priority through directly.
+  return result.priority;
+}
+
+function isEnclosingClassVisible(
+  entry: { fqn: string; packageName?: string },
+  document: vscode.TextDocument,
+): boolean {
+  return enclosingVisibility(entry, document) !== 'none';
 }
 
 function toLocation(e: { uri: vscode.Uri; line: number; character: number }): vscode.Location {

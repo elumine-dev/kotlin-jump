@@ -45,7 +45,7 @@ Kotlin Jump skips all of that. **No LSP. No JVM. No waiting.**
 
 ## ✨ Recent
 
-- **🎨 Drawable previews.** Hover any `R.drawable.*` for an inline thumbnail; gutter mini next to every reference.
+- **🎨 Vector drawable preview.** Open a `<vector>` XML and a side by side render appears automatically. Hover `R.drawable.*` for an inline thumbnail. Gutter mini next to every reference.
 - **🧵 Coroutine thread badges.** `🧵 IO` · `🖥 Main` next to every dispatched call.
 - **⌨️ IntelliJ keymap bundled.** `Alt+F7`, `Alt+Shift+T`, `Cmd+Alt+←/→` work the moment you install.
 
@@ -235,12 +235,12 @@ Every `suspend` call is a potential pause. Every dispatcher switch is a potentia
 
 Know your pauses. Know your threads. Before the UI freezes.
 
-### 🎨 R.drawable hover preview + gutter thumbnails
+### 🎨 Vector drawable preview
 
-Hover any `R.drawable.*` to preview the asset across densities, themes, vector or raster. The gutter shows a mini render of every reference, always.
+Open any `<vector>` XML drawable and a rendered preview appears side by side automatically. Hover any `R.drawable.*` reference for an inline thumbnail. The gutter shows a mini render next to every reference. Click the CodeLens above the XML file to open the dedicated preview panel.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/drawable-hover.webp" width="720" />
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/vector-preview.webp" width="720" />
 </p>
 
 ---

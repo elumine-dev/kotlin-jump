@@ -1,26 +1,40 @@
 {
-  "version": "1.18.2",
+  "version": "1.18.3",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Reliable drawable gutter thumbnail refresh",
-  "summary": "Drawable gutter thumbnails now refresh reliably when files are edited or saved.",
+  "tagline": "Richer @Suppress hover, sharper inlay navigation",
+  "summary": "Adds plain-English hover for @Suppress codes, fixes Cmd+Click on inlay hints to jump to the parameter declaration rather than the function name, and standardizes all user-facing UI text.",
   "highlights": [
     {
-      "title": "Gutter Thumbnail Reliability",
-      "description": "Vector drawable previews in the gutter now update correctly after every edit and save. Stale thumbnails no longer persist when you modify a drawable file.",
-      "kind": "fix"
+      "title": "Suppress Code Hover",
+      "description": "Hovering over a suppression ID inside @Suppress, @SuppressLint, or @SuppressWarnings now shows a plain English description of what that code disables, covering Kotlin compiler warnings, Android Lint checks, and Java warnings, without leaving the editor.",
+      "kind": "feature"
+    },
+    {
+      "title": "Inlay Hint Navigation",
+      "description": "Cmd+Click on a parameter inlay hint now resolves to the parameter declaration itself (for example, val name: String in a data class) rather than the enclosing function or constructor name.",
+      "kind": "improvement"
+    },
+    {
+      "title": "Consistent UI Text",
+      "description": "All user-facing strings across tooltips, menu items, and status bar messages were reviewed and standardized, removing inconsistent punctuation throughout the extension.",
+      "kind": "improvement"
     }
   ],
   "sections": [
     {
-      "heading": "Fixes",
+      "heading": "Improvements",
       "bullets": [
-        "Fixed drawable gutter thumbnails to refresh reliably on every file edit and save, so the preview in the gutter always reflects the current state of the drawable."
+        "Hovering over a @Suppress, @SuppressLint, or @SuppressWarnings code now displays a plain-English description of what that suppression disables, with coverage for Kotlin compiler diagnostics, Android Lint checks, and Java warnings.",
+        "Cmd+Click on a parameter inlay hint now resolves to the correct parameter declaration rather than the function or constructor name, making navigation from call sites precise.",
+        "All user-facing strings in tooltips, quick-pick labels, status bar text, and menu items were standardized for consistent, clean prose across the extension."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "No changes to navigation, indexing, code folding, inlay hints, Gradle integration, or any other feature since v1.18.1."
+        "The in-editor walkthrough now mentions KDoc hover, the string locale grid, and suspend call markers in existing steps, making those features easier to discover after install.",
+        "The Marketplace and Open VSX display name was updated to include Android Studio to improve search discoverability for Android developers.",
+        "No changes to indexing, code folding, Gradle integration, Android Run, or Find Usages behavior since v1.18.2."
       ]
     }
   ],

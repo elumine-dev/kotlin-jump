@@ -1206,7 +1206,6 @@ check_no_readme_only_demos_in_vsix() {
     suspend-call-marker
     private-file-isolation
     suppress-hover
-    vector-preview
   )
   local contents
   contents="$(unzip -l "$vsix_file" 2>/dev/null || true)"

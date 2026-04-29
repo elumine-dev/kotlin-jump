@@ -1,6 +1,6 @@
 {
   "name": "kotlin-jump",
-  "displayName": "Kotlin Jump: Fast Kotlin & Android Navigation",
+  "displayName": "Kotlin Jump: Fast Kotlin & Android Studio Navigation",
   "description": "Fast Kotlin & Android navigation. Find Usages, Go to Definition, Compose, R.string, Android Run. No JVM, no language server. The Android Studio experience inside VS Code.",
   "version": "1.18.2",
   "publisher": "elumine",

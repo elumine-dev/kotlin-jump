@@ -1114,6 +1114,15 @@
             ]
           },
           {
+            "id": "vectorPreview",
+            "title": "Vector drawables, rendered live",
+            "description": "Open any `<vector>` XML drawable and a side by side preview opens automatically. Hover any `R.drawable.*` reference for an inline thumbnail. The gutter shows a mini render next to every reference. Click the CodeLens above the XML to open the dedicated panel.\n\n[Show Vector Preview](command:kotlinJump.vectorPreview.show)",
+            "media": {
+              "image": "assets/demos/vector-preview.webp",
+              "altText": "Vector drawable preview with side by side panel and gutter thumbnails"
+            }
+          },
+          {
             "id": "inlayHints",
             "title": "Inline type hints with KDoc on hover",
             "description": "The `: Pokemon` is the type, rendered inline, no explicit annotation. Hover any hint and the full class KDoc appears at the call site. No jump, no file tree hunt. Parameter names at call sites work the same way (configurable per setting).",

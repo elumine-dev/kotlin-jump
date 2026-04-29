@@ -192,25 +192,25 @@
       },
       {
         "command": "kotlin-jump.findUsages.toggleTests",
-        "title": "Tests: Showing — click to hide",
+        "title": "Tests showing, click to hide",
         "category": "Kotlin Jump",
         "icon": "$(beaker)"
       },
       {
         "command": "kotlin-jump.findUsages.showTests",
-        "title": "Tests: Hidden — click to show",
+        "title": "Tests hidden, click to show",
         "category": "Kotlin Jump",
         "icon": "$(circle-slash)"
       },
       {
         "command": "kotlin-jump.findUsages.togglePreviews",
-        "title": "Previews: Showing — click to hide",
+        "title": "Previews showing, click to hide",
         "category": "Kotlin Jump",
         "icon": "$(eye)"
       },
       {
         "command": "kotlin-jump.findUsages.showPreviews",
-        "title": "Previews: Hidden — click to show",
+        "title": "Previews hidden, click to show",
         "category": "Kotlin Jump",
         "icon": "$(eye-closed)"
       },
@@ -342,18 +342,18 @@
       },
       {
         "command": "kotlin-jump.sources.openActions",
-        "title": "Library Sources — Open Actions Menu",
+        "title": "Library Sources: Open Actions Menu",
         "category": "Kotlin Jump"
       },
       {
         "command": "kotlin-jump.sources.downloadMissing",
-        "title": "Library Sources — Download Missing",
+        "title": "Library Sources: Download Missing",
         "category": "Kotlin Jump",
         "icon": "$(cloud-download)"
       },
       {
         "command": "kotlin-jump.sources.refresh",
-        "title": "Library Sources — Refresh Cache",
+        "title": "Library Sources: Refresh Cache",
         "category": "Kotlin Jump",
         "icon": "$(refresh)"
       },
@@ -402,7 +402,7 @@
       },
       {
         "command": "kotlin-jump.pairAdbWifi",
-        "title": "Pair Android Device via WiFi (first-time setup)",
+        "title": "Pair Android Device via WiFi (initial setup)",
         "category": "Kotlin Jump",
         "icon": "$(add)"
       }
@@ -671,7 +671,7 @@
             "jvmTest",
             "commonTest"
           ],
-          "markdownDescription": "Path segments identifying test source sets. Used by **Go to Definition** (to skip test-only results) and **Test Explorer** (to discover test functions by path). Add custom segments for non-standard layouts."
+          "markdownDescription": "Path segments identifying test source sets. Used by **Go to Definition** (to skip results that come only from tests) and **Test Explorer** (to discover test functions by path). Add custom segments for unusual layouts."
         },
         "kotlinJump.gradleWrapper": {
           "type": "string",
@@ -722,12 +722,12 @@
             }
           },
           "default": [],
-          "markdownDescription": "Explicit Android app definitions. When non-empty, **auto-detection is skipped entirely** — the button uses these entries directly.\n\nEquivalent to the zshrc aliases `replica()`/`rubicon()`.\n\n```json\n\"kotlinJump.androidProjects\": [\n  {\n    \"name\": \"Rubicon\",\n    \"module\": \"rubicon/app\",\n    \"package\": \"ca.lapresse.android.lapressemobile.debug\",\n    \"variant\": \"Debug\"\n  },\n  {\n    \"name\": \"Replica\",\n    \"module\": \"replica/app\",\n    \"package\": \"ca.lapresse.lapresseplus.debug\",\n    \"variant\": \"ReplicaLaPresseDebug\"\n  }\n]\n```"
+          "markdownDescription": "Explicit Android app definitions. When this list contains entries, **automatic detection is skipped entirely**. The button uses these entries directly.\n\nEquivalent to the zshrc aliases `replica()`/`rubicon()`.\n\n```json\n\"kotlinJump.androidProjects\": [\n  {\n    \"name\": \"Rubicon\",\n    \"module\": \"rubicon/app\",\n    \"package\": \"ca.lapresse.android.lapressemobile.debug\",\n    \"variant\": \"Debug\"\n  },\n  {\n    \"name\": \"Replica\",\n    \"module\": \"replica/app\",\n    \"package\": \"ca.lapresse.lapresseplus.debug\",\n    \"variant\": \"ReplicaLaPresseDebug\"\n  }\n]\n```"
         },
         "kotlinJump.gradleProjectRoot": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Explicit path to the Gradle project root (the directory containing `settings.gradle.kts` or `settings.gradle`). **Absolute** or **workspace-relative**.\n\nOverrides auto-detection entirely when set. **Set this** if you opened a sub-module (e.g. `app/`) instead of the project root, or if you have an unconventional layout (e.g. `master/` flat-style).\n\nExamples:\n```json\n\"kotlinJump.gradleProjectRoot\": \"test/kotlin-jump-demo\"\n\"kotlinJump.gradleProjectRoot\": \"/Users/me/code/my-app\"\n\"kotlinJump.gradleProjectRoot\": \"master\"\n```\n\nLeave empty (default) to use automatic detection:\n1. Walks up from the active editor's file (stops at the first `settings.gradle*`; matches Gradle's own root-discovery rule)\n2. Checks workspace folder roots\n3. Scans up to 2 levels deep (handles monorepos like `kotlin-nav/test/kotlin-jump-demo`)\n\nRun **Kotlin Jump: Diagnose Gradle Detection** to see which tier resolved the project."
+          "markdownDescription": "Explicit path to the Gradle project root (the directory containing `settings.gradle.kts` or `settings.gradle`). **Absolute** or **relative to the workspace**.\n\nOverrides automatic detection entirely when set. **Set this** if you opened a submodule (e.g. `app/`) instead of the project root, or if you have an unconventional layout (e.g. `master/` flat layout).\n\nExamples:\n```json\n\"kotlinJump.gradleProjectRoot\": \"test/kotlin-jump-demo\"\n\"kotlinJump.gradleProjectRoot\": \"/Users/me/code/my-app\"\n\"kotlinJump.gradleProjectRoot\": \"master\"\n```\n\nLeave empty (default) to use automatic detection:\n1. Walks up from the active editor's file (stops at the first `settings.gradle*`; matches Gradle's own root discovery rule)\n2. Checks workspace folder roots\n3. Scans up to 2 levels deep (handles monorepos like `kotlin-nav/test/kotlin-jump-demo`)\n\nRun **Kotlin Jump: Diagnose Gradle Detection** to see which tier resolved the project."
         },
         "kotlinJump.testTaskOverrides": {
           "type": "object",
@@ -740,7 +740,7 @@
         "kotlinJump.injectTestLogging": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Inject a Gradle init-script that enables `testLogging` (passed/failed/skipped events) on all test tasks. Gives live test names in the output panel even when the project doesn't configure `testLogging` itself. Disable if your project already configures it or if the init-script causes issues."
+          "markdownDescription": "Inject a Gradle init script that enables `testLogging` (passed/failed/skipped events) on all test tasks. Gives live test names in the output panel even when the project doesn't configure `testLogging` itself. Disable if your project already configures it or if the init script causes issues."
         },
         "kotlinJump.testCodeLens": {
           "type": "boolean",
@@ -750,7 +750,7 @@
         "kotlinJump.smartNavigation": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "When enabled, **Cmd+Click** on a declaration opens the custom Find Usages panel instead of VS Code's built-in References. Default: off (uses native VS Code References)."
+          "markdownDescription": "When enabled, **Cmd+Click** on a declaration opens the custom Find Usages panel instead of VS Code's native References. Default: off (uses native VS Code References)."
         },
         "kotlinJump.codeLens": {
           "type": "boolean",
@@ -780,12 +780,12 @@
         "kotlinJump.snapshotEnabled": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Persist the symbol index to disk between sessions. Disable if the snapshot becomes stale or causes unexpected navigation results — the index will be rebuilt from scratch on every open."
+          "markdownDescription": "Persist the symbol index to disk between sessions. Disable if the snapshot becomes stale or causes unexpected navigation results. The index will be rebuilt from scratch on every open."
         },
         "kotlinJump.watcherDebounceMs": {
           "type": "number",
           "default": 150,
-          "markdownDescription": "Milliseconds to wait after a file change before re-indexing it. Increase on slow machines or network drives to reduce churn; decrease for near-instant updates on fast SSDs."
+          "markdownDescription": "Milliseconds to wait after a file change before reindexing it. Increase on slow machines or network drives to reduce churn; decrease for almost instant updates on fast SSDs."
         },
         "kotlinJump.statusBarEnabled": {
           "type": "boolean",
@@ -801,11 +801,11 @@
           ],
           "enumDescriptions": [
             "Detect the JetBrains Kotlin LSP automatically and enable companion mode when found.",
-            "Always run as a companion — disable hover, outline, rename, and semantic tokens regardless of other extensions.",
-            "Never enable companion mode — register all providers."
+            "Always run as a companion. Disable hover, outline, rename, and semantic tokens regardless of other extensions.",
+            "Never enable companion mode. Register all providers."
           ],
           "default": "auto",
-          "markdownDescription": "Controls how Kotlin Jump coexists with a full Kotlin language server such as the JetBrains Kotlin LSP.\n\nWhen companion mode is active, Kotlin Jump disables overlapping providers (hover, document outline, rename, semantic tokens) and keeps only the fast navigation providers (Go to Definition, Find Usages, Go to Implementation, Type/Call Hierarchy, Code Lens).\n\n- `auto` — detect the JetBrains Kotlin LSP and enable automatically\n- `always` — always enable, useful with other LSPs that provide hover and outline\n- `never` — disable, register all providers"
+          "markdownDescription": "Controls how Kotlin Jump coexists with a full Kotlin language server such as the JetBrains Kotlin LSP.\n\nWhen companion mode is active, Kotlin Jump disables overlapping providers (hover, document outline, rename, semantic tokens) and keeps only the fast navigation providers (Go to Definition, Find Usages, Go to Implementation, Type/Call Hierarchy, Code Lens).\n\n- `auto`: detect the JetBrains Kotlin LSP and enable automatically\n- `always`: always enable, useful with other LSPs that provide hover and outline\n- `never`: disable, register all providers"
         },
         "kotlinJump.workspaceSymbolKinds": {
           "type": "array",
@@ -827,7 +827,7 @@
             ]
           },
           "default": [],
-          "markdownDescription": "Restrict **Go to Symbol in Workspace** (Cmd+T) to specific symbol kinds. Empty array shows all kinds.\n\nExample — classes and functions only:\n```json\n[\"class\", \"dataClass\", \"sealedClass\", \"fun\", \"composable\"]\n```"
+          "markdownDescription": "Restrict **Go to Symbol in Workspace** (Cmd+T) to specific symbol kinds. Empty array shows all kinds.\n\nExample (classes and functions only):\n```json\n[\"class\", \"dataClass\", \"sealedClass\", \"fun\", \"composable\"]\n```"
         },
         "kotlinJump.organizeImports.removeUnused": {
           "type": "boolean",
@@ -847,7 +847,7 @@
         "kotlinJump.gradleCacheDir": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Override the Gradle cache path. Leave empty to auto-detect `~/.gradle/caches/modules-2/files-2.1`."
+          "markdownDescription": "Override the Gradle cache path. Leave empty to detect `~/.gradle/caches/modules-2/files-2.1` automatically."
         },
         "kotlinJump.indexMavenSources": {
           "type": "boolean",
@@ -862,22 +862,22 @@
         "kotlinJump.mavenLocalRepoDir": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Override the Maven local repository path. Leave empty to auto-detect `~/.m2/repository`."
+          "markdownDescription": "Override the Maven local repository path. Leave empty to detect `~/.m2/repository` automatically."
         },
         "kotlinJump.jdkHome": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Override the JDK home for source indexing (`java.lang.*`, `java.util.*`, etc.). Leave empty to auto-detect via `JAVA_HOME` environment variable, then platform-specific defaults (macOS `/usr/libexec/java_home`, Linux `update-alternatives`, Windows `C:\\Program Files\\Java\\` and `C:\\Program Files\\Eclipse Adoptium\\`). The directory must contain `lib/src.zip` (standard in OpenJDK 9+)."
+          "markdownDescription": "Override the JDK home for source indexing (`java.lang.*`, `java.util.*`, etc.). Leave empty to detect automatically via the `JAVA_HOME` environment variable, then platform defaults (macOS `/usr/libexec/java_home`, Linux `update-alternatives`, Windows `C:\\Program Files\\Java\\` and `C:\\Program Files\\Eclipse Adoptium\\`). The directory must contain `lib/src.zip` (standard in OpenJDK 9+)."
         },
         "kotlinJump.useBundledStdlib": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Load the bundled Kotlin stdlib sources JAR (~600 KB shipped with the extension) so `List`, `String`, `Sequence`, etc. are navigable from the first second — no Gradle build required. A project-specific stdlib version (from Gradle/Maven cache) takes precedence when present."
+          "markdownDescription": "Load the bundled Kotlin stdlib sources JAR (~600 KB shipped with the extension) so `List`, `String`, `Sequence`, etc. are navigable from the first second. No Gradle build required. A project specific stdlib version (from Gradle/Maven cache) takes precedence when present."
         },
         "kotlinJump.suppressFirstScanPrompt": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "If `true`, suppress the one-time prompt offering to download missing library sources after the first scan. Set automatically by clicking 'Don't show again' on the prompt."
+          "markdownDescription": "If `true`, suppress the prompt that offers to download missing library sources after the first scan. Set automatically by clicking 'Don't show again' on the prompt."
         },
         "kotlinJump.fallbackToOnlineDocs": {
           "type": "boolean",
@@ -897,12 +897,12 @@
         "kotlinJump.autoImport.enabled": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Show **Add import** quick-fix suggestions when the cursor is on an unresolved type name. Candidates are drawn from the symbol index — no JVM required."
+          "markdownDescription": "Show **Add import** quickfix suggestions when the cursor is on an unresolved type name. Candidates are drawn from the symbol index. No JVM required."
         },
         "kotlinJump.inlayHints.parameterNames": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Show parameter name hints inline at call sites (e.g. `modifier: m`). Clickable — navigates to the parameter declaration."
+          "markdownDescription": "Show parameter name hints inline at call sites (e.g. `modifier: m`). Click any hint to jump to the parameter declaration."
         },
         "kotlinJump.inlayHints.inferredTypes": {
           "type": "boolean",
@@ -917,7 +917,7 @@
         "kotlinJump.foldingEnabled": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Enable symbol-aware folding for Kotlin files (classes, functions, import block, KDoc). More accurate than VS Code's default indentation-based folding."
+          "markdownDescription": "Enable folding that follows Kotlin symbols (classes, functions, import block, KDoc). More accurate than VS Code's default folding, which uses indentation alone."
         },
         "kotlinJump.stringResourceFolding": {
           "type": "boolean",
@@ -932,12 +932,12 @@
         "kotlinJump.constValFolding": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Inline the literal value of referenced `const val` symbols so constant-heavy Kotlin code stays readable without jumping to declarations."
+          "markdownDescription": "Inline the literal value of referenced `const val` symbols so Kotlin code rich in constants stays readable without jumping to declarations."
         },
         "kotlinJump.nullAssertionHighlight": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Highlight `!!` non-null assertions in amber/orange to make unsafe force-unwraps visually distinct."
+          "markdownDescription": "Highlight `!!` not null assertions in amber/orange to make unsafe force unwraps visually distinct."
         },
         "kotlinJump.hexColorSwatch": {
           "type": "boolean",
@@ -947,12 +947,12 @@
         "kotlinJump.drawableThumbnails": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Paint a miniature of the referenced Android asset in the gutter next to every `R.drawable.xxx` / `R.mipmap.xxx` call — matches the Android Studio thumbnail behaviour."
+          "markdownDescription": "Paint a miniature of the referenced Android asset in the gutter next to every `R.drawable.xxx` / `R.mipmap.xxx` call. Matches the Android Studio thumbnail behaviour."
         },
         "kotlinJump.vectorPreview.autoOpen": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Automatically open a side-by-side rendered preview of `<vector>` drawables when their source XML becomes the active editor. Re-open via *Kotlin Jump: Show Vector Preview* if dismissed."
+          "markdownDescription": "Automatically open a rendered preview of `<vector>` drawables alongside the source XML when it becomes the active editor. Reopen via *Kotlin Jump: Show Vector Preview* if dismissed."
         },
         "kotlinJump.overrideGutterIcons": {
           "type": "boolean",
@@ -986,7 +986,7 @@
         "id": "kotlin-jump",
         "name": "kotlin-jump",
         "fullName": "Kotlin Jump",
-        "description": "Query your Kotlin/Java symbol index — search, implementations, KDoc.",
+        "description": "Query your Kotlin/Java symbol index for symbols, implementations, KDoc.",
         "isSticky": false,
         "commands": [
           {
@@ -1018,12 +1018,12 @@
       {
         "id": "kotlinJumpGettingStarted",
         "title": "Get Started with Kotlin Jump",
-        "description": "Fast Kotlin & Java navigation — no JVM, no language server required.",
+        "description": "Fast Kotlin & Java navigation. No JVM, no language server required.",
         "steps": [
           {
             "id": "welcome",
-            "title": "Navigate Kotlin at the speed of thought",
-            "description": "Kotlin Jump indexes your entire project in milliseconds — powered by a regex parser that is **109× faster** than any JVM or tree-sitter alternative. No setup, no waiting.",
+            "title": "Navigate Kotlin instantly",
+            "description": "Kotlin Jump indexes your entire project in milliseconds. The parser is **109× faster** than any JVM or tree-sitter alternative. No setup, no waiting.",
             "media": {
               "image": "assets/demos/welcome.webp",
               "altText": "Kotlin Jump in action"
@@ -1031,8 +1031,8 @@
           },
           {
             "id": "androidRun",
-            "title": "Build, install, and launch Android — one click",
-            "description": "The **$(play) Run** button builds, installs, and launches your app — no terminal required.\n\n**WiFi setup (one-time):**\n1. Phone: Settings → Developer options → **Wireless debugging** ON\n2. Click **$(add) Pair new device via WiFi…** below\n3. Phone: **Pair device with pairing code** → enter the 6-digit code\n4. Done — connect wirelessly from now on\n\n[Run Android](command:kotlin-jump.runAndroid) · [Pair via WiFi](command:kotlin-jump.pairAdbWifi) · [Connect via WiFi](command:kotlin-jump.connectAdbWifi)",
+            "title": "Run Android in one click",
+            "description": "The **$(play) Run** button builds, installs, and launches your app. No terminal required.\n\n**WiFi setup (do once):**\n1. Phone: Settings → Developer options → **Wireless debugging** ON\n2. Click **$(add) Pair new device via WiFi…** below\n3. Phone: **Pair device with pairing code** → enter the 6-digit code\n4. Done. Connect wirelessly from now on.\n\n[Run Android](command:kotlin-jump.runAndroid) · [Pair via WiFi](command:kotlin-jump.pairAdbWifi) · [Connect via WiFi](command:kotlin-jump.connectAdbWifi)",
             "media": {
               "image": "assets/demos/android-run.webp",
               "altText": "Android Run button demo"
@@ -1043,8 +1043,8 @@
           },
           {
             "id": "goToDefinition",
-            "title": "Go to Definition — even inside JARs",
-            "description": "Press **F12** (or **Cmd+Click**) on any symbol to jump to its definition — across files, modules, and straight into JAR sources. No language server, no JVM spin-up.\n\n[Try it](command:editor.action.revealDefinition)",
+            "title": "Go to Definition, even inside JARs",
+            "description": "Press **F12** (or **Cmd+Click**) on any symbol to jump to its definition: across files, modules, and into JAR sources. No language server, no JVM startup.\n\n[Try it](command:editor.action.revealDefinition)",
             "media": {
               "image": "assets/demos/go-to-definition.webp",
               "altText": "Go to Definition demo"
@@ -1052,8 +1052,8 @@
           },
           {
             "id": "librarySources",
-            "title": "Navigate into your dependencies — KDoc included",
-            "description": "Kotlin Jump indexes the **JDK** (`java.lang.*`, `java.util.*`) + a bundled **Kotlin stdlib** out of the box. For Compose, Coroutines, AndroidX and other libraries, click the **`$(library)`** item in the status bar to download `-sources.jar` files via direct HTTP. No JVM, no Gradle invocation, no terminal — just one click.\n\n[Open Library Sources actions](command:kotlin-jump.sources.openActions)",
+            "title": "Navigate into your dependencies",
+            "description": "Kotlin Jump indexes the **JDK** (`java.lang.*`, `java.util.*`) + a bundled **Kotlin stdlib** out of the box. For Compose, Coroutines, AndroidX and other libraries, click the **`$(library)`** item in the status bar to download `-sources.jar` files via direct HTTP. No JVM, no Gradle invocation, no terminal. One click.\n\n[Open Library Sources actions](command:kotlin-jump.sources.openActions)",
             "media": {
               "image": "assets/demos/lib-jar-coroutines.webp",
               "altText": "Cmd+Click into kotlinx.coroutines JAR source"
@@ -1061,7 +1061,7 @@
           },
           {
             "id": "findUsages",
-            "title": "Find Usages — the panel that changes everything",
+            "title": "Find Usages",
             "description": "Press **Alt+F7** on any symbol to open a dedicated panel showing every usage across your project. Filter out test files or Compose previews in one click.\n\n[Open Find Usages](command:kotlin-jump.findUsages)",
             "media": {
               "image": "assets/demos/find-usages-test-filter.webp",
@@ -1073,8 +1073,8 @@
           },
           {
             "id": "codeLens",
-            "title": "Always-visible usage counts",
-            "description": "See **N usages | M implementations** inline above every class and function — no hover required. Click any lens to open the Find Usages panel directly.",
+            "title": "Usage counts, always visible",
+            "description": "See **N usages | M implementations** inline above every class and function. No hover required. Click any lens to open the Find Usages panel directly.",
             "media": {
               "image": "assets/demos/code-lens.webp",
               "altText": "Code Lens showing N usages"
@@ -1082,7 +1082,7 @@
           },
           {
             "id": "testNavigation",
-            "title": "Jump between test and implementation — Alt+Shift+T",
+            "title": "Toggle test and implementation (Alt+Shift+T)",
             "description": "Press **Alt+Shift+T** to instantly toggle between a class and its test file. Kotlin Jump infers the pairing from your Gradle source sets.\n\n[Try it](command:kotlin-jump.goToTest)",
             "media": {
               "image": "assets/demos/test-nav.webp",
@@ -1094,8 +1094,8 @@
           },
           {
             "id": "navigationHistory",
-            "title": "Navigate back — with the caret exactly where you left it",
-            "description": "Press **Cmd+Alt+←** to step back through every jump. Kotlin Jump restores the **line AND column** — not just the file, like VS Code's native back. Across files, packages, and module boundaries.\n\n| Shortcut | Action |\n|---|---|\n| `Cmd+Alt+←` | Navigate Back |\n| `Cmd+Alt+→` | Navigate Forward |",
+            "title": "Navigate back, caret preserved",
+            "description": "Press **Cmd+Alt+←** to step back through every jump. Kotlin Jump restores the **line AND column**. VS Code's native back only restores the file. Works across files, packages, and module boundaries.\n\n| Shortcut | Action |\n|---|---|\n| `Cmd+Alt+←` | Navigate Back |\n| `Cmd+Alt+→` | Navigate Forward |",
             "media": {
               "image": "assets/demos/navigation-history.webp",
               "altText": "Navigation history with caret restoration"
@@ -1104,7 +1104,7 @@
           {
             "id": "stringFolding",
             "title": "See your string values inline",
-            "description": "String resource folding replaces `R.string.button_ok` with its actual value — **\"OK\"** — directly in the editor. Zero context switching to `strings.xml`.\n\n[Enable String Folding](command:kotlinJump.enableStringFolding)",
+            "description": "String resource folding replaces `R.string.button_ok` with its actual value, **\"OK\"**, directly in the editor. Zero context switching to `strings.xml`.\n\n[Enable String Folding](command:kotlinJump.enableStringFolding)",
             "media": {
               "image": "assets/demos/string-resource-folding.webp",
               "altText": "String resource folding demo"
@@ -1115,8 +1115,8 @@
           },
           {
             "id": "inlayHints",
-            "title": "Types infer inline — KDoc one hover away",
-            "description": "The `: Pokemon` is the type — rendered inline, no explicit annotation. Hover any hint and the full class KDoc materialises right at the call site. No jump, no file-tree hunt. Parameter names at call sites work the same way (configurable per setting).",
+            "title": "Inline type hints with KDoc on hover",
+            "description": "The `: Pokemon` is the type, rendered inline, no explicit annotation. Hover any hint and the full class KDoc appears at the call site. No jump, no file tree hunt. Parameter names at call sites work the same way (configurable per setting).",
             "media": {
               "image": "assets/demos/inlay-hints.webp",
               "altText": "Inlay hints showing parameter names and types"
@@ -1125,7 +1125,7 @@
           {
             "id": "aiAssistant",
             "title": "Query your codebase in natural language",
-            "description": "Type **@kotlin-jump** in Copilot Chat to search your symbol index — find classes, trace usages, explore implementations, read KDoc.\n\n[Open Chat](command:workbench.action.chat.open)",
+            "description": "Type **@kotlin-jump** in Copilot Chat to search your symbol index: find classes, trace usages, explore implementations, read KDoc.\n\n[Open Chat](command:workbench.action.chat.open)",
             "media": {
               "image": "assets/demos/ai-assistant.webp",
               "altText": "AI assistant querying the symbol index"

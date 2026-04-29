@@ -6,7 +6,7 @@
   "highlights": [
     {
       "title": "Gutter Thumbnail Reliability",
-      "description": "Vector drawable previews in the gutter now update correctly after every edit and save — stale thumbnails no longer persist when you modify a drawable file.",
+      "description": "Vector drawable previews in the gutter now update correctly after every edit and save. Stale thumbnails no longer persist when you modify a drawable file.",
       "kind": "fix"
     }
   ],

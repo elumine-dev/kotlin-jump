@@ -321,6 +321,8 @@ Already using the **JetBrains Kotlin LSP**? Kotlin Jump detects it automatically
 
 Auto-detected. Tweak via the `kotlinJump.companionMode` setting if needed.
 
+Pair with [**detekt-lsp**](https://github.com/elumine-dev/detekt-lsp) for live Detekt diagnostics in any LSP editor (pre-alpha).
+
 ---
 
 ## Configuration
@@ -366,6 +368,16 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full dev setup, or quickstart:
 ```bash
 code --install-extension kotlin-jump-1.18.3.vsix
 ```
+
+---
+
+## Companion tools
+
+- **Kotlin Jump** : this extension.
+- [**detekt-lsp**](https://github.com/elumine-dev/detekt-lsp) : Live Detekt diagnostics for any LSP editor (pre-alpha).
+- [**SearchDeadCode**](https://github.com/KevinDoremy/SearchDeadCode) : Dead code detection for Android (Rust CLI on Homebrew).
+
+Maintained alongside [elumine-dev](https://github.com/elumine-dev) by [Kevin Doremy](https://kevindoremy.com).
 
 ---
 

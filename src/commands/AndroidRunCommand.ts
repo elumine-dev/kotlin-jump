@@ -6,6 +6,8 @@ import { exec, spawn } from 'child_process';
 import { findProjectRoot, resolveGradleWrapper, detectProjectRoot } from '../testing/GradleTestRunner';
 import type { DetectionResult } from '../testing/GradleRootDetector';
 import { Logger } from '../util/logger';
+import { runAdb, runShell, getFirstConnectedDevice, resolveAdbPath, watchAdbPathSetting } from '../android/AdbBinary';
+import { _emitRunSuccess } from '../android/RunEvents';
 
 const GRADLE_PROJECT_CHOICE_KEY = 'kotlinJump.gradleProjectRoot.resolved';
 
@@ -135,6 +137,9 @@ export function registerAndroidRunCommand(
       await runAndroid(context, log);
     }),
   );
+
+  // Watch adb-path setting → invalidates the cached binary path.
+  context.subscriptions.push(watchAdbPathSetting());
 
   // Connect via WiFi (Wireless Debugging, macOS only)
   context.subscriptions.push(
@@ -435,7 +440,7 @@ function executeWithShellIntegration(
 
     if (vscode.workspace.getConfiguration('kotlinJump').get<boolean>('androidSkipLaunch', false)) {
       log.info('[android:run] ADB launch skipped (kotlinJump.androidSkipLaunch)');
-      onSuccess();
+      onSuccess(launchParams);
       return;
     }
 
@@ -460,7 +465,7 @@ function executeWithShellIntegration(
       if (event2.execution !== adbExecution) return;
       d2.dispose();
       log.info(`[android:run] adb — exit ${event2.exitCode ?? '?'}`);
-      if (event2.exitCode === 0) { onSuccess(); } else { onLaunchFailed(terminal); }
+      if (event2.exitCode === 0) { onSuccess(launchParams); } else { onLaunchFailed(terminal); }
     });
     context.subscriptions.push(d2);
   });
@@ -680,13 +685,9 @@ function getOrCreateTerminal(projectRoot: string): vscode.Terminal {
 }
 
 // ── Device & emulator management ─────────────────────────────────────────────
-// Mirrors _android_check_and_select_emulator() in zshrc
-
-function runShell(cmd: string): Promise<string | undefined> {
-  return new Promise(resolve => {
-    exec(cmd, (err, stdout) => resolve(err ? undefined : stdout.trim()));
-  });
-}
+// Mirrors _android_check_and_select_emulator() in zshrc.
+// Low-level adb invocation lives in /src/android/AdbBinary.ts and is shared
+// with the Logcat feature so they always pick the same binary.
 
 // ── ADB WiFi discovery (macOS only — dns-sd / mDNS) ─────────────────────────
 
@@ -792,7 +793,9 @@ async function pairAdbWifi(log: Logger): Promise<string | undefined> {
   });
   if (!code) return undefined;
 
-  const pairResult = await runShell(`echo "${code.trim()}" | adb pair ${chosen.host}:${chosen.port}`);
+  // Shell pipe is required (echo into adb pair). Resolve adb path so the user's
+  // kotlinJump.adbPath setting is honored even through this shell invocation.
+  const pairResult = await runShell(`echo "${code.trim()}" | "${resolveAdbPath()}" pair ${chosen.host}:${chosen.port}`);
   log.info(`[android:wifi] adb pair → ${pairResult}`);
 
   if (pairResult?.includes('Successfully paired')) {
@@ -835,7 +838,7 @@ async function connectAdbWifi(log: Logger): Promise<string | undefined> {
   if (!chosen) return undefined;
 
   const serial = `${chosen.host}:${chosen.port}`;
-  const result = await runShell(`adb connect ${serial}`);
+  const result = await runAdb(['connect', serial]);
   log.info(`[android:wifi] adb connect ${serial} → ${result}`);
 
   if (result?.includes('connected to') || result?.includes('already connected')) {
@@ -856,28 +859,9 @@ async function connectAdbWifi(log: Logger): Promise<string | undefined> {
 }
 
 // Returns first connected device serial.
-// Priority: USB / HOST:PORT (explicit adb connect) > adb-XXXX-YYYY (ADB auto-mDNS) > _adb-tls-connect
-// ADB auto-mDNS entries (serial starts with "adb-") can be stale and fail adb install.
-async function getConnectedDevice(): Promise<string | undefined> {
-  const output = await runShell('adb devices');
-  if (!output) return undefined;
-
-  let mdnsFallback: string | undefined;
-  for (const line of output.split('\n').slice(1)) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    if (trimmed.endsWith('\tdevice') || /\tdevice\b/.test(trimmed)) {
-      const serial = trimmed.split(/\s+/)[0];
-      if (!serial) continue;
-      if (trimmed.includes('_adb-tls-connect') || serial.startsWith('adb-')) {
-        mdnsFallback ??= serial;
-      } else {
-        return serial;
-      }
-    }
-  }
-  return mdnsFallback;
-}
+// Priority: USB / HOST:PORT (explicit adb connect) > adb-XXXX-YYYY (ADB auto-mDNS) > _adb-tls-connect.
+// Implementation lives in AdbBinary; thin wrapper kept for readability of the run flow.
+const getConnectedDevice = getFirstConnectedDevice;
 
 function findEmulatorBin(): string | undefined {
   const candidates = [
@@ -1002,8 +986,19 @@ function setIdle(): void {
   _runButton.backgroundColor = undefined;
 }
 
-function onSuccess(): void {
+function onSuccess(launchParams: LaunchParams): void {
   _isBuilding = false;
+  // Broadcast for downstream consumers (Logcat auto-start, future profiler, etc.).
+  // Failure to handle this event must NOT bubble back into the run flow.
+  try {
+    _emitRunSuccess({
+      device:      launchParams.device,
+      packageName: launchParams.packageName,
+      projectRoot: launchParams.projectRoot,
+      at:          Date.now(),
+    });
+  } catch { /* best-effort — never let a subscriber crash the run flow */ }
+
   if (!_runButton) return;
   _runButton.text            = '$(check) Launched!';
   _runButton.backgroundColor = undefined;

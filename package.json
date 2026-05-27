@@ -77,12 +77,15 @@
     "onLanguage:kotlin",
     "workspaceContains:**/*.kt",
     "onView:kotlinJump.findUsages",
+    "onView:kotlinJump.logcat",
+    "onView:kotlinJump.logcat.devices",
     "onCommand:kotlin-jump.goToClassImpl",
     "onCommand:kotlin-jump.goToMethodImpl",
     "onCommand:kotlin-jump.revealDefinitionAt",
     "onCommand:kotlinJump.navigateBack",
     "onCommand:kotlinJump.navigateForward",
     "onCommand:kotlinJump.clearNavigationHistory",
+    "onCommand:kotlinJump.logcat.show",
     "onChatParticipant:kotlin-jump",
     "onMcpServerDefinitionProvider:kotlin-jump"
   ],
@@ -98,6 +101,11 @@
           "id": "kotlinJumpPanel",
           "title": "Find Usages",
           "icon": "media/find-usages.svg"
+        },
+        {
+          "id": "kotlinJumpLogcat",
+          "title": "Logcat",
+          "icon": "media/logcat.svg"
         }
       ]
     },
@@ -107,6 +115,19 @@
           "id": "kotlinJump.findUsages",
           "name": "Find Usages",
           "type": "tree"
+        }
+      ],
+      "kotlinJumpLogcat": [
+        {
+          "id": "kotlinJump.logcat",
+          "name": "Logs",
+          "type": "webview"
+        },
+        {
+          "id": "kotlinJump.logcat.devices",
+          "name": "Devices",
+          "type": "tree",
+          "visibility": "collapsed"
         }
       ]
     },
@@ -164,6 +185,11 @@
         "key": "shift+alt+c",
         "mac": "shift+alt+c",
         "when": "editorTextFocus && (editorLangId == kotlin || editorLangId == java)"
+      },
+      {
+        "command": "kotlinJump.logcat.show",
+        "key": "ctrl+alt+l",
+        "mac": "cmd+alt+l"
       }
     ],
     "commands": [
@@ -408,6 +434,54 @@
         "title": "Pair Android Device via WiFi (initial setup)",
         "category": "Kotlin Jump",
         "icon": "$(add)"
+      },
+      {
+        "command": "kotlinJump.logcat.show",
+        "title": "Logcat: Show",
+        "category": "Kotlin Jump",
+        "icon": "$(output)"
+      },
+      {
+        "command": "kotlinJump.logcat.start",
+        "title": "Logcat: Start Streaming",
+        "category": "Kotlin Jump",
+        "icon": "$(play)"
+      },
+      {
+        "command": "kotlinJump.logcat.stop",
+        "title": "Logcat: Stop Streaming",
+        "category": "Kotlin Jump",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "kotlinJump.logcat.pause",
+        "title": "Logcat: Pause",
+        "category": "Kotlin Jump",
+        "icon": "$(debug-pause)"
+      },
+      {
+        "command": "kotlinJump.logcat.resume",
+        "title": "Logcat: Resume",
+        "category": "Kotlin Jump",
+        "icon": "$(play)"
+      },
+      {
+        "command": "kotlinJump.logcat.clear",
+        "title": "Logcat: Clear Buffer",
+        "category": "Kotlin Jump",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "kotlinJump.logcat.export",
+        "title": "Logcat: Export Filtered Logs",
+        "category": "Kotlin Jump",
+        "icon": "$(save)"
+      },
+      {
+        "command": "kotlinJump.logcat.pickDevice",
+        "title": "Logcat: Switch Device",
+        "category": "Kotlin Jump",
+        "icon": "$(device-mobile)"
       }
     ],
     "menus": {
@@ -695,6 +769,48 @@
           "type": "boolean",
           "default": false,
           "markdownDescription": "Skip the `adb shell monkey` launch step after a successful Gradle build. Useful for stub/demo projects where no real APK is installed."
+        },
+        "kotlinJump.adbPath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Absolute path to the `adb` binary. Empty falls back to `$ANDROID_HOME/platform-tools/adb` then PATH. Shared by **Run Android App** and **Logcat** so both pick the same binary."
+        },
+        "kotlinJump.logcat.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Enable the **Logcat** panel in the bottom panel area."
+        },
+        "kotlinJump.logcat.bufferSize": {
+          "type": "number",
+          "default": 100000,
+          "minimum": 1000,
+          "maximum": 1000000,
+          "markdownDescription": "Maximum number of log entries kept in the in-memory ring buffer before older entries are evicted."
+        },
+        "kotlinJump.logcat.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Automatically start streaming after a successful **Run Android App**."
+        },
+        "kotlinJump.logcat.statusBarPill": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show the Logcat throughput pill in the status bar (left side, near **Run Android**). Hidden when no Logcat session is active. Independent of `kotlinJump.statusBarEnabled`."
+        },
+        "kotlinJump.logcat.followAppPid": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Filter the stream to the PID of the most recently launched app. Re-resolves automatically when the app restarts."
+        },
+        "kotlinJump.logcat.colorScheme": {
+          "type": "string",
+          "default": "studio",
+          "enum": [
+            "studio",
+            "monochrome",
+            "high-contrast"
+          ],
+          "markdownDescription": "Color scheme for log levels: `studio` mirrors Android Studio Dolphin, `monochrome` removes per-level tints, `high-contrast` increases level contrast."
         },
         "kotlinJump.androidProjects": {
           "type": "array",

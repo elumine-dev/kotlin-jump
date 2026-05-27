@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none';
+                 style-src {{cspSource}} 'unsafe-inline';
+                 script-src 'nonce-{{nonce}}';
+                 font-src {{cspSource}};
+                 img-src {{cspSource}} data:;">
+  <link rel="stylesheet" href="{{styleUri}}">
+  <title>Logcat</title>
+</head>
+<body>
+  <div id="root">
+    <header class="toolbar">
+      <button id="btn-pause"   class="icon-btn" title="Pause / Resume" aria-label="Pause">⏸</button>
+      <button id="btn-clear"   class="icon-btn" title="Clear buffer"   aria-label="Clear">🗑</button>
+      <button id="btn-wrap"    class="icon-btn" title="Toggle soft wrap" aria-label="Soft wrap">↩</button>
+      <button id="btn-export"  class="icon-btn" title="Export filtered logs" aria-label="Export">⬇</button>
+      <span class="separator"></span>
+      <select id="device-picker" title="Active device" aria-label="Device"></select>
+      <input  id="package-input" type="text" list="package-list" placeholder="package…" aria-label="Package filter" />
+      <datalist id="package-list"></datalist>
+      <input  id="tag-input" type="text" placeholder="tag…" aria-label="Tag filter" />
+      <input  id="search-input" type="search" placeholder="search messages…" aria-label="Search" />
+      <span class="separator"></span>
+      <label class="toggle">
+        <input type="checkbox" id="follow-pid" checked>
+        Follow app PID
+      </label>
+      <span class="status" id="status-pill"></span>
+    </header>
+
+    <div class="level-chips" id="level-chips" role="toolbar" aria-label="Log level filter"></div>
+
+    <div id="release-banner" class="banner banner-warning" hidden>
+      <strong>Release build detected.</strong>
+      Stack frames are obfuscated by R8 — full deobfuscation support is on the roadmap.
+      <button id="banner-dismiss" class="link-btn" type="button">Dismiss</button>
+    </div>
+
+    <div id="stream-error" class="banner banner-error" hidden></div>
+
+    <main id="log-list" class="log-list" tabindex="0">
+      <div id="log-viewport" class="log-viewport"></div>
+    </main>
+
+    <footer class="footer">
+      <span id="buffer-meter">0 / 0</span>
+      <span class="footer-spacer"></span>
+      <span id="throughput">0/s</span>
+    </footer>
+  </div>
+  <script nonce="{{nonce}}" src="{{scriptUri}}"></script>
+</body>
+</html>

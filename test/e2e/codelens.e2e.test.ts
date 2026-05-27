@@ -40,6 +40,23 @@ function findLens(lenses: vscode.CodeLens[], pattern: RegExp): vscode.CodeLens |
   return lenses.find(l => l.command?.title && pattern.test(l.command.title));
 }
 
+// Poll the active editor until it matches, instead of a fixed sleep: navigation
+// can take longer than any single timeout, and earlier tests may leave the
+// output channel focused. Returns whatever is active at the deadline so the
+// caller's assertion produces a useful message.
+async function waitForActiveEditor(
+  predicate: (editor: vscode.TextEditor) => boolean,
+  timeoutMs = 10_000,
+): Promise<vscode.TextEditor | undefined> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const active = vscode.window.activeTextEditor;
+    if (active && predicate(active)) return active;
+    await new Promise(r => setTimeout(r, 100));
+  }
+  return vscode.window.activeTextEditor;
+}
+
 suite('E2E — CodeLens (real VS Code)', function () {
   this.timeout(60_000);
 
@@ -95,10 +112,9 @@ suite('E2E — CodeLens (real VS Code)', function () {
       'com.example.data',
     );
 
-    // Attendre que l'éditeur actif change
-    await new Promise(r => setTimeout(r, 1500));
-
-    const active = vscode.window.activeTextEditor;
+    const active = await waitForActiveEditor(
+      e => e.document.fileName.includes('ApiServiceImpl'),
+    );
     assert.ok(active, 'Aucun éditeur actif après goToClassImpl');
     assert.ok(
       active.document.fileName.includes('ApiServiceImpl'),

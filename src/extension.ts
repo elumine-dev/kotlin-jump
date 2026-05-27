@@ -62,6 +62,7 @@ import { registerAndroidRunCommand } from './commands/AndroidRunCommand';
 import { registerInlineFeatureToggles } from './commands/InlineFeatureToggles';
 import { SealedWhenCoverageProvider } from './providers/SealedWhenCoverageProvider';
 import { registerAddMissingWhenBranches } from './commands/addMissingWhenBranches';
+import { registerLogcat } from './logcat';
 import { ColorResourceIndex } from './indexer/ColorResourceIndex';
 import { DimenResourceIndex } from './indexer/DimenResourceIndex';
 import { DimenResourceDefinitionProvider } from './providers/DimenResourceDefinitionProvider';
@@ -161,6 +162,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   if (statusBarEnabled) statusBar.show();
 
   registerAndroidRunCommand(context, log);
+  registerLogcat(context, log, index);
 
   const KT_JAVA = [{ language: 'kotlin' }, { language: 'java' }];
 

@@ -49,7 +49,7 @@ const perfEntryPoints = ['scripts/perf-bench.ts', 'scripts/perf-diff.ts']
 async function main() {
   const buildDemo = demoLibEntryPoints.length > 0 || demoEntryPoints.length > 0;
   const buildPerf = perfEntryPoints.length > 0;
-  const [extCtx, browserCtx, workerCtx, serverCtx, e2eCtx, demoLibCtx, demoCtx, recordCtx, recorderExtCtx, perfCtx] = await Promise.all([
+  const [extCtx, browserCtx, workerCtx, serverCtx, e2eCtx, demoLibCtx, demoCtx, recordCtx, recorderExtCtx, perfCtx, logcatWebviewCtx] = await Promise.all([
     esbuild.context({
       ...sharedOptions,
       entryPoints: ['src/extension.ts'],
@@ -143,9 +143,21 @@ async function main() {
           banner:      { js: '#!/usr/bin/env node' },
         })
       : Promise.resolve(undefined),
+    // Logcat webview bundle. Runs inside the VS Code webview iframe (Chromium),
+    // so the platform is 'browser' and `vscode` is not available — only the
+    // postMessage bridge via `acquireVsCodeApi`.
+    esbuild.context({
+      ...sharedOptions,
+      platform:    'browser',
+      target:      'es2020',
+      format:      'iife',
+      external:    [],
+      entryPoints: ['media/logcat/main.ts'],
+      outfile:     'dist/logcat/main.js',
+    }),
   ]);
 
-  const allCtx = [extCtx, browserCtx, workerCtx, serverCtx, e2eCtx, demoLibCtx, demoCtx, recordCtx, recorderExtCtx, perfCtx].filter(Boolean);
+  const allCtx = [extCtx, browserCtx, workerCtx, serverCtx, e2eCtx, demoLibCtx, demoCtx, recordCtx, recorderExtCtx, perfCtx, logcatWebviewCtx].filter(Boolean);
   if (watch) {
     await Promise.all(allCtx.map(c => c.watch()));
     console.log('[esbuild] watching…');

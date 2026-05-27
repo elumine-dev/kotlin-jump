@@ -1,0 +1,24 @@
+2026-04-29 10:32:11.214  4521  4521 I MyApp   : onCreate begin
+2026-04-29 10:32:11.218  4521  4521 D MyApp   : prefs loaded, source=launcher
+2026-04-29 10:32:11.222  4521  4521 I System.out: starting network init
+2026-04-29 10:32:11.224  4521  4521 W ApiClient: token cache empty, refreshing
+2026-04-29 10:32:11.232  4521  4521 I MyApp   : injecting ViewModel
+2026-04-29 10:32:11.246  4521  4521 D MyApp   : trackOpen()
+2026-04-29 10:32:11.288  4521  4521 E AndroidRuntime: FATAL EXCEPTION: main
+2026-04-29 10:32:11.288  4521  4521 E AndroidRuntime: Process: com.example.app, PID: 4521
+2026-04-29 10:32:11.288  4521  4521 E AndroidRuntime: java.lang.NullPointerException: Attempt to read length of null String
+2026-04-29 10:32:11.288  4521  4521 E AndroidRuntime: 	at com.example.app.MainActivity.onCreate(MainActivity.kt:42)
+2026-04-29 10:32:11.288  4521  4521 E AndroidRuntime: 	at com.example.app.AppNavigator.start(AppNavigator.kt:18)
+2026-04-29 10:32:11.288  4521  4521 E AndroidRuntime: 	at com.example.app.App.boot(App.kt:24)
+2026-04-29 10:32:11.288  4521  4521 E AndroidRuntime: 	at android.app.Activity.performCreate(Activity.java:8000)
+2026-04-29 10:32:11.288  4521  4521 E AndroidRuntime: 	at android.app.Activity.performCreate(Activity.java:7984)
+2026-04-29 10:32:11.288  4521  4521 E AndroidRuntime: 	at android.app.Instrumentation.callActivityOnCreate(Instrumentation.java:1342)
+2026-04-29 10:32:11.288  4521  4521 E AndroidRuntime: 	at android.app.ActivityThread.performLaunchActivity(ActivityThread.java:3782)
+2026-04-29 10:32:11.288  4521  4521 E AndroidRuntime: 	at android.app.ActivityThread.handleLaunchActivity(ActivityThread.java:3956)
+2026-04-29 10:32:11.288  4521  4521 E AndroidRuntime: 	at android.app.servertransaction.LaunchActivityItem.execute(LaunchActivityItem.java:101)
+2026-04-29 10:32:11.288  4521  4521 E AndroidRuntime: 	at android.os.Looper.loop(Looper.java:294)
+2026-04-29 10:32:11.288  4521  4521 E AndroidRuntime: 	at android.app.ActivityThread.main(ActivityThread.java:8194)
+2026-04-29 10:32:11.288  4521  4521 E AndroidRuntime: 	at java.lang.reflect.Method.invoke(Native Method)
+2026-04-29 10:32:11.288  4521  4521 E AndroidRuntime: 	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:584)
+2026-04-29 10:32:11.288  4521  4521 E AndroidRuntime: 	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:1071)
+2026-04-29 10:32:11.301  1234  1234 I ActivityManager: Process com.example.app (pid 4521) has died

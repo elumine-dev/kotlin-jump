@@ -35,8 +35,14 @@ export class MarkdownString {
 
 export class EventEmitter<T> {
   private _listeners: Array<(e: T) => void> = [];
-  event = (listener: (e: T) => void) => { this._listeners.push(listener); return { dispose: () => {} }; };
-  fire(e: T) { for (const l of this._listeners) l(e); }
+  event = (listener: (e: T) => void) => {
+    this._listeners.push(listener);
+    return { dispose: () => {
+      const idx = this._listeners.indexOf(listener);
+      if (idx >= 0) this._listeners.splice(idx, 1);
+    } };
+  };
+  fire(e: T) { for (const l of this._listeners.slice()) l(e); }
   dispose() { this._listeners = []; }
 }
 

@@ -59,6 +59,7 @@ import { HexColorFoldingProvider } from './providers/HexColorFoldingProvider';
 import { HexColorDocumentColorProvider } from './providers/HexColorDocumentColorProvider';
 import { ApiLevelProvider } from './providers/ApiLevelProvider';
 import { registerAndroidRunCommand } from './commands/AndroidRunCommand';
+import { registerLogcat } from './logcat';
 import { ColorResourceIndex } from './indexer/ColorResourceIndex';
 import { DimenResourceIndex } from './indexer/DimenResourceIndex';
 import { DimenResourceDefinitionProvider } from './providers/DimenResourceDefinitionProvider';
@@ -157,6 +158,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   if (statusBarEnabled) statusBar.show();
 
   registerAndroidRunCommand(context, log);
+  registerLogcat(context, log, index);
 
   const KT_JAVA = [{ language: 'kotlin' }, { language: 'java' }];
 

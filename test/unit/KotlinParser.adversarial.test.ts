@@ -575,3 +575,59 @@ describe('Fix B — objets anonymes (object : Interface)', () => {
     expect(syms.some(s => s.name.startsWith('$anon$'))).toBe(false);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ENUM-ENTRY — full-identifier rule (phantom-entry regression, SNAPSHOT v20)
+// `enum class Screen { Home, Battle }` used to index phantom entries `H`/`B`
+// because the entry regex only accepted SCREAMING_CASE and matched partially.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('Enum entries — PascalCase and partial-match regression', () => {
+  it('ENUM-PASCAL-1 — inline PascalCase entries indexed in full, no phantoms', () => {
+    const syms = symbols('enum class Screen { Home, Battle, SETTINGS }');
+    const entries = syms.filter(s => s.kind === 'enum' && s.name !== 'Screen').map(s => s.name);
+    expect(entries).toEqual(['Home', 'Battle', 'SETTINGS']);
+  });
+
+  it('ENUM-PASCAL-2 — multi-line PascalCase entries with ctor args and body', () => {
+    const code = [
+      'enum class Planet(val au: Double) {',
+      '    Mercury(0.39),',
+      '    Venus(0.72) {',
+      '        fun extra() = 1',
+      '    },',
+      '    EARTH(1.0);',
+      '    fun dist() = au',
+      '}',
+    ].join('\n');
+    const syms = symbols(code);
+    const entries = syms.filter(s => s.kind === 'enum' && s.name !== 'Planet').map(s => s.name);
+    expect(entries).toContain('Mercury');
+    expect(entries).toContain('EARTH');
+    expect(entries).not.toContain('M'); // no partial phantom
+    // members after `;` are not entries
+    expect(entries).not.toContain('dist');
+  });
+
+  it('ENUM-PASCAL-3 — data object keeps kind object with supertypes', () => {
+    const syms = symbols('sealed interface S\ndata object Loading : S');
+    const loading = syms.find(s => s.name === 'Loading');
+    expect(loading?.kind).toBe('object');
+    expect(loading?.supertypes).toContain('S');
+  });
+
+  it('ENUM-PASCAL-4 — entry character column is exact (semantic-token regression)', () => {
+    // The entry regex match includes the trailing delimiter; a wrong column
+    // produced overlapping semantic tokens in the live editor.
+    const line = 'enum class Weather { Sunny, Rainy, SNOWY }';
+    const syms = symbols(line);
+    for (const name of ['Sunny', 'Rainy', 'SNOWY']) {
+      const entry = syms.find(s => s.name === name)!;
+      expect(entry.character).toBe(line.indexOf(name));
+    }
+    // Multi-line with ctor args: column points at the name, not the args.
+    const multi = 'enum class P(val x: Int) {\n    Mercury(1), Venus(2);\n}';
+    const msyms = symbols(multi);
+    expect(msyms.find(s => s.name === 'Mercury')!.character).toBe(4);
+    expect(msyms.find(s => s.name === 'Venus')!.character).toBe('    Mercury(1), '.length);
+  });
+});

@@ -64,7 +64,11 @@ const RE_ANON_OBJECT = /\bobject\s*:/;
 const RE_FUN        = /^\s*(?:@\w+(?:\([^)]*\))?\s+)*(?:(?:public|private|protected|internal|override|abstract|open|actual|expect|suspend|inline|noinline|crossinline|infix|operator|tailrec|external)\s+)*fun\s+(?:<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>\s+)?(?:(?:\w+(?:<(?:[^<>]|<[^<>]*>)*>)?[?]?\.)+)?([\p{L}\p{N}_]+|`[^`]+`)\s*[(<]/u;
 const RE_PROP       = /^\s*(?:(?:public|private|protected|internal|override|open|abstract|actual|expect|lateinit|const)\s+)*(val|var)\s+([\p{L}\p{N}_]+)\s*(?:[=:(<]|\bby\b)/u;
 const RE_TYPEALIAS  = /^\s*(?:(?:public|private|internal|actual)\s+)?typealias\s+([\p{L}\p{N}_]+)(?:<[^>]*>)?\s*=\s*(.+)/u;
-const RE_ENUM_ENTRY = /^\s*([A-Z][A-Z0-9_]*)(?:\s*[,(;({]|$)/;
+// Enum entries may be SCREAMING_CASE or UpperCamelCase (both are legal and
+// idiomatic Kotlin). The name must exhaust the identifier: requiring a
+// delimiter (or EOL/comment) right after prevents `Home` from being indexed
+// as a phantom entry `H`.
+const RE_ENUM_ENTRY = /^\s*([A-Z]\w*)\s*(?:[,(;({]|\/\/|$)/;
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -222,10 +226,16 @@ export function parse(uriString: string, text: string): ParsedFile {
             else if (parenD > 0)               { continue; }
             if (ch === ',' || ch === ';' || i === inline.length) {
               const seg = inline.slice(segStart, i);
-              const sm  = /^\s*([A-Z][A-Z0-9_]*)/.exec(seg);
+              // Same full-identifier rule as RE_ENUM_ENTRY: the name must be
+              // followed by ctor args, a body, a comment, or end of segment —
+              // never a partial match (`Home` must not index as `H`).
+              const sm  = /^\s*([A-Z]\w*)\s*(?:[({]|\/\/|$)/.exec(seg);
+              // seg.indexOf, not sm[0] arithmetic: sm[0] swallows the trailing
+              // delimiter, which would shift `character` past the name and
+              // produce overlapping semantic tokens.
               if (sm) symbols.push({
                 name: sm[1], kind: 'enum', line: lineNum,
-                character: enumBodyOpen + 1 + segStart + (sm[0].length - sm[1].length),
+                character: enumBodyOpen + 1 + segStart + seg.indexOf(sm[1]),
                 isComposable: false, depth: braceDepth + 1,
               });
               if (ch === ';') break;
@@ -276,7 +286,7 @@ export function parse(uriString: string, text: string): ParsedFile {
         // Split the line at depth-0 commas so that `REGULAR, EXTRA` on one line
         // indexes both entries. Paren depth is tracked so commas inside constructor
         // args like `ACTIVE(1), INACTIVE(0)` don't create spurious splits.
-        const RE_ENTRY_NAME = /^\s*([A-Z][A-Z0-9_]*)/;
+        const RE_ENTRY_NAME = /^\s*([A-Z]\w*)\s*(?:[({]|\/\/|$)/;
         let parenD = 0;
         let segStart = 0;
         for (let i = 0; i <= raw.length; i++) {
@@ -287,7 +297,9 @@ export function parse(uriString: string, text: string): ParsedFile {
           if (ch === ',' || ch === ';' || ch === '{' || i === raw.length) {
             const seg = raw.slice(segStart, i);
             const sm = RE_ENTRY_NAME.exec(seg);
-            if (sm) symbols.push({ name: sm[1], kind: 'enum', line: lineNum, character: segStart + (sm[0].length - sm[1].length), isComposable: false, depth: braceDepth });
+            // seg.indexOf(name): RE_ENTRY_NAME's match includes the trailing
+            // delimiter, so sm[0]-length arithmetic would shift the column.
+            if (sm) symbols.push({ name: sm[1], kind: 'enum', line: lineNum, character: segStart + seg.indexOf(sm[1]), isComposable: false, depth: braceDepth });
             if (ch === ';' || ch === '{') break;
             segStart = i + 1;
           }

@@ -69,6 +69,8 @@ import { DrawableResourceIndex } from './indexer/DrawableResourceIndex';
 import { DrawableHoverProvider } from './providers/DrawableHoverProvider';
 import { DrawableXmlPreviewPanel, DrawableXmlPreviewLensProvider } from './providers/DrawableXmlPreviewPanel';
 import { registerInlineFeatureToggles } from './commands/InlineFeatureToggles';
+import { SealedWhenCoverageProvider } from './providers/SealedWhenCoverageProvider';
+import { registerAddMissingWhenBranches } from './commands/addMissingWhenBranches';
 import { registerChatParticipant } from './ai/KotlinJumpChatParticipant';
 
 const WORD_RE = /[A-Za-z_]\w*/;
@@ -78,6 +80,7 @@ let _index:            SymbolIndex | undefined;
 let _context:          vscode.ExtensionContext | undefined;
 let _stats:            Map<string, { mtime: number; size: number }> = new Map();
 let _semanticTokens:   KotlinSemanticTokensProvider | undefined;
+let _sealedWhen:       SealedWhenCoverageProvider | undefined;
 let _signatureHelp:    KotlinSignatureHelpProvider  | undefined;
 let _snapshotEnabled:  boolean = true;
 
@@ -548,6 +551,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     codeLens.evictFile(uri.toString());
     _signatureHelp?.evictFile(uri.toString());
     invalidateContentCache(uri.toString());
+    _sealedWhen?.bumpEpoch(); // sealed subtype sets may have changed in any file
   }, log);
   context.subscriptions.push(watcher, { dispose: () => scanner.destroy() });
 
@@ -888,6 +892,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         if (e.affectsConfiguration('kotlinJump.overrideGutterIcons')) overrideProvider.fireChange();
       }),
     );
+  })();
+
+  // ── Sealed when coverage — ✓ N/N branches lens above when(sealed/enum) ────
+  (() => {
+    const sealedWhen = new SealedWhenCoverageProvider(index, log);
+    _sealedWhen = sealedWhen;
+    context.subscriptions.push(
+      sealedWhen,
+      vscode.languages.registerCodeLensProvider({ language: 'kotlin' }, sealedWhen),
+      vscode.workspace.onDidChangeConfiguration(e => {
+        if (e.affectsConfiguration('kotlinJump.sealedWhenCoverage')) sealedWhen.fireChange();
+      }),
+    );
+    registerAddMissingWhenBranches(context, index, log);
   })();
 
   context.subscriptions.push(

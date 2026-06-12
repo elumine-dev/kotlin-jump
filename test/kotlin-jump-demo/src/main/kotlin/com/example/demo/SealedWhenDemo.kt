@@ -153,3 +153,37 @@ fun battleTitle(screen: NavigationScreen.Battle): String = when (screen) { // �
     is NavigationScreen.Battle.Active -> "Battle!"
     is NavigationScreen.Battle.Result -> "Results"
 }
+
+// ── Enum coverage ─────────────────────────────────────────────────────────────
+
+enum class Weather { Sunny, Rainy, Stormy, SNOWY }
+
+fun weatherEmoji(w: Weather): String = when (w) {                          // ✓ 4/4
+    Weather.Sunny  -> "☀️"
+    Weather.Rainy  -> "🌧"
+    Weather.Stormy -> "⛈"
+    Weather.SNOWY  -> "❄️"
+}
+
+fun weatherLabel(w: Weather): String = when (w) {                          // ⚠ 2/4
+    Weather.Sunny -> "Beau temps"
+    Weather.Rainy -> "Pluie"
+    else          -> "Météo difficile"
+}
+
+// ── data object (idiome Kotlin 1.9+) ─────────────────────────────────────────
+
+sealed interface SyncState {
+    data object Idle    : SyncState
+    data object Syncing : SyncState
+    data class Failed(val reason: String) : SyncState
+}
+
+fun logSyncState(s: SyncState) {
+    // when STATEMENT (valeur ignorée) : compile même incomplet — la lens
+    // affiche ⚠ 2/3 et le clic insère la branche Syncing manquante.
+    when (s) {                                                             // ⚠ 2/3 (Syncing manquant)
+        SyncState.Idle      -> println("À jour")
+        is SyncState.Failed -> println("Échec : ${s.reason}")
+    }
+}

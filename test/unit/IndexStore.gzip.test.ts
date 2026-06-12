@@ -75,13 +75,13 @@ describe('IndexStore — gzip snapshot (v19)', () => {
     // 2. Decompressed payload is valid JSON with the right shape
     const json = zlib.gunzipSync(buf).toString('utf8');
     const snap = JSON.parse(json);
-    expect(snap.version).toBe(19);
+    expect(snap.version).toBe(IndexStore.SNAPSHOT_VERSION);
     expect(Object.keys(snap.files).length).toBe(50);
 
     // 3. load() round-trips — returns a non-null snapshot
     const loaded = await IndexStore.load(makeContext());
     expect(loaded).not.toBeNull();
-    expect(loaded!.version).toBe(19);
+    expect(loaded!.version).toBe(IndexStore.SNAPSHOT_VERSION);
     expect(Object.keys(loaded!.files).length).toBe(50);
   });
 
@@ -113,14 +113,14 @@ class WidgetCarousel${i} {
   });
 
   it('load() falls back to raw JSON for legacy v18 (non-gzipped) bytes', async () => {
-    // Synthesise a v19 snapshot but write it as raw JSON (without gzip).
-    // load() should detect the missing magic and parse as JSON.
-    const rawSnap = { version: 19, files: { 'file:///x.kt': { t: 1, p: 'p', n: ['x'], k: ['fun'], l: [0], c: [0], i: [0], d: [0] } } };
+    // Synthesise a current-version snapshot but write it as raw JSON (without
+    // gzip). load() should detect the missing magic and parse as JSON.
+    const rawSnap = { version: IndexStore.SNAPSHOT_VERSION, files: { 'file:///x.kt': { t: 1, p: 'p', n: ['x'], k: ['fun'], l: [0], c: [0], i: [0], d: [0] } } };
     writtenBytes = Buffer.from(JSON.stringify(rawSnap), 'utf8');
 
     const loaded = await IndexStore.load(makeContext());
     expect(loaded).not.toBeNull();
-    expect(loaded!.version).toBe(19);
+    expect(loaded!.version).toBe(IndexStore.SNAPSHOT_VERSION);
     expect(Object.keys(loaded!.files)).toEqual(['file:///x.kt']);
   });
 

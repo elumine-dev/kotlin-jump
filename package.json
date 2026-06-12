@@ -962,6 +962,11 @@
           "default": true,
           "markdownDescription": "Show override and implementation gutter lenses above interface members, abstract declarations, and overrides."
         },
+        "kotlinJump.sealedWhenCoverage": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show a coverage CodeLens above `when (subject)` expressions over sealed class/interface subtypes and enum entries (`✓ 3/3 branches`, `⚠ 2/3 branches, missing: Error`). Click an incomplete lens to insert the missing branches."
+        },
         "kotlinJump.suspendCallMarkers": {
           "type": "boolean",
           "default": true,

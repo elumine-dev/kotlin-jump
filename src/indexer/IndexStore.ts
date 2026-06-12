@@ -5,7 +5,7 @@ import { SymbolIndex } from './SymbolIndex';
 import { SymbolKind } from './KotlinParser';
 import { decodeUtf8 } from '../util/encoding';
 
-const SNAPSHOT_VERSION = 19; // bumped: gzip-compressed payload (was raw JSON in v18)
+export const SNAPSHOT_VERSION = 20; // bumped: enum-entry parsing fix (v19 snapshots may hold phantom entries like `H` for `Home`)
 const SNAPSHOT_FILENAME = 'kotlin-jump-index.json'; // historical name; content is gzip from v19+
 
 const gzip   = promisify(zlib.gzip);

@@ -1,40 +1,40 @@
 {
-  "version": "1.18.3",
+  "version": "1.19.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Richer @Suppress hover, sharper inlay navigation",
-  "summary": "Adds plain-English hover for @Suppress codes, fixes Cmd+Click on inlay hints to jump to the parameter declaration rather than the function name, and standardizes all user-facing UI text.",
+  "tagline": "Kotlin Jump now works on vscode.dev",
+  "summary": "Version 1.19.0 fixes activation on VS Code for the Web and brings the full pure JavaScript feature set to the browser: folding and swatches, Find Usages, drawable previews, the vector side panel, and clickable inlay hints.",
   "highlights": [
     {
-      "title": "Suppress Code Hover",
-      "description": "Hovering over a suppression ID inside @Suppress, @SuppressLint, or @SuppressWarnings now shows a plain English description of what that code disables, covering Kotlin compiler warnings, Android Lint checks, and Java warnings, without leaving the editor.",
+      "title": "Works on vscode.dev",
+      "description": "Activation no longer crashes in the web extension host. Indexing, Find Usages, string and color folding, hex swatches, null assertion highlighting, semantic tokens, and the What's New panel all run in the browser now.",
+      "kind": "fix"
+    },
+    {
+      "title": "Drawable Previews in the Browser",
+      "description": "Hover any R.drawable reference for an inline thumbnail, and open a vector drawable XML to get the auto-opening side preview with its references CodeLens, now on the web as well as desktop.",
       "kind": "feature"
     },
     {
-      "title": "Inlay Hint Navigation",
-      "description": "Cmd+Click on a parameter inlay hint now resolves to the parameter declaration itself (for example, val name: String in a data class) rather than the enclosing function or constructor name.",
-      "kind": "improvement"
-    },
-    {
-      "title": "Consistent UI Text",
-      "description": "All user-facing strings across tooltips, menu items, and status bar messages were reviewed and standardized, removing inconsistent punctuation throughout the extension.",
-      "kind": "improvement"
+      "title": "Inline Toggles and Inlay Navigation on the Web",
+      "description": "The editor toolbar buttons for the inline features now work on vscode.dev, including the Shift+Alt+I master toggle, and jumping to a parameter from an inlay hint lands cleanly without a stray References peek.",
+      "kind": "feature"
     }
   ],
   "sections": [
     {
       "heading": "Improvements",
       "bullets": [
-        "Hovering over a @Suppress, @SuppressLint, or @SuppressWarnings code now displays a plain-English description of what that suppression disables, with coverage for Kotlin compiler diagnostics, Android Lint checks, and Java warnings.",
-        "Cmd+Click on a parameter inlay hint now resolves to the correct parameter declaration rather than the function or constructor name, making navigation from call sites precise.",
-        "All user-facing strings in tooltips, quick-pick labels, status bar text, and menu items were standardized for consistent, clean prose across the extension."
+        "The browser build registers everything that does not need Node.js: inline feature toggles, the @Suppress hover, drawable hover thumbnails, the vector drawable side preview with its references CodeLens, and clickable inlay hint navigation.",
+        "Desktop-only commands (library sources download, Gradle detection) now show a clear unavailability message in the browser instead of failing silently.",
+        "Added a companion tools section to the README documenting detekt-lsp and SearchDeadCode as complementary Kotlin development tools."
       ]
     },
     {
-      "heading": "Notes",
+      "heading": "Fixes",
       "bullets": [
-        "The in-editor walkthrough now mentions KDoc hover, the string locale grid, and suspend call markers in existing steps, making those features easier to discover after install.",
-        "The Marketplace and Open VSX display name was updated to include Android Studio to improve search discoverability for Android developers.",
-        "No changes to indexing, code folding, Gradle integration, Android Run, or Find Usages behavior since v1.18.2."
+        "Fixed extension activation on vscode.dev, which crashed in the web worker before indexing could start.",
+        "Fixed Find Usages, index snapshot persistence, the What's New panel, and viewport semantic highlighting in the browser, all of which relied on Node-only globals.",
+        "Fixed inlay hint navigation in the browser so jumping to a parameter no longer opens the References peek on top of the destination."
       ]
     }
   ],

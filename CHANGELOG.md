@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.19.0
+
+Version 1.19.0 makes Kotlin Jump work on VS Code for the Web. Activation previously crashed on vscode.dev; the full pure JavaScript feature set now runs in the browser, verified end to end on a live web extension host.
+
+### Improvements
+- The browser build now registers everything that does not need Node.js: the editor toolbar toggles for string, color, and const val folding, hex swatches, and null assertion highlighting (with the Shift+Alt+I master toggle), the @Suppress hover, R.drawable hover thumbnails, the auto-opening vector drawable side preview with its references CodeLens, and clickable inlay hint navigation.
+- A shared encoding utility now backs every byte-to-text conversion in code common to both hosts. Desktop keeps the zero-copy Buffer fast path; the web host uses TextDecoder and btoa with identical output, BOM handling included.
+- Desktop-only commands (library sources download, Gradle detection) show a clear "Not available in VS Code for the Web" message instead of failing silently when invoked in the browser.
+- Added a companion tools section to the README documenting detekt-lsp and SearchDeadCode as complementary Kotlin development tools.
+
+### Fixes
+- Fixed extension activation on vscode.dev: the parser worker pool read `__dirname` outside its fallback guard, which crashed activate() in the web worker before indexing could start.
+- Fixed Find Usages, index snapshot persistence, and the What's New panel in the browser; all three relied on the Node-only Buffer global and threw on first use.
+- Fixed viewport semantic highlighting in the browser: the range tokens provider scheduled its cache fill with Node-only setImmediate and failed on every freshly opened document.
+- Fixed inlay hint navigation in the browser: the post-navigation suppression guard introduced in 1.18.3 was missing from the web entry, so jumping to a parameter from a hint opened the References peek on top of the destination.
+- The vector preview references CodeLens provider is now disposed on deactivation, on desktop and web alike.
+
 ## 1.18.3
 
 Adds plain-English hover for @Suppress codes, fixes Cmd+Click on inlay hints to jump to the parameter declaration rather than the function name, and standardizes all user-facing UI text.

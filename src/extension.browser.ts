@@ -9,7 +9,7 @@ import * as vscode from 'vscode';
 import { SymbolIndex } from './indexer/SymbolIndex';
 import { FileScanner } from './indexer/FileScanner';
 import { FileWatcher } from './watcher/FileWatcher';
-import { KotlinDefinitionProvider, getPendingDeclNav, clearPendingDeclNav, navigateFromInlay } from './providers/DefinitionProvider';
+import { KotlinDefinitionProvider, getPendingDeclNav, clearPendingDeclNav, navigateFromInlay, isInlayNavSuppressed } from './providers/DefinitionProvider';
 import { KotlinDocumentSymbolProvider } from './providers/DocumentSymbolProvider';
 import { KotlinHoverProvider } from './providers/HoverProvider';
 import { KotlinReferenceProvider } from './providers/ReferenceProvider';
@@ -498,6 +498,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
 
     vscode.window.onDidChangeTextEditorSelection(e => {
+      // Inlay-hint navigation just landed (or is in flight): suppress the
+      // smart-nav consumption entirely during the post-nav race window.
+      // Same guard as extension.ts — without it, clicking an inlay hint
+      // on vscode.dev opened the References peek on top of the navigation.
+      if (isInlayNavSuppressed()) {
+        clearPendingDeclNav();
+        return;
+      }
       const pending = getPendingDeclNav();
       if (!pending) return;
       if (e.kind !== vscode.TextEditorSelectionChangeKind.Command) {

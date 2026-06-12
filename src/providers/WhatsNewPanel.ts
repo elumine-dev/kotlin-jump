@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { decodeUtf8 } from '../util/encoding';
 
 interface WhatsNewHighlight {
   title: string;
@@ -102,13 +103,14 @@ export class WhatsNewPanel {
       // freshly-drafted whats-new JSON to a temp path and exports
       // KJ_WHATS_NEW_JSON so the dev host reads THAT instead of the
       // shipped file. Without this, the preview webview would show the
-      // previous release's content.
-      const overridePath = process.env.KJ_WHATS_NEW_JSON;
+      // previous release's content. `process` is absent in the web
+      // extension host — guard before touching it.
+      const overridePath = typeof process !== 'undefined' ? process.env.KJ_WHATS_NEW_JSON : undefined;
       const uri = overridePath
         ? vscode.Uri.file(overridePath)
         : vscode.Uri.joinPath(context.extensionUri, 'media', 'whats-new.json');
       const raw = await vscode.workspace.fs.readFile(uri);
-      const data = JSON.parse(Buffer.from(raw).toString('utf8')) as WhatsNewData;
+      const data = JSON.parse(decodeUtf8(raw)) as WhatsNewData;
 
       if (
         !data ||

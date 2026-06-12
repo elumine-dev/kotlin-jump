@@ -2,12 +2,14 @@
 //   - JAR scanning (GradleSourcesScanner, MavenSourcesScanner, KotlinJarContentProvider)
 //   - Test runner (KotlinTestController) and Android run / ADB commands
 //   - MCP server definition provider (requires process.execPath)
-// All pure-JS features work normally: navigation, highlighting, folding, chat.
+//   - Drawable gutter thumbnails + inline XML preview (render cache on node:fs)
+// All pure-JS features work normally: navigation, highlighting, folding, chat,
+// inline feature toggles, drawable hover + vector preview, inlay navigation.
 import * as vscode from 'vscode';
 import { SymbolIndex } from './indexer/SymbolIndex';
 import { FileScanner } from './indexer/FileScanner';
 import { FileWatcher } from './watcher/FileWatcher';
-import { KotlinDefinitionProvider, getPendingDeclNav, clearPendingDeclNav } from './providers/DefinitionProvider';
+import { KotlinDefinitionProvider, getPendingDeclNav, clearPendingDeclNav, navigateFromInlay } from './providers/DefinitionProvider';
 import { KotlinDocumentSymbolProvider } from './providers/DocumentSymbolProvider';
 import { KotlinHoverProvider } from './providers/HoverProvider';
 import { KotlinReferenceProvider } from './providers/ReferenceProvider';
@@ -62,6 +64,11 @@ import { ResourceDiagnosticProvider } from './providers/ResourceDiagnosticProvid
 import { VersionCatalogHoverProvider } from './providers/VersionCatalogHoverProvider';
 import { OverrideGutterProvider } from './providers/OverrideGutterProvider';
 import { NavigationHistoryProvider } from './providers/NavigationHistoryProvider';
+import { SuppressHoverProvider } from './providers/SuppressHoverProvider';
+import { DrawableResourceIndex } from './indexer/DrawableResourceIndex';
+import { DrawableHoverProvider } from './providers/DrawableHoverProvider';
+import { DrawableXmlPreviewPanel, DrawableXmlPreviewLensProvider } from './providers/DrawableXmlPreviewPanel';
+import { registerInlineFeatureToggles } from './commands/InlineFeatureToggles';
 import { registerChatParticipant } from './ai/KotlinJumpChatParticipant';
 
 const WORD_RE = /[A-Za-z_]\w*/;
@@ -147,6 +154,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (!enabled) return { dispose: () => {} };
       return vscode.languages.registerHoverProvider(KT_JAVA, new KotlinHoverProvider(index));
     })(),
+    ...(!isCompanion ? [vscode.languages.registerHoverProvider(KT_JAVA, new SuppressHoverProvider())] : []),
     vscode.languages.registerReferenceProvider(KT_JAVA, new KotlinReferenceProvider(index, log)),
     vscode.languages.registerImplementationProvider(KT_JAVA, new KotlinImplementationProvider(index)),
     vscode.languages.registerTypeHierarchyProvider(KT_JAVA, new KotlinTypeHierarchyProvider(index)),
@@ -236,6 +244,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         });
       },
     ),
+
+    // Inlay-hint navigation wrapper — same wiring as extension.ts. Without
+    // it, clicking any inlay hint on vscode.dev errors with "command not
+    // found" even though the hints themselves render fine.
+    vscode.commands.registerCommand('kotlin-jump._navigateInlay', navigateFromInlay),
 
     vscode.commands.registerCommand('kotlin-jump.goToClassImpl',
       async (name: string, packageName: string) => {
@@ -753,6 +766,86 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
   })();
 
+  // ── R.drawable / R.mipmap — hover preview + vector side panel ─────────────
+  // Web subset of the desktop drawable block: gutter thumbnails and the
+  // inline XML preview need a node:fs render cache, so only the pure-JS
+  // pieces (hover, side panel webview, references CodeLens) ship here.
+  (() => {
+    const drawableIndex = new DrawableResourceIndex();
+
+    const dwW1 = vscode.workspace.createFileSystemWatcher('**/res/drawable*/*');
+    const dwW2 = vscode.workspace.createFileSystemWatcher('**/res/mipmap*/*');
+
+    vscode.workspace.findFiles(
+      '**/res/{drawable,mipmap}*/*.{xml,png,webp,svg,jpg,jpeg,gif,bmp}',
+      `{${excludeList.join(',')}}`,
+    ).then(uris => { for (const u of uris) drawableIndex.addFile(u); });
+
+    for (const w of [dwW1, dwW2]) {
+      w.onDidCreate(uri => drawableIndex.addFile(uri));
+      w.onDidChange(uri => drawableIndex.addFile(uri));
+      w.onDidDelete(uri => drawableIndex.removeFile(uri));
+    }
+
+    const sidePreview = new DrawableXmlPreviewPanel();
+    // The lens provider owns an onDidSaveTextDocument subscription — keep the
+    // instance so its dispose() runs (the registration alone doesn't call it).
+    const previewLens = new DrawableXmlPreviewLensProvider(index);
+    context.subscriptions.push(
+      drawableIndex,
+      sidePreview,
+      previewLens,
+      vscode.languages.registerHoverProvider(KT_JAVA, new DrawableHoverProvider(drawableIndex)),
+      vscode.languages.registerCodeLensProvider(
+        { language: 'xml', pattern: '**/res/drawable*/*.xml' },
+        previewLens,
+      ),
+      vscode.commands.registerCommand('kotlinJump.vectorPreview.show', () => sidePreview.show()),
+      vscode.commands.registerCommand('kotlinJump.vectorPreview.close', () => sidePreview.close()),
+      // Wrapper around `editor.action.showReferences` that auto-closes the
+      // peek on first navigation — same contract as extension.ts.
+      vscode.commands.registerCommand(
+        'kotlinJump.vectorPreview.showRefsAutoClose',
+        async (uri: vscode.Uri, pos: vscode.Position, locs: vscode.Location[]) => {
+          const initialUri = vscode.window.activeTextEditor?.document.uri.toString();
+          let listener: vscode.Disposable | undefined;
+          let timeout: ReturnType<typeof setTimeout> | undefined;
+          const cleanup = (): void => {
+            listener?.dispose();
+            listener = undefined;
+            if (timeout) clearTimeout(timeout);
+          };
+          listener = vscode.window.onDidChangeActiveTextEditor(e => {
+            if (!e || e.document.uri.toString() === initialUri) return;
+            cleanup();
+            void vscode.commands.executeCommand('closeReferenceSearch');
+          });
+          timeout = setTimeout(cleanup, 60_000);
+          await vscode.commands.executeCommand(
+            'editor.action.showReferences', uri, pos, locs,
+          );
+        },
+      ),
+      vscode.commands.registerCommand(
+        'kotlinJump.vectorPreview.gotoSingleRef',
+        async (uri: vscode.Uri, pos: vscode.Position) => {
+          const sel = new vscode.Range(pos, pos);
+          await vscode.commands.executeCommand('vscode.open', uri, {
+            preview: false,
+            selection: sel,
+          } as vscode.TextDocumentShowOptions);
+        },
+      ),
+      dwW1, dwW2,
+    );
+  })();
+
+  // ── Inline feature toggles — buttons in editor/title + master toggle ──────
+  // Shared with extension.ts (see InlineFeatureToggles.ts). These commands
+  // back the always-visible editor toolbar buttons on Kotlin/Java files, so
+  // skipping them on the web meant every button errored on vscode.dev.
+  registerInlineFeatureToggles(context);
+
   (() => {
     const vcIndex = new VersionCatalogIndex();
     const GRADLE_FILES = [{ language: 'kotlin' }, { language: 'groovy' }];
@@ -910,6 +1003,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       vscode.window.showWarningMessage(`Kotlin Jump: ${WEB_UNAVAILABLE}`);
     }),
     vscode.commands.registerCommand('kotlin-jump.pairAdbWifi', () => {
+      vscode.window.showWarningMessage(`Kotlin Jump: ${WEB_UNAVAILABLE}`);
+    }),
+    vscode.commands.registerCommand('kotlin-jump.sources.openActions', () => {
+      vscode.window.showWarningMessage(`Kotlin Jump: ${WEB_UNAVAILABLE}`);
+    }),
+    vscode.commands.registerCommand('kotlin-jump.sources.downloadMissing', () => {
+      vscode.window.showWarningMessage(`Kotlin Jump: ${WEB_UNAVAILABLE}`);
+    }),
+    vscode.commands.registerCommand('kotlin-jump.sources.refresh', () => {
+      vscode.window.showWarningMessage(`Kotlin Jump: ${WEB_UNAVAILABLE}`);
+    }),
+    vscode.commands.registerCommand('kotlin-jump.diagnoseGradleDetection', () => {
+      vscode.window.showWarningMessage(`Kotlin Jump: ${WEB_UNAVAILABLE}`);
+    }),
+    vscode.commands.registerCommand('kotlin-jump.resetGradleProject', () => {
+      vscode.window.showWarningMessage(`Kotlin Jump: ${WEB_UNAVAILABLE}`);
+    }),
+    vscode.commands.registerCommand('kotlin-jump.pickGradleProject', () => {
       vscode.window.showWarningMessage(`Kotlin Jump: ${WEB_UNAVAILABLE}`);
     }),
   );

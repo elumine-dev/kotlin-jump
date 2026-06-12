@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { vectorXmlToSvg } from '../util/vectorToSvg';
 import { SymbolIndex } from '../indexer/SymbolIndex';
 import { isExcluded } from './FindUsagesEngine';
+import { decodeUtf8 } from '../util/encoding';
 
 const DRAWABLE_PATH_RE = /\/res\/drawable[^/]*\//;
 const VECTOR_OPEN_RE = /<vector\b/;
@@ -174,7 +175,7 @@ export class DrawableXmlPreviewLensProvider implements vscode.CodeLensProvider, 
         const uri = vscode.Uri.parse(uriStr);
         try {
           const bytes = await vscode.workspace.fs.readFile(uri);
-          const text = Buffer.from(bytes).toString('utf8');
+          const text = decodeUtf8(bytes);
           if (!text.includes(drawablePrefix) && !text.includes(mipmapPrefix)) continue;
           const lines = text.split('\n');
           for (let i = 0; i < lines.length; i++) {

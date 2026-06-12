@@ -59,6 +59,7 @@ import { HexColorFoldingProvider } from './providers/HexColorFoldingProvider';
 import { HexColorDocumentColorProvider } from './providers/HexColorDocumentColorProvider';
 import { ApiLevelProvider } from './providers/ApiLevelProvider';
 import { registerAndroidRunCommand } from './commands/AndroidRunCommand';
+import { registerInlineFeatureToggles } from './commands/InlineFeatureToggles';
 import { ColorResourceIndex } from './indexer/ColorResourceIndex';
 import { DimenResourceIndex } from './indexer/DimenResourceIndex';
 import { DimenResourceDefinitionProvider } from './providers/DimenResourceDefinitionProvider';
@@ -944,16 +945,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         // CodeLens above `<vector>` exposes the same command so the
         // affordance is always discoverable in-context.
         const sidePreview = new DrawableXmlPreviewPanel();
+        // The lens provider owns an onDidSaveTextDocument subscription — keep
+        // the instance so its dispose() runs (the registration alone doesn't).
+        const previewLens = new DrawableXmlPreviewLensProvider(index);
         return [
           xmlPreview,
           sidePreview,
+          previewLens,
           vscode.languages.registerHoverProvider(
             { language: 'xml', pattern: '**/res/drawable*/*.xml' },
             xmlPreview,
           ),
           vscode.languages.registerCodeLensProvider(
             { language: 'xml', pattern: '**/res/drawable*/*.xml' },
-            new DrawableXmlPreviewLensProvider(index),
+            previewLens,
           ),
           vscode.commands.registerCommand('kotlinJump.vectorPreview.show', () => sidePreview.show()),
           vscode.commands.registerCommand('kotlinJump.vectorPreview.close', () => sidePreview.close()),
@@ -1009,6 +1014,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           ),
         ];
       })(),
+      drawableIndex,
       gutter,
       dwW1, dwW2,
     );
@@ -1440,85 +1446,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   runJarScan();
 
   // ── Inline feature toggles — buttons in editor/title + master toggle ──────
-  // Each Kotlin Jump inline feature (string folding, color folding, const val
-  // folding, hex color swatch, null assertion highlight) gets enable/disable/
-  // toggle commands wired to a setting. Context keys are published so the
-  // editor/title menu can swap the icon (enable vs disable) based on state.
-  // The master command flips all inline features off (or all on if all are
-  // currently off) — a one-click panic button.
-  (() => {
-    interface InlineFeature { setting: string; ctxKey: string; }
-    const FEATURES: InlineFeature[] = [
-      { setting: 'stringResourceFolding',  ctxKey: 'stringFoldingEnabled' },
-      { setting: 'colorResourceFolding',   ctxKey: 'colorFoldingEnabled' },
-      { setting: 'constValFolding',        ctxKey: 'constValFoldingEnabled' },
-      { setting: 'hexColorSwatch',         ctxKey: 'hexColorSwatchEnabled' },
-      { setting: 'nullAssertionHighlight', ctxKey: 'nullAssertionHighlightEnabled' },
-    ];
-
-    const syncContexts = (): void => {
-      const cfg = vscode.workspace.getConfiguration('kotlinJump');
-      for (const f of FEATURES) {
-        void vscode.commands.executeCommand(
-          'setContext',
-          `kotlinJump.${f.ctxKey}`,
-          cfg.get<boolean>(f.setting, true),
-        );
-      }
-    };
-    syncContexts();
-
-    const setOne = (setting: string, value: boolean): Thenable<void> =>
-      vscode.workspace.getConfiguration('kotlinJump')
-        .update(setting, value, vscode.ConfigurationTarget.Global);
-
-    // stringResourceFolding's enable/disable/toggle are already registered in
-    // the dedicated string-folding IIFE above — don't double-register.
-    const FIXED: Array<[string, string, boolean]> = [
-      ['enableColorFolding',            'colorResourceFolding',   true],
-      ['disableColorFolding',           'colorResourceFolding',   false],
-      ['enableConstValFolding',         'constValFolding',        true],
-      ['disableConstValFolding',        'constValFolding',        false],
-      ['enableHexColorSwatch',          'hexColorSwatch',         true],
-      ['disableHexColorSwatch',         'hexColorSwatch',         false],
-      ['enableNullAssertionHighlight',  'nullAssertionHighlight', true],
-      ['disableNullAssertionHighlight', 'nullAssertionHighlight', false],
-    ];
-    const TOGGLES: Array<[string, string]> = [
-      ['toggleColorFolding',           'colorResourceFolding'],
-      ['toggleConstValFolding',        'constValFolding'],
-      ['toggleHexColorSwatch',         'hexColorSwatch'],
-      ['toggleNullAssertionHighlight', 'nullAssertionHighlight'],
-    ];
-
-    const subs: vscode.Disposable[] = [];
-    for (const [cmd, setting, val] of FIXED) {
-      subs.push(vscode.commands.registerCommand(`kotlinJump.${cmd}`, () => setOne(setting, val)));
-    }
-    for (const [cmd, setting] of TOGGLES) {
-      subs.push(vscode.commands.registerCommand(`kotlinJump.${cmd}`, () => {
-        const current = vscode.workspace.getConfiguration('kotlinJump').get<boolean>(setting, true);
-        return setOne(setting, !current);
-      }));
-    }
-    // Master: if ANY feature is on, turn ALL off. Otherwise, turn ALL on.
-    // Asymmetric semantics make this a reliable "shut everything off" button
-    // while keeping a one-click restore from a clean-slate state.
-    subs.push(vscode.commands.registerCommand('kotlinJump.toggleAllInlineFeatures', async () => {
-      const cfg = vscode.workspace.getConfiguration('kotlinJump');
-      const anyOn = FEATURES.some(f => cfg.get<boolean>(f.setting, true));
-      const target = !anyOn;
-      for (const f of FEATURES) {
-        await cfg.update(f.setting, target, vscode.ConfigurationTarget.Global);
-      }
-    }));
-    subs.push(vscode.workspace.onDidChangeConfiguration(e => {
-      if (FEATURES.some(f => e.affectsConfiguration(`kotlinJump.${f.setting}`))) {
-        syncContexts();
-      }
-    }));
-    context.subscriptions.push(...subs);
-  })();
+  // Shared with extension.browser.ts (see InlineFeatureToggles.ts).
+  registerInlineFeatureToggles(context);
 
   // ── Chat Participant (F7) ─────────────────────────────────────────────────
   registerChatParticipant(context, index);

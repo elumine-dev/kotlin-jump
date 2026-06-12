@@ -2,6 +2,8 @@ node_modules/
 dist/
 *.vsix
 .vscode-test/
+# @vscode/test-web downloads VS Code Web here when smoke-testing the browser build
+.vscode-test-web/
 test/kotlin-lsp-main/*
 test/vscode-kotlin-main/*
 test/kotlin-jump-demo/.gradle/

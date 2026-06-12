@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.20.0
+
+Adds a sealed `when` coverage CodeLens that shows branch coverage inline and inserts every missing case in one click. Works on sealed classes, sealed interfaces, and enums, on desktop and on vscode.dev.
+
+### Features
+- A CodeLens above every `when` over a sealed hierarchy or enum shows coverage at a glance: `✓ 3/3 branches` when exhaustive, `⚠ 2/3 branches, missing: Draw` when incomplete, and `✓ else covers 2 remaining` when an `else` hides unhandled subtypes.
+- Clicking an incomplete lens inserts the missing branches with `TODO()` bodies. Insertion is kind-aware (bare name for objects and enum entries, `is` for classes) and mirrors the qualification style already used in the file. The cursor lands on the first inserted `TODO()`.
+- No compiler involved: the hierarchy is recovered from the branches themselves through the import-aware resolver. When a branch is ambiguous or unresolved the lens stays silent rather than showing a wrong count. Kotlin 2.1+ guard branches (`is A if cond ->`) are recognized and correctly excluded from exhaustiveness.
+- Toggle with `kotlinJump.sealedWhenCoverage` (on by default). Every analysis step and skip reason is traced as `[SealedWhen]` lines in the Kotlin Jump output channel.
+
+### Fixes
+- Enum entries written in UpperCamelCase are now indexed correctly: `enum class Screen { Home, Battle }` used to produce phantom one-letter symbols inline and drop the entries entirely in multi-line bodies, polluting Go to Symbol results.
+- Fixed the column position of enum entries with constructor arguments, which produced overlapping semantic tokens in the editor.
+
 ## 1.19.0
 
 Version 1.19.0 makes Kotlin Jump work on VS Code for the Web. Activation previously crashed on vscode.dev; the full pure JavaScript feature set now runs in the browser, verified end to end on a live web extension host.

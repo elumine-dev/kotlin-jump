@@ -1,40 +1,39 @@
 {
-  "version": "1.19.0",
+  "version": "1.20.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Kotlin Jump now works on vscode.dev",
-  "summary": "Version 1.19.0 fixes activation on VS Code for the Web and brings the full pure JavaScript feature set to the browser: folding and swatches, Find Usages, drawable previews, the vector side panel, and clickable inlay hints.",
+  "tagline": "Sealed when coverage, with one-click branch insertion",
+  "summary": "A coverage CodeLens above every `when` on a sealed hierarchy or enum: see missing branches before the compiler does, and insert them all in one click. Desktop and vscode.dev.",
   "highlights": [
     {
-      "title": "Works on vscode.dev",
-      "description": "Activation no longer crashes in the web extension host. Indexing, Find Usages, string and color folding, hex swatches, null assertion highlighting, semantic tokens, and the What's New panel all run in the browser now.",
-      "kind": "fix"
-    },
-    {
-      "title": "Drawable Previews in the Browser",
-      "description": "Hover any R.drawable reference for an inline thumbnail, and open a vector drawable XML to get the auto-opening side preview with its references CodeLens, now on the web as well as desktop.",
+      "title": "Sealed When Coverage",
+      "description": "Every `when` over a sealed class, sealed interface, or enum gets a lens: ✓ 3/3 branches when exhaustive, ⚠ 2/3 branches with the missing names when incomplete, and `else covers N remaining` when an else hides unhandled subtypes. No compiler, no waiting.",
       "kind": "feature"
     },
     {
-      "title": "Inline Toggles and Inlay Navigation on the Web",
-      "description": "The editor toolbar buttons for the inline features now work on vscode.dev, including the Shift+Alt+I master toggle, and jumping to a parameter from an inlay hint lands cleanly without a stray References peek.",
+      "title": "Insert Missing Branches",
+      "description": "Click an incomplete lens and the missing branches appear with placeholder bodies, spelled the way your file already writes them: bare names for objects and enum entries, `is` for classes, same qualification style. The cursor lands on the first inserted stub, ready to fill in.",
       "kind": "feature"
+    },
+    {
+      "title": "Truthful by Design",
+      "description": "When a branch is ambiguous or unresolved, the lens stays silent instead of guessing. Kotlin 2.1 guard branches (`is A if cond ->`) are recognized and excluded from exhaustiveness, matching the language spec.",
+      "kind": "note"
     }
   ],
   "sections": [
     {
-      "heading": "Improvements",
+      "heading": "Features",
       "bullets": [
-        "The browser build registers everything that does not need Node.js: inline feature toggles, the @Suppress hover, drawable hover thumbnails, the vector drawable side preview with its references CodeLens, and clickable inlay hint navigation.",
-        "Desktop-only commands (library sources download, Gradle detection) now show a clear unavailability message in the browser instead of failing silently.",
-        "Added a companion tools section to the README documenting detekt-lsp and SearchDeadCode as complementary Kotlin development tools."
+        "Coverage CodeLens above `when` expressions over sealed classes, sealed interfaces, and enums, with exact missing-branch names in the title.",
+        "One-click insertion of missing branches with kind-aware spelling and placeholder bodies, on desktop and vscode.dev alike.",
+        "Toggle with kotlinJump.sealedWhenCoverage; analysis steps and skip reasons are traced as [SealedWhen] lines in the Kotlin Jump output channel."
       ]
     },
     {
       "heading": "Fixes",
       "bullets": [
-        "Fixed extension activation on vscode.dev, which crashed in the web worker before indexing could start.",
-        "Fixed Find Usages, index snapshot persistence, the What's New panel, and viewport semantic highlighting in the browser, all of which relied on Node-only globals.",
-        "Fixed inlay hint navigation in the browser so jumping to a parameter no longer opens the References peek on top of the destination."
+        "UpperCamelCase enum entries are now indexed correctly; they used to produce phantom one-letter symbols in Go to Symbol or be dropped entirely.",
+        "Fixed the column of enum entries with constructor arguments, which produced overlapping semantic tokens in the editor."
       ]
     }
   ],

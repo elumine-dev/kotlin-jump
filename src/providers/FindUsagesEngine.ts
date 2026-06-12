@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { resolveBest } from '../util/ImportResolver';
 import { isInsideCommentOrString } from '../util/textUtils';
+import { decodeUtf8 } from '../util/encoding';
 import { Logger } from '../util/logger';
 
 // ── Internal: wildcard import extraction ─────────────────────────────────────
@@ -67,7 +68,7 @@ async function readCachedFile(uri: vscode.Uri, uriString: string): Promise<strin
   const hit = _contentCache.get(uriString);
   if (hit !== undefined) return hit;
   const bytes = await vscode.workspace.fs.readFile(uri);
-  const text = Buffer.from(bytes).toString('utf8');
+  const text = decodeUtf8(bytes);
   _contentCache.set(uriString, text);
   return text;
 }
@@ -347,7 +348,7 @@ export async function scanImports(
       const uri = vscode.Uri.parse(uriStr);
       try {
         const bytes = await vscode.workspace.fs.readFile(uri);
-        const text  = Buffer.from(bytes).toString('utf8');
+        const text  = decodeUtf8(bytes);
         if (!text.includes(word)) continue;
 
         const lines = text.split('\n');

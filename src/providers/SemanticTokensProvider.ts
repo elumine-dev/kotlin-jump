@@ -224,10 +224,13 @@ export class KotlinSemanticTokensProvider
     ct: vscode.CancellationToken,
   ): vscode.SemanticTokens {
     const result = this.computeAndCache(doc, range, ct);
-    // Seed the full-doc cache in the background so subsequent edits use delta diffs
+    // Seed the full-doc cache in the background so subsequent edits use delta
+    // diffs. setTimeout, not setImmediate: the latter is Node-only and threw
+    // a ReferenceError in the web extension host, failing the whole range
+    // request on every freshly opened document.
     if (!this.cache.has(doc.uri.toString())) {
       const cts = new vscode.CancellationTokenSource();
-      setImmediate(() => { this.computeAndCache(doc, null, cts.token); cts.dispose(); });
+      setTimeout(() => { this.computeAndCache(doc, null, cts.token); cts.dispose(); }, 0);
     }
     return result;
   }

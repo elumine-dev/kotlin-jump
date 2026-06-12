@@ -3,6 +3,7 @@ import * as zlib from 'zlib';
 import { promisify } from 'util';
 import { SymbolIndex } from './SymbolIndex';
 import { SymbolKind } from './KotlinParser';
+import { decodeUtf8 } from '../util/encoding';
 
 const SNAPSHOT_VERSION = 19; // bumped: gzip-compressed payload (was raw JSON in v18)
 const SNAPSHOT_FILENAME = 'kotlin-jump-index.json'; // historical name; content is gzip from v19+
@@ -127,7 +128,9 @@ export async function save(
     // Gzip cuts the on-disk size by ~80 % on real workspaces (the JSON
     // is highly repetitive: package names, kinds, sparse boolean maps).
     // The compress cost is amortised across many startups.
-    const compressed = await gzip(Buffer.from(json, 'utf8'));
+    // String input (treated as UTF-8 by both Node zlib and the browser
+    // zlib-stub) — no Buffer, which doesn't exist in the web host.
+    const compressed = await gzip(json);
     await vscode.workspace.fs.writeFile(snapshotUri, compressed);
   } catch { /* non-fatal: next open will just do a full scan */ }
 }
@@ -140,16 +143,15 @@ export async function load(context: vscode.ExtensionContext): Promise<Snapshot |
 
   try {
     const bytes = await vscode.workspace.fs.readFile(snapshotUri);
-    const buf = Buffer.from(bytes);
     // Detect gzip magic (0x1f 0x8b). v19+ writes gzip; pre-v19 wrote raw
     // JSON (those load and then version-check fails — invalidated).
-    let jsonBuf: Buffer;
-    if (buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b) {
-      jsonBuf = await gunzip(buf);
+    let jsonBytes: Uint8Array;
+    if (bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b) {
+      jsonBytes = await gunzip(bytes);
     } else {
-      jsonBuf = buf;
+      jsonBytes = bytes;
     }
-    const snap = JSON.parse(jsonBuf.toString('utf8')) as Snapshot;
+    const snap = JSON.parse(decodeUtf8(jsonBytes)) as Snapshot;
     if (snap.version !== SNAPSHOT_VERSION) return null;
     return snap;
   } catch {

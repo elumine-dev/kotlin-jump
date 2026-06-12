@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { DrawableResourceIndex, DrawableVariant } from '../indexer/DrawableResourceIndex';
 import { vectorXmlToSvg } from '../util/vectorToSvg';
+import { bytesToBase64, utf8ToBase64 } from '../util/encoding';
 
 const R_DRAWABLE_RE = /\bR\.(drawable|mipmap)\.([A-Za-z_]\w*)\b/g;
 
@@ -78,7 +79,7 @@ async function appendPreview(md: vscode.MarkdownString, v: DrawableVariant): Pro
       const xml = new TextDecoder().decode(bytes);
       const svg = vectorXmlToSvg(xml);
       if (svg) {
-        const dataUri = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+        const dataUri = `data:image/svg+xml;base64,${utf8ToBase64(svg)}`;
         const alt = escapeHtmlAttr(v.uri.path.split('/').pop() ?? 'vector');
         md.appendMarkdown(`<img src="${dataUri}" width="128" height="128" alt="${alt}" />\n\n`);
         return;
@@ -92,13 +93,13 @@ async function appendPreview(md: vscode.MarkdownString, v: DrawableVariant): Pro
     }
 
     if (v.ext === 'svg') {
-      const dataUri = `data:image/svg+xml;base64,${Buffer.from(bytes).toString('base64')}`;
+      const dataUri = `data:image/svg+xml;base64,${bytesToBase64(bytes)}`;
       md.appendMarkdown(`<img src="${dataUri}" width="128" height="128" alt="svg" />\n\n`);
       return;
     }
 
     const mime    = MIME_BY_EXT[v.ext] ?? 'image/png';
-    const dataUri = `data:${mime};base64,${Buffer.from(bytes).toString('base64')}`;
+    const dataUri = `data:${mime};base64,${bytesToBase64(bytes)}`;
     const ninePatchNote = v.isNinePatch ? ' *(9-patch)*' : '';
     md.appendMarkdown(`<img src="${dataUri}" width="128" alt="${escapeHtmlAttr(v.ext)}" />${ninePatchNote}\n\n`);
   } catch {

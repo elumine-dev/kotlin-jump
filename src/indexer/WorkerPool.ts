@@ -15,8 +15,11 @@ export class WorkerPool {
   readonly available: boolean;
 
   constructor(size: number) {
-    const workerPath = path.join(__dirname, 'parser-worker.js');
     try {
+      // Inside the try: `__dirname` does not exist in the web extension
+      // host, and the ReferenceError must hit the same inline-parsing
+      // fallback as a missing worker file — not crash activate().
+      const workerPath = path.join(__dirname, 'parser-worker.js');
       for (let i = 0; i < size; i++) {
         const w = new Worker(workerPath);
         w.on('message', (result: ParsedFile) => this.onMessage(w, result));
@@ -26,7 +29,8 @@ export class WorkerPool {
       }
       this.available = size > 0;
     } catch {
-      // Worker file not found (e.g. not yet built) — fall back to inline parsing
+      // Worker file not found (e.g. not yet built) or no worker_threads
+      // (web) — fall back to inline parsing
       this.available = false;
     }
   }

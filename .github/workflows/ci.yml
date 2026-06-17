@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
 
+# Dedupe redundant runs on the same ref: a re-delivered push or a quick
+# follow-up commit cancels the superseded run instead of running twice.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest

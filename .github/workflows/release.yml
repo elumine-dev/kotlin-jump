@@ -5,6 +5,13 @@ on:
     tags:
       - 'v*.*.*'
 
+# A push that re-delivers the same tag (HTTP retry, combined `--tags` push)
+# must never run two publish jobs in parallel: the loser races to the registry
+# and fails on "already published". One run per tag, newest wins.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 

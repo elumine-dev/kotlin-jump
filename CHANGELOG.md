@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.21.0
+
+Adds a built-in Logcat panel with real-time ADB streaming, clickable stacktrace deeplinks, and automatic start on Android Run.
+
+### Features
+- Added a Logcat panel that streams ADB output from connected Android devices in a dedicated VS Code webview, removing the need to switch tools during development.
+- Stack traces in the live stream render as clickable deeplinks; selecting a frame navigates to the exact file and line in your source.
+- Logcat starts automatically when Android Run launches the app and follows its PID, so the panel shows only that app's output from the first moment.
+- A status bar pill reflects the current stream state and provides one-click access to start, stop, pause, resume, clear, and device switching.
+- A configurable ring buffer caps memory usage during long sessions; logs can be exported to a plain-text file for sharing or post-mortem analysis.
+
 ## 1.20.0
 
 Adds a sealed `when` coverage CodeLens that shows branch coverage inline and inserts every missing case in one click. Works on sealed classes, sealed interfaces, and enums, on desktop and on vscode.dev.

@@ -1,39 +1,34 @@
 {
-  "version": "1.20.0",
+  "version": "1.21.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Sealed when coverage, with one-click branch insertion",
-  "summary": "A coverage CodeLens above every `when` on a sealed hierarchy or enum: see missing branches before the compiler does, and insert them all in one click. Desktop and vscode.dev.",
+  "tagline": "Live Logcat streaming with stacktrace deeplinks",
+  "summary": "Adds a built-in Logcat panel with real-time ADB streaming, clickable stacktrace deeplinks, and automatic start on Android Run.",
   "highlights": [
     {
-      "title": "Sealed When Coverage",
-      "description": "Every `when` over a sealed class, sealed interface, or enum gets a lens: ✓ 3/3 branches when exhaustive, ⚠ 2/3 branches with the missing names when incomplete, and `else covers N remaining` when an else hides unhandled subtypes. No compiler, no waiting.",
+      "title": "Built-in Logcat Panel",
+      "description": "Stream logcat output from any connected Android device in a dedicated VS Code panel, with pause, resume, clear, and export controls. No Android Studio or terminal tab required.",
       "kind": "feature"
     },
     {
-      "title": "Insert Missing Branches",
-      "description": "Click an incomplete lens and the missing branches appear with placeholder bodies, spelled the way your file already writes them: bare names for objects and enum entries, `is` for classes, same qualification style. The cursor lands on the first inserted stub, ready to fill in.",
+      "title": "Stacktrace Deeplinks",
+      "description": "Every exception frame in the live log stream is a clickable link that opens the corresponding Kotlin or Java source file at the exact line.",
       "kind": "feature"
     },
     {
-      "title": "Truthful by Design",
-      "description": "When a branch is ambiguous or unresolved, the lens stays silent instead of guessing. Kotlin 2.1 guard branches (`is A if cond ->`) are recognized and excluded from exhaustiveness, matching the language spec.",
-      "kind": "note"
+      "title": "Auto-start on Android Run",
+      "description": "The logcat stream starts automatically when Android Run launches the app and filters output to that process's PID from the first log line.",
+      "kind": "feature"
     }
   ],
   "sections": [
     {
       "heading": "Features",
       "bullets": [
-        "Coverage CodeLens above `when` expressions over sealed classes, sealed interfaces, and enums, with exact missing-branch names in the title.",
-        "One-click insertion of missing branches with kind-aware spelling and placeholder bodies, on desktop and vscode.dev alike.",
-        "Toggle with kotlinJump.sealedWhenCoverage; analysis steps and skip reasons are traced as [SealedWhen] lines in the Kotlin Jump output channel."
-      ]
-    },
-    {
-      "heading": "Fixes",
-      "bullets": [
-        "UpperCamelCase enum entries are now indexed correctly; they used to produce phantom one-letter symbols in Go to Symbol or be dropped entirely.",
-        "Fixed the column of enum entries with constructor arguments, which produced overlapping semantic tokens in the editor."
+        "Added a Logcat panel that streams ADB output from connected Android devices in a dedicated VS Code webview, removing the need to switch tools during development.",
+        "Stack traces in the live stream render as clickable deeplinks; selecting a frame navigates to the exact file and line in your source.",
+        "Logcat starts automatically when Android Run launches the app and follows its PID, so the panel shows only that app's output from the first moment.",
+        "A status bar pill reflects the current stream state and provides one-click access to start, stop, pause, resume, clear, and device switching.",
+        "A configurable ring buffer caps memory usage during long sessions; logs can be exported to a plain-text file for sharing or post-mortem analysis."
       ]
     }
   ],

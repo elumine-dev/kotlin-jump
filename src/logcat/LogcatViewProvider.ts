@@ -6,12 +6,20 @@ import type { LogEntry, ViewToHost } from './messages';
 import { LOGCAT_API_VERSION, makeHostMsg } from './messages';
 import { looksObfuscated } from './LogcatStackResolver';
 
-export class LogcatViewProvider implements vscode.WebviewViewProvider {
+export class LogcatViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   static readonly VIEW_ID = 'kotlinJump.logcat';
 
   private view?: vscode.WebviewView;
   private htmlCache?: string;
   private warnedReleaseBuild = false;
+  private visibilitySub?: vscode.Disposable;
+
+  // Highest seq already delivered to the webview, via 'append' or 'hydrate'.
+  // Filters sendAppend() so a batch that straddles a hydrate resync (see
+  // resyncAfterVisible) is never delivered twice — onEntry() pushes into the
+  // host ring synchronously but the ~16ms flush timer can still emit the same
+  // rows again right after a resync reads them via refilter().
+  private lastSentSeq = -1;
 
   /** True when the panel is currently rendered AND visible to the user. */
   get visible(): boolean { return this.view?.visible === true; }
@@ -20,8 +28,16 @@ export class LogcatViewProvider implements vscode.WebviewViewProvider {
     private readonly extensionUri: vscode.Uri,
     private readonly service: LogcatService,
   ) {
-    service.on('append',  (rows: LogEntry[]) => this.post(makeHostMsg({ type: 'append', rows })));
-    service.on('reset',   () => this.post(makeHostMsg({ type: 'reset' })));
+    // Gated on visibility: retainContextWhenHidden keeps the webview's JS running
+    // in the background once opened, so an ungated postMessage would have it
+    // keep mirroring + re-filtering the full stream while the panel is hidden
+    // (switched to another bottom-panel tab). The host ring is already bounded,
+    // so nothing is lost — resyncAfterVisible() replays it wholesale on return.
+    service.on('append',  (rows: LogEntry[]) => {
+      if (!this.visible) return;
+      this.sendAppend(rows);
+    });
+    service.on('reset',   () => { this.lastSentSeq = -1; this.post(makeHostMsg({ type: 'reset' })); });
     service.on('devices', devices => this.post(makeHostMsg({ type: 'devices', devices })));
     service.on('state',   state    => this.post(makeHostMsg({ type: 'state', ...state })));
     service.on('stream-error', (err: unknown) => {
@@ -46,6 +62,18 @@ export class LogcatViewProvider implements vscode.WebviewViewProvider {
     _token: vscode.CancellationToken,
   ): Promise<void> {
     this.view = view;
+
+    // First real signal that Logcat is relevant to this workspace — the ADB
+    // device watcher is started lazily here (and from a couple of command
+    // entry points, see registerLogcat) rather than unconditionally at
+    // extension activation. start() is idempotent, so this is safe to call
+    // even if a command entry point already triggered it.
+    this.service.startWatching();
+
+    this.visibilitySub = view.onDidChangeVisibility(() => {
+      if (view.visible) this.resyncAfterVisible();
+    });
+
     view.webview.options = {
       enableScripts: true,
       localResourceRoots: [
@@ -58,6 +86,10 @@ export class LogcatViewProvider implements vscode.WebviewViewProvider {
     // 'ready' handshake (the script loads almost synchronously after html is set).
     view.webview.onDidReceiveMessage((msg: ViewToHost) => this.onMessage(msg));
     view.webview.html = await this.renderHtml(view.webview);
+  }
+
+  dispose(): void {
+    this.visibilitySub?.dispose();
   }
 
   /**
@@ -157,6 +189,35 @@ export class LogcatViewProvider implements vscode.WebviewViewProvider {
 
   private post(message: unknown): void {
     void this.view?.webview.postMessage(message);
+  }
+
+  /**
+   * Filters out rows already delivered (via a prior 'append' or 'hydrate') so a
+   * flush batch that straddles a resyncAfterVisible() call is never delivered
+   * twice — onEntry() pushes into the host ring synchronously, so refilter()
+   * can already include a row that is also still sitting in the pending queue
+   * about to be flushed as a normal 'append'.
+   */
+  private sendAppend(rows: LogEntry[]): void {
+    const fresh = rows.filter(r => r.seq > this.lastSentSeq);
+    if (fresh.length === 0) return;
+    this.lastSentSeq = fresh[fresh.length - 1]!.seq;
+    this.post(makeHostMsg({ type: 'append', rows: fresh }));
+  }
+
+  /**
+   * Replays the host ring wholesale when the panel becomes visible again.
+   * Nothing was buffered specifically for this — the host ring is already
+   * bounded (kotlinJump.logcat.bufferSize), so this is just "show what's
+   * currently retained", the same guarantee already relied on for scrollback.
+   */
+  private resyncAfterVisible(): void {
+    const rows = this.service.refilter();
+    this.lastSentSeq = rows.length > 0 ? rows[rows.length - 1]!.seq : -1;
+    this.post(makeHostMsg({ type: 'hydrate', rows }));
+    // Refresh the meter/throughput immediately rather than waiting for the
+    // next 1s tick — the panel was just hidden, its last snapshot is stale.
+    this.post(makeHostMsg({ type: 'state', ...this.service.snapshotState() }));
   }
 
   private maybeWarnReleaseBuild(rows: LogEntry[]): void {

@@ -118,6 +118,10 @@ export class LogcatService extends EventEmitter implements vscode.Disposable {
     this.buffer.clear();
     this.emit('reset');
     this.startStream();
+    // Emit immediately rather than waiting for the next 1s throughput tick —
+    // without this, the status bar pill can flash "Stopped" for up to a
+    // second after switching devices (stale `streaming` from a prior stop).
+    this.emit('state', this.snapshotState());
   }
 
   setFollowedPackage(packageName: string | undefined): void {
@@ -152,8 +156,38 @@ export class LogcatService extends EventEmitter implements vscode.Disposable {
     this.emit('state', this.snapshotState());
   }
 
-  pause():  void { if (this._disposed) return; this.paused = true;  this.emit('state', this.snapshotState()); }
-  resume(): void { if (this._disposed) return; this.paused = false; this.emit('state', this.snapshotState()); }
+  /** Mutes forwarding to the webview without touching the underlying stream —
+   *  the adb process, parsing, resolving and buffering keep running. Use this
+   *  for a brief interruption; use stop() to actually tear the stream down. */
+  pause(): void { if (this._disposed) return; this.paused = true; this.emit('state', this.snapshotState()); }
+
+  /**
+   * Un-mutes AND reconnects if the stream was fully torn down by stop() — the
+   * webview only exposes a single pause/resume toggle button (no separate Stop
+   * button in its own UI), so this must recover from either state.
+   */
+  resume(): void {
+    if (this._disposed) return;
+    this.paused = false;
+    if (this.currentSerial && !this.stream) this.startStream();
+    this.emit('state', this.snapshotState());
+  }
+
+  /**
+   * Real stop: tears down the adb process and the flush/throughput timers.
+   * Unlike pause(), nothing keeps running in the background afterwards.
+   * Leaves currentSerial and the ring buffer untouched — start()/resume()
+   * reconnect to the same device; clear() is the only thing that wipes history.
+   */
+  stop(): void {
+    if (this._disposed) return;
+    this.stopStream();
+    this.emit('state', this.snapshotState());
+  }
+
+  /** (Re)opens a stream to the last selected device if none is active. No-op
+   *  if a device was never selected. Semantic alias of resume(). */
+  start(): void { this.resume(); }
 
   clear(): void {
     if (this._disposed) return;
@@ -184,12 +218,13 @@ export class LogcatService extends EventEmitter implements vscode.Disposable {
     return lines.join('\n');
   }
 
-  snapshotState(): { paused: boolean; bufferUsed: number; bufferCap: number; throughputPerSec: number } {
+  snapshotState(): { paused: boolean; bufferUsed: number; bufferCap: number; throughputPerSec: number; streaming: boolean } {
     return {
       paused:           this.paused,
       bufferUsed:       this.buffer.size(),
       bufferCap:        this.buffer.cap(),
       throughputPerSec: this.computeThroughput(),
+      streaming:        !!this.stream,
     };
   }
 
@@ -364,6 +399,9 @@ export class LogcatService extends EventEmitter implements vscode.Disposable {
   private stopStream(): void {
     this.stream?.dispose();
     this.stream = undefined;
+    this.flushPending(); // don't lose <16ms of already-parsed entries in flight
+    if (this.flushTimer)      { clearInterval(this.flushTimer);      this.flushTimer      = undefined; }
+    if (this.throughputTimer) { clearInterval(this.throughputTimer); this.throughputTimer = undefined; }
   }
 
   private onEntry(entry: LogEntry): void {

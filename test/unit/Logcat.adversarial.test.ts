@@ -579,6 +579,233 @@ describe('LogcatRingBuffer — true ring with head/tail pointers (O(1) push rega
   });
 });
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Round 4 — global VS Code slowdown after Logcat usage: lazy watcher start,
+// real stop() vs pause(), and visibility-gated webview delivery.
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('LogcatService — real stop() vs pause() (was: kotlinJump.logcat.stop only muted forwarding, never tore down the stream)', () => {
+  it('pause() keeps the adb process and timers alive — only forwarding is muted', () => {
+    const svc = new LogcatService(noopIndex, noopLog, 100);
+    const fakeStream: any = { dispose: vi.fn() };
+    (svc as unknown as { stream?: any }).stream = fakeStream;
+    (svc as unknown as { currentSerial?: string }).currentSerial = 'A';
+    (svc as unknown as { flushTimer?: NodeJS.Timeout }).flushTimer = setInterval(() => {}, 1000);
+    (svc as unknown as { throughputTimer?: NodeJS.Timeout }).throughputTimer = setInterval(() => {}, 1000);
+
+    svc.pause();
+
+    expect(fakeStream.dispose).not.toHaveBeenCalled();
+    expect((svc as unknown as { stream?: any }).stream).toBe(fakeStream);
+    expect((svc as unknown as { flushTimer?: unknown }).flushTimer).toBeDefined();
+    expect(svc.snapshotState().streaming).toBe(true);
+
+    clearInterval((svc as unknown as { flushTimer?: NodeJS.Timeout }).flushTimer);
+    clearInterval((svc as unknown as { throughputTimer?: NodeJS.Timeout }).throughputTimer);
+    svc.dispose();
+  });
+
+  it('stop() tears down the adb process and clears the flush/throughput timers', () => {
+    const svc = new LogcatService(noopIndex, noopLog, 100);
+    const fakeStream: any = { dispose: vi.fn() };
+    (svc as unknown as { stream?: any }).stream = fakeStream;
+    (svc as unknown as { currentSerial?: string }).currentSerial = 'A';
+    (svc as unknown as { flushTimer?: NodeJS.Timeout }).flushTimer = setInterval(() => {}, 1000);
+    (svc as unknown as { throughputTimer?: NodeJS.Timeout }).throughputTimer = setInterval(() => {}, 1000);
+
+    svc.stop();
+
+    expect(fakeStream.dispose).toHaveBeenCalledTimes(1);
+    expect((svc as unknown as { stream?: any }).stream).toBeUndefined();
+    expect((svc as unknown as { flushTimer?: unknown }).flushTimer).toBeUndefined();
+    expect((svc as unknown as { throughputTimer?: unknown }).throughputTimer).toBeUndefined();
+    expect(svc.snapshotState().streaming).toBe(false);
+
+    svc.dispose();
+  });
+
+  it('resume() reconnects to the last device after a stop() — the webview only exposes one pause/resume toggle', () => {
+    const svc = new LogcatService(noopIndex, noopLog, 100);
+    (svc as unknown as { currentSerial?: string }).currentSerial = 'A';
+    (svc as unknown as { stream?: unknown }).stream = undefined; // as if stop() already ran
+    const startStreamSpy = vi.fn();
+    (svc as unknown as { startStream(): void }).startStream = startStreamSpy;
+
+    svc.resume();
+
+    expect(startStreamSpy).toHaveBeenCalledTimes(1);
+    svc.dispose();
+  });
+
+  it('resume() does not restart a stream that is already active (plain un-mute)', () => {
+    const svc = new LogcatService(noopIndex, noopLog, 100);
+    (svc as unknown as { currentSerial?: string }).currentSerial = 'A';
+    (svc as unknown as { stream?: any }).stream = { dispose: vi.fn() };
+    const startStreamSpy = vi.fn();
+    (svc as unknown as { startStream(): void }).startStream = startStreamSpy;
+
+    svc.resume();
+
+    expect(startStreamSpy).not.toHaveBeenCalled();
+    svc.dispose();
+  });
+
+  it('start() is a semantic alias of resume()', () => {
+    const svc = new LogcatService(noopIndex, noopLog, 100);
+    const resumeSpy = vi.spyOn(svc, 'resume');
+    svc.start();
+    expect(resumeSpy).toHaveBeenCalledTimes(1);
+    svc.dispose();
+  });
+});
+
+describe('registerLogcat — lazy ADB watcher & command wiring (was: eager unconditional startWatching() at activation)', () => {
+  function fakeContext(): vscode.ExtensionContext {
+    const store = new Map<string, unknown>();
+    return {
+      subscriptions: [],
+      workspaceState: {
+        get: <T>(k: string) => store.get(k) as T | undefined,
+        update: (k: string, v: unknown) => { store.set(k, v); return Promise.resolve(); },
+      },
+      extensionUri: vscode.Uri.file('/ext'),
+    } as unknown as vscode.ExtensionContext;
+  }
+
+  it('registerLogcat() alone never spawns adb — the watcher only starts on a real usage signal', async () => {
+    const AdbBinary = await import('../../src/android/AdbBinary');
+    const spawnSpy = vi.spyOn(AdbBinary, 'spawnAdb').mockImplementation(() => {
+      throw new Error('spawnAdb must not be called just from registerLogcat()');
+    });
+
+    const { registerLogcat } = await import('../../src/logcat/index');
+    const service = registerLogcat(fakeContext(), noopLog, noopIndex);
+
+    expect(spawnSpy).not.toHaveBeenCalled();
+    service.dispose();
+    spawnSpy.mockRestore();
+  });
+
+  it('kotlinJump.logcat.stop wires to a real stop(), not pause() — the integration seam, not just the method', async () => {
+    const registeredCmds = new Map<string, (...args: unknown[]) => unknown>();
+    const registerSpy = vi.spyOn(vscode.commands, 'registerCommand').mockImplementation(
+      ((id: string, handler: (...args: unknown[]) => unknown) => {
+        registeredCmds.set(id, handler);
+        return { dispose: () => {} };
+      }) as typeof vscode.commands.registerCommand,
+    );
+
+    const { registerLogcat } = await import('../../src/logcat/index');
+    const service = registerLogcat(fakeContext(), noopLog, noopIndex);
+    const stopSpy  = vi.spyOn(service, 'stop');
+    const pauseSpy = vi.spyOn(service, 'pause');
+
+    registeredCmds.get('kotlinJump.logcat.stop')!();
+
+    expect(stopSpy).toHaveBeenCalledTimes(1);
+    expect(pauseSpy).not.toHaveBeenCalled();
+
+    service.dispose();
+    registerSpy.mockRestore();
+  });
+
+  it('kotlinJump.logcat.start calls startWatching() (idempotent lazy-start) then a real (re)start', async () => {
+    const registeredCmds = new Map<string, (...args: unknown[]) => unknown>();
+    const registerSpy = vi.spyOn(vscode.commands, 'registerCommand').mockImplementation(
+      ((id: string, handler: (...args: unknown[]) => unknown) => {
+        registeredCmds.set(id, handler);
+        return { dispose: () => {} };
+      }) as typeof vscode.commands.registerCommand,
+    );
+    const AdbBinary = await import('../../src/android/AdbBinary');
+    const spawnSpy = vi.spyOn(AdbBinary, 'spawnAdb').mockImplementation(() => {
+      const ee = new (require('events').EventEmitter)();
+      (ee as any).stdout = new (require('events').EventEmitter)();
+      (ee as any).stderr = new (require('events').EventEmitter)();
+      (ee as any).kill   = () => {};
+      return ee as any;
+    });
+
+    const { registerLogcat } = await import('../../src/logcat/index');
+    const service = registerLogcat(fakeContext(), noopLog, noopIndex);
+    expect(spawnSpy).not.toHaveBeenCalled(); // still lazy — nothing has touched the panel/commands yet
+
+    registeredCmds.get('kotlinJump.logcat.start')!();
+
+    expect(spawnSpy).toHaveBeenCalled();
+
+    service.dispose();
+    registerSpy.mockRestore();
+    spawnSpy.mockRestore();
+  });
+});
+
+describe('LogcatViewProvider — visibility gating (was: ungated postMessage kept the hidden webview re-filtering the full stream)', () => {
+  async function makeProvider(refilterRows: LogEntry[] = []) {
+    const { EventEmitter } = await import('events');
+    const { LogcatViewProvider } = await import('../../src/logcat/LogcatViewProvider');
+
+    class FakeService extends EventEmitter {
+      refilter(): LogEntry[] { return refilterRows; }
+      snapshotState() { return { paused: false, bufferUsed: 0, bufferCap: 100, throughputPerSec: 0, streaming: true }; }
+      startWatching(): void {}
+    }
+    const fakeService = new FakeService();
+    const provider = new LogcatViewProvider(vscode.Uri.parse('file:///ext'), fakeService as any);
+    const posts: any[] = [];
+    (provider as unknown as { post(m: unknown): void }).post = (m: unknown) => { posts.push(m); };
+    return { provider, fakeService, posts };
+  }
+
+  const withSeq = (seq: number): LogEntry => ({ ...mkEntry('x'), seq });
+
+  it('does not forward append while the panel is hidden', async () => {
+    const { provider, fakeService, posts } = await makeProvider();
+    (provider as unknown as { view?: { visible: boolean } }).view = { visible: false };
+
+    fakeService.emit('append', [withSeq(0)]);
+
+    expect(posts.find(p => p?.type === 'append')).toBeUndefined();
+  });
+
+  it('append is still delivered immediately while visible (normal path unaffected)', async () => {
+    const { provider, fakeService, posts } = await makeProvider();
+    (provider as unknown as { view?: { visible: boolean } }).view = { visible: true };
+
+    fakeService.emit('append', [withSeq(0)]);
+
+    expect(posts.find(p => p?.type === 'append')).toBeDefined();
+  });
+
+  it('resyncs with a hydrate + fresh state snapshot as soon as the panel becomes visible again', async () => {
+    const { provider, posts } = await makeProvider([withSeq(0), withSeq(1), withSeq(2)]);
+    (provider as unknown as { view?: { visible: boolean } }).view = { visible: true };
+
+    (provider as unknown as { resyncAfterVisible(): void }).resyncAfterVisible();
+
+    const hydrate = posts.find(p => p?.type === 'hydrate');
+    expect(hydrate).toBeDefined();
+    expect(hydrate.rows.map((r: LogEntry) => r.seq)).toEqual([0, 1, 2]);
+    expect(posts.find(p => p?.type === 'state')).toBeDefined();
+  });
+
+  it('does not double-deliver a row that arrives via append right after a hydrate resync (pending/hydrate race)', async () => {
+    // onEntry() pushes into the host ring synchronously, so refilter() can
+    // already include a row that is ALSO still queued to be flushed as a
+    // normal 'append' moments later — without the seq filter both would post.
+    const { provider, fakeService, posts } = await makeProvider([withSeq(0), withSeq(1), withSeq(2)]);
+    (provider as unknown as { view?: { visible: boolean } }).view = { visible: true };
+    (provider as unknown as { resyncAfterVisible(): void }).resyncAfterVisible();
+    posts.length = 0; // only care about what happens after the resync
+
+    fakeService.emit('append', [withSeq(2), withSeq(3)]); // seq 2 overlaps, seq 3 is genuinely new
+
+    const appended = posts.find(p => p?.type === 'append');
+    expect(appended).toBeDefined();
+    expect(appended.rows.map((r: LogEntry) => r.seq)).toEqual([3]);
+  });
+});
+
 describe('LogcatViewProvider — error formatting', () => {
   it('stream-error survives a non-Error payload (string, undefined, etc.) without producing "undefined"', async () => {
     const { LogcatViewProvider } = await import('../../src/logcat/LogcatViewProvider');

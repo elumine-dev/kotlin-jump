@@ -42,10 +42,11 @@ export interface LogEntry {
 export type HostToView =
   | { apiVersion: number; type: 'init'; state: ViewState }
   | { apiVersion: number; type: 'append'; rows: LogEntry[] }
+  | { apiVersion: number; type: 'hydrate'; rows: LogEntry[] }
   | { apiVersion: number; type: 'reset' }
   | { apiVersion: number; type: 'devices'; devices: AdbDevice[] }
   | { apiVersion: number; type: 'packages'; serial: string; packages: string[] }
-  | { apiVersion: number; type: 'state'; paused: boolean; bufferUsed: number; bufferCap: number; throughputPerSec: number }
+  | { apiVersion: number; type: 'state'; paused: boolean; bufferUsed: number; bufferCap: number; throughputPerSec: number; streaming: boolean }
   | { apiVersion: number; type: 'adb-missing' }
   | { apiVersion: number; type: 'release-build-detected' }
   | { apiVersion: number; type: 'stream-error'; message: string }

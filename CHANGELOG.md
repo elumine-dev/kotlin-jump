@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.21.2
+
+Fixes a Logcat panel performance bug that could make VS Code as a whole feel sluggish during or after a debugging session, makes `kotlinJump.logcat.stop` actually stop the stream, and resolves the v1.21.0 Marketplace install failure.
+
+### Fixes
+- Fixed the Logcat webview's mirror buffer, which evicted rows with `Array.prototype.shift()`, an O(n) operation per row that ran on every incoming log line once the buffer filled, inside the webview's rendering process. Replaced with the same O(1) ring buffer already used on the extension host side.
+- Fixed the webview's tag/search/level filter to update incrementally instead of rescanning the entire buffer on every batch of incoming lines (this ran at up to 60Hz while a filter was active).
+- Fixed `kotlinJump.logcat.stop`, which only muted forwarding to the panel (`pause()`) without stopping the underlying `adb logcat` process. The stream, parsing, and stack-trace resolution kept running in the background indefinitely after a Stop. Stop now tears the stream down for real, and the status bar pill shows a distinct "Stopped" state.
+- The ADB device watcher no longer starts unconditionally at extension activation. It now starts lazily, on first opening the Logcat panel, running a command that needs it, or a successful Android Run. A Kotlin file in the workspace no longer implies an always-on `adb` process for non-Android projects.
+- The webview no longer keeps re-filtering and re-rendering while the Logcat panel is hidden; it resyncs in one pass when the panel becomes visible again.
+
+### Notes
+- v1.21.0 could fail to install from the Marketplace with a `PackageIntegrityCheckFailed` error: two Release workflow runs fired concurrently on that tag and each published its own build under the same version number, leaving a mismatched package signature. This release is a fresh, single-build publish and is unaffected.
+- No changes to navigation, indexing, Gradle integration, or Android Run itself.
+
 ## 1.21.0
 
 Adds a built-in Logcat panel with real-time ADB streaming, clickable stacktrace deeplinks, and automatic start on Android Run.

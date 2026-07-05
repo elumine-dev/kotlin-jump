@@ -21,7 +21,7 @@ export const SNOOZE_KEY = 'kotlinJump.logcat.autoStart.snoozedThisSession';
  * device guard without booting the whole `registerLogcat` integration.
  */
 export interface AutoStartDeps {
-  service:         Pick<LogcatService, 'listDevices' | 'switchDevice' | 'setFollowedPackage'>;
+  service:         Pick<LogcatService, 'listDevices' | 'switchDevice' | 'setFollowedPackage' | 'startWatching'>;
   viewProvider:    { readonly visible: boolean };
   devicesProvider: { setActive(s: string): void };
   workspaceState:  { get<T>(k: string): T | undefined; update(k: string, v: unknown): Thenable<void> };
@@ -33,6 +33,10 @@ export interface AutoStartDeps {
 
 export async function handleAutoStart(deps: AutoStartDeps, ev: RunSuccessEvent): Promise<void> {
   if (!deps.configEnabled()) return;
+  // A successful Android Run is a strong engagement signal even if the user
+  // never opened the Logcat panel — start the (idempotent) device watcher so
+  // the Devices tree reacts live if they open the panel after a disconnect.
+  deps.service.startWatching();
   if (deps.workspaceState.get<boolean>(SNOOZE_KEY) === true) {
     deps.log.debug('[logcat:auto] snoozed — skipping');
     return;
@@ -75,7 +79,14 @@ export function registerLogcat(
 
   const bufferCap = cfg.get<number>('logcat.bufferSize', 100_000);
   const service   = new LogcatService(index, log, bufferCap);
-  service.startWatching();
+  // NOTE: the ADB device watcher is started lazily, not here. Starting it
+  // unconditionally at activation meant every workspace with a single .kt file
+  // spawned `adb track-devices` (or retried every 3s if adb was missing) for
+  // the entire VS Code session, regardless of whether Logcat was ever used.
+  // startWatching() is idempotent, so it's called instead from the first real
+  // signal of relevance: LogcatViewProvider.resolveWebviewView (panel opened),
+  // the pickDevice/start commands below, and handleAutoStart (an Android Run
+  // succeeded).
 
   const viewProvider    = new LogcatViewProvider(context.extensionUri, service);
   const devicesProvider = new LogcatDevicesTreeProvider(service);
@@ -89,13 +100,15 @@ export function registerLogcat(
     vscode.window.registerTreeDataProvider('kotlinJump.logcat.devices', devicesProvider),
     pill,
     service,
+    viewProvider,
   );
 
   // ── Status-bar pill wiring ────────────────────────────────────────────────
-  service.on('state', (s: { paused: boolean; bufferUsed: number; bufferCap: number; throughputPerSec: number }) => {
+  service.on('state', (s: { paused: boolean; bufferUsed: number; bufferCap: number; throughputPerSec: number; streaming: boolean }) => {
     pill.setState({
       hasSession:       !!service.getCurrentSerial(),
       paused:           s.paused,
+      streaming:        s.streaming,
       bufferUsed:       s.bufferUsed,
       bufferCap:        s.bufferCap,
       throughputPerSec: s.throughputPerSec,
@@ -131,12 +144,14 @@ export function registerLogcat(
     }),
     vscode.commands.registerCommand('kotlinJump.logcat.clear', () => service.clear()),
     vscode.commands.registerCommand('kotlinJump.logcat.stop', () => {
-      service.pause();
+      // Real stop — tears down the adb process and its timers, not just a mute.
+      service.stop();
       // User-initiated stop snoozes the next auto-start until they resume manually.
       void context.workspaceState.update(SNOOZE_KEY, true);
     }),
     vscode.commands.registerCommand('kotlinJump.logcat.start', () => {
-      service.resume();
+      service.startWatching();
+      service.start();
       void context.workspaceState.update(SNOOZE_KEY, undefined);
     }),
     vscode.commands.registerCommand('kotlinJump.logcat.export', async () => {
@@ -145,6 +160,9 @@ export function registerLogcat(
       await vscode.window.showTextDocument(doc, { preview: false });
     }),
     vscode.commands.registerCommand('kotlinJump.logcat.pickDevice', async (serial?: string) => {
+      // Safety net — the panel isn't necessarily open yet if this was invoked
+      // from the Command Palette. startWatching() is idempotent.
+      service.startWatching();
       let chosen = serial;
       if (!chosen) {
         const devices = await service.listDevices();

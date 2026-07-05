@@ -1,34 +1,34 @@
 {
-  "version": "1.21.0",
+  "version": "1.21.2",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Live Logcat streaming with stacktrace deeplinks",
-  "summary": "Adds a built-in Logcat panel with real-time ADB streaming, clickable stacktrace deeplinks, and automatic start on Android Run.",
+  "tagline": "Logcat panel performance fixes",
+  "summary": "Fixes a Logcat panel bug that could make VS Code as a whole feel sluggish during or after a debugging session, and makes Stop actually stop the stream.",
   "highlights": [
     {
-      "title": "Built-in Logcat Panel",
-      "description": "Stream logcat output from any connected Android device in a dedicated VS Code panel, with pause, resume, clear, and export controls. No Android Studio or terminal tab required.",
-      "kind": "feature"
+      "title": "Logcat Buffer Rewrite",
+      "description": "The Logcat webview's mirror buffer used an O(n) eviction on every incoming line once full. Replaced with the same O(1) ring buffer already used on the extension host side.",
+      "kind": "fix"
     },
     {
-      "title": "Stacktrace Deeplinks",
-      "description": "Every exception frame in the live log stream is a clickable link that opens the corresponding Kotlin or Java source file at the exact line.",
-      "kind": "feature"
+      "title": "Stop Now Really Stops",
+      "description": "kotlinJump.logcat.stop only muted the panel before; the adb process kept running in the background. Stop now tears the stream down, and the status bar shows a distinct Stopped state.",
+      "kind": "fix"
     },
     {
-      "title": "Auto-start on Android Run",
-      "description": "The logcat stream starts automatically when Android Run launches the app and filters output to that process's PID from the first log line.",
-      "kind": "feature"
+      "title": "Lazy ADB Watcher",
+      "description": "The ADB device watcher no longer starts at extension activation for every workspace with a Kotlin file. It starts on first use: opening the panel, running a Logcat command, or a successful Android Run.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Features",
+      "heading": "Fixes",
       "bullets": [
-        "Added a Logcat panel that streams ADB output from connected Android devices in a dedicated VS Code webview, removing the need to switch tools during development.",
-        "Stack traces in the live stream render as clickable deeplinks; selecting a frame navigates to the exact file and line in your source.",
-        "Logcat starts automatically when Android Run launches the app and follows its PID, so the panel shows only that app's output from the first moment.",
-        "A status bar pill reflects the current stream state and provides one-click access to start, stop, pause, resume, clear, and device switching.",
-        "A configurable ring buffer caps memory usage during long sessions; logs can be exported to a plain-text file for sharing or post-mortem analysis."
+        "Fixed the Logcat webview's mirror buffer, which evicted rows with Array.shift(), an O(n) operation per row that ran on every incoming log line once the buffer filled. Replaced with the ring buffer already used on the extension host side.",
+        "Fixed the webview's tag/search/level filter to update incrementally instead of rescanning the entire buffer on every batch of incoming lines.",
+        "Fixed kotlinJump.logcat.stop, which only muted forwarding to the panel without stopping the underlying adb logcat process; the stream, parsing, and stack-trace resolution kept running after a Stop. Stop now tears the stream down for real.",
+        "The ADB device watcher no longer starts unconditionally at extension activation. It starts lazily on first real use, so a Kotlin file no longer implies an always-on adb process for non-Android workspaces.",
+        "The webview no longer keeps re-filtering and re-rendering while the Logcat panel is hidden; it resyncs in one pass when the panel becomes visible again."
       ]
     }
   ],

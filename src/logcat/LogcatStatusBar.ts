@@ -11,6 +11,9 @@ import * as vscode from 'vscode';
  *   Idle      — picked a device, throughput is zero
  *   Stream    — picked a device, throughput > 0
  *   PausedRn  — picked a device, paused
+ *   Stopped   — picked a device, but the underlying adb stream was torn down
+ *               (kotlinJump.logcat.stop) — distinct from Paused: nothing is
+ *               running in the background at all, not even muted
  *   Pressure  — Stream/PausedRn AND buffer used > 80% of cap
  *   Error     — last 'stream-error' arrived less than 30 s ago
  *
@@ -28,6 +31,7 @@ const PRESSURE_RATIO    = 0.80;
 export interface LogcatStatusState {
   hasSession:       boolean;
   paused:           boolean;
+  streaming:        boolean;
   bufferUsed:       number;
   bufferCap:        number;
   throughputPerSec: number;
@@ -38,8 +42,13 @@ export interface LogcatStatusState {
 
 export class LogcatStatusBar implements vscode.Disposable {
   private readonly item: vscode.StatusBarItem;
+  // streaming defaults to true: while hasSession is false the pill stays
+  // hidden regardless (applyVisibility), and callers that only ever mention
+  // paused/throughput (never streaming) mean "actively streaming" — matches
+  // production wiring, where hasSession and streaming both arrive from the
+  // same LogcatService 'state' snapshot rather than as independent toggles.
   private state: LogcatStatusState = {
-    hasSession: false, paused: false, bufferUsed: 0, bufferCap: 0, throughputPerSec: 0,
+    hasSession: false, paused: false, streaming: true, bufferUsed: 0, bufferCap: 0, throughputPerSec: 0,
   };
   private errorTimer?: NodeJS.Timeout;
   private cfg: () => vscode.WorkspaceConfiguration;
@@ -93,6 +102,16 @@ export class LogcatStatusBar implements vscode.Disposable {
       this.item.text       = '$(error) Logcat: stream error';
       this.item.tooltip    = this.buildTooltip();
       this.item.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
+      this.item.color      = undefined;
+      return;
+    }
+
+    // Stopped: session picked but nothing is actually running — a stale buffer
+    // pressure warning would be misleading here, so this wins over it.
+    if (s.hasSession && !s.streaming) {
+      this.item.text       = '$(debug-stop) Logcat: stopped';
+      this.item.tooltip    = this.buildTooltip();
+      this.item.backgroundColor = undefined;
       this.item.color      = undefined;
       return;
     }

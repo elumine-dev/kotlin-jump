@@ -9,6 +9,7 @@ function buildDeps(overrides: Partial<AutoStartDeps> = {}): {
   deps: AutoStartDeps;
   switchDevice: ReturnType<typeof vi.fn>;
   setFollowedPackage: ReturnType<typeof vi.fn>;
+  startWatching: ReturnType<typeof vi.fn>;
   setActive: ReturnType<typeof vi.fn>;
   showToast: ReturnType<typeof vi.fn>;
   showLogcat: ReturnType<typeof vi.fn>;
@@ -17,6 +18,7 @@ function buildDeps(overrides: Partial<AutoStartDeps> = {}): {
   const state = new Map<string, unknown>();
   const switchDevice       = vi.fn();
   const setFollowedPackage = vi.fn();
+  const startWatching      = vi.fn();
   const setActive          = vi.fn();
   const showToast          = vi.fn().mockResolvedValue(undefined);
   const showLogcat         = vi.fn().mockResolvedValue(undefined);
@@ -26,6 +28,7 @@ function buildDeps(overrides: Partial<AutoStartDeps> = {}): {
       listDevices: vi.fn().mockResolvedValue([{ serial: 'emu-1', state: 'device', transport: 'usb' }]),
       switchDevice,
       setFollowedPackage,
+      startWatching,
     } as any,
     viewProvider:    { visible: false },
     devicesProvider: { setActive },
@@ -40,7 +43,7 @@ function buildDeps(overrides: Partial<AutoStartDeps> = {}): {
     ...overrides,
   };
 
-  return { deps, switchDevice, setFollowedPackage, setActive, showToast, showLogcat, state };
+  return { deps, switchDevice, setFollowedPackage, startWatching, setActive, showToast, showLogcat, state };
 }
 
 const RUN_EV: RunSuccessEvent = {
@@ -77,6 +80,7 @@ describe('handleAutoStart', () => {
         listDevices: vi.fn().mockResolvedValue([{ serial: 'other', state: 'device', transport: 'usb' }]),
         switchDevice: vi.fn(),
         setFollowedPackage: vi.fn(),
+        startWatching: vi.fn(),
       } as any,
     });
     // Re-grab the spies via the deps we just built.
@@ -113,5 +117,19 @@ describe('handleAutoStart', () => {
     const { deps, setActive } = buildDeps();
     await handleAutoStart(deps, RUN_EV);
     expect(setActive).toHaveBeenCalledWith('emu-1');
+  });
+
+  it('starts the (idempotent) ADB watcher even when snoozed — a Run success is a strong signal on its own', async () => {
+    const { deps, startWatching, switchDevice, state } = buildDeps();
+    state.set(SNOOZE_KEY, true);
+    await handleAutoStart(deps, RUN_EV);
+    expect(startWatching).toHaveBeenCalledTimes(1);
+    expect(switchDevice).not.toHaveBeenCalled(); // snooze still blocks the actual switch
+  });
+
+  it('does not start the watcher when kotlinJump.logcat.autoStart is disabled', async () => {
+    const { deps, startWatching } = buildDeps({ configEnabled: () => false });
+    await handleAutoStart(deps, RUN_EV);
+    expect(startWatching).not.toHaveBeenCalled();
   });
 });

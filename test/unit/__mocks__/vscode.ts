@@ -334,6 +334,8 @@ export const window = {
     revealRange:    () => {},
     setDecorations: () => {},
   }),
+  registerWebviewViewProvider: (_id: string, _provider: any, _options?: any) => ({ dispose: () => {} }),
+  registerTreeDataProvider:    (_id: string, _provider: any) => ({ dispose: () => {} }),
 };
 
 export const commands = {

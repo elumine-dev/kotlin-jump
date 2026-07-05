@@ -49,6 +49,30 @@ export class LogcatRingBuffer {
   cap(): number { return this.capacity_; }
   dropped(): number { return this.droppedCount; }
 
+  /**
+   * O(1) random access by display position (0 = oldest currently retained entry).
+   * Returns undefined out of range — callers already bound their loops with
+   * size()/displayCount(), so this is a no-throw contract, not an error path.
+   */
+  at(i: number): LogEntry | undefined {
+    if (i < 0 || i >= this.size_) return undefined;
+    return this.slots[(this.head + i) % this.capacity_];
+  }
+
+  /**
+   * O(1) lookup by the entry's stable `seq`. Relies on seq being densely
+   * monotonic with no gaps within one buffer's lifetime — guaranteed because
+   * `allocSeq()` is the only seq source and every pushed entry consumes exactly
+   * one call. If that invariant is ever broken (a future dedup/batch-ingestion
+   * path that skips allocSeq for some rows), this silently returns the wrong
+   * entry instead of undefined — grep for `allocSeq` before touching ingestion.
+   */
+  getBySeq(seq: number): LogEntry | undefined {
+    const oldest = this.at(0);
+    if (!oldest) return undefined;
+    return this.at(seq - oldest.seq);
+  }
+
   /** Returns a shallow copy of all buffered entries in FIFO order. */
   all(): LogEntry[] {
     const out: LogEntry[] = new Array(this.size_);

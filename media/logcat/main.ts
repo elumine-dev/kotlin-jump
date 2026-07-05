@@ -5,56 +5,30 @@
 // Mirrors the message contract in /src/logcat/messages.ts.
 //
 // Architecture:
-//   - Mirror buffer holds every row received via 'append' (capped to bufferCap).
+//   - LogMirror (logMirror.ts) owns the ring-buffered rows + incremental filter —
+//     zero DOM, testable on its own. See its header comment for why it exists:
+//     the mirror buffer here used to be a plain Array evicted with .shift(),
+//     which is O(n) per push under V8 once full — the same anti-pattern already
+//     fixed once on the host side (LogcatRingBuffer.ts).
 //   - Virtual scroller maintains a recycled DOM-node pool for the visible window.
 //   - Events bubble through a single delegated listener on the viewport.
 // ──────────────────────────────────────────────────────────────────────────────
+
+import { LogMirror, ALL_LEVELS, type MirrorFilterState } from './logMirror';
+import type { LogEntry, LogLevel, ResolvedFrame } from '../../src/logcat/messages';
+import type { AdbDevice } from '../../src/android/AdbBinary';
 
 declare const acquireVsCodeApi: () => { postMessage(msg: unknown): void };
 const vscode = acquireVsCodeApi();
 
 const API_VERSION = 1;
 
-type LogLevel = 'V' | 'D' | 'I' | 'W' | 'E' | 'F';
-
-interface ResolvedFrame {
-  startCol: number;
-  endCol:   number;
-  fqn:      string;
-  method:   string;
-  file:     string;
-  line:     number;
-  uri?:     string;
-  obfuscated?: boolean;
-}
-
-interface LogEntry {
-  seq:    number;
-  ts:     number;
-  tsDisplay: string;            // device-emitted HH:MM:SS.mmm
-  pid:    number;
-  tid:    number;
-  level:  LogLevel;
-  tag:    string;
-  message: string;
-  isStackFrame?: boolean;
-  frames?: ResolvedFrame[];
-}
-
-interface AdbDevice {
-  serial: string;
-  state:  'device' | 'offline' | 'unauthorized' | 'unknown';
-  model?: string;
-  transport: 'usb' | 'tcp' | 'mdns';
-}
-
 // ── State ─────────────────────────────────────────────────────────────────────
 
 const ROW_HEIGHT = 16;
-const ALL_LEVELS: LogLevel[] = ['V', 'D', 'I', 'W', 'E', 'F'];
 
-const buffer: LogEntry[] = [];
 let bufferCap = 100_000;
+const mirror = new LogMirror(bufferCap);
 
 const selectedLevels = new Set<LogLevel>(ALL_LEVELS);
 let tagFilter    = '';
@@ -64,9 +38,18 @@ let softWrap     = false;
 let paused       = false;
 let autoScroll   = true;
 
+// Precomputed once per filter edit, not per row — matches() in logMirror.ts reads
+// this directly instead of recomputing selectedLevels.size/toLowerCase() per entry.
+const filterState: MirrorFilterState = {
+  levels:    selectedLevels,
+  hasTag:    false,
+  tagLow:    '',
+  hasSearch: false,
+  searchLow: '',
+};
+
 const renderedNodes = new Map<number, HTMLElement>(); // displayIdx → node
 const nodePool: HTMLElement[] = [];
-let filteredIndices: number[] | null = null;
 
 // ── DOM lookups ───────────────────────────────────────────────────────────────
 
@@ -118,6 +101,7 @@ window.addEventListener('message', ev => {
     case 'init':
       followAppPid = msg.state.followAppPid;
       bufferCap    = msg.state.bufferCap;
+      mirror.resizeCapacity(bufferCap, filterState);
       elFollow.checked = followAppPid;
       paused = msg.state.paused;
       updatePauseButton();
@@ -125,6 +109,10 @@ window.addEventListener('message', ev => {
 
     case 'append':
       onAppend(msg.rows as LogEntry[]);
+      break;
+
+    case 'hydrate':
+      onHydrate(msg.rows as LogEntry[]);
       break;
 
     case 'reset':
@@ -143,7 +131,13 @@ window.addEventListener('message', ev => {
       // Keep the local mirror cap in sync with the host ring (the user can change
       // kotlinJump.logcat.bufferSize at runtime). Without this, the webview keeps
       // evicting at the OLD cap even after the host resized.
-      if (typeof msg.bufferCap === 'number' && msg.bufferCap > 0) bufferCap = msg.bufferCap;
+      if (typeof msg.bufferCap === 'number' && msg.bufferCap > 0 && msg.bufferCap !== bufferCap) {
+        bufferCap = msg.bufferCap;
+        mirror.resizeCapacity(bufferCap, filterState);
+        invalidateAllRows();
+        updateVirtualHeight();
+        renderVisible();
+      }
       elBuffer.textContent  = `${formatNum(msg.bufferUsed)} / ${formatNum(msg.bufferCap)}`;
       elThrough.textContent = `${msg.throughputPerSec}/s`;
       elStatus.textContent  = msg.paused ? 'paused' : 'streaming';
@@ -196,12 +190,16 @@ function wireEvents(): void {
 
   elTag.addEventListener('input', debounce(() => {
     tagFilter = elTag.value.trim();
+    filterState.hasTag = tagFilter.length > 0;
+    filterState.tagLow = tagFilter.toLowerCase();
     post({ type: 'setTagFilter', tag: tagFilter });
     rebuildFiltered();
   }, 120));
 
   elSearch.addEventListener('input', debounce(() => {
     searchQuery = elSearch.value.trim();
+    filterState.hasSearch = searchQuery.length > 0;
+    filterState.searchLow = searchQuery.toLowerCase();
     post({ type: 'setSearch', query: searchQuery });
     rebuildFiltered();
   }, 150));
@@ -264,19 +262,30 @@ function wireEvents(): void {
 // ── Append / reset ────────────────────────────────────────────────────────────
 
 function onAppend(rows: LogEntry[]): void {
-  for (const r of rows) {
-    if (buffer.length >= bufferCap) buffer.shift();
-    buffer.push(r);
+  mirror.append(rows, filterState);
+  invalidateAllRows();
+  updateVirtualHeight();
+  renderVisible();
+  if (autoScroll) {
+    elList.scrollTop = elList.scrollHeight;
   }
-  rebuildFiltered();
+}
+
+// Visibility resync — sent once when the panel becomes visible again after
+// being hidden, replacing the mirror's contents wholesale from the host's
+// (already-bounded) ring buffer. See LogcatViewProvider.resyncAfterVisible().
+function onHydrate(rows: LogEntry[]): void {
+  mirror.hydrate(rows, filterState);
+  invalidateAllRows();
+  updateVirtualHeight();
+  renderVisible();
   if (autoScroll) {
     elList.scrollTop = elList.scrollHeight;
   }
 }
 
 function onReset(): void {
-  buffer.length = 0;
-  filteredIndices = null;
+  mirror.reset();
   invalidateAllRows();
   updateVirtualHeight();
   renderVisible();
@@ -312,35 +321,21 @@ function onPackages(packages: string[]): void {
 
 // ── Filter ────────────────────────────────────────────────────────────────────
 
+// Full rescan — called only on an actual filter change (level toggle, tag/search
+// edit). The hot path (onAppend, ~60Hz while streaming) never calls this; it
+// only scans the batch it receives (see LogMirror.append in logMirror.ts).
 function rebuildFiltered(): void {
-  const allLevels = selectedLevels.size === ALL_LEVELS.length;
-  const hasTag    = tagFilter.length > 0;
-  const hasSearch = searchQuery.length > 0;
-
-  if (allLevels && !hasTag && !hasSearch) {
-    filteredIndices = null;
-  } else {
-    filteredIndices = [];
-    const tagLow    = tagFilter.toLowerCase();
-    const searchLow = searchQuery.toLowerCase();
-    for (let i = 0; i < buffer.length; i++) {
-      const e = buffer[i]!;
-      if (!selectedLevels.has(e.level)) continue;
-      if (hasTag && !e.tag.toLowerCase().includes(tagLow)) continue;
-      if (hasSearch && !e.message.toLowerCase().includes(searchLow)) continue;
-      filteredIndices.push(i);
-    }
-  }
+  mirror.rebuild(filterState);
   invalidateAllRows();
   updateVirtualHeight();
   renderVisible();
 }
 
 function displayCount(): number {
-  return filteredIndices ? filteredIndices.length : buffer.length;
+  return mirror.displayCount();
 }
 function entryAt(idx: number): LogEntry | undefined {
-  return filteredIndices ? buffer[filteredIndices[idx]!] : buffer[idx];
+  return mirror.entryAt(idx);
 }
 
 // ── Virtual scroller ──────────────────────────────────────────────────────────

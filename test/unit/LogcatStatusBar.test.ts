@@ -131,6 +131,23 @@ describe('LogcatStatusBar — state machine', () => {
     pill.dispose();
   });
 
+  it('Stopped: hasSession=true, streaming=false → debug-stop icon (was: pill went silently stale after kotlinJump.logcat.stop)', () => {
+    const pill = new LogcatStatusBar(fakeCfg());
+    pill.setState({ hasSession: true, streaming: false, throughputPerSec: 0 });
+    expect(lastItem.text).toContain('debug-stop');
+    expect(lastItem.text).toContain('stopped');
+    expect(lastItem.backgroundColor).toBeUndefined();
+    pill.dispose();
+  });
+
+  it('Stopped wins over Pressure — a stale buffer-pressure warning would be misleading once nothing is running', () => {
+    const pill = new LogcatStatusBar(fakeCfg());
+    pill.setState({ hasSession: true, streaming: false, bufferUsed: 95, bufferCap: 100 });
+    expect(lastItem.text).toContain('stopped');
+    expect(lastItem.text).not.toContain('warning');
+    pill.dispose();
+  });
+
   it('Pressure: bufferUsed/bufferCap > 0.80 → warning icon + warning bg', () => {
     const pill = new LogcatStatusBar(fakeCfg());
     pill.setState({ hasSession: true, throughputPerSec: 100, bufferUsed: 85, bufferCap: 100 });

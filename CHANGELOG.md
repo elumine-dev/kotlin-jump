@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.23.0
+
+Kotlin Jump 1.23.0 adds an optional rating prompt with editor-aware review links, plus a leaner package and a more reliable release pipeline.
+
+### Improvements
+- Added a rating prompt that appears after Kotlin Jump has been active for at least 10 sessions over a week, caps at three lifetime prompts, and honors "Don't ask again" permanently.
+- Routed the rating prompt and the What's New panel's review link to the correct store for your editor: the VS Code Marketplace, or Open VSX for Cursor, Windsurf, VSCodium, and other forks.
+
+### Packaging and Docs
+- Excluded stray development tool artifacts, such as debug logs and session data, from the packaged extension, keeping installs clean.
+- Hardened the automated web test suite by forcing headless Chromium, cutting spurious failures during release checks.
+
 ## 1.22.0
 
 Kotlin Jump 1.22.0 brings Move File, bundled stdlib navigation, and drawable hover previews to VS Code for the Web, fixes test task overrides in multi-root workspaces, and adds automated web testing to the release process.

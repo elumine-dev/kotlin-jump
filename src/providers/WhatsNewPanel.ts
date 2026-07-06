@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { decodeUtf8 } from '../util/encoding';
+import { getReviewUrl } from '../util/reviewLink';
 
 interface WhatsNewHighlight {
   title: string;
@@ -121,7 +122,10 @@ export class WhatsNewPanel {
         return undefined;
       }
 
-      return data;
+      // The review link is host-dependent (Marketplace vs Open VSX), so it
+      // can never be a value curated per-release in the JSON — computed
+      // here instead of trusting release prep to remember and set it.
+      return { ...data, links: { ...data.links, review: getReviewUrl() } };
     } catch {
       return undefined;
     }

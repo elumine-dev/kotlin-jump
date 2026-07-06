@@ -49,6 +49,7 @@ import { buildAllowFilter } from './util/testFilter';
 import * as IndexStore from './indexer/IndexStore';
 import { runCodeLensAction } from './providers/CodeLensAction';
 import { WhatsNewPanel } from './providers/WhatsNewPanel';
+import { RatingPromptService } from './ui/RatingPromptService';
 import { NullAssertionProvider } from './providers/NullAssertionProvider';
 import { HexColorFoldingProvider } from './providers/HexColorFoldingProvider';
 import { HexColorDocumentColorProvider } from './providers/HexColorDocumentColorProvider';
@@ -125,6 +126,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     });
   }
   void context.globalState.update('lastSeenVersion', version);
+
+  // Only ask for a rating on a steady-state activation, never in the same
+  // tick as the "Kotlin Jump updated to vX" toast above — stacking two
+  // info messages right after an update is exactly the noisy UX this
+  // extension avoids everywhere else.
+  if (lastSeen === version) {
+    void RatingPromptService.maybePrompt(context, undefined, false);
+  }
 
   const index = new SymbolIndex();
   _index = index;

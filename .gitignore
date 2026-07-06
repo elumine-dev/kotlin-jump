@@ -36,3 +36,6 @@ local.properties
 
 # AX harvest dumps (large diagnostic JSON, not versioned)
 media/ax-debug-harvest/
+
+# Claude in Chrome / Playwright MCP debug console dumps, not versioned
+.playwright-mcp/

@@ -44,6 +44,14 @@ dist/scripts/**
 tmp-demo-e2e/**
 tmp-demo-frames/**
 
+# Unrelated tool artifacts that land in the repo root at dev time (Firebase
+# CLI, ruvector/ruflo MCP, Playwright MCP session recordings). Not part of
+# the extension; vsce packages the working tree regardless of .gitignore,
+# so these need an explicit entry here too or they ship in the VSIX.
+firebase-debug.log
+ruvector.db
+.playwright-mcp/**
+
 # assets/demos/ : sidecars + demos NOT consumed by VSIX runtime.
 # Only the 11 walkthrough webps + any whats-new highlight media should ship.
 # README/CHANGELOG load the rest via raw.githubusercontent.com directly.

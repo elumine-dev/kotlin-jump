@@ -55,6 +55,7 @@ import { DrawableXmlDefinitionProvider } from './providers/DrawableXmlDefinition
 import { RResourceIndex } from './indexer/RResourceIndex';
 import { runCodeLensAction } from './providers/CodeLensAction';
 import { WhatsNewPanel } from './providers/WhatsNewPanel';
+import { RatingPromptService } from './ui/RatingPromptService';
 import { NullAssertionProvider } from './providers/NullAssertionProvider';
 import { HexColorFoldingProvider } from './providers/HexColorFoldingProvider';
 import { HexColorDocumentColorProvider } from './providers/HexColorDocumentColorProvider';
@@ -121,6 +122,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     });
   }
   void context.globalState.update('lastSeenVersion', version);
+
+  // Only ask for a rating on a steady-state activation, never in the same
+  // tick as the "Kotlin Jump updated to vX" toast above — stacking two
+  // info messages right after an update is exactly the noisy UX this
+  // extension avoids everywhere else.
+  const forceRatingPrompt = typeof process !== 'undefined' && process.env.KJ_FORCE_RATING_PROMPT === '1';
+  if (lastSeen === version || forceRatingPrompt) {
+    void RatingPromptService.maybePrompt(context, undefined, forceRatingPrompt);
+  }
 
   // Release-time preview hook: when `.publish --dry-run` launches a dev
   // host with KJ_OPEN_WHATS_NEW=1, auto-open the What's New panel so the

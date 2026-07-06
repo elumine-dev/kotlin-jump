@@ -336,6 +336,12 @@ export const window = {
   }),
   registerWebviewViewProvider: (_id: string, _provider: any, _options?: any) => ({ dispose: () => {} }),
   registerTreeDataProvider:    (_id: string, _provider: any) => ({ dispose: () => {} }),
+  showInformationMessage: async (_message: string, ..._items: string[]): Promise<string | undefined> => undefined,
+};
+
+export const env = {
+  uriScheme: 'vscode' as string,
+  openExternal: async (_target: any): Promise<boolean> => true,
 };
 
 export const commands = {

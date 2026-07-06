@@ -422,9 +422,11 @@ export function detectProjectRoot(log?: Logger, persistedChoice?: string): Detec
 // runs skip the failing first invocation. Resets on extension reload.
 const resolvedTaskCache = new Map<string, string>();
 
-function resolveTestTask(modulePath: string, gradleModule: string, log: Logger): string {
+export function resolveTestTask(modulePath: string, gradleModule: string, log: Logger): string {
   const fs = require('fs') as typeof import('fs');
-  const cfg = vscode.workspace.getConfiguration('kotlinJump');
+  // Pass the module's own path as the config resource so multi-root workspaces resolve
+  // `testTaskOverrides` from that module's workspace folder, not an arbitrary window-wide value.
+  const cfg = vscode.workspace.getConfiguration('kotlinJump', vscode.Uri.file(modulePath));
 
   // 1. Per-module explicit override (highest priority)
   const overrides = cfg.get<Record<string, string>>('testTaskOverrides', {});

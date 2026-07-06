@@ -40,6 +40,7 @@ media/ax-debug-harvest/**
 # Demo recording tooling — DEV ONLY, never ship
 scripts/**
 dist/demo/**
+dist/scripts/**
 tmp-demo-e2e/**
 tmp-demo-frames/**
 

@@ -325,9 +325,25 @@ Pair with [**detekt-lsp**](https://github.com/elumine-dev/detekt-lsp) for live D
 
 ---
 
+## 🌐 Web support
+
+Kotlin Jump runs on vscode.dev and github.dev: navigation, Find Usages, Code Lens, folding, hover, and the AI chat participant all work with no backend. Android Run, ADB, Logcat, and JAR source scanning need a real machine behind the editor. They work as-is in a GitHub Codespace opened in a browser tab, since VS Code detects the Codespace's Node backend and loads the full desktop feature set automatically. See [`doc/web-support.md`](doc/web-support.md) for the exact breakdown.
+
+---
+
 ## Configuration
 
 Search **Kotlin Jump** in VS Code settings (`Cmd+,`). All defaults work out of the box. No tweaks required for 95 % of projects.
+
+One exception: `kotlinJump.testTaskOverrides`. The test runner picks `testDebugUnitTest` for Android modules and plain `test` otherwise, but it can't see an Android plugin applied indirectly through your own convention plugins. Set the task explicitly when that's the case, or when a flavor makes `testDebugUnitTest` ambiguous:
+
+```json
+"kotlinJump.testTaskOverrides": {
+  ":app": "testDebugUnitTest"
+}
+```
+
+Multiple project folders in one workspace: this setting reads from each folder's own `.vscode/settings.json`, not the shared `settings` block of a `.code-workspace` file, so two folders with their own `:app` module can each get a different task.
 
 ---
 
@@ -358,7 +374,7 @@ Search **Kotlin Jump** in your editor's Extensions tab (`Cmd+Shift+X`), or insta
 For offline installs (machines without internet access), grab the latest `.vsix` from [GitHub Releases](https://github.com/elumine-dev/kotlin-jump/releases/latest):
 
 ```bash
-code --install-extension kotlin-jump-1.21.2.vsix
+code --install-extension kotlin-jump-1.22.0.vsix
 ```
 
 ### Build from source
@@ -366,7 +382,7 @@ code --install-extension kotlin-jump-1.21.2.vsix
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full dev setup, or quickstart:
 
 ```bash
-code --install-extension kotlin-jump-1.21.2.vsix
+code --install-extension kotlin-jump-1.22.0.vsix
 ```
 
 ---

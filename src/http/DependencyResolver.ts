@@ -1,46 +1,54 @@
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import * as vscode from 'vscode';
 import { MavenCoords, parseCoords, coordsEqual } from './MavenCoordinatesParser';
+
+const decoder = new TextDecoder();
 
 /**
  * Walks the workspace to find dependency declarations and extracts
  * Maven coordinates. Supports three formats:
  *
- *   1. `build.gradle.kts` / `build.gradle` — Kotlin DSL or Groovy
+ *   1. `build.gradle.kts` / `build.gradle`: Kotlin DSL or Groovy
  *      Patterns:
  *        implementation("group:artifact:version")
  *        implementation 'group:artifact:version'
  *        implementation(libs.foo)            // resolves via libs.versions.toml
  *
- *   2. `pom.xml` — Maven XML
+ *   2. `pom.xml`: Maven XML
  *      <dependency>
  *        <groupId>...</groupId>
  *        <artifactId>...</artifactId>
  *        <version>...</version>
  *      </dependency>
  *
- *   3. `gradle/libs.versions.toml` — Gradle Version Catalog
+ *   3. `gradle/libs.versions.toml`: Gradle Version Catalog
  *      [libraries]
  *      retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
  *
  *      [versions]
  *      retrofit = "2.9.0"
  *
- * Pure parsing — no network, no JVM, no Gradle/Maven invocation. Best
+ * Pure parsing: no network, no JVM, no Gradle/Maven invocation. Best
  * effort: complex Gradle constructs (BOMs, plugins, conditional deps,
  * subprojects { } blocks) may not be fully captured. The trade-off is
  * deliberate: 80 % coverage with zero external process is better than
  * 100 % coverage requiring a JVM invocation.
+ *
+ * Uses `vscode.workspace.fs` throughout (not Node's `fs`), so this class
+ * works identically on desktop and on the web/virtual workspaces. On the
+ * web, nothing downstream can act on the coordinates yet (no CORS-friendly
+ * way to fetch sources from Maven Central/Google Maven), but resolving them
+ * still has value on its own, e.g. a future "N Maven dependencies found in
+ * this project" diagnostic that never needs to download anything.
  */
 export class DependencyResolver {
   /**
    * Scans a workspace folder and returns every Maven coord it can
    * extract from the dependency manifests it finds.
    */
-  async resolveAll(workspaceRoot: string): Promise<MavenCoords[]> {
+  async resolveAll(workspaceRoot: vscode.Uri): Promise<MavenCoords[]> {
     const all: MavenCoords[] = [];
 
-    // Read libs.versions.toml first — its versions table feeds the
+    // Read libs.versions.toml first: its versions table feeds the
     // build.gradle.kts resolution that follows.
     const versionCatalog = await this.readVersionCatalog(workspaceRoot);
 
@@ -49,8 +57,9 @@ export class DependencyResolver {
 
     for (const file of buildFiles) {
       try {
-        const text = await fs.readFile(file, 'utf8');
-        const base = path.basename(file);
+        const bytes = await vscode.workspace.fs.readFile(file);
+        const text  = decoder.decode(bytes);
+        const base  = basename(file.path);
         const found = base.endsWith('.gradle.kts') || base.endsWith('.gradle')
           ? this.parseGradle(text, versionCatalog)
           : base === 'pom.xml'
@@ -59,7 +68,7 @@ export class DependencyResolver {
         for (const c of found) {
           if (!all.some(existing => coordsEqual(existing, c))) all.push(c);
         }
-      } catch { /* unreadable — skip */ }
+      } catch { /* unreadable, skip */ }
     }
 
     return all;
@@ -70,21 +79,23 @@ export class DependencyResolver {
    * pom.xml) up to `maxDepth` levels. Skips `node_modules`, `build`,
    * `.gradle`, and other noise.
    */
-  private async findBuildFiles(root: string, maxDepth: number): Promise<string[]> {
+  private async findBuildFiles(root: vscode.Uri, maxDepth: number): Promise<vscode.Uri[]> {
     const SKIP = new Set(['node_modules', 'build', '.gradle', '.idea', 'out', 'dist', '.git']);
     const TARGETS = new Set(['build.gradle.kts', 'build.gradle', 'pom.xml']);
-    const results: string[] = [];
+    const results: vscode.Uri[] = [];
 
-    const walk = async (dir: string, depth: number): Promise<void> => {
+    const walk = async (dir: vscode.Uri, depth: number): Promise<void> => {
       if (depth > maxDepth) return;
-      let entries: { name: string; isDirectory: () => boolean; isFile: () => boolean }[];
-      try { entries = await fs.readdir(dir, { withFileTypes: true }); }
+      let entries: [string, vscode.FileType][];
+      try { entries = await vscode.workspace.fs.readDirectory(dir); }
       catch { return; }
-      for (const e of entries) {
-        if (SKIP.has(e.name)) continue;
-        const full = path.join(dir, e.name);
-        if (e.isDirectory()) await walk(full, depth + 1);
-        else if (e.isFile() && TARGETS.has(e.name)) results.push(full);
+      for (const [name, type] of entries) {
+        if (SKIP.has(name)) continue;
+        const full = vscode.Uri.joinPath(dir, name);
+        // Bitwise, not ===: a symlinked directory reports as
+        // FileType.Directory | FileType.SymbolicLink (66), not a bare 2.
+        if (type & vscode.FileType.Directory) await walk(full, depth + 1);
+        else if (type & vscode.FileType.File && TARGETS.has(name)) results.push(full);
       }
     };
     await walk(root, 0);
@@ -96,11 +107,11 @@ export class DependencyResolver {
    * `libs.alias.path` → `MavenCoords`. Used by `parseGradle` to resolve
    * `implementation(libs.retrofit.core)` style references.
    */
-  private async readVersionCatalog(workspaceRoot: string): Promise<Map<string, MavenCoords>> {
+  private async readVersionCatalog(workspaceRoot: vscode.Uri): Promise<Map<string, MavenCoords>> {
     const map = new Map<string, MavenCoords>();
-    const tomlPath = path.join(workspaceRoot, 'gradle', 'libs.versions.toml');
+    const tomlUri = vscode.Uri.joinPath(workspaceRoot, 'gradle', 'libs.versions.toml');
     let text: string;
-    try { text = await fs.readFile(tomlPath, 'utf8'); }
+    try { text = decoder.decode(await vscode.workspace.fs.readFile(tomlUri)); }
     catch { return map; }
 
     // Parse [versions] table.
@@ -178,7 +189,7 @@ export class DependencyResolver {
   parseGradle(text: string, versionCatalog: Map<string, MavenCoords>): MavenCoords[] {
     const results: MavenCoords[] = [];
 
-    // 1. Direct string literals — works for both Kotlin & Groovy DSL.
+    // 1. Direct string literals: works for both Kotlin & Groovy DSL.
     const reDirect = /\b(?:implementation|api|compileOnly|runtimeOnly|testImplementation|testRuntimeOnly|annotationProcessor|kapt|ksp)\s*[(\s]\s*["']([^"']+:[^"']+:[^"']+)["']/g;
     let m: RegExpExecArray | null;
     while ((m = reDirect.exec(text)) !== null) {
@@ -186,7 +197,7 @@ export class DependencyResolver {
       if (c) results.push(c);
     }
 
-    // 2. Version Catalog refs — `implementation(libs.foo.bar)`.
+    // 2. Version Catalog refs: `implementation(libs.foo.bar)`.
     const reCatalog = /\b(?:implementation|api|compileOnly|runtimeOnly|testImplementation|testRuntimeOnly)\s*\(\s*(libs\.[a-zA-Z0-9_.]+)\s*\)/g;
     while ((m = reCatalog.exec(text)) !== null) {
       const c = versionCatalog.get(m[1]);
@@ -198,7 +209,7 @@ export class DependencyResolver {
 
   /**
    * Extracts coords from a `pom.xml` text. Only the standard
-   * `<dependency>` shape — no profiles, no parent inheritance, no
+   * `<dependency>` shape: no profiles, no parent inheritance, no
    * properties resolution beyond version (which is already a string).
    */
   parsePom(text: string): MavenCoords[] {
@@ -217,4 +228,8 @@ export class DependencyResolver {
     }
     return results;
   }
+}
+
+function basename(uriPath: string): string {
+  return uriPath.slice(uriPath.lastIndexOf('/') + 1);
 }

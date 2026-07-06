@@ -16,9 +16,17 @@ export class WorkerPool {
 
   constructor(size: number) {
     try {
-      // Inside the try: `__dirname` does not exist in the web extension
-      // host, and the ReferenceError must hit the same inline-parsing
-      // fallback as a missing worker file — not crash activate().
+      // `__dirname` does not exist in the web extension host. Checked
+      // explicitly (rather than left to throw as an implicit
+      // ReferenceError) so this fallback reads as an intentional
+      // environment check, not an accident. It must land in the same
+      // inline-parsing fallback as a missing worker file, not crash
+      // activate(). Doubly protected either way: even if this check were
+      // removed, `new Worker(...)` below would still throw via the browser
+      // build's worker_threads stub (src/browser/worker-threads-stub.ts).
+      if (typeof __dirname === 'undefined') {
+        throw new Error('worker_threads unavailable (web extension host)');
+      }
       const workerPath = path.join(__dirname, 'parser-worker.js');
       for (let i = 0; i < size; i++) {
         const w = new Worker(workerPath);

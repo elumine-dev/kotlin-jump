@@ -23,7 +23,13 @@ jobs:
           node-version: 20
           cache: npm
 
+      # @vscode/test-web (a devDependency, used only by the separate
+      # web-smoke job below) pulls in @playwright/browser-chromium, whose
+      # postinstall downloads a Chromium binary. Skip that download here,
+      # since this job never launches a browser, so only web-smoke pays the cost.
       - run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
 
       # ffmpeg is used by a handful of tests under test/unit/Demo*.test.ts to
       # measure caption chroma and validate pipeline output. The Ubuntu runner
@@ -59,3 +65,49 @@ jobs:
 
       - name: Package (verify it builds cleanly)
         run: npx @vscode/vsce package --no-dependencies
+
+  # Separate from `build` on purpose: this is the one job that verifies
+  # dist/extension.browser.js actually *activates* in a real browser Web
+  # Extension Host, the class of regression that shipped twice before
+  # (commits 6e81662, 2466ce9) and was only ever caught by a manual,
+  # un-committed run of @vscode/test-web. Kept isolated so its Chromium/VS
+  # Code Web download cost never slows down the fast unit+build+package path.
+  web-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Cache Playwright Chromium binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ hashFiles('package-lock.json') }}
+
+      - name: Cache VS Code Web build
+        uses: actions/cache@v4
+        with:
+          path: .vscode-test-web
+          key: vscode-test-web-stable-${{ github.run_id }}
+          restore-keys: vscode-test-web-stable-
+
+      # No PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD here: this job needs the browser.
+      - run: npm ci
+
+      # Explicit rather than relying on @playwright/browser-chromium's
+      # postinstall alone (which can be skipped or land without OS shared
+      # libs on a bare runner). This is idempotent and a no-op once the
+      # cache above is warm.
+      - name: Ensure Chromium is installed
+        run: npx playwright install --with-deps chromium
+
+      - name: Build (dev) for the web bundle
+        run: node esbuild.js
+
+      - name: Web extension smoke test (@vscode/test-web)
+        run: npm run test:web

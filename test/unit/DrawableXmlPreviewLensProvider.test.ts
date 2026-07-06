@@ -1,22 +1,14 @@
 /**
- * Tests for DrawableXmlInlinePreviewProvider — inline hover preview of
- * `<vector>` drawables when their source XML is open.
+ * Tests for DrawableXmlPreviewLensProvider: the CodeLens above `<vector>`
+ * drawables (Open Preview / N references). Hover preview tests moved to
+ * test/unit/DrawableXmlHoverProvider.test.ts when that hover logic was split
+ * out of DrawableXmlInlinePreviewProvider into its own zero-Node-dependency
+ * class; DrawableXmlInlinePreviewProvider itself (the always-visible gutter
+ * icon, desktop-only) has no test coverage change here.
  */
-import { describe, it, expect, vi } from 'vitest';
-import * as os from 'node:os';
-import * as path from 'node:path';
-import * as vscodeMock from './__mocks__/vscode';
-import { DrawableXmlInlinePreviewProvider } from '../../src/providers/DrawableXmlInlinePreviewProvider';
+import { describe, it, expect } from 'vitest';
 import { DrawableXmlPreviewLensProvider } from '../../src/providers/DrawableXmlPreviewPanel';
 import { Position } from './__mocks__/vscode';
-
-// The provider needs a storage dir + a few VS Code event listeners.
-// Stub them so the constructor runs cleanly inside vitest.
-const STORAGE_URI = { fsPath: path.join(os.tmpdir(), 'kj-vector-xml-preview-test') };
-vi.spyOn(vscodeMock.window as any, 'onDidChangeActiveTextEditor').mockReturnValue({ dispose: () => {} });
-vi.spyOn(vscodeMock.window as any, 'onDidChangeVisibleTextEditors').mockReturnValue({ dispose: () => {} });
-vi.spyOn(vscodeMock.workspace as any, 'onDidChangeTextDocument').mockReturnValue({ dispose: () => {} });
-Object.defineProperty(vscodeMock.window as any, 'visibleTextEditors', { configurable: true, get: () => [] });
 
 const VECTOR_XML = `<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -53,54 +45,6 @@ function makeDoc(text: string, opts: { lang?: string; path?: string } = {}) {
     },
   } as any;
 }
-
-describe('DrawableXmlInlinePreviewProvider', () => {
-  const provider = new DrawableXmlInlinePreviewProvider(STORAGE_URI as any);
-
-  it('shows an SVG preview when hovering the `<vector>` tag line', () => {
-    const doc = makeDoc(VECTOR_XML);
-    // `<vector` starts on line 1. Hover on line 1.
-    const hover = provider.provideHover(doc, new Position(1, 5));
-    expect(hover).toBeDefined();
-    const md = (hover!.contents as any[])[0].value as string;
-    expect(md).toContain('data:image/svg+xml;base64,');
-    expect(md).toContain('width="256"');
-    expect(md).toContain('ic_banner.xml');
-  });
-
-  it('returns undefined for hover on a non-vector line (e.g. <path>)', () => {
-    const doc = makeDoc(VECTOR_XML);
-    // <path> sits on line 6.
-    const hover = provider.provideHover(doc, new Position(6, 5));
-    expect(hover).toBeUndefined();
-  });
-
-  it('returns undefined for non-vector drawable XML (selector)', () => {
-    const doc = makeDoc(NON_VECTOR_XML);
-    const hover = provider.provideHover(doc, new Position(1, 5));
-    expect(hover).toBeUndefined();
-  });
-
-  it('returns undefined for files outside `res/drawable*/`', () => {
-    const doc = makeDoc(VECTOR_XML, { path: '/project/build.xml' });
-    const hover = provider.provideHover(doc, new Position(1, 5));
-    expect(hover).toBeUndefined();
-  });
-
-  it('returns undefined for non-XML language', () => {
-    const doc = makeDoc(VECTOR_XML, { lang: 'kotlin' });
-    const hover = provider.provideHover(doc, new Position(1, 5));
-    expect(hover).toBeUndefined();
-  });
-
-  it('drawable-v24 / drawable-night / mipmap-xxhdpi all match the path filter', () => {
-    for (const dir of ['drawable-v24', 'drawable-night', 'drawable-xxhdpi']) {
-      const doc = makeDoc(VECTOR_XML, { path: `/project/res/${dir}/ic.xml` });
-      const hover = provider.provideHover(doc, new Position(1, 5));
-      expect(hover, `expected match for ${dir}`).toBeDefined();
-    }
-  });
-});
 
 // ── CodeLens "Open Vector Preview" + "N references" ─────────────────────────
 describe('DrawableXmlPreviewLensProvider', () => {

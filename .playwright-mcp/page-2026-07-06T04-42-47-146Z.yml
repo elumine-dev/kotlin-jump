@@ -1,0 +1,63 @@
+- generic [active] [ref=e1]:
+  - dialog "cookieconsent" [ref=e2]:
+    - generic [ref=e3]:
+      - text: Some Eclipse Foundation pages use cookies to better serve you when you return to the site. You can set your browser to notify you before you receive a cookie or turn off cookies. If you do so, however, some areas of some sites may not function properly. To read Eclipse Foundation Privacy Policy
+      - button "learn more about cookies" [ref=e4] [cursor=pointer]: click here.
+    - generic [ref=e5]:
+      - generic "deny cookies" [ref=e6] [cursor=pointer]: Deny
+      - generic "allow cookies" [ref=e7] [cursor=pointer]: Allow
+  - generic [ref=e9]:
+    - banner [ref=e10]:
+      - generic [ref=e11]:
+        - link "Home - Open VSX Registry" [ref=e13] [cursor=pointer]:
+          - /url: /
+          - img [ref=e14]
+        - generic [ref=e18]:
+          - link "Commercial Usage" [ref=e19] [cursor=pointer]:
+            - /url: https://managed.open-vsx.org/
+          - link "Report a Vulnerability" [ref=e20] [cursor=pointer]:
+            - /url: https://researcher-recognition.open-vsx.org
+          - link "Documentation" [ref=e21] [cursor=pointer]:
+            - /url: https://github.com/EclipseFdn/open-vsx.org/wiki
+          - link "Status" [ref=e22] [cursor=pointer]:
+            - /url: https://status.open-vsx.org/
+          - paragraph [ref=e23] [cursor=pointer]: Working Group
+          - link "Sponsor" [ref=e24] [cursor=pointer]:
+            - /url: https://www.eclipse.org/donate/openvsx/
+          - link "About" [ref=e25] [cursor=pointer]:
+            - /url: /about
+          - link "Publish" [ref=e26] [cursor=pointer]:
+            - /url: /user-settings/extensions
+            - text: Publish
+          - link "Log In" [ref=e27] [cursor=pointer]:
+            - /url: /oauth2/authorization/github
+            - img [ref=e28]
+    - generic [ref=e34]:
+      - generic [ref=e36]:
+        - img [ref=e38]
+        - paragraph [ref=e40]:
+          - text: Open VSX is growing! To support reliable access as usage increases, we've implemented rate limiting tiers that govern usage. Learn more
+          - link "here" [ref=e41] [cursor=pointer]:
+            - /url: https://github.com/EclipseFdn/open-vsx.org/wiki/rate-limiting
+          - text: .
+      - button "Got It" [ref=e43] [cursor=pointer]: Got It
+    - contentinfo [ref=e45]:
+      - generic [ref=e46]:
+        - generic [ref=e47]:
+          - link "Open VSX on GitHub" [ref=e48] [cursor=pointer]:
+            - /url: https://github.com/eclipse-openvsx/openvsx
+            - img "Open VSX on GitHub" [ref=e49]
+          - link "Open VSX LinkedIn" [ref=e51] [cursor=pointer]:
+            - /url: https://www.linkedin.com/company/open-vsx/
+            - img [ref=e52]
+          - link "Open VSX X (Twitter)" [ref=e54] [cursor=pointer]:
+            - /url: https://x.com/openvsx
+            - img [ref=e55]
+        - generic [ref=e57]:
+          - text: Copyright ©
+          - link "Eclipse Foundation, AISBL." [ref=e58] [cursor=pointer]:
+            - /url: https://www.eclipse.org
+        - generic [ref=e59]:
+          - link "Legal" [ref=e60] [cursor=pointer]:
+            - /url: http://www.eclipse.org/legal/
+          - img [ref=e61]

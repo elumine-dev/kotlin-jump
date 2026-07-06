@@ -32,24 +32,39 @@ const demoEntryPoints = fs.existsSync(path.join('scripts', 'demo', 'demos'))
   : [];
 
 const browserStubs = {
-  'worker_threads': './src/browser/worker-threads-stub',
-  'os':             './src/browser/os-stub',
-  'path':           './src/browser/path-stub',
-  'child_process':  './src/browser/child-process-stub',
-  'fs':             './src/browser/fs-stub',
-  'fs/promises':    './src/browser/fs-stub',
-  'zlib':           './src/browser/zlib-stub',
-  'util':           './src/browser/util-stub',
+  'worker_threads':      './src/browser/worker-threads-stub',
+  'node:worker_threads': './src/browser/worker-threads-stub',
+  'os':                  './src/browser/os-stub',
+  'node:os':             './src/browser/os-stub',
+  'path':                './src/browser/path-stub',
+  'node:path':           './src/browser/path-stub',
+  'child_process':       './src/browser/child-process-stub',
+  'node:child_process':  './src/browser/child-process-stub',
+  'fs':                  './src/browser/fs-stub',
+  'node:fs':             './src/browser/fs-stub',
+  'fs/promises':         './src/browser/fs-stub',
+  'node:fs/promises':    './src/browser/fs-stub',
+  'zlib':                './src/browser/zlib-stub',
+  'node:zlib':           './src/browser/zlib-stub',
+  'util':                './src/browser/util-stub',
+  'node:util':           './src/browser/util-stub',
+  'crypto':              './src/browser/crypto-stub',
+  'node:crypto':         './src/browser/crypto-stub',
 };
 
 // Perf benchmark scripts (DEV ONLY — excluded from VSIX).
 const perfEntryPoints = ['scripts/perf-bench.ts', 'scripts/perf-diff.ts']
   .filter(fs.existsSync);
 
+// Maintenance scripts (DEV ONLY, excluded from VSIX, run manually).
+const maintenanceEntryPoints = ['scripts/build-bundled-stdlib-index.ts']
+  .filter(fs.existsSync);
+
 async function main() {
   const buildDemo = demoLibEntryPoints.length > 0 || demoEntryPoints.length > 0;
   const buildPerf = perfEntryPoints.length > 0;
-  const [extCtx, browserCtx, workerCtx, serverCtx, e2eCtx, demoLibCtx, demoCtx, recordCtx, recorderExtCtx, perfCtx, logcatWebviewCtx] = await Promise.all([
+  const buildMaintenance = maintenanceEntryPoints.length > 0;
+  const [extCtx, browserCtx, workerCtx, serverCtx, e2eCtx, demoLibCtx, demoCtx, recordCtx, recorderExtCtx, perfCtx, logcatWebviewCtx, testWebCtx, maintenanceCtx] = await Promise.all([
     esbuild.context({
       ...sharedOptions,
       entryPoints: ['src/extension.ts'],
@@ -155,9 +170,37 @@ async function main() {
       entryPoints: ['media/logcat/main.ts'],
       outfile:     'dist/logcat/main.js',
     }),
+    // @vscode/test-web smoke test suite. Same alias as browserCtx (must
+    // exercise the exact same Node-stub environment the real web bundle
+    // does) but `vscode` stays external, since this runs inside a real web
+    // extension host that provides the genuine API, not a mock. Mocha-browser
+    // requires a single bundled file, hence one entry point (unlike e2eCtx's
+    // per-file outdir).
+    esbuild.context({
+      ...sharedOptions,
+      platform:    'browser',
+      target:      'es2020',
+      alias:       browserStubs,
+      entryPoints: ['test/web/suite/index.ts'],
+      outfile:     'dist/test-web/suite/index.js',
+    }),
+    // Maintenance scripts (e.g. build-bundled-stdlib-index.ts): headless,
+    // run manually from the CLI, never shipped. `vscode` aliased to the
+    // unit-test mock, same as perfCtx above, since these import repo modules
+    // that reference `vscode` at the top level without ever calling into it.
+    buildMaintenance
+      ? esbuild.context({
+          ...sharedOptions,
+          external:    [],
+          alias:       { vscode: './test/unit/__mocks__/vscode.ts' },
+          entryPoints: maintenanceEntryPoints,
+          outdir:      'dist/scripts',
+          banner:      { js: '#!/usr/bin/env node' },
+        })
+      : Promise.resolve(undefined),
   ]);
 
-  const allCtx = [extCtx, browserCtx, workerCtx, serverCtx, e2eCtx, demoLibCtx, demoCtx, recordCtx, recorderExtCtx, perfCtx, logcatWebviewCtx].filter(Boolean);
+  const allCtx = [extCtx, browserCtx, workerCtx, serverCtx, e2eCtx, demoLibCtx, demoCtx, recordCtx, recorderExtCtx, perfCtx, logcatWebviewCtx, testWebCtx, maintenanceCtx].filter(Boolean);
   if (watch) {
     await Promise.all(allCtx.map(c => c.watch()));
     console.log('[esbuild] watching…');

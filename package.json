@@ -1291,7 +1291,7 @@
     "pretest:integration": "npm run compile",
     "test:integration": "vscode-test",
     "pretest:web": "node esbuild.js",
-    "test:web": "vscode-test-web --browser=chromium --quality=stable --extensionDevelopmentPath=. --extensionTestsPath=dist/test-web/suite/index.js test/web/fixtures/workspace",
+    "test:web": "vscode-test-web --browser=chromium --quality=stable --headless --extensionDevelopmentPath=. --extensionTestsPath=dist/test-web/suite/index.js test/web/fixtures/workspace",
     "predemo:record": "npm run compile",
     "demo:record": "node dist/demo/record.js",
     "build:event-tap": "bash scripts/demo/event-capture/build.sh",

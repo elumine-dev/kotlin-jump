@@ -126,7 +126,7 @@ export class SourcesActionsMenu implements vscode.Disposable {
     const resolver   = new DependencyResolver();
     const downloader = new HttpSourcesDownloader(this.log);
 
-    const coordsAll = await resolver.resolveAll(folders[0].uri.fsPath);
+    const coordsAll = await resolver.resolveAll(folders[0].uri);
     if (coordsAll.length === 0) {
       vscode.window.showInformationMessage(
         'Kotlin Jump: no Maven coords found in build files. Nothing to download.',

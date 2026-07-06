@@ -35,6 +35,7 @@ import { KotlinJarContentProvider, KOTLIN_JAR_SCHEME, closeAllCachedZips } from 
 import { GradleSourcesScanner } from './gradle/GradleSourcesScanner';
 import { JdkSourcesScanner }    from './jdk/JdkSourcesScanner';
 import { BundledStdlibProvider } from './kotlin/BundledStdlibProvider';
+import { BundledStdlibFsProvider, KOTLIN_STDLIB_JAR_SCHEME } from './providers/BundledStdlibFsProvider';
 import { SourcesStatusBar }     from './ui/SourcesStatusBar';
 import { SourcesActionsMenu }   from './ui/SourcesActionsMenu';
 import { DependencyResolver }   from './http/DependencyResolver';
@@ -71,6 +72,7 @@ import { DrawableResourceIndex } from './indexer/DrawableResourceIndex';
 import { DrawableHoverProvider } from './providers/DrawableHoverProvider';
 import { DrawableGutterThumbnailProvider } from './providers/DrawableGutterThumbnailProvider';
 import { DrawableXmlInlinePreviewProvider } from './providers/DrawableXmlInlinePreviewProvider';
+import { DrawableXmlHoverProvider } from './providers/DrawableXmlHoverProvider';
 import { DrawableXmlPreviewPanel, DrawableXmlPreviewLensProvider } from './providers/DrawableXmlPreviewPanel';
 import { VersionCatalogIndex } from './indexer/VersionCatalogIndex';
 import { ColorFoldingProvider } from './providers/ColorFoldingProvider';
@@ -269,6 +271,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     vscode.languages.registerWorkspaceSymbolProvider(new KotlinFileProvider(index, log)),
     vscode.workspace.registerFileSystemProvider(KOTLIN_JAR_SCHEME, new KotlinJarContentProvider(), { isReadonly: true, isCaseSensitive: true }),
+    vscode.workspace.registerFileSystemProvider(KOTLIN_STDLIB_JAR_SCHEME, new BundledStdlibFsProvider(), { isReadonly: true, isCaseSensitive: true }),
 
     // ── Semantic Highlighting ─────────────────────────────────────────────
     (() => {
@@ -937,11 +940,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         [{ language: 'kotlin' }, { language: 'java' }],
         new DrawableHoverProvider(drawableIndex),
       ),
-      // Inline `<vector>` preview when the drawable XML is open in
-      // the editor. The provider exposes BOTH:
-      //  - an always-visible gutter icon at the `<vector>` line, kept
-      //    in sync with the file's content (subscriptions internal),
-      //  - a hover registered below for the larger 256×256 popup.
+      // Inline `<vector>` preview when the drawable XML is open in the
+      // editor: an always-visible gutter icon at the `<vector>` line
+      // (DrawableXmlInlinePreviewProvider, desktop-only disk cache) plus a
+      // hover for the larger 256x256 popup (DrawableXmlHoverProvider, no
+      // Node dependency, also registered on the web).
       ...((): vscode.Disposable[] => {
         const xmlPreview = new DrawableXmlInlinePreviewProvider(context.globalStorageUri);
         // Auto-opening side preview — opens beside the editor on
@@ -960,7 +963,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           previewLens,
           vscode.languages.registerHoverProvider(
             { language: 'xml', pattern: '**/res/drawable*/*.xml' },
-            xmlPreview,
+            new DrawableXmlHoverProvider(),
           ),
           vscode.languages.registerCodeLensProvider(
             { language: 'xml', pattern: '**/res/drawable*/*.xml' },
@@ -1161,7 +1164,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           const folders = vscode.workspace.workspaceFolders ?? [];
           if (folders.length > 0) {
             const resolver = new DependencyResolver();
-            const declared = await resolver.resolveAll(folders[0].uri.fsPath);
+            const declared = await resolver.resolveAll(folders[0].uri);
             // A dep is "missing" if neither Gradle nor Maven scanners returned a
             // matching JAR. Approximation: count of declared coords minus indexed
             // JARs (gradle.jars + maven.jars). Negative clamped to 0.
@@ -1460,7 +1463,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // ready, even on a cold Gradle cache. Gradle/Maven scans (which may
   // include a project-pinned stdlib of the same or a newer version) will
   // overwrite this fallback when they index their own kotlin-stdlib JAR.
-  const bundledStdlib = new BundledStdlibProvider(index, log, context.extensionPath);
+  const bundledStdlib = new BundledStdlibProvider(index, log, context.extensionUri);
   void bundledStdlib.load().catch((e: Error) => log.warn(`[bundled-stdlib] ${e.message}`));
 
   runJarScan();

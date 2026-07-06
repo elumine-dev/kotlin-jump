@@ -2,7 +2,7 @@
   "name": "kotlin-jump",
   "displayName": "Kotlin Jump: Fast Kotlin & Android Studio Navigation",
   "description": "Fast Kotlin & Android Studio navigation. Find Usages, Go to Definition, Compose, R.string, Android Run. No JVM, no language server. The Android Studio experience inside VS Code.",
-  "version": "1.21.2",
+  "version": "1.22.0",
   "publisher": "elumine",
   "license": "MIT",
   "icon": "media/logo.png",
@@ -20,7 +20,7 @@
   "capabilities": {
     "virtualWorkspaces": {
       "supported": "limited",
-      "description": "Navigation, Find Usages, Code Lens, folding and highlighting work. JAR scanning, test runner, and Android run are unavailable."
+      "description": "Navigation, Find Usages, Code Lens, folding, highlighting, and Move File work. JAR scanning, the test runner, Android Run/ADB, and Logcat are unavailable."
     },
     "untrustedWorkspaces": {
       "supported": "limited",
@@ -131,6 +131,13 @@
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "kotlinJump.logcat.devices",
+        "contents": "Logcat and ADB device access aren't available in VS Code for the Web.\n\nOpen this workspace in desktop VS Code, or in a GitHub Codespace, to use Logcat.",
+        "when": "kotlinJump.logcat.webUnavailable"
+      }
+    ],
     "keybindings": [
       {
         "command": "kotlin-jump.findUsages",
@@ -854,7 +861,8 @@
             "type": "string"
           },
           "default": {},
-          "markdownDescription": "Override the Gradle test task per module. Use this when a module has multiple product flavors and `testDebugUnitTest` is ambiguous.\n\nExample:\n```json\n{\n  \":replica:app\": \"testReplicaLaPresseDebugUnitTest\"\n}\n```"
+          "scope": "resource",
+          "markdownDescription": "Override the Gradle test task per module. Use this when a module has multiple product flavors and `testDebugUnitTest` is ambiguous.\n\nExample:\n```json\n{\n  \":replica:app\": \"testReplicaLaPresseDebugUnitTest\"\n}\n```\n\nIn a multi-root workspace, set this in each folder's own `.vscode/settings.json` (not the top-level `settings` block of a `.code-workspace` file, which is shared by every folder)."
         },
         "kotlinJump.injectTestLogging": {
           "type": "boolean",
@@ -1271,6 +1279,8 @@
   "scripts": {
     "compile": "node esbuild.js",
     "build:server": "node esbuild.js",
+    "prebuild:bundled-stdlib-index": "node esbuild.js",
+    "build:bundled-stdlib-index": "node dist/scripts/build-bundled-stdlib-index.js",
     "watch": "node esbuild.js --watch",
     "vscode:prepublish": "node esbuild.js --production",
     "release:notes": "./.publish --notes-only",
@@ -1280,6 +1290,8 @@
     "test:watch": "vitest",
     "pretest:integration": "npm run compile",
     "test:integration": "vscode-test",
+    "pretest:web": "node esbuild.js",
+    "test:web": "vscode-test-web --browser=chromium --quality=stable --extensionDevelopmentPath=. --extensionTestsPath=dist/test-web/suite/index.js test/web/fixtures/workspace",
     "predemo:record": "npm run compile",
     "demo:record": "node dist/demo/record.js",
     "build:event-tap": "bash scripts/demo/event-capture/build.sh",
@@ -1302,10 +1314,13 @@
     "@types/node": "^20.0.0",
     "@types/picomatch": "^4.0.2",
     "@types/vscode": "^1.88.0",
+    "@types/mocha": "^10.0.10",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
+    "@vscode/test-web": "^0.0.81",
     "esbuild": "^0.27.4",
     "husky": "^9.1.7",
+    "mocha": "^11.7.6",
     "ovsx": "^0.10.11",
     "typescript": "^5.3.3",
     "vitest": "^4.1.2"

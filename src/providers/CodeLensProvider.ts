@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { SymbolKind } from '../indexer/KotlinParser';
 import { scanForUsagesWithTarget, isExcluded, UsageResult } from './FindUsagesEngine';
-import { isTestFun } from '../testing/KotlinTestController';
+import { isTestFun } from '../testing/TestAnnotations';
 
 const LENS_KINDS = new Set<SymbolKind>([
   'class', 'interface', 'object', 'enum',

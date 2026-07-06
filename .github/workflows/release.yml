@@ -28,7 +28,12 @@ jobs:
           node-version: 20
           cache: npm
 
+      # @vscode/test-web (a devDependency used only for the CI web-smoke job)
+      # pulls in @playwright/browser-chromium. Skip its Chromium download
+      # here, since the release pipeline never launches a browser.
       - run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
 
       - name: Validate Open VSX token
         env:

@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.22.0
+
+Kotlin Jump 1.22.0 brings Move File, bundled stdlib navigation, and drawable hover previews to VS Code for the Web, fixes test task overrides in multi-root workspaces, and adds automated web testing to the release process.
+
+### Improvements
+- Move File now works in VS Code for the Web, including package inference and import rewriting, instead of showing a "not available" message.
+- The bundled Kotlin stdlib (List, String, Sequence, and the rest) now resolves from a prebuilt index shipped with the extension, so it works offline on the first file open, on both desktop and web.
+- The drawable XML hover preview now works in web workspaces; the always-on gutter thumbnail stays desktop-only since it needs local disk access.
+- Opening the Logcat panel or its device list in VS Code for the Web now shows a clear message pointing to desktop VS Code or a GitHub Codespace instead of a generic error.
+- The README now documents exactly which features work in the browser versus which need a real machine behind the editor.
+
+### Fixes
+- Fixed `kotlinJump.testTaskOverrides` in multi-root workspaces: it now resolves from the module's own workspace folder instead of a single window-wide setting, so different Gradle modules apply their own overrides correctly.
+
+### Packaging and Docs
+- Added an automated test suite that runs the extension inside a real VS Code for the Web instance, catching browser-specific regressions before they reach a release.
+
 ## 1.21.2
 
 Fixes a Logcat panel performance bug that could make VS Code as a whole feel sluggish during or after a debugging session, makes `kotlinJump.logcat.stop` actually stop the stream, and resolves the v1.21.0 Marketplace install failure.

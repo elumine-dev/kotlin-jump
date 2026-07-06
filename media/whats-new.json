@@ -1,34 +1,46 @@
 {
-  "version": "1.21.2",
+  "version": "1.22.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Logcat panel performance fixes",
-  "summary": "Fixes a Logcat panel bug that could make VS Code as a whole feel sluggish during or after a debugging session, and makes Stop actually stop the stream.",
+  "tagline": "Broader VS Code for the Web support",
+  "summary": "Kotlin Jump 1.22.0 brings Move File, bundled stdlib navigation, and drawable hover previews to VS Code for the Web, fixes test task overrides in multi-root workspaces, and adds automated web testing to the release process.",
   "highlights": [
     {
-      "title": "Logcat Buffer Rewrite",
-      "description": "The Logcat webview's mirror buffer used an O(n) eviction on every incoming line once full. Replaced with the same O(1) ring buffer already used on the extension host side.",
-      "kind": "fix"
+      "title": "Web Support Expansion",
+      "kind": "feature",
+      "description": "Move File, bundled Kotlin stdlib navigation, and the drawable XML hover preview now all work in vscode.dev and github.dev without any backend."
     },
     {
-      "title": "Stop Now Really Stops",
-      "description": "kotlinJump.logcat.stop only muted the panel before; the adb process kept running in the background. Stop now tears the stream down, and the status bar shows a distinct Stopped state.",
-      "kind": "fix"
+      "title": "Faster Stdlib Activation",
+      "kind": "improvement",
+      "description": "The bundled Kotlin stdlib now loads from a single prebuilt index instead of parsing a JAR on every startup, speeding up activation on desktop and making it available on the web."
     },
     {
-      "title": "Lazy ADB Watcher",
-      "description": "The ADB device watcher no longer starts at extension activation for every workspace with a Kotlin file. It starts on first use: opening the panel, running a Logcat command, or a successful Android Run.",
-      "kind": "fix"
+      "title": "Multi-Root Test Task Fix",
+      "kind": "fix",
+      "description": "Test task overrides now resolve from each Gradle module's own workspace folder, so multi-root projects apply the right override per module instead of one window-wide setting."
     }
   ],
   "sections": [
     {
+      "heading": "Improvements",
+      "bullets": [
+        "Move File now works in VS Code for the Web, including package inference and import rewriting, instead of showing a \"not available\" message.",
+        "The bundled Kotlin stdlib (List, String, Sequence, and the rest) now resolves from a prebuilt index shipped with the extension, so it works offline on the first file open, on both desktop and web.",
+        "The drawable XML hover preview now works in web workspaces; the always-on gutter thumbnail stays desktop-only since it needs local disk access.",
+        "Opening the Logcat panel or its device list in VS Code for the Web now shows a clear message pointing to desktop VS Code or a GitHub Codespace instead of a generic error.",
+        "The README now documents exactly which features work in the browser versus which need a real machine behind the editor."
+      ]
+    },
+    {
       "heading": "Fixes",
       "bullets": [
-        "Fixed the Logcat webview's mirror buffer, which evicted rows with Array.shift(), an O(n) operation per row that ran on every incoming log line once the buffer filled. Replaced with the ring buffer already used on the extension host side.",
-        "Fixed the webview's tag/search/level filter to update incrementally instead of rescanning the entire buffer on every batch of incoming lines.",
-        "Fixed kotlinJump.logcat.stop, which only muted forwarding to the panel without stopping the underlying adb logcat process; the stream, parsing, and stack-trace resolution kept running after a Stop. Stop now tears the stream down for real.",
-        "The ADB device watcher no longer starts unconditionally at extension activation. It starts lazily on first real use, so a Kotlin file no longer implies an always-on adb process for non-Android workspaces.",
-        "The webview no longer keeps re-filtering and re-rendering while the Logcat panel is hidden; it resyncs in one pass when the panel becomes visible again."
+        "Fixed `kotlinJump.testTaskOverrides` in multi-root workspaces: it now resolves from the module's own workspace folder instead of a single window-wide setting, so different Gradle modules apply their own overrides correctly."
+      ]
+    },
+    {
+      "heading": "Packaging and Docs",
+      "bullets": [
+        "Added an automated test suite that runs the extension inside a real VS Code for the Web instance, catching browser-specific regressions before they reach a release."
       ]
     }
   ],

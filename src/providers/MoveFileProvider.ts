@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { SymbolIndex } from '../indexer/SymbolIndex';
+import { decodeUtf8 } from '../util/encoding';
 
 // Matches `import com.example.Foo` with optional alias and trailing comment
 const RE_IMPORT_LINE =
@@ -146,7 +147,7 @@ async function scanAndRewriteImports(
       const uri = vscode.Uri.parse(uriStr);
       try {
         const bytes  = await vscode.workspace.fs.readFile(uri);
-        const text   = Buffer.from(bytes).toString('utf8');
+        const text   = decodeUtf8(bytes);
         if (!text.includes(oldPackage)) continue;
 
         const rewrites = rewriteImports(text, oldPackage, newPackage, symbolNames);

@@ -1,11 +1,22 @@
 // Browser entry point — omits Node.js-only features:
 //   - JAR scanning (GradleSourcesScanner, MavenSourcesScanner, KotlinJarContentProvider)
 //   - Test runner (KotlinTestController) and Android run / ADB commands
+//   - Logcat (LogcatService: child_process adb, fs, readline). Commands are
+//     stubbed WEB_UNAVAILABLE and the 2 declared views get static placeholders
+//     (src/browser/logcat-web-placeholder.ts), same pattern as Android Run
 //   - MCP server definition provider (requires process.execPath)
-//   - Drawable gutter thumbnails + inline XML preview (render cache on node:fs)
+//   - Drawable gutter thumbnail icon (DrawableXmlInlinePreviewProvider's
+//     always-visible <vector> gutter icon, and its R.drawable.* sibling
+//     DrawableGutterThumbnailProvider) — needs a node:fs disk cache because
+//     VS Code's gutterIconPath requires an on-disk file, not a data: URI.
+//     The hover-popup half of both (data: URI, no disk cache) is web-enabled:
+//     DrawableXmlHoverProvider.ts, DrawableHoverProvider.ts.
 // All pure-JS features work normally: navigation, highlighting, folding, chat,
-// inline feature toggles, drawable hover + vector preview, inlay navigation.
+// inline feature toggles, drawable hover + vector preview, inlay navigation,
+// Move File, and bundled Kotlin stdlib navigation (a prebuilt JSON index,
+// see src/kotlin/BundledStdlibProvider.ts, not the raw JAR).
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { SymbolIndex } from './indexer/SymbolIndex';
 import { FileScanner } from './indexer/FileScanner';
 import { FileWatcher } from './watcher/FileWatcher';
@@ -72,6 +83,11 @@ import { registerInlineFeatureToggles } from './commands/InlineFeatureToggles';
 import { SealedWhenCoverageProvider } from './providers/SealedWhenCoverageProvider';
 import { registerAddMissingWhenBranches } from './commands/addMissingWhenBranches';
 import { registerChatParticipant } from './ai/KotlinJumpChatParticipant';
+import { LogcatDevicesWebPlaceholderProvider, LogcatWebviewPlaceholderProvider } from './browser/logcat-web-placeholder';
+import { inferPackage, buildMoveEdit } from './providers/MoveFileProvider';
+import { BundledStdlibProvider } from './kotlin/BundledStdlibProvider';
+import { BundledStdlibFsProvider, KOTLIN_STDLIB_JAR_SCHEME } from './providers/BundledStdlibFsProvider';
+import { DrawableXmlHoverProvider } from './providers/DrawableXmlHoverProvider';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 const WEB_UNAVAILABLE = 'Not available in VS Code for the Web.';
@@ -544,6 +560,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const moduleMap = new Map([...jsonModules, ...gradleModules]);
   log.info(`[moduleMap] ${moduleMap.size} module(s) from settings.gradle + kotlin-jump.json`);
 
+  // Bundled Kotlin stdlib: a prebuilt JSON index (not the raw .jar, no zip
+  // library on the web), so List/String/Sequence/etc. resolve from the first
+  // moment a Kotlin file opens, even offline. See BundledStdlibProvider.ts.
+  context.subscriptions.push(
+    vscode.workspace.registerFileSystemProvider(
+      KOTLIN_STDLIB_JAR_SCHEME, new BundledStdlibFsProvider(), { isReadonly: true, isCaseSensitive: true },
+    ),
+  );
+  const bundledStdlib = new BundledStdlibProvider(index, log, context.extensionUri);
+  void bundledStdlib.load().catch((e: Error) => log.warn(`[bundled-stdlib] ${e.message}`));
+
   const scanner = new FileScanner(index, log, moduleMap);
 
   const watcher = new FileWatcher(scanner, index, uri => {
@@ -808,6 +835,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       sidePreview,
       previewLens,
       vscode.languages.registerHoverProvider(KT_JAVA, new DrawableHoverProvider(drawableIndex)),
+      // <vector> hover popup only — no Node dependency (data: URI, no
+      // gutter icon). The always-visible gutter icon half
+      // (DrawableXmlInlinePreviewProvider) needs a disk cache and stays
+      // desktop-only; see DrawableXmlHoverProvider.ts's header comment.
+      vscode.languages.registerHoverProvider(
+        { language: 'xml', pattern: '**/res/drawable*/*.xml' },
+        new DrawableXmlHoverProvider(),
+      ),
       vscode.languages.registerCodeLensProvider(
         { language: 'xml', pattern: '**/res/drawable*/*.xml' },
         previewLens,
@@ -997,8 +1032,58 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         );
       }
     }),
-    vscode.commands.registerCommand('kotlin-jump.moveFile', () => {
-      vscode.window.showWarningMessage(`Kotlin Jump: ${WEB_UNAVAILABLE}`);
+    // Web-native implementation, not a straight port of the desktop command:
+    // that version builds URIs with vscode.Uri.file(path.join(...)), which
+    // forces the file: scheme regardless of the workspace's real scheme and
+    // breaks on virtual workspaces (vscode-vfs:, github:). This one stays in
+    // vscode.Uri end to end (Uri.joinPath instead of Uri.file(path.join(...))).
+    vscode.commands.registerCommand('kotlin-jump.moveFile', async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) return;
+      const doc = editor.document;
+      if (!doc.uri.fsPath.endsWith('.kt')) {
+        vscode.window.showWarningMessage('Kotlin Jump: Move File only works on .kt files.');
+        return;
+      }
+
+      const dest = await vscode.window.showOpenDialog({
+        canSelectFiles:   false,
+        canSelectFolders: true,
+        canSelectMany:    false,
+        title:            'Move file to…',
+        openLabel:        'Move here',
+        defaultUri:       vscode.Uri.joinPath(doc.uri, '..'),
+      });
+      if (!dest || dest.length === 0) return;
+      const destUri = dest[0];
+
+      // Read-only workspace guard (e.g. Remote Repositories opened without
+      // write access). undefined means "unknown scheme", left to proceed
+      // rather than treated as a hard block.
+      if (vscode.workspace.fs.isWritableFileSystem(destUri.scheme) === false) {
+        vscode.window.showWarningMessage('Kotlin Jump: this workspace is read-only here, Move File is unavailable.');
+        return;
+      }
+
+      const fileName = path.basename(doc.uri.fsPath);
+      const newUri   = vscode.Uri.joinPath(destUri, fileName);
+      if (newUri.toString() === doc.uri.toString()) return;
+
+      const oldPkg = /^(?:\s*package\s+)([\w.]+)/m.exec(doc.getText())?.[1] ?? '';
+      let newPkg = inferPackage(doc.uri.fsPath, destUri.fsPath, oldPkg, sourceRoots);
+
+      if (newPkg === null) {
+        const input = await vscode.window.showInputBox({
+          prompt:        'New package name (could not be inferred from path)',
+          value:         oldPkg,
+          validateInput: v => /^[\w.]*$/.test(v) ? null : 'Invalid package name',
+        });
+        if (input === undefined) return;
+        newPkg = input;
+      }
+
+      const edit = await buildMoveEdit(doc, newUri, newPkg, index);
+      await vscode.workspace.applyEdit(edit);
     }),
     vscode.commands.registerCommand('kotlin-jump.reindex', async () => {
       statusBar.text    = '$(sync~spin) Kotlin Jump: re-indexing…';
@@ -1049,6 +1134,41 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('kotlin-jump.pickGradleProject', () => {
       vscode.window.showWarningMessage(`Kotlin Jump: ${WEB_UNAVAILABLE}`);
     }),
+    vscode.commands.registerCommand('kotlinJump.logcat.show', () => {
+      vscode.window.showWarningMessage(`Kotlin Jump: ${WEB_UNAVAILABLE}`);
+    }),
+    vscode.commands.registerCommand('kotlinJump.logcat.start', () => {
+      vscode.window.showWarningMessage(`Kotlin Jump: ${WEB_UNAVAILABLE}`);
+    }),
+    vscode.commands.registerCommand('kotlinJump.logcat.stop', () => {
+      vscode.window.showWarningMessage(`Kotlin Jump: ${WEB_UNAVAILABLE}`);
+    }),
+    vscode.commands.registerCommand('kotlinJump.logcat.pause', () => {
+      vscode.window.showWarningMessage(`Kotlin Jump: ${WEB_UNAVAILABLE}`);
+    }),
+    vscode.commands.registerCommand('kotlinJump.logcat.resume', () => {
+      vscode.window.showWarningMessage(`Kotlin Jump: ${WEB_UNAVAILABLE}`);
+    }),
+    vscode.commands.registerCommand('kotlinJump.logcat.clear', () => {
+      vscode.window.showWarningMessage(`Kotlin Jump: ${WEB_UNAVAILABLE}`);
+    }),
+    vscode.commands.registerCommand('kotlinJump.logcat.export', () => {
+      vscode.window.showWarningMessage(`Kotlin Jump: ${WEB_UNAVAILABLE}`);
+    }),
+    vscode.commands.registerCommand('kotlinJump.logcat.pickDevice', () => {
+      vscode.window.showWarningMessage(`Kotlin Jump: ${WEB_UNAVAILABLE}`);
+    }),
+  );
+
+  // Logcat views are declared in package.json but have no provider on the
+  // web, so register static placeholders instead of leaving VS Code's generic
+  // "no data provider registered" error. The context key gates viewsWelcome
+  // for the tree view and is NEVER set in extension.ts (desktop), so it has
+  // zero effect there.
+  void vscode.commands.executeCommand('setContext', 'kotlinJump.logcat.webUnavailable', true);
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider('kotlinJump.logcat', new LogcatWebviewPlaceholderProvider()),
+    vscode.window.registerTreeDataProvider('kotlinJump.logcat.devices', new LogcatDevicesWebPlaceholderProvider()),
   );
 
   const t0 = Date.now();

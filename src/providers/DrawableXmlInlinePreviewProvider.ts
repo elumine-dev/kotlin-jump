@@ -10,15 +10,22 @@ const VECTOR_OPEN_RE   = /<vector\b/;
 /**
  * Always-visible inline preview for Android <vector> drawables. When a
  * drawable XML containing a <vector> is open in the editor, a small
- * rendered thumbnail appears in the gutter beside the <vector> line —
- * no hover required. Hover the same line for a 256×256 popup variant.
+ * rendered thumbnail appears in the gutter beside the <vector> line,
+ * no hover required. Hover the same line for a 256×256 popup variant,
+ * DrawableXmlHoverProvider.ts (a separate class, not this one).
  *
  * Converts the XML to SVG via the workspace's existing `vectorXmlToSvg`
  * helper (also used by the R.drawable gutter thumbnails and hover) so
  * the rendering is identical across every surface. Non-vector
  * drawables (selectors, shapes, layer-list…) silently decline.
+ *
+ * Desktop-only: the gutter icon needs `gutterIconPath` to point at an
+ * on-disk file (VS Code does not accept a data: URI there), so this keeps
+ * a `node:fs` disk cache under `context.globalStorageUri`. The hover-only
+ * half needed no such cache (a data: URI is enough for a hover popup) and
+ * was split out specifically so it could register on the web too.
  */
-export class DrawableXmlInlinePreviewProvider implements vscode.HoverProvider, vscode.Disposable {
+export class DrawableXmlInlinePreviewProvider implements vscode.Disposable {
   private readonly cacheDir: string;
   // One decoration type per cached SVG file — VS Code requires the
   // gutter icon to be baked into the type, not into the per-line
@@ -45,36 +52,8 @@ export class DrawableXmlInlinePreviewProvider implements vscode.HoverProvider, v
     this.flush();
   }
 
-  // ── Hover (popup variant) ────────────────────────────────────────────
-  provideHover(
-    document: vscode.TextDocument,
-    position: vscode.Position,
-  ): vscode.Hover | undefined {
-    if (document.languageId !== 'xml') return;
-    if (!DRAWABLE_PATH_RE.test(document.uri.path)) return;
-
-    const text = document.getText();
-    const vectorMatch = VECTOR_OPEN_RE.exec(text);
-    if (!vectorMatch) return;
-    const vectorLine = document.positionAt(vectorMatch.index).line;
-    if (position.line !== vectorLine) return;
-
-    const svg = vectorXmlToSvg(text);
-    if (!svg) return;
-
-    const dataUri = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
-    const md = new vscode.MarkdownString();
-    md.supportHtml = true;
-    md.isTrusted = false;
-    md.appendMarkdown(`<img src="${dataUri}" width="256" height="256" alt="vector preview" />\n\n`);
-    md.appendMarkdown(`*${document.uri.path.split('/').pop()}*`);
-
-    const start = document.positionAt(vectorMatch.index);
-    const end = document.positionAt(vectorMatch.index + vectorMatch[0].length);
-    return new vscode.Hover(md, new vscode.Range(start, end));
-  }
-
   // ── Always-visible gutter icon ───────────────────────────────────────
+  // (Hover popup variant lives in DrawableXmlHoverProvider.ts.)
   private scheduleFlush(): void {
     clearTimeout(this.flushTimer);
     this.flushTimer = setTimeout(() => this.flush(), 80);

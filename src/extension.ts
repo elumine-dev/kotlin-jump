@@ -658,7 +658,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     invalidateContentCache(uri.toString()); // file changed — next scan re-reads from disk
     _sealedWhen?.bumpEpoch();               // sealed subtype sets may have changed in any file
     testCtrl.notifyFileIndexed(uri);    // index is fresh — safe to refresh test tree now
-  }, log);
+  }, log, uris => {
+    // Burst path (git checkout/rebase): per-file cache evictions are O(1)
+    // each, but the sealed epoch bump and the test-tree refresh happen ONCE
+    // for the whole batch instead of once per file.
+    for (const uri of uris) {
+      _semanticTokens?.invalidate(uri.toString());
+      codeLens.evictFile(uri.toString());
+      _signatureHelp?.evictFile(uri.toString());
+      invalidateContentCache(uri.toString());
+    }
+    _sealedWhen?.bumpEpoch();
+    testCtrl.notifyScanComplete();
+  });
   context.subscriptions.push(watcher, { dispose: () => scanner.destroy() });
 
   // ── String Resource Folding ────────────────────────────────────────────────
@@ -679,15 +691,29 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       } catch { /* skip unreadable files */ }
     }));
     const rW = vscode.workspace.createFileSystemWatcher('**/*.{kt,kts,java}');
-    const handleRChanged = async (uri: vscode.Uri) => {
-      try {
-        const bytes = await vscode.workspace.fs.readFile(uri);
-        rIndex.reindexFile(uri.toString(), new TextDecoder().decode(bytes));
-      } catch { /* skip */ }
+    // Global quiet-window batching: a checkout used to fire one immediate
+    // readFile PER changed file — hundreds of concurrent disk reads racing
+    // git itself. Batched and read sequentially once the storm settles.
+    const rPending = new Set<string>();
+    let rTimer: ReturnType<typeof setTimeout> | undefined;
+    const handleRChanged = (uri: vscode.Uri) => {
+      rPending.add(uri.toString());
+      if (rTimer) clearTimeout(rTimer);
+      rTimer = setTimeout(async () => {
+        rTimer = undefined;
+        const pending = [...rPending];
+        rPending.clear();
+        for (const uriStr of pending) {
+          try {
+            const bytes = await vscode.workspace.fs.readFile(vscode.Uri.parse(uriStr));
+            rIndex.reindexFile(uriStr, new TextDecoder().decode(bytes));
+          } catch { /* skip */ }
+        }
+      }, 300);
     };
     rW.onDidChange(handleRChanged);
     rW.onDidCreate(handleRChanged);
-    rW.onDidDelete(uri => rIndex.removeFile(uri.toString()));
+    rW.onDidDelete(uri => { rPending.delete(uri.toString()); rIndex.removeFile(uri.toString()); });
 
     // Initial scan of every XML under values*/. Real Android projects
     // routinely split <string>/<plurals>/<string-array> across files

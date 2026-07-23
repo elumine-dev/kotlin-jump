@@ -601,7 +601,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     _signatureHelp?.evictFile(uri.toString());
     invalidateContentCache(uri.toString());
     _sealedWhen?.bumpEpoch(); // sealed subtype sets may have changed in any file
-  }, log);
+  }, log, uris => {
+    for (const uri of uris) {
+      _semanticTokens?.invalidate(uri.toString());
+      codeLens.evictFile(uri.toString());
+      _signatureHelp?.evictFile(uri.toString());
+      invalidateContentCache(uri.toString());
+    }
+    _sealedWhen?.bumpEpoch();
+  });
   context.subscriptions.push(watcher, { dispose: () => scanner.destroy() });
 
   // ── String Resource Folding ────────────────────────────────────────────────
@@ -619,15 +627,28 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       } catch { /* skip unreadable files */ }
     }));
     const rW = vscode.workspace.createFileSystemWatcher('**/*.{kt,kts,java}');
-    const handleRChanged = async (uri: vscode.Uri) => {
-      try {
-        const bytes = await vscode.workspace.fs.readFile(uri);
-        rIndex.reindexFile(uri.toString(), new TextDecoder().decode(bytes));
-      } catch { /* skip */ }
+    // Same quiet-window batching as the desktop entrypoint: no per-event
+    // concurrent reads during a checkout storm.
+    const rPending = new Set<string>();
+    let rTimer: ReturnType<typeof setTimeout> | undefined;
+    const handleRChanged = (uri: vscode.Uri) => {
+      rPending.add(uri.toString());
+      if (rTimer) clearTimeout(rTimer);
+      rTimer = setTimeout(async () => {
+        rTimer = undefined;
+        const pending = [...rPending];
+        rPending.clear();
+        for (const uriStr of pending) {
+          try {
+            const bytes = await vscode.workspace.fs.readFile(vscode.Uri.parse(uriStr));
+            rIndex.reindexFile(uriStr, new TextDecoder().decode(bytes));
+          } catch { /* skip */ }
+        }
+      }, 300);
     };
     rW.onDidChange(handleRChanged);
     rW.onDidCreate(handleRChanged);
-    rW.onDidDelete(uri => rIndex.removeFile(uri.toString()));
+    rW.onDidDelete(uri => { rPending.delete(uri.toString()); rIndex.removeFile(uri.toString()); });
 
     vscode.workspace.findFiles(
       '**/res/values*/strings.xml',

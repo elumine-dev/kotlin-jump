@@ -1101,6 +1101,11 @@
           "default": true,
           "markdownDescription": "Warn on `val`/`var` declared in a data class body: those fields are silently excluded from the generated `equals()`, `hashCode()`, and `copy()`."
         },
+        "kotlinJump.manifestPermissionBadges": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show a risk pill on every `<uses-permission>` line in AndroidManifest.xml: green for normal, amber for dangerous, red for special or signature."
+        },
         "kotlinJump.hexColorSwatch": {
           "type": "boolean",
           "default": true,

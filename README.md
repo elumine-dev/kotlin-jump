@@ -266,6 +266,17 @@ Manifest.permission.ACCESS_FINE_LOCATION
 
 Works on `Manifest.permission.*` constants and on `"android.permission.*"` strings, including inside `AndroidManifest.xml`. Covers 61 permissions, with migration notes on the legacy ones (`WRITE_EXTERNAL_STORAGE`, `BLUETOOTH`, `USE_FINGERPRINT`).
 
+### ♿ Compose accessibility nudges
+
+Two TalkBack traps, caught while you type.
+
+```kotlin
+Image(painter = p, contentDescription = null)  ⚠ a11y: decorative?
+Box(Modifier.clickable { open() })             ⚠ a11y: role?
+```
+
+Hints, not errors: `null` is right for decorative images, so the hint asks instead of asserting. Hover it for the fix. Toggle with `kotlinJump.composeAccessibilityHints`.
+
 ### 🎨 Vector drawable preview
 
 Open any `<vector>` XML drawable and a rendered preview appears side by side automatically. Hover any `R.drawable.*` reference for an inline thumbnail. The gutter shows a mini render next to every reference. Click the CodeLens above the XML file to open the dedicated preview panel.

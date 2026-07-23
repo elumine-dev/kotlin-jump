@@ -73,6 +73,7 @@ import { ColorFoldingProvider } from './providers/ColorFoldingProvider';
 import { ColorResourceDefinitionProvider } from './providers/ColorResourceDefinitionProvider';
 import { ConstValFoldingProvider } from './providers/ConstValFoldingProvider';
 import { SuspendMarkerProvider } from './providers/SuspendMarkerProvider';
+import { ComposeA11yProvider } from './providers/ComposeA11yProvider';
 import { ResourceDiagnosticProvider } from './providers/ResourceDiagnosticProvider';
 import { VersionCatalogHoverProvider } from './providers/VersionCatalogHoverProvider';
 import { OverrideGutterProvider } from './providers/OverrideGutterProvider';
@@ -744,6 +745,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       vscode.languages.registerInlayHintsProvider(KT_JAVA, sp),
       vscode.workspace.onDidChangeConfiguration(e => {
         if (e.affectsConfiguration('kotlinJump.suspendCallMarkers')) sp.fireChange();
+      }),
+    );
+  })();
+
+  (() => {
+    const a11y = new ComposeA11yProvider();
+    context.subscriptions.push(
+      a11y,
+      vscode.languages.registerInlayHintsProvider({ language: 'kotlin' }, a11y),
+      vscode.workspace.onDidChangeConfiguration(e => {
+        if (e.affectsConfiguration('kotlinJump.composeAccessibilityHints')) a11y.fireChange();
       }),
     );
   })();

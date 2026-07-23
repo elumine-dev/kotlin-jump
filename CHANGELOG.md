@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.33.2
+
+Kotlin Jump 1.33.2 fixes a stall where large git operations could freeze editor responsiveness while the file watcher processed a burst of changes.
+
+### Fixes
+- Fixed a stall where a burst of file changes during git checkouts, branch switches, or pulls could saturate the extension host, keeping VS Code responsive instead of freezing while Kotlin Jump's file watcher caught up.
+
+### Notes
+- No other functional changes to extension behavior in this release.
+
 ## 1.33.1
 
 Kotlin Jump 1.33.1 is a documentation and version update with no changes to extension behavior.

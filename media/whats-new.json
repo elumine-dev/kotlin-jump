@@ -1,21 +1,26 @@
 {
-  "version": "1.33.1",
+  "version": "1.33.2",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Documentation refresh, no behavior change",
-  "summary": "Kotlin Jump 1.33.1 is a documentation and version update with no changes to extension behavior.",
+  "tagline": "Smoother editor during large git operations",
+  "summary": "Kotlin Jump 1.33.2 fixes a stall where large git operations could freeze editor responsiveness while the file watcher processed a burst of changes.",
   "highlights": [
     {
-      "title": "No Functional Changes",
-      "description": "This release updates documentation and version metadata only, extension behavior is unchanged from 1.33.0.",
-      "kind": "note"
+      "title": "Extension Host Responsiveness Fix",
+      "description": "Fixed the file watcher overwhelming VS Code's extension host during large git operations such as checkouts and branch switches, which could make the editor sluggish while many files changed at once.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
+      "heading": "Fixes",
+      "bullets": [
+        "Fixed a stall where a burst of file changes during git checkouts, branch switches, or pulls could saturate the extension host, keeping VS Code responsive instead of freezing while Kotlin Jump's file watcher caught up."
+      ]
+    },
+    {
       "heading": "Notes",
       "bullets": [
-        "Refreshed the README's Recent Releases section, which had fallen ten versions behind, so the listed history now matches what's actually shipped.",
-        "No functional changes to extension behavior in this release."
+        "No other functional changes to extension behavior in this release."
       ]
     }
   ],

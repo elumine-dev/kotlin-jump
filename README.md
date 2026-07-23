@@ -243,6 +243,17 @@ Every `suspend` call is a potential pause. Every dispatcher switch is a potentia
 
 Know your pauses. Know your threads. Before the UI freezes.
 
+### ⏰ Overdue TODO Highlight
+
+Date your TODOs and they hold you to it.
+
+```kotlin
+// TODO(2025-01-01): migrate to Room   ← red, that ship has sailed
+// TODO(2027-06-01): optimize later    ← quiet until the day comes
+```
+
+Once the date passes, the TODO turns red. No config, no ceremony. Turn it off with `kotlinJump.todoExpiry` if you prefer your debt silent.
+
 ### 🎨 Vector drawable preview
 
 Open any `<vector>` XML drawable and a rendered preview appears side by side automatically. Hover any `R.drawable.*` reference for an inline thumbnail. The gutter shows a mini render next to every reference. Click the CodeLens above the XML file to open the dedicated preview panel.

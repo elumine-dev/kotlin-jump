@@ -290,6 +290,19 @@ flow
 
 Multi line Flow and collection chains get ① ② ③ badges, so you can talk about "step 2" instead of counting dots. Single operators stay clean. Toggle with `kotlinJump.flowChainBadges`.
 
+### 🚫 Deprecation, visible
+
+Deprecated symbols get native strikethrough, at the declaration and at every resolved call site. Hover shows why and what to use instead:
+
+```kotlin
+@Deprecated("Use fetchV2", ReplaceWith("fetchV2(id)"))
+fun fetch(id: Int)
+
+fetch(7)   // struck through · hover → "Use fetchV2" + the replacement snippet
+```
+
+Multi line `@Deprecated(...)` annotations included. When two same name symbols could match, the hover stays quiet rather than flagging the wrong one.
+
 ### 🎨 Vector drawable preview
 
 Open any `<vector>` XML drawable and a rendered preview appears side by side automatically. Hover any `R.drawable.*` reference for an inline thumbnail. The gutter shows a mini render next to every reference. Click the CodeLens above the XML file to open the dedicated preview panel.

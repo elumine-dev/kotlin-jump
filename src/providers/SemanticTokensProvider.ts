@@ -49,7 +49,7 @@ const M_ASYNC        = 1 << 2;
 const M_STATIC       = 1 << 3;
 const M_ABSTRACT     = 1 << 4;
 const M_MODIFICATION = 1 << 5;
-// const M_DEPRECATED = 1 << 6;  // reserved, not yet emitted
+const M_DEPRECATED   = 1 << 6;
 const M_COMPOSABLE   = 1 << 7;
 const M_SEALED       = 1 << 8;
 const M_EXTENSION    = 1 << 9;
@@ -86,6 +86,9 @@ function buildModifiers(entry: SymbolEntry, isDeclaration: boolean): number {
 
   if (isDeclaration)    mods |= M_DECLARATION;
   if (entry.isAbstract) mods |= M_ABSTRACT;
+  // Standard modifier: themes render it as strikethrough, declarations and
+  // resolved usages both.
+  if (entry.isDeprecated) mods |= M_DEPRECATED;
   if (entry.isSuspend)  mods |= M_ASYNC;
   if (entry.isInline)   mods |= M_INLINE;
   if (entry.isInfix)    mods |= M_INFIX;

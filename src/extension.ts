@@ -83,6 +83,7 @@ import { ColorResourceDefinitionProvider } from './providers/ColorResourceDefini
 import { ConstValFoldingProvider } from './providers/ConstValFoldingProvider';
 import { SuspendMarkerProvider } from './providers/SuspendMarkerProvider';
 import { ComposeA11yProvider } from './providers/ComposeA11yProvider';
+import { FlowChainProvider } from './providers/FlowChainProvider';
 import { ResourceDiagnosticProvider } from './providers/ResourceDiagnosticProvider';
 import { VersionCatalogHoverProvider } from './providers/VersionCatalogHoverProvider';
 import { OverrideGutterProvider } from './providers/OverrideGutterProvider';
@@ -844,6 +845,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       vscode.languages.registerInlayHintsProvider({ language: 'kotlin' }, a11y),
       vscode.workspace.onDidChangeConfiguration(e => {
         if (e.affectsConfiguration('kotlinJump.composeAccessibilityHints')) a11y.fireChange();
+      }),
+    );
+  })();
+
+  // ── Flow chain step badges ────────────────────────────────────────────────
+  (() => {
+    const fc = new FlowChainProvider();
+    context.subscriptions.push(
+      fc,
+      vscode.languages.registerInlayHintsProvider({ language: 'kotlin' }, fc),
+      vscode.workspace.onDidChangeConfiguration(e => {
+        if (e.affectsConfiguration('kotlinJump.flowChainBadges')) fc.fireChange();
       }),
     );
   })();

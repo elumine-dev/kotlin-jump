@@ -1076,6 +1076,11 @@
           "default": true,
           "markdownDescription": "Show inline accessibility nudges in Compose code: `contentDescription = null` gets a decorative check, `Modifier.clickable` without a role gets a role reminder."
         },
+        "kotlinJump.flowChainBadges": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Number the stages of multi-line Flow and collection pipelines with inline badges (① ② ③) so long chains are scannable at a glance."
+        },
         "kotlinJump.hexColorSwatch": {
           "type": "boolean",
           "default": true,

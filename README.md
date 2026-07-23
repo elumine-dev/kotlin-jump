@@ -277,6 +277,19 @@ Box(Modifier.clickable { open() })             ⚠ a11y: role?
 
 Hints, not errors: `null` is right for decorative images, so the hint asks instead of asserting. Hover it for the fix. Toggle with `kotlinJump.composeAccessibilityHints`.
 
+### 🔢 Flow chain step badges
+
+Long pipelines, numbered stages.
+
+```kotlin
+flow
+    ① .map { it.name }
+    ② .filter { it.isNotEmpty() }
+    ③ .collect { render(it) }
+```
+
+Multi line Flow and collection chains get ① ② ③ badges, so you can talk about "step 2" instead of counting dots. Single operators stay clean. Toggle with `kotlinJump.flowChainBadges`.
+
 ### 🎨 Vector drawable preview
 
 Open any `<vector>` XML drawable and a rendered preview appears side by side automatically. Hover any `R.drawable.*` reference for an inline thumbnail. The gutter shows a mini render next to every reference. Click the CodeLens above the XML file to open the dedicated preview panel.

@@ -1347,10 +1347,29 @@ watch_ci_after_push() {
     gh run watch "$rid" --interval 5 >/dev/null 2>&1 || true
   done <<< "$run_ids"
 
-  # Authoritative pass/fail evaluation: read conclusion per run.
+  # Authoritative pass/fail evaluation: read conclusion per run. The
+  # tag-triggered Release run can appear a few seconds AFTER the branch
+  # CI run, so the enumeration above may have missed it entirely — if a
+  # run shows up here still in flight, watch it and re-read instead of
+  # calling it a failure (v1.31.0 false alarm).
   local status_table
-  status_table="$(gh run list --limit 10 --json databaseId,headSha,name,status,conclusion,displayTitle \
-    --jq ".[] | select(.headSha == \"$head_sha\") | \"\(.conclusion // .status)\t\(.name)\t\(.displayTitle)\"")"
+  local _attempt
+  for _attempt in 1 2 3; do
+    status_table="$(gh run list --limit 10 --json databaseId,headSha,name,status,conclusion,displayTitle \
+      --jq ".[] | select(.headSha == \"$head_sha\") | \"\(.conclusion // .status)\t\(.name)\t\(.displayTitle)\"")"
+    if ! echo "$status_table" | awk -F'\t' '{print $1}' \
+        | grep -qE '^(in_progress|queued|pending|waiting|requested)$'; then
+      break
+    fi
+    while IFS=$'\t' read -r conclusion name _title; do
+      [[ "$conclusion" =~ ^(in_progress|queued|pending|waiting|requested)$ ]] || continue
+      local live_rid
+      live_rid="$(gh run list --limit 10 --json databaseId,headSha,name \
+        --jq ".[] | select(.headSha == \"$head_sha\" and .name == \"$name\") | .databaseId" \
+        | head -1)"
+      [[ -n "$live_rid" ]] && gh run watch "$live_rid" --interval 5 >/dev/null 2>&1 || true
+    done <<< "$status_table"
+  done
 
   local overall_ok=1
   local -a failed_runs=()
@@ -1384,7 +1403,9 @@ watch_ci_after_push() {
     echo "❌ One or more workflows failed. v$VERSION tag is on GitHub but"
     echo "   the Marketplace publish likely did NOT happen."
     echo ""
-    for rid in "${failed_runs[@]}"; do
+    # ${arr[@]+...} expansion: a bare "${failed_runs[@]}" trips `set -u`
+    # on macOS bash 3.2 when the array is empty.
+    for rid in ${failed_runs[@]+"${failed_runs[@]}"}; do
       echo "   Investigate: gh run view $rid --log-failed"
     done
     exit 1

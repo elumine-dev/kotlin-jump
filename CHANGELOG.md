@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.33.4
+
+Kotlin Jump 1.33.4 finishes bounding activation time concurrency, extending the 1.33.3 fix so no remaining startup scan can slow down large projects.
+
+### Fixes
+- Bounded the concurrency of all remaining activation scans, not just R-index reads, using a shared batching helper. This closes the last gap that could still slow startup or exhaust file handles on large projects. Applies to both desktop VS Code and VS Code for the Web.
+
+### Notes
+- No other functional changes to extension behavior in this release.
+
 ## 1.33.3
 
 Kotlin Jump 1.33.3 fixes a potential slowdown during activation on projects with many Android resource files by capping concurrent R-index reads.

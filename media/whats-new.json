@@ -1,12 +1,12 @@
 {
-  "version": "1.33.3",
+  "version": "1.33.4",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Smoother activation on resource heavy projects",
-  "summary": "Kotlin Jump 1.33.3 fixes a potential slowdown during activation on projects with many Android resource files by capping concurrent R-index reads.",
+  "tagline": "Activation startup, fully bounded",
+  "summary": "Kotlin Jump 1.33.4 finishes bounding activation time concurrency, extending the 1.33.3 fix so no remaining startup scan can slow down large projects.",
   "highlights": [
     {
-      "title": "Bounded R-index Activation Reads",
-      "description": "Caps concurrent file reads during startup at 16, keeping activation smooth on projects with many Android resource files.",
+      "title": "Bounded activation concurrency",
+      "description": "Closes the last unbounded activation scan so large projects stay protected from startup slowdowns and file handle exhaustion.",
       "kind": "fix"
     }
   ],
@@ -14,7 +14,7 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Capped R-index activation reads at 16 concurrent files, preventing potential slowdowns or file-handle exhaustion when a project has many Android resource files. Applies to both desktop VS Code and VS Code for the Web."
+        "Bounded the concurrency of all remaining activation scans, not just R-index reads, using a shared batching helper. This closes the last gap that could still slow startup or exhaust file handles on large projects. Applies to both desktop VS Code and VS Code for the Web."
       ]
     },
     {

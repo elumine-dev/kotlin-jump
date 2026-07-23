@@ -1,20 +1,22 @@
 {
-  "version": "1.23.1",
+  "version": "1.24.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Accurate test resolution for duplicate test names",
-  "summary": "Kotlin Jump 1.23.1 fixes a test explorer bug that could target the wrong test when files share the same fully qualified name.",
+  "tagline": "Overdue TODOs in red",
+  "summary": "Kotlin Jump 1.24.0 highlights overdue dated TODO comments in red so stale work is easy to spot.",
   "highlights": [
     {
-      "title": "Duplicate Test Name Fix",
-      "description": "Tests with the same fully qualified name in different files now resolve to their own file instead of potentially running or debugging the wrong test.",
-      "kind": "fix"
+      "title": "Overdue TODO Highlighting",
+      "description": "Dated TODO comments past their due date now render in red, so stale work stands out without scanning every comment by hand.",
+      "kind": "feature"
     }
   ],
   "sections": [
     {
-      "heading": "Fixes",
+      "heading": "Improvements",
       "bullets": [
-        "Fixed test run and debug targeting from the gutter and CodeLens: tests sharing the same fully qualified name across different files now each resolve to their own test instead of risking a mismatch."
+        "Dated TODO comments that have passed their due date now render in red, making overdue work visible at a glance instead of requiring a manual scan through the file.",
+        "Works in both desktop VS Code and VS Code for the Web.",
+        "Can be toggled with the kotlinJump.todoExpiry setting."
       ]
     }
   ],

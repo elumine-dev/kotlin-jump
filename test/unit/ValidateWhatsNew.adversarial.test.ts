@@ -409,6 +409,32 @@ describe('ADV-validate-whats-new — leak and placeholder guards', () => {
     });
   }
 
+  // TODO nuance: marker FORMS are leaks, prose ABOUT todos is legitimate copy
+  // (v1.24.0 ships "Overdue TODO Highlighting" — the feature is named after
+  // the marker).
+  for (const text of ['TODO(2025-01-01) cleanup', 'ships soon. TODO...', 'TODO']) {
+    it(`rejects TODO marker form in bullet: "${text}"`, () => {
+      const r = runValidator(fixture({
+        ...base,
+        sections: [{ heading: 'h', bullets: [text] }],
+      }));
+      expect(r.exit).toBe(1);
+    });
+  }
+
+  for (const text of [
+    'Overdue TODO Highlighting',
+    'Dated TODO comments past their due date now render in red.',
+  ]) {
+    it(`accepts prose about todos in bullet: "${text.slice(0, 40)}"`, () => {
+      const r = runValidator(fixture({
+        ...base,
+        sections: [{ heading: 'h', bullets: [text] }],
+      }));
+      expect(r.exit).toBe(0);
+    });
+  }
+
   it('rejects markdown code fences (not rendered by webview)', () => {
     const r = runValidator(fixture({
       ...base,

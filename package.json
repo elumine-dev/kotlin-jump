@@ -1086,6 +1086,11 @@
           "default": true,
           "markdownDescription": "Translate cron expressions and ISO 8601 durations in string literals to plain language, like `\"0 */6 * * *\"` showing `every 6 hours`."
         },
+        "kotlinJump.gradleTaskLens": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show a Run task lens on task declarations in `build.gradle.kts`. Click runs the task in the integrated terminal with the module path resolved, like `./gradlew :app:generateProtos`. Desktop only."
+        },
         "kotlinJump.hexColorSwatch": {
           "type": "boolean",
           "default": true,

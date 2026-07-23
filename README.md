@@ -312,6 +312,10 @@ val timeout  = "PT1H30M"       ↳ 1 hr 30 min
 
 No more counting cron fields on your fingers. Shapes the translator cannot phrase cleanly show nothing at all, because a wrong translation is worse than none. Toggle with `kotlinJump.literalTooltips`.
 
+### ▶ Run Gradle tasks from the build file
+
+Every `tasks.register(...)` in a `build.gradle.kts` gets a Run task lens. Click it and the task runs in the integrated terminal, module path resolved: `./gradlew :app:generateProtos`. Desktop only.
+
 ### 🎨 Vector drawable preview
 
 Open any `<vector>` XML drawable and a rendered preview appears side by side automatically. Hover any `R.drawable.*` reference for an inline thumbnail. The gutter shows a mini render next to every reference. Click the CodeLens above the XML file to open the dedicated preview panel.

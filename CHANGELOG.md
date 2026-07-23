@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.28.0
+
+Kotlin Jump 1.28.0 flags deprecated Kotlin symbols with a strikethrough and shows the suggested replacement code directly on hover.
+
+### Improvements
+- Added strikethrough rendering for deprecated Kotlin symbols, making outdated APIs visible at a glance instead of requiring a manual check.
+- Added a hover tooltip on deprecated symbols that shows the ReplaceWith snippet, so the suggested replacement is visible without navigating to the declaration.
+- Available in both desktop VS Code and VS Code for the Web.
+
+### Notes
+- No other functional changes in this release.
+
 ## 1.27.0
 
 Kotlin Jump 1.27.0 adds numbered step badges that show execution order on multi-line Kotlin Flow chains.

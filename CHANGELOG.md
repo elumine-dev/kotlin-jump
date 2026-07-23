@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.33.5
+
+Kotlin Jump 1.33.5 fixes the file watcher so it skips build and .gradle folders, the same exclusion already applied at startup.
+
+### Fixes
+- Excluded build/ and .gradle/ folders from the file watcher, matching the exclusion already used during the initial project scan, so ongoing file tracking no longer wastes time on generated output.
+
+### Notes
+- No other functional changes to extension behavior in this release.
+
 ## 1.33.4
 
 Kotlin Jump 1.33.4 finishes bounding activation time concurrency, extending the 1.33.3 fix so no remaining startup scan can slow down large projects.

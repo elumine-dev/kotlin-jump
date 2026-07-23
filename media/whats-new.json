@@ -1,12 +1,12 @@
 {
-  "version": "1.33.4",
+  "version": "1.33.5",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Activation startup, fully bounded",
-  "summary": "Kotlin Jump 1.33.4 finishes bounding activation time concurrency, extending the 1.33.3 fix so no remaining startup scan can slow down large projects.",
+  "tagline": "Leaner File Watching on Large Projects",
+  "summary": "Kotlin Jump 1.33.5 fixes the file watcher so it skips build and .gradle folders, the same exclusion already applied at startup.",
   "highlights": [
     {
-      "title": "Bounded activation concurrency",
-      "description": "Closes the last unbounded activation scan so large projects stay protected from startup slowdowns and file handle exhaustion.",
+      "title": "Build Folder Watcher Exclusion",
+      "description": "File change tracking no longer scans build and .gradle output folders, avoiding unnecessary work while you code on large projects.",
       "kind": "fix"
     }
   ],
@@ -14,7 +14,7 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Bounded the concurrency of all remaining activation scans, not just R-index reads, using a shared batching helper. This closes the last gap that could still slow startup or exhaust file handles on large projects. Applies to both desktop VS Code and VS Code for the Web."
+        "Excluded build/ and .gradle/ folders from the file watcher, matching the exclusion already used during the initial project scan, so ongoing file tracking no longer wastes time on generated output."
       ]
     },
     {

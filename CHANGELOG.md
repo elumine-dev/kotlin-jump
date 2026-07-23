@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.27.0
+
+Kotlin Jump 1.27.0 adds numbered step badges that show execution order on multi-line Kotlin Flow chains.
+
+### Improvements
+- Added numbered badges on multi-line Kotlin Flow chains, marking the order each operator executes so long chains are easier to read at a glance.
+- Available in both desktop VS Code and VS Code for the Web.
+- Can be turned off via the kotlinJump.flowChainBadges setting.
+
 ## 1.26.0
 
 Kotlin Jump 1.26.0 adds inline accessibility hints for Jetpack Compose, flagging accessibility gaps directly in your UI code.

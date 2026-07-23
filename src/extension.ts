@@ -47,6 +47,7 @@ import { StringResourceIndex } from './indexer/StringResourceIndex';
 import { StringResourceFoldingProvider } from './providers/StringResourceFoldingProvider';
 import { StringResourceHoverProvider } from './providers/StringResourceHoverProvider';
 import { SuppressHoverProvider } from './providers/SuppressHoverProvider';
+import { PermissionHoverProvider } from './providers/PermissionHoverProvider';
 import { StringResourceDefinitionProvider } from './providers/StringResourceDefinitionProvider';
 import { StringXmlDefinitionProvider } from './providers/StringXmlDefinitionProvider';
 import { ColorXmlDefinitionProvider } from './providers/ColorXmlDefinitionProvider';
@@ -216,6 +217,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // descriptions even when hoverEnabled is turned off for the symbol
     // hover.
     ...(!isCompanion ? [vscode.languages.registerHoverProvider(KT_JAVA, new SuppressHoverProvider())] : []),
+    // Android permission hover — also on XML so AndroidManifest.xml
+    // `<uses-permission android:name="android.permission.X">` resolves.
+    ...(!isCompanion ? [vscode.languages.registerHoverProvider(
+      [...KT_JAVA, { language: 'xml' }], new PermissionHoverProvider(),
+    )] : []),
     vscode.languages.registerReferenceProvider(KT_JAVA, new KotlinReferenceProvider(index, log)),
     vscode.languages.registerImplementationProvider(KT_JAVA, new KotlinImplementationProvider(index)),
     vscode.languages.registerTypeHierarchyProvider(KT_JAVA, new KotlinTypeHierarchyProvider(index)),

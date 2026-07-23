@@ -1071,6 +1071,11 @@
           "default": true,
           "markdownDescription": "Highlight dated TODO comments in red once the date has passed, like `// TODO(2025-01-01): migrate`. Future dates and undated TODOs keep their normal appearance."
         },
+        "kotlinJump.composeAccessibilityHints": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show inline accessibility nudges in Compose code: `contentDescription = null` gets a decorative check, `Modifier.clickable` without a role gets a role reminder."
+        },
         "kotlinJump.hexColorSwatch": {
           "type": "boolean",
           "default": true,

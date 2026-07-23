@@ -1,12 +1,12 @@
 {
-  "version": "1.33.2",
+  "version": "1.33.3",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Smoother editor during large git operations",
-  "summary": "Kotlin Jump 1.33.2 fixes a stall where large git operations could freeze editor responsiveness while the file watcher processed a burst of changes.",
+  "tagline": "Smoother activation on resource heavy projects",
+  "summary": "Kotlin Jump 1.33.3 fixes a potential slowdown during activation on projects with many Android resource files by capping concurrent R-index reads.",
   "highlights": [
     {
-      "title": "Extension Host Responsiveness Fix",
-      "description": "Fixed the file watcher overwhelming VS Code's extension host during large git operations such as checkouts and branch switches, which could make the editor sluggish while many files changed at once.",
+      "title": "Bounded R-index Activation Reads",
+      "description": "Caps concurrent file reads during startup at 16, keeping activation smooth on projects with many Android resource files.",
       "kind": "fix"
     }
   ],
@@ -14,7 +14,7 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Fixed a stall where a burst of file changes during git checkouts, branch switches, or pulls could saturate the extension host, keeping VS Code responsive instead of freezing while Kotlin Jump's file watcher caught up."
+        "Capped R-index activation reads at 16 concurrent files, preventing potential slowdowns or file-handle exhaustion when a project has many Android resource files. Applies to both desktop VS Code and VS Code for the Web."
       ]
     },
     {

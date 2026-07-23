@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.33.3
+
+Kotlin Jump 1.33.3 fixes a potential slowdown during activation on projects with many Android resource files by capping concurrent R-index reads.
+
+### Fixes
+- Capped R-index activation reads at 16 concurrent files, preventing potential slowdowns or file-handle exhaustion when a project has many Android resource files. Applies to both desktop VS Code and VS Code for the Web.
+
+### Notes
+- No other functional changes to extension behavior in this release.
+
 ## 1.33.2
 
 Kotlin Jump 1.33.2 fixes a stall where large git operations could freeze editor responsiveness while the file watcher processed a burst of changes.

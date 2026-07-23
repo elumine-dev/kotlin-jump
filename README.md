@@ -316,6 +316,14 @@ No more counting cron fields on your fingers. Shapes the translator cannot phras
 
 Every `tasks.register(...)` in a `build.gradle.kts` gets a Run task lens. Click it and the task runs in the integrated terminal, module path resolved: `./gradlew :app:generateProtos`. Desktop only.
 
+### 🎯 KMP target coverage on expect declarations
+
+```kotlin
+expect fun platformName(): String     [android ✓] [ios ✓] [js ✗]
+```
+
+Which platforms implement this `expect`? The badge row says it before you go looking. Targets come from your real source sets, no Gradle parsing. Click jumps to the actual (picker when several targets have one). Toggle with `kotlinJump.kmpTargetBadges`.
+
 ### 🎨 Vector drawable preview
 
 Open any `<vector>` XML drawable and a rendered preview appears side by side automatically. Hover any `R.drawable.*` reference for an inline thumbnail. The gutter shows a mini render next to every reference. Click the CodeLens above the XML file to open the dedicated preview panel.

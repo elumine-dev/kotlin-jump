@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.24.0
+
+Kotlin Jump 1.24.0 highlights overdue dated TODO comments in red so stale work is easy to spot.
+
+### Improvements
+- Dated TODO comments that have passed their due date now render in red, making overdue work visible at a glance instead of requiring a manual scan through the file.
+- Works in both desktop VS Code and VS Code for the Web.
+- Can be toggled with the kotlinJump.todoExpiry setting.
+
 ## 1.23.1
 
 Kotlin Jump 1.23.1 fixes a test explorer bug that could target the wrong test when files share the same fully qualified name.

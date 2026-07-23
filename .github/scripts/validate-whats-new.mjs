@@ -51,7 +51,12 @@ const MEDIA_FILENAME_RE       = /^[a-z0-9][a-z0-9\-_.]*\.webp$/i;
 // ALL-CAPS filler. These must never reach the Marketplace webview.
 const LEAK_PATTERNS = [
   { re: /\bI(?:'m| am| will)\b/i,                 why: 'first-person phrasing (possible LLM leak)'      },
-  { re: /\b(?:TODO|FIXME|XXX)\b/,                 why: 'todo/fixme marker'                              },
+  // FIXME/XXX are never legitimate copy. TODO is only blocked in marker FORM
+  // (`TODO:`, `TODO(`, `TODO...`, or alone on a line) — prose ABOUT todos
+  // ("Overdue TODO Highlighting") is legitimate copy since v1.24.0 ships a
+  // feature named after the marker.
+  { re: /\b(?:FIXME|XXX)\b/,                      why: 'todo/fixme marker'                              },
+  { re: /\bTODO\b\s*[:(.]|^\s*TODO\b\s*$/m,       why: 'todo/fixme marker'                              },
   { re: /lorem ipsum/i,                           why: 'placeholder text'                               },
   { re: /<placeholder>|<insert .*?>/i,            why: 'bracketed placeholder'                          },
   { re: /\bclaude\b/i,                            why: 'bare "claude" reference (prompt leak)'          },

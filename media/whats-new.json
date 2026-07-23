@@ -1,12 +1,12 @@
 {
-  "version": "1.26.0",
+  "version": "1.27.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Compose accessibility, inline",
-  "summary": "Kotlin Jump 1.26.0 adds inline accessibility hints for Jetpack Compose, flagging accessibility gaps directly in your UI code.",
+  "tagline": "Step-by-step clarity for Flow chains",
+  "summary": "Kotlin Jump 1.27.0 adds numbered step badges that show execution order on multi-line Kotlin Flow chains.",
   "highlights": [
     {
-      "title": "Compose Accessibility Hints",
-      "description": "Kotlin Jump now flags accessibility gaps in Jetpack Compose UI code directly in the editor, so issues surface while you're writing the code instead of at review time.",
+      "title": "Flow Chain Step Badges",
+      "description": "Numbered badges next to each step in a multi-line Kotlin Flow chain show the order operators run, so you can trace map, filter, and collect calls without counting lines by hand.",
       "kind": "feature"
     }
   ],
@@ -14,8 +14,9 @@
     {
       "heading": "Improvements",
       "bullets": [
-        "Added inline hints that flag Jetpack Compose accessibility gaps right where you're writing UI code, making them easy to catch early instead of during a later review pass.",
-        "Can be turned off via the kotlinJump.composeAccessibilityHints setting if you don't want the extra inline markers."
+        "Added numbered badges on multi-line Kotlin Flow chains, marking the order each operator executes so long chains are easier to read at a glance.",
+        "Available in both desktop VS Code and VS Code for the Web.",
+        "Can be turned off via the kotlinJump.flowChainBadges setting."
       ]
     }
   ],

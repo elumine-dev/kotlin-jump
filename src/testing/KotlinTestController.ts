@@ -161,15 +161,17 @@ export class KotlinTestController implements vscode.Disposable {
   }
 
   private async discoverMethodsInClass(classItem: vscode.TestItem): Promise<void> {
-    const classFqn = classItem.id.slice('cls|'.length);
-    const classEntry = this.index.lookupFqn(classFqn);
+    const { fqn: classFqn, uriStr } = parseItemId(classItem.id);
+    // Resolve within the item's own file — lookupFqn keeps one entry per FQN,
+    // so same-FQN classes across workspace roots would resolve arbitrarily.
+    const fileEntries = this.index.getFileSymbols(uriStr);
+    const classEntry = fileEntries.find(e => e.fqn === classFqn);
     if (!classEntry) {
-      this.log.warn(`[test:discover] class not found in index: ${classFqn}`);
+      this.log.warn(`[test:discover] class not found in index: ${classFqn} (${uriStr})`);
       return;
     }
 
     const segs = this.getExtraSegs();
-    const fileEntries = this.index.getFileSymbols(classEntry.uri.toString());
     const fqnPrefix = classEntry.fqn + '.';
     const methods = fileEntries.filter(e =>
       isTestFun(e, segs) && e.depth === classEntry.depth + 1 && e.fqn.startsWith(fqnPrefix),
@@ -235,7 +237,8 @@ export class KotlinTestController implements vscode.Disposable {
   // ── TestItem helpers ──────────────────────────────────────────────────────
 
   private getOrCreateClassItem(classEntry: SymbolEntry, allFqns: Set<string>): vscode.TestItem {
-    const id = `cls|${classEntry.fqn}`;
+    const uriStr = classEntry.uri.toString();
+    const id = itemId('cls', classEntry.fqn, uriStr);
     let item = this.classItems.get(id);
     if (!item) {
       item = this.ctrl.createTestItem(id, classEntry.name, classEntry.uri);
@@ -243,7 +246,9 @@ export class KotlinTestController implements vscode.Disposable {
       item.sortText = classEntry.name.toLowerCase();
 
       const parentFqn = deriveParentClassFqn(classEntry.fqn, classEntry.packageName);
-      const parentItem = parentFqn && allFqns.has(parentFqn) ? this.classItems.get(`cls|${parentFqn}`) : undefined;
+      const parentItem = parentFqn && allFqns.has(parentFqn)
+        ? this.classItems.get(itemId('cls', parentFqn, uriStr))
+        : undefined;
 
       if (parentItem) {
         parentItem.children.add(item);
@@ -257,7 +262,7 @@ export class KotlinTestController implements vscode.Disposable {
   }
 
   private upsertMethodItem(classItem: vscode.TestItem, entry: SymbolEntry): vscode.TestItem {
-    const id = `mth|${entry.fqn}`;
+    const id = itemId('mth', entry.fqn, entry.uri.toString());
     let item = classItem.children.get(id);
     if (!item) {
       item = this.ctrl.createTestItem(id, entry.name, entry.uri);
@@ -359,9 +364,13 @@ export class KotlinTestController implements vscode.Disposable {
     const visitItem = (item: vscode.TestItem) => {
       if (excludeIds.has(item.id)) return;
       if (item.id.startsWith('mth|')) {
-        const fqn = item.id.slice('mth|'.length);
-        const entry = this.index.lookupFqn(fqn);
+        // Resolve within the item's own file, not via lookupFqn — same-FQN
+        // tests in another workspace root would run against the wrong
+        // Gradle project (issue #3).
+        const { fqn, uriStr } = parseItemId(item.id);
+        const entry = this.index.getFileSymbols(uriStr).find(e => e.fqn === fqn);
         if (entry && isTestFun(entry, segs)) specs.push({ item, entry });
+        else this.log.warn(`[test:run] stale test item skipped: ${fqn} (${uriStr})`);
         return;
       }
       for (const [, child] of item.children) visitItem(child);
@@ -385,14 +394,22 @@ export class KotlinTestController implements vscode.Disposable {
   /** Expose the controller so extension.ts can pass it to commands */
   getController(): vscode.TestController { return this.ctrl; }
 
-  /** Lookup a TestItem by method FQN — used by Code Lens commands */
-  findMethodItem(fqn: string): vscode.TestItem | undefined {
-    return findInTree(this.ctrl.items, `mth|${fqn}`);
+  /** Lookup a TestItem by method FQN — used by Code Lens commands.
+   *  `uriStr` pins the lookup to one file so same-FQN tests in another
+   *  workspace root are not matched; without it, first match wins. */
+  findMethodItem(fqn: string, uriStr?: string): vscode.TestItem | undefined {
+    if (uriStr) return findInTree(this.ctrl.items, itemId('mth', fqn, uriStr));
+    return findInTreeByPrefix(this.ctrl.items, `mth|${fqn}|`);
   }
 
   /** Lookup a TestItem by class FQN — used by Code Lens Run All command */
-  findClassItem(fqn: string): vscode.TestItem | undefined {
-    return this.classItems.get(`cls|${fqn}`);
+  findClassItem(fqn: string, uriStr?: string): vscode.TestItem | undefined {
+    if (uriStr) return this.classItems.get(itemId('cls', fqn, uriStr));
+    const prefix = `cls|${fqn}|`;
+    for (const [id, item] of this.classItems) {
+      if (id.startsWith(prefix)) return item;
+    }
+    return undefined;
   }
 
   /** Run one or more TestItems directly — used by Code Lens commands */
@@ -424,6 +441,23 @@ export class KotlinTestController implements vscode.Disposable {
 }
 
 // ── Module-level helpers ──────────────────────────────────────────────────────
+
+/**
+ * TestItem ids embed the file URI so two same-FQN classes in different
+ * workspace roots get distinct items (issue #3: the wrong root's Gradle
+ * project was resolved, running `test` instead of `testDebugUnitTest`).
+ * FQNs never contain `|`, so the first two `|` delimit kind and fqn; the
+ * rest is the URI (which may itself contain `|` in theory).
+ */
+function itemId(kind: 'cls' | 'mth', fqn: string, uriStr: string): string {
+  return `${kind}|${fqn}|${uriStr}`;
+}
+
+function parseItemId(id: string): { fqn: string; uriStr: string } {
+  const first = id.indexOf('|');
+  const second = id.indexOf('|', first + 1);
+  return { fqn: id.slice(first + 1, second), uriStr: id.slice(second + 1) };
+}
 
 function isTestFile(uriStr: string, extraSegs: string[]): boolean {
   const segs = extraSegs.length > 0 ? [...DEFAULT_TEST_SEGS, ...extraSegs] : DEFAULT_TEST_SEGS;
@@ -462,6 +496,18 @@ function findInTree(
   for (const [, item] of collection) {
     if (item.id === id) return item;
     const found = findInTree(item.children, id);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+function findInTreeByPrefix(
+  collection: vscode.TestItemCollection,
+  idPrefix: string,
+): vscode.TestItem | undefined {
+  for (const [, item] of collection) {
+    if (item.id.startsWith(idPrefix)) return item;
+    const found = findInTreeByPrefix(item.children, idPrefix);
     if (found) return found;
   }
   return undefined;

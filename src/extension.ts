@@ -86,6 +86,7 @@ import { SuspendMarkerProvider } from './providers/SuspendMarkerProvider';
 import { ComposeA11yProvider } from './providers/ComposeA11yProvider';
 import { FlowChainProvider } from './providers/FlowChainProvider';
 import { LiteralTooltipProvider } from './providers/LiteralTooltipProvider';
+import { GradleTaskLensProvider, runGradleTask } from './providers/GradleTaskLensProvider';
 import { ResourceDiagnosticProvider } from './providers/ResourceDiagnosticProvider';
 import { VersionCatalogHoverProvider } from './providers/VersionCatalogHoverProvider';
 import { OverrideGutterProvider } from './providers/OverrideGutterProvider';
@@ -875,6 +876,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }),
     );
   })();
+
+  // ── Gradle task run lens (desktop only — spawns the wrapper) ─────────────
+  context.subscriptions.push(
+    vscode.languages.registerCodeLensProvider(
+      { pattern: '**/*.gradle.kts' }, new GradleTaskLensProvider(),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.runGradleTask', runGradleTask),
+  );
 
   // ── Sprint 2: R.color swatch + resource diagnostics ───────────────────────
   const colorIndex = new ColorResourceIndex();

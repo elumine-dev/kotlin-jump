@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.33.0
+
+Kotlin Jump 1.33.0 adds inline risk pills on AndroidManifest.xml permission lines, showing each permission's risk level without a hover.
+
+### Improvements
+- Added inline risk pills on AndroidManifest.xml uses-permission lines, marking each permission as normal, dangerous, or signature level right in the manifest.
+- Available in both desktop VS Code and VS Code for the Web.
+- Can be turned off via the kotlinJump.manifestPermissionBadges setting.
+
 ## 1.32.0
 
 Kotlin Jump 1.32.0 warns when a data class property declared in the class body gets silently left out of equals() and copy().

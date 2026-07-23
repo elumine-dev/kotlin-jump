@@ -51,6 +51,7 @@ import { runCodeLensAction } from './providers/CodeLensAction';
 import { WhatsNewPanel } from './providers/WhatsNewPanel';
 import { RatingPromptService } from './ui/RatingPromptService';
 import { NullAssertionProvider } from './providers/NullAssertionProvider';
+import { TodoExpiryProvider } from './providers/TodoExpiryProvider';
 import { HexColorFoldingProvider } from './providers/HexColorFoldingProvider';
 import { HexColorDocumentColorProvider } from './providers/HexColorDocumentColorProvider';
 import { ApiLevelProvider } from './providers/ApiLevelProvider';
@@ -710,6 +711,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   })());
 
   context.subscriptions.push(new NullAssertionProvider());
+  context.subscriptions.push(new TodoExpiryProvider());
   context.subscriptions.push(new HexColorFoldingProvider());
   context.subscriptions.push(
     vscode.languages.registerColorProvider(KT_JAVA, new HexColorDocumentColorProvider()),

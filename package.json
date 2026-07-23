@@ -1066,6 +1066,11 @@
           "default": true,
           "markdownDescription": "Highlight `!!` not null assertions in amber/orange to make unsafe force unwraps visually distinct."
         },
+        "kotlinJump.todoExpiry": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Highlight dated TODO comments in red once the date has passed, like `// TODO(2025-01-01): migrate`. Future dates and undated TODOs keep their normal appearance."
+        },
         "kotlinJump.hexColorSwatch": {
           "type": "boolean",
           "default": true,

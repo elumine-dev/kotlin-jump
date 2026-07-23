@@ -57,6 +57,7 @@ import { runCodeLensAction } from './providers/CodeLensAction';
 import { WhatsNewPanel } from './providers/WhatsNewPanel';
 import { RatingPromptService } from './ui/RatingPromptService';
 import { NullAssertionProvider } from './providers/NullAssertionProvider';
+import { TodoExpiryProvider } from './providers/TodoExpiryProvider';
 import { HexColorFoldingProvider } from './providers/HexColorFoldingProvider';
 import { HexColorDocumentColorProvider } from './providers/HexColorDocumentColorProvider';
 import { ApiLevelProvider } from './providers/ApiLevelProvider';
@@ -786,6 +787,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   // ── Sprint 1: Null assertion highlight ────────────────────────────────────
   context.subscriptions.push(new NullAssertionProvider());
+
+  // ── Overdue dated TODO highlight ──────────────────────────────────────────
+  context.subscriptions.push(new TodoExpiryProvider());
 
   // ── Sprint 1: Hex color inline swatch + native color picker ───────────────
   context.subscriptions.push(new HexColorFoldingProvider());

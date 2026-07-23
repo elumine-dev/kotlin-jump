@@ -53,9 +53,10 @@ Kotlin Jump skips all of that. **No LSP. No JVM. No waiting.**
 
 ## ✨ Recent
 
-- **🎨 Vector drawable preview.** Open a `<vector>` XML and a side by side render appears automatically. Hover `R.drawable.*` for an inline thumbnail. Gutter mini next to every reference.
-- **🧵 Coroutine thread badges.** `🧵 IO` · `🖥 Main` next to every dispatched call.
-- **⌨️ IntelliJ keymap bundled.** `Alt+F7`, `Alt+Shift+T`, `Cmd+Alt+←/→` work the moment you install.
+- **🚫 Deprecation you can see.** Strikethrough on deprecated symbols; hover shows the message and its `ReplaceWith` snippet.
+- **🔐 Permission intel.** Hover any Android permission for what it grants. The manifest gets risk pills: 🟢 normal · 🟡 dangerous · 🔴 special.
+- **🎯 KMP coverage badges.** `[android ✓] [ios ✗]` on every `expect` declaration. Click jumps to the actual.
+- **⚠ Silent traps, caught.** Dated TODOs turn red once overdue. Data class body fields warn that they skip `equals()` and `copy()`.
 
 [Full changelog →](CHANGELOG.md)
 

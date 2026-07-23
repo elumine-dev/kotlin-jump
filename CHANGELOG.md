@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.33.1
+
+Kotlin Jump 1.33.1 is a documentation and version update with no changes to extension behavior.
+
+### Notes
+- Refreshed the README's Recent Releases section, which had fallen ten versions behind, so the listed history now matches what's actually shipped.
+- No functional changes to extension behavior in this release.
+
 ## 1.33.0
 
 Kotlin Jump 1.33.0 adds inline risk pills on AndroidManifest.xml permission lines, showing each permission's risk level without a hover.

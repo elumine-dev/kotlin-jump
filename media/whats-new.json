@@ -1,22 +1,21 @@
 {
-  "version": "1.33.0",
+  "version": "1.33.1",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Permission risk, right in the manifest",
-  "summary": "Kotlin Jump 1.33.0 adds inline risk pills on AndroidManifest.xml permission lines, showing each permission's risk level without a hover.",
+  "tagline": "Documentation refresh, no behavior change",
+  "summary": "Kotlin Jump 1.33.1 is a documentation and version update with no changes to extension behavior.",
   "highlights": [
     {
-      "title": "Permission Risk Badges",
-      "kind": "feature",
-      "description": "Shows a risk pill directly on each uses-permission line in AndroidManifest.xml, so dangerous or signature-level permissions are visible without opening a hover."
+      "title": "No Functional Changes",
+      "description": "This release updates documentation and version metadata only, extension behavior is unchanged from 1.33.0.",
+      "kind": "note"
     }
   ],
   "sections": [
     {
-      "heading": "Improvements",
+      "heading": "Notes",
       "bullets": [
-        "Added inline risk pills on AndroidManifest.xml uses-permission lines, marking each permission as normal, dangerous, or signature level right in the manifest.",
-        "Available in both desktop VS Code and VS Code for the Web.",
-        "Can be turned off via the kotlinJump.manifestPermissionBadges setting."
+        "Refreshed the README's Recent Releases section, which had fallen ten versions behind, so the listed history now matches what's actually shipped.",
+        "No functional changes to extension behavior in this release."
       ]
     }
   ],

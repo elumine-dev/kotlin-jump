@@ -23,6 +23,7 @@ import { KotlinSelectionRangeProvider } from './providers/SelectionRangeProvider
 import { KotlinFoldingRangeProvider } from './providers/FoldingRangeProvider';
 import { KotlinSemanticTokensProvider, TOKEN_TYPES, TOKEN_MODIFIERS } from './providers/SemanticTokensProvider';
 import { Logger } from './util/logger';
+import { mapBatched } from './util/batched';
 import { resolveCompanionMode } from './util/companionMode';
 import { resolveAll as resolveModules } from './gradle/ModuleResolver';
 import { resolveBest } from './util/ImportResolver';
@@ -687,17 +688,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Bounded concurrency: the old unbatched Promise.all fired thousands of
     // simultaneous readFile calls at activation, an I/O storm competing with
     // VS Code's own startup (and its git extension's first refresh).
-    void (async () => {
-      const BATCH = 16;
-      for (let i = 0; i < allUris.length; i += BATCH) {
-        await Promise.all(allUris.slice(i, i + BATCH).map(async u => {
-          try {
-            const bytes = await vscode.workspace.fs.readFile(u);
-            rIndex.reindexFile(u.toString(), new TextDecoder().decode(bytes));
-          } catch { /* skip unreadable files */ }
-        }));
-      }
-    })();
+    void mapBatched(allUris, async u => {
+      try {
+        const bytes = await vscode.workspace.fs.readFile(u);
+        rIndex.reindexFile(u.toString(), new TextDecoder().decode(bytes));
+      } catch { /* skip unreadable files */ }
+    });
     const rW = vscode.workspace.createFileSystemWatcher('**/*.{kt,kts,java}');
     // Global quiet-window batching: a checkout used to fire one immediate
     // readFile PER changed file — hundreds of concurrent disk reads racing
@@ -736,11 +732,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ).then(uris => {
       log.info(`[StringFolding] found ${uris.length} values*.xml file(s)`);
       for (const u of uris) log.debug(`[StringFolding]   ${u.fsPath}`);
-      return Promise.all(uris.map(async u => {
+      return mapBatched(uris, async u => {
         const bytes = await vscode.workspace.fs.readFile(u);
         stringIndex.reindexFile(u, new TextDecoder().decode(bytes));
         log.debug(`[StringFolding] indexed ${u.fsPath}`);
-      }));
+      });
     }).then(() => {
       log.info('[StringFolding] initial scan done — invalidating all editors');
       foldingProvider.invalidateAll();
@@ -969,7 +965,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.workspace.findFiles(
       '**/res/values*/*.xml',
       `{${excludeList.join(',')}}`,
-    ).then(uris => Promise.all(uris.map(handleColorChanged)));
+    ).then(uris => mapBatched(uris, handleColorChanged));
 
     const cW1 = vscode.workspace.createFileSystemWatcher('**/res/values/*.xml');
     const cW2 = vscode.workspace.createFileSystemWatcher('**/res/values-*/*.xml');
@@ -1003,7 +999,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.workspace.findFiles(
       '**/res/values*/dimens.xml',
       `{${excludeList.join(',')}}`,
-    ).then(uris => Promise.all(uris.map(handleDimenChanged)));
+    ).then(uris => mapBatched(uris, handleDimenChanged));
 
     const dW1 = vscode.workspace.createFileSystemWatcher('**/res/values/dimens.xml');
     const dW2 = vscode.workspace.createFileSystemWatcher('**/res/values-*/dimens.xml');

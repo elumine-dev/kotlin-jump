@@ -41,6 +41,7 @@ import { KotlinSelectionRangeProvider } from './providers/SelectionRangeProvider
 import { KotlinFoldingRangeProvider } from './providers/FoldingRangeProvider';
 import { KotlinSemanticTokensProvider, TOKEN_TYPES, TOKEN_MODIFIERS } from './providers/SemanticTokensProvider';
 import { Logger } from './util/logger';
+import { mapBatched } from './util/batched';
 import { resolveCompanionMode } from './util/companionMode';
 import { resolveAll as resolveModules } from './gradle/ModuleResolver';
 import { resolveBest } from './util/ImportResolver';
@@ -621,17 +622,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const foldingProvider = new StringResourceFoldingProvider(stringIndex, log);
 
     // Bounded concurrency, same rationale as the desktop entrypoint.
-    void (async () => {
-      const BATCH = 16;
-      for (let i = 0; i < allUris.length; i += BATCH) {
-        await Promise.all(allUris.slice(i, i + BATCH).map(async u => {
-          try {
-            const bytes = await vscode.workspace.fs.readFile(u);
-            rIndex.reindexFile(u.toString(), new TextDecoder().decode(bytes));
-          } catch { /* skip unreadable files */ }
-        }));
-      }
-    })();
+    void mapBatched(allUris, async u => {
+      try {
+        const bytes = await vscode.workspace.fs.readFile(u);
+        rIndex.reindexFile(u.toString(), new TextDecoder().decode(bytes));
+      } catch { /* skip unreadable files */ }
+    });
     const rW = vscode.workspace.createFileSystemWatcher('**/*.{kt,kts,java}');
     // Same quiet-window batching as the desktop entrypoint: no per-event
     // concurrent reads during a checkout storm.
@@ -661,10 +657,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       `{${excludeList.join(',')}}`,
     ).then(uris => {
       log.info(`[StringFolding] found ${uris.length} strings.xml file(s)`);
-      return Promise.all(uris.map(async u => {
+      return mapBatched(uris, async u => {
         const bytes = await vscode.workspace.fs.readFile(u);
         stringIndex.reindexFile(u, new TextDecoder().decode(bytes));
-      }));
+      });
     }).then(() => {
       foldingProvider.invalidateAll();
     });
@@ -851,7 +847,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.workspace.findFiles(
       '**/res/values*/colors.xml',
       `{${excludeList.join(',')}}`,
-    ).then(uris => Promise.all(uris.map(handleColorChanged)));
+    ).then(uris => mapBatched(uris, handleColorChanged));
 
     const cW1 = vscode.workspace.createFileSystemWatcher('**/res/values/colors.xml');
     const cW2 = vscode.workspace.createFileSystemWatcher('**/res/values-*/colors.xml');
@@ -883,7 +879,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.workspace.findFiles(
       '**/res/values*/dimens.xml',
       `{${excludeList.join(',')}}`,
-    ).then(uris => Promise.all(uris.map(handleDimenChanged)));
+    ).then(uris => mapBatched(uris, handleDimenChanged));
 
     const dW1 = vscode.workspace.createFileSystemWatcher('**/res/values/dimens.xml');
     const dW2 = vscode.workspace.createFileSystemWatcher('**/res/values-*/dimens.xml');

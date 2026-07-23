@@ -684,12 +684,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // ── R.string usage index (XML → Kotlin navigation) ──────────────────────
     // Pre-indexes R.(string|plurals|array).KEY usages from all Kotlin/Java files
     // so that provideDefinition() is O(1) instead of O(N files × I/O).
-    void Promise.all(allUris.map(async u => {
-      try {
-        const bytes = await vscode.workspace.fs.readFile(u);
-        rIndex.reindexFile(u.toString(), new TextDecoder().decode(bytes));
-      } catch { /* skip unreadable files */ }
-    }));
+    // Bounded concurrency: the old unbatched Promise.all fired thousands of
+    // simultaneous readFile calls at activation, an I/O storm competing with
+    // VS Code's own startup (and its git extension's first refresh).
+    void (async () => {
+      const BATCH = 16;
+      for (let i = 0; i < allUris.length; i += BATCH) {
+        await Promise.all(allUris.slice(i, i + BATCH).map(async u => {
+          try {
+            const bytes = await vscode.workspace.fs.readFile(u);
+            rIndex.reindexFile(u.toString(), new TextDecoder().decode(bytes));
+          } catch { /* skip unreadable files */ }
+        }));
+      }
+    })();
     const rW = vscode.workspace.createFileSystemWatcher('**/*.{kt,kts,java}');
     // Global quiet-window batching: a checkout used to fire one immediate
     // readFile PER changed file — hundreds of concurrent disk reads racing

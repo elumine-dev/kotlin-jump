@@ -77,7 +77,9 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
         lenses.push(new vscode.CodeLens(range, {
           title: '▶ Run',
           command: 'kotlin-jump.runTest',
-          arguments: [entry.fqn, entry.moduleName],
+          // URI pins the run to this file — same-FQN tests can exist in
+          // another workspace root (issue #3).
+          arguments: [entry.fqn, entry.moduleName, document.uri.toString()],
         }));
       }
 
@@ -86,7 +88,7 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
         lenses.push(new vscode.CodeLens(range, {
           title: '▶ Run All',
           command: 'kotlin-jump.runTestClass',
-          arguments: [entry.fqn, entry.moduleName],
+          arguments: [entry.fqn, entry.moduleName, document.uri.toString()],
         }));
       }
 

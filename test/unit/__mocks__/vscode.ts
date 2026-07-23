@@ -310,6 +310,12 @@ export const workspace = {
   onDidCloseTextDocument:  (_listener: any) => ({ dispose: () => {} }),
   onDidSaveTextDocument:   (_listener: any) => ({ dispose: () => {} }),
   onDidChangeConfiguration: (_listener: any) => ({ dispose: () => {} }),
+  createFileSystemWatcher: (_glob: string) => ({
+    onDidChange: (_l: any) => ({ dispose: () => {} }),
+    onDidCreate: (_l: any) => ({ dispose: () => {} }),
+    onDidDelete: (_l: any) => ({ dispose: () => {} }),
+    dispose: () => {},
+  }),
   fs: {
     readFile: async () => Buffer.from(''),
   },
@@ -481,6 +487,84 @@ export class SemanticTokensBuilder {
     return new SemanticTokens(new Uint32Array(this._data), resultId);
   }
 }
+
+// ── Testing API ───────────────────────────────────────────────────────────────
+
+export enum TestRunProfileKind {
+  Run      = 1,
+  Debug    = 2,
+  Coverage = 3,
+}
+
+export class TestRunRequest {
+  constructor(
+    public readonly include?: any[],
+    public readonly exclude?: any[],
+    public readonly profile?: any,
+    public readonly continuous?: boolean,
+  ) {}
+}
+
+export class TestMessage {
+  expectedOutput?: string;
+  actualOutput?: string;
+  constructor(public message: string | MarkdownString) {}
+}
+
+export class CancellationTokenSource {
+  token = {
+    isCancellationRequested: false,
+    onCancellationRequested: (_l: any) => ({ dispose: () => {} }),
+  };
+  cancel(): void { this.token.isCancellationRequested = true; }
+  dispose(): void {}
+}
+
+class TestItemCollectionMock {
+  private readonly map = new Map<string, any>();
+  get size(): number { return this.map.size; }
+  add(item: any): void { this.map.set(item.id, item); }
+  get(id: string): any { return this.map.get(id); }
+  delete(id: string): void { this.map.delete(id); }
+  replace(items: any[]): void {
+    this.map.clear();
+    for (const i of items) this.map.set(i.id, i);
+  }
+  forEach(fn: (item: any) => void): void { for (const i of this.map.values()) fn(i); }
+  [Symbol.iterator](): IterableIterator<[string, any]> { return this.map.entries(); }
+}
+
+export const tests = {
+  createTestController: (_id: string, _label: string) => ({
+    items: new TestItemCollectionMock(),
+    resolveHandler: undefined as any,
+    refreshHandler: undefined as any,
+    createRunProfile: (_label: string, _kind: TestRunProfileKind, _handler: any, _isDefault?: boolean) => ({
+      supportsContinuousRun: false,
+      dispose: () => {},
+    }),
+    createTestItem: (id: string, label: string, uri?: any) => ({
+      id,
+      label,
+      uri,
+      children: new TestItemCollectionMock(),
+      canResolveChildren: false,
+      sortText: undefined as string | undefined,
+      range: undefined as any,
+    }),
+    createTestRun: (_req: any) => ({
+      started:  (_i: any) => {},
+      passed:   (_i: any, _d?: number) => {},
+      failed:   (_i: any, _m: any, _d?: number) => {},
+      errored:  (_i: any, _m: any, _d?: number) => {},
+      skipped:  (_i: any) => {},
+      enqueued: (_i: any) => {},
+      appendOutput: (_s: string) => {},
+      end: () => {},
+    }),
+    dispose: () => {},
+  }),
+};
 
 // ── Chat Participant ──────────────────────────────────────────────────────────
 

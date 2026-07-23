@@ -1205,11 +1205,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   };
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('kotlin-jump.runTest', async (fqn: string, moduleName?: string) => {
-      let item = testCtrl.findMethodItem(fqn);
+    vscode.commands.registerCommand('kotlin-jump.runTest', async (fqn: string, _moduleName?: string, uriStr?: string) => {
+      let item = testCtrl.findMethodItem(fqn, uriStr);
       if (!item) {
-        const entry = index.lookupFqn(fqn);
-        if (entry) { testCtrl.refreshFileTests(entry.uri); item = testCtrl.findMethodItem(fqn); }
+        const entry = uriStr
+          ? index.getFileSymbols(uriStr).find(e => e.fqn === fqn)
+          : index.lookupFqn(fqn);
+        if (entry) { testCtrl.refreshFileTests(entry.uri); item = testCtrl.findMethodItem(fqn, uriStr); }
       }
       if (!item) { vscode.window.showWarningMessage(`Kotlin Jump: test not found in index: ${fqn}`); return; }
       vscode.commands.executeCommand('workbench.view.testing.focus');
@@ -1217,11 +1219,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await testCtrl.runItems([item]);
     }),
 
-    vscode.commands.registerCommand('kotlin-jump.runTestClass', async (fqn: string, moduleName?: string) => {
-      let classItem = testCtrl.findClassItem(fqn);
+    vscode.commands.registerCommand('kotlin-jump.runTestClass', async (fqn: string, _moduleName?: string, uriStr?: string) => {
+      let classItem = testCtrl.findClassItem(fqn, uriStr);
       if (!classItem) {
-        const entry = index.lookupFqn(fqn);
-        if (entry) { testCtrl.refreshFileTests(entry.uri); classItem = testCtrl.findClassItem(fqn); }
+        const entry = uriStr
+          ? index.getFileSymbols(uriStr).find(e => e.fqn === fqn)
+          : index.lookupFqn(fqn);
+        if (entry) { testCtrl.refreshFileTests(entry.uri); classItem = testCtrl.findClassItem(fqn, uriStr); }
       }
       if (!classItem) { vscode.window.showWarningMessage(`Kotlin Jump: test class not found: ${fqn}`); return; }
       vscode.commands.executeCommand('workbench.view.testing.focus');

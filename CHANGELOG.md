@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.29.0
+
+Kotlin Jump 1.29.0 adds inline hover tooltips that translate cron and ISO 8601 duration string literals into plain language.
+
+### Improvements
+- Added hover tooltips that translate cron expressions and ISO 8601 duration string literals (schedules, timeouts, delays) into plain language, right where you're reading the code.
+- Available in both desktop VS Code and VS Code for the Web.
+- Can be turned off via the kotlinJump.literalTooltips setting.
+
 ## 1.28.0
 
 Kotlin Jump 1.28.0 flags deprecated Kotlin symbols with a strikethrough and shows the suggested replacement code directly on hover.

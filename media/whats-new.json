@@ -1,22 +1,33 @@
 {
-  "version": "1.27.0",
+  "version": "1.28.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Step-by-step clarity for Flow chains",
-  "summary": "Kotlin Jump 1.27.0 adds numbered step badges that show execution order on multi-line Kotlin Flow chains.",
+  "tagline": "Deprecated code, marked and explained",
+  "summary": "Kotlin Jump 1.28.0 flags deprecated Kotlin symbols with a strikethrough and shows the suggested replacement code directly on hover.",
   "highlights": [
     {
-      "title": "Flow Chain Step Badges",
-      "description": "Numbered badges next to each step in a multi-line Kotlin Flow chain show the order operators run, so you can trace map, filter, and collect calls without counting lines by hand.",
-      "kind": "feature"
+      "title": "Deprecation Strikethrough",
+      "kind": "feature",
+      "description": "Deprecated Kotlin symbols now render with a strikethrough directly in the editor, so outdated APIs are visible at a glance instead of requiring a lookup."
+    },
+    {
+      "title": "ReplaceWith Hover Snippet",
+      "kind": "feature",
+      "description": "Hovering a deprecated symbol shows the suggested replacement code from its ReplaceWith annotation, so you can migrate off it without opening the declaration."
     }
   ],
   "sections": [
     {
       "heading": "Improvements",
       "bullets": [
-        "Added numbered badges on multi-line Kotlin Flow chains, marking the order each operator executes so long chains are easier to read at a glance.",
-        "Available in both desktop VS Code and VS Code for the Web.",
-        "Can be turned off via the kotlinJump.flowChainBadges setting."
+        "Added strikethrough rendering for deprecated Kotlin symbols, making outdated APIs visible at a glance instead of requiring a manual check.",
+        "Added a hover tooltip on deprecated symbols that shows the ReplaceWith snippet, so the suggested replacement is visible without navigating to the declaration.",
+        "Available in both desktop VS Code and VS Code for the Web."
+      ]
+    },
+    {
+      "heading": "Notes",
+      "bullets": [
+        "No other functional changes in this release."
       ]
     }
   ],

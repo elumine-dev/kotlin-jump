@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.30.0
+
+Kotlin Jump 1.30.0 adds a CodeLens that runs Gradle tasks directly from build.gradle.kts declarations.
+
+### Improvements
+- Added a CodeLens above Gradle task declarations in build.gradle.kts files, letting you run a task with one click right where it's defined.
+
+### Notes
+- No other functional changes in this release.
+
 ## 1.29.0
 
 Kotlin Jump 1.29.0 adds inline hover tooltips that translate cron and ISO 8601 duration string literals into plain language.

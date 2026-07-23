@@ -1,12 +1,12 @@
 {
-  "version": "1.31.0",
+  "version": "1.32.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "KMP target coverage at a glance",
-  "summary": "Kotlin Jump 1.31.0 adds inline badges on expect declarations that show which Kotlin Multiplatform targets have a matching actual implementation.",
+  "tagline": "Data class equals/copy blind spots",
+  "summary": "Kotlin Jump 1.32.0 warns when a data class property declared in the class body gets silently left out of equals() and copy().",
   "highlights": [
     {
-      "title": "KMP Target Coverage Badges",
-      "description": "Shows which platform targets implement each expect declaration directly in the editor, so gaps in your Kotlin Multiplatform coverage are visible without opening every actual file.",
+      "title": "Data Class Field Warnings",
+      "description": "Flags properties declared in a data class body so you notice before equals(), hashCode(), or copy() silently ignore them.",
       "kind": "feature"
     }
   ],
@@ -14,9 +14,16 @@
     {
       "heading": "Improvements",
       "bullets": [
-        "Added inline badges on expect declarations showing which Kotlin Multiplatform targets have a matching actual implementation, making platform coverage visible at a glance instead of requiring a manual check per target.",
+        "Added warnings for data class properties declared in the class body, since only primary constructor properties participate in the generated equals(), hashCode(), and copy(). It is a common source of subtle bugs.",
         "Available in both desktop VS Code and VS Code for the Web.",
-        "Can be turned off via the kotlinJump.kmpTargetBadges setting."
+        "Can be turned off via the kotlinJump.dataClassFieldWarnings setting."
+      ]
+    },
+    {
+      "heading": "Notes",
+      "bullets": [
+        "Fixed an internal release check that could trigger false CI failure alerts, improving release reliability.",
+        "No other functional changes to extension behavior in this release."
       ]
     }
   ],

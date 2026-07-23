@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.32.0
+
+Kotlin Jump 1.32.0 warns when a data class property declared in the class body gets silently left out of equals() and copy().
+
+### Improvements
+- Added warnings for data class properties declared in the class body, since only primary constructor properties participate in the generated equals(), hashCode(), and copy(). It is a common source of subtle bugs.
+- Available in both desktop VS Code and VS Code for the Web.
+- Can be turned off via the kotlinJump.dataClassFieldWarnings setting.
+
+### Notes
+- Fixed an internal release check that could trigger false CI failure alerts, improving release reliability.
+- No other functional changes to extension behavior in this release.
+
 ## 1.31.0
 
 Kotlin Jump 1.31.0 adds inline badges on expect declarations that show which Kotlin Multiplatform targets have a matching actual implementation.

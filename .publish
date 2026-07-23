@@ -477,6 +477,7 @@ Rules:
 - Do not include meaningless bullets like "Bumped version" or "Updated package.json".
 - Do not list raw implementation details unless they materially help a user understand the release.
 - Keep the tone concise, credible, and professional. No hype, no emojis, no fluff.
+- PUNCTUATION, STRICT: never use an em-dash or en-dash anywhere in the output. A pre-commit hook rejects the whole release when one appears. Use a period, comma, colon, or parentheses instead. Split the sentence in two when in doubt.
 - Prefer section headings from this set when they fit: Improvements, Fixes, Notes, Packaging and docs.
 - Use at most 3 sections unless the evidence strongly justifies more.
 - Each bullet must stand on its own, mention impact, and start with a verb in past tense or present tense.
@@ -497,7 +498,7 @@ silently. Never summarise a release as "adds demo recording" or similar.
 
 Return structured JSON with:
 - summary: one short sentence
-- tagline: one punchy phrase (max 8 words) capturing the release's key theme — no verbs, no fluff
+- tagline: one punchy phrase (max 8 words) capturing the release's key theme (no verbs, no fluff)
 - highlights: 2-3 top changes as cards, each with:
   - title: short label (max 5 words, noun phrase)
   - description: one sentence explaining the user benefit

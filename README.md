@@ -266,6 +266,16 @@ Manifest.permission.ACCESS_FINE_LOCATION
 
 Works on `Manifest.permission.*` constants and on `"android.permission.*"` strings, including inside `AndroidManifest.xml`. Covers 61 permissions, with migration notes on the legacy ones (`WRITE_EXTERNAL_STORAGE`, `BLUETOOTH`, `USE_FINGERPRINT`).
 
+And in the manifest itself, every `<uses-permission>` line carries a risk pill:
+
+```xml
+<uses-permission android:name="android.permission.INTERNET" />   🟢 normal
+<uses-permission android:name="android.permission.CAMERA" />     🟡 dangerous
+<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />  🔴 special
+```
+
+Your permission review, at a glance. Toggle with `kotlinJump.manifestPermissionBadges`.
+
 ### ♿ Compose accessibility nudges
 
 Two TalkBack traps, caught while you type.

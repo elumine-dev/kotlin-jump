@@ -60,6 +60,7 @@ import { WhatsNewPanel } from './providers/WhatsNewPanel';
 import { RatingPromptService } from './ui/RatingPromptService';
 import { NullAssertionProvider } from './providers/NullAssertionProvider';
 import { TodoExpiryProvider } from './providers/TodoExpiryProvider';
+import { ManifestPermissionProvider } from './providers/ManifestPermissionProvider';
 import { HexColorFoldingProvider } from './providers/HexColorFoldingProvider';
 import { HexColorDocumentColorProvider } from './providers/HexColorDocumentColorProvider';
 import { ApiLevelProvider } from './providers/ApiLevelProvider';
@@ -804,6 +805,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   // ── Overdue dated TODO highlight ──────────────────────────────────────────
   context.subscriptions.push(new TodoExpiryProvider());
+
+  // ── Manifest permission risk badges ───────────────────────────────────────
+  context.subscriptions.push(new ManifestPermissionProvider());
 
   // ── Sprint 1: Hex color inline swatch + native color picker ───────────────
   context.subscriptions.push(new HexColorFoldingProvider());

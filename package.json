@@ -1091,6 +1091,11 @@
           "default": true,
           "markdownDescription": "Show a Run task lens on task declarations in `build.gradle.kts`. Click runs the task in the integrated terminal with the module path resolved, like `./gradlew :app:generateProtos`. Desktop only."
         },
+        "kotlinJump.kmpTargetBadges": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show target coverage badges on `expect` declarations in Kotlin Multiplatform projects, like `[android ✓] [ios ✓] [js ✗]`. Click jumps to the actual implementation."
+        },
         "kotlinJump.hexColorSwatch": {
           "type": "boolean",
           "default": true,

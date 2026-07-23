@@ -87,6 +87,7 @@ import { ComposeA11yProvider } from './providers/ComposeA11yProvider';
 import { FlowChainProvider } from './providers/FlowChainProvider';
 import { LiteralTooltipProvider } from './providers/LiteralTooltipProvider';
 import { GradleTaskLensProvider, runGradleTask } from './providers/GradleTaskLensProvider';
+import { KmpExpectActualProvider, showActuals } from './providers/KmpExpectActualProvider';
 import { ResourceDiagnosticProvider } from './providers/ResourceDiagnosticProvider';
 import { VersionCatalogHoverProvider } from './providers/VersionCatalogHoverProvider';
 import { OverrideGutterProvider } from './providers/OverrideGutterProvider';
@@ -883,6 +884,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       { pattern: '**/*.gradle.kts' }, new GradleTaskLensProvider(),
     ),
     vscode.commands.registerCommand('kotlin-jump.runGradleTask', runGradleTask),
+  );
+
+  // ── KMP expect/actual target badges ───────────────────────────────────────
+  context.subscriptions.push(
+    vscode.languages.registerCodeLensProvider({ language: 'kotlin' }, new KmpExpectActualProvider(index)),
+    vscode.commands.registerCommand('kotlin-jump.showActuals',
+      (fqn: string, name: string) => showActuals(index, fqn, name)),
   );
 
   // ── Sprint 2: R.color swatch + resource diagnostics ───────────────────────

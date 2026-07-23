@@ -81,6 +81,7 @@ import { OverrideGutterProvider } from './providers/OverrideGutterProvider';
 import { NavigationHistoryProvider } from './providers/NavigationHistoryProvider';
 import { SuppressHoverProvider } from './providers/SuppressHoverProvider';
 import { PermissionHoverProvider } from './providers/PermissionHoverProvider';
+import { DeprecationHoverProvider } from './providers/DeprecationHoverProvider';
 import { DrawableResourceIndex } from './indexer/DrawableResourceIndex';
 import { DrawableHoverProvider } from './providers/DrawableHoverProvider';
 import { DrawableXmlPreviewPanel, DrawableXmlPreviewLensProvider } from './providers/DrawableXmlPreviewPanel';
@@ -190,6 +191,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ...(!isCompanion ? [vscode.languages.registerHoverProvider(
       [...KT_JAVA, { language: 'xml' }], new PermissionHoverProvider(),
     )] : []),
+    ...(!isCompanion ? [vscode.languages.registerHoverProvider(KT_JAVA, new DeprecationHoverProvider(index))] : []),
     vscode.languages.registerReferenceProvider(KT_JAVA, new KotlinReferenceProvider(index, log)),
     vscode.languages.registerImplementationProvider(KT_JAVA, new KotlinImplementationProvider(index)),
     vscode.languages.registerTypeHierarchyProvider(KT_JAVA, new KotlinTypeHierarchyProvider(index)),

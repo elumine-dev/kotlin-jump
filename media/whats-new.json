@@ -1,12 +1,12 @@
 {
-  "version": "1.30.0",
+  "version": "1.31.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Gradle Task CodeLens for build.gradle.kts",
-  "summary": "Kotlin Jump 1.30.0 adds a CodeLens that runs Gradle tasks directly from build.gradle.kts declarations.",
+  "tagline": "KMP target coverage at a glance",
+  "summary": "Kotlin Jump 1.31.0 adds inline badges on expect declarations that show which Kotlin Multiplatform targets have a matching actual implementation.",
   "highlights": [
     {
-      "title": "Gradle Task CodeLens",
-      "description": "Adds a CodeLens above each task declaration in build.gradle.kts, so you can run a Gradle task straight from the editor instead of switching to the terminal or Gradle panel.",
+      "title": "KMP Target Coverage Badges",
+      "description": "Shows which platform targets implement each expect declaration directly in the editor, so gaps in your Kotlin Multiplatform coverage are visible without opening every actual file.",
       "kind": "feature"
     }
   ],
@@ -14,13 +14,9 @@
     {
       "heading": "Improvements",
       "bullets": [
-        "Added a CodeLens above Gradle task declarations in build.gradle.kts files, letting you run a task with one click right where it's defined."
-      ]
-    },
-    {
-      "heading": "Notes",
-      "bullets": [
-        "No other functional changes in this release."
+        "Added inline badges on expect declarations showing which Kotlin Multiplatform targets have a matching actual implementation, making platform coverage visible at a glance instead of requiring a manual check per target.",
+        "Available in both desktop VS Code and VS Code for the Web.",
+        "Can be turned off via the kotlinJump.kmpTargetBadges setting."
       ]
     }
   ],

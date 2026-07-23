@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.31.0
+
+Kotlin Jump 1.31.0 adds inline badges on expect declarations that show which Kotlin Multiplatform targets have a matching actual implementation.
+
+### Improvements
+- Added inline badges on expect declarations showing which Kotlin Multiplatform targets have a matching actual implementation, making platform coverage visible at a glance instead of requiring a manual check per target.
+- Available in both desktop VS Code and VS Code for the Web.
+- Can be turned off via the kotlinJump.kmpTargetBadges setting.
+
 ## 1.30.0
 
 Kotlin Jump 1.30.0 adds a CodeLens that runs Gradle tasks directly from build.gradle.kts declarations.

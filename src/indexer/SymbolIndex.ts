@@ -33,6 +33,7 @@ export interface SymbolEntry {
   isPreview?:       boolean;
   isPrivate?:       boolean;
   isDeprecated?:    boolean;
+  isPrimaryCtorParam?: boolean; // val/var declared in a primary constructor
   isTest?:          boolean; // fun annotated with @Test / @ParameterizedTest etc.
   isTestClass?:     boolean; // class annotated with @RunWith
   isIgnored?:       boolean; // fun annotated with @Ignore / @Disabled
@@ -144,6 +145,7 @@ export class SymbolIndex {
         isPreview:       sym.isPreview,
         isPrivate:       sym.isPrivate,
         isDeprecated:    sym.isDeprecated,
+        isPrimaryCtorParam: sym.isPrimaryCtorParam,
         isTest:          sym.isTest,
         isTestClass:     sym.isTestClass,
         isIgnored:       sym.isIgnored,

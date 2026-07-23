@@ -254,6 +254,18 @@ Date your TODOs and they hold you to it.
 
 Once the date passes, the TODO turns red. No config, no ceremony. Turn it off with `kotlinJump.todoExpiry` if you prefer your debt silent.
 
+### 🔐 Permission hover
+
+Hover any Android permission and know what you're asking for.
+
+```kotlin
+Manifest.permission.ACCESS_FINE_LOCATION
+// → dangerous · requires a runtime request
+// → "Allows the app to get the precise location of the device."
+```
+
+Works on `Manifest.permission.*` constants and on `"android.permission.*"` strings, including inside `AndroidManifest.xml`. Covers 61 permissions, with migration notes on the legacy ones (`WRITE_EXTERNAL_STORAGE`, `BLUETOOTH`, `USE_FINGERPRINT`).
+
 ### 🎨 Vector drawable preview
 
 Open any `<vector>` XML drawable and a rendered preview appears side by side automatically. Hover any `R.drawable.*` reference for an inline thumbnail. The gutter shows a mini render next to every reference. Click the CodeLens above the XML file to open the dedicated preview panel.

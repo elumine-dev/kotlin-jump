@@ -75,6 +75,7 @@ import { ConstValFoldingProvider } from './providers/ConstValFoldingProvider';
 import { SuspendMarkerProvider } from './providers/SuspendMarkerProvider';
 import { ComposeA11yProvider } from './providers/ComposeA11yProvider';
 import { FlowChainProvider } from './providers/FlowChainProvider';
+import { LiteralTooltipProvider } from './providers/LiteralTooltipProvider';
 import { ResourceDiagnosticProvider } from './providers/ResourceDiagnosticProvider';
 import { VersionCatalogHoverProvider } from './providers/VersionCatalogHoverProvider';
 import { OverrideGutterProvider } from './providers/OverrideGutterProvider';
@@ -770,6 +771,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       vscode.languages.registerInlayHintsProvider({ language: 'kotlin' }, fc),
       vscode.workspace.onDidChangeConfiguration(e => {
         if (e.affectsConfiguration('kotlinJump.flowChainBadges')) fc.fireChange();
+      }),
+    );
+  })();
+
+  (() => {
+    const lt = new LiteralTooltipProvider();
+    context.subscriptions.push(
+      lt,
+      vscode.languages.registerInlayHintsProvider(KT_JAVA, lt),
+      vscode.workspace.onDidChangeConfiguration(e => {
+        if (e.affectsConfiguration('kotlinJump.literalTooltips')) lt.fireChange();
       }),
     );
   })();

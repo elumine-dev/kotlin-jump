@@ -1081,6 +1081,11 @@
           "default": true,
           "markdownDescription": "Number the stages of multi-line Flow and collection pipelines with inline badges (① ② ③) so long chains are scannable at a glance."
         },
+        "kotlinJump.literalTooltips": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Translate cron expressions and ISO 8601 durations in string literals to plain language, like `\"0 */6 * * *\"` showing `every 6 hours`."
+        },
         "kotlinJump.hexColorSwatch": {
           "type": "boolean",
           "default": true,

@@ -42,6 +42,7 @@ import { KotlinFoldingRangeProvider } from './providers/FoldingRangeProvider';
 import { KotlinSemanticTokensProvider, TOKEN_TYPES, TOKEN_MODIFIERS } from './providers/SemanticTokensProvider';
 import { Logger } from './util/logger';
 import { mapBatched } from './util/batched';
+import { makeExclusionMatcher } from './util/pathExclusion';
 import { resolveCompanionMode } from './util/companionMode';
 import { resolveAll as resolveModules } from './gradle/ModuleResolver';
 import { resolveBest } from './util/ImportResolver';
@@ -572,6 +573,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   const cfg         = vscode.workspace.getConfiguration('kotlinJump');
   const excludeList = cfg.get<string[]>('excludePatterns') ?? ['**/build/**', '**/.gradle/**'];
+  const isExcludedPath = makeExclusionMatcher(excludeList);
   const maxFiles    = cfg.get<number>('maxIndexedFiles') ?? 10000;
 
   const [gradleModules, { moduleMap: jsonModules, sourceRoots }, allUris] = await Promise.all([
@@ -610,7 +612,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       invalidateContentCache(uri.toString());
     }
     _sealedWhen?.bumpEpoch();
-  });
+  }, isExcludedPath);
   context.subscriptions.push(watcher, { dispose: () => scanner.destroy() });
 
   // ── String Resource Folding ────────────────────────────────────────────────
@@ -634,6 +636,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const rPending = new Set<string>();
     let rTimer: ReturnType<typeof setTimeout> | undefined;
     const handleRChanged = (uri: vscode.Uri) => {
+      if (isExcludedPath(uri.path)) return; // ignore build/ .gradle/ churn
       rPending.add(uri.toString());
       if (rTimer) clearTimeout(rTimer);
       rTimer = setTimeout(async () => {

@@ -29,6 +29,10 @@ export class FileWatcher implements vscode.Disposable {
     // during a checkout is O(N × tests) for a result one discovery pass
     // gets in O(tests).
     private readonly onBurstIndexed?: (uris: vscode.Uri[]) => void,
+    // Matches the same excludePatterns the initial findFiles scan used
+    // (build/, .gradle/). Without it, a Gradle build's regenerated sources
+    // storm the watcher even though we never index them.
+    private readonly isExcluded: (path: string) => boolean = () => false,
   ) {
     this.ktWatcher = vscode.workspace.createFileSystemWatcher('**/*.{kt,kts}');
     this.ktWatcher.onDidCreate(uri => this.queue(uri));
@@ -49,6 +53,8 @@ export class FileWatcher implements vscode.Disposable {
    * expiring simultaneously.
    */
   private queue(uri: vscode.Uri): void {
+    // Drop build/ and .gradle/ churn before it ever enters the batch.
+    if (this.isExcluded(uri.path)) return;
     this.pendingScan.add(uri.toString());
     if (this.flushTimer) clearTimeout(this.flushTimer);
     const debounceMs = vscode.workspace.getConfiguration('kotlinJump').get<number>('watcherDebounceMs', 150);

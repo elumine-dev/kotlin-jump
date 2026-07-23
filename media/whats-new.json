@@ -1,33 +1,20 @@
 {
-  "version": "1.23.0",
+  "version": "1.23.1",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Rating prompt with editor-aware review links",
-  "summary": "Kotlin Jump 1.23.0 adds an optional rating prompt with editor-aware review links, plus a leaner package and a more reliable release pipeline.",
+  "tagline": "Accurate test resolution for duplicate test names",
+  "summary": "Kotlin Jump 1.23.1 fixes a test explorer bug that could target the wrong test when files share the same fully qualified name.",
   "highlights": [
     {
-      "title": "Rating Prompt",
-      "kind": "feature",
-      "description": "Added a one-time-per-milestone prompt that appears once Kotlin Jump has proven useful over sustained use, asking for a rating without interrupting your workflow."
-    },
-    {
-      "title": "Store-Aware Review Links",
-      "kind": "improvement",
-      "description": "The rating prompt and the What's New panel now detect your editor and link to the correct review page, the VS Code Marketplace or Open VSX for Cursor, Windsurf, VSCodium, and other forks."
+      "title": "Duplicate Test Name Fix",
+      "description": "Tests with the same fully qualified name in different files now resolve to their own file instead of potentially running or debugging the wrong test.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Improvements",
+      "heading": "Fixes",
       "bullets": [
-        "Added a rating prompt that appears after Kotlin Jump has been active for at least 10 sessions over a week, caps at three lifetime prompts, and honors \"Don't ask again\" permanently.",
-        "Routed the rating prompt and the What's New panel's review link to the correct store for your editor: the VS Code Marketplace, or Open VSX for Cursor, Windsurf, VSCodium, and other forks."
-      ]
-    },
-    {
-      "heading": "Packaging and Docs",
-      "bullets": [
-        "Excluded stray development tool artifacts, such as debug logs and session data, from the packaged extension, keeping installs clean.",
-        "Hardened the automated web test suite by forcing headless Chromium, cutting spurious failures during release checks."
+        "Fixed test run and debug targeting from the gutter and CodeLens: tests sharing the same fully qualified name across different files now each resolve to their own test instead of risking a mismatch."
       ]
     }
   ],

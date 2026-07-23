@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.23.1
+
+Kotlin Jump 1.23.1 fixes a test explorer bug that could target the wrong test when files share the same fully qualified name.
+
+### Fixes
+- Fixed test run and debug targeting from the gutter and CodeLens: tests sharing the same fully qualified name across different files now each resolve to their own test instead of risking a mismatch.
+
 ## 1.23.0
 
 Kotlin Jump 1.23.0 adds an optional rating prompt with editor-aware review links, plus a leaner package and a more reliable release pipeline.

@@ -1,12 +1,12 @@
 {
-  "version": "1.29.0",
+  "version": "1.30.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Plain-language tooltips for cron and durations",
-  "summary": "Kotlin Jump 1.29.0 adds inline hover tooltips that translate cron and ISO 8601 duration string literals into plain language.",
+  "tagline": "Gradle Task CodeLens for build.gradle.kts",
+  "summary": "Kotlin Jump 1.30.0 adds a CodeLens that runs Gradle tasks directly from build.gradle.kts declarations.",
   "highlights": [
     {
-      "title": "Inline Literal Tooltips",
-      "description": "Cron expressions and ISO 8601 durations written as string literals now show a plain-language translation on hover, so you don't have to decode the syntax by hand.",
+      "title": "Gradle Task CodeLens",
+      "description": "Adds a CodeLens above each task declaration in build.gradle.kts, so you can run a Gradle task straight from the editor instead of switching to the terminal or Gradle panel.",
       "kind": "feature"
     }
   ],
@@ -14,9 +14,13 @@
     {
       "heading": "Improvements",
       "bullets": [
-        "Added hover tooltips that translate cron expressions and ISO 8601 duration string literals (schedules, timeouts, delays) into plain language, right where you're reading the code.",
-        "Available in both desktop VS Code and VS Code for the Web.",
-        "Can be turned off via the kotlinJump.literalTooltips setting."
+        "Added a CodeLens above Gradle task declarations in build.gradle.kts files, letting you run a task with one click right where it's defined."
+      ]
+    },
+    {
+      "heading": "Notes",
+      "bullets": [
+        "No other functional changes in this release."
       ]
     }
   ],

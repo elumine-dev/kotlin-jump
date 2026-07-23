@@ -1,22 +1,22 @@
 {
-  "version": "1.24.0",
+  "version": "1.25.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Overdue TODOs in red",
-  "summary": "Kotlin Jump 1.24.0 highlights overdue dated TODO comments in red so stale work is easy to spot.",
+  "tagline": "Android permission details on hover",
+  "summary": "Kotlin Jump 1.25.0 adds hover tooltips that explain Android permissions directly in your code and in AndroidManifest.xml.",
   "highlights": [
     {
-      "title": "Overdue TODO Highlighting",
-      "description": "Dated TODO comments past their due date now render in red, so stale work stands out without scanning every comment by hand.",
-      "kind": "feature"
+      "title": "Permission Hover Details",
+      "kind": "feature",
+      "description": "Hovering an Android permission, whether a Manifest.permission constant, a permission string, or an entry in AndroidManifest.xml, now shows its protection level and a plain-language explanation of what it grants."
     }
   ],
   "sections": [
     {
       "heading": "Improvements",
       "bullets": [
-        "Dated TODO comments that have passed their due date now render in red, making overdue work visible at a glance instead of requiring a manual scan through the file.",
-        "Works in both desktop VS Code and VS Code for the Web.",
-        "Can be toggled with the kotlinJump.todoExpiry setting."
+        "Added hover tooltips for Android permissions covering 61 permissions, showing the protection level (normal, dangerous, or signature) and a plain-language description without leaving the editor.",
+        "Included migration notes on legacy permissions such as WRITE_EXTERNAL_STORAGE, BLUETOOTH, and USE_FINGERPRINT, clarifying how they behave on newer Android versions.",
+        "Extended hover support to AndroidManifest.xml, so permission entries there get the same tooltips as permission references in Kotlin code."
       ]
     }
   ],

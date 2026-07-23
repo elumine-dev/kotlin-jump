@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.25.0
+
+Kotlin Jump 1.25.0 adds hover tooltips that explain Android permissions directly in your code and in AndroidManifest.xml.
+
+### Improvements
+- Added hover tooltips for Android permissions covering 61 permissions, showing the protection level (normal, dangerous, or signature) and a plain-language description without leaving the editor.
+- Included migration notes on legacy permissions such as WRITE_EXTERNAL_STORAGE, BLUETOOTH, and USE_FINGERPRINT, clarifying how they behave on newer Android versions.
+- Extended hover support to AndroidManifest.xml, so permission entries there get the same tooltips as permission references in Kotlin code.
+
 ## 1.24.0
 
 Kotlin Jump 1.24.0 highlights overdue dated TODO comments in red so stale work is easy to spot.

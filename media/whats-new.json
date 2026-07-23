@@ -1,22 +1,21 @@
 {
-  "version": "1.25.0",
+  "version": "1.26.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Android permission details on hover",
-  "summary": "Kotlin Jump 1.25.0 adds hover tooltips that explain Android permissions directly in your code and in AndroidManifest.xml.",
+  "tagline": "Compose accessibility, inline",
+  "summary": "Kotlin Jump 1.26.0 adds inline accessibility hints for Jetpack Compose, flagging accessibility gaps directly in your UI code.",
   "highlights": [
     {
-      "title": "Permission Hover Details",
-      "kind": "feature",
-      "description": "Hovering an Android permission, whether a Manifest.permission constant, a permission string, or an entry in AndroidManifest.xml, now shows its protection level and a plain-language explanation of what it grants."
+      "title": "Compose Accessibility Hints",
+      "description": "Kotlin Jump now flags accessibility gaps in Jetpack Compose UI code directly in the editor, so issues surface while you're writing the code instead of at review time.",
+      "kind": "feature"
     }
   ],
   "sections": [
     {
       "heading": "Improvements",
       "bullets": [
-        "Added hover tooltips for Android permissions covering 61 permissions, showing the protection level (normal, dangerous, or signature) and a plain-language description without leaving the editor.",
-        "Included migration notes on legacy permissions such as WRITE_EXTERNAL_STORAGE, BLUETOOTH, and USE_FINGERPRINT, clarifying how they behave on newer Android versions.",
-        "Extended hover support to AndroidManifest.xml, so permission entries there get the same tooltips as permission references in Kotlin code."
+        "Added inline hints that flag Jetpack Compose accessibility gaps right where you're writing UI code, making them easy to catch early instead of during a later review pass.",
+        "Can be turned off via the kotlinJump.composeAccessibilityHints setting if you don't want the extra inline markers."
       ]
     }
   ],

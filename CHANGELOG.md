@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.26.0
+
+Kotlin Jump 1.26.0 adds inline accessibility hints for Jetpack Compose, flagging accessibility gaps directly in your UI code.
+
+### Improvements
+- Added inline hints that flag Jetpack Compose accessibility gaps right where you're writing UI code, making them easy to catch early instead of during a later review pass.
+- Can be turned off via the kotlinJump.composeAccessibilityHints setting if you don't want the extra inline markers.
+
 ## 1.25.0
 
 Kotlin Jump 1.25.0 adds hover tooltips that explain Android permissions directly in your code and in AndroidManifest.xml.

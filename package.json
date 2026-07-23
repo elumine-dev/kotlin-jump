@@ -1096,6 +1096,11 @@
           "default": true,
           "markdownDescription": "Show target coverage badges on `expect` declarations in Kotlin Multiplatform projects, like `[android ✓] [ios ✓] [js ✗]`. Click jumps to the actual implementation."
         },
+        "kotlinJump.dataClassFieldWarnings": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Warn on `val`/`var` declared in a data class body: those fields are silently excluded from the generated `equals()`, `hashCode()`, and `copy()`."
+        },
         "kotlinJump.hexColorSwatch": {
           "type": "boolean",
           "default": true,

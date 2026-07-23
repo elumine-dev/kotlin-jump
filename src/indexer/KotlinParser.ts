@@ -32,6 +32,7 @@ export interface RawSymbol {
   isPreview?:       boolean; // function annotated with @Preview
   isPrivate?:       boolean; // private val/var/fun/class — not visible outside declaring file
   isDeprecated?:    boolean; // annotated with @Deprecated
+  isPrimaryCtorParam?: boolean; // val/var declared in a primary constructor, not the class body
   isTest?:          boolean; // fun annotated with @Test / @ParameterizedTest etc.
   isTestClass?:     boolean; // class annotated with @RunWith
   isIgnored?:       boolean; // fun annotated with @Ignore / @Disabled
@@ -267,6 +268,7 @@ export function parse(uriString: string, text: string): ParsedFile {
               character: ctorOpen + 1 + ip.index + (ip[0].length - ip[2].length),
               isComposable: false,
               depth: braceDepth + 1,
+              isPrimaryCtorParam: true,
             });
           }
         }
@@ -400,6 +402,7 @@ export function parse(uriString: string, text: string): ParsedFile {
         constValue,
         isExpect,
         isActual,
+        isPrimaryCtorParam: isPrimaryCtorParam || undefined,
       });
       // val x = object : Interface — anonymous object on same line as property
       emitAnonObjectIfPresent(raw, lineNum, braceDepth, symbols);

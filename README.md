@@ -324,6 +324,16 @@ expect fun platformName(): String     [android ✓] [ios ✓] [js ✗]
 
 Which platforms implement this `expect`? The badge row says it before you go looking. Targets come from your real source sets, no Gradle parsing. Click jumps to the actual (picker when several targets have one). Toggle with `kotlinJump.kmpTargetBadges`.
 
+### ⚠ Data class body fields, exposed
+
+```kotlin
+data class User(val id: Int, val name: String) {
+    val cache = emptyList<String>()   ⚠ not in equals/copy
+}
+```
+
+Body properties are silently excluded from the generated `equals()`, `hashCode()`, and `copy()`. Two instances differing only in that field compare equal. The hint says so before the bug does. Toggle with `kotlinJump.dataClassFieldWarnings`.
+
 ### 🎨 Vector drawable preview
 
 Open any `<vector>` XML drawable and a rendered preview appears side by side automatically. Hover any `R.drawable.*` reference for an inline thumbnail. The gutter shows a mini render next to every reference. Click the CodeLens above the XML file to open the dedicated preview panel.

@@ -88,6 +88,7 @@ import { FlowChainProvider } from './providers/FlowChainProvider';
 import { LiteralTooltipProvider } from './providers/LiteralTooltipProvider';
 import { GradleTaskLensProvider, runGradleTask } from './providers/GradleTaskLensProvider';
 import { KmpExpectActualProvider, showActuals } from './providers/KmpExpectActualProvider';
+import { DataClassFieldProvider } from './providers/DataClassFieldProvider';
 import { ResourceDiagnosticProvider } from './providers/ResourceDiagnosticProvider';
 import { VersionCatalogHoverProvider } from './providers/VersionCatalogHoverProvider';
 import { OverrideGutterProvider } from './providers/OverrideGutterProvider';
@@ -885,6 +886,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand('kotlin-jump.runGradleTask', runGradleTask),
   );
+
+  // ── Data class body-field warnings ────────────────────────────────────────
+  (() => {
+    const df = new DataClassFieldProvider(index);
+    context.subscriptions.push(
+      df,
+      vscode.languages.registerInlayHintsProvider({ language: 'kotlin' }, df),
+      vscode.workspace.onDidChangeConfiguration(e => {
+        if (e.affectsConfiguration('kotlinJump.dataClassFieldWarnings')) df.fireChange();
+      }),
+    );
+  })();
 
   // ── KMP expect/actual target badges ───────────────────────────────────────
   context.subscriptions.push(

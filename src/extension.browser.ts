@@ -620,12 +620,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push((() => {
     const foldingProvider = new StringResourceFoldingProvider(stringIndex, log);
 
-    void Promise.all(allUris.map(async u => {
-      try {
-        const bytes = await vscode.workspace.fs.readFile(u);
-        rIndex.reindexFile(u.toString(), new TextDecoder().decode(bytes));
-      } catch { /* skip unreadable files */ }
-    }));
+    // Bounded concurrency, same rationale as the desktop entrypoint.
+    void (async () => {
+      const BATCH = 16;
+      for (let i = 0; i < allUris.length; i += BATCH) {
+        await Promise.all(allUris.slice(i, i + BATCH).map(async u => {
+          try {
+            const bytes = await vscode.workspace.fs.readFile(u);
+            rIndex.reindexFile(u.toString(), new TextDecoder().decode(bytes));
+          } catch { /* skip unreadable files */ }
+        }));
+      }
+    })();
     const rW = vscode.workspace.createFileSystemWatcher('**/*.{kt,kts,java}');
     // Same quiet-window batching as the desktop entrypoint: no per-event
     // concurrent reads during a checkout storm.

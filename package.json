@@ -96,6 +96,13 @@
   },
   "contributes": {
     "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "kotlinJumpViews",
+          "title": "Kotlin Jump",
+          "icon": "media/kotlin-jump-views.svg"
+        }
+      ],
       "panel": [
         {
           "id": "kotlinJumpPanel",
@@ -110,6 +117,22 @@
       ]
     },
     "views": {
+      "kotlinJumpViews": [
+        {
+          "id": "kotlinJump.androidProjectView",
+          "name": "Android",
+          "type": "tree",
+          "when": "config.kotlinJump.androidProjectView && kotlinJump.isAndroidWorkspace",
+          "visibility": "visible"
+        },
+        {
+          "id": "kotlinJump.composeOutline",
+          "name": "Compose Outline",
+          "type": "tree",
+          "when": "config.kotlinJump.composeOutline",
+          "visibility": "visible"
+        }
+      ],
       "kotlinJumpPanel": [
         {
           "id": "kotlinJump.findUsages",
@@ -143,6 +166,24 @@
         "command": "kotlin-jump.findUsages",
         "key": "alt+f7",
         "mac": "alt+f7",
+        "when": "editorTextFocus && (editorLangId == kotlin || editorLangId == java)"
+      },
+      {
+        "command": "kotlin-jump.surroundWith",
+        "key": "ctrl+alt+t",
+        "mac": "cmd+alt+t",
+        "when": "editorTextFocus && editorHasSelection && editorLangId == kotlin"
+      },
+      {
+        "command": "kotlin-jump.smartJoinLines",
+        "key": "ctrl+shift+j",
+        "mac": "ctrl+shift+j",
+        "when": "editorTextFocus && editorLangId == kotlin"
+      },
+      {
+        "command": "kotlin-jump.recentLocations",
+        "key": "ctrl+shift+e",
+        "mac": "cmd+shift+e",
         "when": "editorTextFocus && (editorLangId == kotlin || editorLangId == java)"
       },
       {
@@ -203,6 +244,26 @@
       {
         "command": "kotlin-jump.whatsNew",
         "title": "See What's New",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.surroundWith",
+        "title": "Surround With…",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.smartJoinLines",
+        "title": "Smart Join Lines",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.recentLocations",
+        "title": "Recent Locations",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.screenFlowMap",
+        "title": "Show Screen Flow Map",
         "category": "Kotlin Jump"
       },
       {
@@ -687,6 +748,12 @@
         "path": "./syntaxes/kotlin.tmLanguage.json"
       }
     ],
+    "snippets": [
+      {
+        "language": "kotlin",
+        "path": "./snippets/kotlin.json"
+      }
+    ],
     "languages": [
       {
         "id": "kotlin",
@@ -765,7 +832,7 @@
         "kotlinJump.androidVariant": {
           "type": "string",
           "default": "Debug",
-          "markdownDescription": "Android build variant used by the **Run Android App** button. Defaults to `Debug`. Set to a custom flavor variant when needed (e.g. `\"ReplicaLaPresseDebug\"`)."
+          "markdownDescription": "Android build variant used by the **Run Android App** button. Defaults to `Debug`. Set to a custom flavor variant when needed (e.g. `\"DemoFreeDebug\"`)."
         },
         "kotlinJump.androidRunEnabled": {
           "type": "boolean",
@@ -831,24 +898,24 @@
             "properties": {
               "name": {
                 "type": "string",
-                "description": "Display name shown in the QuickPick (e.g. \"Replica\")"
+                "description": "Display name shown in the QuickPick (e.g. \"Reader\")"
               },
               "module": {
                 "type": "string",
-                "description": "Gradle module path relative to the project root (e.g. \"replica/app\")"
+                "description": "Gradle module path relative to the project root (e.g. \"reader/app\")"
               },
               "package": {
                 "type": "string",
-                "description": "Application ID used by adb (e.g. \"ca.lapresse.lapresseplus.debug\")"
+                "description": "Application ID used by adb (e.g. \"com.example.newsapp.debug\")"
               },
               "variant": {
                 "type": "string",
-                "description": "Build variant override (e.g. \"ReplicaLaPresseDebug\"). Falls back to kotlinJump.androidVariant when omitted."
+                "description": "Build variant override (e.g. \"DemoFreeDebug\"). Falls back to kotlinJump.androidVariant when omitted."
               }
             }
           },
           "default": [],
-          "markdownDescription": "Explicit Android app definitions. When this list contains entries, **automatic detection is skipped entirely**. The button uses these entries directly.\n\nEquivalent to the zshrc aliases `replica()`/`rubicon()`.\n\n```json\n\"kotlinJump.androidProjects\": [\n  {\n    \"name\": \"Rubicon\",\n    \"module\": \"rubicon/app\",\n    \"package\": \"ca.lapresse.android.lapressemobile.debug\",\n    \"variant\": \"Debug\"\n  },\n  {\n    \"name\": \"Replica\",\n    \"module\": \"replica/app\",\n    \"package\": \"ca.lapresse.lapresseplus.debug\",\n    \"variant\": \"ReplicaLaPresseDebug\"\n  }\n]\n```"
+          "markdownDescription": "Explicit Android app definitions. When this list contains entries, **automatic detection is skipped entirely**. The button uses these entries directly.\n\nEquivalent to the zshrc aliases `reader()`/`newsfeed()`.\n\n```json\n\"kotlinJump.androidProjects\": [\n  {\n    \"name\": \"NewsApp\",\n    \"module\": \"newsfeed/app\",\n    \"package\": \"ca.newsapp.android.newsappmobile.debug\",\n    \"variant\": \"Debug\"\n  },\n  {\n    \"name\": \"Reader\",\n    \"module\": \"reader/app\",\n    \"package\": \"com.example.newsapp.debug\",\n    \"variant\": \"DemoFreeDebug\"\n  }\n]\n```"
         },
         "kotlinJump.gradleProjectRoot": {
           "type": "string",
@@ -862,7 +929,13 @@
           },
           "default": {},
           "scope": "resource",
-          "markdownDescription": "Override the Gradle test task per module. Use this when a module has multiple product flavors and `testDebugUnitTest` is ambiguous.\n\nExample:\n```json\n{\n  \":replica:app\": \"testReplicaLaPresseDebugUnitTest\"\n}\n```\n\nIn a multi-root workspace, set this in each folder's own `.vscode/settings.json` (not the top-level `settings` block of a `.code-workspace` file, which is shared by every folder)."
+          "markdownDescription": "Override the Gradle test task per module. Use this when a module has multiple product flavors and `testDebugUnitTest` is ambiguous.\n\nExample:\n```json\n{\n  \":reader:app\": \"testDemoFreeDebugUnitTest\"\n}\n```\n\nIn a multi-root workspace, set this in each folder's own `.vscode/settings.json` (not the top-level `settings` block of a `.code-workspace` file, which is shared by every folder)."
+        },
+        "kotlinJump.androidTestVariant": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "markdownDescription": "Global build-variant override for Android unit test tasks. When set (e.g. `\"demoFreeDebug\"`), test runs use `test<Variant>UnitTest` instead of `testDebugUnitTest`. Per-module overrides in `kotlinJump.testTaskOverrides` take precedence."
         },
         "kotlinJump.injectTestLogging": {
           "type": "boolean",
@@ -1030,6 +1103,101 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Show parameter name hints inline at call sites (e.g. `modifier: m`). Click any hint to jump to the parameter declaration."
+        },
+        "kotlinJump.deadWeightQuickFixes": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Offer **Remove unused …** quick fixes wherever the extension reports dead weight: resources with `0 usages`, Gradle dependencies with `0 imports`, manifest permissions with no matching API call, and components whose class does not exist."
+        },
+        "kotlinJump.resourceUsageBadges": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "In `strings.xml` / `colors.xml` / `dimens.xml`, show a usage count on every entry (`0 usages` grayed out = dead weight). `tools:` attributes and comments don't count."
+        },
+        "kotlinJump.dependencyUsageBadges": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "In `build.gradle(.kts)` and `libs.versions.toml`, show how many project imports each dependency actually provides (`0 imports` grayed = probably removable). BOMs and ksp/kapt processors are labeled, never counted as dead."
+        },
+        "kotlinJump.manifestNecessityBadges": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "In `AndroidManifest.xml`, show whether each `<uses-permission>` matches an API usage in the code, and gray out declared components whose class doesn't exist. Permissions commonly pulled by libraries say « peut venir d'une lib », never a misleading « unused »."
+        },
+        "kotlinJump.reverseStringMap": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Hover on `<string name=\"x\">` or `R.string.x`: shows which composable screens display the string, and which non-UI classes use it."
+        },
+        "kotlinJump.dispatcherLens": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Annotate `withContext` / `launch` / `flowOn` blocks with their dispatcher (IO / Main / Default) and softly flag suspicious calls: View access off Main, network/DB calls on Main. Injected dispatchers get no annotation: no false certainty."
+        },
+        "kotlinJump.roomMigrationDrift": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Warn when a Room `@Entity` field has no `ADD COLUMN` in any migration and no `defaultValue`, and when the migration chain has a hole (1→2, 3→4 but no 2→3), before it crashes on upgrade. Silenced entirely by `fallbackToDestructiveMigration`."
+        },
+        "kotlinJump.resourceShadowing": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "When a resource name is defined in several modules, the hover on `R.color.x` / `R.string.x` shows which definition wins the Gradle merge (app > library, flavor > main) and strikes through the shadowed ones."
+        },
+        "kotlinJump.lifecyclePairing": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Warn when a resource acquired in a lifecycle method has no matching release in its mirror (`registerReceiver` in `onStart` without `unregisterReceiver` in `onStop`, `acquire` without `release`…). Releases through one helper call are recognized."
+        },
+        "kotlinJump.composeOutline": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Compose Outline: side view showing the UI structure of the @Composable under the cursor (`Scaffold > Column > LazyColumn > Card`) without building or running: branches labeled, loops marked, recursion cut."
+        },
+        "kotlinJump.stateProvenance": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "UDF X-Ray: CodeLens on every ViewModel state property (`StateFlow`, `LiveData`, `SharedFlow`, `mutableStateOf`) showing write and reader counts: who writes, who reads."
+        },
+        "kotlinJump.androidProjectView": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show the **Android** project view in the Explorer: modules from `settings.gradle(.kts)`, with manifests / kotlin+java / res (grouped by type, qualifiers nested) / Gradle Scripts under each module."
+        },
+        "kotlinJump.methodSeparators": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Draw a subtle separator line above each top-level class member (functions, companion, nested classes), like IntelliJ's *Show method separators*."
+        },
+        "kotlinJump.unusedImportGraying": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Gray out imports whose name (or alias) never appears in the code. Wildcard imports are never flagged. Mentions in comments and strings don't count; `${…}` templates do."
+        },
+        "kotlinJump.surroundWith": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Offer **Surround with…** (if / try-catch / let / run / apply / when) on selections, via the lightbulb or `Cmd+Alt+T` / `Ctrl+Alt+T`."
+        },
+        "kotlinJump.extractStringResource": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Offer the **Extract string resource** quick fix on string literals: moves the text to `strings.xml` and replaces the literal with `stringResource(R.string.x)` in @Composable context, `R.string.x` elsewhere."
+        },
+        "kotlinJump.hardcodedStringLint": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Warn when a string literal is passed directly to a UI function (`Text(\"…\")`, `setText(\"…\")`) instead of a string resource. Opt-in: name-based heuristic, false positives possible on non-UI helpers."
+        },
+        "kotlinJump.postfixCompletion": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "IntelliJ-style postfix completion: type `.let`, `.null`, `.notnull`, `.if`, `.for`, `.when`, `.try`, `.val` or `.not` after an expression to transform it (e.g. `user.null` → `if (user == null) { }`)."
+        },
+        "kotlinJump.namedArgumentsAction": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Offer the **Add names to call arguments** refactoring (lightbulb / `Cmd+.`) that rewrites `createUser(\"Ada\", 36)` into `createUser(name = \"Ada\", age = 36)`, like IntelliJ's Alt+Enter intention."
         },
         "kotlinJump.inlayHints.inferredTypes": {
           "type": "boolean",
@@ -1334,6 +1502,8 @@
     "test:web": "vscode-test-web --browser=chromium --quality=stable --headless --extensionDevelopmentPath=. --extensionTestsPath=dist/test-web/suite/index.js test/web/fixtures/workspace",
     "predemo:record": "npm run compile",
     "demo:record": "node dist/demo/record.js",
+    "predemo:batch": "npm run compile",
+    "demo:batch": "node dist/demo/record-batch.js",
     "build:event-tap": "bash scripts/demo/event-capture/build.sh",
     "pretest:ax-integration": "npm run build:event-tap",
     "test:ax-integration": "KJ_RUN_AX_INTEGRATION=1 vitest run test/unit/event-tap-ax",

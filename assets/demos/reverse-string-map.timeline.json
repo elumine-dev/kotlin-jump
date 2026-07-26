@@ -1,0 +1,14 @@
+[
+  {
+    "type": "caption",
+    "label": "One string, two screens. Edit it once.",
+    "duration": 1800,
+    "t": 300
+  },
+  {
+    "type": "caption",
+    "label": "One edit, every screen updated",
+    "duration": 2000,
+    "t": 5457
+  }
+]

@@ -83,8 +83,20 @@ export class ConstValFoldingProvider implements vscode.Disposable {
     const swatchesByLine = new Map<number, vscode.DecorationOptions[]>();
     const lookupMemo     = new Map<string, /* constValue */ string | null>();
 
+    // Suivi des raw strings multi-lignes : `COUNT(m.id)` dans un SQL
+    // triple-quoted ne doit JAMAIS être replié en `10(m.id)` — le garde
+    // par-ligne isInsideCommentOrString ne voit pas les """ des lignes
+    // précédentes.
+    let inRawString = false;
+
     for (let i = 0; i < doc.lineCount; i++) {
       const text = doc.lineAt(i).text;
+      const triples = (text.match(/"""/g) ?? []).length;
+      if (inRawString) {
+        if (triples % 2 !== 0) inRawString = false;
+        continue;
+      }
+      if (triples % 2 !== 0) inRawString = true;
       if (/\bconst\s+val\b/.test(text)) continue;
       const lineOpts = this._scanLine(i, text, lookupMemo);
       if (lineOpts.opts.length      > 0) optsByLine.set(i,     lineOpts.opts);

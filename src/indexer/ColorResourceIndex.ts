@@ -25,6 +25,16 @@ export class ColorResourceIndex {
     this.files.delete(uri.toString());
   }
 
+  /** KJ-017 — toutes les définitions d'une couleur, tous fichiers confondus. */
+  allDefinitions(key: string): ColorEntry[] {
+    const out: ColorEntry[] = [];
+    for (const map of this.files.values()) {
+      const e = map.get(key);
+      if (e) out.push(e);
+    }
+    return out;
+  }
+
   getValue(key: string): ColorEntry | undefined {
     for (const [fUri, map] of this.files) {
       if (/\/values\/[^/]+$/.test(fUri)) {

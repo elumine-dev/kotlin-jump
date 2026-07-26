@@ -1,0 +1,14 @@
+[
+  {
+    "type": "caption",
+    "label": "Two risky lines, selected",
+    "duration": 2000,
+    "t": 300
+  },
+  {
+    "type": "caption",
+    "label": "try/catch wrapped, indentation intact",
+    "duration": 2600,
+    "t": 3627
+  }
+]

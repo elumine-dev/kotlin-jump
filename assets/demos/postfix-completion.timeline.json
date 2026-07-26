@@ -1,0 +1,14 @@
+[
+  {
+    "type": "caption",
+    "label": "The null check, written backwards",
+    "duration": 2200,
+    "t": 300
+  },
+  {
+    "type": "caption",
+    "label": "Postfix completion: .null .let .for .when",
+    "duration": 2600,
+    "t": 4531
+  }
+]

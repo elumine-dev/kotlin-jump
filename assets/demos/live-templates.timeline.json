@@ -1,0 +1,21 @@
+[
+  {
+    "type": "caption",
+    "label": "Android Studio abbreviations, same muscle memory",
+    "duration": 2200,
+    "t": 300
+  },
+  {
+    "type": "keystroke",
+    "label": "Tab",
+    "sublabel": "Expand template",
+    "duration": 1800,
+    "t": 4503
+  },
+  {
+    "type": "caption",
+    "label": "logd, logt, comp, prev, vm, lazyv",
+    "duration": 2600,
+    "t": 5967
+  }
+]

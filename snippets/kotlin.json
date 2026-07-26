@@ -1,0 +1,113 @@
+{
+  "Log debug (Android Studio logd)": {
+    "prefix": "logd",
+    "body": ["Log.d(TAG, \"${1:${TM_CURRENT_WORD}}: $2\")$0"],
+    "description": "Log.d with TAG, like Android Studio's logd live template"
+  },
+  "Log info": {
+    "prefix": "logi",
+    "body": ["Log.i(TAG, \"$1\")$0"],
+    "description": "Log.i with TAG"
+  },
+  "Log warn": {
+    "prefix": "logw",
+    "body": ["Log.w(TAG, \"$1\")$0"],
+    "description": "Log.w with TAG"
+  },
+  "Log error": {
+    "prefix": "loge",
+    "body": ["Log.e(TAG, \"$1\", ${2:e})$0"],
+    "description": "Log.e with TAG and throwable"
+  },
+  "TAG constant (Android Studio logt)": {
+    "prefix": "logt",
+    "body": [
+      "companion object {",
+      "\tprivate const val TAG = \"${1:$TM_FILENAME_BASE}\"",
+      "}$0"
+    ],
+    "description": "companion object TAG named after the file"
+  },
+  "TODO comment": {
+    "prefix": "todo",
+    "body": ["// TODO: $0"],
+    "description": "TODO comment"
+  },
+  "FIXME comment": {
+    "prefix": "fixme",
+    "body": ["// FIXME: $0"],
+    "description": "FIXME comment"
+  },
+  "Composable function (comp)": {
+    "prefix": "comp",
+    "body": [
+      "@Composable",
+      "fun ${1:Name}(${2}) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "@Composable function skeleton"
+  },
+  "Composable preview (prev)": {
+    "prefix": "prev",
+    "body": [
+      "@Preview(showBackground = true)",
+      "@Composable",
+      "fun ${1:Name}Preview() {",
+      "\t${2:${1:Name}()}$0",
+      "}"
+    ],
+    "description": "@Preview + @Composable block"
+  },
+  "ViewModel class (vm)": {
+    "prefix": "vm",
+    "body": [
+      "class ${1:Name}ViewModel : ViewModel() {",
+      "\t$0",
+      "}"
+    ],
+    "description": "ViewModel class skeleton"
+  },
+  "Lazy property (lazyv)": {
+    "prefix": "lazyv",
+    "body": ["val ${1:name} by lazy { $2 }$0"],
+    "description": "val by lazy"
+  },
+  "If null block (ifn)": {
+    "prefix": "ifn",
+    "body": [
+      "if (${1:value} == null) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "if (x == null) block"
+  },
+  "If not null block (inn)": {
+    "prefix": "inn",
+    "body": [
+      "if (${1:value} != null) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "if (x != null) block"
+  },
+  "main function": {
+    "prefix": "main",
+    "body": [
+      "fun main() {",
+      "\t$0",
+      "}"
+    ],
+    "description": "main entry point"
+  },
+  "test function": {
+    "prefix": "test",
+    "body": [
+      "@Test",
+      "fun `${1:does something}`() {",
+      "\t$0",
+      "}"
+    ],
+    "description": "JUnit test function with backtick name"
+  }
+}

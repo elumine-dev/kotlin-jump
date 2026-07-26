@@ -16,6 +16,7 @@
  */
 
 import { VIDEO_W, VIDEO_H, buildCornerMaskFilter } from './overlay';
+import { FFMPEG_BIN } from './ffmpeg';
 
 export interface RoundedFrameOpts {
   /** Label of the video input (1280×720 RGB-ish, produced upstream). */
@@ -68,7 +69,7 @@ export function prerenderCornerMask(
     '-frames:v', '1',
     outputPng,
   ];
-  execSyncFn(`ffmpeg ${args.map(a => JSON.stringify(a)).join(' ')}`);
+  execSyncFn(`${FFMPEG_BIN} ${args.map(a => JSON.stringify(a)).join(' ')}`);
 }
 
 /* ── Re-exports kept for callers that still import from here ──────────── */

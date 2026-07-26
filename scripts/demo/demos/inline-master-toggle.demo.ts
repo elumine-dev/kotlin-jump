@@ -48,7 +48,7 @@ export default async function record(stage: Stage): Promise<void> {
     'kotlinJump.toggleAllInlineFeatures',
   );
   await stage.pause(1200);
-  await stage.caption('Master off. Pure code, ready to review or screenshot. 📸', {
+  await stage.caption('Master off. Pure code, ready to review or screenshot.', {
     duration: 2800,
   });
 
@@ -59,7 +59,7 @@ export default async function record(stage: Stage): Promise<void> {
     'kotlinJump.toggleAllInlineFeatures',
   );
   await stage.pause(1200);
-  await stage.caption('Master on. All swatches back. One button. Both ways. 🔄', {
+  await stage.caption('Master on. All swatches back. One button, both ways.', {
     duration: 2800,
   });
 }

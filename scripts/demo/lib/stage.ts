@@ -503,10 +503,29 @@ export class Stage {
         margin:      '0 0 0 8px',
       },
     });
-    // Anchor at the END of the targeted character — the arrow then
-    // points BACK toward the symbol, mimicking a hand-drawn callout.
+    // An `after` decoration placed IN THE MIDDLE of the text does not point
+    // at it: it INSERTS the label at that position and pushes the rest of
+    // the line to the right, cutting the code in two. All ten callouts of
+    // the KJ batch did exactly that. The anchor is therefore pulled to the
+    // end of the line: the label follows the code and the arrow points back
+    // at it. The requested column now only selects the line.
+    const anchorCol = editor.document.lineAt(target.line).text.length;
+
+    // A label overflowing the frame is invisible: better to learn it at
+    // record time than from the finished GIF.
+    const FRAME_COLS = 92;
+    const endCol = anchorCol + 3 + label.length;
+    if (endCol > FRAME_COLS) {
+      deco.dispose();
+      throw new Error(
+        `CALLOUT HORS CADRE — « ${label} » ligne ${target.line} : le code occupe ` +
+        `${anchorCol} colonnes, le label finit à ${endCol}, le cadre en montre ${FRAME_COLS}. ` +
+        `Raccourcir le label ou viser une ligne plus courte.`,
+      );
+    }
+
     editor.setDecorations(deco, [
-      new vscode.Range(target.line, target.column, target.line, target.column),
+      new vscode.Range(target.line, anchorCol, target.line, anchorCol),
     ]);
     await this.pause(duration);
     deco.dispose();
@@ -824,6 +843,215 @@ export class Stage {
     throw new Error(`waitForEditor timeout: ${describe}${line !== undefined ? `:L${line}` : ''}`);
   }
 
+  // ── Relevance gate ─────────────────────────────────────────────────────────
+  // Failure mode #1 of the first demo batch: the script ran a command, the
+  // caption announced the result, and NOTHING appeared on screen. These
+  // assertions make that impossible: a recording that does not show its
+  // feature fails instead of producing a hollow GIF.
+
+  /**
+   * Fails when `probe` does not become true within the timeout. Call it
+   * BEFORE the caption that announces the result: a caption must never
+   * promise what the frame does not show.
+   */
+  async assertVisible(
+    what: string,
+    probe: () => boolean | Promise<boolean>,
+    timeoutMs = 4000,
+  ): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    let last: unknown;
+    while (Date.now() < deadline) {
+      try {
+        if (await probe()) {
+          this.emitBeat('assert', { what, ok: true });
+          return;
+        }
+      } catch (err) {
+        last = err;
+      }
+      await new Promise(r => setTimeout(r, 120));
+    }
+    this.emitBeat('assert', { what, ok: false });
+    throw new Error(
+      `DEMO NON PERTINENTE — rien de visible pour « ${what} » après ${timeoutMs} ms. ` +
+      `Le spectateur verrait une caption sans rien à l'écran.` +
+      (last ? ` (dernière erreur: ${String(last)})` : ''),
+    );
+  }
+
+  /** At least one Kotlin Jump diagnostic on the active file. */
+  async assertDiagnostics(what: string, minCount = 1, timeoutMs = 6000): Promise<void> {
+    await this.assertVisible(
+      what,
+      () => {
+        const doc = vscode.window.activeTextEditor?.document;
+        if (!doc) return false;
+        const mine = vscode.languages
+          .getDiagnostics(doc.uri)
+          .filter(d => String(d.source ?? '').toLowerCase().includes('kotlin'));
+        return mine.length >= minCount;
+      },
+      timeoutMs,
+    );
+  }
+
+  /** Expected text is present in the active file (result of a refactor). */
+  async assertText(what: string, needle: string, timeoutMs = 4000): Promise<void> {
+    await this.assertVisible(
+      what,
+      () => vscode.window.activeTextEditor?.document.getText().includes(needle) ?? false,
+      timeoutMs,
+    );
+  }
+
+  /** At least one resolved CodeLens on the active file. */
+  async assertCodeLens(what: string, minCount = 1, timeoutMs = 6000): Promise<void> {
+    await this.assertVisible(
+      what,
+      async () => {
+        const doc = vscode.window.activeTextEditor?.document;
+        if (!doc) return false;
+        const lenses = await vscode.commands.executeCommand<vscode.CodeLens[]>(
+          'vscode.executeCodeLensProvider',
+          doc.uri,
+        );
+        return (lenses?.length ?? 0) >= minCount;
+      },
+      timeoutMs,
+    );
+  }
+
+  /** A non-empty hover is available at the given position. */
+  async assertHover(
+    what: string,
+    target: { line: number; column: number },
+    needle?: string,
+    timeoutMs = 5000,
+  ): Promise<void> {
+    await this.assertVisible(
+      what,
+      async () => {
+        const doc = vscode.window.activeTextEditor?.document;
+        if (!doc) return false;
+        const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
+          'vscode.executeHoverProvider',
+          doc.uri,
+          new vscode.Position(target.line, target.column),
+        );
+        const text = (hovers ?? [])
+          .flatMap(h => h.contents)
+          .map(c => (typeof c === 'string' ? c : (c as vscode.MarkdownString).value ?? ''))
+          .join('\n');
+        return text.trim().length > 0 && (!needle || text.includes(needle));
+      },
+      timeoutMs,
+    );
+  }
+
+  /** The provider really applied N decorations (badges, graying, rules).
+   *  Only reliable way to know: VS Code does not expose decorations. */
+  async assertDecorations(
+    what: string,
+    providerId: string,
+    minCount = 1,
+    timeoutMs = 10_000,
+  ): Promise<void> {
+    await this.assertVisible(
+      what,
+      async () => {
+        const snap = await vscode.commands.executeCommand<Record<string, number>>(
+          'kotlin-jump._probe',
+        );
+        return (snap?.[providerId] ?? 0) >= minCount;
+      },
+      timeoutMs,
+    );
+  }
+
+  /**
+   * Will the end-of-line badge fit INSIDE the frame?
+   *
+   * A badge applied after a 200-character line does exist (assertDecorations
+   * passes) but renders off-frame to the right, so the viewer sees nothing.
+   * The frame is 1040 px, the gutter about 55 px, and Menlo 18 px advances
+   * roughly 10.8 px per character: about 88 usable columns. Past that, pick
+   * another anchor line or shorten the fixture.
+   */
+  async assertBadgeReadable(
+    what: string,
+    line: number,
+    badgeLabelLength = 12,
+  ): Promise<void> {
+    const MAX_COLS = 88;
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) throw new Error(`assertBadgeReadable: aucun éditeur actif (${what})`);
+    const lineLength = editor.document.lineAt(line).text.length;
+    const needed = lineLength + badgeLabelLength;
+    if (needed > MAX_COLS) {
+      this.emitBeat('assert', { what, ok: false, lineLength, needed });
+      throw new Error(
+        `BADGE HORS CADRE — « ${what} » ligne ${line} : ${lineLength} caractères ` +
+        `+ ${badgeLabelLength} de badge = ${needed} colonnes, le cadre en montre ${MAX_COLS}. ` +
+        `Le badge existe mais le spectateur ne le verra pas. Choisir une ligne plus courte.`,
+      );
+    }
+    this.emitBeat('assert', { what, ok: true, lineLength });
+  }
+
+  /** A panel webview carries the expected title (Screen Flow Map, …). */
+  async assertPanel(what: string, titleFragment: string, timeoutMs = 8000): Promise<void> {
+    await this.assertVisible(
+      what,
+      () => (vscode.window.tabGroups.all
+        .flatMap(g => g.tabs)
+        .some(t => t.label.includes(titleFragment))),
+      timeoutMs,
+    );
+  }
+
+  /**
+   * Restores the fixtures the demo modified.
+   *
+   * An action touching SEVERAL files (extract string resource: the .kt and
+   * strings.xml) cannot be undone with `undo`, which only knows the active
+   * editor. Observed result: the fixture drifted on every recording and
+   * broke the lint unit tests. Here the original state is written back
+   * explicitly, with no reliance on an undo stack.
+   */
+  async restoreFixtures(): Promise<void> {
+    const fs = require('node:fs') as typeof import('node:fs');
+    const RESTORE: Record<string, [RegExp | string, string][]> = {
+      'src/main/kotlin/com/example/kj/g2resources/ExtractStringResourceDemo.kt': [[
+        /Text\(stringResource\(R\.string\.battle_ready\)\)/g,
+        'Text("Battle ready!")',
+      ]],
+      'src/main/res/values/strings.xml': [
+        [/\s*<string name="battle_ready">[^<]*<\/string>/g, ''],
+        // reverse-string-map : la valeur retapée à l'écran revient à l'original.
+        ['CHARGE!', 'A wild battle cry appears!'],
+      ],
+    };
+
+    for (const [rel, rules] of Object.entries(RESTORE)) {
+      const abs = path.join(this.opts.workspaceRoot, rel);
+      try {
+        const before = fs.readFileSync(abs, 'utf8');
+        let after = before;
+        for (const [find, replace] of rules) {
+          after = after.replace(find as RegExp, replace);
+        }
+        if (after !== before) {
+          fs.writeFileSync(abs, after);
+          this.emitBeat('restore', { file: rel });
+        }
+      } catch { /* fixture missing: nothing to restore */ }
+    }
+    // Open editors still hold the old content: reload them.
+    await vscode.commands.executeCommand('workbench.action.files.revertResource')
+      .then(() => {}, () => {});
+  }
+
   /** Narrative text overlay at the bottom of the frame. */
   async caption(text: string, opts: CaptionOpts = {}): Promise<void> {
     const duration = opts.duration ?? 2500;
@@ -839,4 +1067,9 @@ export class Stage {
   async pause(ms: number, _reason?: string): Promise<void> {
     await new Promise(r => setTimeout(r, ms));
   }
+
+  // NOTE (25/07) : ne pas réintroduire de clic physique sur le chrome du
+  // workbench (CGEvent posait le move sans le mousedown ; System Events
+  // cliquait hors cible et a fermé la sidebar). Préférer l'état déclaré :
+  // `visibility: visible` sur la vue + profil frais du recorder.
 }

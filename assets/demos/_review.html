@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Kotlin Jump — demo review</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 28px 60px;
+    background: #16181d; color: #e6e6e6;
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; font-weight: 600; }
+  .sub { color: #8b93a1; margin-bottom: 22px; font-size: 13px; }
+  .bar {
+    position: sticky; top: 0; z-index: 5; margin: -24px -28px 20px;
+    padding: 14px 28px; background: #16181dee; backdrop-filter: blur(8px);
+    border-bottom: 1px solid #262a33; display: flex; gap: 10px; flex-wrap: wrap;
+    align-items: center;
+  }
+  button {
+    background: #22262f; color: #d6dae2; border: 1px solid #333945;
+    border-radius: 7px; padding: 6px 12px; font-size: 13px; cursor: pointer;
+  }
+  button:hover { background: #2b303b; }
+  button.on { background: #2f6feb; border-color: #2f6feb; color: #fff; }
+  .group { margin: 30px 0 12px; font-size: 12px; letter-spacing: .09em;
+           text-transform: uppercase; color: #7d8595; font-weight: 600; }
+  .grid { display: grid; gap: 20px; grid-template-columns: repeat(auto-fill, minmax(470px, 1fr)); }
+  figure { margin: 0; background: #1c1f26; border: 1px solid #262a33;
+           border-radius: 11px; overflow: hidden; }
+  figure.flagged { border-color: #d9822b; }
+  img { display: block; width: 100%; height: auto; cursor: zoom-in; background: #000; }
+  figcaption { padding: 9px 13px; display: flex; align-items: center; gap: 9px;
+               border-top: 1px solid #262a33; }
+  .name { font-weight: 600; font-size: 13.5px; }
+  .meta { color: #7d8595; font-size: 12px; margin-left: auto; }
+  .flag { border: 0; background: #2a2f3a; color: #9aa3b2; border-radius: 6px;
+          padding: 3px 9px; font-size: 12px; cursor: pointer; }
+  .flag.on { background: #d9822b; color: #1a1a1a; font-weight: 600; }
+  dialog { border: 0; padding: 0; background: transparent; max-width: 96vw; }
+  dialog::backdrop { background: #000000e0; }
+  dialog img { width: auto; max-width: 96vw; max-height: 92vh; cursor: zoom-out;
+               border-radius: 8px; }
+  #summary { position: fixed; right: 22px; bottom: 18px; background: #22262f;
+             border: 1px solid #333945; border-radius: 9px; padding: 9px 14px;
+             font-size: 13px; color: #b9c0cc; }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <button id="replay">Replay all</button>
+  <button id="only" class="">Flagged only</button>
+  <span class="meta" id="count"></span>
+</div>
+
+<h1>Kotlin Jump — 21 feature demos</h1>
+<div class="sub">
+  Every clip loops on its own. Click a frame to enlarge, click again to close.
+  Use “Flag” on anything that reads wrong, then hit “Copy flagged” at the bottom.
+</div>
+
+<div id="root"></div>
+<dialog id="zoom"><img alt=""></dialog>
+<div id="summary"><button class="flag" id="copy">Copy flagged</button></div>
+
+<script>
+const GROUPS = [
+  ['Highlights', [
+    ['screen-flow-map', 'Screen Flow Map'],
+    ['udf-xray', 'UDF X-Ray'],
+    ['compose-outline', 'Compose Outline'],
+  ]],
+  ['Fast editing', [
+    ['named-arguments', 'Add names to call arguments'],
+    ['postfix-completion', 'Postfix completion'],
+    ['live-templates', 'Live templates'],
+    ['surround-with', 'Surround with'],
+    ['smart-join-lines', 'Smart join lines'],
+  ]],
+  ['Resources', [
+    ['extract-string-resource', 'Extract string resource'],
+    ['resource-shadowing', 'Resource shadowing'],
+    ['reverse-string-map', 'Reverse string map'],
+  ]],
+  ['Static execution', [
+    ['lifecycle-pairing', 'Lifecycle pairing'],
+    ['dispatcher-lens', 'Dispatcher lens'],
+    ['room-migration-drift', 'Room migration drift'],
+  ]],
+  ['Dead weight', [
+    ['unused-imports', 'Unused imports'],
+    ['resource-usage-badges', 'Resource usage badges'],
+    ['dependency-usage-badges', 'Dependency usage badges'],
+    ['manifest-necessity', 'Manifest necessity'],
+  ]],
+  ['Editor comfort & navigation', [
+    ['method-separators', 'Method separators + SQL'],
+    ['android-project-view', 'Android project view'],
+    ['recent-locations', 'Recent locations'],
+    ['navigation-history', 'Navigation history'],
+    ['go-to-definition', 'Go to Definition'],
+    ['test-nav', 'Jump to test'],
+    ['find-usages-test-filter', 'Find Usages, test filter'],
+  ]],
+  ['Inline intelligence', [
+    ['inlay-hints', 'Inlay hints'],
+    ['code-lens', 'CodeLens'],
+    ['suspend-call-marker', 'Suspend call markers'],
+    ['string-resource-folding', 'String resource folding'],
+    ['string-locale-grid', 'String locale grid'],
+    ['inline-master-toggle', 'Inline features master toggle'],
+  ]],
+  ['Hovers & previews', [
+    ['drawable-hover', 'Drawable hover'],
+    ['vector-preview', 'Vector drawable preview'],
+    ['suppress-hover', 'Suppress hover'],
+    ['private-file-isolation', 'Private file isolation'],
+  ]],
+  ['Library JARs', [
+    ['lib-jar-coroutines', 'Library JAR: coroutines'],
+    ['lib-jar-kdoc-hover', 'Library JAR: KDoc hover'],
+  ]],
+  ['Tooling', [
+    ['android-run', 'Android run'],
+    ['logcat-stack-deeplink', 'Logcat stack deeplink'],
+    ['ai-assistant', 'AI assistant'],
+    ['welcome', 'Welcome tour'],
+  ]],
+];
+
+const root = document.getElementById('root');
+let total = 0;
+
+for (const [group, items] of GROUPS) {
+  const h = document.createElement('div');
+  h.className = 'group';
+  h.textContent = group;
+  root.appendChild(h);
+
+  const grid = document.createElement('div');
+  grid.className = 'grid';
+  for (const [file, label] of items) {
+    total++;
+    const fig = document.createElement('figure');
+    fig.dataset.file = file;
+    fig.innerHTML = `
+      <img src="${file}.webp" alt="${label}">
+      <figcaption>
+        <span class="name">${label}</span>
+        <button class="flag">Flag</button>
+        <span class="meta">${file}</span>
+      </figcaption>`;
+    grid.appendChild(fig);
+  }
+  root.appendChild(grid);
+}
+document.getElementById('count').textContent = total + ' clips';
+
+// Enlarge
+const zoom = document.getElementById('zoom');
+const zoomImg = zoom.querySelector('img');
+root.addEventListener('click', e => {
+  const img = e.target.closest('img');
+  if (img) { zoomImg.src = img.src; zoom.showModal(); return; }
+  const flag = e.target.closest('.flag');
+  if (flag) {
+    flag.classList.toggle('on');
+    flag.closest('figure').classList.toggle('flagged');
+    flag.textContent = flag.classList.contains('on') ? 'Flagged' : 'Flag';
+  }
+});
+zoom.addEventListener('click', () => zoom.close());
+
+// Restart every animation from frame 1
+document.getElementById('replay').addEventListener('click', () => {
+  for (const img of document.querySelectorAll('#root img')) {
+    const src = img.src.split('?')[0];
+    img.src = src + '?t=' + Date.now();
+  }
+});
+
+// Show only flagged
+document.getElementById('only').addEventListener('click', e => {
+  const on = e.target.classList.toggle('on');
+  for (const fig of document.querySelectorAll('figure')) {
+    fig.style.display = !on || fig.classList.contains('flagged') ? '' : 'none';
+  }
+});
+
+// Copy the flagged list, ready to paste back
+document.getElementById('copy').addEventListener('click', () => {
+  const names = [...document.querySelectorAll('figure.flagged')].map(f => f.dataset.file);
+  const text = names.length ? names.join('\n') : '(nothing flagged)';
+  navigator.clipboard.writeText(text).then(() => {
+    const b = document.getElementById('copy');
+    b.textContent = names.length + ' copied';
+    setTimeout(() => (b.textContent = 'Copy flagged'), 1600);
+  });
+});
+</script>
+</body>
+</html>

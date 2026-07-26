@@ -52,7 +52,7 @@ export default async function record(stage: Stage): Promise<void> {
   );
   await stage.dwellOn({ line: 27, column: 20 }, 300);
   await stage.runCommand('editor.action.showHover');
-  await stage.caption('Inline hint → full KDoc on hover. Zero jump. 🧠', {
+  await stage.caption('Inline hint, full KDoc on hover. Zero jump.', {
     duration: 2800,
   });
   // Hold long enough for the reader to parse the data-class signature

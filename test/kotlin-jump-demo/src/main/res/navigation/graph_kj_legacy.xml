@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KJ-013 — nav graph XML « vieille école » (Jetpack Navigation à fragments,
+     même forme que les nav graphs d'une grosse app legacy à fragments). Attendu dans la Screen
+     Flow Map, fusionné avec le graphe Compose :
+       legacy_feed ─> legacy_article ─> legacy_gallery
+       legacy_feed 🔗 deeplink newsdemo://feed
+       legacy_settings : nested graph
+       legacy_dead_end : orphelin (aucune action n'y mène)
+       SubscriptionActivity : nœud activity -->
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+        xmlns:app="http://schemas.android.com/apk/res-auto"
+        xmlns:tools="http://schemas.android.com/tools"
+        android:id="@+id/legacy_navigation"
+        app:startDestination="@+id/legacy_feed">
+
+    <fragment android:id="@+id/legacy_feed"
+            android:name="com.example.legacy.FeedFragment"
+            android:label="fragment_feed"
+            tools:layout="@layout/feed_fragment">
+        <action android:id="@+id/action_feed_to_article"
+                app:destination="@id/legacy_article" />
+        <deepLink app:uri="newsdemo://feed" />
+    </fragment>
+
+    <fragment android:id="@+id/legacy_article"
+            android:name="com.example.legacy.ArticleFragment"
+            android:label="fragment_article">
+        <action android:id="@+id/action_article_to_gallery"
+                app:destination="@id/legacy_gallery" />
+    </fragment>
+
+    <fragment android:id="@+id/legacy_gallery"
+            android:name="com.example.legacy.GalleryFragment"
+            android:label="fragment_gallery" />
+
+    <activity android:id="@+id/legacy_subscription"
+            android:name="com.example.legacy.SubscriptionActivity"
+            android:label="activity_subscription" />
+
+    <!-- Graphe imbriqué -->
+    <navigation android:id="@+id/legacy_settings"
+            app:startDestination="@+id/legacy_settings_home">
+        <fragment android:id="@+id/legacy_settings_home"
+                android:name="com.example.legacy.SettingsHomeFragment">
+            <action android:id="@+id/action_settings_home_to_about"
+                    app:destination="@id/legacy_settings_about" />
+        </fragment>
+        <fragment android:id="@+id/legacy_settings_about"
+                android:name="com.example.legacy.SettingsAboutFragment" />
+    </navigation>
+
+    <!-- Action GLOBALE : legacy_subscription reste atteignable. -->
+    <action android:id="@+id/action_global_subscription"
+            app:destination="@id/legacy_subscription" />
+
+    <!-- Orphelin : aucune action ne mène ici. -->
+    <fragment android:id="@+id/legacy_dead_end"
+            android:name="com.example.legacy.DeadEndFragment" />
+
+</navigation>

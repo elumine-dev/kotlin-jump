@@ -184,6 +184,14 @@ export class WorkspaceEdit {
     this._entries.push({ uri, range, newText });
   }
 
+  delete(uri: any, range: Range, _metadata?: any): void {
+    this._entries.push({ uri, range, newText: '' });
+  }
+
+  insert(uri: any, position: Position, newText: string, _metadata?: any): void {
+    this._entries.push({ uri, range: new Range(position.line, position.character, position.line, position.character), newText });
+  }
+
   set(uri: any, edits: ReadonlyArray<TextEdit | [TextEdit, any]>): void {
     for (const item of edits) {
       if (Array.isArray(item)) {

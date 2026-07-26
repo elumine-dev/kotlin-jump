@@ -4,6 +4,31 @@ import * as path from 'node:path';
 
 import type { TimelineEvent } from './timeline';
 
+/**
+ * Binaire ffmpeg résolu UNE fois : les bannières de raccourci passent par
+ * `drawtext`, absent de certains builds Homebrew (constaté le 25/07 : le
+ * `ffmpeg` du PATH n'avait pas le filtre, `ffmpeg-full` oui). Préfère le
+ * premier candidat qui connaît drawtext, sinon retombe sur `ffmpeg`.
+ */
+export const FFMPEG_BIN: string = (() => {
+  const candidates = [
+    process.env.KJ_DEMO_FFMPEG,
+    'ffmpeg',
+    '/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg',
+    '/opt/homebrew/bin/ffmpeg-full',
+  ].filter((c): c is string => Boolean(c));
+  for (const bin of candidates) {
+    try {
+      const out = execSync(
+        `${JSON.stringify(bin)} -hide_banner -filters 2>/dev/null | grep -c drawtext`,
+        { encoding: 'utf8' },
+      ).trim();
+      if (parseInt(out, 10) > 0) return bin;
+    } catch { /* candidat absent ou sans drawtext */ }
+  }
+  return 'ffmpeg';
+})();
+
 export interface CaptureRegion {
   /** Global desktop X (can be negative or > main-display width on multi-monitor setups) */
   x:      number;
@@ -139,7 +164,7 @@ export function applyOverlays(
         outputPath,
       ]
     : ['-y', ...pre, '-i', inputMp4, '-c:v', 'copy', outputPath];
-  execSync(`ffmpeg ${args.map(a => JSON.stringify(a)).join(' ')}`, { stdio: ['ignore', 'ignore', 'pipe'] });
+  execSync(`${FFMPEG_BIN} ${args.map(a => JSON.stringify(a)).join(' ')}`, { stdio: ['ignore', 'ignore', 'pipe'] });
 }
 
 /**
@@ -162,7 +187,7 @@ export function extractPosterFrame(
     '-q:v',      '2',
     outputPng,
   ];
-  execSync(`ffmpeg ${args.map(a => JSON.stringify(a)).join(' ')}`, { stdio: ['ignore', 'ignore', 'pipe'] });
+  execSync(`${FFMPEG_BIN} ${args.map(a => JSON.stringify(a)).join(' ')}`, { stdio: ['ignore', 'ignore', 'pipe'] });
 }
 
 /**
@@ -288,7 +313,7 @@ export function renderFilterToWebP(
     '-fps_mode', 'passthrough',
     outputWebp,
   ];
-  execSync(`ffmpeg ${args.map(a => JSON.stringify(a)).join(' ')}`, { stdio: ['ignore', 'ignore', 'pipe'] });
+  execSync(`${FFMPEG_BIN} ${args.map(a => JSON.stringify(a)).join(' ')}`, { stdio: ['ignore', 'ignore', 'pipe'] });
 }
 
 /**
@@ -414,7 +439,7 @@ export function convertToWebP(
     '-vsync',       '0',
     outputWebp,
   ];
-  execSync(`ffmpeg ${args.map(a => JSON.stringify(a)).join(' ')}`, { stdio: ['ignore', 'ignore', 'pipe'] });
+  execSync(`${FFMPEG_BIN} ${args.map(a => JSON.stringify(a)).join(' ')}`, { stdio: ['ignore', 'ignore', 'pipe'] });
 }
 
 export function fileSizeKb(file: string): number {

@@ -259,12 +259,19 @@ export class KotlinSemanticTokensProvider
   ): vscode.SemanticTokens {
     const tokens: TokenEntry[] = [];
     const declKeys = new Set<string>();
+    const docLines = doc.getText().split('\n');
 
     // ── Phase 1: declaration sites (exact, from index) ─────────────────────
     for (const entry of this.index.getFileSymbols(doc.uri.toString())) {
       if (range && (entry.line < range.start.line || entry.line > range.end.line)) continue;
       const type = kindToTypeIndex(entry.kind, entry.depth);
       if (type === undefined) continue;
+      // The index tracks the file ON DISK; an unsaved edit that removes a
+      // line shifts everything and a stale declaration token lands on the
+      // wrong text (a joined string got painted as a property, 25/07).
+      // Trust the index only when the document really has that name there.
+      const atIndex = docLines[entry.line]?.slice(entry.character, entry.character + entry.name.length);
+      if (atIndex !== entry.name) continue;
       tokens.push({
         line: entry.line,
         char: entry.character,
@@ -277,6 +284,11 @@ export class KotlinSemanticTokensProvider
 
     // ── Phase 2: reference sites (regex scan) ──────────────────────────────
     const lines = doc.getText().split('\n');
+    // Triple-quoted strings span lines, and the per-line
+    // isInsideCommentOrString cannot see them: SQL keywords inside a
+    // @Query("""…""") got semantic tokens that overrode the embedded SQL
+    // grammar (FROM/BY painted white, Kevin 25/07). Mask them out.
+    const tripleMask = computeTripleStringMask(lines);
     // Per-run cache: same word resolves identically within one document version.
     // Eliminates redundant resolveBest() calls for repeated symbols.
     const wordCache = new Map<string, SymbolEntry | undefined>();
@@ -304,6 +316,7 @@ export class KotlinSemanticTokensProvider
         if (KOTLIN_KEYWORDS.has(word)) continue;
         if (declKeys.has(`${li}:${col}`)) continue;
         if (isInsideCommentOrString(line, col)) continue;
+        if (inTripleStringMask(tripleMask, li, col)) continue;
 
         // ── Check hardcoded stdlib sets first (no index lookup needed) ──────
         const hardcoded = resolveHardcoded(word, li, col);
@@ -395,4 +408,55 @@ function diffUint32(oldData: Uint32Array, newData: Uint32Array): vscode.Semantic
   }
 
   return [new vscode.SemanticTokensEdit(start, oldEnd - start + 1, newData.slice(start, newEnd + 1))];
+}
+
+// ── Triple-quoted string mask ────────────────────────────────────────────────
+
+/** Per-line intervals `[fromCol, toCol)` that sit inside a `"""` string. */
+export type TripleStringMask = Map<number, [number, number][]>;
+
+/**
+ * Scans the document for `"""…"""` spans. The per-line
+ * isInsideCommentOrString helper cannot see them, so without this mask
+ * the reference scan tokenizes words INSIDE multiline strings (Room SQL,
+ * JSON payloads) and its semantic tokens override the embedded grammars.
+ */
+export function computeTripleStringMask(lines: string[]): TripleStringMask {
+  const mask: TripleStringMask = new Map();
+  let open = false;
+  for (let li = 0; li < lines.length; li++) {
+    const line = lines[li];
+    let col = 0;
+    let from = open ? 0 : -1;
+    while (true) {
+      const at = line.indexOf('"""', col);
+      if (at === -1) break;
+      if (!open) {
+        open = true;
+        from = at + 3;
+      } else {
+        open = false;
+        const list = mask.get(li) ?? [];
+        list.push([Math.max(from, 0), at]);
+        mask.set(li, list);
+        from = -1;
+      }
+      col = at + 3;
+    }
+    if (open && from !== -1 && from <= line.length) {
+      const list = mask.get(li) ?? [];
+      list.push([from, line.length]);
+      mask.set(li, list);
+    } else if (open) {
+      mask.set(li, [[0, line.length]]);
+    }
+  }
+  return mask;
+}
+
+/** True when (line, col) falls inside a `"""` string span. */
+export function inTripleStringMask(mask: TripleStringMask, line: number, col: number): boolean {
+  const spans = mask.get(line);
+  if (!spans) return false;
+  return spans.some(([from, to]) => col >= from && col < to);
 }

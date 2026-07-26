@@ -1,0 +1,14 @@
+[
+  {
+    "type": "caption",
+    "label": "Three dead imports, spotted without compiling",
+    "duration": 2400,
+    "t": 300
+  },
+  {
+    "type": "caption",
+    "label": "One action sweeps them all",
+    "duration": 2600,
+    "t": 7945
+  }
+]

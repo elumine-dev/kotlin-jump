@@ -1,0 +1,14 @@
+[
+  {
+    "type": "caption",
+    "label": "Which of these strings are still used?",
+    "duration": 2000,
+    "t": 300
+  },
+  {
+    "type": "caption",
+    "label": "Usage counts live in the XML",
+    "duration": 2600,
+    "t": 4916
+  }
+]

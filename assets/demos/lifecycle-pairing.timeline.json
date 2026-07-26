@@ -1,0 +1,14 @@
+[
+  {
+    "type": "caption",
+    "label": "Acquired in onResume. Where is the release?",
+    "duration": 2200,
+    "t": 300
+  },
+  {
+    "type": "caption",
+    "label": "Unpaired acquisitions get flagged before they leak",
+    "duration": 2600,
+    "t": 7840
+  }
+]

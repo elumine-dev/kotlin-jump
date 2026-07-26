@@ -70,6 +70,35 @@ describe('SP2-CVF-1 — 1 entry isConst+constValue → décoration avec contentT
   });
 });
 
+// ── SP2-CVF-RAW — régression KJ-010 (trouvée par Kevin) ──────────────────────
+// `COUNT(m.id)` dans un SQL triple-quoted était replié en `10(m.id)` : le
+// garde par-ligne ne voyait pas les """ des lignes précédentes.
+
+describe('SP2-CVF-RAW — jamais de fold dans une raw string multi-lignes', () => {
+  it('COUNT dans le SQL intact, COUNT dans le code replié', () => {
+    const result = decs(
+      [{ name: 'COUNT', isConst: true, constValue: '10' }],
+      [
+        'val sql = """',
+        '    SELECT COUNT(id) FROM pokemon',
+        '"""',
+        'val n = COUNT',
+      ],
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0].range.start.line).toBe(3);
+  });
+
+  it('raw string ouverte et fermée sur la même ligne : le code après est replié', () => {
+    const result = decs(
+      [{ name: 'COUNT', isConst: true, constValue: '10' }],
+      ['val s = """COUNT""" ; val n = COUNT'],
+    );
+    // seule l'occurrence hors string est repliée
+    expect(result).toHaveLength(1);
+  });
+});
+
 // ── SP2-CVF-2 ─────────────────────────────────────────────────────────────────
 
 describe('SP2-CVF-2 — 2 entries (ambiguïté) → 0 décorations', () => {

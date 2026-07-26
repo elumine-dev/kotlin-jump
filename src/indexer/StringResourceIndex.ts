@@ -82,6 +82,38 @@ export class StringResourceIndex {
     this.arraysFiles.delete(key);
   }
 
+  /** KJ-017 — toutes les définitions d'une string, tous fichiers confondus. */
+  allDefinitions(key: string): StringEntry[] {
+    const out: StringEntry[] = [];
+    for (const map of this.files.values()) {
+      const e = map.get(key);
+      if (e) out.push(e);
+    }
+    return out;
+  }
+
+  /** KJ-005 — toutes les clés string connues, toutes locales confondues. */
+  allKeys(): string[] {
+    const keys = new Set<string>();
+    for (const m of this.files.values()) {
+      for (const k of m.keys()) keys.add(k);
+    }
+    return [...keys];
+  }
+
+  /** KJ-005 — URIs des strings.xml de base (dossier `values` non qualifié).
+   *  Un fichier de base encore vide n'est pas listé (aucune entrée pour en
+   *  récupérer l'URI — limitation documentée). */
+  baseFiles(): UriLike[] {
+    const out: UriLike[] = [];
+    for (const [key, entries] of this.files) {
+      if (!/[\\/]values[\\/][^\\/]*\.xml$/.test(key)) continue;
+      const first = entries.values().next().value;
+      if (first) out.push(first.uri);
+    }
+    return out;
+  }
+
   getValue(key: string): StringEntry | undefined {
     return this.lookupIn(this.files, key);
   }

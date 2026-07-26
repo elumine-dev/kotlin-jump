@@ -1,0 +1,14 @@
+[
+  {
+    "type": "caption",
+    "label": "Hardcoded string, one action from being a resource",
+    "duration": 2200,
+    "t": 300
+  },
+  {
+    "type": "caption",
+    "label": "The string moves to XML, properly escaped",
+    "duration": 2400,
+    "t": 6497
+  }
+]

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { StringResourceIndex } from '../indexer/StringResourceIndex';
 import { Logger } from '../util/logger';
 import { isInsideCommentOrString } from '../util/textUtils';
+import { reportDecorations } from '../util/demoProbe';
 
 const R_STRING_RE  = /\bR\.string\.([A-Za-z_]\w*)\b/g;
 const R_PLURALS_RE = /\bR\.plurals\.([A-Za-z_]\w*)\b/g;
@@ -31,6 +32,10 @@ export class StringResourceFoldingProvider implements vscode.Disposable {
   private readonly _subscriptions: vscode.Disposable[];
   private _docDebounce: ReturnType<typeof setTimeout> | undefined;
   private _selDebounce: ReturnType<typeof setTimeout> | undefined;
+  /** Rendered texts per document, for the probe: rendering happens one
+   *  editor at a time, and a last-writer-wins report used to drop the
+   *  folds of the neighbouring columns in multi-editor demos. */
+  private readonly _probeByDoc = new Map<string, string[]>();
 
   constructor(private readonly index: StringResourceIndex, private readonly log: Logger) {
     this._hideType = vscode.window.createTextEditorDecorationType({
@@ -144,6 +149,19 @@ export class StringResourceFoldingProvider implements vscode.Disposable {
     }
 
     editor.setDecorations(this._hideType, opts);
+    // Demo/test probe: count + rendered texts, as a UNION across visible
+    // editors, so a demo can assert the folded value painted on screen is
+    // the one expected after an edit. Unit-test editor mocks may have no
+    // uri: fall back to the file name.
+    this._probeByDoc.set(
+      String(editor.document.uri?.toString?.() ?? editor.document.fileName ?? 'mock'),
+      opts.map(o => String(
+        (o.renderOptions?.before as vscode.ThemableDecorationAttachmentRenderOptions | undefined)
+          ?.contentText ?? '',
+      )),
+    );
+    const allTexts = [...this._probeByDoc.values()].flat();
+    reportDecorations('stringResourceFolding', allTexts.length, allTexts);
 
     if (isActive) {
       this._statusBar.text = `$(symbol-string) ${opts.length}`;

@@ -1,0 +1,14 @@
+[
+  {
+    "type": "caption",
+    "label": "primary is defined twice. Which one wins?",
+    "duration": 2600,
+    "t": 300
+  },
+  {
+    "type": "caption",
+    "label": "Gradle merge order, spelled out 🏆",
+    "duration": 2800,
+    "t": 5137
+  }
+]

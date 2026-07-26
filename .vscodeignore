@@ -52,14 +52,21 @@ firebase-debug.log
 ruvector.db
 .playwright-mcp/**
 
-# assets/demos/ : sidecars + demos NOT consumed by VSIX runtime.
-# Only the 11 walkthrough webps + any whats-new highlight media should ship.
-# README/CHANGELOG load the rest via raw.githubusercontent.com directly.
-assets/demos/*.timeline.json
-assets/demos/*-poster.png
-assets/demos/drawable-hover.webp
-assets/demos/lib-jar-kdoc-hover.webp
-assets/demos/string-locale-grid.webp
-assets/demos/suspend-call-marker.webp
-assets/demos/private-file-isolation.webp
-assets/demos/suppress-hover.webp
+# assets/demos/ : rien n'embarque par défaut. La liste nominative
+# d'exclusions laissait passer chaque nouvelle demo (158 MB de VSIX le
+# 25/07) : on exclut TOUT et on ré-inclut les seuls webp que le runtime
+# consomme (walkthrough + What's New). README/CHANGELOG chargent le reste
+# via raw.githubusercontent.com directement.
+assets/demos/**
+!assets/demos/ai-assistant.webp
+!assets/demos/android-run.webp
+!assets/demos/code-lens.webp
+!assets/demos/find-usages-test-filter.webp
+!assets/demos/go-to-definition.webp
+!assets/demos/inlay-hints.webp
+!assets/demos/lib-jar-coroutines.webp
+!assets/demos/navigation-history.webp
+!assets/demos/string-resource-folding.webp
+!assets/demos/test-nav.webp
+!assets/demos/vector-preview.webp
+!assets/demos/welcome.webp

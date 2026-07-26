@@ -1,0 +1,14 @@
+[
+  {
+    "type": "caption",
+    "label": "One string, split across two lines",
+    "duration": 2000,
+    "t": 300
+  },
+  {
+    "type": "caption",
+    "label": "The plus sign and the quotes are gone",
+    "duration": 2600,
+    "t": 6136
+  }
+]

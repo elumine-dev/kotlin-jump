@@ -7,6 +7,8 @@ interface NavEntry {
   uri:       string;
   line:      number;
   character: number;
+  /** Epoch ms de la visite — KJ-008 (recent locations). */
+  timestamp?: number;
 }
 
 export class NavigationHistoryProvider implements vscode.Disposable {
@@ -56,6 +58,16 @@ export class NavigationHistoryProvider implements vscode.Disposable {
   get historyLength(): number { return this._history.length; }
   get cursor():        number { return this._cursor; }
 
+  /** KJ-008 — instantané de l'historique pour le popup Recent Locations. */
+  recentLocations(): { file: string; line: number; character: number; timestamp: number }[] {
+    return this._history.map(e => ({
+      file: e.uri,
+      line: e.line,
+      character: e.character,
+      timestamp: e.timestamp ?? 0,
+    }));
+  }
+
   // ── Private helpers ──────────────────────────────────────────────────────────
 
   private _currentEntry(): NavEntry | undefined {
@@ -70,7 +82,7 @@ export class NavigationHistoryProvider implements vscode.Disposable {
       this._history.splice(this._cursor + 1);
     }
 
-    this._history.push(entry);
+    this._history.push({ ...entry, timestamp: entry.timestamp ?? Date.now() });
     this._cursor = this._history.length - 1;
 
     if (this._history.length > MAX_HISTORY) {

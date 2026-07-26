@@ -45,4 +45,10 @@
     <color name="type_electric">#FFD700</color>
     <color name="type_psychic">#FF69B4</color>
     <color name="type_dragon">#6A0DAD</color>
+
+    <!-- KJ-021 : attendu « 0 usages », grisé. -->
+    <color name="unused_neon">#39FF14</color>
+    <!-- KJ-021 : utilisé UNIQUEMENT par view_kj_banner.xml (android:background)
+         → attendu 1 usage (les refs res→res comptent). -->
+    <color name="banner_backdrop">#102040</color>
 </resources>

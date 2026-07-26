@@ -125,7 +125,29 @@
     <!-- ═══════════════════════════════════════════════════════════════════════ -->
     <string name="sprint1_welcome">Welcome!</string>
     <string name="sprint1_start">Start Game</string>
-    <!-- Intentionally absent from values-en → values ✓  values-en ✗ -->
+    <!-- Intentionally absent from values-en: values yes, values-en no -->
     <string name="sprint1_fr_only">Seulement en français.</string>
     <string name="sprint1_default_only">Only in default locale — no English translation.</string>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!-- KJ 2026-07: fixtures G2/G3/G5                                           -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!-- KJ-017: also redefined in feature-battle, THIS definition wins. -->
+    <string name="battle_start">FIGHT!</string>
+    <!-- KJ-018: used by BattleRouteScreen (routed screen) + BattleAnnouncer (class). -->
+    <string name="battle_cry">A wild battle cry appears!</string>
+    <string name="settings_title">Settings</string>
+    <string name="settings_about">About this Pokédex</string>
+    <string name="orphan_notice">You should never see this screen.</string>
+
+    <!-- KJ-021: expected "0 usages", dimmed lines. -->
+    <string name="unused_promo_banner">Golden Pokéballs!</string>
+    <string name="unused_easter_egg">Nobody references me.</string>
+    <!-- KJ-021: used ONLY via tools:text in the layout, expected 0 usages
+         (tools: is ignored at runtime). -->
+    <string name="legacy_subtitle">Old subtitle kept for previews</string>
+    <!-- KJ-021: used via android:text in view_kj_banner.xml, expected 1 usage. -->
+    <string name="banner_caption">Gotta catch 'em all</string>
+    <!-- KJ-005: collision seed, extracting Text("Battle") should offer battle_2. -->
+    <string name="battle">Battle</string>
 </resources>

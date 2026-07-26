@@ -43,7 +43,7 @@ export default async function record(stage: Stage): Promise<void> {
   // render INSIDE the identifier and split the word visually
   // (`code-lens.demo.ts:38` calls this out explicitly).
   void stage.calloutAt({ line: 69, column: 90 }, 'file-private', 2200);
-  await stage.caption('Top-level `private` = file-private. PluralArrayDemo n\'existe pas pour ce symbole.', {
+  await stage.caption('Top-level `private` means file-private. PluralArrayDemo cannot see this symbol.', {
     duration: 2800,
   });
 
@@ -68,7 +68,7 @@ export default async function record(stage: Stage): Promise<void> {
   //   * line 79  ticketsLeft(...)
   // No PluralArrayDemo, no Sprint1VisualDemo. Cross-file private siblings
   // are invisible.
-  await stage.caption('Deux callers. Tous dans VisualBugsDemo.kt. 🔒', {
+  await stage.caption('Two callers, both inside VisualBugsDemo.kt 🔒', {
     duration: 2800,
   });
 }

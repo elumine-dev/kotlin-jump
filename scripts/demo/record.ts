@@ -189,6 +189,19 @@ async function main(): Promise<void> {
     // shadow/dim never clears.
     try { execSync(`pkill -f "screencapture.*kj-demo-"`, { stdio: 'ignore' }); } catch { /* none */ }
 
+    // Park the physical mouse pointer in the bottom-right corner of the
+    // screen. Left wherever the last run dropped it, it hovers the sidebar
+    // and every recording picks up a file-explorer tooltip in frame
+    // (seen in compose-outline and android-project-view, 25/07).
+    try {
+      execSync(
+        `swift -e 'import CoreGraphics
+let b = CGDisplayBounds(CGMainDisplayID())
+CGWarpMouseCursorPosition(CGPoint(x: b.maxX - 4, y: b.maxY - 4))'`,
+        { stdio: 'ignore', timeout: 15_000 },
+      );
+    } catch { /* cosmetic only — never block a recording on it */ }
+
     // Lockfile via O_EXCL — prevents two kjdemo runs from stealing windows
     // from each other via AppleScript.
     const lockFile = path.join(os.tmpdir(), 'kj-demo.lock');

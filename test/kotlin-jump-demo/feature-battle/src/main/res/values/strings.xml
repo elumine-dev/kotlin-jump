@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KJ-017 — `battle_start` shadows the app module's definition (app wins).
+     KJ-021 — `battle_unused_taunt` has 0 usages anywhere: expected grayed. -->
+<resources>
+    <string name="battle_start">FIGHT! (library version — expected: shadowed)</string>
+    <string name="battle_unused_taunt">Your Pokémon looks weak!</string>
+</resources>

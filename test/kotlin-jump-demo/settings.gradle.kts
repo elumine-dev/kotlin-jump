@@ -25,3 +25,7 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "kotlin-jump-demo"
+
+// Second module — fixture for KJ-017 (resource shadowing), KJ-012 (Android
+// project view multi-module) and KJ-022 (per-module dependency badges).
+include(":feature-battle")

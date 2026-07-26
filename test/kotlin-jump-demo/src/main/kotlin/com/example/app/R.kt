@@ -69,6 +69,12 @@ object R {
         val sprint2_evolution_prompt = -1
         val sprint2_sync_status      = -1
         val sprint2_team_saved_msg   = -1
+        // KJ 2026-07 — G2/G3 fixtures (shadowing, reverse map, navigation)
+        val battle_start             = 57
+        val battle_cry               = 58
+        val settings_title           = 59
+        val settings_about           = 60
+        val orphan_notice            = 61
     }
 
     object color {
@@ -109,6 +115,8 @@ object R {
         val sprint2_ripple_overlay   = -1
         val sprint2_divider_line     = -1
         val sprint2_shimmer_base     = -1
+        // KJ 2026-07 — battle_glow n'existe QUE dans feature-battle (KJ-017)
+        val battle_glow              = 130
     }
 
     object dimen {

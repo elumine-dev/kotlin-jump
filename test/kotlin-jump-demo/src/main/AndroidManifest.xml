@@ -34,6 +34,12 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- KJ-023 : aucun code SMS dans le projet → attendu « aucun usage trouvé », grisé. -->
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <!-- KJ-023 : maxSdkVersion — le badge doit l'afficher sans se tromper de cible. -->
+    <uses-permission android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+
     <application
         android:label="@string/app_name"
         android:icon="@drawable/ic_pokeball">
@@ -43,6 +49,21 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- KJ-023 : la classe GhostActivity N'EXISTE PAS dans le code →
+             attendu : entrée grisée « classe introuvable ». -->
+        <activity android:name=".GhostActivity" />
+
+        <!-- KJ-023 : référencé UNIQUEMENT par son intent-filter (deeplink) →
+             attendu : considéré utilisé, PAS grisé (même si aucun code ne le cite). -->
+        <activity android:name=".DeepLinkActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="pokedemo" android:host="battle" />
             </intent-filter>
         </activity>
 

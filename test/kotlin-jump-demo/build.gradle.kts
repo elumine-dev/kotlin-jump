@@ -87,10 +87,18 @@ dependencies {
     implementation(libs.compose.mp.foundation)
     implementation(libs.compose.mp.material)
 
-    // Kotlinx Serialization — extra third-party lib so the JAR demo
+    // Kotlinx Serialization: extra third-party lib so the JAR demo
     // surface isn't limited to coroutines + compose.
     implementation(libs.serialization.core)
     implementation(libs.serialization.json)
+
+    // -- KJ-022 fixtures: dependency usage badges ------------------------------
+    // Expected "0 imports", dimmed (no com.google.gson import in the project).
+    implementation(libs.gson)
+    // Expected "0 imports", dimmed (no okhttp3 import).
+    implementation(libs.okhttp.core)
+    // Expected "1 import" (DependencyUsageDemo.kt imports retrofit2.Retrofit).
+    implementation(libs.retrofit.core)
 
     testImplementation(libs.coroutines.core)
     testImplementation(libs.junit4)

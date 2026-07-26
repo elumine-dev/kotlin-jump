@@ -22,6 +22,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import type { TimelineEvent } from './timeline';
+import { FFMPEG_BIN } from './ffmpeg';
 
 export type ExtraInput = string | {
   path:       string;
@@ -85,7 +86,7 @@ export function renderFilterToPngSequence(
     outPattern,
   ];
 
-  const r = spawnSync('ffmpeg', args, { stdio: ['ignore', 'ignore', 'pipe'] });
+  const r = spawnSync(FFMPEG_BIN, args, { stdio: ['ignore', 'ignore', 'pipe'] });
   if (r.status !== 0) {
     throw new Error(`ffmpeg PNG-seq failed (exit ${r.status}):\n${r.stderr?.toString().slice(-2000)}`);
   }

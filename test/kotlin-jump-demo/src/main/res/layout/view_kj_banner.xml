@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KJ-021 fixture — usages res→res :
+     android:text="@string/banner_caption"   → compte comme usage (1)
+     tools:text="@string/legacy_subtitle"    → NE compte PAS (namespace tools)
+     android:background="@color/banner_backdrop" → compte comme usage (1) -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:orientation="vertical"
+    android:background="@color/banner_backdrop">
+
+    <TextView
+        android:text="@string/banner_caption"
+        tools:text="@string/legacy_subtitle" />
+
+</LinearLayout>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KJ-017 Resource Shadowing — this LIBRARY module redefines `primary`,
+     which also exists in the app module's res/values/colors.xml.
+     Expected: hover on R.color.primary lists both definitions, the APP one
+     wins (app > library), this one shows struck through.
+     `battle_glow` is unique to this module: no shadowing, normal hover. -->
+<resources>
+    <color name="primary">#FF0044</color>
+    <color name="battle_glow">#FFD700</color>
+</resources>

@@ -58,9 +58,9 @@ describe('resolveTestTask — multi-root config resource scoping', () => {
   it('T2. explicit testTaskOverrides entry wins over Android auto-detection', () => {
     const buildFile = touch('app/build.gradle.kts', 'plugins { id("com.android.application") }');
     const modulePath = path.dirname(buildFile);
-    withConfig({ testTaskOverrides: { ':app': 'testReplicaLaPresseDebugUnitTest' } });
+    withConfig({ testTaskOverrides: { ':app': 'testDemoFreeDebugUnitTest' } });
 
-    expect(resolveTestTask(modulePath, ':app', log)).toBe('testReplicaLaPresseDebugUnitTest');
+    expect(resolveTestTask(modulePath, ':app', log)).toBe('testDemoFreeDebugUnitTest');
   });
 
   it('T3. Android module without an override falls back to testDebugUnitTest', () => {

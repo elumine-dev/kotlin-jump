@@ -1,7 +1,7 @@
 /**
  * Adversarial tests for FoldingRangeProvider.
  *
- * Based on real Kotlin patterns found in lapresse production code.
+ * Based on real Kotlin patterns found in newsapp production code.
  * Goal: find bugs and prevent regressions from unusual-but-valid Kotlin.
  */
 import { describe, it, expect } from 'vitest';
@@ -27,7 +27,7 @@ function imports(code: string)  { return provide(code).filter(r => r.kind === Fo
 
 describe('raw string false-positive KDoc', () => {
   it('multi-line raw string with /**...*/ inside → 0 Comment folds', () => {
-    // Pattern from lapresse JSON parsing tests
+    // Pattern from newsapp JSON parsing tests
     const code = [
       'val sql = """',       // line 0 — opens raw string
       '    /**',             // line 1 — looks like KDoc but is raw string content
@@ -40,13 +40,13 @@ describe('raw string false-positive KDoc', () => {
   });
 
   it('Regex raw string with special chars → 0 Comment folds', () => {
-    // Real pattern from lapresse/MarginJsonParserDelegate.kt
+    // Real pattern from newsapp/MarginJsonParserDelegate.kt
     const code = `val PATTERN = Regex("""^\\{\\s*(-?\\d+)\\s*,\\s*(-?\\d+)\\s*\\}$""")`;
     expect(comments(code)).toHaveLength(0);
   });
 
   it('JSON in raw string with braces and fake comment chars → 0 Comment folds', () => {
-    // Pattern from lapresse test files (fromJson with triple-quoted JSON)
+    // Pattern from newsapp test files (fromJson with triple-quoted JSON)
     const code = [
       'val input = Gson().fromJson(',
       '    """',
@@ -101,7 +101,7 @@ describe('raw string false-positive KDoc', () => {
 
 describe('non-KDoc block comments', () => {
   it('/* ===== Section ===== */ style → 0 Comment folds (by design)', () => {
-    // Real pattern from lapresse FontBuilderTest.kt
+    // Real pattern from newsapp FontBuilderTest.kt
     const code = [
       '/* ========== RobotoSerif ========== */',
       'class FontBuilderTest {',
@@ -122,11 +122,11 @@ describe('non-KDoc block comments', () => {
   });
 });
 
-// ── Lapresse companion object patterns ───────────────────────────────────────
+// ── BigApp companion object patterns ───────────────────────────────────────
 
 describe('companion object', () => {
   it('named companion object `companion object Companion` → Region fold', () => {
-    // Real pattern from lapresse DemoPlaybackService.kt
+    // Real pattern from newsapp DemoPlaybackService.kt
     const code = [
       'class Foo {',
       '  companion object Companion {',  // named companion — IS indexed by parser
@@ -157,11 +157,11 @@ describe('companion object', () => {
   });
 });
 
-// ── Operator and modifier combinations (from lapresse ViewSpacing) ────────────
+// ── Operator and modifier combinations (from newsapp ViewSpacing) ────────────
 
 describe('operator and modifier combos', () => {
   it('`operator fun plus(other: T): T { }` → Region fold', () => {
-    // Real pattern from lapresse MarginJsonParserDelegate.kt
+    // Real pattern from newsapp MarginJsonParserDelegate.kt
     const code = [
       'data class ViewSpacing(val x: Int) {',
       '  operator fun plus(other: ViewSpacing): ViewSpacing {',
@@ -176,7 +176,7 @@ describe('operator and modifier combos', () => {
   });
 
   it('`inline infix fun <reified T : Any> T.merge(other: T): T { }` → Region fold', () => {
-    // Real pattern from lapresse StyleModelAssembler.kt
+    // Real pattern from newsapp StyleModelAssembler.kt
     const code = [
       'private inline infix fun <reified T : Any> T.merge(other: T): T {',
       '  return other',
@@ -188,7 +188,7 @@ describe('operator and modifier combos', () => {
   });
 
   it('`fun foo(): Gson = Serializer.gson` explicit return type single-line → no Region fold', () => {
-    // Real pattern from lapresse MainActivityModule.kt
+    // Real pattern from newsapp MainActivityModule.kt
     // Single-expression function: parser indexes it, but rangeEndLine sees the NEXT symbol
     // immediately on the next line → end = start → no fold
     const code = [
@@ -205,7 +205,7 @@ describe('operator and modifier combos', () => {
 
 describe('anonymous object expressions', () => {
   it('`object : Interface { ... }` → Region fold exists (Fix B indexes $anon$N)', () => {
-    // Real pattern from lapresse MainActivityModule.kt provideEmptyMediaSelector().
+    // Real pattern from newsapp MainActivityModule.kt provideEmptyMediaSelector().
     // After Fix B, `object : MediaEngineSelector` is indexed as $anon$1.
     const code = [
       'fun provideEmptyMediaSelector() =',
@@ -220,7 +220,7 @@ describe('anonymous object expressions', () => {
   });
 });
 
-// ── Sealed class with nested data classes (from lapresse ActionModel.kt) ──────
+// ── Sealed class with nested data classes (from newsapp ActionModel.kt) ──────
 
 describe('sealed class with nested data classes', () => {
   it('sealed class + multiple nested data classes → Region folds for each', () => {
@@ -260,11 +260,11 @@ describe('sealed class with nested data classes', () => {
   });
 });
 
-// ── @file: annotations (from lapresse) ───────────────────────────────────────
+// ── @file: annotations (from newsapp) ───────────────────────────────────────
 
 describe('@file: annotations', () => {
   it('`@file:Suppress("MagicNumber")` before package → class still gets Region fold', () => {
-    // Real pattern from lapresse OnboardingBackground.kt
+    // Real pattern from newsapp OnboardingBackground.kt
     const code = [
       '@file:Suppress("MagicNumber")',  // line 0
       'package com.example',            // line 1
@@ -281,11 +281,11 @@ describe('@file: annotations', () => {
   });
 });
 
-// ── Data class with multi-line constructor (from lapresse) ────────────────────
+// ── Data class with multi-line constructor (from newsapp) ────────────────────
 
 describe('data class multi-line constructor', () => {
   it('data class with many params → class Region fold covers body', () => {
-    // Real pattern from lapresse ClickableText, ViewSpacing, etc.
+    // Real pattern from newsapp ClickableText, ViewSpacing, etc.
     const code = [
       'data class ClickableText(',              // line 0
       '    val annotatedString: String,',       // line 1
@@ -316,11 +316,11 @@ describe('data class multi-line constructor', () => {
   });
 });
 
-// ── Import aliases (from lapresse) ───────────────────────────────────────────
+// ── Import aliases (from newsapp) ───────────────────────────────────────────
 
 describe('import aliases', () => {
   it('`import Foo as Bar` style → Imports fold works normally', () => {
-    // Real pattern from lapresse TransformationImageDelegate.kt
+    // Real pattern from newsapp TransformationImageDelegate.kt
     const code = [
       'import jp.wasabeef.glide.BitmapTransformation as WasabeefTransform',
       'import androidx.compose.ui.geometry.Rect as ComposeRect',
@@ -333,11 +333,11 @@ describe('import aliases', () => {
   });
 });
 
-// ── Composable functions with complex signatures (from lapresse) ──────────────
+// ── Composable functions with complex signatures (from newsapp) ──────────────
 
 describe('composable functions', () => {
   it('@Composable with lambda param → Region fold', () => {
-    // Real pattern from lapresse ActionButtons.kt
+    // Real pattern from newsapp ActionButtons.kt
     const code = [
       '@Composable',                          // line 0
       'fun ProvideActionButtonsDimensions(',   // line 1

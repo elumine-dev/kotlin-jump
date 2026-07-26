@@ -291,7 +291,7 @@ function resolveGradleModulePath(
 
 /**
  * Walk up from `filePath` to `projectRoot` looking for the nearest build.gradle(.kts).
- * Returns the Gradle module path (e.g. ":rubicon:app") or "" for the root project.
+ * Returns the Gradle module path (e.g. ":newsfeed:app") or "" for the root project.
  */
 export function findGradleModuleByPath(filePath: string, projectRoot: string): string {
   const fs = require('fs') as typeof import('fs');
@@ -567,7 +567,7 @@ async function spawnGradle(
 }
 
 // Gradle test output pattern:
-// "nuglif.rubicon.FooTest > testBar PASSED"
+// "com.example.news.FooTest > testBar PASSED"
 // "> Task :app:test FAILED"
 // Method name uses .+? (lazy) to support backtick-named tests with spaces,
 // e.g. "KioskConnectivityUseCaseTest > given device is connected then state should be Connected PASSED"
@@ -906,7 +906,7 @@ function parseCoverageXml(xml: string, results: vscode.FileCoverage[]): void {
 }
 
 function findSourceUri(className: string): vscode.Uri | undefined {
-  // className is like "nuglif/rubicon/foo/Bar" — convert to file path fragment
+  // className is like "com/example/news/foo/Bar" — convert to file path fragment
   const fragment = className.replace(/\$/g, '.') + '.kt';
   const folders = vscode.workspace.workspaceFolders;
   if (!folders) return undefined;

@@ -290,7 +290,7 @@ describe('handleGetFileSymbols — normalisation URI adversariale', () => {
 
 describe('handleSearchSymbols — kind-aware search', () => {
   it('retourne les composables Screen même noyés par des val screen* nombreux', () => {
-    // Reproduit le problème réel de lapresse : beaucoup de val/var "screen*" ont un
+    // Reproduit le problème réel observé sur un gros monorepo : beaucoup de val/var "screen*" ont un
     // fuzzyScore plus élevé (word boundary au début) que "LoginScreen" (match en milieu).
     // Avant fix : les 200 premiers résultats étaient tous des val → les composables
     // n'atteignaient jamais le filtre kind. Après fix : le cap 200 s'applique dans le kind.

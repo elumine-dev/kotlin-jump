@@ -1,7 +1,7 @@
 /**
  * Adversarial tests for SelectionRangeProvider.
  *
- * Based on real Kotlin patterns found in lapresse production code.
+ * Based on real Kotlin patterns found in newsapp production code.
  * Goal: verify the selection range chain is correct for unusual-but-valid syntax.
  */
 import { describe, it, expect } from 'vitest';
@@ -30,7 +30,7 @@ function chain(code: string, pos: Position): Array<[number, number]> {
   return result;
 }
 
-// ── Named companion object (from lapresse DemoPlaybackService.kt) ─────────────
+// ── Named companion object (from newsapp DemoPlaybackService.kt) ─────────────
 
 describe('named companion object', () => {
   const code = [
@@ -82,7 +82,7 @@ describe('unnamed companion object', () => {
   });
 });
 
-// ── Extension functions (from lapresse TextStyleModel.kt) ────────────────────
+// ── Extension functions (from newsapp TextStyleModel.kt) ────────────────────
 
 describe('extension functions', () => {
   it('cursor inside extension function body → chain: extension fn + file', () => {
@@ -103,7 +103,7 @@ describe('extension functions', () => {
   });
 });
 
-// ── Operator functions (from lapresse ViewSpacing) ────────────────────────────
+// ── Operator functions (from newsapp ViewSpacing) ────────────────────────────
 
 describe('operator functions', () => {
   const code = [
@@ -135,7 +135,7 @@ describe('operator functions', () => {
   });
 });
 
-// ── Inline + infix + reified (from lapresse StyleModelAssembler.kt) ───────────
+// ── Inline + infix + reified (from newsapp StyleModelAssembler.kt) ───────────
 
 describe('inline infix reified function', () => {
   it('cursor inside complex modifier function → chain works', () => {
@@ -150,7 +150,7 @@ describe('inline infix reified function', () => {
   });
 });
 
-// ── Sealed class hierarchy (from lapresse ActionModel.kt) ────────────────────
+// ── Sealed class hierarchy (from newsapp ActionModel.kt) ────────────────────
 
 describe('sealed class hierarchy', () => {
   it('cursor inside nested data class → chain: data class + file', () => {
@@ -180,7 +180,7 @@ describe('sealed class hierarchy', () => {
 
 describe('anonymous object expression', () => {
   it('cursor inside anonymous object body → falls back to enclosing function', () => {
-    // Real pattern from lapresse MainActivityModule.kt.
+    // Real pattern from newsapp MainActivityModule.kt.
     // After Fix B, `object : MediaEngineSelector` is indexed as $anon$1.
     const code = [
       'fun provideEmptyMediaSelector() =', // line 0 — indexed
@@ -197,7 +197,7 @@ describe('anonymous object expression', () => {
   });
 });
 
-// ── @file: annotation (from lapresse) ────────────────────────────────────────
+// ── @file: annotation (from newsapp) ────────────────────────────────────────
 
 describe('@file: annotation', () => {
   it('cursor on @file:Suppress line → only file range (no symbol contains line 0)', () => {
@@ -247,7 +247,7 @@ describe('lambda bodies are not indexed', () => {
   });
 
   it('cursor inside complex nested lambda (like LaunchedEffect) → enclosing function', () => {
-    // Real pattern from lapresse OnboardingBackground.kt
+    // Real pattern from newsapp OnboardingBackground.kt
     const code = [
       '@Composable',
       'fun OnboardingBackground() {',  // line 1
@@ -263,11 +263,11 @@ describe('lambda bodies are not indexed', () => {
   });
 });
 
-// ── Delegation pattern (from lapresse ContentCardModuleViewHolder) ────────────
+// ── Delegation pattern (from newsapp ContentCardModuleViewHolder) ────────────
 
 describe('class delegation pattern', () => {
   it('`class Foo(...) : Base(root), Interface by delegate` → class indexed, cursor works', () => {
-    // Real pattern from lapresse: class implementing interface via delegation
+    // Real pattern from newsapp: class implementing interface via delegation
     const code = [
       'class ContentCardModuleViewHolder(',   // line 0
       '    private val binding: CardBinding,', // line 1

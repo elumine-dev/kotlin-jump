@@ -9,7 +9,7 @@
  *   TC-5  isTestFun — @Ignore sur une méthode @Test → isTestFun=true mais entry.isIgnored=true
  *   TC-6  isTestFun avec extraSegs custom
  *   TC-7  isTestFun — kind=composable qualifie
- *   TC-8  Stress scale — 335 classes × 5 méthodes (lapresse)
+ *   TC-8  Stress scale — 335 classes × 5 méthodes (newsapp)
  *   TC-9  Multiple modules — 46 modules
  *   TC-10 Propagation de tous les flags dans le pipeline parser → SymbolIndex
  *   TC-11 isTestFun — plusieurs annotations lifecycle (toutes exclues)
@@ -41,21 +41,21 @@ describe('TC-1 — Same simple name, different packages', () => {
   it('FQNs distincts → pas de collision dans l\'index', () => {
     const idx = new SymbolIndex();
     addKt(idx, 'file:///src/test/java/foo/FooTest.kt', [
-      'package nuglif.foo',
+      'package com.example.foo',
       'class FooTest {',
       '  @Test fun testA() {}',
       '}',
     ].join('\n'), ':moduleA');
 
     addKt(idx, 'file:///src/test/java/bar/FooTest.kt', [
-      'package nuglif.bar',
+      'package com.example.bar',
       'class FooTest {',
       '  @Test fun testB() {}',
       '}',
     ].join('\n'), ':moduleB');
 
-    const entryA = idx.lookupFqn('nuglif.foo.FooTest.testA');
-    const entryB = idx.lookupFqn('nuglif.bar.FooTest.testB');
+    const entryA = idx.lookupFqn('com.example.foo.FooTest.testA');
+    const entryB = idx.lookupFqn('com.example.bar.FooTest.testB');
     expect(entryA).toBeDefined();
     expect(entryB).toBeDefined();
     // Les FQNs sont différents
@@ -65,9 +65,9 @@ describe('TC-1 — Same simple name, different packages', () => {
     expect(isTestFun(entryB!, [])).toBe(true);
   });
 
-  it('mth| IDs distincts — "mth|nuglif.foo.FooTest.testA" ≠ "mth|nuglif.bar.FooTest.testA"', () => {
-    const fqnA = 'nuglif.foo.FooTest.testA';
-    const fqnB = 'nuglif.bar.FooTest.testA';
+  it('mth| IDs distincts — "mth|com.example.foo.FooTest.testA" ≠ "mth|com.example.bar.FooTest.testA"', () => {
+    const fqnA = 'com.example.foo.FooTest.testA';
+    const fqnB = 'com.example.bar.FooTest.testA';
     expect(`mth|${fqnA}`).not.toBe(`mth|${fqnB}`);
   });
 });
@@ -294,10 +294,10 @@ describe('TC-7 — kind=composable dans test path', () => {
   });
 });
 
-// ── TC-8 : Stress scale — lapresse (335 classes × 5 méthodes) ────────────────
+// ── TC-8 : Stress scale — newsapp (335 classes × 5 méthodes) ────────────────
 
-describe('TC-8 — Stress scale lapresse: 335 classes × 5 méthodes', () => {
-  function buildLapresseLikeCode(classIndex: number, pkg: string): string {
+describe('TC-8 — Stress scale newsapp: 335 classes × 5 méthodes', () => {
+  function buildBigAppLikeCode(classIndex: number, pkg: string): string {
     return [
       `package ${pkg}`,
       `import org.junit.Test`,
@@ -326,9 +326,9 @@ describe('TC-8 — Stress scale lapresse: 335 classes × 5 méthodes', () => {
       const moduleName = `:module${m}`;
       for (let c = 0; c < CLASSES_PER_MODULE; c++) {
         const globalIdx = m * CLASSES_PER_MODULE + c;
-        const pkg = `nuglif.module${m}.pkg${c % 3}`;
+        const pkg = `com.example.module${m}.pkg${c % 3}`;
         const uri = `file:///src/test/java/${pkg.replace(/\./g, '/')}/Test${globalIdx}.kt`;
-        addKt(idx, uri, buildLapresseLikeCode(globalIdx, pkg), moduleName);
+        addKt(idx, uri, buildBigAppLikeCode(globalIdx, pkg), moduleName);
       }
     }
 
@@ -361,7 +361,7 @@ describe('TC-8 — Stress scale lapresse: 335 classes × 5 méthodes', () => {
     for (let m = 0; m < 10; m++) {
       for (let c = 0; c < 5; c++) {
         const globalIdx = m * 5 + c;
-        const pkg = `nuglif.module${m}`;
+        const pkg = `com.example.module${m}`;
         const uri = `file:///src/test/java/${pkg}/Test${globalIdx}.kt`;
         addKt(idx, uri, `package ${pkg}\nclass Test${globalIdx} { @Test fun testA() {} }`, `:module${m}`);
 
@@ -517,18 +517,18 @@ describe('TC-12 — Helper class dans test/java/ sans @Test', () => {
     expect(isTestFun(privateHelper!, [])).toBe(false); // private exclu ✓
   });
 
-  it('lapresse: BaseTest.kt avec seulement @Before → setUp exclu des tests', () => {
-    // Pattern commun à lapresse — classe de base avec setUp uniquement
+  it('newsapp: BaseTest.kt avec seulement @Before → setUp exclu des tests', () => {
+    // Pattern commun à newsapp — classe de base avec setUp uniquement
     // Note: `open fun` n'est pas dans les modificateurs RE_FUN — utiliser `fun` ici
-    const idx = makeIndex('file:///src/test/java/nuglif/rubicon/BaseTest.kt', [
-      'package nuglif.rubicon',
+    const idx = makeIndex('file:///src/test/java/com/example/news/BaseTest.kt', [
+      'package com.example.news',
       'open class BaseTest {',
       '  @Before',
       '  fun setUp() {}',  // sans `open` — limitation connue du parser
       '}',
-    ].join('\n'), ':rubicon:core');
+    ].join('\n'), ':newsfeed:core');
 
-    const entries = idx.getFileSymbols('file:///src/test/java/nuglif/rubicon/BaseTest.kt');
+    const entries = idx.getFileSymbols('file:///src/test/java/com/example/news/BaseTest.kt');
     const setUp = entries.find(e => e.name === 'setUp');
     expect(setUp!.isLifecycle).toBe(true);
     expect(isTestFun(setUp!, [])).toBe(false);

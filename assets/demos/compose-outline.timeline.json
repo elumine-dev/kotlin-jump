@@ -1,0 +1,14 @@
+[
+  {
+    "type": "caption",
+    "label": "What does this screen actually render?",
+    "duration": 2400,
+    "t": 300
+  },
+  {
+    "type": "caption",
+    "label": "Branches, loops and recursion, with no build",
+    "duration": 2800,
+    "t": 8167
+  }
+]

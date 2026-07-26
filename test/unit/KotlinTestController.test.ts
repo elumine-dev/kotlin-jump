@@ -167,12 +167,12 @@ describe('@RunWith / isTestClass detection', () => {
   });
 });
 
-// ── Newsapp-style patterns ───────────────────────────────────────────────────
+// ── BigApp-style patterns ───────────────────────────────────────────────────
 
 describe('newsapp-style test patterns', () => {
   it('detects standard JUnit 4 test class', () => {
     const code = `
-      package com.example.saffron.media.video
+      package com.example.news.media.video
 
       import org.junit.Test
       import io.mockk.mockk
@@ -200,8 +200,8 @@ describe('newsapp-style test patterns', () => {
         private fun helperMethod() {}
       }
     `;
-    const uri = 'file:///project/saffron/app/src/test/java/com/example/saffron/media/video/BasilControllerPumaTest.kt';
-    const idx = makeIndex(uri, code, ':saffron:app');
+    const uri = 'file:///project/newsfeed/app/src/test/java/com/example/news/media/video/BasilControllerPumaTest.kt';
+    const idx = makeIndex(uri, code, ':newsfeed:app');
     const entries = idx.getFileSymbols(uri);
 
     const testFuns = entries.filter(e => isTestFun(e, []));
@@ -217,12 +217,12 @@ describe('newsapp-style test patterns', () => {
   });
 
   it('detects moduleName for Gradle task building', () => {
-    const uri = 'file:///project/saffron/app/src/test/java/FooTest.kt';
+    const uri = 'file:///project/newsfeed/app/src/test/java/FooTest.kt';
     const idx = makeIndex(uri, `
       class FooTest { @Test fun testIt() {} }
-    `, ':saffron:app');
+    `, ':newsfeed:app');
     const entries = idx.getFileSymbols(uri);
     const fun_ = entries.find(e => e.name === 'testIt');
-    expect(fun_?.moduleName).toBe(':saffron:app');
+    expect(fun_?.moduleName).toBe(':newsfeed:app');
   });
 });

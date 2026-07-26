@@ -122,7 +122,7 @@ describe('non-KDoc block comments', () => {
   });
 });
 
-// ── Newsapp companion object patterns ───────────────────────────────────────
+// ── BigApp companion object patterns ───────────────────────────────────────
 
 describe('companion object', () => {
   it('named companion object `companion object Companion` → Region fold', () => {

@@ -14,21 +14,21 @@ const GRADLE_PROJECT_CHOICE_KEY = 'kotlinJump.gradleProjectRoot.resolved';
 // ── Types ────────────────────────────────────────────────────────────────────
 
 // Explicit project entry from kotlinJump.androidProjects setting.
-// Equivalent to a zshrc alias like: juniper() { ... }
+// Equivalent to a zshrc alias like: reader() { ... }
 interface ExplicitProject {
-  name: string;     // display name, e.g. "Juniper"
-  module: string;   // gradle module path, e.g. "juniper/app"
+  name: string;     // display name, e.g. "Reader"
+  module: string;   // gradle module path, e.g. "reader/app"
   package: string;  // applicationId, e.g. "com.example.newsapp.debug"
-  variant?: string; // build variant, e.g. "JuniperExampleappDebug" (skips task discovery)
+  variant?: string; // build variant, e.g. "DemoFreeDebug" (skips task discovery)
 }
 
 interface AndroidModuleInfo {
-  module: string;      // e.g. "juniper/app"
+  module: string;      // e.g. "reader/app"
   packageName: string; // e.g. "com.example.newsapp.debug"
 }
 
 interface AndroidConfig extends AndroidModuleInfo {
-  gradleModule: string;   // e.g. ":juniper:app"
+  gradleModule: string;   // e.g. ":reader:app"
   installTask:  string;   // fallback only; resolveInstallTask() overrides for auto-detected
   projectRoot:  string;
   gradlew:      string;
@@ -39,7 +39,7 @@ interface AndroidConfig extends AndroidModuleInfo {
 // Mirrors what Android Studio reads before calling `am start`.
 interface MergedManifestInfo {
   packageName:      string; // e.g. "com.example.newsapp.debug"
-  launcherActivity: string; // e.g. "com.example.newsapp.debug/.JuniperStartActivity"
+  launcherActivity: string; // e.g. "com.example.newsapp.debug/.MainActivity"
 }
 
 // Passed to executeWithShellIntegration so adb command is built post-build
@@ -372,7 +372,7 @@ async function runAndroid(
 
   // adb-XXXX-YYYY serials (ADB internal mDNS auto-discover) don't work reliably with -s or
   // ANDROID_SERIAL — omit both and let ADB target the only connected device automatically,
-  // same as the zshrc saffron approach. USB and HOST:PORT serials are explicit and safe to pass.
+  // same as the zshrc newsfeed approach. USB and HOST:PORT serials are explicit and safe to pass.
   const isMdnsAuto   = device.startsWith('adb-');
   const serialEnv    = isMdnsAuto ? '' : `ANDROID_SERIAL="${device}" `;
   const adbTarget    = isMdnsAuto ? 'adb' : `adb -s "${device}"`;
@@ -1086,7 +1086,7 @@ async function detectAndroidProject(
     return undefined;
   }
 
-  // Group by module: "saffron/app/src/debug/AndroidManifest.xml" → "saffron/app"
+  // Group by module: "newsfeed/app/src/debug/AndroidManifest.xml" → "newsfeed/app"
   const byModule = new Map<string, vscode.Uri[]>();
   for (const uri of uris) {
     const rel    = path.relative(projectRoot, uri.fsPath).replace(/\\/g, '/');
@@ -1201,18 +1201,18 @@ async function detectFromExplicit(
 // Consistent across AGP 7.x and 8.x.
 function readMergedManifest(
   projectRoot: string,
-  gradleModule: string,   // e.g. ":juniper:app" or "" for flat layout
-  installTask: string,    // e.g. ":juniper:app:installJuniperExampleappDebug"
+  gradleModule: string,   // e.g. ":reader:app" or "" for flat layout
+  installTask: string,    // e.g. ":reader:app:installDemoFreeDebug"
 ): MergedManifestInfo | undefined {
   // Derive variant directory from install task name:
-  // ":juniper:app:installJuniperExampleappDebug" → strip up to last "install" → "JuniperExampleappDebug"
-  // → lowercase first char → "juniperExampleappDebug"
-  const taskLocal        = installTask.replace(/^.*:install/, 'install');  // "installJuniperExampleappDebug"
-  const variantCapitalized = taskLocal.replace(/^install/, '');            // "JuniperExampleappDebug"
+  // ":reader:app:installDemoFreeDebug" → strip up to last "install" → "DemoFreeDebug"
+  // → lowercase first char → "demoFreeDebug"
+  const taskLocal        = installTask.replace(/^.*:install/, 'install');  // "installDemoFreeDebug"
+  const variantCapitalized = taskLocal.replace(/^install/, '');            // "DemoFreeDebug"
   if (!variantCapitalized) return undefined;
   const variantDir = variantCapitalized.charAt(0).toLowerCase() + variantCapitalized.slice(1);
 
-  // Module directory: ":juniper:app" → "juniper/app" → {projectRoot}/juniper/app
+  // Module directory: ":reader:app" → "reader/app" → {projectRoot}/reader/app
   const moduleRelPath = gradleModule ? gradleModule.replace(/^:/, '').replace(/:/g, '/') : '';
   const moduleDir     = moduleRelPath ? path.join(projectRoot, moduleRelPath) : projectRoot;
 
@@ -1250,7 +1250,7 @@ function parseLauncherActivity(content: string, packageName: string): string | u
     if (!name) continue;
 
     if (name.startsWith('.')) {
-      // ".JuniperStartActivity" → "com.example/.JuniperStartActivity"
+      // ".MainActivity" → "com.example/.MainActivity"
       return `${packageName}/${name}`;
     } else if (!name.includes('.')) {
       // "MainActivity" (no dots = relative shorthand) → "com.example/.MainActivity"

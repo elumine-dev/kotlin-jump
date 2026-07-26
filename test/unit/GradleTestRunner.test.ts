@@ -123,20 +123,20 @@ describe('parseJUnitXml', () => {
 
   it('handles multiple test cases in one testsuite', () => {
     const xml = `
-      <testsuite name="com.example.saffron.FooTest">
-        <testcase classname="com.example.saffron.FooTest" name="testA" time="0.1"/>
-        <testcase classname="com.example.saffron.FooTest" name="testB" time="0.2">
+      <testsuite name="com.example.news.FooTest">
+        <testcase classname="com.example.news.FooTest" name="testA" time="0.1"/>
+        <testcase classname="com.example.news.FooTest" name="testB" time="0.2">
           <failure message="oops">stacktrace</failure>
         </testcase>
-        <testcase classname="com.example.saffron.FooTest" name="testC" time="0">
+        <testcase classname="com.example.news.FooTest" name="testC" time="0">
           <skipped/>
         </testcase>
       </testsuite>
     `;
     const results = parseJUnitXml(xml);
-    expect(results.get('com.example.saffron.FooTest.testA')!.state).toBe('passed');
-    expect(results.get('com.example.saffron.FooTest.testB')!.state).toBe('failed');
-    expect(results.get('com.example.saffron.FooTest.testC')!.state).toBe('skipped');
+    expect(results.get('com.example.news.FooTest.testA')!.state).toBe('passed');
+    expect(results.get('com.example.news.FooTest.testB')!.state).toBe('failed');
+    expect(results.get('com.example.news.FooTest.testC')!.state).toBe('skipped');
   });
 
   it('handles self-closing testcase (no body)', () => {
@@ -151,17 +151,17 @@ describe('parseJUnitXml', () => {
 describe('Gradle --tests filter syntax', () => {
   it('uses dot separator (not #) for method filter', () => {
     // Gradle requires "pkg.ClassName.methodName", not "pkg.ClassName#methodName"
-    const classFqn = 'com.example.saffron.FooTest';
+    const classFqn = 'com.example.news.FooTest';
     const method = 'testGetUser';
     const filter = `${classFqn}.${method}`;
-    expect(filter).toBe('com.example.saffron.FooTest.testGetUser');
+    expect(filter).toBe('com.example.news.FooTest.testGetUser');
     expect(filter).not.toContain('#');
   });
 
   it('builds module task correctly from moduleName', () => {
-    const moduleName = ':saffron:app';
+    const moduleName = ':newsfeed:app';
     const task = `${moduleName}:test`;
-    expect(task).toBe(':saffron:app:test');
+    expect(task).toBe(':newsfeed:app:test');
   });
 
   it('builds root task when moduleName is empty', () => {
@@ -175,24 +175,24 @@ describe('Gradle --tests filter syntax', () => {
 
 describe('parseStdoutLine (Gradle output)', () => {
   it('parses PASSED line', () => {
-    const r = parseStdoutLine('com.example.saffron.FooTest > testGetUser PASSED');
+    const r = parseStdoutLine('com.example.news.FooTest > testGetUser PASSED');
     expect(r).toBeDefined();
-    expect(r!.key).toBe('com.example.saffron.FooTest.testGetUser');
+    expect(r!.key).toBe('com.example.news.FooTest.testGetUser');
     expect(r!.state).toBe('passed');
   });
 
   it('parses FAILED line', () => {
-    const r = parseStdoutLine('com.example.saffron.FooTest > testError FAILED');
+    const r = parseStdoutLine('com.example.news.FooTest > testError FAILED');
     expect(r!.state).toBe('failed');
   });
 
   it('parses SKIPPED line', () => {
-    const r = parseStdoutLine('com.example.saffron.FooTest > testSkipped SKIPPED');
+    const r = parseStdoutLine('com.example.news.FooTest > testSkipped SKIPPED');
     expect(r!.state).toBe('skipped');
   });
 
   it('ignores non-result lines', () => {
-    expect(parseStdoutLine('> Task :saffron:app:test')).toBeUndefined();
+    expect(parseStdoutLine('> Task :newsfeed:app:test')).toBeUndefined();
     expect(parseStdoutLine('BUILD SUCCESSFUL in 12s')).toBeUndefined();
     expect(parseStdoutLine('')).toBeUndefined();
     expect(parseStdoutLine('Starting Gradle Daemon...')).toBeUndefined();
@@ -201,7 +201,7 @@ describe('parseStdoutLine (Gradle output)', () => {
   it('does not match multi-word test names (known limitation — Gradle strips backticks)', () => {
     // Gradle actually strips backticks and outputs: "FooTest > play starts playback PASSED"
     // Our regex (\S+) only matches single words — multi-word names are a known gap
-    const r = parseStdoutLine('com.example.saffron.FooTest > `play starts playback` PASSED');
+    const r = parseStdoutLine('com.example.news.FooTest > `play starts playback` PASSED');
     // Not matched — multi-word names fall back to XML parsing
     expect(r).toBeUndefined();
   });

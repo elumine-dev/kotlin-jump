@@ -102,13 +102,13 @@ function parseStdoutLine(line: string): { key: string; state: string } | undefin
 describe('GA-1 — Nested class JVM classname normalisation', () => {
   it('classname="pkg.Outer$Inner" normalisé en "pkg.Outer.Inner"', () => {
     const xml = `
-      <testcase classname="com.example.saffron.OuterTest$InnerTest" name="testMethod" time="0.1"/>
+      <testcase classname="com.example.news.OuterTest$InnerTest" name="testMethod" time="0.1"/>
     `;
     const results = parseJUnitXml(xml);
-    // Before fix: key would be "com.example.saffron.OuterTest$InnerTest.testMethod" → not found
-    // After fix: key is "com.example.saffron.OuterTest.InnerTest.testMethod"
-    expect(results.has('com.example.saffron.OuterTest.InnerTest.testMethod')).toBe(true);
-    expect(results.has('com.example.saffron.OuterTest$InnerTest.testMethod')).toBe(false);
+    // Before fix: key would be "com.example.news.OuterTest$InnerTest.testMethod" → not found
+    // After fix: key is "com.example.news.OuterTest.InnerTest.testMethod"
+    expect(results.has('com.example.news.OuterTest.InnerTest.testMethod')).toBe(true);
+    expect(results.has('com.example.news.OuterTest$InnerTest.testMethod')).toBe(false);
   });
 
   it('classname multi-niveau "$" — "A$B$C" → "A.B.C"', () => {
@@ -280,13 +280,13 @@ describe('GA-6 — Stress test (newsapp scale: 335 testcases)', () => {
     for (let i = 0; i < count; i++) {
       const mod = i % 3;
       if (mod === 0) {
-        cases.push(`<testcase classname="com.example.saffron.Test${i}" name="testMethod${i}" time="0.${i % 100}"/>`);
+        cases.push(`<testcase classname="com.example.news.Test${i}" name="testMethod${i}" time="0.${i % 100}"/>`);
       } else if (mod === 1) {
-        cases.push(`<testcase classname="com.example.saffron.Test${i}" name="testMethod${i}" time="0.1">
+        cases.push(`<testcase classname="com.example.news.Test${i}" name="testMethod${i}" time="0.1">
           <failure message="expected ${i}">stack</failure>
         </testcase>`);
       } else {
-        cases.push(`<testcase classname="com.example.saffron.Test${i}" name="testMethod${i}" time="0">
+        cases.push(`<testcase classname="com.example.news.Test${i}" name="testMethod${i}" time="0">
           <skipped/>
         </testcase>`);
       }
@@ -332,16 +332,16 @@ describe('GA-7 — buildGradleTask avec module 3 niveaux', () => {
     expect(buildGradleTask(':core:network:impl')).toBe(':core:network:impl:test');
   });
 
-  it(':saffron:app → :saffron:app:test', () => {
-    expect(buildGradleTask(':saffron:app')).toBe(':saffron:app:test');
+  it(':newsfeed:app → :newsfeed:app:test', () => {
+    expect(buildGradleTask(':newsfeed:app')).toBe(':newsfeed:app:test');
   });
 
   it('module vide → "test"', () => {
     expect(buildGradleTask('')).toBe('test');
   });
 
-  it(':juniper:core:domain:impl (4 niveaux) → :juniper:core:domain:impl:test', () => {
-    expect(buildGradleTask(':juniper:core:domain:impl')).toBe(':juniper:core:domain:impl:test');
+  it(':reader:core:domain:impl (4 niveaux) → :reader:core:domain:impl:test', () => {
+    expect(buildGradleTask(':reader:core:domain:impl')).toBe(':reader:core:domain:impl:test');
   });
 });
 
@@ -385,14 +385,14 @@ describe('GA-8 — buildTestFilters déduplication', () => {
 
 describe('GA-9 — parseStdoutLine patterns spéciaux', () => {
   it('classe avec chiffres dans le nom', () => {
-    const r = parseStdoutLine('com.example.saffron.Test2FAFlow > testOtpValidation PASSED');
-    expect(r?.key).toBe('com.example.saffron.Test2FAFlow.testOtpValidation');
+    const r = parseStdoutLine('com.example.news.Test2FAFlow > testOtpValidation PASSED');
+    expect(r?.key).toBe('com.example.news.Test2FAFlow.testOtpValidation');
     expect(r?.state).toBe('passed');
   });
 
   it('package profond (4 niveaux)', () => {
-    const r = parseStdoutLine('com.example.moonbeam.core.network.FooTest > testRequest FAILED');
-    expect(r?.key).toBe('com.example.moonbeam.core.network.FooTest.testRequest');
+    const r = parseStdoutLine('com.example.core.core.network.FooTest > testRequest FAILED');
+    expect(r?.key).toBe('com.example.core.core.network.FooTest.testRequest');
     expect(r?.state).toBe('failed');
   });
 
@@ -414,7 +414,7 @@ describe('GA-9 — parseStdoutLine patterns spéciaux', () => {
   });
 
   it('ligne de tâche Gradle non capturée', () => {
-    expect(parseStdoutLine('> Task :saffron:app:test FAILED')).toBeUndefined();
+    expect(parseStdoutLine('> Task :newsfeed:app:test FAILED')).toBeUndefined();
     expect(parseStdoutLine('> Configure project :app')).toBeUndefined();
   });
 });

@@ -297,7 +297,7 @@ describe('TC-7 — kind=composable dans test path', () => {
 // ── TC-8 : Stress scale — newsapp (335 classes × 5 méthodes) ────────────────
 
 describe('TC-8 — Stress scale newsapp: 335 classes × 5 méthodes', () => {
-  function buildExampleappLikeCode(classIndex: number, pkg: string): string {
+  function buildBigAppLikeCode(classIndex: number, pkg: string): string {
     return [
       `package ${pkg}`,
       `import org.junit.Test`,
@@ -328,7 +328,7 @@ describe('TC-8 — Stress scale newsapp: 335 classes × 5 méthodes', () => {
         const globalIdx = m * CLASSES_PER_MODULE + c;
         const pkg = `com.example.module${m}.pkg${c % 3}`;
         const uri = `file:///src/test/java/${pkg.replace(/\./g, '/')}/Test${globalIdx}.kt`;
-        addKt(idx, uri, buildExampleappLikeCode(globalIdx, pkg), moduleName);
+        addKt(idx, uri, buildBigAppLikeCode(globalIdx, pkg), moduleName);
       }
     }
 
@@ -520,15 +520,15 @@ describe('TC-12 — Helper class dans test/java/ sans @Test', () => {
   it('newsapp: BaseTest.kt avec seulement @Before → setUp exclu des tests', () => {
     // Pattern commun à newsapp — classe de base avec setUp uniquement
     // Note: `open fun` n'est pas dans les modificateurs RE_FUN — utiliser `fun` ici
-    const idx = makeIndex('file:///src/test/java/com/example/saffron/BaseTest.kt', [
-      'package com.example.saffron',
+    const idx = makeIndex('file:///src/test/java/com/example/news/BaseTest.kt', [
+      'package com.example.news',
       'open class BaseTest {',
       '  @Before',
       '  fun setUp() {}',  // sans `open` — limitation connue du parser
       '}',
-    ].join('\n'), ':saffron:core');
+    ].join('\n'), ':newsfeed:core');
 
-    const entries = idx.getFileSymbols('file:///src/test/java/com/example/saffron/BaseTest.kt');
+    const entries = idx.getFileSymbols('file:///src/test/java/com/example/news/BaseTest.kt');
     const setUp = entries.find(e => e.name === 'setUp');
     expect(setUp!.isLifecycle).toBe(true);
     expect(isTestFun(setUp!, [])).toBe(false);

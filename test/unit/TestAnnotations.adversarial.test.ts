@@ -451,7 +451,7 @@ describe('TA-10 — @org.junit.Test (FQN) — limitation connue', () => {
 describe('TA-11 — plusieurs classes de test dans un fichier', () => {
   it('deux classes @RunWith dans le même fichier — toutes deux détectées', () => {
     const code = [
-      'package com.example.saffron',
+      'package com.example.news',
       '@RunWith(RobolectricTestRunner::class)',
       'class FooTest {',
       '  @Test fun testFoo() {}',
@@ -488,7 +488,7 @@ describe('TA-11 — plusieurs classes de test dans un fichier', () => {
 describe('TA-13 — patterns réels newsapp', () => {
   it('MockKAnnotations + @MockK ne sont pas des tests', () => {
     const code = [
-      'package com.example.saffron.media.video',
+      'package com.example.news.media.video',
       '@RunWith(RobolectricTestRunner::class)',
       'class BasilControllerPumaTest {',
       '  @MockK',
@@ -527,8 +527,8 @@ describe('TA-13 — patterns réels newsapp', () => {
 
     // Vérification via isTestFun
     const idx = new SymbolIndex();
-    const uri = 'file:///saffron/app/src/test/java/com/example/saffron/media/video/BasilControllerPumaTest.kt';
-    addKt(idx, uri, code, ':saffron:app');
+    const uri = 'file:///newsfeed/app/src/test/java/com/example/news/media/video/BasilControllerPumaTest.kt';
+    addKt(idx, uri, code, ':newsfeed:app');
     const entries = idx.getFileSymbols(uri);
     const testFuns = entries.filter(e => isTestFun(e, []));
     const names = testFuns.map(e => e.name);
@@ -544,7 +544,7 @@ describe('TA-13 — patterns réels newsapp', () => {
     const idx = new SymbolIndex();
     const uri = 'file:///src/test/java/CoroutineTest.kt';
     addKt(idx, uri, [
-      'package com.example.moonbeam.core',
+      'package com.example.core.core',
       'class CoroutineTest {',
       '  @Test',
       '  fun testSuspendFunction() = runTest {',

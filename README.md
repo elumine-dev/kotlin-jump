@@ -53,10 +53,11 @@ Kotlin Jump skips all of that. **No LSP. No JVM. No waiting.**
 
 ## ✨ Recent
 
-- **🚫 Deprecation you can see.** Strikethrough on deprecated symbols; hover shows the message and its `ReplaceWith` snippet.
-- **🔐 Permission intel.** Hover any Android permission for what it grants. The manifest gets risk pills: 🟢 normal · 🟡 dangerous · 🔴 special.
-- **🎯 KMP coverage badges.** `[android ✓] [ios ✗]` on every `expect` declaration. Click jumps to the actual.
-- **⚠ Silent traps, caught.** Dated TODOs turn red once overdue. Data class body fields warn that they skip `equals()` and `copy()`.
+- **⚡ Fast editing.** Named arguments, postfix completion, live templates, surround with, smart join: the IntelliJ gestures, in the lightbulb.
+- **🧭 Structure views.** Compose Outline and the Android project view in their own activity-bar container, full height.
+- **🧹 Dead weight.** Usage badges on resources, dependencies and manifest entries. Everything flagged unused offers its removal.
+- **🔬 Static execution.** Lifecycle leaks, dispatcher misuse and Room migration drift, caught before you run.
+- **💡 Quick fix sweep.** Missing lifecycle releases, expired TODOs, `!!` rewrites and missing `when` branches, all one lightbulb away.
 
 [Full changelog →](CHANGELOG.md)
 
@@ -111,6 +112,185 @@ Alt+F7. Every usage, grouped by file, with previews.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/find-usages-test-filter.webp" width="720" />
+</p>
+
+---
+
+## ⚡ Fast Editing
+
+The IntelliJ editing muscle memory, rebuilt for VS Code. No LSP required.
+
+### Add names to call arguments
+`createTrainer("Ada", 36, true)` becomes `createTrainer(name = "Ada", age = 36, isChampion = true)` in one action, straight from the lightbulb.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/named-arguments.webp" width="720" />
+</p>
+
+### Postfix completion
+Type `pikachu.null` and the completion provider expands the null check for you. Also `.notnull`, `.let`, `.for`, `.when`.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/postfix-completion.webp" width="720" />
+</p>
+
+### Live templates
+`prev` + Tab writes the whole `@Preview` + `@Composable` block. `logd`, `logt`, `comp`, `vm`, `lazyv` work the same way.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/live-templates.webp" width="720" />
+</p>
+
+### Surround with
+Wrap the selection in try/catch, if, when, let, run or apply. Indentation follows the enclosing block, cursor lands where you type next.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/surround-with.webp" width="720" />
+</p>
+
+### Smart join lines
+Ctrl+Shift+J fuses split string literals into one, merges consecutive comments, glues call chains. Also in the lightbulb.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/smart-join-lines.webp" width="720" />
+</p>
+
+---
+
+## 🎨 Resource Intelligence
+
+### Extract string resource
+A hardcoded UI string moves to `strings.xml` (escaped, snake_case name generated) and the call site swaps to `stringResource(...)`. Both files shown, `$variables` become placeholders.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/extract-string-resource.webp" width="720" />
+</p>
+
+### Resource shadowing
+Two modules define the same resource name? The badge tells you which definition wins, and where the loser hides.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/resource-shadowing.webp" width="720" />
+</p>
+
+### Reverse string map
+Edit a value in `strings.xml` and watch the folded previews repaint in every consumer on save. Hover the entry to learn which SCREENS display it, by name.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/reverse-string-map.webp" width="720" />
+</p>
+
+---
+
+## 🧭 Structure Views
+
+A dedicated Kotlin Jump container in the activity bar, full sidebar height.
+
+### Compose Outline
+The UI structure of the composable under your caret, without building: branches labeled (`if (loading)`, `else`, `when`), loops marked `×items`, recursion cut with `↺`.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/compose-outline.webp" width="720" />
+</p>
+
+### Android project view
+Modules grouped the Android Studio way: manifests, kotlin+java, res by type, Gradle scripts.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/android-project-view.webp" width="720" />
+</p>
+
+### Screen Flow Map
+Your navigation graph as a diagram: routes, screens, and who reaches whom.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/screen-flow-map.webp" width="720" />
+</p>
+
+### UDF X-Ray
+CodeLens on every ViewModel state property: who writes it, who reads it.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/udf-xray.webp" width="720" />
+</p>
+
+---
+
+## 🔬 Static Execution
+
+Checks that read like runtime knowledge, before you run anything.
+
+### Lifecycle pairing
+`requestLocationUpdates` in `onResume` with no `removeUpdates` in `onPause`? The squiggly lands on the call and the hover spells out the leak. The quick fix writes the missing release.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/lifecycle-pairing.webp" width="720" />
+</p>
+
+### Dispatcher lens
+`withContext` / `launch` / `flowOn` blocks annotated with their dispatcher. View access off Main and network on Main get softly flagged.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/dispatcher-lens.webp" width="720" />
+</p>
+
+### Room migration drift
+An `@Entity` field with no `ADD COLUMN` in any migration, or a hole in the chain (1→2, 3→4, no 2→3), caught before the upgrade crash.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/room-migration-drift.webp" width="720" />
+</p>
+
+---
+
+## 🧹 Dead Weight
+
+Everything the project carries for nothing, visible and deletable in place. Every no-usage flag offers its removal through the lightbulb.
+
+### Unused imports
+Dead imports gray out as you read, alias traps included. One quick fix sweeps them all.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/unused-imports.webp" width="720" />
+</p>
+
+### Resource usage badges
+Per-resource usage counts inside `values/*.xml`. Zero means removable.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/resource-usage-badges.webp" width="720" />
+</p>
+
+### Dependency usage badges
+`build.gradle.kts` shows how many files import each dependency. A library at `0 imports` is pure APK weight, and the lightbulb offers the deletion.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/dependency-usage-badges.webp" width="720" />
+</p>
+
+### Manifest necessity
+Permissions and components checked against real code: `no usage found` badges, risk pills, and removal quick fixes with library-aware wording.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/manifest-necessity.webp" width="720" />
+</p>
+
+---
+
+## ✂️ Editor Comfort
+
+### Method separators + SQL in @Query
+IntelliJ-style separators between members, and real SQL syntax colors inside Room `@Query` strings, single-line or triple-quoted.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/method-separators.webp" width="720" />
+</p>
+
+### Recent locations
+Shift+Cmd+E style picker over your navigation history, with previews.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/recent-locations.webp" width="720" />
 </p>
 
 ---
@@ -476,7 +656,7 @@ Search **Kotlin Jump** in your editor's Extensions tab (`Cmd+Shift+X`), or insta
 For offline installs (machines without internet access), grab the latest `.vsix` from [GitHub Releases](https://github.com/elumine-dev/kotlin-jump/releases/latest):
 
 ```bash
-code --install-extension kotlin-jump-1.33.5.vsix
+code --install-extension kotlin-jump-1.34.0.vsix
 ```
 
 ### Build from source
@@ -484,7 +664,7 @@ code --install-extension kotlin-jump-1.33.5.vsix
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full dev setup, or quickstart:
 
 ```bash
-code --install-extension kotlin-jump-1.33.5.vsix
+code --install-extension kotlin-jump-1.34.0.vsix
 ```
 
 ---

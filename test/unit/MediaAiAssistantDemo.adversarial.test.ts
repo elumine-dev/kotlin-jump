@@ -205,14 +205,22 @@ describe('assets/demos/ai-assistant.webp — adversarial integration', () => {
     if (fs.existsSync(ignorePath)) {
       const ignore = fs.readFileSync(ignorePath, 'utf8');
       const lines = ignore.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
-      const blocksAsset = lines.some(pat =>
-        pat === ASSET_REL ||
-        pat === 'assets/**' ||
-        pat === 'assets/demos/**' ||
-        pat === 'assets/demos/*.webp' ||
-        pat === '**/ai-assistant.webp',
-      );
-      expect(blocksAsset, '.vscodeignore must not exclude the demo asset').toBe(false);
+      // vsce applies patterns in order with gitignore semantics: a `!`
+      // negation AFTER a broad exclusion re-includes the file. Since
+      // 25/07, assets/demos/** is excluded wholesale and only the
+      // runtime-consumed webps are negated back in.
+      let excluded = false;
+      for (const pat of lines) {
+        if (pat === `!${ASSET_REL}` || pat === '!**/ai-assistant.webp') excluded = false;
+        else if (
+          pat === ASSET_REL ||
+          pat === 'assets/**' ||
+          pat === 'assets/demos/**' ||
+          pat === 'assets/demos/*.webp' ||
+          pat === '**/ai-assistant.webp'
+        ) excluded = true;
+      }
+      expect(excluded, '.vscodeignore must not exclude the demo asset').toBe(false);
     }
   });
 });

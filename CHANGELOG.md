@@ -1,5 +1,53 @@
 # Changelog
 
+## 1.34.0
+
+Kotlin Jump 1.34.0 adds a fast editing toolkit, new structure views, static execution checks, and dead weight detection, plus a semantic highlighting fix.
+
+### Improvements
+- Added a fast editing toolkit (named arguments, postfix completion, live templates, surround with, smart join lines) that brings common IntelliJ gestures to the lightbulb, cutting down repetitive edits.
+
+  <p align="center"><img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/named-arguments.webp" width="640" /></p>
+  <p align="center"><img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/postfix-completion.webp" width="640" /></p>
+  <p align="center"><img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/live-templates.webp" width="640" /></p>
+  <p align="center"><img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/surround-with.webp" width="640" /></p>
+  <p align="center"><img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/smart-join-lines.webp" width="640" /></p>
+
+- Added a dedicated view container with Compose Outline, Android project view, Screen Flow Map, and UDF X-Ray, showing app structure without running a build.
+
+  <p align="center"><img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/compose-outline.webp" width="640" /></p>
+  <p align="center"><img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/android-project-view.webp" width="640" /></p>
+  <p align="center"><img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/screen-flow-map.webp" width="640" /></p>
+  <p align="center"><img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/udf-xray.webp" width="640" /></p>
+
+- Added static execution checks for lifecycle pairing, dispatcher misuse, and Room migration drift, surfacing bugs that would otherwise only appear at runtime.
+
+  <p align="center"><img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/lifecycle-pairing.webp" width="640" /></p>
+  <p align="center"><img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/dispatcher-lens.webp" width="640" /></p>
+  <p align="center"><img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/room-migration-drift.webp" width="640" /></p>
+
+- Added dead weight detection with usage badges on resources, dependencies, and manifest entries, each with a quick fix to remove what is unused.
+
+  <p align="center"><img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/unused-imports.webp" width="640" /></p>
+  <p align="center"><img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/resource-usage-badges.webp" width="640" /></p>
+  <p align="center"><img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/dependency-usage-badges.webp" width="640" /></p>
+  <p align="center"><img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/manifest-necessity.webp" width="640" /></p>
+
+- Added resource tools (extract string resource, resource shadowing, reverse string map, hardcoded string lint) and a quick fix sweep for expired TODOs, unsafe !! assertions, and missing when branches.
+
+  <p align="center"><img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/extract-string-resource.webp" width="640" /></p>
+  <p align="center"><img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/resource-shadowing.webp" width="640" /></p>
+  <p align="center"><img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/reverse-string-map.webp" width="640" /></p>
+
+
+- Added editor comfort touches: IntelliJ-style method separators, SQL syntax colors inside Room @Query strings (single-line and multi-line), and a recent locations picker with previews.
+
+  <p align="center"><img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/method-separators.webp" width="640" /></p>
+  <p align="center"><img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/recent-locations.webp" width="640" /></p>
+
+### Fixes
+- Fixed semantic highlighting so declaration tokens stay accurate after unsaved edits and multiline strings mask correctly, keeping colors reliable while typing.
+
 ## 1.33.5
 
 Kotlin Jump 1.33.5 fixes the file watcher so it skips build and .gradle folders, the same exclusion already applied at startup.

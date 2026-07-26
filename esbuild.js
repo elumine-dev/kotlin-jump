@@ -122,7 +122,7 @@ async function main() {
       ? (() => {
           // CLI orchestrators — run outside VS Code. Keep node_modules
           // external to avoid 2 MB single-file bundles.
-          const cliEntries = ['record.ts', 'validate-frames.ts', 'e2e.ts', 'manual-record.ts', 'manual-render.ts']
+          const cliEntries = ['record.ts', 'record-batch.ts', 'validate-frames.ts', 'e2e.ts', 'manual-record.ts', 'manual-render.ts']
             .map(n => path.join('scripts', 'demo', n))
             .filter(fs.existsSync);
           return cliEntries.length === 0

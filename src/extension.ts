@@ -16,6 +16,36 @@ import { KotlinCallHierarchyProvider } from './providers/CallHierarchyProvider';
 import { KotlinRenameProvider } from './providers/RenameProvider';
 import { OrganizeImportsProvider, organizeImports, buildOrganizeEdit } from './providers/OrganizeImportsProvider';
 import { AutoImportProvider } from './providers/AutoImportProvider';
+import { NamedArgumentsActionProvider } from './providers/NamedArgumentsActionProvider';
+import { PostfixCompletionProvider } from './providers/PostfixCompletionProvider';
+import { HardcodedStringProvider } from './providers/HardcodedStringProvider';
+import { ExtractStringResourceProvider } from './providers/ExtractStringResourceProvider';
+import { SurroundWithProvider, applySurround, surroundWithQuickPick } from './providers/SurroundWithProvider';
+import { smartJoinLinesCommand, SmartJoinLinesProvider } from './commands/smartJoinLines';
+import {
+  LifecycleReleaseActionProvider,
+  ExpiredTodoActionProvider,
+  NullAssertionActionProvider,
+  MissingWhenBranchesActionProvider,
+} from './providers/DiscoverabilityQuickFixes';
+import { recentLocationsCommand } from './commands/recentLocations';
+import { UnusedImportProvider, UnusedImportCodeActionProvider } from './providers/UnusedImportProvider';
+import { MethodSeparatorProvider } from './providers/MethodSeparatorProvider';
+import { AndroidProjectViewProvider } from './ui/AndroidProjectViewProvider';
+import { ScreenFlowPanel } from './ui/ScreenFlowPanel';
+import { StateProvenanceProvider } from './providers/StateProvenanceProvider';
+import { ComposeOutlineProvider } from './providers/ComposeOutlineProvider';
+import { probeSnapshot, probeTexts } from './util/demoProbe';
+import { LifecyclePairingProvider } from './providers/LifecyclePairingProvider';
+import { ResourceShadowingProvider } from './providers/ResourceShadowingProvider';
+import { DispatcherLensProvider } from './providers/DispatcherLensProvider';
+import { RoomMigrationProvider } from './providers/RoomMigrationProvider';
+import { ResourceUsageBadgeProvider } from './providers/ResourceUsageBadgeProvider';
+import { DependencyUsageBadgeProvider } from './providers/DependencyUsageBadgeProvider';
+import { ManifestNecessityProvider } from './providers/ManifestNecessityProvider';
+import { StringXmlHoverProvider } from './providers/StringXmlHoverProvider';
+import { DeadWeightActionProvider } from './providers/DeadWeightActionProvider';
+import { readSignature, parseParams } from './util/SignatureReader';
 import { KotlinDocumentHighlightProvider } from './providers/DocumentHighlightProvider';
 import { KotlinInlayHintsProvider } from './providers/InlayHintsProvider';
 import { KotlinSignatureHelpProvider } from './providers/SignatureHelpProvider';
@@ -249,6 +279,47 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         new AutoImportProvider(index),
         { providedCodeActionKinds: AutoImportProvider.providedCodeActionKinds },
       ),
+      // KJ-001 — Add names to call arguments (Alt+Enter à la IntelliJ).
+      vscode.languages.registerCodeActionsProvider(
+        KT_JAVA,
+        new NamedArgumentsActionProvider(async (callee, arity) => {
+          const cfg = vscode.workspace.getConfiguration('kotlinJump');
+          if (!cfg.get<boolean>('namedArgumentsAction', true)) return null;
+          const candidates = index
+            .lookup(callee)
+            .filter(e => ['fun', 'composable', 'class', 'dataClass'].includes(e.kind as string));
+          // Passe 1 : arité exacte ; passe 2 : plus de paramètres (défauts).
+          for (const exact of [true, false]) {
+            for (const entry of candidates) {
+              try {
+                const doc = await vscode.workspace.openTextDocument(entry.uri);
+                const sig = readSignature(doc, entry);
+                if (!sig) continue;
+                const params = parseParams(sig);
+                if (params.length === 0) continue;
+                if (exact ? params.length !== arity : params.length < arity) continue;
+                return {
+                  params: params.map(p => ({
+                    name: p.name,
+                    isVararg: new RegExp(`\\bvararg\\s+${p.name}\\b`).test(sig),
+                  })),
+                };
+              } catch {
+                continue;
+              }
+            }
+          }
+          return null;
+        }),
+        { providedCodeActionKinds: [vscode.CodeActionKind.RefactorRewrite] },
+      ),
+      // KJ-002 — Postfix completion (.let, .null, .for…), kotlin seulement :
+      // les templates générés sont du Kotlin.
+      vscode.languages.registerCompletionItemProvider(
+        { language: 'kotlin' },
+        new PostfixCompletionProvider(),
+        '.',
+      ),
     ] : []),
     vscode.languages.registerDocumentHighlightProvider(KT_JAVA, new KotlinDocumentHighlightProvider(index)),
     vscode.languages.registerSelectionRangeProvider(KT_JAVA, new KotlinSelectionRangeProvider(index)),
@@ -439,6 +510,56 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('kotlin-jump.whatsNew', () => {
       void WhatsNewPanel.show(context);
     }),
+
+    // KJ-006 — Surround with… (QuickPick + application d'un gabarit)
+    vscode.commands.registerCommand('kotlin-jump.surroundWith', () => {
+      const editor = vscode.window.activeTextEditor;
+      if (editor) void surroundWithQuickPick(editor);
+    }),
+    vscode.commands.registerCommand(
+      'kotlin-jump.surroundWith.apply',
+      (_uri: vscode.Uri, _range: vscode.Range, templateId: string) => {
+        const editor = vscode.window.activeTextEditor;
+        if (editor) void applySurround(editor, templateId);
+      },
+    ),
+
+    // KJ-007 — Smart join lines (Ctrl+Shift+J, also in the lightbulb)
+    vscode.commands.registerCommand('kotlin-jump.smartJoinLines', () => {
+      const editor = vscode.window.activeTextEditor;
+      if (editor) void smartJoinLinesCommand(editor);
+    }),
+    vscode.languages.registerCodeActionsProvider(
+      { language: 'kotlin' },
+      new SmartJoinLinesProvider(),
+      { providedCodeActionKinds: [vscode.CodeActionKind.RefactorRewrite] },
+    ),
+
+    // ── Balayage ampoule (Kevin, 25/07) : chaque signalement offre son
+    // remède en code action, la découvrabilité passe par l'ampoule. ──────
+    vscode.languages.registerCodeActionsProvider(
+      { language: 'kotlin' },
+      new LifecycleReleaseActionProvider(),
+      { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] },
+    ),
+    vscode.languages.registerCodeActionsProvider(
+      [{ language: 'kotlin' }, { language: 'java' }],
+      new ExpiredTodoActionProvider(),
+      { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] },
+    ),
+    vscode.languages.registerCodeActionsProvider(
+      { language: 'kotlin' },
+      new NullAssertionActionProvider(),
+      { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] },
+    ),
+    vscode.languages.registerCodeActionsProvider(
+      { language: 'kotlin' },
+      new MissingWhenBranchesActionProvider(index),
+      { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] },
+    ),
+
+    // KJ-013 — Screen Flow Map
+    vscode.commands.registerCommand('kotlin-jump.screenFlowMap', () => ScreenFlowPanel.show()),
 
     vscode.commands.registerCommand('kotlin-jump.openWalkthrough', () => {
       void vscode.commands.executeCommand(
@@ -866,7 +987,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(new ConstValFoldingProvider(index));
 
   // ── Navigation history (Back / Forward — Cmd+Opt+Left / Right) ────────────
-  context.subscriptions.push(new NavigationHistoryProvider());
+  const navigationHistory = new NavigationHistoryProvider();
+  context.subscriptions.push(
+    navigationHistory,
+    // KJ-008 — Recent locations popup (Cmd+Shift+E)
+    vscode.commands.registerCommand('kotlin-jump.recentLocations', () =>
+      recentLocationsCommand(navigationHistory),
+    ),
+  );
 
   // ── Sprint 2: suspend call markers ────────────────────────────────────────
   (() => {
@@ -943,8 +1071,164 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       (fqn: string, name: string) => showActuals(index, fqn, name)),
   );
 
+  // ── KJ-004 : hardcoded string lint (opt-in) ───────────────────────────────
+  context.subscriptions.push(new HardcodedStringProvider());
+
+  // ── KJ-009 : unused import graying + quick fix de suppression ────────────
+  context.subscriptions.push(
+    new UnusedImportProvider(),
+    vscode.languages.registerCodeActionsProvider(
+      { language: 'kotlin' },
+      new UnusedImportCodeActionProvider(),
+      { providedCodeActionKinds: UnusedImportCodeActionProvider.providedCodeActionKinds },
+    ),
+  );
+
+  // ── KJ-016 : lifecycle pairing (register sans unregister…) ───────────────
+  context.subscriptions.push(new LifecyclePairingProvider());
+
+  // ── KJ-019 : dispatcher lens (IO / Main / Default) ────────────────────────
+  context.subscriptions.push(new DispatcherLensProvider());
+
+  // ── KJ-020 : room migration drift ─────────────────────────────────────────
+  context.subscriptions.push(new RoomMigrationProvider());
+
+  // ── KJ-021/022/023 : poids mort visible (badges d'usage) ─────────────────
+  context.subscriptions.push(
+    new ResourceUsageBadgeProvider(),
+    new DependencyUsageBadgeProvider(),
+    new ManifestNecessityProvider(),
+  );
+
+  // Quick fixes that remove whatever the extension reports as unused:
+  // resources with 0 usages, dependencies with 0 imports, manifest
+  // permissions with no code behind them.
+  context.subscriptions.push(
+    vscode.languages.registerCodeActionsProvider(
+      [{ language: 'xml' }, { pattern: '**/build.gradle{,.kts}' }],
+      new DeadWeightActionProvider(),
+      { providedCodeActionKinds: DeadWeightActionProvider.providedCodeActionKinds },
+    ),
+  );
+
+  // ── KJ-018 : reverse string map (cette string s'affiche où ?) ────────────
+  context.subscriptions.push(
+    vscode.languages.registerHoverProvider(
+      [...KT_JAVA, { language: 'xml' }],
+      new StringXmlHoverProvider(),
+    ),
+  );
+
+  // ── KJ-011 : method separator lines ───────────────────────────────────────
+  context.subscriptions.push(new MethodSeparatorProvider());
+
+  // ── KJ-014 : UDF X-Ray (qui écrit / qui lit) ──────────────────────────────
+  context.subscriptions.push(
+    vscode.languages.registerCodeLensProvider(
+      { language: 'kotlin' },
+      new StateProvenanceProvider(),
+    ),
+  );
+
+  // ── KJ-015 : Compose Outline Tree ─────────────────────────────────────────
+  {
+    const composeOutline = new ComposeOutlineProvider();
+    const composeOutlineView = vscode.window.createTreeView('kotlinJump.composeOutline', {
+      treeDataProvider: composeOutline,
+    });
+    context.subscriptions.push(
+      composeOutlineView,
+      vscode.window.onDidChangeTextEditorSelection(e =>
+        composeOutline.refreshFromEditor(e.textEditor),
+      ),
+      vscode.window.onDidChangeActiveTextEditor(e => composeOutline.refreshFromEditor(e)),
+      // Demo/test probe: actual content + view actually on screen.
+      // `visible` comes from the TreeView handle: without it a demo can
+      // pass with the view collapsed and record a closed panel.
+      vscode.commands.registerCommand('kotlin-jump._outlineSnapshot', () => ({
+        items: composeOutline.snapshot(),
+        visible: composeOutlineView.visible,
+      })),
+      // Scrolls the view to the end of the tree (×items / cycle markers):
+      // in a ~6-row sidebar the bottom is never seen otherwise.
+      vscode.commands.registerCommand('kotlin-jump._outlineRevealTail', async () => {
+        const tail = composeOutline.tailNode();
+        if (tail) await composeOutlineView.reveal(tail, { select: false, focus: false });
+      }),
+      vscode.commands.registerCommand('kotlin-jump._probe', () => probeSnapshot()),
+      vscode.commands.registerCommand('kotlin-jump._probeTexts', (providerId: string) =>
+        probeTexts(providerId),
+      ),
+      vscode.commands.registerCommand('kotlin-jump._recentSnapshot', () =>
+        navigationHistory.recentLocations(),
+      ),
+    );
+  }
+
+  // ── KJ-012 : Android project view (Explorer) ──────────────────────────────
+  {
+    const androidView = new AndroidProjectViewProvider();
+    const settingsWatcher = vscode.workspace.createFileSystemWatcher('**/settings.gradle{,.kts}');
+    const manifestWatcher = vscode.workspace.createFileSystemWatcher('**/AndroidManifest.xml');
+    const refreshView = () => androidView.refresh();
+    // La vue n'apparaît que si le workspace ressemble à un projet Android.
+    void vscode.workspace
+      .findFiles('**/AndroidManifest.xml', '**/build/**', 1)
+      .then(found =>
+        vscode.commands.executeCommand('setContext', 'kotlinJump.isAndroidWorkspace', found.length > 0),
+      );
+    context.subscriptions.push(
+      vscode.window.createTreeView('kotlinJump.androidProjectView', {
+        treeDataProvider: androidView,
+      }),
+      vscode.commands.registerCommand('kotlin-jump._androidViewRoots', () =>
+        androidView.getChildren(),
+      ),
+      settingsWatcher, manifestWatcher,
+      settingsWatcher.onDidChange(refreshView),
+      settingsWatcher.onDidCreate(refreshView),
+      manifestWatcher.onDidCreate(refreshView),
+    );
+  }
+
+  // ── KJ-005 : extract string resource (quick fix compagnon du lint) ───────
+  context.subscriptions.push(
+    vscode.languages.registerCodeActionsProvider(
+      KT_JAVA,
+      new ExtractStringResourceProvider(stringIndex),
+      { providedCodeActionKinds: [vscode.CodeActionKind.RefactorExtract] },
+    ),
+    vscode.commands.registerCommand(
+      'kotlin-jump.extractString.saveTarget',
+      async (uri: vscode.Uri) => {
+        const doc = vscode.workspace.textDocuments.find(
+          d => d.uri.toString() === uri.toString(),
+        );
+        if (doc?.isDirty) await doc.save();
+      },
+    ),
+  );
+
+  // ── KJ-006 : surround with (code actions sur sélection) ──────────────────
+  context.subscriptions.push(
+    vscode.languages.registerCodeActionsProvider(
+      { language: 'kotlin' },
+      new SurroundWithProvider(),
+      { providedCodeActionKinds: [vscode.CodeActionKind.RefactorRewrite] },
+    ),
+  );
+
   // ── Sprint 2: R.color swatch + resource diagnostics ───────────────────────
   const colorIndex = new ColorResourceIndex();
+
+  // ── KJ-017 : resource shadowing (quelle définition gagne) ────────────────
+  context.subscriptions.push(
+    vscode.languages.registerHoverProvider(
+      KT_JAVA,
+      new ResourceShadowingProvider(colorIndex, stringIndex),
+    ),
+  );
+
   (() => {
     const colorProvider = new ColorFoldingProvider(colorIndex);
     const resourceDiag  = new ResourceDiagnosticProvider(stringIndex, colorIndex);

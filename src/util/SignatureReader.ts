@@ -230,7 +230,7 @@ function findParamListStart(flat: string): number {
 
 // Finds the index of the `)` that closes the `(` at `openIdx`.
 // Skips string literals (both single and double quoted) to avoid false matches.
-function findMatchingParen(s: string, openIdx: number): number {
+export function findMatchingParen(s: string, openIdx: number): number {
   let depth = 0;
   let i = openIdx;
   while (i < s.length) {

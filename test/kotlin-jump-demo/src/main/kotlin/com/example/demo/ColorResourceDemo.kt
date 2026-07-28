@@ -10,9 +10,9 @@ import com.example.data.PokemonType
 // Les cas (✗) ne doivent PAS afficher de décoration.
 // ─────────────────────────────────────────────────────────────────────────────
 
-private fun setBackgroundColor(colorRes: Int) = Unit
-private fun setTextColor(colorRes: Int) = Unit
-private fun setTint(colorRes: Int) = Unit
+private fun setBackgroundColor(@Suppress("UNUSED_PARAMETER") colorRes: Int) = Unit
+private fun setTextColor(@Suppress("UNUSED_PARAMETER") colorRes: Int) = Unit
+private fun setTint(@Suppress("UNUSED_PARAMETER") colorRes: Int) = Unit
 private fun applyColors(vararg colors: Int) = Unit
 
 // ── 1. Propriétés top-level ───────────────────────────────────────────────────

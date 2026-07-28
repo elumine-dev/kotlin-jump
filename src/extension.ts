@@ -30,6 +30,7 @@ import {
 } from './providers/DiscoverabilityQuickFixes';
 import { recentLocationsCommand } from './commands/recentLocations';
 import { UnusedImportProvider, UnusedImportCodeActionProvider } from './providers/UnusedImportProvider';
+import { UnusedParameterProvider, UnusedParameterCodeActionProvider } from './providers/UnusedParameterProvider';
 import { MethodSeparatorProvider } from './providers/MethodSeparatorProvider';
 import { AndroidProjectViewProvider } from './ui/AndroidProjectViewProvider';
 import { ScreenFlowPanel } from './ui/ScreenFlowPanel';
@@ -1081,6 +1082,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       { language: 'kotlin' },
       new UnusedImportCodeActionProvider(),
       { providedCodeActionKinds: UnusedImportCodeActionProvider.providedCodeActionKinds },
+    ),
+  );
+
+  // ── KJ-025 : unused parameters (warning + quick fix de retrait) ──────────
+  context.subscriptions.push(
+    new UnusedParameterProvider(),
+    vscode.languages.registerCodeActionsProvider(
+      { language: 'kotlin' },
+      new UnusedParameterCodeActionProvider(),
+      { providedCodeActionKinds: UnusedParameterCodeActionProvider.providedCodeActionKinds },
     ),
   );
 

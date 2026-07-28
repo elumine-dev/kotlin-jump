@@ -4,7 +4,7 @@ import com.example.app.R
 import com.example.data.User
 import com.example.data.UserRole
 
-class UserScreen(private val viewModel: UserViewModel) {
+class UserScreen(@Suppress("unused") private val viewModel: UserViewModel) {
 
     companion object {
         val SCREEN_TITLE = R.string.title_users

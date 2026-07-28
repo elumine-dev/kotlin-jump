@@ -343,7 +343,7 @@ class InMemoryCacheStore : CacheStore {
 // ── 6f. Combinaison ⚡ + ⬆ + const val ───────────────────────────────────────
 
 class Sprint2Coordinator(
-    private val source: PokemonDataSource,
+    @Suppress("unused") private val source: PokemonDataSource,
     private val cache: CacheStore,
 ) {
     suspend fun loadWithCache(id: Int): String? {

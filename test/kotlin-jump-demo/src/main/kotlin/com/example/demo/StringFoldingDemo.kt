@@ -19,10 +19,10 @@ annotation class StringRes
 
 private fun getString(resId: Int): String = "#$resId"
 private fun getText(resId: Int): CharSequence = "#$resId"
-private fun setTitle(resId: Int) = Unit
-private fun showToast(resId: Int) = Unit
-private fun showSnackbar(resId: Int) = Unit
-private fun setHint(resId: Int) = Unit
+private fun setTitle(@Suppress("UNUSED_PARAMETER") resId: Int) = Unit
+private fun showToast(@Suppress("UNUSED_PARAMETER") resId: Int) = Unit
+private fun showSnackbar(@Suppress("UNUSED_PARAMETER") resId: Int) = Unit
+private fun setHint(@Suppress("UNUSED_PARAMETER") resId: Int) = Unit
 
 // ── 1. Propriétés top-level ───────────────────────────────────────────────────
 
@@ -63,7 +63,7 @@ fun functionArguments() {
 // ── 5. Plusieurs R.string sur un même appel ───────────────────────────────────
 
 private fun showPair(a: Int, b: Int): String = "$a/$b"
-private fun showDialog(titleRes: Int, confirmRes: Int, cancelRes: Int) = Unit
+private fun showDialog(@Suppress("UNUSED_PARAMETER") titleRes: Int, @Suppress("UNUSED_PARAMETER") confirmRes: Int, @Suppress("UNUSED_PARAMETER") cancelRes: Int) = Unit
 
 fun multiArgCall() {
     showPair(R.string.action_confirm, R.string.action_cancel)

@@ -5,7 +5,7 @@ interface PokeApiService {
     suspend fun searchByType(type: PokemonType): List<Pokemon>
 }
 
-class PokeApiServiceImpl(private val baseUrl: String) : PokeApiService {
+class PokeApiServiceImpl(@Suppress("unused") private val baseUrl: String) : PokeApiService {
 
     override suspend fun fetchPokemon(id: Int): Pokemon {
         // GET $baseUrl/pokemon/$id

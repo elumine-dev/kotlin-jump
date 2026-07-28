@@ -1,16 +1,16 @@
 package com.example.demo
 
 // Stubs UI — non disponibles dans un projet JVM console
-private fun Text(text: String) = Unit
-private fun setText(text: String) = Unit
-private fun setTitle(text: String) = Unit
-private fun setHint(text: String) = Unit
-private fun showToast(text: String) = Unit
-private fun showSnackbar(text: String) = Unit
-private fun setContentDescription(text: String) = Unit
-private fun setLabel(text: String) = Unit
-private fun setError(text: String) = Unit
-private fun setPlaceholder(text: String) = Unit
+private fun Text(@Suppress("UNUSED_PARAMETER") text: String) = Unit
+private fun setText(@Suppress("UNUSED_PARAMETER") text: String) = Unit
+private fun setTitle(@Suppress("UNUSED_PARAMETER") text: String) = Unit
+private fun setHint(@Suppress("UNUSED_PARAMETER") text: String) = Unit
+private fun showToast(@Suppress("UNUSED_PARAMETER") text: String) = Unit
+private fun showSnackbar(@Suppress("UNUSED_PARAMETER") text: String) = Unit
+private fun setContentDescription(@Suppress("UNUSED_PARAMETER") text: String) = Unit
+private fun setLabel(@Suppress("UNUSED_PARAMETER") text: String) = Unit
+private fun setError(@Suppress("UNUSED_PARAMETER") text: String) = Unit
+private fun setPlaceholder(@Suppress("UNUSED_PARAMETER") text: String) = Unit
 
 // Stub Android Log
 private object android {

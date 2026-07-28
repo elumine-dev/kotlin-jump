@@ -9,9 +9,9 @@ import com.example.app.R
 // et une miniature dans la gouttière.
 // ─────────────────────────────────────────────────────────────────────────────
 
-private fun setImageResource(drawableRes: Int) = Unit
-private fun setIcon(drawableRes: Int) = Unit
-private fun loadDrawable(drawableRes: Int): Any? = null
+private fun setImageResource(@Suppress("UNUSED_PARAMETER") drawableRes: Int) = Unit
+private fun setIcon(@Suppress("UNUSED_PARAMETER") drawableRes: Int) = Unit
+private fun loadDrawable(@Suppress("UNUSED_PARAMETER") drawableRes: Int): Any? = null
 
 // ── 1. Propriétés top-level ───────────────────────────────────────────────────
 

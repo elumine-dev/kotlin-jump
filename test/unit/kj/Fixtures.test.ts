@@ -26,6 +26,7 @@ const KOTLIN_FIXTURES = [
   'src/main/kotlin/com/example/kj/g4runtime/DispatcherLensDemo.kt',
   'src/main/kotlin/com/example/kj/g4runtime/RoomMigrationDemo.kt',
   'src/main/kotlin/com/example/kj/g5deadweight/UnusedImportsDemo.kt',
+  'src/main/kotlin/com/example/kj/g5deadweight/UnusedParamsDemo.kt',
   'src/main/kotlin/com/example/kj/g5deadweight/DependencyUsageDemo.kt',
   'src/main/kotlin/com/example/kj/g6editor/SqlQueryDao.kt',
   'src/main/kotlin/com/example/kj/g6editor/MethodSeparatorDemo.kt',
@@ -81,6 +82,15 @@ describe('KJ fixtures — marqueurs clés', () => {
     expect(manifest).toContain('.GhostActivity');
     expect(manifest).toContain('.DeepLinkActivity');
     expect(manifest).toContain('android:maxSdkVersion="30"');
+  });
+
+  it('KJ-025 : les trois morts attendus et leurs call sites présents', () => {
+    const demo = fixture('src/main/kotlin/com/example/kj/g5deadweight/UnusedParamsDemo.kt');
+    expect(demo).toContain('retryCount: Int');
+    expect(demo).toContain('private val wallClock');
+    expect(demo).toContain('verbose: Boolean');
+    expect(demo).toContain('ReportService("Q3", 3,');
+    expect(demo).toContain('retryCount = 5');
   });
 
   it('KJ-020 : trou de migration 2→3 (aucune Migration(2, 3) déclarée)', () => {

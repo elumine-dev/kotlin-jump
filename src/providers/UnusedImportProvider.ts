@@ -4,7 +4,7 @@ import { reportDecorations } from '../util/demoProbe';
 /**
  * KJ-009: Unused import graying, grays out imports whose effective name
  * (alias included) never appears in the code. Mentions inside a comment or a
- * string do not count; `${…}` templates do count (they are code). Wildcard
+ * string do not count; `${…}` and `$name` templates do count (they are code). Wildcard
  * imports are NEVER flagged (conservative: the package contents are
  * unknown).
  */
@@ -78,6 +78,13 @@ export function sanitizeForUsageScan(text: string): string {
           continue;
         }
         if (two === '${') { templateDepth = 1; out.push('  '); i += 2; continue; }
+        if (ch === '$' && /[A-Za-z_]/.test(text[i + 1] ?? '')) {
+          // simple template "$name": the identifier IS code, keep it scannable
+          out.push('$');
+          i++;
+          while (i < text.length && /[A-Za-z0-9_]/.test(text[i])) { out.push(text[i]); i++; }
+          continue;
+        }
         if (mode === 'string') {
           if (ch === '\\') { out.push('  '); i += 2; continue; }
           if (ch === '"') { mode = 'code'; out.push(' '); i++; continue; }

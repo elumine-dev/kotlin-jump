@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.34.1
+
+### Fixes
+- Room migration drift diagnostics are now scoped to their own database, so two databases that each declare an entity with the same class name no longer trigger false missing migration warnings.
+
 ## 1.34.0
 
 Kotlin Jump 1.34.0 adds a fast editing toolkit, new structure views, static execution checks, and dead weight detection, plus a semantic highlighting fix.

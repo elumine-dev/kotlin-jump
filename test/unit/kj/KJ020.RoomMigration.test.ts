@@ -3,11 +3,13 @@ import { fixture, importOrNull } from './harness';
 
 /**
  * KJ-020 — Room Migration Drift. CONTRAT :
- *   export function analyzeRoomSchema(files: string[]): {
- *     missingFieldMigrations: { entity: string; field: string }[];
- *     migrationGaps: { from: number; to: number }[];
+ *   export function analyzeRoomSchema(files: (string | { path?: string; text: string })[]): {
+ *     missingFieldMigrations: { entity: string; field: string; fileIndex: number }[];
+ *     migrationGaps: { from: number; to: number; fileIndex: number }[];
  *     coveredFields: string[];
  *   }
+ * fileIndex pointe l'entrée de `files` où ancrer le diagnostic (voir la
+ * suite multidb pour le clustering par @Database).
  */
 const mod: any = await importOrNull('src/indexer/RoomSchemaIndex');
 const demo = () => [fixture('src/main/kotlin/com/example/kj/g4runtime/RoomMigrationDemo.kt')];
@@ -19,6 +21,7 @@ describe.skipIf(!mod)('KJ-020 — fixture PokedexDatabase', () => {
     expect(result().missingFieldMigrations).toContainEqual({
       entity: 'PokemonEntity',
       field: 'nickname',
+      fileIndex: 0,
     });
   });
 
@@ -32,7 +35,7 @@ describe.skipIf(!mod)('KJ-020 — fixture PokedexDatabase', () => {
   });
 
   it('trou 2→3 détecté (1→2 SQL, 3→4 auto, rien entre)', () => {
-    expect(result().migrationGaps).toContainEqual({ from: 2, to: 3 });
+    expect(result().migrationGaps).toContainEqual({ from: 2, to: 3, fileIndex: 0 });
   });
 
   it('id (clé primaire d’origine) jamais signalé', () => {

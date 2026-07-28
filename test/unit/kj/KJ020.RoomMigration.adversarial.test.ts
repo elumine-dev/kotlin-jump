@@ -47,7 +47,7 @@ describe('KJ-020 adversarial', () => {
     ];
     const r = analyzeRoomSchema(files);
     expect(r.coveredFields).toContain('level');
-    expect(r.missingFieldMigrations).toContainEqual({ entity: 'E', field: 'bonus' });
+    expect(r.missingFieldMigrations).toContainEqual({ entity: 'E', field: 'bonus', fileIndex: 0 });
   });
 
   it('entity sans AUCUN champ couvert : silence total (pas de signal)', () => {
@@ -83,6 +83,6 @@ describe('KJ-020 adversarial', () => {
       '@Database(entities = [A::class], version = 2) abstract class D',
     ]);
     expect(r.coveredFields).toContain('lvl');
-    expect(r.missingFieldMigrations).toContainEqual({ entity: 'A', field: 'extra' });
+    expect(r.missingFieldMigrations).toContainEqual({ entity: 'A', field: 'extra', fileIndex: 0 });
   });
 });

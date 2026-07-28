@@ -1,5 +1,5 @@
 {
-  "version": "1.34.0",
+  "version": "1.34.1",
   "title": "What's New in Kotlin Jump",
   "tagline": "Faster editing, visual structure, cleaner projects",
   "summary": "Kotlin Jump 1.34.0 adds a fast editing toolkit, new structure views, static execution checks, and dead weight detection, plus a semantic highlighting fix.",

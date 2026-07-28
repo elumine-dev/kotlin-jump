@@ -8,7 +8,10 @@ import { analyzeRoomSchema } from '../indexer/RoomSchemaIndex';
  * with a short cache.
  */
 
-const ROOM_MARKER = /@Entity\b|@Database\b|(?<!\w)Migration\s*\(/;
+// databaseBuilder catches the DI/module files: that is where addMigrations
+// and fallbackToDestructiveMigration live, and the analyzer needs those
+// chains to scope migrations to their database.
+const ROOM_MARKER = /@Entity\b|@Database\b|(?<!\w)Migration\s*\(|\bdatabaseBuilder\s*\(/;
 const CACHE_MS = 15_000;
 
 export class RoomMigrationProvider implements vscode.Disposable {
@@ -60,7 +63,10 @@ export class RoomMigrationProvider implements vscode.Disposable {
     const files = await this._roomFiles();
     if (files.size === 0) return;
 
-    const analysis = analyzeRoomSchema([...files.values()]);
+    // Keep the array in Map insertion order: the analyzer's fileIndex refers
+    // to positions in this list.
+    const entries = [...files];
+    const analysis = analyzeRoomSchema(entries.map(([uriStr, text]) => ({ path: uriStr, text })));
     const perFile = new Map<string, vscode.Diagnostic[]>();
     const push = (uriStr: string, d: vscode.Diagnostic) => {
       if (!perFile.has(uriStr)) perFile.set(uriStr, []);
@@ -68,42 +74,40 @@ export class RoomMigrationProvider implements vscode.Disposable {
     };
 
     for (const missing of analysis.missingFieldMigrations) {
-      for (const [uriStr, text] of files) {
-        const lines = text.split('\n');
-        const entityAt = lines.findIndex(l => new RegExp(`class\\s+${missing.entity}\\b`).test(l));
-        if (entityAt < 0) continue;
-        const fieldAt = lines.findIndex(
-          (l, i) => i >= entityAt && new RegExp(`va[lr]\\s+${missing.field}\\b`).test(l),
-        );
-        if (fieldAt < 0) continue;
-        const col = lines[fieldAt].indexOf(missing.field);
-        const d = new vscode.Diagnostic(
-          new vscode.Range(fieldAt, col, fieldAt, col + missing.field.length),
-          `${missing.entity}.${missing.field}: no ADD COLUMN in any migration and no defaultValue. This crashes on upgrade.`,
-          vscode.DiagnosticSeverity.Warning,
-        );
-        d.source = 'kotlin-jump';
-        d.code = 'room-migration-drift';
-        push(uriStr, d);
-        break;
-      }
+      const [uriStr, text] = entries[missing.fileIndex] ?? [];
+      if (uriStr === undefined) continue;
+      const lines = text.split('\n');
+      const entityAt = lines.findIndex(l => new RegExp(`class\\s+${missing.entity}\\b`).test(l));
+      if (entityAt < 0) continue;
+      const fieldAt = lines.findIndex(
+        (l, i) => i >= entityAt && new RegExp(`va[lr]\\s+${missing.field}\\b`).test(l),
+      );
+      if (fieldAt < 0) continue;
+      const col = lines[fieldAt].indexOf(missing.field);
+      const d = new vscode.Diagnostic(
+        new vscode.Range(fieldAt, col, fieldAt, col + missing.field.length),
+        `${missing.entity}.${missing.field}: no ADD COLUMN in any migration and no defaultValue. This crashes on upgrade.`,
+        vscode.DiagnosticSeverity.Warning,
+      );
+      d.source = 'kotlin-jump';
+      d.code = 'room-migration-drift';
+      push(uriStr, d);
     }
 
     for (const gap of analysis.migrationGaps) {
-      for (const [uriStr, text] of files) {
-        const lines = text.split('\n');
-        const dbAt = lines.findIndex(l => l.includes('@Database'));
-        if (dbAt < 0) continue;
-        const d = new vscode.Diagnostic(
-          new vscode.Range(dbAt, 0, dbAt, lines[dbAt].length),
-          `Migration chain has a hole: ${gap.from} to ${gap.to} is missing`,
-          vscode.DiagnosticSeverity.Warning,
-        );
-        d.source = 'kotlin-jump';
-        d.code = 'room-migration-gap';
-        push(uriStr, d);
-        break;
-      }
+      const [uriStr, text] = entries[gap.fileIndex] ?? [];
+      if (uriStr === undefined) continue;
+      const lines = text.split('\n');
+      const dbAt = lines.findIndex(l => l.includes('@Database'));
+      if (dbAt < 0) continue;
+      const d = new vscode.Diagnostic(
+        new vscode.Range(dbAt, 0, dbAt, lines[dbAt].length),
+        `Migration chain has a hole: ${gap.from} to ${gap.to} is missing`,
+        vscode.DiagnosticSeverity.Warning,
+      );
+      d.source = 'kotlin-jump';
+      d.code = 'room-migration-gap';
+      push(uriStr, d);
     }
 
     for (const [uriStr, diags] of perFile) {

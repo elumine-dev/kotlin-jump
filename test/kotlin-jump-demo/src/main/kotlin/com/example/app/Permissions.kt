@@ -97,7 +97,7 @@ fun permissionLabel(perm: String): String = when (perm) {
 
 // ── 5. Vérification runtime ───────────────────────────────────────────────────
 
-private fun isGranted(perm: String): Boolean = true  // stub
+private fun isGranted(@Suppress("UNUSED_PARAMETER") perm: String): Boolean = true  // stub
 
 fun hasAllPermissions(): Boolean =
     isGranted(Manifest.permission.CAMERA) &&

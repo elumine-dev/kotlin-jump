@@ -8,11 +8,11 @@ import com.example.app.R
 // Chaque R.dimen.xxx doit afficher sa valeur dp/sp inline.
 // ─────────────────────────────────────────────────────────────────────────────
 
-private fun setMargin(dimenRes: Int) = Unit
-private fun setPadding(dimenRes: Int) = Unit
-private fun setTextSize(dimenRes: Int) = Unit
-private fun setSize(w: Int, h: Int) = Unit
-private fun setCornerRadius(dimenRes: Int) = Unit
+private fun setMargin(@Suppress("UNUSED_PARAMETER") dimenRes: Int) = Unit
+private fun setPadding(@Suppress("UNUSED_PARAMETER") dimenRes: Int) = Unit
+private fun setTextSize(@Suppress("UNUSED_PARAMETER") dimenRes: Int) = Unit
+private fun setSize(@Suppress("UNUSED_PARAMETER") w: Int, @Suppress("UNUSED_PARAMETER") h: Int) = Unit
+private fun setCornerRadius(@Suppress("UNUSED_PARAMETER") dimenRes: Int) = Unit
 
 // ── 1. Propriétés top-level ───────────────────────────────────────────────────
 

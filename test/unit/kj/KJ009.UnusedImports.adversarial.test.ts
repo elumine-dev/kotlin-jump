@@ -14,6 +14,26 @@ describe('KJ-009 adversarial', () => {
     expect(findUnusedImports(text)).toHaveLength(0);
   });
 
+  it('usage UNIQUEMENT dans un template simple "$Foo" (sans accolades) : compte comme usage', () => {
+    const text = 'import com.x.Foo\nval s = "value: $Foo"\n';
+    expect(findUnusedImports(text)).toHaveLength(0);
+  });
+
+  it('dollar échappé "\\$Foo" n’est PAS un template → flagué', () => {
+    const text = 'import com.x.Foo\nval s = "price: \\$Foo"\nval y = 2\n';
+    expect(findUnusedImports(text)).toHaveLength(1);
+  });
+
+  it('template simple dans une raw string """$Foo""" compte comme usage', () => {
+    const text = 'import com.x.Foo\nval s = """total $Foo"""\n';
+    expect(findUnusedImports(text)).toHaveLength(0);
+  });
+
+  it('sanitize préserve les longueurs avec des templates simples', () => {
+    const text = 'val s = "a $name b" // c\nval t = """x $y"""';
+    expect(sanitizeForUsageScan(text).length).toBe(text.length);
+  });
+
   it('« Users » ne compte pas comme usage de « User » (frontière de mot)', () => {
     const text = 'import com.x.User\nval all = Users.fetch()\n';
     expect(findUnusedImports(text)).toHaveLength(1);

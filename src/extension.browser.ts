@@ -53,6 +53,7 @@ import { runCodeLensAction } from './providers/CodeLensAction';
 import { WhatsNewPanel } from './providers/WhatsNewPanel';
 import { RatingPromptService } from './ui/RatingPromptService';
 import { NullAssertionProvider } from './providers/NullAssertionProvider';
+import { UnusedParameterProvider, UnusedParameterCodeActionProvider } from './providers/UnusedParameterProvider';
 import { TodoExpiryProvider } from './providers/TodoExpiryProvider';
 import { ManifestPermissionProvider } from './providers/ManifestPermissionProvider';
 import { HexColorFoldingProvider } from './providers/HexColorFoldingProvider';
@@ -750,6 +751,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   context.subscriptions.push(new NullAssertionProvider());
   context.subscriptions.push(new TodoExpiryProvider());
+  // KJ-025 : regex only, no Node dependency → wired in the web build too
+  context.subscriptions.push(
+    new UnusedParameterProvider(),
+    vscode.languages.registerCodeActionsProvider(
+      { language: 'kotlin' },
+      new UnusedParameterCodeActionProvider(),
+      { providedCodeActionKinds: UnusedParameterCodeActionProvider.providedCodeActionKinds },
+    ),
+  );
   context.subscriptions.push(new ManifestPermissionProvider());
   context.subscriptions.push(new HexColorFoldingProvider());
   context.subscriptions.push(

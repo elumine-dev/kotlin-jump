@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.35.0
+
+Kotlin Jump 1.35.0 adds unused parameter detection with a one-click removal fix, and corrects unused import detection for $name string templates.
+
+### Improvements
+- Adds unused parameter warnings for primary-constructor parameters, private val/var constructor properties, and private function parameters, so dead parameters are easier to spot and clean up.
+- Ships a quick fix that removes an unused parameter at its declaration and at every unambiguous call site, cutting out manual cleanup.
+- Skips override, operator, and annotated declarations, plus data classes and enums, so signatures required by frameworks or contracts are never flagged.
+- Enabled by default (kotlinJump.unusedParameters) and works in both the desktop extension and the web build.
+
+### Fixes
+- Counts $name string template references as real usage of an import, alongside the existing ${…} template support, removing false positive unused import warnings.
+
 ## 1.34.1
 
 ### Fixes

@@ -9,7 +9,7 @@ import com.example.data.Pokemon
  */
 object PostfixCompletionDemo {
 
-    private fun find(id: Int): Pokemon? = null
+    private fun find(@Suppress("UNUSED_PARAMETER") id: Int): Pokemon? = null
 
     fun playground(list: List<Pokemon>, ready: Boolean) {
         val pikachu = find(25)

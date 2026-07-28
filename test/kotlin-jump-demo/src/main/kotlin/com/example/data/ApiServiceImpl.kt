@@ -1,6 +1,6 @@
 package com.example.data
 
-class ApiServiceImpl(private val baseUrl: String) : ApiService {
+class ApiServiceImpl(@Suppress("unused") private val baseUrl: String) : ApiService {
 
     override suspend fun fetchUser(id: String): User {
         // HTTP GET $baseUrl/users/$id

@@ -2,7 +2,7 @@
   "name": "kotlin-jump",
   "displayName": "Kotlin Jump: Fast Kotlin & Android Studio Navigation",
   "description": "Fast Kotlin & Android Studio navigation. Find Usages, Go to Definition, Compose, R.string, Android Run. No JVM, no language server. The Android Studio experience inside VS Code.",
-  "version": "1.34.1",
+  "version": "1.35.0",
   "publisher": "elumine",
   "license": "MIT",
   "icon": "media/logo.png",
@@ -1172,7 +1172,12 @@
         "kotlinJump.unusedImportGraying": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Gray out imports whose name (or alias) never appears in the code. Wildcard imports are never flagged. Mentions in comments and strings don't count; `${…}` templates do."
+          "markdownDescription": "Gray out imports whose name (or alias) never appears in the code. Wildcard imports are never flagged. Mentions in comments and strings don't count; `${…}` and `$name` templates do."
+        },
+        "kotlinJump.unusedParameters": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Warn about parameters that are never used: plain primary-constructor parameters, `private val`/`var` constructor properties, and parameters of `private` functions. The quick fix removes the parameter at the declaration and at every unambiguous call site. Conservative: `override`/`operator`/annotated declarations, data classes and enums are never flagged; mentions in comments and strings don't count, `$name` and `${…}` templates do."
         },
         "kotlinJump.surroundWith": {
           "type": "boolean",

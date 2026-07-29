@@ -126,6 +126,32 @@ describe('KJ fixtures — marqueurs clés', () => {
     expect(demo).toContain('class Snapshot : Serializable');
   });
 
+  it('KJ-029 : les ressources mortes et les pièges vivants présents', () => {
+    for (const f of [
+      'src/main/res/layout/view_kj_dead.xml',
+      'src/main/res/layout/view_kj_tools_only.xml',
+      'src/main/res/layout/view_kj_included.xml',
+      'src/main/res/layout/view_kj_bound.xml',
+      'src/main/res/layout/view_kj_kept.xml',
+      'src/main/res/menu/menu_kj_main.xml',
+      'src/main/res/menu/menu_kj_dead.xml',
+      'src/main/res/anim/fade_kj_in.xml',
+      'src/main/res/anim/fade_kj_dead.xml',
+      'src/main/res/raw/config_kj_dynamic.json',
+      'src/main/res/drawable/ic_kj_ghost.xml',
+      'src/main/res/drawable-hdpi/ic_kj_ghost.png',
+      'src/main/res/mipmap-anydpi-v26/ic_launcher.xml',
+      'src/main/res/values/keep.xml',
+    ]) {
+      expect(fixtureExists(f), `fixture manquante: ${f}`).toBe(true);
+    }
+    const banner = fixture('src/main/res/layout/view_kj_banner.xml');
+    expect(banner).toContain('<include layout="@layout/view_kj_included"');
+    expect(banner).toContain('app:menu="@menu/menu_kj_main"');
+    expect(banner).toContain('tools:layout="@layout/view_kj_tools_only"');
+    expect(fixture('src/main/res/values/keep.xml')).toContain('tools:keep="@layout/view_kj_kept"');
+  });
+
   it('KJ-020 : trou de migration 2→3 (aucune Migration(2, 3) déclarée)', () => {
     const room = fixture('src/main/kotlin/com/example/kj/g4runtime/RoomMigrationDemo.kt');
     expect(room).toMatch(/object\s*:\s*Migration\(1,\s*2\)/);

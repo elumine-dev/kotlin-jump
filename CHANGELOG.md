@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.37.0
+
+Kotlin Jump 1.37.0 adds a workspace-wide scan for unused Android resource files, with a one-step, previewable quick fix to remove them.
+
+### Improvements
+- Adds the "Kotlin Jump: Find Unused Resource Files" command, scanning layouts, menus, anims, animators, and raw files for anything nothing in the project references.
+- Adds a quick fix that removes an unused resource file and every one of its density variants in a single, previewable change.
+- Adds an opt-in setting (kotlinJump.unusedResourcesIncludeDrawables) to also flag unused drawables and mipmaps, off by default and reported under needs review rather than deleted outright.
+- Keeps detection conservative: tools:keep attributes, ViewBinding class references, and bare string literals all count as real usage, and the scan reports nothing if it could not read the whole workspace.
+
 ## 1.36.0
 
 Kotlin Jump 1.36.0 adds three new dead code detections that flag unused private declarations, unused local variables, and variables that are written but never read.

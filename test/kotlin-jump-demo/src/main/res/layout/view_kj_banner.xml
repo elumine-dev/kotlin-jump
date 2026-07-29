@@ -12,4 +12,16 @@
         android:text="@string/banner_caption"
         tools:text="@string/legacy_subtitle" />
 
+    <!-- KJ-029 fixture — usages res→res :
+         <include layout=…>           → keeps view_kj_included alive
+         app:menu=…                   → keeps menu_kj_main alive
+         tools:layout=…               → does NOT keep view_kj_tools_only alive -->
+    <include layout="@layout/view_kj_included" />
+
+    <BottomNavigationView
+        xmlns:app="http://schemas.android.com/apk/res-auto"
+        app:menu="@menu/menu_kj_main" />
+
+    <fragment tools:layout="@layout/view_kj_tools_only" />
+
 </LinearLayout>

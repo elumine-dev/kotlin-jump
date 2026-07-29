@@ -1,5 +1,9 @@
 import * as vscode from 'vscode';
 import { reportDecorations } from '../util/demoProbe';
+import { stripKotlinComments, stripXmlComments } from '../util/xmlRefs';
+
+// Re-exported: KJ-024 and the KJ-021 suites import them from here.
+export { stripKotlinComments, stripXmlComments };
 
 /**
  * KJ-021: usage badges in res XML. Every entry of strings.xml /
@@ -13,35 +17,6 @@ export type ResKind = 'string' | 'color' | 'dimen';
 export interface UsageSource {
   path: string;
   text: string;
-}
-
-function stripKotlinComments(text: string): string {
-  const out: string[] = [];
-  let mode: 'code' | 'line' | 'block' | 'string' = 'code';
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    const two = text.slice(i, i + 2);
-    if (mode === 'code') {
-      if (two === '//') { mode = 'line'; out.push('  '); i++; continue; }
-      if (two === '/*') { mode = 'block'; out.push('  '); i++; continue; }
-      if (ch === '"') mode = 'string';
-      out.push(ch);
-    } else if (mode === 'line') {
-      if (ch === '\n') { mode = 'code'; out.push('\n'); } else out.push(' ');
-    } else if (mode === 'block') {
-      if (two === '*/') { mode = 'code'; out.push('  '); i++; continue; }
-      out.push(ch === '\n' ? '\n' : ' ');
-    } else {
-      if (ch === '\\') { out.push(two); i++; continue; }
-      if (ch === '"' || ch === '\n') mode = 'code';
-      out.push(ch);
-    }
-  }
-  return out.join('');
-}
-
-function stripXmlComments(text: string): string {
-  return text.replace(/<!--[\s\S]*?-->/g, m => m.replace(/[^\n]/g, ' '));
 }
 
 export function countResourceUsages(

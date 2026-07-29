@@ -1,3 +1,5 @@
+@file:Suppress("unused") // demo fixture: declarations showcase other features
+
 package com.example.demo
 
 import com.example.data.Pokemon as Poke

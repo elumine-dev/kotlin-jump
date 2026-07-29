@@ -6,7 +6,7 @@ import { analyzeRoomSchema } from '../../../src/indexer/RoomSchemaIndex';
  *   analyzeRoomSchema(files: (string | { path?: string; text: string })[])
  *   → missingFieldMigrations / migrationGaps portent un fileIndex.
  *
- * Cas réel (juniper) : deux bases Room indépendantes déclarent chacune une
+ * Cas réel rencontré en production : deux bases Room indépendantes déclarent chacune une
  * entité nommée `Ad`. La fusion par simple nom de classe faisait hériter à
  * l'entité v1 la baseline de migration de l'autre base → faux positif
  * « Ad.ref: no ADD COLUMN … ».
@@ -48,35 +48,35 @@ fun provideClient(application: Application): PepperOxDatabase =
         .enableMultiInstanceInvalidation()
         .build()`;
 
-const juniperFiles = () => [
+const multiDbFiles = () => [
   { path: 'adcore/src/main/java/com/example/adcore/data/dynamicad/database/Ad.kt', text: adcoreAd },
   { path: 'adcore/src/main/java/com/example/adcore/data/dynamicad/database/HemlockDBMigration.kt', text: dynamicMigration },
   { path: 'adcore/src/main/java/com/example/adcore/data/dynamicad/database/HemlockOxDatabase.kt', text: dynamicDb },
-  { path: 'app/src/main/java/com/example/android/newsapp/ads/Ad.kt', text: appAd },
-  { path: 'app/src/main/java/com/example/android/newsapp/ads/PepperOxDatabase.kt', text: clientDb },
-  { path: 'app/src/main/java/com/example/juniper/core/dagger/module/JuniperApplicationModule.kt', text: daggerModule },
+  { path: 'app/src/main/java/com/example/app/ads/Ad.kt', text: appAd },
+  { path: 'app/src/main/java/com/example/app/ads/PepperOxDatabase.kt', text: clientDb },
+  { path: 'app/src/main/java/com/example/core/dagger/module/AppDaggerModule.kt', text: daggerModule },
 ];
 
-describe('KJ-020 multi-DB — repro juniper (deux entités Ad, deux bases)', () => {
+describe('KJ-020 multi-DB — repro terrain (deux entités Ad, deux bases)', () => {
   it('Ad.ref (base v1 sans migration) : plus aucun faux positif', () => {
-    const r = analyzeRoomSchema(juniperFiles());
+    const r = analyzeRoomSchema(multiDbFiles());
     expect(r.missingFieldMigrations).toEqual([]);
   });
 
   it('kind reste couvert, aucune fausse marche dans les chaînes', () => {
-    const r = analyzeRoomSchema(juniperFiles());
+    const r = analyzeRoomSchema(multiDbFiles());
     expect(r.coveredFields).toContain('kind');
     expect(r.migrationGaps).toEqual([]);
   });
 
   it('compat string[] sans chemins : le lien addMigrations suffit à scoper', () => {
-    const r = analyzeRoomSchema(juniperFiles().map(f => f.text));
+    const r = analyzeRoomSchema(multiDbFiles().map(f => f.text));
     expect(r.missingFieldMigrations).toEqual([]);
     expect(r.migrationGaps).toEqual([]);
   });
 
   it('vrai positif préservé : champ ajouté après kind dans la base v2 → signalé', () => {
-    const files = juniperFiles();
+    const files = multiDbFiles();
     files[0] = {
       path: files[0].path,
       text: `@Entity(tableName = "ad")
@@ -92,7 +92,7 @@ data class Ad(var adId: AdId, var kind: Int, var extra: String) {
   it('entité homonyme rattachée par chemin : un champ homonyme couvert ailleurs ne crée pas de baseline ici', () => {
     // The app-side Ad also declares `kind`, but MIGRATION_1_2 belongs to
     // HemlockOxDatabase: the v1 PepperOxDatabase entity must stay silent.
-    const files = juniperFiles();
+    const files = multiDbFiles();
     files[3] = {
       path: files[3].path,
       text: `@Entity(tableName = "ad")

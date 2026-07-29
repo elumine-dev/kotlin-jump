@@ -31,6 +31,9 @@ import {
 import { recentLocationsCommand } from './commands/recentLocations';
 import { UnusedImportProvider, UnusedImportCodeActionProvider } from './providers/UnusedImportProvider';
 import { UnusedParameterProvider, UnusedParameterCodeActionProvider } from './providers/UnusedParameterProvider';
+import { UnusedDeclarationProvider, UnusedDeclarationCodeActionProvider } from './providers/UnusedDeclarationProvider';
+import { UnusedLocalProvider, UnusedLocalCodeActionProvider } from './providers/UnusedLocalProvider';
+import { WriteOnlyProvider, WriteOnlyCodeActionProvider } from './providers/WriteOnlyProvider';
 import { MethodSeparatorProvider } from './providers/MethodSeparatorProvider';
 import { AndroidProjectViewProvider } from './ui/AndroidProjectViewProvider';
 import { ScreenFlowPanel } from './ui/ScreenFlowPanel';
@@ -1092,6 +1095,36 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       { language: 'kotlin' },
       new UnusedParameterCodeActionProvider(),
       { providedCodeActionKinds: UnusedParameterCodeActionProvider.providedCodeActionKinds },
+    ),
+  );
+
+  // ── KJ-026 : unused private declarations (warning + quick fixes) ─────────
+  context.subscriptions.push(
+    new UnusedDeclarationProvider(),
+    vscode.languages.registerCodeActionsProvider(
+      { language: 'kotlin' },
+      new UnusedDeclarationCodeActionProvider(),
+      { providedCodeActionKinds: UnusedDeclarationCodeActionProvider.providedCodeActionKinds },
+    ),
+  );
+
+  // ── KJ-027 : unused locals and bindings (warning + quick fixes) ──────────
+  context.subscriptions.push(
+    new UnusedLocalProvider(),
+    vscode.languages.registerCodeActionsProvider(
+      { language: 'kotlin' },
+      new UnusedLocalCodeActionProvider(),
+      { providedCodeActionKinds: UnusedLocalCodeActionProvider.providedCodeActionKinds },
+    ),
+  );
+
+  // ── KJ-028 : write-only variables (warning + quick fix multi-sites) ──────
+  context.subscriptions.push(
+    new WriteOnlyProvider(),
+    vscode.languages.registerCodeActionsProvider(
+      { language: 'kotlin' },
+      new WriteOnlyCodeActionProvider(),
+      { providedCodeActionKinds: WriteOnlyCodeActionProvider.providedCodeActionKinds },
     ),
   );
 

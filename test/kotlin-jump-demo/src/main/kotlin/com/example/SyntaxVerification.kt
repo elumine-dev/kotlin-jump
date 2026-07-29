@@ -1,3 +1,5 @@
+@file:Suppress("unused") // demo fixture: declarations showcase other features
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SYNTAX VERIFICATION FILE — kotlin-jump manual highlight testing
 // Open this file in VS Code after `npm run compile` + extension reload.
@@ -149,6 +151,7 @@ fun List<Int>.sumPositive(): Int = filter { it > 0 }.sum()
 
 class MemberFunctions : RegularInterface, SealedInterface {
     fun memberFun() {}
+    @Suppress("unused")
     private fun privateFun() {}
     protected fun protectedFun() {}
     internal fun internalFun() {}

@@ -54,6 +54,9 @@ import { WhatsNewPanel } from './providers/WhatsNewPanel';
 import { RatingPromptService } from './ui/RatingPromptService';
 import { NullAssertionProvider } from './providers/NullAssertionProvider';
 import { UnusedParameterProvider, UnusedParameterCodeActionProvider } from './providers/UnusedParameterProvider';
+import { UnusedDeclarationProvider, UnusedDeclarationCodeActionProvider } from './providers/UnusedDeclarationProvider';
+import { UnusedLocalProvider, UnusedLocalCodeActionProvider } from './providers/UnusedLocalProvider';
+import { WriteOnlyProvider, WriteOnlyCodeActionProvider } from './providers/WriteOnlyProvider';
 import { TodoExpiryProvider } from './providers/TodoExpiryProvider';
 import { ManifestPermissionProvider } from './providers/ManifestPermissionProvider';
 import { HexColorFoldingProvider } from './providers/HexColorFoldingProvider';
@@ -758,6 +761,33 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       { language: 'kotlin' },
       new UnusedParameterCodeActionProvider(),
       { providedCodeActionKinds: UnusedParameterCodeActionProvider.providedCodeActionKinds },
+    ),
+  );
+  // KJ-026 : same, regex only
+  context.subscriptions.push(
+    new UnusedDeclarationProvider(),
+    vscode.languages.registerCodeActionsProvider(
+      { language: 'kotlin' },
+      new UnusedDeclarationCodeActionProvider(),
+      { providedCodeActionKinds: UnusedDeclarationCodeActionProvider.providedCodeActionKinds },
+    ),
+  );
+  // KJ-027 : same, regex only
+  context.subscriptions.push(
+    new UnusedLocalProvider(),
+    vscode.languages.registerCodeActionsProvider(
+      { language: 'kotlin' },
+      new UnusedLocalCodeActionProvider(),
+      { providedCodeActionKinds: UnusedLocalCodeActionProvider.providedCodeActionKinds },
+    ),
+  );
+  // KJ-028 : same, regex only
+  context.subscriptions.push(
+    new WriteOnlyProvider(),
+    vscode.languages.registerCodeActionsProvider(
+      { language: 'kotlin' },
+      new WriteOnlyCodeActionProvider(),
+      { providedCodeActionKinds: WriteOnlyCodeActionProvider.providedCodeActionKinds },
     ),
   );
   context.subscriptions.push(new ManifestPermissionProvider());

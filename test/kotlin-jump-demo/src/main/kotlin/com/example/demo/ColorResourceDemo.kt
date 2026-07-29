@@ -1,3 +1,5 @@
+@file:Suppress("unused") // demo fixture: declarations showcase other features
+
 package com.example.demo
 
 import com.example.app.R
@@ -70,6 +72,7 @@ fun showWithColor(
     accentRes: Int     = R.color.primary,
 ) = Unit
 
+@Suppress("unused")
 private fun showColorError(colorRes: Int = R.color.error) = setBackgroundColor(colorRes)
 
 // ── 7. Valeur de retour ───────────────────────────────────────────────────────

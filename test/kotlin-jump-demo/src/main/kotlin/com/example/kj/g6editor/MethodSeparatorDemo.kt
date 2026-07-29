@@ -16,6 +16,8 @@ class MethodSeparatorDemo {
         return cache[id]
     }
 
+    fun hitCount() = hits
+
     fun store(id: Int, name: String) {
         cache[id] = name
     }

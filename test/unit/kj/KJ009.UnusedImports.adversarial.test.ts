@@ -29,6 +29,15 @@ describe('KJ-009 adversarial', () => {
     expect(findUnusedImports(text)).toHaveLength(0);
   });
 
+  it('BUG-HUNT : raw string dont le contenu finit par un guillemet ne déborde pas', () => {
+    // `"""URI="x""""` : 4 guillemets, la fermeture est sur les 3 DERNIERS
+    const text = 'import com.x.Used\nval r = Regex("""URI="([^"]+)"""").find(s)\nval u = Used()\n';
+    expect(findUnusedImports(text)).toHaveLength(0);
+    const clean = sanitizeForUsageScan(text);
+    expect(clean.length).toBe(text.length);
+    expect(clean).toContain('.find(s)'); // le code après la raw string survit
+  });
+
   it('sanitize préserve les longueurs avec des templates simples', () => {
     const text = 'val s = "a $name b" // c\nval t = """x $y"""';
     expect(sanitizeForUsageScan(text).length).toBe(text.length);

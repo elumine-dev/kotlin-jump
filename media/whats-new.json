@@ -1,33 +1,39 @@
 {
-  "version": "1.37.0",
+  "version": "1.38.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Unused resource detection for Android projects",
-  "summary": "Kotlin Jump 1.37.0 adds a workspace-wide scan for unused Android resource files, with a one-step, previewable quick fix to remove them.",
+  "tagline": "Every dead code check in one sweep",
+  "summary": "Kotlin Jump 1.38.0 gathers every dead code check into one workspace scan, and can clear what it finds in a single previewable change.",
   "highlights": [
     {
-      "title": "Unused Resource Detection",
+      "title": "One Scan, Every Check",
       "kind": "feature",
-      "description": "A new \"Find Unused Resource Files\" command scans the whole workspace for layout, menu, anim, and raw files that nothing references, so dead resources are easy to spot instead of piling up."
+      "description": "A new \"Find Dead Code\" command sweeps the workspace for unused imports, parameters, private declarations, local variables, and write-only variables at once, and tells you how many of each it found."
     },
     {
-      "title": "One-step Safe Cleanup",
-      "kind": "feature",
-      "description": "A quick fix deletes an unused resource file and all its density variants at once, always through the Refactor Preview so you can confirm the change before anything is removed."
-    },
-    {
-      "title": "Optional Drawable Review",
+      "title": "Where Dead Code Hides",
       "kind": "improvement",
-      "description": "An opt-in setting extends the scan to drawables and mipmaps, listing them for review instead of auto-flagging them since they can be reached through a theme or style the scanner cannot fully prove."
+      "description": "Findings are reported for the files you do not have open, which is where dead code accumulates. A file you open keeps its own live warnings rather than showing everything twice."
+    },
+    {
+      "title": "Clear It in One Preview",
+      "kind": "feature",
+      "description": "\"Clean Dead Code in This File\" and \"Clean Dead Code in the Workspace\" remove everything with a safe fix in one step, always through the Refactor Preview so nothing is applied unseen."
     }
   ],
   "sections": [
     {
       "heading": "Improvements",
       "bullets": [
-        "Adds the \"Kotlin Jump: Find Unused Resource Files\" command, scanning layouts, menus, anims, animators, and raw files for anything nothing in the project references.",
-        "Adds a quick fix that removes an unused resource file and every one of its density variants in a single, previewable change.",
-        "Adds an opt-in setting (kotlinJump.unusedResourcesIncludeDrawables) to also flag unused drawables and mipmaps, off by default and reported under needs review rather than deleted outright.",
-        "Keeps detection conservative: tools:keep attributes, ViewBinding class references, and bare string literals all count as real usage, and the scan reports nothing if it could not read the whole workspace."
+        "Adds the \"Kotlin Jump: Find Dead Code\" command, which sweeps the whole workspace for unused imports, parameters, private declarations, local variables, and write-only variables at once, and reports the total per category.",
+        "Reports findings for files you do not have open, where dead code actually accumulates; a file you open keeps its own live warnings instead of showing everything twice.",
+        "Adds \"Kotlin Jump: Clean Dead Code in This File\" and \"Clean Dead Code in the Workspace\", removing everything that has a safe fix in one step, always through the Refactor Preview so nothing is applied unseen.",
+        "Skips a finding whenever two checks disagree about the same range, so a sweep can never make an edit that no single check would have made on its own."
+      ]
+    },
+    {
+      "heading": "Fixes",
+      "bullets": [
+        "Fixes write-only variable detection inside a method whose name matches a scope function, such as fun run() or fun apply(). Those methods were treated as run { } and apply { } blocks, which silenced the check across every Runnable implementation."
       ]
     }
   ],

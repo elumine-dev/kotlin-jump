@@ -138,6 +138,19 @@ describe('KJ-028 adversarial — classification', () => {
     expect(names(text)).toEqual(['total']);
   });
 
+  it('une méthode nommée comme une scope function n’est pas une scope function', () => {
+    // `fun run() {` déclare une méthode : `this` n'est pas relié. Confondre les
+    // deux rendait le détecteur muet dans tout Runnable.run().
+    expect(names('class T {\n  fun run() {\n    var n = 0\n    n = 1\n    println(2)\n  }\n}\n')).toEqual(['n']);
+    expect(names('class T {\n  fun apply() {\n    var n = 0\n    n = 1\n    println(2)\n  }\n}\n')).toEqual(['n']);
+    expect(names('class T {\n  override fun run() {\n    var n = 0\n    n = 1\n    println(2)\n  }\n}\n')).toEqual(['n']);
+  });
+
+  it('mais un vrai run { } garde le silence', () => {
+    expect(names('fun f() {\n  var n = 0\n  thing.run {\n    n = 1\n  }\n  println(2)\n}\n')).toEqual([]);
+    expect(names('fun f() {\n  var n = 0\n  thing.apply {\n    n = 1\n  }\n  println(2)\n}\n')).toEqual([]);
+  });
+
   it('gros fichier : 300 classes < 300 ms', () => {
     const text = Array.from({ length: 300 }, (_, i) =>
       `class C${i} {\n  private var flag${i} = false\n  fun a() { flag${i} = true }\n  fun b() { flag${i} = false }\n}`,

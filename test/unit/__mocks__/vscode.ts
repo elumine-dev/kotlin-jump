@@ -286,8 +286,15 @@ export enum DiagnosticSeverity {
   Hint        = 3,
 }
 
+export enum DiagnosticTag {
+  Unnecessary = 1,
+  Deprecated  = 2,
+}
+
 export class Diagnostic {
   public source?: string;
+  public code?: string | number;
+  public tags?: DiagnosticTag[];
   constructor(public range: Range, public message: string, public severity: DiagnosticSeverity = DiagnosticSeverity.Error) {}
 }
 
@@ -374,12 +381,18 @@ export const commands = {
 export const languages = {
   registerHoverProvider:      (_selector: any, _provider: any) => ({ dispose: () => {} }),
   registerColorProvider:      (_selector: any, _provider: any) => ({ dispose: () => {} }),
-  createDiagnosticCollection: (_name?: string) => ({
-    set:    (_uri: any, _diagnostics: any) => {},
-    delete: (_uri: any) => {},
-    clear:  () => {},
-    dispose: () => {},
-  }),
+  createDiagnosticCollection: (_name?: string) => {
+    // Backed by a real map: a provider that publishes to the Problems panel
+    // can only be tested if the panel remembers what it was given.
+    const entries = new Map<string, any[]>();
+    return {
+      _entries: entries,
+      set:    (uri: any, diagnostics: any[]) => { entries.set(uri?.fsPath ?? String(uri), diagnostics); },
+      delete: (uri: any) => { entries.delete(uri?.fsPath ?? String(uri)); },
+      clear:  () => { entries.clear(); },
+      dispose: () => { entries.clear(); },
+    };
+  },
 };
 
 // ── Document Colors ───────────────────────────────────────────────────────────

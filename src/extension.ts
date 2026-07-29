@@ -37,6 +37,12 @@ import { WriteOnlyProvider, WriteOnlyCodeActionProvider } from './providers/Writ
 import { UnusedResourceProvider } from './providers/UnusedResourceProvider';
 import { ResourceCorpus } from './indexer/ResourceCorpus';
 import { findUnusedResourcesCommand } from './commands/FindUnusedResources';
+import {
+  DeadCodeSweepReport,
+  cleanDeadCodeInFileCommand,
+  cleanDeadCodeInWorkspaceCommand,
+  findDeadCodeCommand,
+} from './commands/DeadCodeSweep';
 import { MethodSeparatorProvider } from './providers/MethodSeparatorProvider';
 import { AndroidProjectViewProvider } from './ui/AndroidProjectViewProvider';
 import { ScreenFlowPanel } from './ui/ScreenFlowPanel';
@@ -1134,6 +1140,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // ── KJ-029 : fichiers de ressources jamais référencés ────────────────────
   const unusedResourceProvider = new UnusedResourceProvider();
   const resourceCorpus = new ResourceCorpus();
+  const deadCodeSweepReport = new DeadCodeSweepReport();
   context.subscriptions.push(
     unusedResourceProvider,
     vscode.languages.registerCodeActionsProvider(
@@ -1143,6 +1150,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand('kotlin-jump.findUnusedResources', () =>
       findUnusedResourcesCommand(resourceCorpus, unusedResourceProvider),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.clearUnusedResources', () =>
+      unusedResourceProvider.clear(),
+    ),
+    deadCodeSweepReport,
+    vscode.commands.registerCommand('kotlin-jump.findDeadCode', () =>
+      findDeadCodeCommand(deadCodeSweepReport),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.cleanDeadCodeInFile', () =>
+      cleanDeadCodeInFileCommand(),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.cleanDeadCodeInWorkspace', () =>
+      cleanDeadCodeInWorkspaceCommand(),
     ),
     vscode.workspace.onDidCreateFiles(() => resourceCorpus.invalidate()),
     vscode.workspace.onDidDeleteFiles(() => resourceCorpus.invalidate()),

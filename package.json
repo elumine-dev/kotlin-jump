@@ -2,7 +2,7 @@
   "name": "kotlin-jump",
   "displayName": "Kotlin Jump: Fast Kotlin & Android Studio Navigation",
   "description": "Fast Kotlin & Android Studio navigation. Find Usages, Go to Definition, Compose, R.string, Android Run. No JVM, no language server. The Android Studio experience inside VS Code.",
-  "version": "1.35.0",
+  "version": "1.36.0",
   "publisher": "elumine",
   "license": "MIT",
   "icon": "media/logo.png",
@@ -1178,6 +1178,21 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Warn about parameters that are never used: plain primary-constructor parameters, `private val`/`var` constructor properties, and parameters of `private` functions. The quick fix removes the parameter at the declaration and at every unambiguous call site. Conservative: `override`/`operator`/annotated declarations, data classes and enums are never flagged; mentions in comments and strings don't count, `$name` and `${…}` templates do."
+        },
+        "kotlinJump.unusedDeclarations": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Warn about `private` declarations (functions, properties, classes, objects, interfaces) that are never referenced in their file, with native graying. Quick fixes remove the declaration or add `@Suppress(\"unused\")`. Conservative: overloads, operators and convention names, annotated declarations, and named companions are never flagged; mentions in comments and strings don't count, `$name` and `${…}` templates do."
+        },
+        "kotlinJump.unusedLocals": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Warn about local `val`/`var` that are never read, named lambda parameters that are never used, and unused `catch` bindings, with native graying. Quick fixes rename a lambda parameter or catch binding to `_`, delete a dead variable whose initializer is provably pure, or keep the call and drop the variable when it could run code. Conservative: destructuring, `by` delegates, shadowed names, `it` and anything under `@Suppress` are never flagged; mentions in comments and strings don't count, `$name` and `${…}` templates do."
+        },
+        "kotlinJump.writeOnlyVariables": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Warn about variables that are assigned, sometimes repeatedly, but whose value is never read: `var` locals and `private var` members. The quick fix removes the variable and every assignment at once, keeping any call that has side effects. Conservative: `by` delegates, `lateinit`, annotated declarations, custom accessors, `Serializable`/`Parcelable` classes, shadowed names and anything under `@Suppress` are never flagged; an assignment inside `apply`/`run`/`with` may target the receiver and counts as a read."
         },
         "kotlinJump.surroundWith": {
           "type": "boolean",

@@ -90,9 +90,13 @@ export function sanitizeForUsageScan(text: string): string {
           if (ch === '"') { mode = 'code'; out.push(' '); i++; continue; }
           if (ch === '\n') { mode = 'code'; out.push('\n'); i++; continue; }
         } else if (three === '"""') {
+          // A raw string closes on the LAST three quotes of the run, so a
+          // content ending in a quote (`"""URI="x""""`) keeps the extra ones.
+          let run = 0;
+          while (i + run < text.length && text[i + run] === '"') run++;
           mode = 'code';
-          out.push('   ');
-          i += 3;
+          out.push(' '.repeat(run));
+          i += run;
           continue;
         }
         out.push(ch === '\n' ? '\n' : ' ');

@@ -1,3 +1,5 @@
+@file:Suppress("unused") // demo fixture: declarations showcase other features
+
 package com.example.ui
 
 // Stub Color class — Android Color n'est pas disponible dans un projet JVM console

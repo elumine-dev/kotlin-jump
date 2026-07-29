@@ -27,6 +27,9 @@ const KOTLIN_FIXTURES = [
   'src/main/kotlin/com/example/kj/g4runtime/RoomMigrationDemo.kt',
   'src/main/kotlin/com/example/kj/g5deadweight/UnusedImportsDemo.kt',
   'src/main/kotlin/com/example/kj/g5deadweight/UnusedParamsDemo.kt',
+  'src/main/kotlin/com/example/kj/g5deadweight/UnusedDeclarationsDemo.kt',
+  'src/main/kotlin/com/example/kj/g5deadweight/UnusedLocalsDemo.kt',
+  'src/main/kotlin/com/example/kj/g5deadweight/WriteOnlyDemo.kt',
   'src/main/kotlin/com/example/kj/g5deadweight/DependencyUsageDemo.kt',
   'src/main/kotlin/com/example/kj/g6editor/SqlQueryDao.kt',
   'src/main/kotlin/com/example/kj/g6editor/MethodSeparatorDemo.kt',
@@ -91,6 +94,36 @@ describe('KJ fixtures — marqueurs clés', () => {
     expect(demo).toContain('verbose: Boolean');
     expect(demo).toContain('ReportService("Q3", 3,');
     expect(demo).toContain('retryCount = 5');
+  });
+
+  it('KJ-026 : les cinq morts attendus et les pièges vivants présents', () => {
+    const demo = fixture('src/main/kotlin/com/example/kj/g5deadweight/UnusedDeclarationsDemo.kt');
+    for (const dead of ['staleCache', 'legacyFormat', 'countdown', 'LegacyEncoder', 'compute()']) {
+      expect(demo).toContain(dead);
+    }
+    expect(demo).toContain('::handler');
+    expect(demo).toContain('"value: $label"');
+    expect(demo).toContain('init { println(helper) }');
+  });
+
+  it('KJ-027 : les six morts et les pièges vivants présents', () => {
+    const demo = fixture('src/main/kotlin/com/example/kj/g5deadweight/UnusedLocalsDemo.kt');
+    for (const dead of ['staleTotal', 'labels', 'report', 'cached', 'index', 'IllegalStateException']) {
+      expect(demo).toContain(dead);
+    }
+    expect(demo).toContain('throw wrap(cause)');
+    expect(demo).toContain('rows.map { it.trim() }');
+    expect(demo).toContain('val (first, second)');
+    expect(demo).toContain('"total: $count"');
+  });
+
+  it('KJ-028 : les trois morts et les pièges vivants présents', () => {
+    const demo = fixture('src/main/kotlin/com/example/kj/g5deadweight/WriteOnlyDemo.kt');
+    for (const dead of ['isPlaying', 'lastError', 'discarded']) expect(demo).toContain(dead);
+    expect(demo).toContain('"session: $sessionLabel"');
+    expect(demo).toContain('consume(handedOff++)');
+    expect(demo).toContain('source.apply { total = 1 }');
+    expect(demo).toContain('class Snapshot : Serializable');
   });
 
   it('KJ-020 : trou de migration 2→3 (aucune Migration(2, 3) déclarée)', () => {

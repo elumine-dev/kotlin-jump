@@ -6,7 +6,7 @@ import { analyzeRoomSchema } from '../../../src/indexer/RoomSchemaIndex';
  *   analyzeRoomSchema(files: (string | { path?: string; text: string })[])
  *   → missingFieldMigrations / migrationGaps portent un fileIndex.
  *
- * Cas réel (replica) : deux bases Room indépendantes déclarent chacune une
+ * Cas réel rencontré en production : deux bases Room indépendantes déclarent chacune une
  * entité nommée `Ad`. La fusion par simple nom de classe faisait hériter à
  * l'entité v1 la baseline de migration de l'autre base → faux positif
  * « Ad.ref: no ADD COLUMN … ».
@@ -48,35 +48,35 @@ fun provideClient(application: Application): ClientAdDatabase =
         .enableMultiInstanceInvalidation()
         .build()`;
 
-const replicaFiles = () => [
-  { path: 'adcore/src/main/java/com/nuglif/adcore/data/dynamicad/database/Ad.kt', text: adcoreAd },
-  { path: 'adcore/src/main/java/com/nuglif/adcore/data/dynamicad/database/DynamicDBMigration.kt', text: dynamicMigration },
-  { path: 'adcore/src/main/java/com/nuglif/adcore/data/dynamicad/database/DynamicAdDatabase.kt', text: dynamicDb },
-  { path: 'app/src/main/java/ca/lapresse/android/lapresseplus/ads/Ad.kt', text: appAd },
-  { path: 'app/src/main/java/ca/lapresse/android/lapresseplus/ads/ClientAdDatabase.kt', text: clientDb },
-  { path: 'app/src/main/java/nuglif/replica/core/dagger/module/ReplicaApplicationModule.kt', text: daggerModule },
+const multiDbFiles = () => [
+  { path: 'adcore/src/main/java/com/example/adcore/data/dynamicad/database/Ad.kt', text: adcoreAd },
+  { path: 'adcore/src/main/java/com/example/adcore/data/dynamicad/database/DynamicDBMigration.kt', text: dynamicMigration },
+  { path: 'adcore/src/main/java/com/example/adcore/data/dynamicad/database/DynamicAdDatabase.kt', text: dynamicDb },
+  { path: 'app/src/main/java/com/example/app/ads/Ad.kt', text: appAd },
+  { path: 'app/src/main/java/com/example/app/ads/ClientAdDatabase.kt', text: clientDb },
+  { path: 'app/src/main/java/com/example/core/dagger/module/AppDaggerModule.kt', text: daggerModule },
 ];
 
-describe('KJ-020 multi-DB — repro replica (deux entités Ad, deux bases)', () => {
+describe('KJ-020 multi-DB — repro terrain (deux entités Ad, deux bases)', () => {
   it('Ad.ref (base v1 sans migration) : plus aucun faux positif', () => {
-    const r = analyzeRoomSchema(replicaFiles());
+    const r = analyzeRoomSchema(multiDbFiles());
     expect(r.missingFieldMigrations).toEqual([]);
   });
 
   it('kind reste couvert, aucune fausse marche dans les chaînes', () => {
-    const r = analyzeRoomSchema(replicaFiles());
+    const r = analyzeRoomSchema(multiDbFiles());
     expect(r.coveredFields).toContain('kind');
     expect(r.migrationGaps).toEqual([]);
   });
 
   it('compat string[] sans chemins : le lien addMigrations suffit à scoper', () => {
-    const r = analyzeRoomSchema(replicaFiles().map(f => f.text));
+    const r = analyzeRoomSchema(multiDbFiles().map(f => f.text));
     expect(r.missingFieldMigrations).toEqual([]);
     expect(r.migrationGaps).toEqual([]);
   });
 
   it('vrai positif préservé : champ ajouté après kind dans la base v2 → signalé', () => {
-    const files = replicaFiles();
+    const files = multiDbFiles();
     files[0] = {
       path: files[0].path,
       text: `@Entity(tableName = "ad")
@@ -92,7 +92,7 @@ data class Ad(var adId: AdId, var kind: Int, var extra: String) {
   it('entité homonyme rattachée par chemin : un champ homonyme couvert ailleurs ne crée pas de baseline ici', () => {
     // The app-side Ad also declares `kind`, but MIGRATION_1_2 belongs to
     // DynamicAdDatabase: the v1 ClientAdDatabase entity must stay silent.
-    const files = replicaFiles();
+    const files = multiDbFiles();
     files[3] = {
       path: files[3].path,
       text: `@Entity(tableName = "ad")

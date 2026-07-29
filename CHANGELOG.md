@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.36.0
+
+Kotlin Jump 1.36.0 adds three new dead code detections that flag unused private declarations, unused local variables, and variables that are written but never read.
+
+### Improvements
+- Adds warnings for private functions, properties, classes, objects, and interfaces that are never referenced in their file, so dead code is easy to spot before it piles up. A quick fix removes the declaration or adds @Suppress("unused") in one step.
+- Adds warnings for local variables that are never read, unused named lambda parameters, and unused catch bindings, with quick fixes that rename a binding to _, delete a dead variable when its initializer is safe to remove, or drop just the variable when the call could still run code.
+- Adds warnings for variables, including private var properties, that are assigned, sometimes repeatedly, but never read, with a quick fix that removes the variable and every assignment to it at once.
+- Ships all three checks enabled by default (kotlinJump.unusedDeclarations, kotlinJump.unusedLocals, kotlinJump.writeOnlyVariables), skipping overloads, operators, delegates, lateinit, annotated declarations, and other framework-required patterns, and working in both the desktop extension and the web build.
+
+### Fixes
+- Fixes unused import scanning so raw strings whose content ends in a quote (for example a regex literal like """URI="x"""") close correctly, preventing incorrect scanning of the code that follows and false unused import warnings.
+
 ## 1.35.0
 
 Kotlin Jump 1.35.0 adds unused parameter detection with a one-click removal fix, and corrects unused import detection for $name string templates.

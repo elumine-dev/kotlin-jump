@@ -1,3 +1,5 @@
+@file:Suppress("unused") // demo fixture: declarations showcase other features
+
 package com.example.sprint2
 
 import com.example.app.R

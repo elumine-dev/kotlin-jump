@@ -47,17 +47,17 @@ export interface UnusedParam {
   annotationInsert: number;
 }
 
-const FILE_SUPPRESS_RE = /@file\s*:\s*Suppress\s*\(([^)]*)\)/;
-const SUPPRESS_NAMES = new Set(['Suppress', 'SuppressLint', 'SuppressWarnings']);
+export const FILE_SUPPRESS_RE = /@file\s*:\s*Suppress\s*\(([^)]*)\)/;
+export const SUPPRESS_NAMES = new Set(['Suppress', 'SuppressLint', 'SuppressWarnings']);
 /** Annotations that never change reflective/codegen visibility of a fun's params. */
-const BENIGN_FUN_ANNOTATIONS = new Set(['Composable', 'Preview']);
+export const BENIGN_FUN_ANNOTATIONS = new Set(['Composable', 'Preview']);
 
 interface Seg {
   start: number;
   end: number;
 }
 
-function buildLineStarts(text: string): number[] {
+export function buildLineStarts(text: string): number[] {
   const starts = [0];
   for (let i = 0; i < text.length; i++) {
     if (text[i] === '\n') starts.push(i + 1);
@@ -65,7 +65,7 @@ function buildLineStarts(text: string): number[] {
   return starts;
 }
 
-function offsetToPos(lineStarts: number[], offset: number): { line: number; character: number } {
+export function offsetToPos(lineStarts: number[], offset: number): { line: number; character: number } {
   let lo = 0;
   let hi = lineStarts.length - 1;
   while (lo < hi) {
@@ -246,7 +246,7 @@ function segmentDeletionRange(text: string, segs: Seg[], index: number, lineStar
 }
 
 /** Matching `}` for the `{` at openIdx. Expects sanitized text. */
-function matchBrace(clean: string, openIdx: number): number {
+export function matchBrace(clean: string, openIdx: number): number {
   let depth = 0;
   for (let i = openIdx; i < clean.length; i++) {
     if (clean[i] === '{') depth++;

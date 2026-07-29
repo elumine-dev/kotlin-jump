@@ -1,0 +1,14 @@
+[
+  {
+    "type": "caption",
+    "label": "Who still passes this argument?",
+    "duration": 2400,
+    "t": 300
+  },
+  {
+    "type": "caption",
+    "label": "Gone from the signature and from both call sites",
+    "duration": 2600,
+    "t": 10325
+  }
+]

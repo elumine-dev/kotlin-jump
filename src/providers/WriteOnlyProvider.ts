@@ -116,7 +116,11 @@ function insideReceiverScope(clean: string, blocks: Block[], offset: number): bo
   for (let i = innermostBlockAt(blocks, offset); i !== -1; i = blocks[i].parent) {
     const header = clean.slice(blocks[i].headerStart, blocks[i].open);
     const call = /([A-Za-z_]\w*)\s*(?:\([^()]*\))?\s*$/.exec(header);
-    if (call && RECEIVER_SCOPES.has(call[1])) return true;
+    if (!call || !RECEIVER_SCOPES.has(call[1])) continue;
+    // `fun run() {` declares a method that happens to share a scope function's
+    // name; `this` is not rebound. Runnable.run() alone makes this common.
+    if (/\bfun\s+$/.test(header.slice(0, call.index))) continue;
+    return true;
   }
   return false;
 }

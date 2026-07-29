@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.38.0
+
+Kotlin Jump 1.38.0 gathers every dead code check into one workspace scan, and can clear what it finds in a single previewable change.
+
+### Improvements
+- Adds the "Kotlin Jump: Find Dead Code" command, which sweeps the whole workspace for unused imports, parameters, private declarations, local variables, and write-only variables at once, and reports the total per category.
+- Reports findings for files you do not have open, where dead code actually accumulates; a file you open keeps its own live warnings instead of showing everything twice.
+- Adds "Kotlin Jump: Clean Dead Code in This File" and "Clean Dead Code in the Workspace", removing everything that has a safe fix in one step, always through the Refactor Preview so nothing is applied unseen.
+- Skips a finding whenever two checks disagree about the same range, so a sweep can never make an edit that no single check would have made on its own.
+
+### Fixes
+- Fixes write-only variable detection inside a method whose name matches a scope function, such as `fun run()` or `fun apply()`. Those methods were treated as `run { }` and `apply { }` blocks, which silenced the check across every `Runnable` implementation.
+
 ## 1.37.0
 
 Kotlin Jump 1.37.0 adds a workspace-wide scan for unused Android resource files, with a one-step, previewable quick fix to remove them.

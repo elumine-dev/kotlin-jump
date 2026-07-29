@@ -242,8 +242,28 @@
     ],
     "commands": [
       {
+        "command": "kotlin-jump.findDeadCode",
+        "title": "Find Dead Code",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.cleanDeadCodeInFile",
+        "title": "Clean Dead Code in This File",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.cleanDeadCodeInWorkspace",
+        "title": "Clean Dead Code in the Workspace",
+        "category": "Kotlin Jump"
+      },
+      {
         "command": "kotlin-jump.findUnusedResources",
         "title": "Find Unused Resource Files",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.clearUnusedResources",
+        "title": "Clear Unused Resource Findings",
         "category": "Kotlin Jump"
       },
       {
@@ -1198,6 +1218,11 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Warn about variables that are assigned, sometimes repeatedly, but whose value is never read: `var` locals and `private var` members. The quick fix removes the variable and every assignment at once, keeping any call that has side effects. Conservative: `by` delegates, `lateinit`, annotated declarations, custom accessors, `Serializable`/`Parcelable` classes, shadowed names and anything under `@Suppress` are never flagged; an assignment inside `apply`/`run`/`with` may target the receiver and counts as a read."
+        },
+        "kotlinJump.deadCodeSweep": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Enable **Kotlin Jump: Find Dead Code**, a single workspace scan that gathers every dead-code finding at once: unused imports, parameters, private declarations, local variables and write-only variables. Results land in the Problems panel for the files you do not have open (an open file keeps its own live warnings instead of showing them twice). **Clean Dead Code in This File** and **Clean Dead Code in the Workspace** remove everything that has a safe fix, always through the Refactor Preview."
         },
         "kotlinJump.unusedResources": {
           "type": "boolean",

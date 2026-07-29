@@ -56,6 +56,7 @@ Kotlin Jump skips all of that. **No LSP. No JVM. No waiting.**
 - **⚡ Fast editing.** Named arguments, postfix completion, live templates, surround with, smart join: the IntelliJ gestures, in the lightbulb.
 - **🧭 Structure views.** Compose Outline and the Android project view in their own activity-bar container, full height.
 - **🧹 Dead weight.** Usage badges on resources, dependencies and manifest entries. Everything flagged unused offers its removal.
+- **🧽 One dead code sweep.** Imports, parameters, private declarations, locals and write-only variables, found across the workspace in one scan and cleared in one preview.
 - **🔬 Static execution.** Lifecycle leaks, dispatcher misuse and Room migration drift, caught before you run.
 - **💡 Quick fix sweep.** Missing lifecycle releases, expired TODOs, `!!` rewrites and missing `when` branches, all one lightbulb away.
 
@@ -253,6 +254,30 @@ Dead imports gray out as you read, alias traps included. One quick fix sweeps th
 <p align="center">
   <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/unused-imports.webp" width="720" />
 </p>
+
+### Unused parameters
+A parameter nobody reads warns on the declaration. The quick fix removes it and every argument passed to it, across files, behind the Refactor Preview.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/unused-parameters.webp" width="720" />
+</p>
+
+### Unused locals
+Variables never read, named lambda parameters nobody uses, catch bindings that ignore the exception. The fix deletes the variable when its initializer is safe to drop, and keeps the call when it is not.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/unused-locals.webp" width="720" />
+</p>
+
+### Unused resource files
+Layouts, menus, anims and raw files nothing in the project references. The quick fix deletes the file with all its density variants at once.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/unused-resources.webp" width="720" />
+</p>
+
+### The whole sweep
+`Find Dead Code` runs every check above across the workspace in one pass, on the files you do not have open. `Clean Dead Code in the Workspace` clears everything with a safe fix in a single preview.
 
 ### Resource usage badges
 Per-resource usage counts inside `values/*.xml`. Zero means removable.

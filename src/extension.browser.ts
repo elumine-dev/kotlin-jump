@@ -60,6 +60,12 @@ import { WriteOnlyProvider, WriteOnlyCodeActionProvider } from './providers/Writ
 import { UnusedResourceProvider } from './providers/UnusedResourceProvider';
 import { ResourceCorpus } from './indexer/ResourceCorpus';
 import { findUnusedResourcesCommand } from './commands/FindUnusedResources';
+import {
+  DeadCodeSweepReport,
+  cleanDeadCodeInFileCommand,
+  cleanDeadCodeInWorkspaceCommand,
+  findDeadCodeCommand,
+} from './commands/DeadCodeSweep';
 import { TodoExpiryProvider } from './providers/TodoExpiryProvider';
 import { ManifestPermissionProvider } from './providers/ManifestPermissionProvider';
 import { HexColorFoldingProvider } from './providers/HexColorFoldingProvider';
@@ -796,6 +802,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // KJ-029 : workspace scan through vscode APIs only, so the web build too
   const unusedResourceProviderWeb = new UnusedResourceProvider();
   const resourceCorpusWeb = new ResourceCorpus();
+  const deadCodeSweepReportWeb = new DeadCodeSweepReport();
   context.subscriptions.push(
     unusedResourceProviderWeb,
     vscode.languages.registerCodeActionsProvider(
@@ -805,6 +812,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand('kotlin-jump.findUnusedResources', () =>
       findUnusedResourcesCommand(resourceCorpusWeb, unusedResourceProviderWeb),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.clearUnusedResources', () =>
+      unusedResourceProviderWeb.clear(),
+    ),
+    deadCodeSweepReportWeb,
+    vscode.commands.registerCommand('kotlin-jump.findDeadCode', () =>
+      findDeadCodeCommand(deadCodeSweepReportWeb),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.cleanDeadCodeInFile', () =>
+      cleanDeadCodeInFileCommand(),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.cleanDeadCodeInWorkspace', () =>
+      cleanDeadCodeInWorkspaceCommand(),
     ),
   );
   context.subscriptions.push(new ManifestPermissionProvider());

@@ -1,39 +1,33 @@
 {
-  "version": "1.36.0",
+  "version": "1.37.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Unused declarations, locals, and unread writes",
-  "summary": "Kotlin Jump 1.36.0 adds three new dead code detections that flag unused private declarations, unused local variables, and variables that are written but never read.",
+  "tagline": "Unused resource detection for Android projects",
+  "summary": "Kotlin Jump 1.37.0 adds a workspace-wide scan for unused Android resource files, with a one-step, previewable quick fix to remove them.",
   "highlights": [
     {
-      "title": "Unused Declaration Warnings",
-      "description": "Detects private functions, properties, classes, objects, and interfaces that are never referenced in their file, with a quick fix to remove the declaration or suppress the warning.",
-      "kind": "feature"
+      "title": "Unused Resource Detection",
+      "kind": "feature",
+      "description": "A new \"Find Unused Resource Files\" command scans the whole workspace for layout, menu, anim, and raw files that nothing references, so dead resources are easy to spot instead of piling up."
     },
     {
-      "title": "Unused Local Warnings",
-      "description": "Flags local variables that are never read, unused lambda parameters, and unused catch bindings, with quick fixes to clean each one up automatically.",
-      "kind": "feature"
+      "title": "One-step Safe Cleanup",
+      "kind": "feature",
+      "description": "A quick fix deletes an unused resource file and all its density variants at once, always through the Refactor Preview so you can confirm the change before anything is removed."
     },
     {
-      "title": "Unread Assignment Warnings",
-      "description": "Flags variables, including private var properties, that are assigned but never read, with a quick fix that removes the variable and every assignment to it at once.",
-      "kind": "feature"
+      "title": "Optional Drawable Review",
+      "kind": "improvement",
+      "description": "An opt-in setting extends the scan to drawables and mipmaps, listing them for review instead of auto-flagging them since they can be reached through a theme or style the scanner cannot fully prove."
     }
   ],
   "sections": [
     {
       "heading": "Improvements",
       "bullets": [
-        "Adds warnings for private functions, properties, classes, objects, and interfaces that are never referenced in their file, so dead code is easy to spot before it piles up. A quick fix removes the declaration or adds @Suppress(\"unused\") in one step.",
-        "Adds warnings for local variables that are never read, unused named lambda parameters, and unused catch bindings, with quick fixes that rename a binding to _, delete a dead variable when its initializer is safe to remove, or drop just the variable when the call could still run code.",
-        "Adds warnings for variables, including private var properties, that are assigned, sometimes repeatedly, but never read, with a quick fix that removes the variable and every assignment to it at once.",
-        "Ships all three checks enabled by default (kotlinJump.unusedDeclarations, kotlinJump.unusedLocals, kotlinJump.writeOnlyVariables), skipping overloads, operators, delegates, lateinit, annotated declarations, and other framework-required patterns, and working in both the desktop extension and the web build."
-      ]
-    },
-    {
-      "heading": "Fixes",
-      "bullets": [
-        "Fixes unused import scanning so raw strings whose content ends in a quote (for example a regex literal like \"\"\"URI=\"x\"\"\"\") close correctly, preventing incorrect scanning of the code that follows and false unused import warnings."
+        "Adds the \"Kotlin Jump: Find Unused Resource Files\" command, scanning layouts, menus, anims, animators, and raw files for anything nothing in the project references.",
+        "Adds a quick fix that removes an unused resource file and every one of its density variants in a single, previewable change.",
+        "Adds an opt-in setting (kotlinJump.unusedResourcesIncludeDrawables) to also flag unused drawables and mipmaps, off by default and reported under needs review rather than deleted outright.",
+        "Keeps detection conservative: tools:keep attributes, ViewBinding class references, and bare string literals all count as real usage, and the scan reports nothing if it could not read the whole workspace."
       ]
     }
   ],

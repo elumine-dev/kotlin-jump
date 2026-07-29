@@ -179,6 +179,7 @@ export class DocumentHighlight {
 export class WorkspaceEdit {
   private _entries: Array<{ uri: any; range: Range; newText: string }> = [];
   public _fileRenames: Array<{ oldUri: any; newUri: any; options?: any; metadata?: any }> = [];
+  public _fileDeletes: Array<{ uri: any; options?: any; metadata?: any }> = [];
 
   replace(uri: any, range: Range, newText: string, _metadata?: any): void {
     this._entries.push({ uri, range, newText });
@@ -206,6 +207,10 @@ export class WorkspaceEdit {
 
   renameFile(oldUri: any, newUri: any, options?: any, metadata?: any): void {
     this._fileRenames.push({ oldUri, newUri, options, metadata });
+  }
+
+  deleteFile(uri: any, options?: any, metadata?: any): void {
+    this._fileDeletes.push({ uri, options, metadata });
   }
 
   entries(): Array<{ uri: any; range: Range; newText: string }> { return this._entries; }
@@ -318,6 +323,9 @@ export const workspace = {
   onDidCloseTextDocument:  (_listener: any) => ({ dispose: () => {} }),
   onDidSaveTextDocument:   (_listener: any) => ({ dispose: () => {} }),
   onDidChangeConfiguration: (_listener: any) => ({ dispose: () => {} }),
+  onDidDeleteFiles: (_listener: any) => ({ dispose: () => {} }),
+  onDidCreateFiles: (_listener: any) => ({ dispose: () => {} }),
+  onDidRenameFiles: (_listener: any) => ({ dispose: () => {} }),
   createFileSystemWatcher: (_glob: string) => ({
     onDidChange: (_l: any) => ({ dispose: () => {} }),
     onDidCreate: (_l: any) => ({ dispose: () => {} }),

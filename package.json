@@ -2,7 +2,7 @@
   "name": "kotlin-jump",
   "displayName": "Kotlin Jump: Fast Kotlin & Android Studio Navigation",
   "description": "Fast Kotlin & Android Studio navigation. Find Usages, Go to Definition, Compose, R.string, Android Run. No JVM, no language server. The Android Studio experience inside VS Code.",
-  "version": "1.36.0",
+  "version": "1.37.0",
   "publisher": "elumine",
   "license": "MIT",
   "icon": "media/logo.png",
@@ -241,6 +241,11 @@
       }
     ],
     "commands": [
+      {
+        "command": "kotlin-jump.findUnusedResources",
+        "title": "Find Unused Resource Files",
+        "category": "Kotlin Jump"
+      },
       {
         "command": "kotlin-jump.whatsNew",
         "title": "See What's New",
@@ -1193,6 +1198,16 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Warn about variables that are assigned, sometimes repeatedly, but whose value is never read: `var` locals and `private var` members. The quick fix removes the variable and every assignment at once, keeping any call that has side effects. Conservative: `by` delegates, `lateinit`, annotated declarations, custom accessors, `Serializable`/`Parcelable` classes, shadowed names and anything under `@Suppress` are never flagged; an assignment inside `apply`/`run`/`with` may target the receiver and counts as a read."
+        },
+        "kotlinJump.unusedResources": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Report Android resource files nothing references: layouts, menus, anims, animators and raw files. Run **Kotlin Jump: Find Unused Resource Files** to scan the whole workspace, or open a resource file to see its status. The quick fix deletes the file and all its density variants, always through the Refactor Preview. Conservative: `tools:` attributes never count as a reference (but `tools:keep` does), ViewBinding class names and bare string literals do, and the scan reports nothing at all if it could not read the whole workspace."
+        },
+        "kotlinJump.unusedResourcesIncludeDrawables": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Also warn about unused drawables and mipmaps, and offer to delete them. Off by default: a drawable can be reached through a theme, a style or a library overlay in ways that are hard to prove from the source alone. They are still listed by the scan command under **needs review**."
         },
         "kotlinJump.surroundWith": {
           "type": "boolean",

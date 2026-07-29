@@ -57,6 +57,9 @@ import { UnusedParameterProvider, UnusedParameterCodeActionProvider } from './pr
 import { UnusedDeclarationProvider, UnusedDeclarationCodeActionProvider } from './providers/UnusedDeclarationProvider';
 import { UnusedLocalProvider, UnusedLocalCodeActionProvider } from './providers/UnusedLocalProvider';
 import { WriteOnlyProvider, WriteOnlyCodeActionProvider } from './providers/WriteOnlyProvider';
+import { UnusedResourceProvider } from './providers/UnusedResourceProvider';
+import { ResourceCorpus } from './indexer/ResourceCorpus';
+import { findUnusedResourcesCommand } from './commands/FindUnusedResources';
 import { TodoExpiryProvider } from './providers/TodoExpiryProvider';
 import { ManifestPermissionProvider } from './providers/ManifestPermissionProvider';
 import { HexColorFoldingProvider } from './providers/HexColorFoldingProvider';
@@ -788,6 +791,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       { language: 'kotlin' },
       new WriteOnlyCodeActionProvider(),
       { providedCodeActionKinds: WriteOnlyCodeActionProvider.providedCodeActionKinds },
+    ),
+  );
+  // KJ-029 : workspace scan through vscode APIs only, so the web build too
+  const unusedResourceProviderWeb = new UnusedResourceProvider();
+  const resourceCorpusWeb = new ResourceCorpus();
+  context.subscriptions.push(
+    unusedResourceProviderWeb,
+    vscode.languages.registerCodeActionsProvider(
+      { scheme: 'file', pattern: '**/res/**' },
+      unusedResourceProviderWeb,
+      { providedCodeActionKinds: UnusedResourceProvider.providedCodeActionKinds },
+    ),
+    vscode.commands.registerCommand('kotlin-jump.findUnusedResources', () =>
+      findUnusedResourcesCommand(resourceCorpusWeb, unusedResourceProviderWeb),
     ),
   );
   context.subscriptions.push(new ManifestPermissionProvider());

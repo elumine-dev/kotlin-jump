@@ -34,6 +34,9 @@ import { UnusedParameterProvider, UnusedParameterCodeActionProvider } from './pr
 import { UnusedDeclarationProvider, UnusedDeclarationCodeActionProvider } from './providers/UnusedDeclarationProvider';
 import { UnusedLocalProvider, UnusedLocalCodeActionProvider } from './providers/UnusedLocalProvider';
 import { WriteOnlyProvider, WriteOnlyCodeActionProvider } from './providers/WriteOnlyProvider';
+import { UnusedResourceProvider } from './providers/UnusedResourceProvider';
+import { ResourceCorpus } from './indexer/ResourceCorpus';
+import { findUnusedResourcesCommand } from './commands/FindUnusedResources';
 import { MethodSeparatorProvider } from './providers/MethodSeparatorProvider';
 import { AndroidProjectViewProvider } from './ui/AndroidProjectViewProvider';
 import { ScreenFlowPanel } from './ui/ScreenFlowPanel';
@@ -1126,6 +1129,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       new WriteOnlyCodeActionProvider(),
       { providedCodeActionKinds: WriteOnlyCodeActionProvider.providedCodeActionKinds },
     ),
+  );
+
+  // ── KJ-029 : fichiers de ressources jamais référencés ────────────────────
+  const unusedResourceProvider = new UnusedResourceProvider();
+  const resourceCorpus = new ResourceCorpus();
+  context.subscriptions.push(
+    unusedResourceProvider,
+    vscode.languages.registerCodeActionsProvider(
+      { scheme: 'file', pattern: '**/res/**' },
+      unusedResourceProvider,
+      { providedCodeActionKinds: UnusedResourceProvider.providedCodeActionKinds },
+    ),
+    vscode.commands.registerCommand('kotlin-jump.findUnusedResources', () =>
+      findUnusedResourcesCommand(resourceCorpus, unusedResourceProvider),
+    ),
+    vscode.workspace.onDidCreateFiles(() => resourceCorpus.invalidate()),
+    vscode.workspace.onDidDeleteFiles(() => resourceCorpus.invalidate()),
+    vscode.workspace.onDidSaveTextDocument(doc => {
+      if (/[\\/]res[\\/]/.test(doc.uri.fsPath)) resourceCorpus.invalidate();
+    }),
   );
 
   // ── KJ-016 : lifecycle pairing (register sans unregister…) ───────────────

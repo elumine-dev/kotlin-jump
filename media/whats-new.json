@@ -1,39 +1,40 @@
 {
-  "version": "1.38.0",
+  "version": "1.40.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Every dead code check in one sweep",
-  "summary": "Kotlin Jump 1.38.0 gathers every dead code check into one workspace scan, and can clear what it finds in a single previewable change.",
+  "tagline": "The code nothing in the project reaches",
+  "summary": "Kotlin Jump 1.40.0 finds the classes, objects and functions that nothing in the whole project references, the first check here that reasons across files rather than within one.",
   "highlights": [
     {
-      "title": "One Scan, Every Check",
+      "title": "Across Files, Not Within One",
       "kind": "feature",
-      "description": "A new \"Find Dead Code\" command sweeps the workspace for unused imports, parameters, private declarations, local variables, and write-only variables at once, and tells you how many of each it found."
+      "description": "\"Find Unreferenced Symbols\" covers top-level classes, objects, interfaces, functions and properties. On a 3444 file project it found 89, every one confirmed by hand, in under two seconds."
     },
     {
-      "title": "Where Dead Code Hides",
+      "title": "The Imports Come With It",
+      "kind": "feature",
+      "description": "Removing a declaration leaves imports dangling in other files, and the project stops compiling. The fix deletes those too, and deletes the whole file when nothing else is left in it."
+    },
+    {
+      "title": "Tests Get Their Own Category",
       "kind": "improvement",
-      "description": "Findings are reported for the files you do not have open, which is where dead code accumulates. A file you open keeps its own live warnings rather than showing everything twice."
-    },
-    {
-      "title": "Clear It in One Preview",
-      "kind": "feature",
-      "description": "\"Clean Dead Code in This File\" and \"Clean Dead Code in the Workspace\" remove everything with a safe fix in one step, always through the Refactor Preview so nothing is applied unseen."
+      "description": "A symbol only the tests reference is reported separately and never offered for removal: deleting one breaks the test that exercises it. The quick fix suggests @VisibleForTesting instead."
     }
   ],
   "sections": [
     {
       "heading": "Improvements",
       "bullets": [
-        "Adds the \"Kotlin Jump: Find Dead Code\" command, which sweeps the whole workspace for unused imports, parameters, private declarations, local variables, and write-only variables at once, and reports the total per category.",
-        "Reports findings for files you do not have open, where dead code actually accumulates; a file you open keeps its own live warnings instead of showing everything twice.",
-        "Adds \"Kotlin Jump: Clean Dead Code in This File\" and \"Clean Dead Code in the Workspace\", removing everything that has a safe fix in one step, always through the Refactor Preview so nothing is applied unseen.",
-        "Skips a finding whenever two checks disagree about the same range, so a sweep can never make an edit that no single check would have made on its own."
+        "Adds \"Kotlin Jump: Find Unreferenced Symbols\" and \"Remove All Unreferenced Symbols\", the second clearing everything with a safe fix in one Refactor Preview.",
+        "Deletes the whole file when nothing but the dead declaration is left in it. On the project measured above that applied to 42 files.",
+        "Counts a reference wherever it really is: manifests, layouts, navigation graphs, Gradle scripts, ProGuard rules, META-INF/services entries and plain string literals.",
+        "Keeps alive anything named only by an aliased import or by a fully qualified call with no import, which a per-symbol search would miss.",
+        "Never reports a symbol carrying an annotation outside a short benign list, extending an Android or Gradle type anywhere up the chain, or declared more than once."
       ]
     },
     {
       "heading": "Fixes",
       "bullets": [
-        "Fixes write-only variable detection inside a method whose name matches a scope function, such as fun run() or fun apply(). Those methods were treated as run { } and apply { } blocks, which silenced the check across every Runnable implementation."
+        "Fixes comment stripping inside a multi-line raw string, where a later // blanked live content and could hide a real reference."
       ]
     }
   ],

@@ -2,7 +2,7 @@
   "name": "kotlin-jump",
   "displayName": "Kotlin Jump: Fast Kotlin & Android Studio Navigation",
   "description": "Fast Kotlin & Android Studio navigation. Find Usages, Go to Definition, Compose, R.string, Android Run. No JVM, no language server. The Android Studio experience inside VS Code.",
-  "version": "1.37.0",
+  "version": "1.40.0",
   "publisher": "elumine",
   "license": "MIT",
   "icon": "media/logo.png",
@@ -242,6 +242,11 @@
     ],
     "commands": [
       {
+        "command": "kotlin-jump.findEverythingUnused",
+        "title": "Find Everything Unused",
+        "category": "Kotlin Jump"
+      },
+      {
         "command": "kotlin-jump.findDeadCode",
         "title": "Find Dead Code",
         "category": "Kotlin Jump"
@@ -254,6 +259,36 @@
       {
         "command": "kotlin-jump.cleanDeadCodeInWorkspace",
         "title": "Clean Dead Code in the Workspace",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.findUnusedSymbols",
+        "title": "Find Unreferenced Symbols",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.clearUnusedSymbols",
+        "title": "Clear Unreferenced Symbol Findings",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.removeAllUnusedSymbols",
+        "title": "Remove All Unreferenced Symbols",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.findUnusedResourceKeys",
+        "title": "Find Unused Resource Keys",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.clearUnusedResourceKeys",
+        "title": "Clear Unused Resource Key Findings",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.removeAllUnusedResourceKeys",
+        "title": "Remove All Unused Resource Keys",
         "category": "Kotlin Jump"
       },
       {
@@ -1223,6 +1258,53 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Enable **Kotlin Jump: Find Dead Code**, a single workspace scan that gathers every dead-code finding at once: unused imports, parameters, private declarations, local variables and write-only variables. Results land in the Problems panel for the files you do not have open (an open file keeps its own live warnings instead of showing them twice). **Clean Dead Code in This File** and **Clean Dead Code in the Workspace** remove everything that has a safe fix, always through the Refactor Preview."
+        },
+        "kotlinJump.unusedSymbols": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Report top-level classes, objects, interfaces, functions and properties that nothing in the workspace references. Run **Kotlin Jump: Find Unreferenced Symbols** to scan, or **Remove All Unreferenced Symbols** to clear them in one previewable change; the fix also removes the imports left dangling in other files, without which the project stops compiling. `private` declarations are excluded because the per-file check already covers them. A finding means no textual reference exists in what the extension can read: manifests, layouts, navigation graphs, Gradle scripts, ProGuard rules and `META-INF/services` all count as references, as does a name appearing in a string literal. Never reported: anything carrying an annotation outside a short benign list, anything extending an Android or Gradle framework type (directly or through the chain), operator and convention functions, `expect`/`actual` pairs, and any name declared more than once. Reports nothing at all if the whole workspace could not be read."
+        },
+        "kotlinJump.unusedSymbolsIncludeTestOnly": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Also report symbols that only the test sources reference, as a separate **used only from tests** category. They carry no removal fix: deleting one breaks the test that exercises it, so the call is yours. The quick fix offers `@VisibleForTesting` instead."
+        },
+        "kotlinJump.unusedSymbolsIgnoreNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Symbol names, globs allowed, that are never reported as unreferenced."
+        },
+        "kotlinJump.unusedSymbolsIgnorePaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/buildSrc/**",
+            "**/build-logic/**"
+          ],
+          "markdownDescription": "Declaring paths, globs allowed, that are never reported. Gradle build logic is excluded by default because a convention plugin is identified by its file name rather than by a reference to its class."
+        },
+        "kotlinJump.unusedSymbolsFrameworkNameSuffixes": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Also treat a name ending in `Activity`, `Fragment`, `Service`, `Receiver`, `Provider`, `Application`, `Worker`, `Module`, `Entity`, `Dao` or `Interceptor` as framework-instantiated, even with no annotation or supertype saying so. Off by default: measured on a real project it silenced a genuinely dead Fragment while covering only a handful of extra cases. Turn it on for a codebase whose framework base classes live outside the workspace."
+        },
+        "kotlinJump.unusedResourceKeys": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Report individual `values*/*.xml` entries nothing references: `<string>`, `<color>`, `<dimen>`, `<style>`, `<attr>`, `<integer>`, `<bool>`, arrays and `<plurals>`. Run **Kotlin Jump: Find Unused Resource Keys** to scan the whole workspace, or **Remove All Unused Resource Keys** to clear them in one previewable change. The quick fix removes the key in every qualifier variant at once (`values-night`, `values-fr`, `values-v21`), always through the Refactor Preview. Conservative by design: a redeclaration in a qualified folder is a variant and never a usage, keys a third-party SDK reads by name (`com_braze_*`, `fb_*`, `google_api_key`) are never flagged, `<attr name=\"android:textColor\"/>` declares nothing, a style is kept alive by its dotted children, and R8 build artifacts (`seeds.txt`, `usage.txt`, `mapping.txt`) never count as references. A key whose name also appears as a bare string literal in Kotlin stays unflagged on purpose. Reports nothing at all if the whole workspace could not be read."
+        },
+        "kotlinJump.unusedResourceKeysIgnorePrefixes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Extra resource key prefixes that are never reported as unused, merged with the built-in SDK and library lists. Use it for configuration keys a third-party library reads by name with no mention in project code."
         },
         "kotlinJump.unusedResources": {
           "type": "boolean",

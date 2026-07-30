@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  KJ-031 fixture: a qualified folder holds VARIANTS, not references.
+  `kj_night_dead` exists here and in values/, so it is one finding with two
+  variants, and removing it must touch both files.
+-->
+<resources>
+    <color name="kj_night_dead">#000000</color>
+</resources>

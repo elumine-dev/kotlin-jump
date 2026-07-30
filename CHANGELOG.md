@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.40.0
+
+Kotlin Jump 1.40.0 finds the classes, objects and functions that nothing in the whole project references, the first check here that reasons across files rather than within one.
+
+### Improvements
+- Adds "Kotlin Jump: Find Everything Unused", which runs every check in one pass and reports a single summary. The three workspace checks share one read of the project, so running them together costs barely more than the slowest one alone.
+- Adds "Kotlin Jump: Find Unreferenced Symbols", covering top-level classes, objects, interfaces, functions and properties. Measured on a 3444 file project: 77 findings, every one of them confirmed by hand, in under two seconds.
+- Detects test source sets by Gradle convention rather than from a list, so `savedAndroidTestLaPresse`, `screenshotTest`, `testFixtures` and every `test<Flavor>` variant are recognised without configuring anything. Relying on the configured list alone reported twelve test classes as dead production code.
+- Stops counting static analysis baselines as references. A detekt or Lint baseline records which warnings to silence: it names a class without using it, and one real 904 line baseline listed 376 class names that all read as live references.
+- Treats the Compose contract annotations (`@Stable`, `@Immutable`, `@ReadOnlyComposable`, `@NonRestartableComposable`) as benign. They promise something about a type, they do not make it reachable.
+- Adds "Remove All Unreferenced Symbols", which also deletes the imports left dangling in other files. Without those the project stops compiling the moment the declaration goes away, so they are part of the fix rather than an extra.
+- Deletes the whole file when nothing but the dead declaration is left in it. On the project measured above that applied to 42 files.
+- Reports symbols only the tests reference as a separate category, with no removal offered: deleting one breaks the test that exercises it, so the quick fix suggests @VisibleForTesting instead.
+- Counts a reference wherever it really is: manifests, layouts, navigation graphs, Gradle scripts, ProGuard rules, META-INF/services entries and plain string literals. A class named only by an aliased import or by a fully qualified call with no import stays alive.
+- Never reports anything carrying an annotation outside a short benign list, anything extending an Android or Gradle type directly or further up the chain, a sealed class whose variants are deserialized, operator and convention functions, or a name declared more than once.
+
+### Fixes
+- Fixes the workspace file cap being applied before exclusions rather than after. On a project that had been built, generated output filled the cap, the scan reported a truncated workspace, and every check that reasons about absence silently refused to run. Affected unused resource files and resource keys as well.
+- Fixes comment stripping inside a multi-line raw string. A `//` on a later line of a `"""…"""` literal blanked live content, which could hide a reference and make a used resource look unused.
+- Fixes write-only variable detection inside a method whose name matches a scope function, such as `fun run()` or `fun apply()`. Those methods were read as `run { }` and `apply { }` blocks, which silenced the check across every `Runnable` implementation.
+
+## 1.39.0
+
+Kotlin Jump 1.39.0 finds the individual entries in `values/*.xml` that nothing references, and removes a key across every one of its configuration variants at once.
+
+### Improvements
+- Adds the "Kotlin Jump: Find Unused Resource Keys" command, covering strings, colors, dimensions, styles, attributes, integers, booleans, arrays and plurals. Measured on a 3444 file project: 248 dead keys out of 3204 declared.
+- Adds "Remove All Unused Resource Keys", which clears every one of them in a single Refactor Preview, and a per-key quick fix that removes the entry in `values/`, `values-night`, `values-fr` and every other qualifier variant together.
+- Treats a redeclaration in a qualified folder as a variant rather than a usage, so a key that only exists to be overridden in dark mode is still reported once, with the number of variants in the message.
+- Keeps a style alive through its dotted children, so declaring `Widget.App.Button.Primary` protects `Widget.App.Button` even though the parent name appears nowhere.
+- Never reports configuration keys a third-party SDK reads by name (`com_braze_*`, `fb_*`, `google_api_key`), attributes named for a platform attribute such as `android:textColor`, or anything a shrinker report happens to mention.
+- Makes this the single source of truth for `res/values*`: the older per-line lightbulb stands down and the usage badge keeps its count but stops graying, so a key we refuse to call dead no longer looks dead.
+
 ## 1.38.0
 
 Kotlin Jump 1.38.0 gathers every dead code check into one workspace scan, and can clear what it finds in a single previewable change.

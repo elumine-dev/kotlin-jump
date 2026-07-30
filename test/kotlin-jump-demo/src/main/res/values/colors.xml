@@ -51,4 +51,11 @@
     <!-- KJ-021 : utilisé UNIQUEMENT par view_kj_banner.xml (android:background)
          → attendu 1 usage (les refs res→res comptent). -->
     <color name="banner_backdrop">#102040</color>
+
+    <!-- KJ-031: alive, a style item points at it. -->
+    <color name="kj_accent">#3F51B5</color>
+
+    <!-- KJ-031: dead, and also declared in values-night/ → one finding,
+         two variants, and the removal has to touch both files. -->
+    <color name="kj_night_dead">#FFFFFF</color>
 </resources>

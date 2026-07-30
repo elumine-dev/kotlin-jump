@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { countAllResourceUsages, ResKind, UsageSource } from './ResourceUsageBadgeProvider';
 import { classifyDependency, aliasToCatalogKey, parseCatalogCoordinates } from './DependencyUsageBadgeProvider';
 import { analyzeManifest, ProjectSearcher } from './ManifestNecessityProvider';
+import { UnusedResourceKeyProvider } from './UnusedResourceKeyProvider';
 
 /**
  * "Remove" quick fixes for everything the extension reports as unused.
@@ -107,6 +108,10 @@ export class DeadWeightActionProvider implements vscode.CodeActionProvider {
 
     // ── XML resources with no usage ──────────────────────────────────────
     if (/[\\/]res[\\/]values[^\\/]*[\\/][^\\/]+\.xml$/.test(fsPath)) {
+      // KJ-031 owns dead keys now: it covers nine kinds instead of three and
+      // removes every qualifier variant, so offering both would mean two
+      // near-identical titles deleting different amounts of text.
+      if (UnusedResourceKeyProvider.isEnabled()) return [];
       const m = /<(string|color|dimen)\s+name="([^"]+)"/.exec(lineText);
       if (!m) return [];
       const kind = m[1] as ResKind;

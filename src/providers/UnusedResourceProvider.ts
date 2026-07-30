@@ -48,11 +48,10 @@ const MANIFEST_CRITICAL = [
 ];
 
 /** Prefixes owned by AndroidX / Material / Play libraries: an overlay we must not touch. */
-const LIBRARY_PREFIXES = [
-  'abc_', 'mtrl_', 'm3_', 'design_', 'notification_', 'preference_', 'browser_',
-  'common_google_', 'googleg_', 'exo_', 'ime_', 'tooltip_', 'select_dialog_',
-  'support_', 'expand_activities_', 'material_', 'androidx_',
-];
+// Moved to src/util/resourceAllowlists.ts so KJ-031 shares the same list.
+// Re-exported: the KJ-029 suites import it from here.
+export { LIBRARY_PREFIXES } from '../util/resourceAllowlists';
+import { LIBRARY_PREFIXES } from '../util/resourceAllowlists';
 
 export interface ResourceSource {
   path: string;

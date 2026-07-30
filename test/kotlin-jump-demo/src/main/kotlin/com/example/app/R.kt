@@ -168,4 +168,21 @@ object R {
         val difficulty_levels    = 502
         val this_array_does_not_exist = -1
     }
+
+    // KJ-031: the kinds the older detectors never covered.
+    object integer {
+        val kj_retry_count = 600
+    }
+
+    object bool {
+        val kj_feature_on = 610
+    }
+
+    object style {
+        val Widget_Kj_Button_Primary = 620
+    }
+
+    object styleable {
+        val KjBadge_kjBadgeColor = 630
+    }
 }

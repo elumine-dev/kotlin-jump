@@ -279,6 +279,12 @@ Layouts, menus, anims and raw files nothing in the project references. The quick
 ### The whole sweep
 `Find Dead Code` runs every check above across the workspace in one pass, on the files you do not have open. `Clean Dead Code in the Workspace` clears everything with a safe fix in a single preview.
 
+### Unreferenced symbols
+The classes, objects and functions that nothing in the project references, found across files rather than within one. The fix removes the declaration, the imports it leaves dangling elsewhere, and the file itself when nothing else is in it. Symbols only the tests reference get their own category, without a removal.
+
+### Unused resource keys
+The entries inside `values/*.xml` that nothing references: strings, colors, dimensions, styles, attributes, integers, booleans, arrays and plurals. The fix removes the key in every configuration variant at once, `values-night` and `values-fr` included, in one preview.
+
 ### Resource usage badges
 Per-resource usage counts inside `values/*.xml`. Zero means removable.
 
@@ -681,7 +687,7 @@ Search **Kotlin Jump** in your editor's Extensions tab (`Cmd+Shift+X`), or insta
 For offline installs (machines without internet access), grab the latest `.vsix` from [GitHub Releases](https://github.com/elumine-dev/kotlin-jump/releases/latest):
 
 ```bash
-code --install-extension kotlin-jump-1.37.0.vsix
+code --install-extension kotlin-jump-1.40.0.vsix
 ```
 
 ### Build from source
@@ -689,7 +695,7 @@ code --install-extension kotlin-jump-1.37.0.vsix
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full dev setup, or quickstart:
 
 ```bash
-code --install-extension kotlin-jump-1.37.0.vsix
+code --install-extension kotlin-jump-1.40.0.vsix
 ```
 
 ---

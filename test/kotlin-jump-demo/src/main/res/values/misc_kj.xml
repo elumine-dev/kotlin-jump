@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KJ-031 fixture: the kinds no other detector covered before. -->
+<resources>
+
+    <!-- Alive: read from Kotlin. -->
+    <bool name="kj_feature_on">true</bool>
+    <integer name="kj_retry_count">3</integer>
+
+    <!-- Dead: declared, never read. -->
+    <bool name="kj_bool_dead">false</bool>
+    <integer name="kj_int_dead">7</integer>
+
+    <integer-array name="kj_array_dead">
+        <item>1</item>
+        <item>2</item>
+    </integer-array>
+
+    <!-- Dead, and its removal range spans the whole block. -->
+    <plurals name="kj_plural_dead">
+        <item quantity="one">%d item</item>
+        <item quantity="other">%d items</item>
+    </plurals>
+
+</resources>

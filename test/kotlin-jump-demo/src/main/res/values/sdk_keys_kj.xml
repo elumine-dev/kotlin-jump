@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  KJ-031 fixture: configuration a third-party SDK reads by name, at runtime,
+  with zero mention in project code. Nothing here may ever be reported.
+-->
+<resources>
+    <string name="com_braze_api_key" translatable="false">demo-key</string>
+    <string name="fb_login_protocol_scheme" translatable="false">fb000000</string>
+    <bool name="com_braze_handle_push_deep_links_automatically">true</bool>
+    <integer name="com_braze_session_timeout">10</integer>
+</resources>

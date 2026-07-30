@@ -24,4 +24,17 @@
 
     <fragment tools:layout="@layout/view_kj_tools_only" />
 
+    <!-- KJ-032 fixture — a custom view named by fully qualified name keeps
+         its Kotlin class alive with no call site anywhere in the code. -->
+    <com.example.kj.g5deadweight.GhostCustomView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
+    <!-- KJ-031 fixture — the two reference forms only this detector reads:
+         style="@style/…"     keeps a dotted style alive
+         ?attr/…              keeps an attribute alive through the theme -->
+    <Button
+        style="@style/Widget.Kj.Button"
+        android:background="?attr/kjAccent" />
+
 </LinearLayout>

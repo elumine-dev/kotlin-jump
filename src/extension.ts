@@ -37,6 +37,17 @@ import { WriteOnlyProvider, WriteOnlyCodeActionProvider } from './providers/Writ
 import { UnusedResourceProvider } from './providers/UnusedResourceProvider';
 import { ResourceCorpus } from './indexer/ResourceCorpus';
 import { findUnusedResourcesCommand } from './commands/FindUnusedResources';
+import { UnusedResourceKeyProvider } from './providers/UnusedResourceKeyProvider';
+import { UnusedSymbolProvider } from './providers/UnusedSymbolProvider';
+import { findEverythingUnusedCommand } from './commands/FindEverythingUnused';
+import {
+  findUnusedSymbolsCommand,
+  removeAllUnusedSymbolsCommand,
+} from './commands/FindUnusedSymbols';
+import {
+  findUnusedResourceKeysCommand,
+  removeAllUnusedResourceKeysCommand,
+} from './commands/FindUnusedResourceKeys';
 import {
   DeadCodeSweepReport,
   cleanDeadCodeInFileCommand,
@@ -1141,6 +1152,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const unusedResourceProvider = new UnusedResourceProvider();
   const resourceCorpus = new ResourceCorpus();
   const deadCodeSweepReport = new DeadCodeSweepReport();
+  const unusedResourceKeyProvider = new UnusedResourceKeyProvider();
+  const unusedSymbolProvider = new UnusedSymbolProvider();
   context.subscriptions.push(
     unusedResourceProvider,
     vscode.languages.registerCodeActionsProvider(
@@ -1163,6 +1176,45 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand('kotlin-jump.cleanDeadCodeInWorkspace', () =>
       cleanDeadCodeInWorkspaceCommand(),
+    ),
+    unusedResourceKeyProvider,
+    vscode.languages.registerCodeActionsProvider(
+      { scheme: 'file', pattern: '**/res/values*/*.xml' },
+      unusedResourceKeyProvider,
+      { providedCodeActionKinds: UnusedResourceKeyProvider.providedCodeActionKinds },
+    ),
+    vscode.commands.registerCommand('kotlin-jump.findUnusedResourceKeys', () =>
+      findUnusedResourceKeysCommand(resourceCorpus, unusedResourceKeyProvider),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.clearUnusedResourceKeys', () =>
+      unusedResourceKeyProvider.clear(),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.removeAllUnusedResourceKeys', () =>
+      removeAllUnusedResourceKeysCommand(resourceCorpus, unusedResourceKeyProvider),
+    ),
+    unusedSymbolProvider,
+    vscode.languages.registerCodeActionsProvider(
+      { scheme: 'file', language: 'kotlin' },
+      unusedSymbolProvider,
+      { providedCodeActionKinds: UnusedSymbolProvider.providedCodeActionKinds },
+    ),
+    vscode.commands.registerCommand('kotlin-jump.findUnusedSymbols', () =>
+      findUnusedSymbolsCommand(resourceCorpus, unusedSymbolProvider),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.clearUnusedSymbols', () =>
+      unusedSymbolProvider.clear(),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.removeAllUnusedSymbols', () =>
+      removeAllUnusedSymbolsCommand(resourceCorpus, unusedSymbolProvider),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.findEverythingUnused', () =>
+      findEverythingUnusedCommand(
+        resourceCorpus,
+        deadCodeSweepReport,
+        unusedSymbolProvider,
+        unusedResourceKeyProvider,
+        unusedResourceProvider,
+      ),
     ),
     vscode.workspace.onDidCreateFiles(() => resourceCorpus.invalidate()),
     vscode.workspace.onDidDeleteFiles(() => resourceCorpus.invalidate()),

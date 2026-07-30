@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KJ-031 fixture: style keys, alive and dead. -->
+<resources>
+
+    <!-- Alive: referenced from a layout with style="@style/Widget.Kj.Button". -->
+    <style name="Widget.Kj.Button">
+        <item name="kjAccent">@color/kj_accent</item>
+    </style>
+
+    <!--
+      Alive with NO textual reference anywhere: declaring the child below makes
+      this one its implicit parent. Miss that rule and the sweep deletes the
+      parent of a live style.
+    -->
+    <style name="Widget.Kj">
+        <item name="android:padding">8dp</item>
+    </style>
+
+    <!-- Alive: referenced from Kotlin as R.style.Widget_Kj_Button_Primary. -->
+    <style name="Widget.Kj.Button.Primary" parent="Widget.Kj.Button" />
+
+    <!-- Alive: an explicit parent= counts, bare or with @style/. -->
+    <style name="Widget.Kj.Base" />
+    <style name="Widget.Kj.Derived" parent="@style/Widget.Kj.Base" />
+
+    <!-- Dead: no reference, no child, no parent pointing at it. -->
+    <style name="Widget.Kj.Dead">
+        <item name="android:textSize">14sp</item>
+    </style>
+
+</resources>

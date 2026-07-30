@@ -67,6 +67,11 @@
             </intent-filter>
         </activity>
 
+        <!-- KJ-032 fixture: a manifest component is an entry point the code
+             never names. The dot is a separator in the harvest, so
+             ".ManifestOnlyWorker" yields the token that keeps it alive. -->
+        <service android:name=".g5deadweight.ManifestOnlyWorker" />
+
     </application>
 
 </manifest>

@@ -25,10 +25,19 @@ function makeDoc(path: string, lines: string[]) {
 
 const at = (line: number) => new vscodeMock.Range(line, 0, line, 0) as any;
 
-/** Workspace stub: `sources` drives usage counting, `files` drives findFiles. */
-function stubWorkspace(sources: { path: string; text: string }[]) {
+/**
+ * Workspace stub: `sources` drives usage counting, `files` drives findFiles.
+ *
+ * `settings` overrides individual `kotlinJump.*` values. KJ-031 took ownership
+ * of `res/values*` entries, so the resource cases here have to say which world
+ * they are testing.
+ */
+function stubWorkspace(
+  sources: { path: string; text: string }[],
+  settings: Record<string, unknown> = {},
+) {
   vi.spyOn(vscodeMock.workspace, 'getConfiguration').mockReturnValue({
-    get: (_k: string, d?: unknown) => d ?? true,
+    get: (k: string, d?: unknown) => (k in settings ? settings[k] : d ?? true),
   } as any);
   vi.spyOn(vscodeMock.workspace, 'findFiles').mockImplementation((pattern: any) =>
     Promise.resolve(
@@ -47,9 +56,24 @@ function stubWorkspace(sources: { path: string; text: string }[]) {
 
 beforeEach(() => vi.restoreAllMocks());
 
+/** KJ-031 covers nine kinds and every qualifier variant, so it owns values*. */
+const KJ031_OFF = { unusedResourceKeys: false };
+
 describe('KJ-024 — unused resources', () => {
-  it('offers removal for a string with zero usages', async () => {
-    stubWorkspace([{ path: '/w/src/App.kt', text: 'val x = R.string.used_one' }]);
+  it('yields res/values* to KJ-031 when it is enabled', async () => {
+    stubWorkspace([]);
+    const doc = makeDoc('/w/src/main/res/values/strings.xml', [
+      '<resources>',
+      '    <string name="dead_one">Nobody uses me</string>',
+      '</resources>',
+    ]);
+    // Two lightbulbs deleting different amounts of text under near-identical
+    // titles is the worst outcome available, so this one stands down.
+    expect(await new DeadWeightActionProvider().provideCodeActions(doc, at(1))).toEqual([]);
+  });
+
+  it('offers removal for a string with zero usages when KJ-031 is off', async () => {
+    stubWorkspace([{ path: '/w/src/App.kt', text: 'val x = R.string.used_one' }], KJ031_OFF);
     const doc = makeDoc('/w/src/main/res/values/strings.xml', [
       '<resources>',
       '    <string name="dead_one">Nobody uses me</string>',
@@ -61,7 +85,7 @@ describe('KJ-024 — unused resources', () => {
   });
 
   it('stays silent when the resource is used', async () => {
-    stubWorkspace([{ path: '/w/src/App.kt', text: 'val x = R.string.alive' }]);
+    stubWorkspace([{ path: '/w/src/App.kt', text: 'val x = R.string.alive' }], KJ031_OFF);
     const doc = makeDoc('/w/src/main/res/values/strings.xml', [
       '<resources>',
       '    <string name="alive">Used</string>',
@@ -71,7 +95,7 @@ describe('KJ-024 — unused resources', () => {
   });
 
   it('deletes the whole line, not a fragment', async () => {
-    stubWorkspace([]);
+    stubWorkspace([], KJ031_OFF);
     const doc = makeDoc('/w/src/main/res/values/colors.xml', [
       '<resources>',
       '    <color name="dead">#FF0000</color>',

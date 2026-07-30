@@ -1,25 +1,9 @@
 import * as vscode from 'vscode';
+import { isTestPath } from './testPaths';
 
-/**
- * True iff `uriPath` contains `segment` as a full path component —
- * bounded by `/` on both sides, or `/` + end-of-path.
- *
- * Plain `path.includes(segment)` is too loose: the segment `"test/kotlin"`
- * would match `".../test/kotlin-jump-demo/..."` (a repo directory that
- * simply starts with the same letters), misclassifying every file in
- * that repo as a test file. Matching on bounded components eliminates
- * that false positive while still correctly identifying real test
- * source sets like `".../src/test/kotlin/..."`.
- */
-function segmentMatchesPath(uriPath: string, segment: string): boolean {
-  const s = segment.replace(/^\/+|\/+$/g, '');
-  if (!s) return false;
-  return uriPath.includes(`/${s}/`) || uriPath.endsWith(`/${s}`);
-}
-
-export function isTestPath(uriPath: string, segments: string[]): boolean {
-  return segments.some(s => segmentMatchesPath(uriPath, s));
-}
+// Moved to ./testPaths.ts so a plain Node script can classify a path.
+// Re-exported: the existing suites and providers import them from here.
+export { isTestPath, segmentMatchesPath } from './testPaths';
 
 /**
  * Returns a filter function that excludes test-source files when the caller

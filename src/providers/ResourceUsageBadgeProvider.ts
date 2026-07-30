@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { reportDecorations } from '../util/demoProbe';
 import { stripKotlinComments, stripXmlComments } from '../util/xmlRefs';
+import { UnusedResourceKeyProvider } from './UnusedResourceKeyProvider';
 
 // Re-exported: KJ-024 and the KJ-021 suites import them from here.
 export { stripKotlinComments, stripXmlComments };
@@ -194,7 +195,13 @@ export class ResourceUsageBadgeProvider implements vscode.Disposable {
           after: { contentText: n === 0 ? '0 usages' : `${n} usage${n > 1 ? 's' : ''}` },
         },
       });
-      if (n === 0) dead.push(new vscode.Range(e.line, 0, e.line, lines[e.line].length));
+      if (n === 0 && !UnusedResourceKeyProvider.isEnabled()) {
+        // KJ-031 grays through DiagnosticTag.Unnecessary, and two stacked
+        // graying mechanisms read as a rendering bug. The count stays: it is
+        // information, and "0 usages" without graying is the honest render for
+        // a key KJ-031 refuses to call dead, like an SDK config key.
+        dead.push(new vscode.Range(e.line, 0, e.line, lines[e.line].length));
+      }
     }
     editor.setDecorations(this._badge, badges);
     reportDecorations('resourceUsageBadges', badges.length);

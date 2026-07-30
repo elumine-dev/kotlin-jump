@@ -17,95 +17,10 @@ export interface UnusedImport {
 }
 
 const IMPORT_RE = /^\s*import\s+([\w.]+?)(\.\*)?(?:\s+as\s+(\w+))?\s*(?:\/\/.*)?$/;
-
-/** Blanks out comments and string contents while PRESERVING the code inside
- *  `${…}` templates (lengths are kept). */
-export function sanitizeForUsageScan(text: string): string {
-  const out: string[] = [];
-  let i = 0;
-  let mode: 'code' | 'line-comment' | 'block-comment' | 'string' | 'raw' = 'code';
-  let templateDepth = 0;
-
-  while (i < text.length) {
-    const ch = text[i];
-    const two = text.slice(i, i + 2);
-    const three = text.slice(i, i + 3);
-
-    switch (mode) {
-      case 'code':
-        if (two === '//') { mode = 'line-comment'; out.push('  '); i += 2; continue; }
-        if (two === '/*') { mode = 'block-comment'; out.push('  '); i += 2; continue; }
-        if (three === '"""') { mode = 'raw'; out.push('   '); i += 3; continue; }
-        if (ch === '"') { mode = 'string'; out.push(' '); i++; continue; }
-        if (ch === "'") {
-          // char literal: blanked out entirely ('A', '\'', '\\', 'A')
-          let j = i + 1;
-          if (text[j] === '\\') j += 2 + (text[j + 1] === 'u' ? 4 : 0);
-          else j += 1;
-          if (text[j] === "'") {
-            out.push(' '.repeat(j + 1 - i));
-            i = j + 1;
-            continue;
-          }
-        }
-        out.push(ch);
-        i++;
-        continue;
-
-      case 'line-comment':
-        if (ch === '\n') { mode = 'code'; out.push('\n'); } else out.push(' ');
-        i++;
-        continue;
-
-      case 'block-comment':
-        if (two === '*/') { mode = 'code'; out.push('  '); i += 2; continue; }
-        out.push(ch === '\n' ? '\n' : ' ');
-        i++;
-        continue;
-
-      case 'string':
-      case 'raw':
-        if (templateDepth > 0) {
-          if (ch === '{') templateDepth++;
-          if (ch === '}') {
-            templateDepth--;
-            out.push(templateDepth === 0 ? ' ' : ch);
-            i++;
-            continue;
-          }
-          out.push(ch);
-          i++;
-          continue;
-        }
-        if (two === '${') { templateDepth = 1; out.push('  '); i += 2; continue; }
-        if (ch === '$' && /[A-Za-z_]/.test(text[i + 1] ?? '')) {
-          // simple template "$name": the identifier IS code, keep it scannable
-          out.push('$');
-          i++;
-          while (i < text.length && /[A-Za-z0-9_]/.test(text[i])) { out.push(text[i]); i++; }
-          continue;
-        }
-        if (mode === 'string') {
-          if (ch === '\\') { out.push('  '); i += 2; continue; }
-          if (ch === '"') { mode = 'code'; out.push(' '); i++; continue; }
-          if (ch === '\n') { mode = 'code'; out.push('\n'); i++; continue; }
-        } else if (three === '"""') {
-          // A raw string closes on the LAST three quotes of the run, so a
-          // content ending in a quote (`"""URI="x""""`) keeps the extra ones.
-          let run = 0;
-          while (i + run < text.length && text[i + run] === '"') run++;
-          mode = 'code';
-          out.push(' '.repeat(run));
-          i += run;
-          continue;
-        }
-        out.push(ch === '\n' ? '\n' : ' ');
-        i++;
-        continue;
-    }
-  }
-  return out.join('');
-}
+// Moved to src/util/kotlinScan.ts so a plain Node script can use it.
+// Re-exported: the KJ-009/025/026/027/028/031 suites import it from here.
+export { sanitizeForUsageScan } from '../util/kotlinScan';
+import { sanitizeForUsageScan } from '../util/kotlinScan';
 
 export function findUnusedImports(text: string): UnusedImport[] {
   const lines = text.split('\n');

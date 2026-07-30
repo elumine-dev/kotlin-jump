@@ -228,33 +228,8 @@ function findParamListStart(flat: string): number {
   return -1;
 }
 
-// Finds the index of the `)` that closes the `(` at `openIdx`.
-// Skips string literals (both single and double quoted) to avoid false matches.
-export function findMatchingParen(s: string, openIdx: number): number {
-  let depth = 0;
-  let i = openIdx;
-  while (i < s.length) {
-    const ch = s[i];
-    // Skip string literals to avoid `)` inside them
-    if (ch === '"' || ch === "'") {
-      const quote = ch;
-      i++;
-      while (i < s.length) {
-        if (s[i] === '\\') { i += 2; continue; }
-        if (s[i] === quote) { i++; break; }
-        i++;
-      }
-      continue;
-    }
-    if (ch === '(') depth++;
-    else if (ch === ')') {
-      depth--;
-      if (depth === 0) return i;
-    }
-    i++;
-  }
-  return -1;
-}
+export { findMatchingParen } from './kotlinScan';
+import { findMatchingParen } from './kotlinScan';
 
 // Splits `s` by `,` at bracket depth 0 (parens + angles + braces).
 // Skips string literals so that `)` or `,` inside strings don't affect depth.

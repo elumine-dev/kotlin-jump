@@ -47,19 +47,10 @@ export interface UnusedDecl {
   suppressIndent: string;
 }
 
-/**
- * Functions callable without their name appearing at the call site.
- * `isOperator`/`isOverride` already cover the own-line parser path; this
- * table is the belt for the inline-body path where those flags are partial.
- */
-const CONVENTION_FUN_NAMES = new Set([
-  'invoke', 'getValue', 'setValue', 'provideDelegate',
-  'equals', 'hashCode', 'toString', 'compareTo', 'contains',
-  'iterator', 'next', 'hasNext', 'rangeTo', 'rangeUntil',
-  'plus', 'minus', 'times', 'div', 'rem', 'mod', 'get', 'set',
-  'inc', 'dec', 'unaryPlus', 'unaryMinus', 'not',
-  'plusAssign', 'minusAssign', 'timesAssign', 'divAssign', 'remAssign',
-]);
+// Moved to src/util/kotlinScan.ts, shared with KJ-032.
+export { CONVENTION_FUN_NAMES, REFLECTIVE_SUPERTYPES } from '../util/kotlinScan';
+import { CONVENTION_FUN_NAMES, REFLECTIVE_SUPERTYPES } from '../util/kotlinScan';
+import { declarationSpan } from '../util/declarationSpan';
 
 /**
  * Annotations that do NOT make a declaration reachable. Note `@Preview` is
@@ -69,18 +60,11 @@ const CONVENTION_FUN_NAMES = new Set([
  */
 const BENIGN_DECL_ANNOTATIONS = new Set(['Composable']);
 
-/**
- * Supertypes whose runtime reads fields the code never names: Java
- * serialization, Android Parcelable. A private property of such a class is
- * never provably dead from the source alone.
- */
-const REFLECTIVE_SUPERTYPES = new Set(['Serializable', 'Externalizable', 'Parcelable']);
 
 const MODIFIER_GUARD_RE = /\b(?:override|operator|expect|actual|external|abstract)\b/;
 const CANDIDATE_KINDS = new Set(['fun', 'composable', 'val', 'var', 'class', 'sealedClass', 'object', 'interface']);
 const CLASS_LIKE = new Set(['class', 'sealedClass', 'dataClass', 'object', 'interface', 'enum', 'annotation']);
 /** Characters legal inside a class header between name and body brace. */
-const HEADER_CHARS_RE = /^[\s\w:,<>()?.[\]"'&*-]*$/;
 
 function outputKind(kind: string): UnusedDeclKind {
   if (kind === 'composable') return 'fun';
@@ -182,86 +166,18 @@ export function findUnusedDeclarations(text: string): UnusedDecl[] {
     if (/;\s*\S/.test(cleanDeclLine)) continue; // `private val a = 1; val b = a`
 
     // ── Scan extent (minimal-certain; under-blanking → FN, over → FP) ──────
-    const scanStart = nameOffset;
-    let scanEnd = -1;
-    // `true` when the extent ends at end-of-line rather than a matched brace
-    // (only then can the statement visibly continue → removal uncertainty)
-    let lineBasedEnd = false;
-
-    if (isFun) {
-      let i = nameOffset + sym.name.length;
-      while (i < clean.length && /\s/.test(clean[i])) i++;
-      if (clean[i] !== '(') continue;
-      const closeParen = findMatchingParen(clean, i);
-      if (closeParen === -1) continue;
-      const after = clean.slice(closeParen + 1, closeParen + 801);
-      const bodyRel = after.search(/[{=]/);
-      if (bodyRel === -1) continue; // no body in reach (external stubs, headers)
-      const bodyAbs = closeParen + 1 + bodyRel;
-      if (after[bodyRel] === '{') {
-        const close = matchBrace(clean, bodyAbs);
-        if (close === -1) continue;
-        scanEnd = close + 1;
-      } else {
-        // expression body: a `{` only counts on the SAME line as the `=` —
-        // a wider window would swallow the NEXT declaration's brace and
-        // blank its usages (over-blanking here means false positives)
-        const exprLineEnd = lineEndOf(offsetToPos(lineStarts, bodyAbs).line);
-        const rel = clean.slice(bodyAbs, exprLineEnd).indexOf('{');
-        if (rel !== -1) {
-          const close = matchBrace(clean, bodyAbs + rel);
-          if (close === -1) continue;
-          scanEnd = Math.max(close + 1, exprLineEnd);
-        } else {
-          scanEnd = exprLineEnd;
-          lineBasedEnd = true;
-        }
-      }
-    } else if (isProp) {
-      // NEVER rangeEndLine here: init blocks emit no symbol, so it would
-      // blank a following `init { println(helper) }` usage → false positive.
-      scanEnd = lineEndOf(sym.line);
-      lineBasedEnd = true;
-      const brace = clean.slice(nameOffset, scanEnd).indexOf('{');
-      if (brace !== -1) {
-        const close = matchBrace(clean, nameOffset + brace);
-        if (close === -1) continue;
-        scanEnd = Math.max(scanEnd, close + 1);
-        lineBasedEnd = false;
-      }
-    } else {
-      // class / object / interface
-      let i = nameOffset + sym.name.length;
-      const ctorParen = findCtorParen(clean, i);
-      if (ctorParen !== -1) {
-        const closeParen = findMatchingParen(clean, ctorParen);
-        if (closeParen === -1) continue;
-        i = closeParen + 1;
-      }
-      // The body brace must be part of the HEADER: same line, or reached
-      // through supertype-list continuation lines. Scanning the whole file
-      // for the next `{` would swallow the following declaration's body and
-      // blank the usages inside it (`private class Boom : Exception()` then
-      // `fun log() { throw Boom() }` → false positive).
-      let headerEnd = lineEndOf(sym.line);
-      let brace = clean.slice(i, headerEnd).indexOf('{');
-      while (brace === -1) {
-        const headerText = clean.slice(i, headerEnd).trimEnd();
-        const nextLine = offsetToPos(lineStarts, headerEnd - 1).line + 1;
-        // continuation only when the header is visibly unfinished
-        if (!/[:,]$/.test(headerText) || nextLine > lastLine) break;
-        headerEnd = lineEndOf(nextLine);
-        brace = clean.slice(i, headerEnd).indexOf('{');
-      }
-      if (brace !== -1 && HEADER_CHARS_RE.test(clean.slice(i, i + brace))) {
-        const close = matchBrace(clean, i + brace);
-        if (close === -1) continue;
-        scanEnd = close + 1;
-      } else {
-        scanEnd = headerEnd; // body-less declaration
-        lineBasedEnd = true;
-      }
-    }
+    // Shared with KJ-032 via src/util/declarationSpan.ts: this extent is what
+    // gets blanked before the usage scan, so a second copy that drifted would
+    // be the most expensive bug in the family.
+    const span = declarationSpan(clean, lineStarts, {
+      kind: isFun ? 'fun' : isProp ? 'prop' : 'classLike',
+      name: sym.name,
+      line: sym.line,
+      nameOffset,
+      lastLine,
+    });
+    if (!span) continue;
+    const { scanStart, scanEnd, lineBasedEnd } = span;
 
     // ── Usage scan on a copy with the candidate's own extent blanked ───────
     const scanStr = clean.slice(0, scanStart) + ' '.repeat(scanEnd - scanStart) + clean.slice(scanEnd);

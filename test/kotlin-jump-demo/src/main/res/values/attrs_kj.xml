@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KJ-031 fixture: attribute keys and the declare-styleable trap. -->
+<resources>
+
+    <declare-styleable name="KjBadge">
+        <!-- Alive: consumed as R.styleable.KjBadge_kjBadgeColor. -->
+        <attr name="kjBadgeColor" format="color" />
+        <!--
+          Declares NOTHING. This references the platform attribute, and reading
+          it as a declaration produced six confident false positives in the
+          audit that shaped this detector.
+        -->
+        <attr name="android:textColor" />
+    </declare-styleable>
+
+    <!-- Alive: a style item names it, and a layout uses ?attr/kjAccent. -->
+    <attr name="kjAccent" format="reference" />
+
+    <!-- Dead: declared, never consumed by a styleable, a theme or an item. -->
+    <attr name="kjAttrDead" format="dimen" />
+
+</resources>

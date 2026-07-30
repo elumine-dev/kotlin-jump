@@ -42,6 +42,34 @@ describe('xmlRefs — blanchiment', () => {
     expect(stripKotlinComments(kt)).not.toContain('R.layout.x');
     expect(stripKotlinComments(kt)).not.toContain('R.layout.y');
   });
+
+  it('un raw string multiligne garde son contenu, même après un //', () => {
+    // Sans mode raw, un saut de ligne repassait en mode code et le « // »
+    // de la ligne suivante blanchissait du contenu vivant : une référence
+    // supprimée en silence, donc un faux positif de code mort.
+    const kt = 'val q = """\nSELECT * FROM t\n// not a comment @string/kept\n"""\nval b = 2';
+    const out = stripKotlinComments(kt);
+    expect(out).toHaveLength(kt.length);
+    expect(out).toContain('@string/kept');
+    expect(out).toContain('SELECT * FROM t');
+    expect(out).toContain('val b = 2');
+  });
+
+  it('mais un commentaire APRÈS la fermeture du raw string part bien', () => {
+    const kt = 'val q = """x"""  // R.layout.ghost\nval b = 2';
+    const out = stripKotlinComments(kt);
+    expect(out).toHaveLength(kt.length);
+    expect(out).not.toContain('R.layout.ghost');
+    expect(out).toContain('"""x"""');
+  });
+
+  it('un raw string qui finit par un guillemet ne déborde pas', () => {
+    const kt = 'val r = """URI="x""""\nval after = 1 // R.layout.ghost';
+    const out = stripKotlinComments(kt);
+    expect(out).toHaveLength(kt.length);
+    expect(out).toContain('URI="x"');
+    expect(out).not.toContain('R.layout.ghost');
+  });
 });
 
 describe('xmlRefs — collecte', () => {

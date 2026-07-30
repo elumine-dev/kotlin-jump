@@ -47,166 +47,26 @@ export interface UnusedParam {
   annotationInsert: number;
 }
 
-export const FILE_SUPPRESS_RE = /@file\s*:\s*Suppress\s*\(([^)]*)\)/;
-export const SUPPRESS_NAMES = new Set(['Suppress', 'SuppressLint', 'SuppressWarnings']);
-/** Annotations that never change reflective/codegen visibility of a fun's params. */
-export const BENIGN_FUN_ANNOTATIONS = new Set(['Composable', 'Preview']);
+// The pure scanning primitives moved to src/util/kotlinScan.ts so the
+// KJ-032 dry-run harness can run them without an extension host.
+// Re-exported: the KJ-025/026/027/028/030/031 suites import them from here.
+export {
+  FILE_SUPPRESS_RE, SUPPRESS_NAMES, BENIGN_FUN_ANNOTATIONS,
+  buildLineStarts, offsetToPos, collectAnnotationTargets,
+  findCtorParen, splitParamSegments, matchBrace, depthZeroColon,
+} from '../util/kotlinScan';
+export type { Seg } from '../util/kotlinScan';
+import type { Seg } from '../util/kotlinScan';
+import {
+  FILE_SUPPRESS_RE, SUPPRESS_NAMES, BENIGN_FUN_ANNOTATIONS,
+  buildLineStarts, offsetToPos, collectAnnotationTargets,
+  findCtorParen, splitParamSegments, matchBrace, depthZeroColon,
+} from '../util/kotlinScan';
 
-interface Seg {
-  start: number;
-  end: number;
-}
 
-export function buildLineStarts(text: string): number[] {
-  const starts = [0];
-  for (let i = 0; i < text.length; i++) {
-    if (text[i] === '\n') starts.push(i + 1);
-  }
-  return starts;
-}
 
-export function offsetToPos(lineStarts: number[], offset: number): { line: number; character: number } {
-  let lo = 0;
-  let hi = lineStarts.length - 1;
-  while (lo < hi) {
-    const mid = (lo + hi + 1) >> 1;
-    if (lineStarts[mid] <= offset) lo = mid;
-    else hi = mid - 1;
-  }
-  return { line: lo, character: offset - lineStarts[lo] };
-}
 
-interface AnnoTarget {
-  /** Offset of the first code character the annotation chain applies to. */
-  target: number;
-  /** Simple annotation name (`Suppress`, `Composable`, …), package prefix dropped. */
-  name: string;
-}
 
-/**
- * Finds every annotation chain in the file and the offset of the declaration
- * it attaches to. Paren-matched, so multi-line annotations
- * (`@Suppress(\n"unused"\n)`) are attributed correctly — a naive
- * "lines starting with @ above the decl" walk misses those.
- */
-export function collectAnnotationTargets(clean: string): AnnoTarget[] {
-  const out: AnnoTarget[] = [];
-  const re = /@(?:(?:file|get|set|param|property|field|receiver|delegate|setparam):)?[A-Za-z_]/g;
-  let consumedUntil = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(clean)) !== null) {
-    if (m.index < consumedUntil) continue;
-    const chain: string[] = [];
-    let j = m.index;
-    while (j < clean.length && clean[j] === '@') {
-      j++;
-      const site = /^(?:file|get|set|param|property|field|receiver|delegate|setparam):/.exec(clean.slice(j, j + 12));
-      if (site) j += site[0].length;
-      const nm = /^[A-Za-z_][\w.]*/.exec(clean.slice(j, j + 120));
-      if (!nm) break;
-      chain.push(nm[0].split('.').pop()!);
-      j += nm[0].length;
-      let k = j;
-      while (k < clean.length && /\s/.test(clean[k])) k++;
-      if (clean[k] === '(') {
-        const close = findMatchingParen(clean, k);
-        if (close === -1) break;
-        j = close + 1;
-      }
-      while (j < clean.length && /\s/.test(clean[j])) j++;
-    }
-    consumedUntil = Math.max(j, m.index + 1);
-    for (const name of chain) out.push({ target: j, name });
-  }
-  return out;
-}
-
-/**
- * From just after a class name, finds the `(` opening the primary-constructor
- * parameter list. Tolerates generics, `constructor`, visibility modifiers and
- * simple annotations (`@Inject constructor(`). Returns -1 when the class has
- * no primary constructor OR when an annotation carries arguments (ambiguous —
- * we skip the class rather than risk a misparse).
- */
-export function findCtorParen(clean: string, from: number): number {
-  let i = from;
-  while (i < clean.length && /\s/.test(clean[i])) i++;
-  if (clean[i] === '<') {
-    let depth = 0;
-    while (i < clean.length) {
-      const c = clean[i];
-      if (c === '-' && clean[i + 1] === '>') { i += 2; continue; }
-      if (c === '<') depth++;
-      else if (c === '>') { depth--; i++; if (depth === 0) break; else continue; }
-      i++;
-    }
-  }
-  while (i < clean.length) {
-    const c = clean[i];
-    if (/\s/.test(c)) { i++; continue; }
-    if (c === '(') return i;
-    if (c === '@') {
-      i++;
-      while (i < clean.length && /[\w.]/.test(clean[i])) i++;
-      let j = i;
-      while (j < clean.length && /\s/.test(clean[j])) j++;
-      if (clean[j] === '(') return -1; // annotation with args before ctor
-      continue;
-    }
-    if (/[a-z]/.test(c)) {
-      let j = i;
-      while (j < clean.length && /\w/.test(clean[j])) j++;
-      const word = clean.slice(i, j);
-      if (['constructor', 'private', 'protected', 'internal', 'public', 'actual'].includes(word)) {
-        i = j;
-        continue;
-      }
-      return -1;
-    }
-    return -1; // ':', '{', … → no primary ctor param list
-  }
-  return -1;
-}
-
-/**
- * Splits `clean[from..to)` at depth-0 commas. Depth counts (), <>, {}, [] and
- * skips `->` so lambda types don't unbalance angles. Structure comes from the
- * sanitized text; emptiness is judged on `raw`, because a blanked string
- * argument (`"a"` → spaces) is still a real argument — only trailing commas
- * and empty lists are whitespace in the raw text too.
- */
-export function splitParamSegments(clean: string, from: number, to: number, raw: string): Seg[] {
-  const segs: Seg[] = [];
-  let depth = 0;
-  let start = from;
-  let i = from;
-  while (i < to) {
-    const ch = clean[i];
-    if (ch === '-' && clean[i + 1] === '>') { i += 2; continue; }
-    if (ch === '(' || ch === '<' || ch === '{' || ch === '[') depth++;
-    else if (ch === ')' || ch === '>' || ch === '}' || ch === ']') { if (depth > 0) depth--; }
-    else if (ch === ',' && depth === 0) {
-      segs.push({ start, end: i });
-      start = i + 1;
-    }
-    i++;
-  }
-  segs.push({ start, end: to });
-  return segs.filter(s => raw.slice(s.start, s.end).trim().length > 0);
-}
-
-/** First depth-0 `:` inside a segment (the name/type separator), -1 if none. */
-function depthZeroColon(clean: string, seg: Seg): number {
-  let depth = 0;
-  for (let i = seg.start; i < seg.end; i++) {
-    const ch = clean[i];
-    if (ch === '-' && clean[i + 1] === '>') { i++; continue; }
-    if (ch === '(' || ch === '<' || ch === '{' || ch === '[') depth++;
-    else if (ch === ')' || ch === '>' || ch === '}' || ch === ']') { if (depth > 0) depth--; }
-    else if (ch === ':' && depth === 0) return i;
-  }
-  return -1;
-}
 
 /**
  * Deletion range for one segment of a comma-separated list: the trimmed
@@ -245,18 +105,6 @@ function segmentDeletionRange(text: string, segs: Seg[], index: number, lineStar
   return { start, end };
 }
 
-/** Matching `}` for the `{` at openIdx. Expects sanitized text. */
-export function matchBrace(clean: string, openIdx: number): number {
-  let depth = 0;
-  for (let i = openIdx; i < clean.length; i++) {
-    if (clean[i] === '{') depth++;
-    else if (clean[i] === '}') {
-      depth--;
-      if (depth === 0) return i;
-    }
-  }
-  return -1;
-}
 
 export function findUnusedParameters(text: string): UnusedParam[] {
   if (!/\b(?:class|fun)\b/.test(text)) return [];

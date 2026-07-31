@@ -51,14 +51,17 @@ export interface UnusedParam {
 // KJ-032 dry-run harness can run them without an extension host.
 // Re-exported: the KJ-025/026/027/028/030/031 suites import them from here.
 export {
-  FILE_SUPPRESS_RE, SUPPRESS_NAMES, BENIGN_FUN_ANNOTATIONS,
+  FILE_SUPPRESS_RE, suppressesDiagnostic,
+  UNUSED_DECLARATION, UNUSED_PARAMETER, UNUSED_VARIABLE,
+  SUPPRESS_NAMES, BENIGN_FUN_ANNOTATIONS,
   buildLineStarts, offsetToPos, collectAnnotationTargets,
   findCtorParen, splitParamSegments, matchBrace, depthZeroColon,
 } from '../util/kotlinScan';
 export type { Seg } from '../util/kotlinScan';
 import type { Seg } from '../util/kotlinScan';
 import {
-  FILE_SUPPRESS_RE, SUPPRESS_NAMES, BENIGN_FUN_ANNOTATIONS,
+  FILE_SUPPRESS_RE, suppressesDiagnostic, UNUSED_PARAMETER,
+  SUPPRESS_NAMES, BENIGN_FUN_ANNOTATIONS,
   buildLineStarts, offsetToPos, collectAnnotationTargets,
   findCtorParen, splitParamSegments, matchBrace, depthZeroColon,
 } from '../util/kotlinScan';
@@ -109,7 +112,7 @@ function segmentDeletionRange(text: string, segs: Seg[], index: number, lineStar
 export function findUnusedParameters(text: string): UnusedParam[] {
   if (!/\b(?:class|fun)\b/.test(text)) return [];
   const fileSuppress = FILE_SUPPRESS_RE.exec(text);
-  if (fileSuppress && /unused/i.test(fileSuppress[1])) return [];
+  if (fileSuppress && suppressesDiagnostic(fileSuppress[1], UNUSED_PARAMETER)) return [];
 
   const symbols = parse('inline', text).symbols;
   const clean = sanitizeForUsageScan(text);
@@ -299,8 +302,28 @@ export interface CallScanResult {
 export function computeCallSiteEdits(
   text: string,
   param: Pick<UnusedParam, 'name' | 'paramIndex' | 'ownerName' | 'kind'>,
+  lang: 'kotlin' | 'java' = 'kotlin',
 ): CallScanResult {
   const clean = sanitizeForUsageScan(text);
+
+  // Java writes the same intentions with a different syntax, and every guard
+  // below was written against Kotlin's. Rather than teach each one two
+  // dialects, bail on the whole file whenever a Java construct could hide a
+  // call whose arity we would silently break.
+  if (lang === 'java') {
+    const owner = param.ownerName;
+    // `Owner::new` is a constructor reference; removing a parameter changes
+    // the functional interface it satisfies.
+    if (new RegExp(`\\b${owner}\\s*::`).test(clean)) return { edits: [], skipped: 1 };
+    // `class Sub extends Owner` hides the call inside `super(a, b)`, which we
+    // cannot map positionally without parsing the constructor.
+    if (new RegExp(`\\bextends\\s+${owner}\\b`).test(clean)) return { edits: [], skipped: 1 };
+    // A homonym declared here makes every call site in this file ambiguous.
+    // `record` and `@interface` are Java kinds the Kotlin guard never knew.
+    if (new RegExp(`\\b(?:class|interface|enum|record|@interface)\\s+${owner}\\b`).test(clean)) {
+      return { edits: [], skipped: 1 };
+    }
+  }
   const lineStarts = buildLineStarts(text);
   const isCtor = param.kind !== 'funParam';
   const edits: CallEdit[] = [];
@@ -499,7 +522,8 @@ export class UnusedParameterCodeActionProvider implements vscode.CodeActionProvi
 
     const actions: vscode.CodeAction[] = [];
     for (const param of targets) {
-      actions.push(await this._buildRemoveAction(document, text, param));
+      const removeAction = await this._buildRemoveAction(document, text, param);
+    if (removeAction) actions.push(removeAction);
       actions.push(this._buildSuppressAction(document, text, param));
     }
     return actions;
@@ -509,7 +533,7 @@ export class UnusedParameterCodeActionProvider implements vscode.CodeActionProvi
     document: vscode.TextDocument,
     text: string,
     param: UnusedParam,
-  ): Promise<vscode.CodeAction> {
+  ): Promise<vscode.CodeAction | undefined> {
     const edit = new vscode.WorkspaceEdit();
     edit.delete(document.uri, toRange(text, param.declStart, param.declEnd));
 
@@ -536,6 +560,9 @@ export class UnusedParameterCodeActionProvider implements vscode.CodeActionProvi
 
       if (param.kind !== 'funParam') {
         const cross = await this._crossFileEdits(document, param, edit);
+        // A truncated scan may have missed the one call site that matters, and
+        // missing one means a broken build. Offer no removal at all.
+        if (cross.truncated) return undefined;
         argCount += cross.argCount;
         fileCount += cross.fileCount;
         skipped += cross.skipped;
@@ -559,11 +586,18 @@ export class UnusedParameterCodeActionProvider implements vscode.CodeActionProvi
     document: vscode.TextDocument,
     param: UnusedParam,
     edit: vscode.WorkspaceEdit,
-  ): Promise<{ argCount: number; fileCount: number; skipped: number }> {
+  ): Promise<{ argCount: number; fileCount: number; skipped: number; truncated?: boolean }> {
     let argCount = 0;
     let fileCount = 0;
     let skipped = 0;
-    const files = await vscode.workspace.findFiles('**/*.kt', '**/{node_modules,build,.git,out,dist}/**', 2000);
+    // Java callers were invisible here, so the fix could delete a parameter a
+    // `new Owner(a, b)` still passes. The cap matters just as much: truncating
+    // means missing call sites, which means a broken build, so the family's
+    // rule "a truncated corpus produces nothing" applies and we refuse.
+    const CAP = 20000;
+    const files = await vscode.workspace.findFiles(
+      '**/*.{kt,java}', '**/{node_modules,build,.git,out,dist}/**', CAP);
+    if (files.length >= CAP) return { argCount: 0, fileCount: 0, skipped: 0, truncated: true };
     const declRe = new RegExp(`\\b(?:class|interface|object)\\s+${param.ownerName}\\b`);
     const decoder = new TextDecoder();
     for (const uri of files) {
@@ -580,7 +614,7 @@ export class UnusedParameterCodeActionProvider implements vscode.CodeActionProvi
         skipped++;
         continue;
       }
-      const res = computeCallSiteEdits(other, param);
+      const res = computeCallSiteEdits(other, param, uri.fsPath.endsWith('.java') ? 'java' : 'kotlin');
       skipped += res.skipped;
       if (res.edits.length === 0) continue;
       fileCount++;

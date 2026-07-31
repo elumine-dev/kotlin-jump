@@ -2,7 +2,7 @@
   "name": "kotlin-jump",
   "displayName": "Kotlin Jump: Fast Kotlin & Android Studio Navigation",
   "description": "Fast Kotlin & Android Studio navigation. Find Usages, Go to Definition, Compose, R.string, Android Run. No JVM, no language server. The Android Studio experience inside VS Code.",
-  "version": "1.40.0",
+  "version": "1.41.0",
   "publisher": "elumine",
   "license": "MIT",
   "icon": "media/logo.png",
@@ -259,6 +259,41 @@
       {
         "command": "kotlin-jump.cleanDeadCodeInWorkspace",
         "title": "Clean Dead Code in the Workspace",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.findUnusedRemoteConfigKeys",
+        "title": "Find Unread Remote Config Keys",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.removeAllUnusedRemoteConfigKeys",
+        "title": "Remove All Unread Remote Config Keys",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.clearUnusedRemoteConfigKeys",
+        "title": "Clear Remote Config Key Findings",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.findUnusedEnumEntries",
+        "title": "Find Unused Enum Entries",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.clearUnusedEnumEntries",
+        "title": "Clear Unused Enum Entry Findings",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.findUnheardEvents",
+        "title": "Find Unheard Events",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.clearUnheardEvents",
+        "title": "Clear Unheard Event Findings",
         "category": "Kotlin Jump"
       },
       {
@@ -1258,6 +1293,58 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Enable **Kotlin Jump: Find Dead Code**, a single workspace scan that gathers every dead-code finding at once: unused imports, parameters, private declarations, local variables and write-only variables. Results land in the Problems panel for the files you do not have open (an open file keeps its own live warnings instead of showing them twice). **Clean Dead Code in This File** and **Clean Dead Code in the Workspace** remove everything that has a safe fix, always through the Refactor Preview."
+        },
+        "kotlinJump.unusedRemoteConfigKeys": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Report Remote Config keys declared in a defaults file that nothing in the project reads. Run **Kotlin Jump: Find Unread Remote Config Keys** to scan. A default only matters when the client asks for that key, so a key no line of the project names is dead whatever the server still holds for it, and no network call is needed to know. The defaults file is recognised by its shape (a `<defaults>` root holding `<entry><key>`) rather than by name, since it is passed to `setDefaultsAsync` under any name. A key declared once per build variant is reported once, with every declaration listed."
+        },
+        "kotlinJump.unusedRemoteConfigKeysIgnoreNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Remote Config key names, globs allowed, that are never reported. Useful for keys an A/B test reads from the console side only."
+        },
+        "kotlinJump.unusedEnumEntries": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Report enum entries that nothing in the project ever names. Run **Kotlin Jump: Find Unused Enum Entries** to scan. An enum collects dead variants faster than anything else, because removing the last use of one still compiles. The guards apply to the whole enum rather than one entry: `values()`, `entries`, `valueOf(...)`, a `::class` reference or any annotation outside a short benign list all make every variant reachable without naming one, so the enum is skipped entirely. A name appearing in a string literal or in XML counts as a reference, which covers deserialising by name."
+        },
+        "kotlinJump.unusedEnumEntriesIncludeTestOnly": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Also report entries that only the test sources name, as a separate **used only from tests** category, with no removal offered."
+        },
+        "kotlinJump.unusedEnumEntriesIgnoreNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Enum names, or `Enum.ENTRY` pairs, that are never reported."
+        },
+        "kotlinJump.unheardEvents": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Report events posted on an event bus that nothing in the workspace subscribes to. Run **Kotlin Jump: Find Unheard Events** to scan. Unlike the other checks here this reports a missing behaviour rather than dead weight: someone wrote the trigger and the receiver went away, so the quick fixes offer both removing the post and writing the subscriber back. The bus is learned from `register` call sites rather than hardcoded, so Otto, greenrobot EventBus and a house-built bus all work, and `handler.post(...)` never counts. A subscription on a supertype hears its subtypes, matching how a bus flattens the hierarchy. If a single subscription cannot be read, nothing is reported at all and that subscription is flagged instead: an event is only unheard when every subscription is accounted for."
+        },
+        "kotlinJump.unheardEventsIgnoreNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Event type names, by simple name, that are never reported as unheard."
+        },
+        "kotlinJump.unheardEventsAssumeSubscribed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Event types to treat as subscribed even when no subscription can be read for them. The escape hatch when a subscription uses a shape the extension cannot parse: adding the type here makes the claim yours rather than the extension's, and lets the rest of the scan run."
         },
         "kotlinJump.unusedSymbols": {
           "type": "boolean",

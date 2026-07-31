@@ -3,6 +3,19 @@
 import { ParsedFile, RawSymbol, SymbolKind } from './KotlinParser';
 
 const RE_PACKAGE = /^\s*package\s+([\w.]+)/;
+/**
+ * Java imports. Requiring the `;` is free correctness the Kotlin version
+ * cannot have. The `static` group is captured because a static import needs
+ * two index entries rather than one; see the emit rules in `parseJava`.
+ */
+const RE_IMPORT = /^\s*import\s+(?:(static)\s+)?([\w.]+(?:\.\*)?)\s*;/;
+// Same annotations KotlinParser reads, so a Java test behaves like a Kotlin
+// one: Run Test lenses, deprecation hover, test discovery.
+const RE_DEPRECATED = /@Deprecated\b/;
+const RE_TEST       = /@(?:Test|ParameterizedTest|RepeatedTest|TestFactory|TestTemplate)\b/;
+const RE_RUN_WITH   = /@RunWith\b/;
+const RE_IGNORE     = /@(?:Ignore|Disabled)\b/;
+const RE_LIFECYCLE  = /@(?:Before|After|BeforeEach|AfterEach|BeforeAll|AfterAll|BeforeClass|AfterClass)\b/;
 // Handles: class, interface, enum, record, @interface (annotation type)
 const RE_CLASS = /^\s*(?:(?:public|protected|private|static|abstract|final|strictfp|sealed|non-sealed)\s+)*(@?(?:class|interface|enum|record))\s+(\w+)/;
 // Method/constructor: at least one explicit modifier + optional generic clause + name(
@@ -17,14 +30,40 @@ const RE_PKGPRIVATE_METHOD = /^\s*(?:(?:static|final|abstract|synchronized|nativ
 // Field: at least one explicit modifier + type + name followed by = or ;
 // `[^(=;\n]*?` stops at `(` so method declarations never match here.
 const RE_FIELD  = /^\s*(?:(?:public|protected|private|static|final|volatile|transient)\s+)+[^(=;\n]*?(\w+)\s*[=;]/;
+/**
+ * Annotations written on the SAME line as the declaration they qualify:
+ * `@Deprecated public void oldWay() {}`. Every declaration pattern above
+ * expects a modifier first, so such a line matched nothing at all and the
+ * member was never indexed. Measured on one project: 2393 occurrences.
+ */
+const RE_LEADING_ANNOTATIONS = /^(\s*)((?:@[\w.]+(?:\([^()]*\))?\s+)+)/;
+
+/**
+ * Blanks leading annotations, PRESERVING LENGTH so every `raw.indexOf(name)`
+ * offset downstream stays valid.
+ */
+function stripLeadingAnnotations(raw: string): { decl: string; annotations: string } {
+  const m = RE_LEADING_ANNOTATIONS.exec(raw);
+  if (!m) return { decl: raw, annotations: '' };
+  return {
+    decl: m[1] + ' '.repeat(m[2].length) + raw.slice(m[0].length),
+    annotations: m[2],
+  };
+}
 
 export function parseJava(uriString: string, text: string): ParsedFile {
   const symbols: RawSymbol[] = [];
+  // A Set, not an array: ten static imports from one class would otherwise
+  // emit ten copies of its FQN, and `fileImports` is persisted into the
+  // snapshot verbatim.
+  const importSet = new Set<string>();
   let packageName = '';
   let inBlockComment = false;
   let braceDepth = 0;
   let enumBraceDepth = -1; // brace depth at which the current enum was declared; -1 = not in enum
-  const annotationWindow: string[] = []; // last ≤3 annotation lines before a declaration
+  // A real JUnit class carries four (@RunWith @Config @LargeTest @Ignore), so
+  // three would silently drop the first one.
+  const annotationWindow: string[] = []; // last ≤8 annotation lines before a declaration
 
   const len = text.length;
   let pos     = 0;
@@ -68,11 +107,66 @@ export function parseJava(uriString: string, text: string): ParsedFile {
       pos = nl + 1; lineNum++; continue;
     }
 
-    const raw = text.slice(pos, nl);
+    const rawLine = text.slice(pos, nl);
+    // A same-line annotation both qualifies this declaration and hides it from
+    // every pattern below, so feed it to the window and match on the rest.
+    const { decl: raw, annotations: inlineAnnotations } = stripLeadingAnnotations(rawLine);
+    if (inlineAnnotations.length > 0) annotationWindow.push(inlineAnnotations);
 
     if (!packageName && fc === 'p') {
       const m = RE_PACKAGE.exec(raw);
       if (m) { packageName = m[1]; pos = nl + 1; lineNum++; continue; }
+    }
+
+    // ── Imports ────────────────────────────────────────────────────────────
+    // `SymbolIndex.add` reads these to build the word index that pre-filters
+    // every usage search. Returning none, as this parser used to, made every
+    // Java consumer of a Kotlin symbol invisible to Find Usages and left
+    // Rename rewriting import lines whose bodies it never touched.
+    //
+    // `fc === 'i'` alone would also catch `interface`, so check the second
+    // char too: parseJava runs INLINE, never in the worker pool, so its
+    // per-line cost sits on the indexing critical path.
+    if (fc === 'i' && fc1 === 'm') {
+      const m = RE_IMPORT.exec(raw);
+      if (m) {
+        if (m[1] === undefined) {
+          // `import a.b.C;` and `import a.b.*;` behave exactly like Kotlin.
+          importSet.add(m[2]);
+          // `import a.b.Outer.Inner;` names Outer too, and only the LAST
+          // segment reaches the word index. Without this, a search for Outer
+          // misses every file that imports one of its nested types. Java's
+          // capitalisation convention is what tells a class from a package.
+          const dot = m[2].lastIndexOf('.');
+          if (dot > 0 && !m[2].endsWith('.*')) {
+            const outer = m[2].slice(0, dot);
+            const outerLast = outer.slice(outer.lastIndexOf('.') + 1);
+            if (outerLast.length > 0 && outerLast[0] === outerLast[0].toUpperCase()
+              && /[a-z]/.test(outerLast)) {
+              importSet.add(outer);
+            }
+          }
+        } else {
+          const path = m[2];
+          if (path.endsWith('.*')) {
+            // `import static a.b.C.*;` brings unknown member names into scope,
+            // so there is no word to index. Emit the bare class FQN instead:
+            // `getFilesContainingWord` walks a nested target's ancestors, so a
+            // search for `a.b.C.MAX` finds us through `byWord["C"]`. Emitting
+            // `a.b.C.*` would post to `byWildcard` under a CLASS key, and that
+            // map is only ever read with a PACKAGE key, so it could never be
+            // found. Do not "fix" this to emit the wildcard form.
+            importSet.add(path.slice(0, -2));
+          } else {
+            // `import static a.b.C.method;` needs both: the bare token
+            // `method` appears in the body, and the file also depends on `C`.
+            importSet.add(path);
+            const lastDot = path.lastIndexOf('.');
+            if (lastDot > 0) importSet.add(path.slice(0, lastDot));
+          }
+        }
+        pos = nl + 1; lineNum++; continue;   // an import line holds no brace
+      }
     }
 
     // ── Class-like declarations ────────────────────────────────────────────
@@ -92,6 +186,12 @@ export function parseJava(uriString: string, text: string): ParsedFile {
         supertypes:  supertypes.length > 0 ? supertypes : undefined,
         isAbstract:  /\babstract\b/.test(preClass) || undefined,
         isPrivate:   /\bprivate\b/.test(preClass)  || undefined,
+        // Class-level annotations used to be collected and then dropped, so a
+        // Java JUnit class got no Run Test lens and a @Deprecated Java type no
+        // hover, while their Kotlin equivalents did.
+        isDeprecated: annotationWindow.some(l => RE_DEPRECATED.test(l)) || undefined,
+        isTestClass:  annotationWindow.some(l => RE_RUN_WITH.test(l))   || undefined,
+        isIgnored:    annotationWindow.some(l => RE_IGNORE.test(l))     || undefined,
       });
       if (kind === 'enum') {
         enumBraceDepth = braceDepth;
@@ -148,6 +248,10 @@ export function parseJava(uriString: string, text: string): ParsedFile {
           isComposable: false,
           depth:        braceDepth,
           isAbstract:   /\babstract\b/.test(preMod)  || undefined,
+          isDeprecated: annotationWindow.some(l => RE_DEPRECATED.test(l)) || undefined,
+          isTest:       annotationWindow.some(l => RE_TEST.test(l))       || undefined,
+          isIgnored:    annotationWindow.some(l => RE_IGNORE.test(l))     || undefined,
+          isLifecycle:  annotationWindow.some(l => RE_LIFECYCLE.test(l))  || undefined,
           isOverride:   annotationWindow.some(l => /@Override\b/.test(l)) || undefined,
           isPrivate:    /\bprivate\b/.test(preMod)   || undefined,
         });
@@ -178,6 +282,13 @@ export function parseJava(uriString: string, text: string): ParsedFile {
           isAbstract:   /\babstract\b/.test(preMod) || undefined,
           isOverride:   annotationWindow.some(l => /@Override\b/.test(l)) || undefined,
           isPrivate:    undefined, // package-private by definition
+          // JUnit 5 test methods live exactly here: they carry no access
+          // modifier, so missing this branch would leave the whole modern
+          // test style without a Run Test lens.
+          isDeprecated: annotationWindow.some(l => RE_DEPRECATED.test(l)) || undefined,
+          isTest:       annotationWindow.some(l => RE_TEST.test(l))       || undefined,
+          isIgnored:    annotationWindow.some(l => RE_IGNORE.test(l))     || undefined,
+          isLifecycle:  annotationWindow.some(l => RE_LIFECYCLE.test(l))  || undefined,
         });
         braceDepth = countJavaBraces(text, pos, nl, braceDepth);
         if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
@@ -215,7 +326,7 @@ export function parseJava(uriString: string, text: string): ParsedFile {
 
     // ── Annotation window ──────────────────────────────────────────────────
     if (fc === '@') {
-      if (annotationWindow.length >= 3) annotationWindow.shift();
+      if (annotationWindow.length >= 8) annotationWindow.shift();
       annotationWindow.push(raw.trimStart());
     } else {
       annotationWindow.length = 0;
@@ -227,7 +338,7 @@ export function parseJava(uriString: string, text: string): ParsedFile {
     lineNum++;
   }
 
-  return { uriString, packageName, imports: [], symbols };
+  return { uriString, packageName, imports: [...importSet], symbols };
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

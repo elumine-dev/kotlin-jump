@@ -636,7 +636,8 @@ function formatErrorDetail(result: TestResult, filePath?: string): string | unde
   const lines = result.message.split('\n');
 
   // Extract line number from stack trace, e.g. "(PokemonRepositoryTest.kt:51)"
-  const fileLineMatch = lines.map(l => /\((\w+\.kt):(\d+)\)/.exec(l)).find(Boolean);
+  // Same shape as LogcatLineParser, which already accepts both languages.
+  const fileLineMatch = lines.map(l => /\((\w+\.(?:kt|java)):(\d+)\)/.exec(l)).find(Boolean);
   const lineNum = fileLineMatch?.[2];
   // Use full absolute path when available so VS Code renders a clickable link
   const locPath = filePath && lineNum ? `${filePath}:${lineNum}`

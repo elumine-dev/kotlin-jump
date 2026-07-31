@@ -62,6 +62,18 @@ import { ResourceCorpus } from './indexer/ResourceCorpus';
 import { findUnusedResourcesCommand } from './commands/FindUnusedResources';
 import { UnusedResourceKeyProvider } from './providers/UnusedResourceKeyProvider';
 import { UnusedSymbolProvider } from './providers/UnusedSymbolProvider';
+import { UnheardEventProvider } from './providers/UnheardEventProvider';
+import { UnusedEnumEntryProvider } from './providers/UnusedEnumEntryProvider';
+import { UnusedRemoteConfigKeyProvider } from './providers/UnusedRemoteConfigKeyProvider';
+import {
+  findUnusedRemoteConfigKeysCommand,
+  removeAllUnusedRemoteConfigKeysCommand,
+} from './commands/FindUnusedRemoteConfigKeys';
+import { findUnusedEnumEntriesCommand } from './commands/FindUnusedEnumEntries';
+import {
+  createEventSubscriberCommand,
+  findUnheardEventsCommand,
+} from './commands/FindUnheardEvents';
 import { findEverythingUnusedCommand } from './commands/FindEverythingUnused';
 import {
   findUnusedSymbolsCommand,
@@ -816,6 +828,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const deadCodeSweepReportWeb = new DeadCodeSweepReport();
   const unusedResourceKeyProviderWeb = new UnusedResourceKeyProvider();
   const unusedSymbolProviderWeb = new UnusedSymbolProvider();
+  const unheardEventProviderWeb = new UnheardEventProvider();
+  const unusedEnumEntryProviderWeb = new UnusedEnumEntryProvider();
+  const remoteConfigKeyProviderWeb = new UnusedRemoteConfigKeyProvider();
   context.subscriptions.push(
     unusedResourceProviderWeb,
     vscode.languages.registerCodeActionsProvider(
@@ -869,6 +884,58 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('kotlin-jump.removeAllUnusedSymbols', () =>
       removeAllUnusedSymbolsCommand(resourceCorpusWeb, unusedSymbolProviderWeb),
     ),
+    unheardEventProviderWeb,
+    vscode.languages.registerCodeActionsProvider(
+      { scheme: 'file', language: 'kotlin' },
+      unheardEventProviderWeb,
+      { providedCodeActionKinds: UnheardEventProvider.providedCodeActionKinds },
+    ),
+    vscode.languages.registerCodeActionsProvider(
+      { scheme: 'file', language: 'java' },
+      unheardEventProviderWeb,
+      { providedCodeActionKinds: UnheardEventProvider.providedCodeActionKinds },
+    ),
+    vscode.commands.registerCommand('kotlin-jump.findUnheardEvents', () =>
+      findUnheardEventsCommand(resourceCorpusWeb, unheardEventProviderWeb),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.clearUnheardEvents', () =>
+      unheardEventProviderWeb.clear(),
+    ),
+    vscode.commands.registerCommand('kotlinJump.createEventSubscriber', (name: string, fqn: string) =>
+      createEventSubscriberCommand(name, fqn),
+    ),
+    unusedEnumEntryProviderWeb,
+    vscode.languages.registerCodeActionsProvider(
+      { scheme: 'file', language: 'kotlin' },
+      unusedEnumEntryProviderWeb,
+      { providedCodeActionKinds: UnusedEnumEntryProvider.providedCodeActionKinds },
+    ),
+    vscode.languages.registerCodeActionsProvider(
+      { scheme: 'file', language: 'java' },
+      unusedEnumEntryProviderWeb,
+      { providedCodeActionKinds: UnusedEnumEntryProvider.providedCodeActionKinds },
+    ),
+    vscode.commands.registerCommand('kotlin-jump.findUnusedEnumEntries', () =>
+      findUnusedEnumEntriesCommand(resourceCorpusWeb, unusedEnumEntryProviderWeb),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.clearUnusedEnumEntries', () =>
+      unusedEnumEntryProviderWeb.clear(),
+    ),
+    remoteConfigKeyProviderWeb,
+    vscode.languages.registerCodeActionsProvider(
+      { scheme: 'file', pattern: '**/res/xml*/*.xml' },
+      remoteConfigKeyProviderWeb,
+      { providedCodeActionKinds: UnusedRemoteConfigKeyProvider.providedCodeActionKinds },
+    ),
+    vscode.commands.registerCommand('kotlin-jump.findUnusedRemoteConfigKeys', () =>
+      findUnusedRemoteConfigKeysCommand(resourceCorpusWeb, remoteConfigKeyProviderWeb),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.removeAllUnusedRemoteConfigKeys', () =>
+      removeAllUnusedRemoteConfigKeysCommand(resourceCorpusWeb, remoteConfigKeyProviderWeb),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.clearUnusedRemoteConfigKeys', () =>
+      remoteConfigKeyProviderWeb.clear(),
+    ),
     vscode.commands.registerCommand('kotlin-jump.findEverythingUnused', () =>
       findEverythingUnusedCommand(
         resourceCorpusWeb,
@@ -876,6 +943,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         unusedSymbolProviderWeb,
         unusedResourceKeyProviderWeb,
         unusedResourceProviderWeb,
+        unheardEventProviderWeb,
+        unusedEnumEntryProviderWeb,
+        remoteConfigKeyProviderWeb,
       ),
     ),
   );

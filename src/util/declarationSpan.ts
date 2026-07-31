@@ -116,7 +116,15 @@ export function declarationSpan(
   while (brace === -1) {
     const headerText = clean.slice(i, headerEnd).trimEnd();
     const nextLine = offsetToPos(lineStarts as number[], headerEnd - 1).line + 1;
-    if (!/[:,]$/.test(headerText) || nextLine > lastLine) break;
+    if (nextLine > lastLine) break;
+    // Kotlin wraps a supertype list by ending the line on `:` or `,`. Java
+    // wraps it by STARTING the next line with `extends` or `implements`, so
+    // the header would otherwise look finished and the span would collapse to
+    // the first line, leaving the body unblanked and the type reading alive.
+    const nextText = clean.slice(lineStarts[nextLine], lineEndOf(nextLine)).trimStart();
+    const continues = /[:,]$/.test(headerText)
+      || /^(?:extends|implements|,)\b/.test(nextText);
+    if (!continues) break;
     headerEnd = lineEndOf(nextLine);
     brace = clean.slice(i, headerEnd).indexOf('{');
   }

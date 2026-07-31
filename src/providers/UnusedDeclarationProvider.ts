@@ -11,6 +11,8 @@ import {
   collectAnnotationTargets,
   findCtorParen,
   FILE_SUPPRESS_RE,
+  suppressesDiagnostic,
+  UNUSED_DECLARATION,
 } from './UnusedParameterProvider';
 
 /**
@@ -105,7 +107,7 @@ export function reflectiveOrAnnotatedClassRanges(
 export function findUnusedDeclarations(text: string): UnusedDecl[] {
   if (!/\bprivate\b/.test(text)) return [];
   const fileSuppress = FILE_SUPPRESS_RE.exec(text);
-  if (fileSuppress && /unused/i.test(fileSuppress[1])) return [];
+  if (fileSuppress && suppressesDiagnostic(fileSuppress[1], UNUSED_DECLARATION)) return [];
 
   const symbols = parse('inline', text).symbols;
   const clean = sanitizeForUsageScan(text);

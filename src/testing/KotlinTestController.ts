@@ -94,7 +94,8 @@ export class KotlinTestController implements vscode.Disposable {
     // onChange/onCreate are driven by notifyFileIndexed() (called from FileWatcher after
     // index update) so the index is always up to date when we refresh.
     // onDidDelete fires immediately — no index update needed for removals.
-    this.watcher = vscode.workspace.createFileSystemWatcher('**/*.kt');
+    // Java too: a JUnit class in a .java file must refresh the Test Explorer.
+    this.watcher = vscode.workspace.createFileSystemWatcher('**/*.{kt,java}');
     this.watcher.onDidDelete(uri => this.removeFileTests(uri));
 
     context.subscriptions.push(this.ctrl, this.watcher);

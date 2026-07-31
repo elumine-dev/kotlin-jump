@@ -127,6 +127,31 @@ export function findMatchingParen(s: string, openIdx: number): number {
 
 export const FILE_SUPPRESS_RE = /@file\s*:\s*Suppress\s*\(([^)]*)\)/;
 export const SUPPRESS_NAMES = new Set(['Suppress', 'SuppressLint', 'SuppressWarnings']);
+
+/**
+ * True when a `Suppress` argument list names one of `diagnostics`.
+ *
+ * The distinction matters more than it looks. `"unused"` is the inspection for
+ * a declaration nothing references, and opting out of it opts out of every
+ * detector in the family. `"UNUSED_PARAMETER"`, `"UNUSED_VARIABLE"` and
+ * `"UNUSED_EXPRESSION"` are compiler warnings about something else entirely: a
+ * file that silences the parameter warning has said nothing about whether its
+ * classes are reachable.
+ *
+ * A plain `/unused/i` cannot tell them apart, because `UNUSED_PARAMETER`
+ * contains `unused`. Matching on a whole diagnostic name can, since `_` counts
+ * as a word character and so blocks the short match.
+ */
+export function suppressesDiagnostic(args: string, diagnostics: readonly string[]): boolean {
+  return diagnostics.some(d => new RegExp(`(?:^|[^\\w])${d}(?![\\w])`, 'i').test(args));
+}
+
+/** Opts out of "nothing references this declaration" everywhere in the family. */
+export const UNUSED_DECLARATION = ['unused'] as const;
+/** …plus the compiler warning a parameter detector is the counterpart of. */
+export const UNUSED_PARAMETER = ['unused', 'UNUSED_PARAMETER'] as const;
+/** …plus the ones a local-variable detector is the counterpart of. */
+export const UNUSED_VARIABLE = ['unused', 'UNUSED_VARIABLE', 'UNUSED_EXPRESSION'] as const;
 /** Annotations that never change reflective/codegen visibility of a fun's params. */
 export const BENIGN_FUN_ANNOTATIONS = new Set(['Composable', 'Preview']);
 
@@ -159,6 +184,15 @@ interface AnnoTarget {
   target: number;
   /** Simple annotation name (`Suppress`, `Composable`, …), package prefix dropped. */
   name: string;
+  /**
+   * Offsets of the argument list, parens excluded, or -1 when there is none.
+   *
+   * The sanitizer blanks string BODIES while preserving length, so these
+   * offsets are valid against the original text and an argument has to be read
+   * from there: slicing `clean` would yield `@Suppress("       ")`.
+   */
+  argStart: number;
+  argEnd: number;
 }
 
 /**
@@ -174,7 +208,7 @@ export function collectAnnotationTargets(clean: string): AnnoTarget[] {
   let m: RegExpExecArray | null;
   while ((m = re.exec(clean)) !== null) {
     if (m.index < consumedUntil) continue;
-    const chain: string[] = [];
+    const chain: { name: string; argStart: number; argEnd: number }[] = [];
     let j = m.index;
     while (j < clean.length && clean[j] === '@') {
       j++;
@@ -182,19 +216,21 @@ export function collectAnnotationTargets(clean: string): AnnoTarget[] {
       if (site) j += site[0].length;
       const nm = /^[A-Za-z_][\w.]*/.exec(clean.slice(j, j + 120));
       if (!nm) break;
-      chain.push(nm[0].split('.').pop()!);
+      chain.push({ name: nm[0].split('.').pop()!, argStart: -1, argEnd: -1 });
       j += nm[0].length;
       let k = j;
       while (k < clean.length && /\s/.test(clean[k])) k++;
       if (clean[k] === '(') {
         const close = findMatchingParen(clean, k);
         if (close === -1) break;
+        chain[chain.length - 1].argStart = k + 1;
+        chain[chain.length - 1].argEnd = close;
         j = close + 1;
       }
       while (j < clean.length && /\s/.test(clean[j])) j++;
     }
     consumedUntil = Math.max(j, m.index + 1);
-    for (const name of chain) out.push({ target: j, name });
+    for (const c of chain) out.push({ target: j, name: c.name, argStart: c.argStart, argEnd: c.argEnd });
   }
   return out;
 }

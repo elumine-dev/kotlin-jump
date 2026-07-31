@@ -19,6 +19,9 @@ import {
   UnusedSymbolProvider,
   findUnusedSymbols,
 } from '../providers/UnusedSymbolProvider';
+import { UnheardEventProvider, findUnheardEvents } from '../providers/UnheardEventProvider';
+import { UnusedEnumEntryProvider, findUnusedEnumEntries } from '../providers/UnusedEnumEntryProvider';
+import { UnusedRemoteConfigKeyProvider, findUnusedRemoteConfigKeys } from '../providers/UnusedRemoteConfigKeyProvider';
 
 /**
  * One command for the whole picture: every dead-code detector the extension
@@ -46,6 +49,9 @@ export async function findEverythingUnusedCommand(
   symbolProvider: UnusedSymbolProvider,
   keyProvider: UnusedResourceKeyProvider,
   resourceProvider: UnusedResourceProvider,
+  eventProvider: UnheardEventProvider,
+  enumEntryProvider: UnusedEnumEntryProvider,
+  remoteConfigProvider: UnusedRemoteConfigKeyProvider,
 ): Promise<void> {
   if (!vscode.workspace.workspaceFolders?.length) {
     void vscode.window.showWarningMessage('Open a folder before scanning.');
@@ -156,6 +162,80 @@ export async function findEverythingUnusedCommand(
         }
       } else {
         skipped.push('resource files');
+      }
+
+      // ── 5. Events nobody listens to ──────────────────────────────────────
+      progress.report({ message: 'unheard events…' });
+      if (UnheardEventProvider.isEnabled()) {
+        const scan = findUnheardEvents({
+          sources: data.sources,
+          testSourceSets: cfg.get<string[]>('testSourceSets', []),
+          truncated: data.sourcesTruncated,
+          ignoreNames: cfg.get<string[]>('unheardEventsIgnoreNames', []),
+          assumeSubscribed: cfg.get<string[]>('unheardEventsAssumeSubscribed', []),
+        });
+        // An unreadable subscription means nothing was proven, which is a
+        // different thing from finding nothing. Saying "0" here would be a lie.
+        if (scan.unreadable.length > 0) {
+          eventProvider.setUnreadable(scan.unreadable);
+          skipped.push(`unheard events (${scan.unreadable.length} unreadable subscription(s))`);
+        } else {
+          eventProvider.setFindings(scan.events);
+          const types = new Set(scan.events.map(e => e.name)).size;
+          sections.push({
+            label: 'unheard events',
+            count: scan.events.length,
+            detail: types > 0 ? `${types} event type${types > 1 ? 's' : ''}` : undefined,
+          });
+        }
+      } else {
+        skipped.push('unheard events');
+      }
+
+      // ── 6. Enum entries nothing names ────────────────────────────────────
+      progress.report({ message: 'enum entries…' });
+      if (UnusedEnumEntryProvider.isEnabled()) {
+        if (data.sourcesTruncated) {
+          skipped.push('enum entries (workspace too large to prove absence)');
+        } else {
+          const entries = findUnusedEnumEntries({
+            sources: data.sources,
+            testSourceSets: cfg.get<string[]>('testSourceSets', []),
+            ignoreNames: cfg.get<string[]>('unusedEnumEntriesIgnoreNames', []),
+            includeTestOnly: cfg.get<boolean>('unusedEnumEntriesIncludeTestOnly', true),
+          });
+          enumEntryProvider.setFindings(entries);
+          const enums = new Set(entries.map(e => e.enumName)).size;
+          sections.push({
+            label: 'enum entries',
+            count: entries.length,
+            detail: enums > 0 ? `across ${enums} enum${enums > 1 ? 's' : ''}` : undefined,
+          });
+        }
+      } else {
+        skipped.push('enum entries');
+      }
+
+      // ── 7. Remote Config defaults nothing reads ──────────────────────────
+      progress.report({ message: 'Remote Config keys…' });
+      if (UnusedRemoteConfigKeyProvider.isEnabled()) {
+        if (data.sourcesTruncated) {
+          skipped.push('Remote Config keys (workspace too large to prove absence)');
+        } else {
+          const keys = findUnusedRemoteConfigKeys({
+            sources: data.sources,
+            ignoreNames: cfg.get<string[]>('unusedRemoteConfigKeysIgnoreNames', []),
+          });
+          remoteConfigProvider.setFindings(keys);
+          const decls = keys.reduce((n, k) => n + k.declarations.length, 0);
+          sections.push({
+            label: 'Remote Config keys',
+            count: keys.length,
+            detail: decls > keys.length ? `${decls} declarations` : undefined,
+          });
+        }
+      } else {
+        skipped.push('Remote Config keys');
       }
 
       // ── the one summary ──────────────────────────────────────────────────

@@ -427,7 +427,15 @@ export function fileCouldReference(text: string, target: SymbolEntry, index?: Sy
  * a longer identifier (e.g. `import pkg.FooBarExtended` must NOT match `pkg.FooBar`).
  */
 function importedExactly(text: string, importPath: string): boolean {
-  const needle = `import ${importPath}`;
+  if (matchesImportNeedle(text, `import ${importPath}`)) return true;
+  // Java's `import static a.b.C.MAX;` never matches the plain needle. Guard
+  // the second pass behind one indexOf so the Kotlin hot path, which is the
+  // common case, pays almost nothing for a form it does not have.
+  if (!text.includes('import static ')) return false;
+  return matchesImportNeedle(text, `import static ${importPath}`);
+}
+
+function matchesImportNeedle(text: string, needle: string): boolean {
   let start = 0;
   while (true) {
     const idx = text.indexOf(needle, start);

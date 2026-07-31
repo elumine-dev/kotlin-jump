@@ -1,40 +1,34 @@
 {
-  "version": "1.40.0",
+  "version": "1.41.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The code nothing in the project reaches",
-  "summary": "Kotlin Jump 1.40.0 finds the classes, objects and functions that nothing in the whole project references, the first check here that reasons across files rather than within one.",
+  "tagline": "Java seen properly, and four new things to find",
+  "summary": "Kotlin Jump 1.41.0 makes every navigation feature see Java code that uses Kotlin, and adds four checks that report what the compiler cannot: events nobody listens to, enum entries nothing names, Remote Config keys nothing reads, and names declared twice that nothing mentions.",
   "highlights": [
     {
-      "title": "Across Files, Not Within One",
+      "title": "Find Usages Crosses the Line",
       "kind": "feature",
-      "description": "\"Find Unreferenced Symbols\" covers top-level classes, objects, interfaces, functions and properties. On a 3444 file project it found 89, every one confirmed by hand, in under two seconds."
+      "description": "Java files that use a Kotlin symbol were skipped before being searched, because the Java parser never reported their imports. On a project with 1731 Java files, a class imported by 58 of them returned none. It now returns all 58."
     },
     {
-      "title": "The Imports Come With It",
+      "title": "Events Nobody Listens To",
       "kind": "feature",
-      "description": "Removing a declaration leaves imports dangling in other files, and the project stops compiling. The fix deletes those too, and deletes the whole file when nothing else is left in it."
+      "description": "Reports an event posted on a bus that nothing subscribes to. This one finds a missing behaviour rather than dead weight: someone wrote the trigger and the receiver went away. The bus is learned from register call sites, so Otto, greenrobot and a house-built bus all work."
     },
     {
-      "title": "Tests Get Their Own Category",
-      "kind": "improvement",
-      "description": "A symbol only the tests reference is reported separately and never offered for removal: deleting one breaks the test that exercises it. The quick fix suggests @VisibleForTesting instead."
+      "title": "Enum Entries and Remote Config Keys",
+      "kind": "feature",
+      "description": "Two more things the build never complains about: an enum variant nothing names, and a Remote Config default no line of the project reads. Measured on a 6410 file project, 36 entries and 29 keys, each confirmed by hand."
     }
   ],
   "sections": [
     {
-      "heading": "Improvements",
-      "bullets": [
-        "Adds \"Kotlin Jump: Find Unreferenced Symbols\" and \"Remove All Unreferenced Symbols\", the second clearing everything with a safe fix in one Refactor Preview.",
-        "Deletes the whole file when nothing but the dead declaration is left in it. On the project measured above that applied to 42 files.",
-        "Counts a reference wherever it really is: manifests, layouts, navigation graphs, Gradle scripts, ProGuard rules, META-INF/services entries and plain string literals.",
-        "Keeps alive anything named only by an aliased import or by a fully qualified call with no import, which a per-symbol search would miss.",
-        "Never reports a symbol carrying an annotation outside a short benign list, extending an Android or Gradle type anywhere up the chain, or declared more than once."
-      ]
-    },
-    {
       "heading": "Fixes",
       "bullets": [
-        "Fixes comment stripping inside a multi-line raw string, where a later // blanked live content and could hide a real reference."
+        "Fixes Find Usages, Find References, Call Hierarchy and the usage counter missing every Java file that uses a Kotlin symbol.",
+        "Fixes Rename corrupting Java files, and teaches it to rename Foo.java alongside the class it declares.",
+        "Fixes live sealed classes being reported as unreferenced when only their variants are imported.",
+        "Stops @Suppress from being read as a framework annotation, and stops @file:Suppress(\"UNUSED_PARAMETER\") from silencing three unrelated checks.",
+        "Never reports anything inside a file whose header says a generator wrote it."
       ]
     }
   ],

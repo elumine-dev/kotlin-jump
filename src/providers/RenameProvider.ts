@@ -33,7 +33,7 @@ const FILE_RENAME_KINDS = new Set<string>([
   'dataClass', 'sealedClass', 'annotation',
 ]);
 
-function computeFileRename(
+export function computeFileRename(
   entry: SymbolEntry,
   newName: string,
   index: SymbolIndex,
@@ -44,10 +44,13 @@ function computeFileRename(
   const uriStr   = entry.uri.toString();
   const slashIdx = uriStr.lastIndexOf('/');
   const filename  = uriStr.slice(slashIdx + 1);
-  if (!filename.endsWith('.kt')) return null;
-  if (filename.slice(0, -3) !== entry.name) return null;
+  // Java has the same one-public-type-per-file rule as Kotlin, so the
+  // companion rename generalises: keep whichever extension the file carries.
+  const ext = filename.endsWith('.kt') ? '.kt' : filename.endsWith('.java') ? '.java' : null;
+  if (ext === null) return null;
+  if (filename.slice(0, -ext.length) !== entry.name) return null;
 
-  const newUriStr = uriStr.slice(0, slashIdx + 1) + newName + '.kt';
+  const newUriStr = uriStr.slice(0, slashIdx + 1) + newName + ext;
   if (index.fileUriStrings().includes(newUriStr)) return null; // clash guard
 
   return vscode.Uri.parse(newUriStr);

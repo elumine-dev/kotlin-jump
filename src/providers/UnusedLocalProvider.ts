@@ -5,6 +5,8 @@ import {
   offsetToPos,
   collectAnnotationTargets,
   FILE_SUPPRESS_RE,
+  suppressesDiagnostic,
+  UNUSED_VARIABLE,
   SUPPRESS_NAMES,
 } from './UnusedParameterProvider';
 import { reportDecorations } from '../util/demoProbe';
@@ -296,7 +298,7 @@ function splitLambdaParams(header: string, headerStart: number): { name: string;
 export function findUnusedLocals(text: string): UnusedLocal[] {
   if (!/\b(?:val|var|catch)\b|->/.test(text)) return [];
   const fileSuppress = FILE_SUPPRESS_RE.exec(text);
-  if (fileSuppress && /unused/i.test(fileSuppress[1])) return [];
+  if (fileSuppress && suppressesDiagnostic(fileSuppress[1], UNUSED_VARIABLE)) return [];
 
   const clean = sanitizeForUsageScan(text);
   const lineStarts = buildLineStarts(text);

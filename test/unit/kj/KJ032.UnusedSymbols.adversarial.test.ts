@@ -67,14 +67,21 @@ describe.skipIf(!mod)('F1 à F4 — visibilité, tests, homonymes, KMP', () => {
   });
 
   it('F3 : le même nom déclaré deux fois au top level neutralise les deux', () => {
+    // Il faut une mention pour qu'il y ait quelque chose à attribuer. Sans
+    // aucune, KJ-036 relâche la garde et signale les deux, ce qui est le
+    // sujet de `KJ036.DuplicateNameNoMention`.
     const sources = [
       kt(`${MAIN}/a/Dup.kt`, 'package com.x.a\n\nclass Dup\n'),
       kt(`${MAIN}/b/Dup.kt`, 'package com.x.b\n\nclass Dup\n'),
+      kt(`${MAIN}/Use.kt`, 'package com.x\n\nimport com.x.a.Dup\n\nval held: Dup? = null\n'),
     ];
-    expect(find(sources)).toEqual([]);
+    expect(find(sources).map(f => f.name)).not.toContain('Dup');
   });
 
   it('F3 : et ça couvre les surcharges de fonctions top-level', () => {
+    // Les deux surcharges partagent leur fichier, donc chacune compte les
+    // mentions de l'autre comme siennes et le résidu part en négatif. KJ-036
+    // ne peut pas relâcher : le compte ne retombe jamais à zéro.
     const sources = [kt(`${MAIN}/Ov.kt`, 'package com.x\n\nfun render(a: Int) = a\n\nfun render(a: String) = a\n')];
     expect(find(sources)).toEqual([]);
   });

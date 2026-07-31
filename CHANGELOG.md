@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.41.0
+
+Kotlin Jump 1.41.0 makes every navigation feature see Java code that uses Kotlin, stops Rename from breaking those files, and reports unreferenced Java classes alongside Kotlin ones. It also corrects what the unreferenced symbol scan does with duplicated names, imported nested types and `@Suppress`: on a 6410 file project that dropped 7 findings which would have broken the build and added 26 real ones.
+
+### Improvements
+- Adds "Kotlin Jump: Find Unread Remote Config Keys", which reports keys sitting in a Remote Config defaults file that no line of the project reads. A default only matters when the client asks for that key, so this needs no network call and no credential to be certain. Measured on a 6410 file project: 29 keys across 98 declarations, in 3.6 seconds, matching another tool's result exactly.
+- Recognises the defaults file by its shape rather than its name, since it is passed to `setDefaultsAsync` under any name, and reports a key once even when every build variant declares its own copy.
+- Adds "Kotlin Jump: Find Unused Enum Entries", which reports enum entries nothing in the project ever names. An enum collects dead variants faster than anything else, because removing the last use of one still compiles and nothing in the build complains. Measured on a 6410 file project: 40 entries across 21 enums, in 2.2 seconds.
+- Applies those guards to the whole enum rather than one entry at a time. `values()`, `entries`, `valueOf(...)`, a `::class` reference or any annotation outside a short benign list make every variant reachable without naming one, so the enum is skipped entirely. Judging entries one by one would report the variant that happens not to appear while its siblings do, which is the worst kind of wrong: it looks right.
+- Adds "Kotlin Jump: Find Unheard Events", which reports events posted on an event bus that nothing subscribes to. Unlike every other check here it reports a missing behaviour rather than dead weight: someone wrote the trigger and the receiver went away. Measured on a 5225 file project: 22 posts of 12 event types, every one confirmed by hand, in 1.3 seconds.
+- Learns what the bus is from `register` call sites instead of hardcoding a library, so Otto, greenrobot EventBus and a house-built bus all work, and `handler.post(...)`, `postDelayed(...)` and `view.post { }` never count as posting an event.
+- Understands that a subscription on a supertype hears its subtypes, which is how a bus dispatches, including through Java interfaces and Kotlin sealed hierarchies. A container object holding unrelated nested classes is not a hierarchy, and is not treated as one.
+- Reports nothing at all when a single subscription cannot be read, and flags that subscription instead. An event is only unheard when every subscription is accounted for, so a silent zero would claim something that was never established.
+- Offers both fixes side by side: remove the post, or write the missing `@Subscribe` handler back. The handler name and the annotation import are learned from the project rather than assumed.
+- Reports Java classes, interfaces and enums that nothing in the project references, in the same scan as the Kotlin ones. On a project with 1731 Java files it found 18 more, every one confirmed by hand, with no Kotlin finding lost.
+- Never reports a Java file holding an entry point the project never names by hand: a `main` method, a `native` method bound to a C symbol, or a JUnit test method.
+- Reads a class header that wraps `extends` or `implements` onto the next line, which Java does and Kotlin does not.
+- Reports a name declared in two places when nothing in the project mentions it anywhere else. Two files declaring `foo` used to silence each other, because a `foo` token elsewhere could mean either one. When there is no such token, there is nothing to attribute: neither is referenced, and both are now reported.
+
+### Fixes
+- Fixes Find Usages, Find References, Call Hierarchy and the usage counter missing every Java file that uses a Kotlin symbol. The Java parser never reported the file's imports, so those files were skipped before being searched. On a project with 1731 Java files, a class imported by 58 of them returned none of them.
+- Fixes Rename corrupting Java files. It rewrote their import lines while leaving every use in the body pointing at the old name, because the two halves of the rename disagreed about which files to touch. Renaming a Kotlin class used from Java now updates both, or neither.
+- Fixes Rename not offering to rename `Foo.java` alongside the class it declares, which already worked for `Foo.kt`.
+- Fixes the unused parameter fix ignoring Java call sites. It could remove a parameter that a `new Owner(a, b)` still passed. It now reads Java files, and refuses to touch a file where the call is hidden behind a constructor reference, a subclass calling `super(…)`, or a same-named type.
+- Fixes the same fix silently scanning only the first 2000 files of a project. Missing a call site breaks the build, so a scan that cannot see everything now offers nothing at all.
+- Recognises Java's static imports and nested-class imports, both of which name a type without spelling it in the last segment.
+- Refreshes the Test Explorer when a Java test file changes, and links stack frames from Java test failures.
+- Never reports anything inside a file whose header says a generator wrote it. The next build rewrites the file, so acting on a finding there is wasted, and generator conventions (one variant per schema value, `@SerializedName` on each) read as dead code to a textual scan. On the project measured above, 165 files carry such a header.
+- Fixes live sealed classes being reported as unreferenced. `import p.Outer.Nested` names `Outer`, and a file importing a variant that way breaks if the parent goes away, even though its body only ever writes the variant's name. Seven types on the project measured above were reported this way.
+- Fixes `@Suppress` being read as a framework annotation, which made any declaration carrying one unreachable-proof. It addresses the compiler, never a framework. `@Suppress("unused")` and `@SuppressWarnings("unused")` remain an explicit opt-out.
+- Fixes `@file:Suppress("UNUSED_PARAMETER")` silencing the unreferenced symbol, unused declaration and write-only variable checks across the whole file. Those are different diagnostics, and matching them on a shared prefix conflated them.
+- Fixes import lines being counted as a use of the declaring file's own symbol, but not in the corpus-wide count. The two sides of that subtraction now count the same way.
+
 ## 1.40.0
 
 Kotlin Jump 1.40.0 finds the classes, objects and functions that nothing in the whole project references, the first check here that reasons across files rather than within one.

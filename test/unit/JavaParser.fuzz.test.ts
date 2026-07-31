@@ -33,6 +33,14 @@ function assertJavaInvariants(result: ReturnType<typeof parseJava>, label: strin
   expect(result, `${label}: result defined`).toBeDefined();
   expect(typeof result.packageName, `${label}: packageName type`).toBe('string');
   expect(Array.isArray(result.imports), `${label}: imports array`).toBe(true);
+  // Whatever the fuzzer throws at it, an import entry must be usable as an
+  // index key: SymbolIndex splits on '.' and takes the last segment.
+  for (const imp of result.imports) {
+    expect(imp.length, `${label}: empty import`).toBeGreaterThan(0);
+    expect(imp, `${label}: import kept its semicolon`).not.toContain(';');
+    expect(imp, `${label}: import kept whitespace`).not.toMatch(/\s/);
+    expect(imp, `${label}: import kept the static keyword`).not.toContain('static');
+  }
   expect(Array.isArray(result.symbols), `${label}: symbols array`).toBe(true);
 
   let prevLine = -1;
@@ -196,12 +204,80 @@ describe('JPF-4 — structural invariants on known Java patterns', () => {
     expect(r.packageName).toBe('com.example.myapp');
   });
 
-  it('imports always empty (JavaParser does not extract imports)', () => {
-    // JavaParser returns imports:[] — Java imports are not used for word-index
-    // pre-filtering (source JARs are navigated by FQN lookup, not word search).
+  it('imports feed the word index that pre-filters every usage search', () => {
+    // This test used to assert `imports` was ALWAYS empty, on the premise that
+    // "Java imports are not used for word-index pre-filtering". That premise
+    // was false and it cost us: SymbolIndex builds byWord/byWildcard from
+    // file.imports, so a Java file contributed nothing, was never returned as
+    // a candidate, and every Java consumer of a Kotlin symbol was invisible to
+    // Find Usages. Rename was worse: it rewrote the import lines it could see
+    // while leaving the bodies it could not.
     const code = `import java.util.List;\nimport java.util.Map;\npublic class Foo {}`;
     const r = parseJava('file:///I.java', code);
-    expect(r.imports).toEqual([]);
+    expect(r.imports).toEqual(['java.util.List', 'java.util.Map']);
+  });
+
+  it('a static import yields both the member path and its declaring class', () => {
+    // The bare token (`MAX`) appears in the body, and the file also depends on
+    // the type that declares it.
+    const r = parseJava('file:///S.java', 'import static com.a.Limits.MAX;\npublic class Foo {}');
+    expect(r.imports.sort()).toEqual(['com.a.Limits', 'com.a.Limits.MAX']);
+  });
+
+  it('a static-on-demand import yields the bare class FQN, never a wildcard', () => {
+    // `byWildcard` is only ever read with a PACKAGE key, so posting a CLASS
+    // key there could never be found. The bare FQN works instead because
+    // getFilesContainingWord walks a nested target's ancestors.
+    const r = parseJava('file:///S.java', 'import static com.a.Limits.*;\npublic class Foo {}');
+    expect(r.imports).toEqual(['com.a.Limits']);
+  });
+
+  it('repeated static imports from one class are deduplicated', () => {
+    const code = [
+      'import static com.a.Limits.MAX;',
+      'import static com.a.Limits.MIN;',
+      'import static com.a.Limits.STEP;',
+      'public class Foo {}',
+    ].join('\n');
+    const r = parseJava('file:///D.java', code);
+    expect(r.imports.filter(i => i === 'com.a.Limits')).toHaveLength(1);
+  });
+
+  it('importer une classe imbriquée nomme aussi la classe englobante', () => {
+    // Seul le DERNIER segment atteint l'index de mots. Sans la classe
+    // englobante, une recherche sur Outer rate tout fichier qui importe un de
+    // ses types imbriqués : deux cas réels sur un monorepo de 1731 fichiers.
+    const r = parseJava('file:///N.java', 'import com.a.Outer.Inner;\npublic class Foo {}');
+    expect(r.imports.sort()).toEqual(['com.a.Outer', 'com.a.Outer.Inner']);
+  });
+
+  it('mais un package en minuscules n’est pas pris pour une classe englobante', () => {
+    const r = parseJava('file:///P.java', 'import com.a.b.Widget;\npublic class Foo {}');
+    expect(r.imports).toEqual(['com.a.b.Widget']);
+  });
+
+  it('a wildcard import keeps its star, for the package-keyed map', () => {
+    const r = parseJava('file:///W.java', 'import com.a.*;\npublic class Foo {}');
+    expect(r.imports).toEqual(['com.a.*']);
+  });
+
+  it('what must NOT be read as an import', () => {
+    const code = [
+      '/*',
+      ' * import com.ghost.InComment;',
+      ' */',
+      '// import com.ghost.InLineComment;',
+      'importstatic com.ghost.NoSpace;',
+      'import com.real.Kept;',
+      'public class Foo {}',
+    ].join('\n');
+    const r = parseJava('file:///N.java', code);
+    expect(r.imports).toEqual(['com.real.Kept']);
+  });
+
+  it('imports survive CRLF and a trailing comment', () => {
+    const r = parseJava('file:///R.java', 'import com.a.B; // keep me\r\npublic class Foo {}\r\n');
+    expect(r.imports).toEqual(['com.a.B']);
   });
 
   it('enum members are indexed', () => {

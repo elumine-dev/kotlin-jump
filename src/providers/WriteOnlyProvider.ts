@@ -6,6 +6,8 @@ import {
   offsetToPos,
   collectAnnotationTargets,
   FILE_SUPPRESS_RE,
+  suppressesDiagnostic,
+  UNUSED_VARIABLE,
 } from './UnusedParameterProvider';
 import { reflectiveOrAnnotatedClassRanges } from './UnusedDeclarationProvider';
 import { reportDecorations } from '../util/demoProbe';
@@ -215,7 +217,7 @@ function declarationExtent(
 export function findWriteOnlyVariables(text: string): WriteOnlyVar[] {
   if (!/\bvar\b/.test(text)) return [];
   const fileSuppress = FILE_SUPPRESS_RE.exec(text);
-  if (fileSuppress && /unused/i.test(fileSuppress[1])) return [];
+  if (fileSuppress && suppressesDiagnostic(fileSuppress[1], UNUSED_VARIABLE)) return [];
 
   const clean = sanitizeForUsageScan(text);
   const lines = text.split('\n');

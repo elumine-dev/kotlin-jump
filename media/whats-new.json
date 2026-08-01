@@ -1,34 +1,32 @@
 {
-  "version": "1.41.0",
+  "version": "1.42.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Java seen properly, and four new things to find",
-  "summary": "Kotlin Jump 1.41.0 makes every navigation feature see Java code that uses Kotlin, and adds four checks that report what the compiler cannot: events nobody listens to, enum entries nothing names, Remote Config keys nothing reads, and names declared twice that nothing mentions.",
+  "tagline": "Members nothing references, and code kept alive only by other dead code",
+  "summary": "Kotlin Jump 1.42.0 goes after the dead code every per-symbol counter misses: class members nothing references, fields the app parses and then drops, keys written and never read, catalog aliases no build file names, and whole islands of declarations that reference only each other. Every finding quoted here was verified by hand on a 6410 file project before it shipped.",
   "highlights": [
     {
-      "title": "Find Usages Crosses the Line",
+      "title": "Dead Islands",
       "kind": "feature",
-      "description": "Java files that use a Kotlin symbol were skipped before being searched, because the Java parser never reported their imports. On a project with 1731 Java files, a class imported by 58 of them returned none. It now returns all 58."
+      "description": "Two functions calling each other with no outside caller both look referenced, so both survive every scan. Find Dead Islands reports the whole group instead, and deletes it in one reviewed change with the stale imports included. On a 6410 file project: 22 islands, 52 declarations, 29 of them invisible to per-symbol counting. Every one was checked by hand, and every deletable one was actually deleted on a branch with a green build and test suite."
     },
     {
-      "title": "Events Nobody Listens To",
+      "title": "Members Nothing References",
       "kind": "feature",
-      "description": "Reports an event posted on a bus that nothing subscribes to. This one finds a missing behaviour rather than dead weight: someone wrote the trigger and the receiver went away. The bus is learned from register call sites, so Otto, greenrobot and a house-built bus all work."
+      "description": "The largest tier of dead code left: public, internal and protected class members. A comparable tool reports 506 of them on this project with a measured 57% false-positive rate. This scan reports 92, each hand-verified, by counting any mention of the name anywhere as a use. A third verdict, could be private, covers members reached only from inside their own class."
     },
     {
-      "title": "Enum Entries and Remote Config Keys",
+      "title": "Four More Things The Build Never Complains About",
       "kind": "feature",
-      "description": "Two more things the build never complains about: an enum variant nothing names, and a Remote Config default no line of the project reads. Measured on a 6410 file project, 36 entries and 29 keys, each confirmed by hand."
+      "description": "Fields of deserialized models nothing reads, Intent extras and preference keys nothing gets back, version catalog aliases no build file names, and event subscriptions nothing ever posts to. The catalog check is the first one here that reads the build rather than the code."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Fixes Find Usages, Find References, Call Hierarchy and the usage counter missing every Java file that uses a Kotlin symbol.",
-        "Fixes Rename corrupting Java files, and teaches it to rename Foo.java alongside the class it declares.",
-        "Fixes live sealed classes being reported as unreferenced when only their variants are imported.",
-        "Stops @Suppress from being read as a framework annotation, and stops @file:Suppress(\"UNUSED_PARAMETER\") from silencing three unrelated checks.",
-        "Never reports anything inside a file whose header says a generator wrote it."
+        "Fixes the version catalog reader ignoring module = \"group:artifact\", the form most catalogs are written in. On a catalog using it throughout, all 164 libraries were invisible and the catalog hover was silently blank.",
+        "Fixes catalog accessors resolving by prefix rather than by segment, so where foo and foo-bar both existed, libs.foo.bar counted as a reference to both.",
+        "Fixes the member scan's external guard matching the word anywhere on the declaration line: a Java parameter named external was enough to shield its method from the scan."
       ]
     }
   ],

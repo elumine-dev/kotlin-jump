@@ -21,7 +21,7 @@ import {
  * hundred files, and no one should discover that from an undo stack.
  */
 
-const KOTLIN_GLOB = '**/*.kt';
+const SWEEP_GLOB = '**/*.{kt,java}';
 
 const DETECTOR_LABEL: Record<SweepDetector, string> = {
   imports: 'imports',
@@ -53,7 +53,7 @@ export async function scanWorkspace(token?: vscode.CancellationToken): Promise<S
     cfg.get<string[]>('excludePatterns', ['**/build/**', '**/.gradle/**', '**/generated/**']),
   );
 
-  const uris = await vscode.workspace.findFiles(KOTLIN_GLOB, undefined, maxFiles);
+  const uris = await vscode.workspace.findFiles(SWEEP_GLOB, undefined, maxFiles);
   const truncated = uris.length >= maxFiles;
   const kept = uris.filter(u => !isExcluded(u.fsPath));
 
@@ -67,7 +67,7 @@ export async function scanWorkspace(token?: vscode.CancellationToken): Promise<S
     } catch {
       return; // an unreadable file simply contributes nothing
     }
-    const findings = sweepFile(text);
+    const findings = sweepFile(text, uri.fsPath.endsWith('.java') ? 'java' : 'kotlin');
     if (findings.length > 0) files.push({ uri, findings });
   });
 
@@ -176,13 +176,14 @@ export async function findDeadCodeCommand(report: DeadCodeSweepReport): Promise<
 /** Removes every safely removable finding in the active editor, behind preview. */
 export async function cleanDeadCodeInFileCommand(): Promise<void> {
   const editor = vscode.window.activeTextEditor;
-  if (!editor || editor.document.languageId !== 'kotlin') {
-    void vscode.window.showWarningMessage('Open a Kotlin file to clean it.');
+  const languageId = editor?.document.languageId;
+  if (!editor || (languageId !== 'kotlin' && languageId !== 'java')) {
+    void vscode.window.showWarningMessage('Open a Kotlin or Java file to clean it.');
     return;
   }
 
   const text = editor.document.getText();
-  const findings = sweepFile(text);
+  const findings = sweepFile(text, languageId === 'java' ? 'java' : 'kotlin');
   const plan = planFileEdits(findings);
   if (plan.length === 0) {
     const skipped = findings.length;

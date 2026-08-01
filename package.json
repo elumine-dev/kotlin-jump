@@ -2,7 +2,7 @@
   "name": "kotlin-jump",
   "displayName": "Kotlin Jump: Fast Kotlin & Android Studio Navigation",
   "description": "Fast Kotlin & Android Studio navigation. Find Usages, Go to Definition, Compose, R.string, Android Run. No JVM, no language server. The Android Studio experience inside VS Code.",
-  "version": "1.41.0",
+  "version": "1.42.0",
   "publisher": "elumine",
   "license": "MIT",
   "icon": "media/logo.png",
@@ -259,6 +259,56 @@
       {
         "command": "kotlin-jump.cleanDeadCodeInWorkspace",
         "title": "Clean Dead Code in the Workspace",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.findUnusedDtoFields",
+        "title": "Find Unread DTO Fields",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.clearUnusedDtoFields",
+        "title": "Clear DTO Field Findings",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.findWriteOnlyKeys",
+        "title": "Find Write-Only Keys",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.clearWriteOnlyKeys",
+        "title": "Clear Write-Only Key Findings",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.findUnusedMembers",
+        "title": "Find Unreferenced Members",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.clearUnusedMembers",
+        "title": "Clear Unreferenced Member Findings",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.findDeadIslands",
+        "title": "Find Dead Islands",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.clearDeadIslands",
+        "title": "Clear Dead Island Findings",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.findUnusedGradleDependencies",
+        "title": "Find Unreferenced Catalog Aliases",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.clearUnusedGradleDependencies",
+        "title": "Clear Catalog Alias Findings",
         "category": "Kotlin Jump"
       },
       {
@@ -1293,6 +1343,81 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Enable **Kotlin Jump: Find Dead Code**, a single workspace scan that gathers every dead-code finding at once: unused imports, parameters, private declarations, local variables and write-only variables. Results land in the Problems panel for the files you do not have open (an open file keeps its own live warnings instead of showing them twice). **Clean Dead Code in This File** and **Clean Dead Code in the Workspace** remove everything that has a safe fix, always through the Refactor Preview."
+        },
+        "kotlinJump.unusedDtoFields": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Report fields of deserialized models (a `DO`/`DTO`/`Response` suffix, or a serialization annotation) that nothing in the project reads. Run **Kotlin Jump: Find Unread DTO Fields** to scan. Removing one is safe on the read side by construction, since JSON libraries ignore unknown keys. A class mentioned in a file that destructures anything is skipped entirely, `component1()` reading fields without spelling them, and a class constructed by hand keeps its findings but loses the removal fix, a deleted parameter shifting every later positional argument. Generated models are never examined."
+        },
+        "kotlinJump.unusedDtoFieldsIgnoreNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Class names, or `Class.field` pairs, never reported."
+        },
+        "kotlinJump.writeOnlyKeys": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Report keys written and never read: Intent extras nothing gets back, preference keys nothing reloads, permissions nothing exercises. These are bugs more than dead weight, the producing half of a hand-off whose consumer went away. A read whose key cannot be resolved makes its whole category unprovable, and the scan says so instead of guessing."
+        },
+        "kotlinJump.writeOnlyKeysIgnoreNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Keys or permission names never reported."
+        },
+        "kotlinJump.unusedMembers": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Report class members (`public`, `internal`, `protected`) that nothing in the workspace references. Run **Kotlin Jump: Find Unreferenced Members** to scan. Any mention of the name anywhere counts, XML and string literals included, so colliding member names silence each other rather than producing false reports. Overrides implement a contract and are never candidates; in Java, where `@Override` is optional, only classes with no supertype at all are examined. A member used only inside its own class gets its own **could be private** verdict, whose fix the compiler fully re-checks."
+        },
+        "kotlinJump.unusedMembersSelfOnly": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Also report members referenced only from inside their own class, with a **Make private** fix. Once private, the file-local checks track them in real time."
+        },
+        "kotlinJump.unusedMembersIgnoreNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Member names, globs allowed, that are never reported."
+        },
+        "kotlinJump.deadIslands": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Report dead islands: groups of declarations that reference only each other and are referenced by nothing else. These are the mutual-recursion pairs and cascade chains that per-symbol counting cannot see. Run **Kotlin Jump: Find Dead Islands** to scan. Every mention that cannot be placed inside an island's own declarations is a root and keeps it alive: XML, ProGuard rules, string literals, generated-code naming conventions (`DaggerX` reaches `X`) all count. The fix deletes the whole island in one reviewed change, stale imports included; an island still referenced from tests is reported but never auto-deleted. Measured on a 6410 file project: 22 islands, each verified by hand, each fixable one deleted on a branch with a green build and test suite."
+        },
+        "kotlinJump.deadIslandsIgnoreNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Declaration names (`Name` or `Container.Name`, globs allowed) whose islands are never reported."
+        },
+        "kotlinJump.deadIslandsMaxSize": {
+          "type": "number",
+          "default": 8,
+          "markdownDescription": "Islands larger than this are withheld whole: a giant component is more likely an analysis gap than a forty-symbol corpse. Raise it after reviewing a few reports."
+        },
+        "kotlinJump.unusedGradleDependencies": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Report version catalog aliases that no build file ever references. Run **Kotlin Jump: Find Unreferenced Catalog Aliases** to scan. A type-safe accessor (`libs.androidx.browser`), a lookup by name (`findLibrary(\"androidx-browser\")`) or membership of a live bundle all count as a reference, and `buildSrc` and `build-logic` are read even though nothing is ever reported inside them: a convention plugin is often the only place naming an alias. When an alias dies and its version entry serves nothing else, both go in the same previewable change.\n\nThis deliberately stops at the catalog. Reporting a dependency a module declares without importing cannot be made safe from text alone: a coordinate does not say which packages it brings, and a library reached through a transitive would be removed from the compile classpath."
+        },
+        "kotlinJump.unusedGradleDependenciesIgnoreNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Catalog alias names, globs allowed, that are never reported."
         },
         "kotlinJump.unusedRemoteConfigKeys": {
           "type": "boolean",

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { parse, RawSymbol } from '../indexer/KotlinParser';
+import { parseJava } from '../indexer/JavaParser';
 import { sanitizeForUsageScan } from './UnusedImportProvider';
 import { findMatchingParen } from '../util/SignatureReader';
 import { rangeEndLine } from '../util/symbolRanges';
@@ -63,7 +64,7 @@ import { declarationSpan } from '../util/declarationSpan';
 const BENIGN_DECL_ANNOTATIONS = new Set(['Composable']);
 
 
-const MODIFIER_GUARD_RE = /\b(?:override|operator|expect|actual|external|abstract)\b/;
+const MODIFIER_GUARD_RE = /\b(?:override|operator|expect|actual|external|abstract|native|default)\b/;
 const CANDIDATE_KINDS = new Set(['fun', 'composable', 'val', 'var', 'class', 'sealedClass', 'object', 'interface']);
 const CLASS_LIKE = new Set(['class', 'sealedClass', 'dataClass', 'object', 'interface', 'enum', 'annotation']);
 /** Characters legal inside a class header between name and body brace. */
@@ -104,12 +105,17 @@ export function reflectiveOrAnnotatedClassRanges(
   return ranges;
 }
 
-export function findUnusedDeclarations(text: string): UnusedDecl[] {
+export function findUnusedDeclarations(text: string, lang: 'kotlin' | 'java' = 'kotlin'): UnusedDecl[] {
   if (!/\bprivate\b/.test(text)) return [];
   const fileSuppress = FILE_SUPPRESS_RE.exec(text);
   if (fileSuppress && suppressesDiagnostic(fileSuppress[1], UNUSED_DECLARATION)) return [];
 
-  const symbols = parse('inline', text).symbols;
+  // Java is the same question with the same answer: a private member no word
+  // of its own file names. The guards translate directly, and the ones that
+  // do not apply (companion, expect/actual) simply never fire. A private
+  // constructor is neutralised by rule 6 for free: its name is the class's,
+  // which the class declaration itself already counts.
+  const symbols = (lang === 'java' ? parseJava('inline', text) : parse('inline', text)).symbols;
   const clean = sanitizeForUsageScan(text);
   const lines = text.split('\n');
   const lineStarts = buildLineStarts(text);
@@ -165,7 +171,10 @@ export function findUnusedDeclarations(text: string): UnusedDecl[] {
     if ((nameCounts.get(sym.name) ?? 0) > 1) continue;
     if (sym.kind === 'object' && /\bcompanion\b/.test(declLine)) continue;
     const cleanDeclLine = clean.slice(lineStarts[sym.line], lineEndOf(sym.line));
-    if (/;\s*\S/.test(cleanDeclLine)) continue; // `private val a = 1; val b = a`
+    // `private val a = 1; val b = a` shares its line with more code. In Java a
+    // semicolon ends EVERY statement, so an inline body `{ return s; }` would
+    // trip this on each one-line method; there the brace already delimits.
+    if (!(lang === 'java' && isFun) && /;\s*\S/.test(cleanDeclLine)) continue;
 
     // ── Scan extent (minimal-certain; under-blanking → FN, over → FP) ──────
     // Shared with KJ-032 via src/util/declarationSpan.ts: this extent is what
@@ -292,7 +301,9 @@ export class UnusedDeclarationProvider implements vscode.Disposable {
 
   private _refresh(): void {
     const editor = vscode.window.activeTextEditor;
-    if (!editor || editor.document.languageId !== 'kotlin') return;
+    if (!editor) return;
+    const languageId = editor.document.languageId;
+    if (languageId !== 'kotlin' && languageId !== 'java') return;
 
     const enabled = vscode.workspace.getConfiguration('kotlinJump').get<boolean>(CONFIG_KEY, true);
     if (!enabled) {
@@ -301,7 +312,7 @@ export class UnusedDeclarationProvider implements vscode.Disposable {
       return;
     }
 
-    const unused = findUnusedDeclarations(editor.document.getText());
+    const unused = findUnusedDeclarations(editor.document.getText(), languageId === 'java' ? 'java' : 'kotlin');
     const diags = unused.map(u => {
       const noun = KIND_NOUNS[u.kind];
       const d = new vscode.Diagnostic(
@@ -334,10 +345,11 @@ export class UnusedDeclarationCodeActionProvider implements vscode.CodeActionPro
   ): vscode.CodeAction[] {
     const cfg = vscode.workspace.getConfiguration('kotlinJump');
     if (!cfg.get<boolean>(CONFIG_KEY, true)) return [];
-    if (document.languageId !== 'kotlin') return [];
+    if (document.languageId !== 'kotlin' && document.languageId !== 'java') return [];
 
     const text = document.getText();
-    const targets = findUnusedDeclarations(text).filter(u => u.line === range.start.line);
+    const lang = document.languageId === 'java' ? 'java' as const : 'kotlin' as const;
+    const targets = findUnusedDeclarations(text, lang).filter(u => u.line === range.start.line);
     if (targets.length === 0) return [];
 
     const lineStarts = buildLineStarts(text);
@@ -356,12 +368,13 @@ export class UnusedDeclarationCodeActionProvider implements vscode.CodeActionPro
         remove.isPreferred = true;
         actions.push(remove);
       }
-      const suppress = new vscode.CodeAction('Suppress with @Suppress("unused")', vscode.CodeActionKind.QuickFix);
+      const annotation = lang === 'java' ? '@SuppressWarnings("unused")' : '@Suppress("unused")';
+      const suppress = new vscode.CodeAction(`Suppress with ${annotation}`, vscode.CodeActionKind.QuickFix);
       const edit = new vscode.WorkspaceEdit();
       edit.insert(
         document.uri,
         new vscode.Position(decl.suppressLine, 0),
-        `${decl.suppressIndent}@Suppress("unused")\n`,
+        `${decl.suppressIndent}${annotation}\n`,
       );
       suppress.edit = edit;
       actions.push(suppress);

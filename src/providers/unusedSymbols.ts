@@ -126,7 +126,7 @@ const CANDIDATE_KINDS = new Set<string>([
  * it is an entry point). `@Deprecated` is present on purpose: deprecated AND
  * unreferenced is the best finding this detector produces.
  */
-const BENIGN_TOPLEVEL_ANNOTATIONS = new Set([
+export const BENIGN_TOPLEVEL_ANNOTATIONS = new Set([
   'Composable', 'Deprecated', 'JvmOverloads', 'Throws', 'OptIn', 'RequiresApi', 'SuppressLint',
   // `@Suppress` addresses the compiler, never a framework, so it cannot make a
   // declaration reachable. Whether it opts OUT of this detector is decided by
@@ -138,7 +138,7 @@ const BENIGN_TOPLEVEL_ANNOTATIONS = new Set([
 ]);
 
 /** Supertypes whose instances the framework creates; nothing names the class. */
-const FRAMEWORK_SUPERTYPES = new Set([
+export const FRAMEWORK_SUPERTYPES = new Set([
   'Application', 'Activity', 'AppCompatActivity', 'ComponentActivity', 'FragmentActivity',
   'Fragment', 'DialogFragment', 'BottomSheetDialogFragment', 'PreferenceFragmentCompat',
   'Service', 'JobService', 'TileService', 'IntentService', 'JobIntentService',
@@ -191,7 +191,7 @@ interface Candidate {
   optsOutUnused: boolean;
 }
 
-interface Harvest {
+export interface Harvest {
   main: Map<string, number>;
   test: Map<string, number>;
   /** Names an aliased import mentions: alive unconditionally (H10). */
@@ -207,7 +207,7 @@ function bump(bag: Map<string, number>, name: string, wanted: ReadonlySet<string
   bag.set(name, (bag.get(name) ?? 0) + 1);
 }
 
-function countWord(text: string, name: string): number {
+export function countWord(text: string, name: string): number {
   let n = 0;
   WORD_RE.lastIndex = 0;
   let m: RegExpExecArray | null;
@@ -215,7 +215,7 @@ function countWord(text: string, name: string): number {
   return n;
 }
 
-function matchesGlob(path: string, pattern: string): boolean {
+export function matchesGlob(path: string, pattern: string): boolean {
   const re = new RegExp(
     '^' + pattern
       .replace(/[.+^${}()|[\]\\]/g, '\\$&')
@@ -226,7 +226,7 @@ function matchesGlob(path: string, pattern: string): boolean {
   return re.test(path);
 }
 
-function isUnder(path: string, dir: string): boolean {
+export function isUnder(path: string, dir: string): boolean {
   return path === dir || path.startsWith(`${dir}/`) || path.startsWith(`${dir}\\`);
 }
 
@@ -237,12 +237,12 @@ function isUnder(path: string, dir: string): boolean {
  * way. Counting an import on one side and not the other understates the
  * residue, which is the direction that manufactures a finding.
  */
-function stripImportLines(text: string): string {
+export function stripImportLines(text: string): string {
   return text.split('\n').map(l => (/^\s*import\s/.test(l) ? '' : l)).join('\n');
 }
 
 /** Java sees a top-level `val x` as `FileKt.getX()` (H9). */
-function accessorNames(name: string): string[] {
+export function accessorNames(name: string): string[] {
   const cap = name[0].toUpperCase() + name.slice(1);
   const out = [`get${cap}`, `set${cap}`];
   if (/^is[A-Z]/.test(name)) {
@@ -261,7 +261,7 @@ function accessorNames(name: string): string[] {
  * VERDICT; this one decides what a quick fix would delete, and it is allowed
  * to give up (-1) while the verdict still stands.
  */
-function removalExtent(
+export function removalExtent(
   text: string,
   clean: string,
   lineStarts: readonly number[],
@@ -535,12 +535,12 @@ export function harvestMentions(
  * Only workspace-declared parents can be followed, so the walk is bounded by
  * the corpus and by a depth cap against cycles.
  */
-function frameworkAncestor(
-  c: Candidate,
+export function frameworkAncestor(
+  supertypes: readonly string[],
   supertypesByName: ReadonlyMap<string, string[]>,
 ): string | null {
   const seen = new Set<string>();
-  let frontier = (c.sym.supertypes ?? []).map(t => t.replace(/<.*/, '').trim());
+  let frontier = supertypes.map(t => t.replace(/<.*/, '').trim());
 
   for (let depth = 0; depth < 8 && frontier.length > 0; depth++) {
     const next: string[] = [];
@@ -600,6 +600,12 @@ function duplicatesWithNoMention(
     // the bag's silence proves nothing (H10).
     if (harvest.aliased.has(name)) continue;
 
+    // A second mention inside a candidate's OWN span is a call to another
+    // bearer of the name (or self-recursion): either way the group is not
+    // provably unmentioned. Found live as a member-level false positive
+    // (a member delegating to its homonym), and the flaw is identical here.
+    if (group.some(c => c.selfInSpan !== 1)) continue;
+
     let mentions = harvest.main.get(name) ?? 0;
     if (group.some(c => c.kind === 'val' || c.kind === 'var')) {
       for (const a of accessorNames(name)) mentions += harvest.main.get(a) ?? 0;   // H9
@@ -649,7 +655,7 @@ function rejectionReason(
   const foreign = c.annoNames.find(a => !BENIGN_TOPLEVEL_ANNOTATIONS.has(a));
   if (foreign) return `F5:@${foreign}`;
 
-  const framework = frameworkAncestor(c, supertypesByName);
+  const framework = frameworkAncestor(c.sym.supertypes ?? [], supertypesByName);
   if (framework) return framework;
   if (parentsOfAnnotatedSubtypes.has(c.name)) return 'F8:annotated-subtype';
   // An interface is never instantiated by a framework, so the name belt must

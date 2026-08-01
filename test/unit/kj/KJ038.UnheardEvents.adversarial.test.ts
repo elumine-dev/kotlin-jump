@@ -788,6 +788,178 @@ describe('la variable locale construite juste au-dessus', () => {
   });
 });
 
+describe('direction 2 — les souscriptions que rien ne poste', () => {
+  const dead = (sources: any[], extra: Record<string, unknown> = {}) =>
+    scan(sources, extra).deadSubscriptions.map((d: any) => d.name);
+  const unbounded = (sources: any[]) => scan(sources).unboundedPosts.length;
+
+  const starvedListener = f(`${MAIN}/StarvedListener.kt`,
+    'package com.x\n\nclass StarvedListener {\n    @Subscribe\n' +
+    '    fun onBusEvent(event: GhostEvent) {\n    }\n}\n');
+  const ghostEvent = f(`${MAIN}/GhostEvent.kt`, 'package com.x\n\nclass GhostEvent\n');
+  const heardPoster = f(`${MAIN}/Poster.kt`,
+    'package com.x\n\nclass Poster {\n    fun go() {\n' +
+    '        EventBus.getDefault().post(HeardEvent())\n    }\n}\n');
+
+  it('une souscription sans aucun post est signalée', () => {
+    const sources = [busFile, anySubscriber, heardEvent, heardPoster, starvedListener, ghostEvent];
+    const found = scan(sources).deadSubscriptions;
+    expect(found.map(d => d.name)).toEqual(['GhostEvent']);
+    expect(found[0].verdict).toBe('neverPosted');
+  });
+
+  it('un post borné par constructeur la fait vivre', () => {
+    const sources = [busFile, anySubscriber, heardEvent, heardPoster, starvedListener, ghostEvent,
+      f(`${MAIN}/G.kt`, 'package com.x\n\nclass G {\n    fun go() {\n' +
+        '        EventBus.getDefault().post(GhostEvent())\n    }\n}\n')];
+    expect(dead(sources)).toEqual([]);
+  });
+
+  it('LE renversement : un post non borné empoisonne la direction entière', () => {
+    // Ici les posts SONT la preuve. Un post dont le type livré ne peut pas
+    // être borné pourrait livrer n\'importe quoi : plus rien n\'est prouvable.
+    const sources = [busFile, anySubscriber, heardEvent, heardPoster, starvedListener, ghostEvent,
+      f(`${MAIN}/Dyn.kt`, 'package com.x\n\nclass Dyn {\n    fun go(e: Any) {\n' +
+        '        EventBus.getDefault().post(computeSomething(e))\n    }\n}\n')];
+    expect(dead(sources)).toEqual([]);
+    expect(unbounded(sources)).toBe(1);
+  });
+
+  it('le marqueur unbounded-post rend la revendication à l’utilisateur', () => {
+    const sources = [busFile, anySubscriber, heardEvent, heardPoster, starvedListener, ghostEvent,
+      f(`${MAIN}/Dyn.kt`, [
+        'package com.x',
+        '',
+        'class Dyn {',
+        '    fun go(e: Any) {',
+        '        // kotlin-jump:ignore unbounded-post',
+        '        EventBus.getDefault().post(computeSomething(e))',
+        '    }',
+        '}',
+      ].join('\n'))];
+    expect(unbounded(sources)).toBe(0);
+    expect(dead(sources)).toEqual(['GhostEvent']);
+  });
+
+  it('un post de factory est borné par le type de retour déclaré', () => {
+    // La résolution scopée au type du receveur : une recherche globale par
+    // nom de méthode s\'effondre sur `build`/`create` (mesuré : 63/63 posts
+    // non bornés).
+    const sources = [busFile, anySubscriber, heardEvent, heardPoster, starvedListener, ghostEvent,
+      f(`${MAIN}/GhostFactory.kt`,
+        'package com.x\n\nclass GhostFactory {\n    fun createEvent(id: Int): GhostEvent = GhostEvent()\n}\n'),
+      f(`${MAIN}/P.kt`, [
+        'package com.x',
+        '',
+        'class P {',
+        '    val factory: GhostFactory = GhostFactory()',
+        '    fun go() {',
+        '        EventBus.getDefault().post(factory.createEvent(1))',
+        '    }',
+        '}',
+      ].join('\n'))];
+    expect(dead(sources)).toEqual([]);
+    expect(unbounded(sources)).toBe(0);
+  });
+
+  it('une factory STATIQUE sur le type lui-même est bornée', () => {
+    const sources = [busFile, anySubscriber, heardEvent, heardPoster, starvedListener,
+      f(`${MAIN}/GhostEvent.kt`, [
+        'package com.x',
+        '',
+        'class GhostEvent {',
+        '    companion object {',
+        '        fun newHidden(): GhostEvent = GhostEvent()',
+        '    }',
+        '}',
+      ].join('\n')),
+      f(`${MAIN}/P.kt`, 'package com.x\n\nclass P {\n    fun go() {\n' +
+        '        EventBus.getDefault().post(GhostEvent.newHidden())\n    }\n}\n')];
+    expect(dead(sources)).toEqual([]);
+    expect(unbounded(sources)).toBe(0);
+  });
+
+  it('un `when` dont chaque branche livre une référence borne la variable', () => {
+    const sources = [busFile, anySubscriber, heardEvent, heardPoster, starvedListener, ghostEvent,
+      f(`${MAIN}/Menu.kt`, [
+        'package com.x',
+        '',
+        'enum class MenuClick { PROFILE, KIOSK }',
+        '',
+        'class Menu {',
+        '    fun go(id: Int) {',
+        '        val event = when (id) {',
+        '            1 -> MenuClick.PROFILE',
+        '            2 -> MenuClick.KIOSK',
+        '            else -> return',
+        '        }',
+        '        EventBus.getDefault().post(event)',
+        '    }',
+        '}',
+      ].join('\n'))];
+    expect(unbounded(sources)).toBe(0);
+    expect(dead(sources)).toEqual(['GhostEvent']);
+  });
+
+  it('un smart cast `is T ->` borne un post de la branche', () => {
+    const sources = [busFile, anySubscriber, heardEvent, heardPoster, starvedListener, ghostEvent,
+      f(`${MAIN}/TriggerDO.kt`, 'package com.x\n\nclass TriggerDO\n'),
+      f(`${MAIN}/H.kt`, [
+        'package com.x',
+        '',
+        'class H {',
+        '    fun handle(dataObject: Any?) {',
+        '        when (val d = dataObject) {',
+        '            is TriggerDO -> EventBus.getDefault().post(d)',
+        '        }',
+        '    }',
+        '}',
+      ].join('\n'))];
+    expect(unbounded(sources)).toBe(0);
+  });
+
+  it('un souscripteur nourri seulement par un test a son verdict à part', () => {
+    const sources = [busFile, anySubscriber, heardEvent, heardPoster, starvedListener, ghostEvent,
+      f('/w/app/src/test/kotlin/com/x/T.kt',
+        'package com.x\n\nclass T {\n    fun t() {\n' +
+        '        EventBus.getDefault().post(GhostEvent())\n    }\n}\n')];
+    const found = scan(sources).deadSubscriptions;
+    expect(found.map(d => d.name)).toEqual(['GhostEvent']);
+    expect(found[0].verdict).toBe('testOnlyPoster');
+  });
+
+  it('un post d’une SOUS-CLASSE nourrit la souscription au parent, et l’inverse aussi', () => {
+    // Le type statique livré borne le runtime à son sous-arbre : livrer le
+    // parent depuis une factory peut produire un enfant.
+    const sources = [busFile, anySubscriber, heardEvent, heardPoster,
+      f(`${MAIN}/Base.kt`, 'package com.x\n\nopen class BaseEvent\n\nclass ChildEvent : BaseEvent()\n'),
+      f(`${MAIN}/ChildListener.kt`,
+        'package com.x\n\nclass ChildListener {\n    @Subscribe\n' +
+        '    fun onBusEvent(event: ChildEvent) {\n    }\n}\n'),
+      f(`${MAIN}/F.kt`,
+        'package com.x\n\nclass F {\n    fun make(): BaseEvent = ChildEvent()\n}\n'),
+      f(`${MAIN}/P.kt`, [
+        'package com.x',
+        '',
+        'class P {',
+        '    val f: F = F()',
+        '    fun go() {',
+        '        EventBus.getDefault().post(f.make())',
+        '    }',
+        '}',
+      ].join('\n'))];
+    expect(dead(sources)).toEqual([]);
+  });
+
+  it('une souscription déclarée dans un test n’est jamais candidate', () => {
+    const sources = [busFile, anySubscriber, heardEvent, heardPoster, ghostEvent,
+      f('/w/app/src/test/kotlin/com/x/Helper.kt',
+        'package com.x\n\nclass Helper {\n    @Subscribe\n' +
+        '    fun onBusEvent(event: GhostEvent) {\n    }\n}\n')];
+    expect(dead(sources)).toEqual([]);
+  });
+});
+
 describe('les primitives', () => {
   it('le receveur se lit à travers les sauts de ligne', () => {
     // `EventBus\n  .getDefault()\n  .post(` est une forme réelle. Lire une

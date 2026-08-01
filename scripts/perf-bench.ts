@@ -38,6 +38,7 @@ import { mockDocument } from '../test/unit/helpers';
 import { Position } from '../test/unit/__mocks__/vscode';
 import * as IndexStore from '../src/indexer/IndexStore';
 import { isInsideCommentOrString } from '../src/util/textUtils';
+import { findDeadIslands } from '../src/providers/deadIslands';
 
 const FIXTURE = path.resolve(__dirname, '../../test/kotlin-jump-demo/src/main/kotlin');
 const REPO_ROOT = path.resolve(__dirname, '../..');
@@ -224,6 +225,13 @@ async function main(): Promise<void> {
   }));
   scenarios.push(await bench('snapshot.load', 20, async () => {
     await IndexStore.load(ctx);
+  }));
+
+  // KJ-046: full dead-island analysis over the fixture (candidates via
+  // explainSymbols/explainMembers, attributed harvest, liveness fixpoint).
+  const islandSources = files.map(f => ({ path: f.uri.replace('file://', ''), text: f.src }));
+  scenarios.push(await bench('deadIslands.workspace', 10, () => {
+    findDeadIslands({ sources: islandSources, testSourceSets: ['test/java', 'test/kotlin', 'androidTest'] });
   }));
 
   // Measure compressed-vs-raw size

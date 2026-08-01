@@ -39,3 +39,8 @@ media/ax-debug-harvest/
 
 # Claude in Chrome / Playwright MCP debug console dumps, not versioned
 .playwright-mcp/
+
+# Ground-truth corpus measured on a private codebase: paths, class names and
+# audit notes belong to that project, not to this public repo. The KJ-046
+# ground-truth test is gated on LAPRESSE_ROOT and skips without it.
+test/corpus/

@@ -285,6 +285,9 @@ The classes, objects and functions that nothing in the project references, found
 ### Unused resource keys
 The entries inside `values/*.xml` that nothing references: strings, colors, dimensions, styles, attributes, integers, booleans, arrays and plurals. The fix removes the key in every configuration variant at once, `values-night` and `values-fr` included, in one preview.
 
+### Dead islands
+Groups of declarations that reference only each other and are referenced by nothing else. Two functions calling each other with no outside caller both look used to every per-symbol counter; `Find Dead Islands` sees through it. Any mention it cannot place inside the island itself counts as life: XML, ProGuard, string literals, `DaggerX` naming. Uncertainty always keeps code alive. The fix deletes the whole island in one reviewed change, stale imports included. If a report looks wrong, `scripts/scan-dead-islands.ts --why` traces every verdict, and `// kotlin-jump:ignore dead-island` silences a file's islands while you tell us about it.
+
 ### Resource usage badges
 Per-resource usage counts inside `values/*.xml`. Zero means removable.
 
@@ -687,7 +690,7 @@ Search **Kotlin Jump** in your editor's Extensions tab (`Cmd+Shift+X`), or insta
 For offline installs (machines without internet access), grab the latest `.vsix` from [GitHub Releases](https://github.com/elumine-dev/kotlin-jump/releases/latest):
 
 ```bash
-code --install-extension kotlin-jump-1.40.0.vsix
+code --install-extension kotlin-jump-1.42.0.vsix
 ```
 
 ### Build from source
@@ -695,7 +698,7 @@ code --install-extension kotlin-jump-1.40.0.vsix
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full dev setup, or quickstart:
 
 ```bash
-code --install-extension kotlin-jump-1.40.0.vsix
+code --install-extension kotlin-jump-1.42.0.vsix
 ```
 
 ---

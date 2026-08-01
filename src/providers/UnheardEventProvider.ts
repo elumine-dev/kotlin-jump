@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import {
+  DeadSubscription,
   UnheardEvent,
+  UnheardEventScan,
   UnreadableSubscription,
   createSubscriberTitleFor,
   messageFor,
@@ -24,6 +26,7 @@ export class UnheardEventProvider implements vscode.CodeActionProvider, vscode.D
 
   private readonly collection = vscode.languages.createDiagnosticCollection('kotlin-jump-unheard-events');
   private readonly byPath = new Map<string, UnheardEvent[]>();
+  private readonly deadByPath = new Map<string, DeadSubscription[]>();
   private readonly subs: vscode.Disposable[];
 
   constructor() {
@@ -42,9 +45,53 @@ export class UnheardEventProvider implements vscode.CodeActionProvider, vscode.D
     return vscode.workspace.getConfiguration('kotlinJump').get<boolean>(CONFIG_KEY, true);
   }
 
+  /** Publishes both directions of a scan in one shot. */
+  setScan(scan: UnheardEventScan): void {
+    this.setFindings(scan.events);
+    const byFile = new Map<string, vscode.Diagnostic[]>();
+
+    for (const d of scan.deadSubscriptions) {
+      const list = this.deadByPath.get(d.path) ?? [];
+      list.push(d);
+      this.deadByPath.set(d.path, list);
+      const range = new vscode.Range(d.line, d.character, d.line, d.character + 10);
+      const diag = new vscode.Diagnostic(range,
+        d.verdict === 'testOnlyPoster'
+          ? `Nothing in production posts '${d.name}': only a test delivers it`
+          : `Nothing ever posts '${d.name}': this handler can never run`,
+        d.verdict === 'testOnlyPoster'
+          ? vscode.DiagnosticSeverity.Information
+          : vscode.DiagnosticSeverity.Warning);
+      diag.source = 'kotlin-jump';
+      diag.code = d.verdict === 'testOnlyPoster' ? 'test-only-posted-subscription' : 'never-posted-subscription';
+      const diags = byFile.get(d.path) ?? [];
+      diags.push(diag);
+      byFile.set(d.path, diags);
+    }
+    // An unbounded post is why direction 2 proved nothing: it has to be
+    // visible, or the zero reads as an all-clear.
+    for (const u of scan.unboundedPosts) {
+      const range = new vscode.Range(u.line, 0, u.line, 200);
+      const diag = new vscode.Diagnostic(range,
+        'The type this post delivers cannot be bounded, so no subscription can be proven starved. '
+        + 'Add // kotlin-jump:ignore unbounded-post above it if its delivery set does not matter.',
+        vscode.DiagnosticSeverity.Information);
+      diag.source = 'kotlin-jump';
+      diag.code = 'unbounded-post';
+      const diags = byFile.get(u.path) ?? [];
+      diags.push(diag);
+      byFile.set(u.path, diags);
+    }
+    for (const [p, diags] of byFile) {
+      const existing = this.collection.get(vscode.Uri.file(p)) ?? [];
+      this.collection.set(vscode.Uri.file(p), [...existing, ...diags]);
+    }
+  }
+
   setFindings(findings: readonly UnheardEvent[]): void {
     this.collection.clear();
     this.byPath.clear();
+    this.deadByPath.clear();
 
     const byFile = new Map<string, vscode.Diagnostic[]>();
     for (const f of findings) {
@@ -114,6 +161,20 @@ export class UnheardEventProvider implements vscode.CodeActionProvider, vscode.D
     range: vscode.Range | vscode.Selection,
   ): vscode.CodeAction[] {
     if (!UnheardEventProvider.isEnabled()) return [];
+
+    const deadHit = this.deadByPath.get(document.uri.fsPath)?.find(d => d.line === range.start.line);
+    if (deadHit && deadHit.removeStart !== -1
+      && document.lineAt(deadHit.line).text.includes('Subscribe')) {
+      const title = `Remove this starved @Subscribe handler for ${deadHit.name}`;
+      const action = new vscode.CodeAction(title, vscode.CodeActionKind.QuickFix);
+      const edit = new vscode.WorkspaceEdit();
+      edit.delete(document.uri, new vscode.Range(
+        document.positionAt(deadHit.removeStart), document.positionAt(deadHit.removeEnd)),
+        { needsConfirmation: true, label: title });
+      action.edit = edit;
+      return [action];
+    }
+
     const findings = this.byPath.get(document.uri.fsPath);
     if (!findings?.length) return [];
 
@@ -176,6 +237,7 @@ export class UnheardEventProvider implements vscode.CodeActionProvider, vscode.D
   private forget(path: string): void {
     this.collection.delete(vscode.Uri.file(path));
     this.byPath.delete(path);
+    this.deadByPath.delete(path);
   }
 
   dispose(): void {

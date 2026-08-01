@@ -87,6 +87,16 @@ function main(): void {
   }
   console.log(`elapsed        : ${elapsed} ms`);
 
+  console.log(`\ndirection 2   : ${scan.deadSubscriptions.length} starved subscription(s), ${scan.unboundedPosts.length} unbounded post(s)`);
+  if (scan.unboundedPosts.length > 0) {
+    console.log('  no subscription can be proven starved while a post stays unbounded:');
+    for (const u of scan.unboundedPosts.slice(0, 20)) console.log(`    ${u.path}:${u.line + 1}`);
+  } else {
+    for (const d of scan.deadSubscriptions) {
+      console.log(`  ${d.verdict.padEnd(16)} ${d.name.padEnd(38)} ${d.path}:${d.line + 1}`);
+    }
+  }
+
   if (!why) {
     for (const e of scan.events) {
       console.log(`  ${e.verdict.padEnd(20)} ${e.name.padEnd(34)} ${e.path}:${e.line + 1}`);

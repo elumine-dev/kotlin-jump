@@ -5,6 +5,7 @@ import {
   collectAnnotationTargets,
   depthZeroColon,
   findMatchingParen,
+  matchBrace,
   offsetToPos,
   sanitizeForUsageScan,
   splitParamSegments,
@@ -102,6 +103,31 @@ export interface UnheardEventScan {
    * must surface this: a silent zero would read as "all clear".
    */
   unreadable: UnreadableSubscription[];
+  /**
+   * Direction 2: subscriptions whose event type nothing ever posts. Empty
+   * whenever `unboundedPosts` is not, for the mirror of the direction-1 rule:
+   * here the POSTS are the proof, so a post whose delivered type cannot be
+   * bounded means no subscription can be proven starved.
+   */
+  deadSubscriptions: DeadSubscription[];
+  /** Post sites whose delivered type could not be bounded to corpus types. */
+  unboundedPosts: { path: string; line: number }[];
+}
+
+export type DeadSubscriptionVerdict = 'neverPosted' | 'testOnlyPoster';
+
+export interface DeadSubscription {
+  /** Simple name of the subscribed event type. */
+  name: string;
+  fqn: string;
+  verdict: DeadSubscriptionVerdict;
+  path: string;
+  /** 0-based position of the handler's name token. */
+  line: number;
+  character: number;
+  /** Whole handler extent (annotation included), or -1 when not delimitable. */
+  removeStart: number;
+  removeEnd: number;
 }
 
 /** One line per raw post site, saying what happened to it. For `--why`. */
@@ -115,6 +141,7 @@ export interface PostExplanation {
 }
 
 const IGNORE_MARKER = 'kotlin-jump:ignore unheard-event';
+const UNBOUNDED_IGNORE_MARKER = 'kotlin-jump:ignore unbounded-post';
 
 /**
  * Supertypes that end an ancestor walk. Anything else that leaves the corpus
@@ -167,6 +194,8 @@ interface TypeNode {
   simple: string;
   /** Supertypes as written at the declaration, unresolved. */
   superRefs: string[];
+  /** Declaring file, so a method lookup can be scoped to it. */
+  path: string;
 }
 
 interface FileFacts {
@@ -377,7 +406,7 @@ export function buildTypeTable(sources: readonly EventSource[]): TypeTable {
       if (sym.kind === 'enum' && sym.depth > 0 && stackKinds[sym.depth - 1] === 'enum') {
         superRefs.push(stack[sym.depth - 1]);
       }
-      const node: TypeNode = { fqn, simple: sym.name, superRefs };
+      const node: TypeNode = { fqn, simple: sym.name, superRefs, path: src.path };
       // Build variants declare the same fqn twice; union the supertypes, since
       // more ancestors can only make the type easier to hear (H5).
       const existing = table.byFqn.get(fqn);
@@ -524,6 +553,18 @@ function resolveRefLoose(table: TypeTable, ref: string): string[] {
   return [...(table.bySuffix.get(ref) ?? table.bySimple.get(ref) ?? [])];
 }
 
+interface SubscriptionSite {
+  path: string;
+  line: number;
+  character: number;
+  /** The type as written at the parameter. */
+  ref: string;
+  resolved: string[];
+  isTest: boolean;
+  removeStart: number;
+  removeEnd: number;
+}
+
 interface SubscriptionScan {
   /** fqns subscribed from production code. */
   main: Set<string>;
@@ -534,6 +575,8 @@ interface SubscriptionScan {
   anySubscription: boolean;
   /** A subscription on `Any`/`Object` hears everything (C6). */
   universal: boolean;
+  /** Every readable subscription, for direction 2. */
+  sites: SubscriptionSite[];
 }
 
 /**
@@ -552,6 +595,7 @@ export function collectSubscriptions(
 ): SubscriptionScan {
   const out: SubscriptionScan = {
     main: new Set(), test: new Set(), unreadable: [], anySubscription: false, universal: false,
+    sites: [],
   };
 
   for (const file of files) {
@@ -580,10 +624,50 @@ export function collectSubscriptions(
       const targets = resolveRef(table, file.path, ref);
       const bag = file.isTest ? out.test : out.main;
       for (const t of targets) bag.add(t);
+
+      const pos = posOf(anno.target);
+      out.sites.push({
+        path: file.path,
+        line: pos.line,
+        character: pos.character,
+        ref,
+        resolved: targets,
+        isTest: file.isTest,
+        ...handlerExtent(file.raw, file.clean, anno.target),
+      });
     }
   }
 
   return out;
+}
+
+/**
+ * The whole handler's extent, annotation line included, so removing a starved
+ * subscriber leaves no orphan `@Subscribe` behind. -1 when not delimitable:
+ * the verdict stands, the fix gives up, as everywhere in the family.
+ */
+function handlerExtent(
+  raw: string,
+  clean: string,
+  target: number,
+): { removeStart: number; removeEnd: number } {
+  // Back up to the start of the annotation's line.
+  let start = raw.lastIndexOf('\n', Math.max(target - 1, 0));
+  // The annotation may sit on its own line above the target.
+  const annoLine = raw.lastIndexOf('@Subscribe', target);
+  if (annoLine !== -1) {
+    const annoLineStart = raw.lastIndexOf('\n', annoLine);
+    if (annoLineStart !== -1 && annoLineStart < start) start = annoLineStart;
+    if (annoLineStart === -1) start = -1;
+  }
+  start = start + 1;
+
+  const bodyOpen = clean.indexOf('{', target);
+  if (bodyOpen === -1) return { removeStart: -1, removeEnd: -1 };
+  const bodyClose = matchBrace(clean, bodyOpen);
+  if (bodyClose === -1) return { removeStart: -1, removeEnd: -1 };
+  const lineEnd = raw.indexOf('\n', bodyClose);
+  return { removeStart: start, removeEnd: lineEnd === -1 ? raw.length : lineEnd + 1 };
 }
 
 /** The event type of a `@Subscribe` method, or null when unreadable (C3). */
@@ -817,8 +901,364 @@ function statementExtent(
   };
 }
 
+
+interface DeliveredTypes {
+  /** fqns a production post can deliver. */
+  main: Set<string>;
+  /** fqns only a test post delivers. */
+  test: Set<string>;
+  /** Sites whose delivered type could not be bounded to corpus types. */
+  unbounded: { path: string; line: number }[];
+}
+
+/**
+ * Direction 2 inverts the burden of proof. In direction 1 an unresolved post
+ * only loses a candidate; here the posts ARE the evidence, so every post on a
+ * learned bus must have its delivered type BOUNDED to corpus types, or nothing
+ * can be proven starved. Three resolution steps, in order:
+ *
+ *   1. the argument's own head (`post(FooEvent())`, `post(Pause)`)
+ *   2. a local built just above (`val event = FooEvent(); post(event)`),
+ *      including several constructors for one name: the union is a bound
+ *   3. a call's RETURN TYPE (`post(factory.createEvent(...))`): every
+ *      declaration of that method name in the corpus must have a resolvable
+ *      declared return type, and the union of those types is the bound
+ *
+ * Anything else is unbounded and poisons direction 2 globally, reported as
+ * such rather than silently.
+ */
+function collectDeliveredTypes(
+  files: readonly { path: string; clean: string; raw: string; isTest: boolean }[],
+  table: TypeTable,
+  busReceivers: ReadonlySet<string>,
+  cleanByPath: ReadonlyMap<string, string>,
+): DeliveredTypes {
+  const out: DeliveredTypes = { main: new Set(), test: new Set(), unbounded: [] };
+
+  for (const file of files) {
+    if (isBusImplementation(file.raw)) continue;                      // P6
+    const lineStarts = buildLineStarts(file.clean);
+
+    POST_CALL_RE.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = POST_CALL_RE.exec(file.clean)) !== null) {
+      const receiver = receiverBefore(file.clean, m.index).replace(/^this\./, '');
+      if (!busReceivers.has(receiver)) continue;                      // P1
+
+      const openIdx = m.index + m[0].length - 1;
+      const closeIdx = findMatchingParen(file.clean, openIdx);
+      const pos = offsetToPos(lineStarts, m.index);
+      if (closeIdx === -1) {
+        out.unbounded.push({ path: file.path, line: pos.line });
+        continue;
+      }
+      const segments = splitParamSegments(file.clean, openIdx + 1, closeIdx, file.raw);
+      if (segments.length === 0) {
+        out.unbounded.push({ path: file.path, line: pos.line });
+        continue;
+      }
+
+      const refs = deliveredRefsOf(file, segments[0], m.index, table, cleanByPath);
+      if (refs === null) {
+        // `// kotlin-jump:ignore unbounded-post` on or above the line: the
+        // user asserts this post's delivery set does not matter, and the
+        // claim becomes theirs. A test-side unbounded post never poisons the
+        // production claim either way.
+        const lineStart = lineStarts[pos.line];
+        const prev = pos.line > 0 ? file.raw.slice(lineStarts[pos.line - 1], lineStart) : '';
+        const own = file.raw.slice(lineStart, m.index);
+        if (prev.includes(UNBOUNDED_IGNORE_MARKER) || own.includes(UNBOUNDED_IGNORE_MARKER)) continue;
+        if (!file.isTest) out.unbounded.push({ path: file.path, line: pos.line });
+        continue;
+      }
+      const bag = file.isTest ? out.test : out.main;
+      for (const ref of refs) {
+        const targets = resolveRef(table, file.path, ref);
+        if (targets.length === 0) {
+          // A bound that names a type outside the corpus cannot be walked, so
+          // it is no bound at all.
+          out.unbounded.push({ path: file.path, line: pos.line });
+        } else {
+          // Delivery is generous on ambiguity: every candidate satisfies.
+          for (const t of targets) bag.add(t);
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/** The refs a post argument can deliver, or null when unbounded. */
+function deliveredRefsOf(
+  file: { path: string; clean: string; raw: string },
+  seg: { start: number; end: number },
+  postIdx: number,
+  table: TypeTable,
+  cleanByPath: ReadonlyMap<string, string>,
+): string[] | null {
+  const head = postedRef(file.raw, seg);
+  if (head) return [head];
+
+  const argText = file.raw.slice(seg.start, seg.end).trim();
+
+  // `post(it)` inside `expr?.let { ... }`: the delivered type is the type of
+  // the receiver expression before the `let`.
+  if (argText === 'it') {
+    const before = file.clean.slice(Math.max(0, postIdx - 400), postIdx);
+    const letCall = /([A-Za-z_][\w.()]*(?:\([^()]*\))?)\s*\??\.let\s*\{[^{}]*$/.exec(before);
+    if (letCall) return resolveCallChain(letCall[1], file, table, cleanByPath);
+    return null;
+  }
+
+  // A plain variable: constructor assignments just above form the bound, and
+  // an assignment from a call chain resolves like a direct call would.
+  const varName = /^([a-z_]\w*)$/.exec(argText);
+  if (varName) {
+    const assigned = localAssignedTypes(file, varName[1], postIdx, table, cleanByPath);
+    if (assigned !== null) return assigned;
+    // Smart cast: `when (x) { is TriggerPayload -> ... post(x) }` bounds `x`
+    // to the branch's type. The nearest `is T ->` between the matching
+    // `when (x)` and the post is the branch the post sits in.
+    const before = file.clean.slice(Math.max(0, postIdx - LOCAL_ASSIGNMENT_WINDOW), postIdx);
+    if (new RegExp(`when\\s*\\(\\s*(?:val\\s+)?${varName[1]}\\b`).test(before)) {
+      const casts = [...before.matchAll(/\bis\s+([A-Z][\w.]*)\s*->/g)];
+      if (casts.length > 0) return [bareName(casts[casts.length - 1][1])];
+    }
+    return null;
+  }
+
+  return resolveCallChain(argText, file, table, cleanByPath);
+}
+
+/**
+ * The refs a `when` expression's arms deliver, or null when any arm is not a
+ * bare boundable reference or constructor. `else -> return` delivers nothing
+ * and is fine; `else -> compute()` is a hole in the bound.
+ */
+function whenArmRefs(whenText: string): string[] | null {
+  const out: string[] = [];
+  const armRe = /->\s*([^\n;{]+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = armRe.exec(whenText)) !== null) {
+    const value = m[1].trim();
+    if (value === 'return' || value.startsWith('return ') || value === 'continue' || value === 'break') continue;
+    const ref = /^(?:new\s+)?([A-Z][\w.]*)\s*(?:\(|$)/.exec(value);
+    if (!ref) return null;
+    if (!out.includes(ref[1])) out.push(ref[1]);
+  }
+  return out;
+}
+
+/**
+ * The delivered types of a call expression, or null when unbounded.
+ *
+ * Three shapes, all resolved through the DECLARED RETURN TYPE of the final
+ * method, looked up in the first receiver's own type:
+ *
+ *   factory.createEvent(...)     receiver is a variable: its declared type
+ *                                 names the file holding `createEvent`
+ *   Type.newThing(...)           static factory: the receiver IS the type
+ *   builder.withX(...).build()   a chain: builders return their product from
+ *                                 their own class, so the LAST method is
+ *                                 looked up in the FIRST receiver's type
+ *
+ * A corpus-wide lookup by method name was measured first and collapsed on
+ * common names (`build`, `create`): 63 of 63 posts unbounded. Scoping to the
+ * receiver's type is what makes direction 2 provable at all.
+ */
+function resolveCallChain(
+  argText: string,
+  file: { path: string; clean: string },
+  table: TypeTable,
+  cleanByPath: ReadonlyMap<string, string>,
+): string[] | null {
+  if (!argText.endsWith(')')) return null;
+
+  // Walk back over the final balanced argument list to find the last method.
+  let depth = 0;
+  let i = argText.length - 1;
+  for (; i >= 0; i--) {
+    const ch = argText[i];
+    if (ch === ')') depth++;
+    else if (ch === '(') { depth--; if (depth === 0) break; }
+  }
+  if (i <= 0) return null;
+  const beforeParen = argText.slice(0, i).trimEnd();
+  const lastMethod = /([A-Za-z_]\w*)$/.exec(beforeParen)?.[1];
+  if (!lastMethod || !/^[a-z_]/.test(lastMethod)) return null;
+
+  const firstSegment = /^(?:new\s+)?([A-Za-z_]\w*)/.exec(argText)?.[1];
+  if (!firstSegment) return null;
+
+  let scopePaths: string[];
+  if (firstSegment === lastMethod) {
+    // A function-typed parameter (`buildEvent: () -> T`) invoked in
+    // place: the declared return type IS the bound. `() -> Any` bounds
+    // nothing, which is the honest answer for it.
+    const lambdaTyped = new RegExp(
+      `\\b${lastMethod}\\s*:\\s*\\([^)]*\\)\\s*->\\s*([A-Z][\\w.]*)`).exec(file.clean);
+    if (lambdaTyped) {
+      const t = bareName(lambdaTyped[1]);
+      return t === 'Any' || t === 'Object' ? null : [t];
+    }
+    // Bare call `createIntent(...)`: same file.
+    scopePaths = [file.path];
+  } else if (/^[A-Z]/.test(firstSegment)) {
+    // Static factory: the receiver is the type itself.
+    const targets = resolveRef(table, file.path, firstSegment);
+    scopePaths = targets.map(t => table.byFqn.get(t)?.path)
+      .filter((x): x is string => x !== undefined);
+  } else {
+    const receiverType = declaredTypeOf(file.clean, firstSegment);
+    if (!receiverType) return null;
+    const targets = resolveRef(table, file.path, receiverType);
+    scopePaths = targets.map(t => table.byFqn.get(t)?.path)
+      .filter((x): x is string => x !== undefined);
+  }
+  if (scopePaths.length === 0) return null;
+
+  const returns: string[] = [];
+  for (const path of scopePaths) {
+    const clean = cleanByPath.get(path);
+    if (!clean) return null;
+    const rs = methodReturnTypes(clean, lastMethod, path.endsWith('.java'));
+    if (rs === null || rs.length === 0) return null;
+    for (const r of rs) if (!returns.includes(r)) returns.push(r);
+  }
+  return returns;
+}
+
+/**
+ * The declared type of `name` in this file: a Java field or parameter
+ * (`PageOpenedEventFactory pageOpenedEventFactory`), a Kotlin `val x: Type`,
+ * or a Kotlin `val x = Type(...)`.
+ */
+function declaredTypeOf(clean: string, name: string): string | undefined {
+  const kotlinTyped = new RegExp(`\\bva[lr]\\s+${name}\\s*:\\s*([A-Z][\\w.]*)`);
+  const kotlinCtor = new RegExp(`\\bva[lr]\\s+${name}\\s*=\\s*([A-Z][\\w.]*)\\s*\\(`);
+  const kotlinParam = new RegExp(`\\b${name}\\s*:\\s*([A-Z][\\w.]*)`);
+  const javaDecl = new RegExp(`\\b([A-Z][\\w.]*)\\s+${name}\\b`);
+  for (const re of [kotlinTyped, kotlinCtor, kotlinParam, javaDecl]) {
+    const m = re.exec(clean);
+    if (m) return bareName(m[1]);
+  }
+  return undefined;
+}
+
+/**
+ * Declared return types of `method` within one file, or null when a
+ * declaration exists whose return cannot be read. Several overloads union.
+ */
+function methodReturnTypes(clean: string, method: string, isJava: boolean): string[] | null {
+  const out: string[] = [];
+  if (isJava) {
+    const re = new RegExp(`([A-Z][\\w.<>\\[\\]]*)\\s+${method}\\s*\\(`, 'g');
+    let m: RegExpExecArray | null;
+    let found = false;
+    while ((m = re.exec(clean)) !== null) {
+      found = true;
+      const t = bareName(m[1]);
+      if (!out.includes(t)) out.push(t);
+    }
+    return found ? out : null;
+  }
+  const re = new RegExp(`\\bfun\\s+(?:<[^>]*>\\s*)?${method}\\s*\\(`, 'g');
+  let m: RegExpExecArray | null;
+  let found = false;
+  while ((m = re.exec(clean)) !== null) {
+    found = true;
+    const openIdx = m.index + m[0].length - 1;
+    const closeIdx = findMatchingParen(clean, openIdx);
+    if (closeIdx === -1) return null;
+    const after = clean.slice(closeIdx + 1, closeIdx + 160);
+    const typed = /^\s*:\s*([A-Z][\w.]*)/.exec(after);
+    if (typed) { const t = bareName(typed[1]); if (!out.includes(t)) out.push(t); continue; }
+    const exprCtor = /^\s*=\s*([A-Z][\w.]*)\s*\(/.exec(after);
+    if (exprCtor) { const t = bareName(exprCtor[1]); if (!out.includes(t)) out.push(t); continue; }
+    return null;   // block body or untyped expression: the return is unwritten
+  }
+  return found ? out : null;
+}
+
+/**
+ * The types a local variable can hold at the post, or null when unbounded.
+ *
+ * Several constructor assignments union (a `when` writing two constructors
+ * delivers one of the two). An assignment from a call chain resolves through
+ * `resolveCallChain`; any assignment neither shape can bound voids the whole
+ * bound.
+ */
+function localAssignedTypes(
+  file: { path: string; clean: string; raw: string },
+  varName: string,
+  postIdx: number,
+  table: TypeTable,
+  cleanByPath: ReadonlyMap<string, string>,
+): string[] | null {
+  const from = Math.max(0, postIdx - LOCAL_ASSIGNMENT_WINDOW);
+  const window = file.clean.slice(from, postIdx);
+  const assignRe = new RegExp(`\\b${varName}\\s*=\\s*`, 'g');
+
+  const types: string[] = [];
+  let m: RegExpExecArray | null;
+  let assignments = 0;
+  while ((m = assignRe.exec(window)) !== null) {
+    assignments++;
+    const rhsStart = from + m.index + m[0].length;
+    // The RHS runs to the end of the statement: a `;`, or a newline that does
+    // not continue a chain. A `when` expression runs to its matched brace.
+    let end = rhsStart;
+    if (/^when\b/.test(file.clean.slice(rhsStart, rhsStart + 6))) {
+      const open = file.clean.indexOf('{', rhsStart);
+      const close = open === -1 ? -1 : matchBrace(file.clean, open);
+      if (close === -1) return null;
+      end = close + 1;
+    } else {
+      let depth = 0;
+      while (end < file.clean.length) {
+        const ch = file.clean[end];
+        if (ch === '(') depth++;
+        else if (ch === ')') depth--;
+        else if (ch === ';' && depth === 0) break;
+        else if (ch === '\n' && depth === 0) {
+          const rest = file.clean.slice(end + 1, end + 40).trimStart();
+          if (!rest.startsWith('.')) break;
+        }
+        end++;
+      }
+    }
+    const rhs = file.raw.slice(rhsStart, end).trim();
+
+    const ctor = /^(?:new\s+)?([A-Z][\w.]*)\s*\($/.exec(rhs.replace(/\(.*$/s, '('));
+    if (ctor) {
+      if (!types.includes(ctor[1])) types.push(ctor[1]);
+      continue;
+    }
+    // `val event = Parent.ObjectVariant`, `= Enum.ENTRY`, `= Type.EMPTY`: a
+    // bare qualified reference. resolveRef already reads an object, an enum
+    // entry and a SCREAMING constant back to its type.
+    const bareRef = /^([A-Z][\w.]*)$/.exec(rhs);
+    if (bareRef) {
+      if (!types.includes(bareRef[1])) types.push(bareRef[1]);
+      continue;
+    }
+    // `val event = when (...) { A -> X.P; B -> Y.Q }`: every arrow value must
+    // itself be boundable, and the union bounds the variable.
+    if (/^when\b/.test(rhs)) {
+      const arms = whenArmRefs(rhs);
+      if (arms === null) return null;
+      for (const t of arms) if (!types.includes(t)) types.push(t);
+      continue;
+    }
+    const chained = resolveCallChain(rhs, file, table, cleanByPath);
+    if (chained === null) return null;
+    for (const t of chained) if (!types.includes(t)) types.push(t);
+  }
+  return assignments > 0 ? types : null;
+}
+
 export function findUnheardEvents(input: UnheardEventScanInput): UnheardEventScan {
-  const empty: UnheardEventScan = { events: [], unreadable: [] };
+  const empty: UnheardEventScan = { events: [], unreadable: [], deadSubscriptions: [], unboundedPosts: [] };
   if (input.truncated) return empty;                                  // C1
 
   const files = input.sources
@@ -841,7 +1281,9 @@ export function findUnheardEvents(input: UnheardEventScanInput): UnheardEventSca
 
   // R-COMPLÈTE: a hole in the subscription set is a truncated corpus for this
   // question. Report the hole, prove nothing.
-  if (subs.unreadable.length > 0) return { events: [], unreadable: subs.unreadable };
+  if (subs.unreadable.length > 0) {
+    return { events: [], unreadable: subs.unreadable, deadSubscriptions: [], unboundedPosts: [] };
+  }
   if (!subs.anySubscription) return empty;                            // C2
   if (subs.universal) return empty;                                   // C6
 
@@ -895,7 +1337,105 @@ export function findUnheardEvents(input: UnheardEventScanInput): UnheardEventSca
   }
 
   events.sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line);
-  return { events, unreadable: [] };
+
+  // ── Direction 2: subscriptions nothing ever posts ──────────────────────────
+  // The lookup scope may live OUTSIDE the prefiltered file set (a factory
+  // file mentions no bus), so every source is sanitised lazily on demand.
+  const cleanCache = new Map(files.map(f => [f.path, f.clean]));
+  const cleanByPath = {
+    get(path: string): string | undefined {
+      if (!cleanCache.has(path)) {
+        const src = input.sources.find(s => s.path === path);
+        if (!src) return undefined;
+        cleanCache.set(path, sanitizeForUsageScan(src.text));
+      }
+      return cleanCache.get(path);
+    },
+  } as ReadonlyMap<string, string>;
+  const delivered = collectDeliveredTypes(files, table, busReceivers, cleanByPath);
+
+  const deadSubscriptions: DeadSubscription[] = [];
+  if (delivered.unbounded.length === 0) {
+    // A post of X reaches subscribers of X and of every ancestor of X: the
+    // set of SATISFIED subscription types is the ancestor closure of what is
+    // delivered. Null closures (chain leaving the corpus) satisfy everything,
+    // since the unknown segment could be any corpus name.
+    // The runtime type of a delivery bounded by a DECLARED type can be any
+    // subtype of it, so satisfaction closes over the subtree first, then over
+    // ancestors. Uniformly applied: for an exact constructor the subtree pass
+    // only ever ADDS satisfaction, which loses findings, never invents one.
+    const childrenOf = new Map<string, string[]>();
+    for (const node of table.byFqn.values()) {
+      for (const ref of node.superRefs) {
+        for (const parent of resolveRef(table, node.path, ref)) {
+          const list = childrenOf.get(parent) ?? [];
+          list.push(node.fqn);
+          childrenOf.set(parent, list);
+        }
+      }
+    }
+    const subtreeOf = (fqn: string): string[] => {
+      const seen = new Set<string>([fqn]);
+      const stack = [fqn];
+      while (stack.length > 0) {
+        const cur = stack.pop()!;
+        for (const c of childrenOf.get(cur) ?? []) {
+          if (!seen.has(c)) { seen.add(c); stack.push(c); }
+        }
+      }
+      return [...seen];
+    };
+    const satisfied = (bag: ReadonlySet<string>): Set<string> | null => {
+      const out = new Set<string>();
+      for (const fqn of bag) {
+        for (const member of subtreeOf(fqn)) {
+          const closure = ancestorClosure(table, member);
+          if (closure === null) return null;
+          for (const a of closure) out.add(a);
+        }
+      }
+      return out;
+    };
+    const mainSat = satisfied(delivered.main);
+    const testSat = satisfied(delivered.test);
+
+    if (mainSat !== null && testSat !== null) {
+      const assumed = new Set<string>();
+      for (const name of input.assumeSubscribed ?? []) assumed.add(name);
+      for (const site of subs.sites) {
+        if (site.isTest) continue;                                    // test infra
+        // A DeadEvent subscription is the bus's own catch-all: the bus itself
+        // posts it, from a file P6 excludes.
+        if (site.ref === 'DeadEvent') continue;
+        if (ignored.has(site.ref)) continue;
+        if (exemptFiles.has(site.path)) continue;
+        // Ambiguity is generous in BOTH directions: one satisfied candidate
+        // keeps the subscription alive.
+        if (site.resolved.length === 0) continue;
+        if (site.resolved.some(f => mainSat.has(f))) continue;
+        const verdict: DeadSubscriptionVerdict =
+          site.resolved.some(f => testSat.has(f)) ? 'testOnlyPoster' : 'neverPosted';
+        deadSubscriptions.push({
+          name: site.ref.split('.').pop() ?? site.ref,
+          fqn: site.resolved[0],
+          verdict,
+          path: site.path,
+          line: site.line,
+          character: site.character,
+          removeStart: site.removeStart,
+          removeEnd: site.removeEnd,
+        });
+      }
+      deadSubscriptions.sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line);
+    }
+  }
+
+  return {
+    events,
+    unreadable: [],
+    deadSubscriptions,
+    unboundedPosts: delivered.unbounded,
+  };
 }
 
 /** One line per raw post site, for the dry-run harness. */

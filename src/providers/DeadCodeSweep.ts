@@ -46,11 +46,31 @@ function lineStartsOf(text: string): number[] {
   return starts;
 }
 
-/** Every finding of every Kotlin detector for one file, in document order. */
-export function sweepFile(text: string): SweepFinding[] {
+/**
+ * Every finding of every detector for one file, in document order.
+ *
+ * For Java only the declarations detector runs: the other four carry Kotlin
+ * grammar assumptions (import forms, scope functions, lambda parameters) and
+ * running them on Java would trade correctness for coverage.
+ */
+export function sweepFile(text: string, lang: 'kotlin' | 'java' = 'kotlin'): SweepFinding[] {
   const starts = lineStartsOf(text);
   const lineEnd = (line: number) => (line + 1 < starts.length ? starts[line + 1] : text.length);
   const out: SweepFinding[] = [];
+
+  if (lang === 'java') {
+    for (const d of findUnusedDeclarations(text, 'java')) {
+      out.push({
+        detector: 'declarations',
+        line: d.line,
+        character: d.character,
+        name: d.name,
+        message: `Declaration '${d.name}' is never used`,
+        edits: d.removeStart === -1 ? [] : [{ start: d.removeStart, end: d.removeEnd, text: '' }],
+      });
+    }
+    return out.sort((a, b) => a.line - b.line || a.character - b.character);
+  }
 
   for (const imp of findUnusedImports(text)) {
     const indent = imp.statement.length - imp.statement.trimStart().length;

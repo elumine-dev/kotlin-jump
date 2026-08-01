@@ -22,6 +22,9 @@ import {
 import { UnheardEventProvider, findUnheardEvents } from '../providers/UnheardEventProvider';
 import { UnusedEnumEntryProvider, findUnusedEnumEntries } from '../providers/UnusedEnumEntryProvider';
 import { UnusedRemoteConfigKeyProvider, findUnusedRemoteConfigKeys } from '../providers/UnusedRemoteConfigKeyProvider';
+import { UnusedGradleDependencyProvider, findUnusedGradleDependencies } from '../providers/UnusedGradleDependencyProvider';
+import { UnusedMemberProvider, findUnusedMembers } from '../providers/UnusedMemberProvider';
+import { DeadIslandProvider, findDeadIslands } from '../providers/DeadIslandProvider';
 
 /**
  * One command for the whole picture: every dead-code detector the extension
@@ -52,6 +55,9 @@ export async function findEverythingUnusedCommand(
   eventProvider: UnheardEventProvider,
   enumEntryProvider: UnusedEnumEntryProvider,
   remoteConfigProvider: UnusedRemoteConfigKeyProvider,
+  gradleProvider: UnusedGradleDependencyProvider,
+  memberProvider: UnusedMemberProvider,
+  islandProvider: DeadIslandProvider,
 ): Promise<void> {
   if (!vscode.workspace.workspaceFolders?.length) {
     void vscode.window.showWarningMessage('Open a folder before scanning.');
@@ -236,6 +242,88 @@ export async function findEverythingUnusedCommand(
         }
       } else {
         skipped.push('Remote Config keys');
+      }
+
+      // ── 8. Catalog aliases nothing references ────────────────────────────
+      progress.report({ message: 'Gradle dependencies…' });
+      if (UnusedGradleDependencyProvider.isEnabled()) {
+        if (data.sourcesTruncated) {
+          skipped.push('Gradle dependencies (workspace too large to prove absence)');
+        } else {
+          const aliases = findUnusedGradleDependencies({
+            sources: data.sources,
+            ignoreNames: cfg.get<string[]>('unusedGradleDependenciesIgnoreNames', []),
+          });
+          gradleProvider.setFindings(aliases);
+          const versions = aliases.filter(a => a.orphanedVersion).length;
+          sections.push({
+            label: 'catalog aliases',
+            count: aliases.length,
+            detail: versions > 0 ? `${versions} version entries freed` : undefined,
+          });
+        }
+      } else {
+        skipped.push('Gradle dependencies');
+      }
+
+      // ── 9. Class members nothing references ──────────────────────────────
+      progress.report({ message: 'class members…' });
+      if (UnusedMemberProvider.isEnabled()) {
+        if (data.sourcesTruncated) {
+          skipped.push('class members (workspace too large to prove absence)');
+        } else {
+          // KJ-032 already ran above; reuse its findings for M12 when it did.
+          const dead = UnusedSymbolProvider.isEnabled() && !data.sourcesTruncated
+            ? findUnusedSymbols({
+              sources: data.sources,
+              testSourceSets: cfg.get<string[]>('testSourceSets', []),
+            }).map(f => ({ path: f.path, removeStart: f.removeStart, removeEnd: f.removeEnd }))
+            : [];
+          const members = findUnusedMembers({
+            sources: data.sources,
+            testSourceSets: cfg.get<string[]>('testSourceSets', []),
+            ignoreNames: cfg.get<string[]>('unusedMembersIgnoreNames', []),
+            ignorePaths: cfg.get<string[]>('unusedSymbolsIgnorePaths', ['**/buildSrc/**', '**/build-logic/**']),
+            includeTestOnly: cfg.get<boolean>('unusedSymbolsIncludeTestOnly', true),
+            includeSelfOnly: cfg.get<boolean>('unusedMembersSelfOnly', true),
+            deadDeclarations: dead,
+          });
+          memberProvider.setFindings(members);
+          const unref = members.filter(m => m.verdict === 'unreferenced').length;
+          const selfOnly = members.filter(m => m.verdict === 'selfOnly').length;
+          sections.push({
+            label: 'class members',
+            count: unref,
+            detail: selfOnly > 0 ? `${selfOnly} could be private` : undefined,
+          });
+        }
+      } else {
+        skipped.push('class members');
+      }
+
+      // ── 10. dead islands (KJ-046) ────────────────────────────────────────
+      progress.report({ message: 'dead islands…' });
+      if (DeadIslandProvider.isEnabled()) {
+        if (data.sourcesTruncated) {
+          skipped.push('dead islands (workspace too large to prove absence)');
+        } else {
+          const islands = findDeadIslands({
+            sources: data.sources,
+            testSourceSets: cfg.get<string[]>('testSourceSets', []),
+            ignoreNames: cfg.get<string[]>('deadIslandsIgnoreNames', []),
+            includeTestOnly: cfg.get<boolean>('unusedSymbolsIncludeTestOnly', true),
+            maxIslandSize: cfg.get<number>('deadIslandsMaxSize', 8),
+          });
+          islandProvider.setFindings(islands, new Map(data.sources.map(s => [s.path, s.text])));
+          const islandDecls = islands.reduce((sum, i) => sum + i.members.length, 0);
+          sections.push({
+            label: 'dead islands',
+            count: islands.length,
+            detail: islands.length > 0 ? `${islandDecls} declarations holding each other` : undefined,
+          });
+        }
+      } else {
+        skipped.push('dead islands');
       }
 
       // ── the one summary ──────────────────────────────────────────────────

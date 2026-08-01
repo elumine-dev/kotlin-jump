@@ -65,6 +65,18 @@ import { UnusedSymbolProvider } from './providers/UnusedSymbolProvider';
 import { UnheardEventProvider } from './providers/UnheardEventProvider';
 import { UnusedEnumEntryProvider } from './providers/UnusedEnumEntryProvider';
 import { UnusedRemoteConfigKeyProvider } from './providers/UnusedRemoteConfigKeyProvider';
+import { UnusedGradleDependencyProvider } from './providers/UnusedGradleDependencyProvider';
+import { UnusedMemberProvider } from './providers/UnusedMemberProvider';
+import { findUnusedMembersCommand } from './commands/FindUnusedMembers';
+import { DeadIslandProvider } from './providers/DeadIslandProvider';
+import { findDeadIslandsCommand } from './commands/FindDeadIslands';
+import { UnusedDtoFieldProvider } from './providers/UnusedDtoFieldProvider';
+import { WriteOnlyKeyProvider } from './providers/WriteOnlyKeyProvider';
+import {
+  findUnusedDtoFieldsCommand,
+  findWriteOnlyKeysCommand,
+} from './commands/FindWriteOnlyKeys';
+import { findUnusedGradleDependenciesCommand } from './commands/FindUnusedGradleDependencies';
 import {
   findUnusedRemoteConfigKeysCommand,
   removeAllUnusedRemoteConfigKeysCommand,
@@ -799,7 +811,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     new UnusedDeclarationProvider(),
     vscode.languages.registerCodeActionsProvider(
-      { language: 'kotlin' },
+      [{ language: 'kotlin' }, { language: 'java' }],
       new UnusedDeclarationCodeActionProvider(),
       { providedCodeActionKinds: UnusedDeclarationCodeActionProvider.providedCodeActionKinds },
     ),
@@ -831,6 +843,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const unheardEventProviderWeb = new UnheardEventProvider();
   const unusedEnumEntryProviderWeb = new UnusedEnumEntryProvider();
   const remoteConfigKeyProviderWeb = new UnusedRemoteConfigKeyProvider();
+  const gradleDependencyProviderWeb = new UnusedGradleDependencyProvider();
+  const unusedMemberProviderWeb = new UnusedMemberProvider();
+  const deadIslandProviderWeb = new DeadIslandProvider();
+  const unusedDtoFieldProviderWeb = new UnusedDtoFieldProvider();
+  const writeOnlyKeyProviderWeb = new WriteOnlyKeyProvider();
   context.subscriptions.push(
     unusedResourceProviderWeb,
     vscode.languages.registerCodeActionsProvider(
@@ -936,6 +953,71 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('kotlin-jump.clearUnusedRemoteConfigKeys', () =>
       remoteConfigKeyProviderWeb.clear(),
     ),
+    gradleDependencyProviderWeb,
+    vscode.languages.registerCodeActionsProvider(
+      { scheme: 'file', pattern: '**/*.versions.toml' },
+      gradleDependencyProviderWeb,
+      { providedCodeActionKinds: UnusedGradleDependencyProvider.providedCodeActionKinds },
+    ),
+    vscode.commands.registerCommand('kotlin-jump.findUnusedGradleDependencies', () =>
+      findUnusedGradleDependenciesCommand(resourceCorpusWeb, gradleDependencyProviderWeb),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.clearUnusedGradleDependencies', () =>
+      gradleDependencyProviderWeb.clear(),
+    ),
+    unusedMemberProviderWeb,
+    vscode.languages.registerCodeActionsProvider(
+      { scheme: 'file', language: 'kotlin' },
+      unusedMemberProviderWeb,
+      { providedCodeActionKinds: UnusedMemberProvider.providedCodeActionKinds },
+    ),
+    vscode.languages.registerCodeActionsProvider(
+      { scheme: 'file', language: 'java' },
+      unusedMemberProviderWeb,
+      { providedCodeActionKinds: UnusedMemberProvider.providedCodeActionKinds },
+    ),
+    vscode.commands.registerCommand('kotlin-jump.findUnusedMembers', () =>
+      findUnusedMembersCommand(resourceCorpusWeb, unusedMemberProviderWeb),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.clearUnusedMembers', () =>
+      unusedMemberProviderWeb.clear(),
+    ),
+    deadIslandProviderWeb,
+    vscode.languages.registerCodeActionsProvider(
+      { scheme: 'file', language: 'kotlin' },
+      deadIslandProviderWeb,
+      { providedCodeActionKinds: DeadIslandProvider.providedCodeActionKinds },
+    ),
+    vscode.languages.registerCodeActionsProvider(
+      { scheme: 'file', language: 'java' },
+      deadIslandProviderWeb,
+      { providedCodeActionKinds: DeadIslandProvider.providedCodeActionKinds },
+    ),
+    vscode.commands.registerCommand('kotlin-jump.findDeadIslands', () =>
+      findDeadIslandsCommand(resourceCorpusWeb, deadIslandProviderWeb),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.clearDeadIslands', () =>
+      deadIslandProviderWeb.clear(),
+    ),
+    unusedDtoFieldProviderWeb,
+    vscode.languages.registerCodeActionsProvider(
+      { scheme: 'file', language: 'kotlin' },
+      unusedDtoFieldProviderWeb,
+      { providedCodeActionKinds: UnusedDtoFieldProvider.providedCodeActionKinds },
+    ),
+    vscode.commands.registerCommand('kotlin-jump.findUnusedDtoFields', () =>
+      findUnusedDtoFieldsCommand(resourceCorpusWeb, unusedDtoFieldProviderWeb),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.clearUnusedDtoFields', () =>
+      unusedDtoFieldProviderWeb.clear(),
+    ),
+    writeOnlyKeyProviderWeb,
+    vscode.commands.registerCommand('kotlin-jump.findWriteOnlyKeys', () =>
+      findWriteOnlyKeysCommand(resourceCorpusWeb, writeOnlyKeyProviderWeb),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.clearWriteOnlyKeys', () =>
+      writeOnlyKeyProviderWeb.clear(),
+    ),
     vscode.commands.registerCommand('kotlin-jump.findEverythingUnused', () =>
       findEverythingUnusedCommand(
         resourceCorpusWeb,
@@ -946,6 +1028,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         unheardEventProviderWeb,
         unusedEnumEntryProviderWeb,
         remoteConfigKeyProviderWeb,
+        gradleDependencyProviderWeb,
+        unusedMemberProviderWeb,
+        deadIslandProviderWeb,
       ),
     ),
   );

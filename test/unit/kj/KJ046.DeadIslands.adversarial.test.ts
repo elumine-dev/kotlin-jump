@@ -473,6 +473,16 @@ describe('l’amplification refusée et le contrat', () => {
     expect(islands([witnessA, witnessB], { truncated: true })).toEqual([]);
   });
 
+  it('un objet anonyme n’entraîne pas son supertype dans une île', () => {
+    // Trouvé sur le dépôt kotlin-lsp : le symbole synthétique `$anon$N` du
+    // parseur passait pour une déclaration morte, puis emportait avec lui la
+    // classe qu'il implémente, vivante, dans une île à deux membres
+    // (« kept alive only by: $anon$24 — themselves dead »).
+    const base = f(`${MAIN}/Hover.kt`, 'package com.x\n\nopen class HoverProvider {\n    open fun go() = 1\n}\n');
+    const anon = f(`${MAIN}/Config.kt`, 'package com.x\n\nval config = listOf(\n    object : HoverProvider() { },\n)\n');
+    expect(islands([base, anon, witnessA, witnessB])).toEqual([WITNESS]);
+  });
+
   it('chaque candidat brut a un outcome : le --why rend compte de tout', () => {
     const island = f(`${MAIN}/A.kt`, 'package com.x\n\nfun ringA() {\n    ringB()\n}\n\nfun ringB() {\n    ringA()\n}\n');
     const live = f(`${MAIN}/Live.kt`, 'package com.x\n\nfun shown() {\n    println("x")\n}\n');

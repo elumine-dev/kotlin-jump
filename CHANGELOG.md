@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.1
+
+Two defects found by auditing the dead-code family against its own promise. One turned detectors off without saying so, the other invented a declaration that does not exist and then took a live class down with it. Both were reproduced on a real repository before being fixed, and the fix was measured against that repository afterwards.
+
+### Fixes
+- Reads `@file:Suppress` in the file header only. It used to be matched anywhere in the raw text, so quoting the annotation in a KDoc, a string or a commented-out TODO silenced every dead-code check for that file, with nothing logged and nothing reported. Nested block comments, which Kotlin allows, count as comments now, and `packageName` no longer passes for the start of the body.
+- Honours the two spellings that were being ignored: `@file:[JvmName("X") Suppress("unused")]` and `@file:kotlin.Suppress("unused")`. A file its author had marked kept being reported.
+- Stops reporting anonymous objects as dead declarations. The parser names `object : Base { }` `$anon$<line>` so it can count anonymous implementors; at file scope that synthetic name reached the unreferenced-symbol scan, where no word in any file can match it, so it passed every guard. On the kotlin-lsp repository it produced one phantom finding, and in Find Dead Islands it dragged `LSJavaHoverProvider`, a live class, into a dead island with it.
+
+### Notes
+- The five per-file detectors (unused imports, parameters, private declarations, locals, write-only variables) now live in modules that do not import `vscode`, so they can run outside the editor. The behaviour is unchanged: on 659 files, all 279 findings and the edits of every quick fix are byte for byte what they were.
+- Adds `scripts/scan-dead-code-sweep.ts`, which runs those five over a whole project from the command line. They had never been measured on a corpus, and they now can be.
+
 ## 1.42.0
 
 Kotlin Jump 1.42.0 closes the two biggest gaps left in dead-code detection: class members nothing references, and code kept alive only by other dead code. Two functions calling each other with no outside caller both look referenced, so both survive every per-symbol scan. Along the way this is the first release that reads the build rather than the code, and the version catalog parser that reading needed gets repaired.

@@ -19,6 +19,12 @@ publish.sh
 .claude/**
 ANDROID-SETUP.md
 CLAUDE.md
+# Any other root-level note stays local. Listing them one by one meant the next
+# working note shipped to the Marketplace: "next thing to do.md" made it into
+# the 1.42.1 VSIX before this rule existed.
+*.md
+!README.md
+!CHANGELOG.md
 **/*.map
 **/*.wasm
 *.vsix

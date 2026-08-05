@@ -242,6 +242,41 @@ describe.skipIf(!mod)('F11 à F17 — opt-outs et périmètre', () => {
     expect(find([kt(`${MAIN}/S.kt`, '@file:Suppress("unused")\npackage com.x\n\nclass Ghost\n')])).toEqual([]);
   });
 
+  it('F12 : @file:Suppress cité dans un KDoc n’éteint rien', () => {
+    // La regex tournait sur le texte brut : citer l'annotation suffisait à
+    // taire le détecteur pour tout le fichier, sans que rien ne le dise.
+    expect(names(find([kt(`${MAIN}/S.kt`,
+      '/** @file:Suppress("unused") */\npackage com.x\n\nclass Ghost\n')]))).toEqual(['Ghost']);
+  });
+
+  it('F12 : la forme entre crochets éteint le fichier comme la forme simple', () => {
+    expect(find([kt(`${MAIN}/S.kt`,
+      '@file:[JvmName("S") Suppress("unused")]\npackage com.x\n\nclass Ghost\n')])).toEqual([]);
+  });
+
+  it('un objet anonyme au niveau fichier n’est pas une déclaration', () => {
+    // Le parseur émet `$anon$<ligne>` pour `object : Base { }` afin de compter
+    // les implémenteurs anonymes. WORD_RE ne peut pas produire ce jeton, donc
+    // son compte de mentions restait à zéro et il traversait toutes les gardes.
+    const text = [
+      'package com.x',
+      '',
+      'interface Bar { fun go() }',
+      '',
+      'val handler = Foo(object : Bar { })',
+      '',
+      'fun Foo(b: Bar) = b',
+    ].join('\n');
+    const found = names(find([kt(`${MAIN}/S.kt`, text)]));
+    expect(found.some(n => n.startsWith('$'))).toBe(false);
+    expect(found).toEqual(['handler']);
+  });
+
+  it('un object nommé mort reste signalé', () => {
+    expect(names(find([kt(`${MAIN}/R.kt`, 'package com.x\n\nobject Real { fun go() = 1 }\n')])))
+      .toEqual(['Real']);
+  });
+
   it('F12 : le marqueur kotlin-jump:ignore aussi', () => {
     expect(find([kt(`${MAIN}/M.kt`,
       'package com.x\n// kotlin-jump:ignore unused-symbol\n\nclass Ghost\n')])).toEqual([]);

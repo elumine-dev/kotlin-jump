@@ -125,7 +125,14 @@ export function findMatchingParen(s: string, openIdx: number): number {
   return -1;
 }
 
-export const FILE_SUPPRESS_RE = /@file\s*:\s*Suppress\s*\(([^)]*)\)/;
+/**
+ * `@file:Suppress(...)`, bracketed (`@file:[JvmName("X") Suppress("x")]`) or
+ * qualified (`@file:kotlin.Suppress("x")`). Group 1 is the argument list,
+ * parentheses excluded. Global on purpose: `fileOptsOut` walks every `@file:`
+ * annotation of the header.
+ */
+export const FILE_SUPPRESS_RE =
+  /@file\s*:\s*(?:\[[^\]]*?)?(?:[A-Za-z_]\w*\s*\.\s*)*Suppress\s*\(([^)]*)\)/g;
 export const SUPPRESS_NAMES = new Set(['Suppress', 'SuppressLint', 'SuppressWarnings']);
 
 /**
@@ -144,6 +151,136 @@ export const SUPPRESS_NAMES = new Set(['Suppress', 'SuppressLint', 'SuppressWarn
  */
 export function suppressesDiagnostic(args: string, diagnostics: readonly string[]): boolean {
   return diagnostics.some(d => new RegExp(`(?:^|[^\\w])${d}(?![\\w])`, 'i').test(args));
+}
+
+// A file annotation must sit above `package`, so only what precedes it is ever
+// read. 64 KB rather than a few lines because the thing above `package` is
+// often a licence header, and a file whose header exceeds this has bigger
+// problems than a missed opt-out.
+const HEADER_BYTES = 64 * 1024;
+// Fallback for a file with neither `package` nor `import` (a `.kts` script, the
+// default package). Applied ONLY after the whole slice failed to yield either
+// keyword: a licence header longer than this must not cost the file its opt-out.
+const HEADER_LINES_WITHOUT_PACKAGE = 50;
+const BODY_START_RE = /^(?:package|import)\b/;
+
+/**
+ * Blanks comments while PRESERVING string contents, and every length with them.
+ *
+ * Deliberately not `sanitizeForUsageScan`, and deliberately not exported. That
+ * one blanks strings too, which would erase the very argument list this file
+ * reads: `@file:Suppress("unused")` would come back as `@file:Suppress(      )`
+ * and every legitimate opt-out would stop working. This one runs on the header
+ * only, so it needs no char-literal branch either: above `package` there are
+ * none.
+ */
+/**
+ * The text above the first `package` or `import`, comments blanked.
+ *
+ * One pass that stops at the body, rather than blanking the whole window and
+ * splitting it into lines afterwards: on a real corpus that pass cost 1.6 ms
+ * where the whole-text regex it replaces cost 0.2 ms, and a header is usually
+ * a few hundred bytes of a file that can run to 64 KB.
+ *
+ * Blanking has to precede the keyword test, so a commented-out `// package`
+ * cannot end the header early, and the test needs a word boundary:
+ * `packageName = 1` and `importantFlag = 1` are identifiers, not the body.
+ *
+ * String contents are preserved (`sanitizeForUsageScan` would blank the very
+ * argument list the caller reads), and so are all lengths, so an offset taken
+ * in the result still points into the source.
+ */
+export function fileHeader(text: string): string {
+  const limit = Math.min(text.length, HEADER_BYTES);
+  let out = '';
+  let copied = 0;
+  let i = 0;
+  let lineStart = 0;
+  let lines = 0;
+  let capped = -1;
+
+  const upTo = (end: number) => out + text.slice(copied, end);
+  const blankOut = (start: number, end: number) => {
+    out += text.slice(copied, start);
+    out += text.slice(start, end).split('\n').map(l => ' '.repeat(l.length)).join('\n');
+    copied = end;
+  };
+  // A line is the body's first only when it opens with the keyword in code
+  // position; `atLineStart` is false anywhere a comment or a string is still open.
+  const startsBody = (from: number): boolean => {
+    let s = from;
+    while (s < limit && (text[s] === ' ' || text[s] === '\t')) s++;
+    return BODY_START_RE.test(text.slice(s, Math.min(s + 8, limit)));
+  };
+
+  if (startsBody(0)) return '';
+
+  while (i < limit) {
+    if (text.startsWith('"""', i)) {
+      i += 3;
+      while (i < limit && !text.startsWith('"""', i)) i++;
+      i = Math.min(i + 3, limit);
+      continue;
+    }
+    if (text[i] === '"') {
+      i++;
+      while (i < limit && text[i] !== '"' && text[i] !== '\n') i += text[i] === '\\' ? 2 : 1;
+      i++;
+      continue;
+    }
+    const two = text.slice(i, i + 2);
+    if (two === '//') {
+      const start = i;
+      while (i < limit && text[i] !== '\n') i++;
+      blankOut(start, i);
+      continue;
+    }
+    if (two === '/*') {
+      // Kotlin nests block comments, so `/* /* */ @file:Suppress("x") */` is
+      // entirely commented out. Stopping at the first `*/` would hand the
+      // annotation back as code, which is the exact failure this function
+      // exists to prevent.
+      const start = i;
+      let depth = 1;
+      i += 2;
+      while (i < limit && depth > 0) {
+        if (text.startsWith('/*', i)) { depth++; i += 2; continue; }
+        if (text.startsWith('*/', i)) { depth--; i += 2; continue; }
+        i++;
+      }
+      blankOut(start, i);
+      continue;
+    }
+    if (text[i] === '\n') {
+      i++;
+      lineStart = i;
+      if (++lines === HEADER_LINES_WITHOUT_PACKAGE) capped = i;
+      if (startsBody(lineStart)) return upTo(lineStart);
+      continue;
+    }
+    i++;
+  }
+  // Neither keyword in the whole window: a `.kts` script or the default
+  // package, where the line cap is the only sane bound left.
+  return capped === -1 ? upTo(limit) : upTo(capped);
+}
+
+/**
+ * True when the file's HEADER carries a `@file:Suppress` naming one of
+ * `diagnostics`.
+ *
+ * The header is the whole point. Run against the raw file, the same regex turns
+ * a detector off for a file whose only sin is quoting the annotation in a KDoc,
+ * a string or a commented-out TODO, and nothing reports that it happened.
+ * `matchAll` clones the regex, so the global flag leaves no `lastIndex` behind
+ * between two files.
+ */
+export function fileOptsOut(text: string, diagnostics: readonly string[]): boolean {
+  if (!text.includes('@file')) return false;
+  for (const m of fileHeader(text).matchAll(FILE_SUPPRESS_RE)) {
+    if (suppressesDiagnostic(m[1], diagnostics)) return true;
+  }
+  return false;
 }
 
 /** Opts out of "nothing references this declaration" everywhere in the family. */

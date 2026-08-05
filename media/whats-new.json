@@ -1,32 +1,26 @@
 {
-  "version": "1.42.0",
+  "version": "1.42.1",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Members nothing references, and code kept alive only by other dead code",
-  "summary": "Kotlin Jump 1.42.0 goes after the dead code every per-symbol counter misses: class members nothing references, fields the app parses and then drops, keys written and never read, catalog aliases no build file names, and whole islands of declarations that reference only each other. Every finding quoted here was verified by hand on a 6410 file project before it shipped.",
+  "tagline": "Two defects in the dead-code family, found by auditing it against its own promise",
+  "summary": "Kotlin Jump 1.42.1 fixes two defects found by attacking the dead-code checks rather than trusting them. One turned every check off for a file that merely quoted @file:Suppress in a comment or a string, silently. The other invented a declaration the parser never meant as one, and in Find Dead Islands that phantom took a live class down with it. Both were reproduced on the kotlin-lsp repository before the fix, and measured on it after.",
   "highlights": [
     {
-      "title": "Dead Islands",
-      "kind": "feature",
-      "description": "Two functions calling each other with no outside caller both look referenced, so both survive every scan. Find Dead Islands reports the whole group instead, and deletes it in one reviewed change with the stale imports included. On a 6410 file project: 22 islands, 52 declarations, 29 of them invisible to per-symbol counting. Every one was checked by hand, and every deletable one was actually deleted on a branch with a green build and test suite."
+      "title": "@file:Suppress is read in the header, and nowhere else",
+      "kind": "fix",
+      "description": "The annotation used to be matched anywhere in the raw file, so a mention inside a KDoc, a string literal or a commented-out TODO turned every dead-code check off for that file, with nothing logged and nothing reported. It is now read above package only, where Kotlin requires it. Nested block comments count as comments, and packageName no longer passes for the start of the body. Two spellings that were being ignored are honoured now: @file:[JvmName(\"X\") Suppress(\"unused\")] and @file:kotlin.Suppress(\"unused\")."
     },
     {
-      "title": "Members Nothing References",
-      "kind": "feature",
-      "description": "The largest tier of dead code left: public, internal and protected class members. A comparable tool reports 506 of them on this project with a measured 57% false-positive rate. This scan reports 92, each hand-verified, by counting any mention of the name anywhere as a use. A third verdict, could be private, covers members reached only from inside their own class."
-    },
-    {
-      "title": "Four More Things The Build Never Complains About",
-      "kind": "feature",
-      "description": "Fields of deserialized models nothing reads, Intent extras and preference keys nothing gets back, version catalog aliases no build file names, and event subscriptions nothing ever posts to. The catalog check is the first one here that reads the build rather than the code."
+      "title": "An anonymous object is not a dead declaration",
+      "kind": "fix",
+      "description": "The parser names object : Base { } as $anon$<line> so it can count anonymous implementors. At file scope that synthetic name reached the unreferenced-symbol scan, where no word in any file can ever match it, so it walked through every guard. On the kotlin-lsp repository it produced one phantom finding, and Find Dead Islands reported it as an island together with LSJavaHoverProvider, a live class it dragged in."
     }
   ],
   "sections": [
     {
-      "heading": "Fixes",
+      "heading": "Notes",
       "bullets": [
-        "Fixes the version catalog reader ignoring module = \"group:artifact\", the form most catalogs are written in. On a catalog using it throughout, all 164 libraries were invisible and the catalog hover was silently blank.",
-        "Fixes catalog accessors resolving by prefix rather than by segment, so where foo and foo-bar both existed, libs.foo.bar counted as a reference to both.",
-        "Fixes the member scan's external guard matching the word anywhere on the declaration line: a Java parameter named external was enough to shield its method from the scan."
+        "The five per-file detectors (unused imports, parameters, private declarations, locals, write-only variables) moved into modules that do not import vscode, so they can run outside the editor. Behaviour is unchanged: on 659 files, all 279 findings and the edits of every quick fix are byte for byte what they were.",
+        "A command line harness now runs those five over a whole project. They had never been measured on a corpus."
       ]
     }
   ],

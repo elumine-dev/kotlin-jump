@@ -2,14 +2,13 @@ import { parse, RawSymbol } from '../indexer/KotlinParser';
 import { parseJava } from '../indexer/JavaParser';
 import {
   CONVENTION_FUN_NAMES,
-  FILE_SUPPRESS_RE,
+  fileOptsOut,
   UNUSED_DECLARATION,
   buildLineStarts,
   collectAnnotationTargets,
   matchBrace,
   findMatchingParen,
   sanitizeForUsageScan,
-  suppressesDiagnostic,
 } from '../util/kotlinScan';
 import { declarationSpan } from '../util/declarationSpan';
 import { isTestSourceSet } from '../util/testPaths';
@@ -55,6 +54,17 @@ import {
  * An interface method and its only override die together in silence: the
  * override's declaration is itself a token of the bag, so the interface member
  * always reads as mentioned. False negative, safe direction, accepted.
+ *
+ * ## What M3 actually costs, measured
+ *
+ * M3 (Java class with a supertype) reads as the harshest guard here, and it is
+ * worth knowing it retains almost nothing on its own. On test/kotlin-lsp-main,
+ * 265 sources with 15 supertyped Java files, its bucket held 56 members while
+ * it was evaluated FIRST. Moved after M2/M4/M6 — same findings, the guards are
+ * disjunctive — the bucket drops to zero: 43 of those members are `@Override`
+ * (M2) and 12 sit under a `Serializable` root (M4). Relaxing M3 on that corpus
+ * would therefore gain nothing, which is why the relaxation was specified and
+ * then not built. Re-measure with `--why` before revisiting.
  *
  * Nested TYPES (`class Outer { class Inner }`) are out of scope: candidate
  * kinds are restricted to fun/composable/val/var.
@@ -142,6 +152,10 @@ interface MemberCandidate {
   annoNames: string[];
   /** Guard that took the whole ENCLOSING out of scope, or null. */
   enclosingRejection: string | null;
+  /** Any enclosing declares a supertype (Java inheritance, read late). */
+  enclosingSupertyped: boolean;
+  /** Any enclosing Java declaration line never reached its `{`. */
+  enclosingDeclTruncated: boolean;
   /** Mentions of the name inside the member's own declaration extent. */
   selfInSpan: number;
   /** Mentions anywhere in its file, comments and imports stripped, strings kept. */
@@ -164,6 +178,8 @@ interface EnclosingInfo {
   sym: RawSymbol;
   annoNames: string[];
   isFunInterface: boolean;
+  /** A Java declaration line that never reached its `{`: inheritance unknown. */
+  declTruncated: boolean;
   extentStart: number;
   extentEnd: number;
 }
@@ -213,8 +229,7 @@ export function collectMemberCandidates(
 
     if (isGeneratedSource(src.text)) continue;                        // F18
     if (isTestSourceSet(src.path, testSourceSets)) continue;          // F2
-    const fileSuppress = FILE_SUPPRESS_RE.exec(src.text);
-    if (fileSuppress && suppressesDiagnostic(fileSuppress[1], UNUSED_DECLARATION)) continue;
+    if (fileOptsOut(src.text, UNUSED_DECLARATION)) continue;
     if (src.text.includes(IGNORE_MARKER)) continue;
 
     const clean = sanitizeForUsageScan(src.text);
@@ -257,6 +272,12 @@ export function collectMemberCandidates(
         sym,
         annoNames: annosAt(sym),
         isFunInterface: /\bfun\s+interface\b/.test(rawLines[sym.line] ?? ''),
+        // The Java parser reads supertypes from the DECLARATION LINE only, so
+        // a line that never reaches its `{` may carry an `implements` clause
+        // nobody has seen. "No supertype" cannot be trusted there: a single
+        // line break would otherwise disarm M3, the strictest guard of the
+        // detector, and hand every member of the class to the candidates.
+        declTruncated: isJava && !(rawLines[sym.line] ?? '').includes('{'),
         extentStart,
         extentEnd,
       };
@@ -304,7 +325,9 @@ export function collectMemberCandidates(
       if (sym.isPrimaryCtorParam) continue;                           // M7: KJ-025's territory
 
       const chain = [...stack];
-      const enclosingRejection = rejectEnclosingChain(chain, isJava);
+      const enclosingRejection = rejectEnclosingChain(chain);
+      const enclosingSupertyped = chain.some(e => (e.sym.supertypes?.length ?? 0) > 0);
+      const enclosingDeclTruncated = chain.some(e => e.declTruncated);
 
       const nameOffset = symOffset;
       const span = declarationSpan(clean, lineStarts, {
@@ -344,6 +367,8 @@ export function collectMemberCandidates(
         isJava,
         annoNames: annosAt(sym),
         enclosingRejection,
+        enclosingSupertyped,
+        enclosingDeclTruncated,
         selfInSpan,
         selfInFile,
         codeOutsideSpan,
@@ -366,18 +391,34 @@ export function collectMemberCandidates(
   return { candidates, declNameCounts, supertypesByName };
 }
 
-/** Guard that takes the whole enclosing chain out of scope, or null (M3/M4/M5). */
-function rejectEnclosingChain(chain: readonly EnclosingInfo[], isJava: boolean): string | null {
+/** Guard that takes the whole enclosing chain out of scope, or null (M4/M5). */
+function rejectEnclosingChain(chain: readonly EnclosingInfo[]): string | null {
   for (const e of chain) {
-    // M3: a Java method implementing an interface has NO textual marker
-    // (`@Override` is optional), so any supertype at all makes every member
-    // a potential unmarked implementation. Only supertype-free Java classes
-    // (utils, constants) remain, which is where the real dead code hides.
-    if (isJava && (e.sym.supertypes?.length ?? 0) > 0) return 'M3:java-supertyped';
     if (e.isFunInterface) return 'M5:sam-interface';
     const foreign = e.annoNames.find(a => !BENIGN_MEMBER_ANNOTATIONS.has(a));
     if (foreign) return `M4:@${foreign}`;
   }
+  return null;
+}
+
+/**
+ * M3, evaluated LATE. A Java method implementing an interface has no textual
+ * marker (`@Override` is optional), so any supertype at all makes every member
+ * a potential unmarked implementation. Only supertype-free Java classes (utils,
+ * constants) stay in scope, which is where the real dead code hides.
+ *
+ * Read AFTER M2/M4/M6 on purpose. Evaluated first, it swallowed their labels:
+ * on the reference corpus its bucket read 56 members, of which roughly thirty
+ * were `@Override` (M2) and ten `@NonNull` getters (M6). The bucket now counts
+ * what M3 alone retains, which is the number this trade-off has to be judged on.
+ * No finding changes either way — the guards are disjunctive.
+ */
+function javaInheritanceReason(c: MemberCandidate): string | null {
+  if (!c.isJava) return null;
+  // A declaration line that never reached its `{` may hide the very clause
+  // M3 looks for, so an unread inheritance counts as inheritance.
+  if (c.enclosingDeclTruncated) return 'M3:java-decl-truncated';
+  if (c.enclosingSupertyped) return 'M3:java-supertyped';
   return null;
 }
 
@@ -406,6 +447,9 @@ function memberRejectionReason(
 
   const foreign = c.annoNames.find(a => !BENIGN_MEMBER_ANNOTATIONS.has(a));
   if (foreign) return `M6:@${foreign}`;
+
+  const inherited = javaInheritanceReason(c);
+  if (inherited) return inherited;
 
   if (sym.isExpect || sym.isActual) return 'F4:kmp';
   if (sym.isOperator) return 'M8:operator';
@@ -468,13 +512,14 @@ export function findUnusedMembers(input: UnusedMemberScanInput): UnusedMember[] 
   }
   const harvest = harvestMentions(input.sources, wanted, input.testSourceSets);
   const bareXml = harvestBareXmlMentions(input.sources, kept);
+  const bareKotlin = harvestBareKotlinMentions(input.sources, kept);
   const unmentioned = unmentionedDuplicateMembers(kept, declNameCounts, harvest);
 
   const out: UnusedMember[] = [];
   for (const c of kept) {
     if (harvest.aliased.has(c.name)) continue;                        // H10
 
-    const mainMentions = mentionsOf(harvest.main, c, bareXml);
+    const mainMentions = mentionsOf(harvest.main, c, bareXml, bareKotlin);
     const mainElsewhere = unmentioned.has(c.name) ? 0 : mainMentions - c.selfInFile;
     if (mainElsewhere !== 0) continue;
 
@@ -533,6 +578,7 @@ function mentionsOf(
   bag: Map<string, number>,
   c: MemberCandidate,
   bareXml?: ReadonlyMap<string, number>,
+  bareKotlin?: ReadonlyMap<string, number>,
 ): number {
   let n = bag.get(c.name) ?? 0;
   if (c.sym.kind === 'val' || c.sym.kind === 'var') {
@@ -540,6 +586,7 @@ function mentionsOf(
   }
   const bare = bareAccessorTarget(c);
   if (bare && bareXml) n += bareXml.get(bare) ?? 0;                   // H9 reversed, XML only
+  if (bare && bareKotlin && c.isJava) n += bareKotlin.get(bare) ?? 0; // H9 reversed, Kotlin
   return n;
 }
 
@@ -556,6 +603,33 @@ function harvestBareXmlMentions(
   if (wanted.size === 0) return new Map();
   const xml = sources.filter(s => s.path.endsWith('.xml'));
   return harvestMentions(xml, wanted, []).main;
+}
+
+/**
+ * H9 reversed, second half. The XML-only restriction above holds for a KOTLIN
+ * getter: Kotlin and Java callers both spell `getX`, and a bare `x` elsewhere
+ * is an unrelated variable — that is the regression it was written for.
+ *
+ * It does NOT hold for a JAVA getter. Kotlin synthesises a property from it,
+ * so `metadata.includedProjects` is the ONLY way to spell
+ * `getIncludedProjects()` at a Kotlin call site. Found on test/kotlin-lsp-main:
+ * IdeaProjectMapper.kt:39 reads ProjectMetadata.java:30 that way. Without this
+ * every Java getter read as a property from Kotlin is a false positive, and
+ * M3 is the only thing that has been hiding it — on classes with a supertype.
+ */
+function harvestBareKotlinMentions(
+  sources: readonly SymbolSource[],
+  candidates: readonly MemberCandidate[],
+): Map<string, number> {
+  const wanted = new Set<string>();
+  for (const c of candidates) {
+    if (!c.isJava) continue;                       // Kotlin keeps the XML-only rule
+    const bare = bareAccessorTarget(c);
+    if (bare) wanted.add(bare);
+  }
+  if (wanted.size === 0) return new Map();         // a Kotlin-only workspace pays nothing
+  const kt = sources.filter(s => s.path.endsWith('.kt') || s.path.endsWith('.kts'));
+  return harvestMentions(kt, wanted, []).main;
 }
 
 /**
@@ -624,6 +698,7 @@ export function explainMembers(input: UnusedMemberScanInput): MemberExplanation[
   }
   const harvest = harvestMentions(input.sources, wanted, input.testSourceSets);
   const bareXml = harvestBareXmlMentions(input.sources, candidates);
+  const bareKotlin = harvestBareKotlinMentions(input.sources, candidates);
   const unmentioned = unmentionedDuplicateMembers(
     candidates.filter(c =>
       memberRejectionReason(c, input, supertypesByName, deadByPath) === null),
@@ -634,7 +709,8 @@ export function explainMembers(input: UnusedMemberScanInput): MemberExplanation[
     let outcome: string;
     if (rejected) outcome = rejected;
     else if (harvest.aliased.has(c.name)) outcome = 'H10:aliased-import';
-    else if (!unmentioned.has(c.name) && mentionsOf(harvest.main, c, bareXml) - c.selfInFile !== 0) {
+    else if (!unmentioned.has(c.name)
+             && mentionsOf(harvest.main, c, bareXml, bareKotlin) - c.selfInFile !== 0) {
       outcome = 'alive:main';
     } else if (c.selfInFile - c.selfInSpan > 0) {
       const selfOnly = c.stringMentions === 0 && c.codeOutsideSpan > 0

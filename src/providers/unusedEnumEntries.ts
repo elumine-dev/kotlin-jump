@@ -1,13 +1,12 @@
 import { parse, RawSymbol } from '../indexer/KotlinParser';
 import { parseJava } from '../indexer/JavaParser';
 import {
-  FILE_SUPPRESS_RE,
+  fileOptsOut,
   UNUSED_DECLARATION,
   buildLineStarts,
   collectAnnotationTargets,
   offsetToPos,
   sanitizeForUsageScan,
-  suppressesDiagnostic,
 } from '../util/kotlinScan';
 import { isTestSourceSet } from '../util/testPaths';
 import { isBuildArtifactPath, isGeneratedSource } from '../util/resourceAllowlists';
@@ -127,8 +126,7 @@ export function collectEnums(
     if (isGeneratedSource(src.text)) continue;                        // E4
     if (!/\benum\b/.test(src.text)) continue;
 
-    const fileSuppress = FILE_SUPPRESS_RE.exec(src.text);
-    if (fileSuppress && suppressesDiagnostic(fileSuppress[1], UNUSED_DECLARATION)) continue;
+    if (fileOptsOut(src.text, UNUSED_DECLARATION)) continue;
     if (src.text.includes(IGNORE_MARKER)) continue;
 
     const parsed = isJava ? parseJava(src.path, src.text) : parse(src.path, src.text);

@@ -1,8 +1,12 @@
-import { findUnusedImports } from './UnusedImportProvider';
-import { findUnusedParameters } from './UnusedParameterProvider';
-import { findUnusedDeclarations } from './UnusedDeclarationProvider';
-import { findUnusedLocals } from './UnusedLocalProvider';
-import { findWriteOnlyVariables } from './WriteOnlyProvider';
+// The pure modules, never the providers: those host the VS Code layer, whose
+// static initializers touch the API at module load. Importing one here would
+// make this file, and every harness built on it, unloadable outside an
+// extension host.
+import { findUnusedImports } from './unusedImports';
+import { findUnusedParameters } from './unusedParameters';
+import { findUnusedDeclarations } from './unusedDeclarations';
+import { findUnusedLocals } from './unusedLocals';
+import { findWriteOnlyVariables } from './writeOnlyVariables';
 
 /**
  * Aggregates every Kotlin dead-code detector into one list, and turns their

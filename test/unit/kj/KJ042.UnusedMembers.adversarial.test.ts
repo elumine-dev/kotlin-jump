@@ -454,3 +454,108 @@ describe('M12 et le contrat', () => {
     expect(names(sources)).toEqual([]);
   });
 });
+
+describe('H9 inversé — le getter Java lu comme propriété Kotlin', () => {
+  const holder = f('/w/app/src/main/java/com/x/Holder.java', [
+    'package com.x;',
+    '',
+    'public class Holder {',
+    '    public String getLabel() {',
+    '        return "";',
+    '    }',
+    '}',
+  ].join('\n'));
+
+  it('un getter Java lu en propriété depuis Kotlin est vivant', () => {
+    // Cas réel du corpus : IdeaProjectMapper.kt:39 écrit
+    // `metadata.includedProjects` pour appeler
+    // ProjectMetadata.java:30 `getIncludedProjects()`. Kotlin synthétise une
+    // propriété depuis un getter JAVA, donc `h.label` est la SEULE graphie
+    // possible au site d'appel.
+    const sources = [
+      holder,
+      f(`${MAIN}/Reader.kt`, 'package com.x\n\nclass Reader {\n    fun read(h: Holder) = h.label\n}\n'),
+      f(`${MAIN}/Main.kt`, 'package com.x\n\nfun main() {\n    println(Reader().read(Holder()))\n}\n'),
+    ];
+    expect(names(sources)).toEqual([]);
+  });
+
+  it('témoin : sans le lecteur Kotlin, le même getter est bien signalé', () => {
+    expect(names([holder])).toEqual(['Holder.getLabel']);
+  });
+
+  it('témoin : un getter KOTLIN garde sa règle XML-only', () => {
+    // La régression qui a motivé la restriction : un nom nu qui coïncide avec
+    // un local sans rapport ne doit pas sauver le getter.
+    const sources = [
+      f(`${MAIN}/A.kt`, 'package com.x\n\nclass A {\n    fun getLabel(): String = ""\n}\n'),
+      f(`${MAIN}/B.kt`, 'package com.x\n\nclass B {\n    fun go() {\n        val label = 1\n        println(label)\n    }\n}\n'),
+      f(`${MAIN}/Main.kt`, 'package com.x\n\nfun main() {\n    B().go()\n}\n'),
+    ];
+    expect(names(sources)).toEqual(['A.getLabel']);
+  });
+});
+
+describe('M3 — la déclaration Java tronquée', () => {
+  it('une clause implements sur la ligne suivante n’est pas lue, donc silence', () => {
+    // extractJavaSupertypes ne lit QUE la ligne de déclaration. Sans ce garde,
+    // un simple retour à la ligne désarme M3 et livre tous les membres de la
+    // classe aux candidats.
+    const sources = [f('/w/app/src/main/java/com/x/Impl.java', [
+      'package com.x;',
+      '',
+      'public class Impl',
+      '        implements SdkCallback {',
+      '    public void onDone() {',
+      '    }',
+      '}',
+    ].join('\n'))];
+    expect(names(sources)).toEqual([]);
+    expect(why(sources, 'onDone')).toEqual(['M3:java-decl-truncated']);
+  });
+
+  it('témoin : la même classe avec le { sur la ligne reste jugée normalement', () => {
+    const sources = [f('/w/app/src/main/java/com/x/Util.java', [
+      'package com.x;',
+      '',
+      'public final class Util {',
+      '    public static String slugify(String s) {',
+      '        return s;',
+      '    }',
+      '}',
+    ].join('\n'))];
+    expect(names(sources)).toEqual(['Util.slugify']);
+  });
+});
+
+describe('M3 — lue après M2/M4/M6, donc mesurable', () => {
+  it('un membre @Override d’une classe supertypée lit M2, pas M3', () => {
+    // M3 évaluée en tête masquait M2, M4 et M6 : son compteur était opaque.
+    // Mesuré sur test/kotlin-lsp-main : 56 rangées avant, 0 après, dont 43
+    // absorbées par M2 et 12 par M4:F6:Serializable.
+    const sources = [f('/w/app/src/main/java/com/x/C.java', [
+      'package com.x;',
+      '',
+      'public class C implements SdkCallback {',
+      '    @Override',
+      '    public void onDone() {',
+      '    }',
+      '}',
+    ].join('\n'))];
+    expect(names(sources)).toEqual([]);
+    expect(why(sources, 'onDone')).toEqual(['M2:override']);
+  });
+
+  it('un membre SANS marqueur d’une classe supertypée lit toujours M3', () => {
+    const sources = [f('/w/app/src/main/java/com/x/C.java', [
+      'package com.x;',
+      '',
+      'public class C implements SdkCallback {',
+      '    public void onDone() {',
+      '    }',
+      '}',
+    ].join('\n'))];
+    expect(names(sources)).toEqual([]);
+    expect(why(sources, 'onDone')).toEqual(['M3:java-supertyped']);
+  });
+});

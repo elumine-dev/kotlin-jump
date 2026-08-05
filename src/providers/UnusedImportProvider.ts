@@ -2,67 +2,16 @@ import * as vscode from 'vscode';
 import { reportDecorations } from '../util/demoProbe';
 
 /**
- * KJ-009: Unused import graying, grays out imports whose effective name
- * (alias included) never appears in the code. Mentions inside a comment or a
- * string do not count; `${…}` and `$name` templates do count (they are code). Wildcard
- * imports are NEVER flagged (conservative: the package contents are
- * unknown).
+ * KJ-009: the VS Code layer of unused import graying. The detector itself sits
+ * in `./unusedImports`, out of reach of `vscode`, so a Node script can run it.
  */
 
-export interface UnusedImport {
-  /** 0-based line of the import. */
-  line: number;
-  /** Full text of the import line. */
-  statement: string;
-}
-
-const IMPORT_RE = /^\s*import\s+([\w.]+?)(\.\*)?(?:\s+as\s+(\w+))?\s*(?:\/\/.*)?$/;
-// Moved to src/util/kotlinScan.ts so a plain Node script can use it.
-// Re-exported: the KJ-009/025/026/027/028/031 suites import it from here.
+// Re-exported: the KJ-009/025/026/027/028/031 suites import these from here.
 export { sanitizeForUsageScan } from '../util/kotlinScan';
-import { sanitizeForUsageScan } from '../util/kotlinScan';
-
-export function findUnusedImports(text: string): UnusedImport[] {
-  const lines = text.split('\n');
-  const imports: { line: number; statement: string; effectiveName: string; wildcard: boolean }[] = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const m = IMPORT_RE.exec(lines[i]);
-    if (!m) continue;
-    const path = m[1];
-    const wildcard = Boolean(m[2]);
-    const alias = m[3];
-    const lastSegment = path.split('.').pop() ?? path;
-    imports.push({
-      line: i,
-      statement: lines[i],
-      effectiveName: alias ?? lastSegment,
-      wildcard,
-    });
-  }
-  if (imports.length === 0) return [];
-
-  // Body = sanitized text WITHOUT the import lines themselves.
-  const importLines = new Set(imports.map(im => im.line));
-  const body = sanitizeForUsageScan(text)
-    .split('\n')
-    .map((l, idx) => (importLines.has(idx) ? '' : l))
-    .join('\n');
-
-  const unused: UnusedImport[] = [];
-  for (const im of imports) {
-    if (im.wildcard) continue; // conservative
-    const usageRe = new RegExp(`\\b${escapeRegExp(im.effectiveName)}\\b`);
-    if (!usageRe.test(body)) {
-      unused.push({ line: im.line, statement: im.statement });
-    }
-  }
-  return unused;
-}
-
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+export { findUnusedImports } from './unusedImports';
+export type { UnusedImport } from './unusedImports';
+import { findUnusedImports } from './unusedImports';
+import type { UnusedImport } from './unusedImports';
 
 /**
  * Code actions that go with the graying: remove ONE unused import (cursor on

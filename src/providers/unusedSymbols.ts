@@ -2,7 +2,7 @@ import { parse, RawSymbol, SymbolKind } from '../indexer/KotlinParser';
 import { parseJava } from '../indexer/JavaParser';
 import {
   CONVENTION_FUN_NAMES,
-  FILE_SUPPRESS_RE,
+  fileOptsOut,
   REFLECTIVE_SUPERTYPES,
   buildLineStarts,
   collectAnnotationTargets,
@@ -358,7 +358,12 @@ export function collectTopLevelCandidates(
     if (!isJava && !src.path.endsWith('.kt')) continue;
     if (isBuildArtifactPath(src.path)) continue;
     const parsed = isJava ? parseJava(src.path, src.text) : parse(src.path, src.text);
-    const tops = parsed.symbols.filter(s => s.depth === 0 && CANDIDATE_KINDS.has(s.kind));
+    // `$anon$<line>` is the parser's synthetic name for `object : Base { }`, kept
+    // so lookupImplementations() can count anonymous implementors. It is not a
+    // declaration: WORD_RE cannot produce that token, so its mention count is
+    // always zero and it would walk through every test below untouched.
+    const tops = parsed.symbols.filter(
+      s => s.depth === 0 && CANDIDATE_KINDS.has(s.kind) && !s.name.startsWith('$'));
     for (const s of tops) {
       topLevelNameCounts.set(s.name, (topLevelNameCounts.get(s.name) ?? 0) + 1);
       const supers = (s.supertypes ?? []).map(x => x.replace(/<.*/, '').trim()).filter(Boolean);
@@ -384,10 +389,10 @@ export function collectTopLevelCandidates(
     if (isGeneratedSource(src.text)) continue;
     if (isTestSourceSet(src.path, testSourceSets)) continue; // F2
     // F12, file scope: `@file:Suppress("unused")` opts the whole file out. It
-    // sits above `package`, so the per-declaration annotation window below
-    // cannot see it.
-    const fileSuppress = FILE_SUPPRESS_RE.exec(src.text);
-    if (fileSuppress && suppressesDiagnostic(fileSuppress[1], UNUSED_DECLARATION)) continue;
+    // sits above `package` — `fileOptsOut` reads only there, so a mention in a
+    // KDoc or a string cannot silence the file — and the per-declaration
+    // annotation window below cannot see it.
+    if (fileOptsOut(src.text, UNUSED_DECLARATION)) continue;
     perFile.push({ path: src.path, clean: sanitizeForUsageScan(src.text), syms: tops, text: src.text });
   }
 

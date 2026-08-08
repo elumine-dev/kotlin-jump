@@ -2,10 +2,17 @@
  * Dry-run harness for KJ-046, outside VS Code.
  *
  *   npx vite-node scripts/scan-dead-islands.ts <project-root> [--why] [--json] [--apply]
+ *                                             [--name=<substring>]
  *
  * `--why` prints the outcome histogram over every raw candidate, then the
  * islands. Auditing findings without it is guesswork, and the zero-FP gate
  * would get rubber-stamped instead of crossed.
+ *
+ * `--name=` prints the outcome of every candidate whose name matches, with the
+ * reason spelled out. The histogram buckets `alive:root(path:line)` down to
+ * `alive:root`, which hides exactly what an audit needs: WHICH file kept a
+ * declaration alive. Answering "why is this one not reported?" needed a
+ * throwaway script until this flag existed.
  *
  * `--apply` WRITES the deletions to disk (island extents + stale imports),
  * for the delete-and-build audit on a throwaway branch. It refuses islands
@@ -61,6 +68,17 @@ function main(): void {
     }
     console.log(`\nevery candidate (${why.length}), by outcome:`);
     for (const [o, n] of [...by].sort((a, b) => b[1] - a[1])) console.log(`  ${String(n).padStart(6)}  ${o}`);
+  }
+
+  const nameFilter = args.find(a => a.startsWith('--name='))?.slice('--name='.length);
+  if (nameFilter) {
+    const matching = explainIslands(input).filter(w => w.name.includes(nameFilter));
+    console.log(`\ncandidates matching '${nameFilter}' (${matching.length}):`);
+    for (const w of matching) {
+      const label = w.container ? `${w.container}.${w.name}` : w.name;
+      console.log(`  ${label.padEnd(52)} ${w.outcome}`);
+      console.log(`  ${' '.repeat(52)} declared ${w.path}:${w.line + 1}`);
+    }
   }
 
   console.log('\nthe islands:');

@@ -143,3 +143,64 @@ describe('KJ-009 adversarial', () => {
     expect(performance.now() - start).toBeLessThan(300);
   });
 });
+
+describe('les noms que Kotlin résout par convention', () => {
+  // Signalé sur un vrai projet : `import androidx.compose.runtime.getValue`
+  // était marqué inutilisé. Retiré sur cette foi, le module ne compile plus :
+  //   Property delegate must have a 'getValue(Nothing?, KMutableProperty0<*>)'
+  // Le mot `getValue` n'apparaît nulle part dans le fichier, c'est `by` qui
+  // l'appelle. Vérifié par un vrai build avant d'écrire ce test.
+
+  it('getValue et setValue, réclamés par une délégation `by`', () => {
+    const text = [
+      'package a',
+      '',
+      'import androidx.compose.runtime.getValue',
+      'import androidx.compose.runtime.mutableStateOf',
+      'import androidx.compose.runtime.remember',
+      'import androidx.compose.runtime.setValue',
+      '',
+      '@Composable',
+      'fun Screen() {',
+      '    var state by remember { mutableStateOf(0) }',
+      '    state = 1',
+      '}',
+    ].join('\n');
+    expect(findUnusedImports(text)).toEqual([]);
+  });
+
+  it('componentN, réclamé par une déstructuration', () => {
+    const text = 'package a\n\nimport a.b.component1\nimport a.b.component2\n\nfun f(p: P) {\n    val (x, y) = p\n    println(x + y)\n}\n';
+    expect(findUnusedImports(text)).toEqual([]);
+  });
+
+  it('les autres conventions : get, invoke, iterator, plus', () => {
+    const text = [
+      'package a',
+      '',
+      'import a.b.get',
+      'import a.b.invoke',
+      'import a.b.iterator',
+      'import a.b.plus',
+      '',
+      'fun f() { println(1) }',
+    ].join('\n');
+    expect(findUnusedImports(text)).toEqual([]);
+  });
+
+  it('témoin : un import ordinaire vraiment inutilisé reste signalé', () => {
+    const text = [
+      'package a',
+      '',
+      'import androidx.compose.runtime.getValue',
+      'import androidx.compose.runtime.remember',
+      'import kotlin.math.max',
+      '',
+      'fun f() { println(1) }',
+    ].join('\n');
+    expect(findUnusedImports(text).map(u => u.statement.trim())).toEqual([
+      'import androidx.compose.runtime.remember',
+      'import kotlin.math.max',
+    ]);
+  });
+});

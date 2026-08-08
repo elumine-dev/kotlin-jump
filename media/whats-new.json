@@ -1,26 +1,26 @@
 {
-  "version": "1.42.1",
+  "version": "1.42.2",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Two defects in the dead-code family, found by auditing it against its own promise",
-  "summary": "Kotlin Jump 1.42.1 fixes two defects found by attacking the dead-code checks rather than trusting them. One turned every check off for a file that merely quoted @file:Suppress in a comment or a string, silently. The other invented a declaration the parser never meant as one, and in Find Dead Islands that phantom took a live class down with it. Both were reproduced on the kotlin-lsp repository before the fix, and measured on it after.",
+  "tagline": "Three false positives found by running the checks against real projects",
+  "summary": "Kotlin Jump 1.42.2 fixes three false positives in the dead-code family, found by running it against real Android and Kotlin projects rather than trusting it. The first one gave advice that stops a module from compiling: on a 4100 file project the import check reported 222 findings, and 206 of them were this defect.",
   "highlights": [
     {
-      "title": "@file:Suppress is read in the header, and nowhere else",
+      "title": "Imports Kotlin resolves by convention",
       "kind": "fix",
-      "description": "The annotation used to be matched anywhere in the raw file, so a mention inside a KDoc, a string literal or a commented-out TODO turned every dead-code check off for that file, with nothing logged and nothing reported. It is now read above package only, where Kotlin requires it. Nested block comments count as comments, and packageName no longer passes for the start of the body. Two spellings that were being ignored are honoured now: @file:[JvmName(\"X\") Suppress(\"unused\")] and @file:kotlin.Suppress(\"unused\")."
+      "description": "import androidx.compose.runtime.getValue is required by var state by remember { … }, and the word getValue appears nowhere in the file, so the import check called it unused. Removing it on that advice fails the build with \"Property delegate must have a getValue(…) method\", verified with a real Gradle compile. The same held for componentN from destructuring, div behind basePath / \"sub\", set behind x[i] and every other operator convention. On a 4100 file project: 222 findings before, 16 after. The name list already existed and already guarded declarations, it had never been applied to imports."
     },
     {
-      "title": "An anonymous object is not a dead declaration",
+      "title": "Find Dead Islands now agrees with the member scan",
       "kind": "fix",
-      "description": "The parser names object : Base { } as $anon$<line> so it can count anonymous implementors. At file scope that synthetic name reached the unreferenced-symbol scan, where no word in any file can ever match it, so it walked through every guard. On the kotlin-lsp repository it produced one phantom finding, and Find Dead Islands reported it as an island together with LSJavaHoverProvider, a live class it dragged in."
+      "description": "Kotlin reads a Java getBar() as the property bar, so no call site can spell the method name. The member scan has known that since 1.42.1, the island scan did not. On a real project it reported 12 accessors, 6 of them referenced from production Kotlin, and one of those dragged a live class into an island with it."
     }
   ],
   "sections": [
     {
-      "heading": "Notes",
+      "heading": "Fixes",
       "bullets": [
-        "The five per-file detectors (unused imports, parameters, private declarations, locals, write-only variables) moved into modules that do not import vscode, so they can run outside the editor. Behaviour is unchanged: on 659 files, all 279 findings and the edits of every quick fix are byte for byte what they were.",
-        "A command line harness now runs those five over a whole project. They had never been measured on a corpus."
+        "Counts f.isBar = true as a write to a Java setBar(). A Java isX()/setX() pair becomes one Kotlin property named isX, so the setter is never written f.x = v, and it was reported as unreferenced.",
+        "The island harness takes --name=, which prints why each matching candidate is alive, with the file and line that keep it so. The outcome histogram collapsed that detail away."
       ]
     }
   ],

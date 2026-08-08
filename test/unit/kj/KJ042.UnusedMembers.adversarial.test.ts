@@ -559,3 +559,62 @@ describe('M3 — lue après M2/M4/M6, donc mesurable', () => {
     expect(why(sources, 'onDone')).toEqual(['M3:java-supertyped']);
   });
 });
+
+describe('H9 inversée : ce qu’un site d’appel Kotlin peut écrire', () => {
+  const JAVA = '/w/app/src/main/java/com/x/Foo.java';
+  const KT = `${MAIN}/Main.kt`;
+
+  it('un getter Java lu comme propriété depuis Kotlin est vivant', () => {
+    // `getBar()` ne s’écrit jamais `getBar` côté Kotlin : la propriété
+    // synthétique est le SEUL nom disponible au site d’appel.
+    const sources = [
+      f(JAVA, 'package com.x;\n\npublic class Foo {\n    public String getBar() { return "x"; }\n}\n'),
+      f(KT, 'package com.x\n\nfun main() {\n    val f = Foo()\n    println(f.bar)\n}\n'),
+    ];
+    expect(names(sources)).toEqual([]);
+  });
+
+  it('le setter d’une paire isX()/setX() s’écrit f.isX, pas f.x', () => {
+    // Kotlin nomme `isBar` la propriété de la paire, donc l’écriture ne
+    // contient jamais le jeton `bar`. Compter `bar` seul signalait `setBar`.
+    const sources = [
+      f(JAVA, [
+        'package com.x;',
+        '',
+        'public class Foo {',
+        '    private boolean b;',
+        '    public boolean isBar() { return b; }',
+        '    public void setBar(boolean v) { b = v; }',
+        '}',
+      ].join('\n')),
+      f(KT, 'package com.x\n\nfun main() {\n    val f = Foo()\n    f.isBar = true\n    println(f.isBar)\n}\n'),
+    ];
+    expect(names(sources)).toEqual([]);
+  });
+
+  it('témoin : la paire getX()/setX() s’écrit bien f.x', () => {
+    const sources = [
+      f(JAVA, [
+        'package com.x;',
+        '',
+        'public class Foo {',
+        '    private boolean b;',
+        '    public boolean getBar() { return b; }',
+        '    public void setBar(boolean v) { b = v; }',
+        '}',
+      ].join('\n')),
+      f(KT, 'package com.x\n\nfun main() {\n    val f = Foo()\n    f.bar = true\n    println(f.bar)\n}\n'),
+    ];
+    expect(names(sources)).toEqual([]);
+  });
+
+  it('témoin : un getter KOTLIN garde la règle XML seule', () => {
+    // Tous les appelants d’un `getBar` Kotlin écrivent `getBar` ; un `bar` nu
+    // ailleurs est une variable sans rapport et ne doit rien sauver.
+    const sources = [
+      f(`${MAIN}/Foo.kt`, 'package com.x\n\nclass Foo {\n    fun getBar(): String = "x"\n}\n'),
+      f(KT, 'package com.x\n\nfun main() {\n    val f = Foo()\n    val bar = 1\n    println(f)\n    println(bar)\n}\n'),
+    ];
+    expect(names(sources)).toEqual(['Foo.getBar']);
+  });
+});

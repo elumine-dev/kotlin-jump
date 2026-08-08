@@ -306,6 +306,7 @@ function analyze(input: DeadIslandScanInput): Analysis {
   }
 
   const eligibleNames = new Set(nodes.map(n => n.name));
+  const javaAccessorsByBareName = javaAccessorIndex(nodes);
 
   // ── Attributed harvest: same skip rules as harvestMentions, plus offsets.
   const edges = new Map<string, Set<string>>();
@@ -404,6 +405,17 @@ function analyze(input: DeadIslandScanInput): Analysis {
         const cap = token.charAt(0).toUpperCase() + token.slice(1);
         for (const prefix of ['get', 'set', 'is']) {
           if (eligibleNames.has(prefix + cap)) contributions.push(prefix + cap);
+        }
+      }
+      // H9 reversed, Kotlin half: a bare `x` in a .kt reaches the JAVA accessor
+      // `getX`/`setX`. A workspace without Java pays nothing — the index is empty,
+      // and the lookup below allocates nothing per token.
+      if (javaAccessorsByBareName.size > 0 && isCode && !src.path.endsWith('.java')) {
+        const accessors = javaAccessorsByBareName.get(token);
+        if (accessors) {
+          for (const accessor of accessors) {
+            if (!contributions.includes(accessor)) contributions.push(accessor);
+          }
         }
       }
       if (contributions.length === 0) continue;
@@ -563,6 +575,46 @@ function signatureOnlySpan(
  * `iGNORED_CHILD_CLASSES` — the identity mapping was the one real false
  * positive of the corpus audit (a Java caller through the companion getter).
  */
+/**
+ * H9 reversed, Kotlin half — the rule `harvestBareKotlinMentions` applies in
+ * `unusedMembers.ts`, brought to the reference graph so the two detectors stop
+ * disagreeing about what reaches a Java accessor.
+ *
+ * Kotlin synthesises a property from a JAVA accessor, so
+ * `metadata.includedProjects` is the only way a Kotlin call site can spell
+ * `ProjectMetadata.getIncludedProjects()` (test/kotlin-lsp-main:
+ * IdeaProjectMapper.kt:39 reads ProjectMetadata.java:30 that way).
+ *
+ * Restricted to Java declarations, exactly as KJ-042 does: every caller of a
+ * KOTLIN `getX` spells `getX`, and a bare `x` elsewhere is an unrelated
+ * variable — that restriction exists because counting it killed a real finding.
+ *
+ * `isX()` needs no key: the token already IS the declaration name. `setX` gets
+ * two, since a Java `isX()`/`setX()` pair is one Kotlin property named `isX`
+ * and its write is `f.isX = v`.
+ *
+ * Exported for the suite: the restriction cannot be exercised through islands,
+ * because a Kotlin `getX` whose class is alive is claimed by KJ-042 first.
+ */
+export function javaAccessorIndex(
+  nodes: readonly { name: string; kind: string; path: string }[],
+): Map<string, string[]> {
+  const index = new Map<string, string[]>();
+  const add = (bare: string, accessor: string) => {
+    const known = index.get(bare);
+    if (known) { if (!known.includes(accessor)) known.push(accessor); }
+    else index.set(bare, [accessor]);
+  };
+  for (const n of nodes) {
+    if (n.kind !== 'fun' || !n.path.endsWith('.java')) continue;
+    const m = /^(get|set)([A-Z]\w*)$/.exec(n.name);
+    if (!m) continue;
+    add(m[2][0].toLowerCase() + m[2].slice(1), n.name);
+    if (m[1] === 'set') add(`is${m[2]}`, n.name);
+  }
+  return index;
+}
+
 function accessorProperties(token: string): string[] {
   const m = /^(?:get|set|is)([A-Z]\w*)$/.exec(token);
   if (!m) return [];

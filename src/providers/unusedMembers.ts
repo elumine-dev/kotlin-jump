@@ -574,6 +574,26 @@ function bareAccessorTarget(c: MemberCandidate): string | undefined {
   return m[1][0].toLowerCase() + m[1].slice(1);
 }
 
+/**
+ * Every bare name a KOTLIN call site can use to reach this member.
+ *
+ * A Java `isX()`/`setX()` pair becomes one Kotlin property named `isX`, not
+ * `x`, so the setter is written `f.isX = v` and never `f.x = v`. Counting only
+ * `x` reported `setBar` as unreferenced on a file whose sole write was
+ * `f.isBar = true`.
+ *
+ * The `isX` key is added for every Java `setX` without checking that its class
+ * really declares `isX()`: the candidate list holds no siblings to check
+ * against, and an extra key can only silence a finding, never invent one.
+ */
+function bareKotlinTargets(c: MemberCandidate): string[] {
+  if (c.sym.kind !== 'fun') return [];
+  const m = /^(get|set)([A-Z]\w*)$/.exec(c.name);
+  if (!m) return [];
+  const property = m[2][0].toLowerCase() + m[2].slice(1);
+  return m[1] === 'set' ? [property, `is${m[2]}`] : [property];
+}
+
 function mentionsOf(
   bag: Map<string, number>,
   c: MemberCandidate,
@@ -586,7 +606,9 @@ function mentionsOf(
   }
   const bare = bareAccessorTarget(c);
   if (bare && bareXml) n += bareXml.get(bare) ?? 0;                   // H9 reversed, XML only
-  if (bare && bareKotlin && c.isJava) n += bareKotlin.get(bare) ?? 0; // H9 reversed, Kotlin
+  if (bareKotlin && c.isJava) {                                       // H9 reversed, Kotlin
+    for (const target of bareKotlinTargets(c)) n += bareKotlin.get(target) ?? 0;
+  }
   return n;
 }
 
@@ -624,8 +646,7 @@ function harvestBareKotlinMentions(
   const wanted = new Set<string>();
   for (const c of candidates) {
     if (!c.isJava) continue;                       // Kotlin keeps the XML-only rule
-    const bare = bareAccessorTarget(c);
-    if (bare) wanted.add(bare);
+    for (const target of bareKotlinTargets(c)) wanted.add(target);
   }
   if (wanted.size === 0) return new Map();         // a Kotlin-only workspace pays nothing
   const kt = sources.filter(s => s.path.endsWith('.kt') || s.path.endsWith('.kts'));

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { explainIslands, findDeadIslands } from '../../../src/providers/deadIslands';
+import { explainIslands, findDeadIslands, javaAccessorIndex } from '../../../src/providers/deadIslands';
 
 /**
  * KJ-046 — les îlots morts, mis à l'épreuve.
@@ -491,5 +491,65 @@ describe('l’amplification refusée et le contrat', () => {
     expect(rows.find(r => r.name === 'ringA')?.outcome).toMatch(/^island#/);
     expect(rows.find(r => r.name === 'shown')?.outcome).toMatch(/^alive:root/);
     expect(rows.every(r => r.outcome !== 'unaccounted')).toBe(true);
+  });
+});
+
+describe('H9 inversée côté Kotlin : les îlots et KJ-042 disent la même chose', () => {
+  const JAVA = '/w/app/src/main/java/com/x/Foo.java';
+  const FOO = 'package com.x;\n\npublic class Foo {\n    public String getBar() { return "x"; }\n}\n';
+
+  it('un getter Java lu comme propriété depuis Kotlin n’est pas une île', () => {
+    // Avant : l’île ["Foo.getBar"], parce que la moisson cherchait le jeton
+    // `getBar`, que Kotlin n’écrit jamais. Trouvé sur un monorepo réel, où
+    // six accesseurs vivants étaient rapportés, dont un lu par un ViewModel.
+    const java = f(JAVA, FOO);
+    const kt = f(`${MAIN}/Main.kt`, 'package com.x\n\nfun main() {\n    val f = Foo()\n    println(f.bar)\n}\n');
+    expect(islands([java, kt])).toEqual([]);
+  });
+
+  it('lu depuis du code lui-même mort, le lecteur entre dans l’île', () => {
+    // La contribution est une ARÊTE, pas une vie : c’est ce qui distingue
+    // l’analyse d’îlots du simple comptage de mentions de KJ-042.
+    const java = f(JAVA, FOO);
+    const alive = f(`${MAIN}/Main.kt`, 'package com.x\n\nfun main() {\n    val f = Foo()\n    println(f)\n}\n');
+    const dead = f(`${MAIN}/Dead.kt`, 'package com.x\n\nfun deadReader() {\n    val f = Foo()\n    println(f.bar)\n}\n');
+    expect(islands([java, alive, dead])).toEqual([['Foo.getBar', 'deadReader']]);
+  });
+
+  it('isX() n’a besoin d’aucune correspondance : le jeton est déjà le nom', () => {
+    const java = f(JAVA, 'package com.x;\n\npublic class Foo {\n    public boolean isReady() { return true; }\n}\n');
+    const kt = f(`${MAIN}/Main.kt`, 'package com.x\n\nfun main() {\n    val f = Foo()\n    println(f.isReady)\n}\n');
+    expect(islands([java, kt])).toEqual([]);
+  });
+});
+
+describe('javaAccessorIndex : la restriction Java, que la surface des îlots ne peut pas exercer', () => {
+  // Un `getX` déclaré en Kotlin dont la classe est vivante est revendiqué par
+  // KJ-042 avant d’atteindre les îlots : la garde se teste donc ici.
+  const node = (name: string, path: string, kind = 'fun') => ({ name, kind, path });
+
+  it('un accesseur Java entre sous son nom nu', () => {
+    const index = javaAccessorIndex([node('getBar', 'a/Foo.java')]);
+    expect(index.get('bar')).toEqual(['getBar']);
+  });
+
+  it('un setter Java entre aussi sous isX, pour la paire isX()/setX()', () => {
+    const index = javaAccessorIndex([node('setBar', 'a/Foo.java')]);
+    expect(index.get('bar')).toEqual(['setBar']);
+    expect(index.get('isBar')).toEqual(['setBar']);
+  });
+
+  it('getX et setX de la même propriété partagent la clé', () => {
+    const index = javaAccessorIndex([node('getBar', 'a/Foo.java'), node('setBar', 'a/Foo.java')]);
+    expect(index.get('bar')).toEqual(['getBar', 'setBar']);
+  });
+
+  it('un accesseur déclaré en KOTLIN reste dehors', () => {
+    expect(javaAccessorIndex([node('getBar', 'a/Foo.kt')]).size).toBe(0);
+  });
+
+  it('ni une propriété, ni un nom qui commence par get sans majuscule', () => {
+    expect(javaAccessorIndex([node('getBar', 'a/Foo.java', 'val')]).size).toBe(0);
+    expect(javaAccessorIndex([node('gettysburg', 'a/Foo.java')]).size).toBe(0);
   });
 });

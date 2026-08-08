@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.2
+
+Three false positives found by running the dead-code checks against real Android and Kotlin projects instead of trusting them. The first one gave advice that stops a module from compiling.
+
+### Fixes
+- Stops reporting imports that Kotlin resolves by convention. `import androidx.compose.runtime.getValue` is required by `var state by remember { … }`, and the word `getValue` appears nowhere in the file, so the import scan called it unused. Removing it on that advice fails the build with "Property delegate must have a `getValue(…)` method", verified with a real Gradle compile. The same held for `componentN` from destructuring, `div` from `basePath / "sub"`, `set` from `x[i]` and every other operator convention. On one 4100 file project the import check reported 222 findings, of which 206 were this defect; the vendored kotlin-lsp corpus carried 7 more. The name list already existed and already guarded declarations, it had simply never been applied to imports.
+- Makes Find Dead Islands agree with the member scan about Java accessors. Kotlin reads a Java `getBar()` as `bar`, so a call site can never spell the method name; the member scan has known that since 1.42.1, the island scan did not, and reported live code as dead. On the same project it reported 12 accessors, 6 of them referenced from production Kotlin, and one dragged a live class into an island with it.
+- Counts `f.isBar = true` as a write to a Java `setBar()`. A Java `isX()`/`setX()` pair becomes one Kotlin property named `isX`, so the setter is never written `f.x = v`, and it was reported as unreferenced.
+
+### Notes
+- `scan-dead-islands.ts` gains `--name=<substring>`, which prints why each matching candidate is alive with the file and line that keeps it so. The outcome histogram collapsed `alive:root(path:line)` to `alive:root`, hiding exactly what an audit needs.
+
 ## 1.42.1
 
 Two defects found by auditing the dead-code family against its own promise. One turned detectors off without saying so, the other invented a declaration that does not exist and then took a live class down with it. Both were reproduced on a real repository before being fixed, and the fix was measured against that repository afterwards.

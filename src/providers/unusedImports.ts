@@ -11,7 +11,7 @@
  * make the whole module unloadable outside an extension host.
  */
 
-import { sanitizeForUsageScan } from '../util/kotlinScan';
+import { CONVENTION_FUN_NAMES, sanitizeForUsageScan } from '../util/kotlinScan';
 
 export interface UnusedImport {
   /** 0-based line of the import. */
@@ -21,6 +21,31 @@ export interface UnusedImport {
 }
 
 const IMPORT_RE = /^\s*import\s+([\w.]+?)(\.\*)?(?:\s+as\s+(\w+))?\s*(?:\/\/.*)?$/;
+
+/**
+ * Names Kotlin resolves BY CONVENTION, so the call site never spells them.
+ *
+ * `import androidx.compose.runtime.getValue` is required by `var x by remember
+ * { … }`, and the word `getValue` appears nowhere in the file. Reported as
+ * unused, removed on that advice, the module stops compiling: "Property
+ * delegate must have a 'getValue(…)' method". Verified on a real app, the
+ * compiler refuses the file the moment the import goes.
+ *
+ * The same holds for every operator convention: `component1` comes from
+ * destructuring, `iterator` from a `for` loop, `get` from `x[i]`, `invoke`
+ * from `x()`. None of them is ever written at the point of use.
+ *
+ * The cost is a genuinely unused import whose name happens to be one of these,
+ * which stays silent. That is the trade the whole family makes: an occurrence
+ * we cannot classify counts as a use.
+ *
+ * Same vocabulary as the declaration-side detectors (`unusedDeclarations.ts:163`,
+ * `unusedMembers.ts:456`), which have guarded these names since the start. The
+ * import side was the one place the list had never been applied.
+ */
+function isResolvedByConvention(effectiveName: string): boolean {
+  return CONVENTION_FUN_NAMES.has(effectiveName) || /^component\d+$/.test(effectiveName);
+}
 
 export function findUnusedImports(text: string): UnusedImport[] {
   const lines = text.split('\n');
@@ -52,6 +77,7 @@ export function findUnusedImports(text: string): UnusedImport[] {
   const unused: UnusedImport[] = [];
   for (const im of imports) {
     if (im.wildcard) continue; // conservative
+    if (isResolvedByConvention(im.effectiveName)) continue;
     const usageRe = new RegExp(`\\b${escapeRegExp(im.effectiveName)}\\b`);
     if (!usageRe.test(body)) {
       unused.push({ line: im.line, statement: im.statement });

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.31
+
+Kotlin Jump 1.42.31 repairs three things that were plainly broken: Organize Imports could turn the rest of a file into a comment, test coverage never appeared at all, and a `"""` written inside a comment killed the semantic colours from that line to the end of the file. Postfix completion on a safe call also stops producing Kotlin that does not compile.
+
+### Fixes
+- Keeps a comment written inside the import block. Organize Imports copied only the lines starting with `*` or `//`, so the inside of a `/* … */` vanished. When the lost line carried the `*/`, the comment stayed open and swallowed the rest of the file, class included: the module stopped compiling. An import commented out inside such a block is also no longer sorted as a real one.
+- Shows test coverage. The class name was read from the wrong attribute of the report, `sourcefilename` instead of `name`, so every entry resolved to a file called `Foo.kt.kt` and was dropped in silence. Coverage now also looks under the module that ran the tests, in the KMP source sets, and for Java files, instead of only `src/main/kotlin` of the first workspace folder.
+- Stops breaking the file on a safe call. Typing `viewModel?.` and picking a postfix template inserted `if (viewModel? == null)`, `val value = viewModel?` or `!viewModel?`, none of which compile. The question mark belongs to the dot, not to the receiver, and `let` still produces the `?.let` you want.
+- Restores the colours after a `"""` written in a comment. An example of a raw string inside a `//` or `/* */` comment opened a raw string that never closed, so semantic highlighting, occurrence highlighting and KDoc folding stopped there and never came back in that file.
+- Prints the release notes as written. This panel escaped everything and interpreted nothing, so the file names and flags quoted in the notes showed their backticks to the reader.
+
 ## 1.42.30
 
 Kotlin Jump 1.42.30 fixes the dead code family where it could break a build or a running app: a Delete quick fix that landed on the wrong lines after an unsaved edit, a manifest activity reported as missing on a large project and offered for removal, a custom view constructor whose `attrs` parameter looked unused, a shrinker keep list reported as an unused resource, and Room enums whose entries come back from the database.

@@ -11,9 +11,12 @@ import { parse as parseKotlin } from '../indexer/KotlinParser';
 import { parseJava } from '../indexer/JavaParser';
 import { escapeRegex } from '../providers/FindUsagesEngine';
 import { isInsideCommentOrString } from '../util/textUtils';
-import { uriToPath, pathToUri } from './utils';
+import { uriToPath, pathToUri, INDEXABLE_RE } from './utils';
 
 // ── Directories skipped during workspace scan ─────────────────────────────────
+
+/** Above this, the scan stops: an editor launched from `~` must not index a home directory. */
+export const MAX_SCANNED_FILES = 20_000;
 
 export const SKIP_DIRS = new Set([
   'build', '.gradle', '.git', 'node_modules', '.idea', 'out', 'tmp',
@@ -26,6 +29,7 @@ export async function indexFile(
   index: SymbolIndex,
   readFile: (p: string) => Promise<string> = p => fs.readFile(p, 'utf8'),
 ): Promise<void> {
+  if (!INDEXABLE_RE.test(fsPath)) return; // saving a README is not an index update
   try {
     const text   = await readFile(fsPath);
     const uri    = pathToUri(fsPath);
@@ -54,12 +58,17 @@ export async function scanWorkspace(root: string, index: SymbolIndex): Promise<v
     try { children = await fs.readdir(dir); } catch { return; }
     await Promise.all(children.map(async name => {
       if (SKIP_DIRS.has(name)) return;
+      if (name.startsWith('.')) return;           // .venv, .cache, dotfiles
+      if (entries.length >= MAX_SCANNED_FILES) return;
       const full = path.join(dir, name);
       let stat;
-      try { stat = await fs.stat(full); } catch { return; }
+      try { stat = await fs.lstat(full); } catch { return; }
+      // A symlink inside the project used to walk the scanner straight out of
+      // the root, indexing whatever it pointed at.
+      if (stat.isSymbolicLink()) return;
       if (stat.isDirectory()) {
         await walk(full);
-      } else if (name.endsWith('.kt') || name.endsWith('.kts') || name.endsWith('.java')) {
+      } else if (INDEXABLE_RE.test(name)) {
         entries.push(full);
       }
     }));

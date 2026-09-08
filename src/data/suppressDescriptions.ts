@@ -317,5 +317,9 @@ export const SUPPRESS_DESCRIPTIONS: Record<string, SuppressionDescription> = {
 /** Case-aware lookup. Kotlin uses UPPER_SNAKE_CASE; javac lowercase;
  *  Android Lint PascalCase. All three map directly — no normalisation. */
 export function lookupSuppression(id: string): SuppressionDescription | undefined {
-  return SUPPRESS_DESCRIPTIONS[id];
+  // `@Suppress("constructor")` would otherwise return a function off
+  // Object.prototype and be rendered as if it were a documented id.
+  return Object.prototype.hasOwnProperty.call(SUPPRESS_DESCRIPTIONS, id)
+    ? SUPPRESS_DESCRIPTIONS[id]
+    : undefined;
 }

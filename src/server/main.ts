@@ -19,6 +19,8 @@ import {
   HoverParams,
   ReferenceParams,
   WorkspaceSymbolParams,
+  DidChangeWatchedFilesNotification,
+  FileChangeType,
   Location,
   SymbolInformation,
   SymbolKind,
@@ -30,7 +32,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import * as fs from 'fs/promises';
 
 import { SymbolIndex } from '../indexer/SymbolIndex';
-import { wordAt, uriToPath, KIND_MAP, buildHoverMarkdown } from './utils';
+import { wordAt, uriToPath, pathToUri, KIND_MAP, buildHoverMarkdown, resolveWorkspaceRoots, preferByImports } from './utils';
 import { indexFile, scanWorkspace, findUsagesInWorkspace } from './scanner';
 import { runMcpServer } from './mcp';
 
@@ -55,9 +57,14 @@ const documents  = new TextDocuments(TextDocument);
 documents.listen(connection);
 
 const index = new SymbolIndex();
-let workspaceRoot = '';
+let workspaceRoots: string[] = [];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** The shim's Uri, the only shape SymbolIndex.remove needs. */
+function vscodeUri(uri: string): import('vscode').Uri {
+  return { toString: () => uri } as unknown as import('vscode').Uri;
+}
 
 function entryToLspLocation(entry: { uri: { toString(): string }; line: number; character: number }): Location {
   const pos = LspPosition.create(entry.line, entry.character);
@@ -67,13 +74,19 @@ function entryToLspLocation(entry: { uri: { toString(): string }; line: number; 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
 connection.onInitialize(async (params: InitializeParams): Promise<InitializeResult> => {
-  workspaceRoot = params.rootUri
-    ? uriToPath(params.rootUri)
-    : (params.rootPath ?? process.cwd());
+  workspaceRoots = resolveWorkspaceRoots(params);
 
   return {
     capabilities: {
-      textDocumentSync: TextDocumentSyncKind.Incremental,
+      // The object form is what asks for save notifications. With the bare
+      // enum, a conformant client never sends textDocument/didSave, and
+      // didSave was the ONLY thing refreshing the index: the server answered
+      // from its startup snapshot until it was restarted.
+      textDocumentSync: {
+        openClose: true,
+        change: TextDocumentSyncKind.Incremental,
+        save: { includeText: false },
+      },
       definitionProvider: true,
       hoverProvider: true,
       referencesProvider: true,
@@ -84,10 +97,30 @@ connection.onInitialize(async (params: InitializeParams): Promise<InitializeResu
 });
 
 connection.onInitialized(async () => {
-  connection.console.log(`[kotlin-jump] Scanning ${workspaceRoot}…`);
-  await scanWorkspace(workspaceRoot, index);
+  if (workspaceRoots.length === 0) {
+    connection.console.warn('[kotlin-jump] No workspace root announced — nothing indexed.');
+    return;
+  }
+  // Deletions and renames never reached the index: nothing watched the disk,
+  // so a removed class stayed navigable and a renamed one appeared twice.
+  try {
+    await connection.client.register(DidChangeWatchedFilesNotification.type, {
+      watchers: [{ globPattern: '**/*.{kt,kts,java}' }],
+    });
+  } catch { /* client without dynamic registration: save still refreshes */ }
+
+  connection.console.log(`[kotlin-jump] Scanning ${workspaceRoots.join(', ')}…`);
+  for (const root of workspaceRoots) await scanWorkspace(root, index);
   const { files, symbols } = index.stats();
   connection.console.log(`[kotlin-jump] Ready — ${symbols} symbols in ${files} files`);
+});
+
+connection.onDidChangeWatchedFiles(async ({ changes }) => {
+  for (const change of changes) {
+    if (change.type === FileChangeType.Deleted) index.remove(vscodeUri(change.uri));
+    else await indexFile(uriToPath(change.uri), index);
+  }
+  index.finalize();
 });
 
 // ── textDocument/definition ───────────────────────────────────────────────────
@@ -100,7 +133,9 @@ connection.onDefinition(async (params: DefinitionParams) => {
 
   const decls = index.lookup(hit.word);
   if (decls.length === 0) return null;
-  return decls.map(entryToLspLocation);
+  // Three same named classes in a project is normal; the file's own imports
+  // say which one it means, so do not hand the editor all of them.
+  return preferByImports(text, decls).map(entryToLspLocation);
 });
 
 // ── textDocument/hover ────────────────────────────────────────────────────────
@@ -131,7 +166,18 @@ connection.onReferences(async (params: ReferenceParams) => {
   const hit = wordAt(text, params.position.line, params.position.character);
   if (!hit || hit.word.length < 2) return null;
 
-  return findUsagesInWorkspace(hit.word, index, { isCancellationRequested: false });
+  // Read open buffers from the editor, not the disk: with unsaved edits above,
+  // every reported position was off by the number of inserted lines.
+  const locations = await findUsagesInWorkspace(
+    hit.word, index, { isCancellationRequested: false },
+    async p => documents.get(pathToUri(p))?.getText() ?? fs.readFile(p, 'utf8'),
+  );
+  if (params.context?.includeDeclaration === false) {
+    const decls = index.lookup(hit.word);
+    return locations.filter(loc => !decls.some(d =>
+      d.uri.toString() === loc.uri && d.line === loc.range.start.line));
+  }
+  return locations;
 });
 
 // ── workspace/symbol ──────────────────────────────────────────────────────────

@@ -39,6 +39,9 @@ import { Position } from '../test/unit/__mocks__/vscode';
 import * as IndexStore from '../src/indexer/IndexStore';
 import { isInsideCommentOrString } from '../src/util/textUtils';
 import { findDeadIslands } from '../src/providers/deadIslands';
+import { KotlinSemanticTokensProvider, TOKEN_TYPES, TOKEN_MODIFIERS } from '../src/providers/SemanticTokensProvider';
+import { KotlinFoldingRangeProvider } from '../src/providers/FoldingRangeProvider';
+import { KotlinDocumentHighlightProvider } from '../src/providers/DocumentHighlightProvider';
 
 const FIXTURE = path.resolve(__dirname, '../../test/kotlin-jump-demo/src/main/kotlin');
 const REPO_ROOT = path.resolve(__dirname, '../..');
@@ -201,7 +204,37 @@ async function main(): Promise<void> {
     }));
   }
 
-  // ── 5. IndexStore save+load round-trip ───────────────────────────────
+  // ── 5. Per keystroke paths ───────────────────────────────────────────
+  // These run on every edit of the open file, and NOTHING in this bench used
+  // to touch them: a change to the semantic token mask or to the folding scan
+  // was invisible to the watchdog. The providers cache by document version, so
+  // each run bumps it to time the real work rather than a cache hit.
+  {
+    const biggest = Object.keys(codeMap).sort((a, b) => codeMap[b].length - codeMap[a].length)[0];
+    const doc = mockDocument(biggest, codeMap[biggest]) as any;
+    const noCancel = { isCancellationRequested: false } as any;
+
+    const tokens = new KotlinSemanticTokensProvider(index, new vscodeMock.SemanticTokensLegend(TOKEN_TYPES, TOKEN_MODIFIERS) as any);
+    scenarios.push(await bench('semanticTokens.full', 50, () => {
+      doc.version++;
+      tokens.provideDocumentSemanticTokens(doc, noCancel);
+    }));
+
+    const folding = new KotlinFoldingRangeProvider(index);
+    scenarios.push(await bench('folding.ranges', 50, () => {
+      doc.version++;
+      folding.provideFoldingRanges(doc, {} as any, noCancel);
+    }));
+
+    const highlight = new KotlinDocumentHighlightProvider(index);
+    const hlPos = new Position(targets[0].pos.line, targets[0].pos.column + 1);
+    scenarios.push(await bench('highlight.occurrences', 50, () => {
+      doc.version++;
+      highlight.provideDocumentHighlights(mockDocument(targets[0].uri, codeMap[targets[0].uri]) as any, hlPos, noCancel);
+    }));
+  }
+
+  // ── 6. IndexStore save+load round-trip ───────────────────────────────
   // Stub a tiny in-memory storage so we measure (de)compression + JSON.
   const fakeStorageBytes: { v?: Uint8Array } = {};
   const origWrite = (vscodeMock.workspace.fs as any).writeFile;

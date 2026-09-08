@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.32
+
+Kotlin Jump 1.42.32 repairs the standalone language server that Neovim, Helix and Zed talk to. Its index was frozen at startup, it could index your home directory instead of your project, and Go to Definition answered with every class of that name in the workspace. The permission hover also stops missing `SET_ALARM`.
+
+### Fixes
+- Keeps the index in step with the disk. The server announced document sync in the short form, which does not ask for save notifications, and a conformant client therefore never sent one. Since save was the only refresh path, a deleted class stayed navigable, a renamed one appeared twice, and only a restart fixed it. The server now asks for save notifications and registers a file watcher, so deletions and renames land immediately.
+- Indexes your project, not your home directory. A client that sends `workspaceFolders` with a null `rootUri`, which is the modern form, fell through to the process working directory. Started from `~`, the server walked everything the user owns. All announced folders are indexed now, a project with several roots included, and no root announced means nothing scanned rather than a guess.
+- Answers Go to Definition with the class you imported. Three same named `User` classes in a project is ordinary, and the server offered all three every time. An explicit import settles it, a wildcard import narrows to its package, and otherwise the declaration from the file's own package wins.
+- Reports references at the right lines. They were read from the disk copy, so a few unsaved lines inserted above shifted every result. Open buffers are read from the editor now, and `includeDeclaration: false` is honoured instead of ignored.
+- Stops indexing what is not code. Saving a README injected its words as symbols, a symlink inside the project walked the scan out of the project, and nothing capped the walk.
+
 ## 1.42.31
 
 Kotlin Jump 1.42.31 repairs three things that were plainly broken: Organize Imports could turn the rest of a file into a comment, test coverage never appeared at all, and a `"""` written inside a comment killed the semantic colours from that line to the end of the file. Postfix completion on a safe call also stops producing Kotlin that does not compile.

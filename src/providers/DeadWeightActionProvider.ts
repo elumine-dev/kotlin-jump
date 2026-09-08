@@ -189,9 +189,27 @@ export class DeadWeightActionProvider implements vscode.CodeActionProvider {
 
       const comp = analysis.components.find(c => c.name === compMatch![2]);
       if (comp?.status !== 'missing-class' && comp?.status !== 'unreferenced') return [];
-      let end = line;
       const tag = compMatch![1];
-      while (end < document.lineCount - 1 && !new RegExp(`/>|</${tag}>`).test(document.lineAt(end).text)) end++;
+      // Only the opening tag's own `/>` closes a self-closing element; a
+      // child's `<action … />` used to end the removal, leaving orphan
+      // `</intent-filter>` and `</activity>` lines behind.
+      let end = line;
+      {
+        let text = '';
+        let openTagEnd = -1;
+        for (let i = line; i < document.lineCount; i++) {
+          text += document.lineAt(i).text + '\n';
+          openTagEnd = text.indexOf('>');
+          if (openTagEnd >= 0) { end = i; break; }
+        }
+        const selfClosing = openTagEnd > 0 && text[openTagEnd - 1] === '/';
+        if (!selfClosing) {
+          const closeRe = new RegExp(`</${tag}\\s*>`);
+          for (let i = end; i < document.lineCount; i++) {
+            if (closeRe.test(document.lineAt(i).text)) { end = i; break; }
+          }
+        }
+      }
       const title = comp.status === 'missing-class'
         ? `Remove ${comp.name} (class not found)`
         : `Remove ${comp.name} (declared but never referenced)`;

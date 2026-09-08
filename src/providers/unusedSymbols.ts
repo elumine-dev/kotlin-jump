@@ -112,6 +112,8 @@ export interface StaleImport {
 }
 
 /** Kinds this detector reasons about. `typealias` and `annotation` are v2. */
+// Declaration keywords: a line holding one is a declaration of its own.
+const DECL_KEYWORD_RE = /\b(?:val|var|fun|class|object|interface|typealias|const|enum|companion)\b/;
 const CANDIDATE_KINDS = new Set<string>([
   'class', 'interface', 'object', 'enum', 'dataClass', 'sealedClass',
   'fun', 'composable', 'val', 'var',
@@ -275,10 +277,20 @@ export function removalExtent(
   let firstLine = sym.line;
   for (let l = sym.line - 1; l >= 0; l--) {
     const trimmed = (lines[l] ?? '').trim();
-    if (trimmed.startsWith('@')) { firstLine = l; continue; }
-    if (trimmed.endsWith('*/')) {
+    // An annotation line that declares something of its own
+    // (`@Inject lateinit var analytics`) is a neighbour, not ours.
+    if (trimmed.startsWith('@') && !DECL_KEYWORD_RE.test(trimmed)) { firstLine = l; continue; }
+    // Same walk as unusedDeclarations.ts: only through comment-only lines.
+    // `val cache = … /* warm */` also ends with `*/`, and the walk used to
+    // climb from there to the licence header and delete the whole file top.
+    if (trimmed.endsWith('*/') && (trimmed.startsWith('/*') || trimmed.startsWith('*'))) {
       let k = l;
-      while (k >= 0 && !(lines[k] ?? '').trim().startsWith('/*')) k--;
+      while (k >= 0) {
+        const t = (lines[k] ?? '').trim();
+        if (t.startsWith('/*')) break;
+        if (!t.startsWith('*')) { k = -1; break; }
+        k--;
+      }
       if (k >= 0) { firstLine = k; l = k; continue; }
     }
     break;
@@ -874,7 +886,11 @@ export function findUnusedSymbols(input: UnusedSymbolScanInput): UnusedSymbol[] 
   for (const [p, findings] of byPath) {
     const text = textByPath.get(p);
     if (text === undefined) continue;
-    const empties = fileBecomesEmpty(text, findings.map(f => ({ start: f.removeStart, end: f.removeEnd })));
+    // Test-only findings never carry a removal: a file that still holds one
+    // is not emptied, and "Delete X.kt (nothing else in it)" was breaking tests.
+    const removable = findings.filter(f => f.verdict === 'unreferenced' && f.removeStart !== -1);
+    const empties = removable.length === findings.length
+      && fileBecomesEmpty(text, removable.map(f => ({ start: f.removeStart, end: f.removeEnd })));
     for (const f of findings) f.fileBecomesEmpty = empties;
   }
 

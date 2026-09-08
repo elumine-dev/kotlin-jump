@@ -101,10 +101,18 @@ export class ResourceCorpus {
     const decoder = new TextDecoder();
     let readFailed = false;
     const sources: ResourceSource[] = [];
+    // Offsets from the disk copy were applied to open documents with unsaved
+    // edits, and a deletion landed a few characters off, leaving a fragment
+    // that did not compile. The editor's text is the truth for open files.
+    const open = new Map<string, string>();
+    for (const d of vscode.workspace.textDocuments) {
+      if (d.uri.scheme === 'file' && d.isDirty) open.set(d.uri.fsPath, d.getText());
+    }
     await mapBatched(keptSources, async uri => {
       if (token?.isCancellationRequested) { readFailed = true; return; }
       try {
-        sources.push({ path: uri.fsPath, text: decoder.decode(await vscode.workspace.fs.readFile(uri)) });
+        const fromEditor = open.get(uri.fsPath);
+        sources.push({ path: uri.fsPath, text: fromEditor ?? decoder.decode(await vscode.workspace.fs.readFile(uri)) });
       } catch {
         // one unreadable file is enough to void the "nothing references it" claim
         readFailed = true;

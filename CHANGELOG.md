@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.42.11
+
+Kotlin Jump 1.42.11 audits the edits the dead-code family writes. A removal that could climb to the licence header, a catalog fix that broke the next alias, a "Delete file" offered on a file a test still needs, offsets computed on the disk copy of a file you were editing, and a manifest removal that stopped at the first child tag.
+
+### Fixes
+- Keeps "Delete unreferenced …" to the declaration, its own doc comment and its own annotations. The extent walked up from any line ending with `*/` to the nearest `/*` in the file, so a `/* warm */` at the end of the line above deleted everything from the licence header down. An annotation line that declares something itself (`@JvmField val analytics`) is no longer absorbed either. The same walk feeds the member, island and "Delete file" fixes.
+- Frees a `[versions]` entry only through its last referrer. Two dead aliases sharing a version got separate fixes, the first one deleted the version, and the second was left pointing at nothing, which Gradle refuses at the next sync. The "version entries freed" count follows.
+- Offers "Delete X.kt (nothing else in it)" only when every finding in the file is removable. A file holding a test-only symbol next to an unreferenced one was offered for deletion, and Remove All deleted it, breaking the tests.
+- Reads the dead-code corpus from open editors when they have unsaved edits. Offsets computed on the disk copy were applied to the document you were typing in, a few characters off, and the deletion left a fragment that did not compile.
+- Removes a manifest component as a whole. The removal ended at the first `/>` inside it, so an activity with an intent filter lost its opening lines and kept an orphan `</intent-filter>` and `</activity>`.
+- Never mixes a file deletion and a text edit on the same file in one Remove All. VS Code rejected the whole edit without a word when a stale-import removal targeted a file the same edit deleted.
+- Says what the Remote Config quick fix does: "Delete unread Remote Config key X here (2 other variants left)" instead of "from all 3 defaults files … (2 other variants left)".
+- Keeps the comments inside the import block through Organize Imports. A `// ktlint-disable` between two imports vanished; it now stays where it stands, and the imports on each side of it are sorted separately.
+- Moves a trailing line comment after the chain in Smart Join. `val x = listOf(1) // ints` joined with `.map { … }` used to turn the chain into comment text.
+- Runs the unreferenced-symbol scan once in "Find Everything Unused" instead of twice.
+
 ## 1.42.10
 
 Kotlin Jump 1.42.10 closes the fifth audit: a dead-code corpus that a cancelled scan could poison, Java parameters that Rename treated as workspace symbols, an Android Run button that could pin a non-existent Gradle task forever, and a Logcat banner whose trigger could never fire.

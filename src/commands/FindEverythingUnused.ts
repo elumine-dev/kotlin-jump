@@ -71,6 +71,7 @@ export async function findEverythingUnusedCommand(
       const sections: Section[] = [];
       const skipped: string[] = [];
 
+      let symbolFindings: ReturnType<typeof findUnusedSymbols> | undefined;
       // ── 1. Dead code inside files ────────────────────────────────────────
       progress.report({ message: 'dead code in files…' });
       if (cfg.get<boolean>('deadCodeSweep', true)) {
@@ -103,7 +104,7 @@ export async function findEverythingUnusedCommand(
           const published = data.moduleDirs.filter(dir =>
             data.sources.some(s => s.path.startsWith(`${dir}/build.gradle`)
               && /maven-publish|com\.vanniktech\.maven\.publish/.test(s.text)));
-          const symbols = findUnusedSymbols({
+          const symbols = symbolFindings = findUnusedSymbols({
             sources: data.sources,
             testSourceSets: cfg.get<string[]>('testSourceSets', []),
             publishedModules: published,
@@ -272,13 +273,9 @@ export async function findEverythingUnusedCommand(
         if (data.sourcesTruncated) {
           skipped.push('class members (workspace too large to prove absence)');
         } else {
-          // KJ-032 already ran above; reuse its findings for M12 when it did.
-          const dead = UnusedSymbolProvider.isEnabled() && !data.sourcesTruncated
-            ? findUnusedSymbols({
-              sources: data.sources,
-              testSourceSets: cfg.get<string[]>('testSourceSets', []),
-            }).map(f => ({ path: f.path, removeStart: f.removeStart, removeEnd: f.removeEnd }))
-            : [];
+          // KJ-032 already ran above; reuse its findings for M12 when it did
+          // (it used to run the whole scan a second time here).
+          const dead = (symbolFindings ?? []).map(f => ({ path: f.path, removeStart: f.removeStart, removeEnd: f.removeEnd }));
           const members = findUnusedMembers({
             sources: data.sources,
             testSourceSets: cfg.get<string[]>('testSourceSets', []),

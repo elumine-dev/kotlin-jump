@@ -71,9 +71,10 @@ export class KotlinFileProvider implements vscode.WorkspaceSymbolProvider {
     let entries: SymbolEntry[];
     if (kinds && !name) {
       // "@class:" with no name → list all symbols of that kind
-      entries = this.index.filterByKind(kinds);
+      entries = this.index.filterByKind(kinds, 200, true);
     } else {
-      entries = this.index.search(name);
+      // Locals are not destinations: they filled the cap before the classes.
+      entries = this.index.search(name, undefined, true);
       if (kinds) entries = entries.filter(e => kinds.has(e.kind));
     }
 

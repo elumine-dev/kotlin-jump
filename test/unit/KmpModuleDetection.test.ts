@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { SymbolIndex } from '../../src/indexer/SymbolIndex';
 import { parse } from '../../src/indexer/KotlinParser';
+import { moduleRootFor } from '../../src/indexer/FileScanner';
 
 // Must stay in sync with FileScanner.ts
 const KMP_SOURCE_SET_RE = /[/\\]src[/\\]([a-z]\w+(?:Main|Test))[/\\]/;
@@ -10,13 +11,10 @@ const KMP_SOURCE_SET_RE = /[/\\]src[/\\]([a-z]\w+(?:Main|Test))[/\\]/;
  * Must stay in sync with the implementation in FileScanner.ts.
  */
 function moduleFor(fsPath: string, moduleMap: Map<string, string>): string | undefined {
-  for (const [name, rootPath] of moduleMap) {
-    if (fsPath.startsWith(rootPath)) {
-      const rel = fsPath.slice(rootPath.length);
-      const kmp = KMP_SOURCE_SET_RE.exec(rel);
-      if (kmp) return `${name} (${kmp[1]})`;
-      return name;
-    }
+  const hit = moduleRootFor(fsPath, moduleMap);
+  if (hit) {
+    const kmp = KMP_SOURCE_SET_RE.exec(hit.rel);
+    return kmp ? `${hit.name} (${kmp[1]})` : hit.name;
   }
   const kmp = KMP_SOURCE_SET_RE.exec(fsPath);
   if (kmp) return kmp[1];
@@ -175,15 +173,15 @@ describe('moduleFor — module map + KMP source set', () => {
     expect(moduleFor('/project/Foo.kt', new Map())).toBeUndefined();
   });
 
-  // Known limitation: Map insertion order determines which module matches first
-  it('overlapping module paths: first inserted entry wins', () => {
+  // The most specific root wins, whatever the insertion order: :feature:auth
+  // files used to land in :feature and "Run test" ran the wrong Gradle task.
+  it('overlapping module paths: the longest matching root wins', () => {
     const map = new Map([
       [':feature',      '/project/feature'],       // inserted first
       [':feature:auth', '/project/feature/auth'],  // more specific, inserted second
     ]);
-    // /project/feature/auth starts with /project/feature → first entry wins
     const result = moduleFor('/project/feature/auth/src/commonMain/kotlin/Foo.kt', map);
-    expect(result).toBe(':feature (commonMain)');  // NOT ':feature:auth (commonMain)'
+    expect(result).toBe(':feature:auth (commonMain)');
   });
 });
 

@@ -47,7 +47,17 @@ export class BundledStdlibProvider {
     private readonly extensionUri: vscode.Uri,
   ) {}
 
-  async load(): Promise<{ files: number }> {
+  private inFlight?: Promise<{ files: number }>;
+
+  /** Activation and an early Re-index both call this: one restore at a time. */
+  load(): Promise<{ files: number }> {
+    if (!this.inFlight) {
+      this.inFlight = this.doLoad().finally(() => { this.inFlight = undefined; });
+    }
+    return this.inFlight;
+  }
+
+  private async doLoad(): Promise<{ files: number }> {
     const cfg = vscode.workspace.getConfiguration('kotlinJump');
     if (!cfg.get<boolean>('useBundledStdlib', true)) return { files: 0 };
     if (!cfg.get<boolean>('indexSourcesJars', true)) return { files: 0 };

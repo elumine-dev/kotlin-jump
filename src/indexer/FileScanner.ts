@@ -72,8 +72,9 @@ export class FileScanner {
     const t0 = Date.now();
     try {
       const maxFileBytes = vscode.workspace.getConfiguration('kotlinJump').get<number>('fileSizeLimit', 512) * 1024;
+      if (uri.fsPath.includes('.kapt_metadata')) return;
       const bytes = await vscode.workspace.fs.readFile(uri);
-      if (bytes.byteLength > maxFileBytes) return;
+      if (bytes.byteLength > maxFileBytes) { this.index.remove(uri); return; }
       const text   = this.decoder.decode(bytes);
       const parsed = await this.parseText(uri.toString(), text, uri.fsPath.endsWith('.java'));
       this.index.add(parsed, this.moduleFor(uri));
@@ -102,14 +103,16 @@ export class FileScanner {
         if (token.cancelled) return; // another scan started — bail out
         // cursor++ is synchronous — safe in single-threaded JS event loop
         const uri = uris[cursor++];
-        if (uri.fsPath.includes('.kapt_metadata') || uri.fsPath.includes('_metadata')) continue;
+        if (uri.fsPath.includes('.kapt_metadata')) continue;
         try {
           const bytes = await vscode.workspace.fs.readFile(uri);
-          if (bytes.byteLength > maxFileBytes) continue;
+          // A file that outgrew the limit since the snapshot kept its old
+          // symbols and lines: a skipped file is an emptied file.
+          if (bytes.byteLength > maxFileBytes) { this.index.remove(uri); continue; }
           const text   = this.decoder.decode(bytes);
           const parsed = await this.parseText(uri.toString(), text, uri.fsPath.endsWith('.java'));
           if (!token.cancelled) this.index.add(parsed, this.moduleFor(uri));
-        } catch { /* skip unreadable / deleted files */ }
+        } catch { if (!token.cancelled) this.index.remove(uri); /* unreadable / deleted */ }
       }
     };
 
@@ -132,17 +135,35 @@ export class FileScanner {
 
   private moduleFor(uri: vscode.Uri): string | undefined {
     const p = uri.fsPath;
-    for (const [name, rootPath] of this.moduleMap) {
-      if (p.startsWith(rootPath)) {
-        const rel = p.slice(rootPath.length);
-        const kmp = KMP_SOURCE_SET_RE.exec(rel);
-        if (kmp) return `${name} (${kmp[1]})`;
-        return name;
-      }
+    const hit = moduleRootFor(p, this.moduleMap);
+    if (hit) {
+      const kmp = KMP_SOURCE_SET_RE.exec(hit.rel);
+      return kmp ? `${hit.name} (${kmp[1]})` : hit.name;
     }
     // Fallback: detect KMP source set without a module map entry (no settings.gradle)
     const kmp = KMP_SOURCE_SET_RE.exec(p);
     if (kmp) return kmp[1];
     return undefined;
   }
+}
+
+/**
+ * The module whose root contains `fsPath`: the longest root that is a whole
+ * path prefix. A bare `startsWith` put `app-widgets/` files in `:app` and
+ * `feature/home/` in `:feature` (so "Run test" ran the wrong Gradle task),
+ * and never matched on Windows, where settings.gradle roots were joined with
+ * `/` while fsPath uses `\`.
+ */
+export function moduleRootFor(
+  fsPath: string,
+  moduleMap: ReadonlyMap<string, string>,
+): { name: string; rel: string } | undefined {
+  const p = fsPath.replace(/\\/g, '/');
+  let best: { name: string; rel: string; len: number } | undefined;
+  for (const [name, rootPath] of moduleMap) {
+    const rootDir = rootPath.replace(/\\/g, '/').replace(/\/+$/, '');
+    if (p !== rootDir && !p.startsWith(rootDir + '/')) continue;
+    if (!best || rootDir.length > best.len) best = { name, rel: p.slice(rootDir.length), len: rootDir.length };
+  }
+  return best && { name: best.name, rel: best.rel };
 }

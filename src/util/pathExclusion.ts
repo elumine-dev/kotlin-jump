@@ -11,8 +11,23 @@ import picomatch from 'picomatch';
  * exactly while VS Code's own git integration reacts to the same files.
  * Watching what we deliberately refused to index was pure waste on top.
  */
-export function makeExclusionMatcher(patterns: readonly string[]): (path: string) => boolean {
+export function makeExclusionMatcher(
+  patterns: readonly string[],
+  // Workspace folder paths: `app/build/**` is relative to one of them for
+  // findFiles, and the watcher tested only the absolute path, so the first
+  // Gradle build indexed `app/build/generated/**` behind the scan's back.
+  roots: readonly string[] = [],
+): (path: string) => boolean {
   if (patterns.length === 0) return () => false;
   const matchers = patterns.map(p => picomatch(p, { dot: true }));
-  return (path: string) => matchers.some(m => m(path));
+  const prefixes = roots.map(r => r.replace(/\/+$/, '') + '/');
+  return (path: string) => {
+    if (matchers.some(m => m(path))) return true;
+    for (const prefix of prefixes) {
+      if (!path.startsWith(prefix)) continue;
+      const rel = path.slice(prefix.length);
+      if (matchers.some(m => m(rel))) return true;
+    }
+    return false;
+  };
 }

@@ -55,6 +55,24 @@ describe('Étendue de suppression et annotations', () => {
     expect(text.slice(ghostly.removeStart, ghostly.removeEnd)).toBe('@Deprecated("Use the val instead")\nfun ghostly() = 1\n');
   });
 
+  it('une annotation qui déclare quelque chose reste au voisin', () => {
+    // La remontée ne doit pas avaler la déclaration d'à côté : elle porte
+    // son annotation, et la supprimer emporterait du code vivant.
+    const text = [
+      'package com.x',
+      '',
+      '@JvmField var keepMe = 1',
+      'class Ghost',
+      '',
+      'fun use() = keepMe',
+    ].join('\n');
+    const findings = findUnusedSymbols({ sources: [f(`${MAIN}/A.kt`, text)], testSourceSets: TEST_SETS });
+    const ghost = findings.find(x => x.name === 'Ghost')!;
+    expect(text.slice(ghost.removeStart, ghost.removeEnd)).toBe('class Ghost\n');
+    const ext = currentRemovalExtent(`${MAIN}/A.kt`, text, 'Ghost', 'class')!;
+    expect(text.slice(ext.removeStart, ext.removeEnd)).toBe('class Ghost\n');
+  });
+
   it('currentRemovalExtent suit une édition non sauvegardée au-dessus de la déclaration', () => {
     const before = 'package com.x\nval label = "hi"\nclass Ghost {\n    fun x() = 1\n}\n';
     const after = 'package com.x\nval label = "hello there, longer"\nclass Ghost {\n    fun x() = 1\n}\n';
@@ -86,6 +104,30 @@ describe('ResourceCorpus', () => {
       expect((corpus as any).cacheIsStale(scanned)).toBe(false);
     } finally {
       (workspace as any).textDocuments = orig;
+    }
+  });
+
+  it('get() relit le corpus quand un éditeur ouvert a changé depuis le scan', async () => {
+    const corpus = new ResourceCorpus();
+    const uri = Uri.file('/proj/app/src/main/kotlin/A.kt');
+    const origFind = workspace.findFiles;
+    const origRead = workspace.fs.readFile;
+    const origDocs = (workspace as any).textDocuments;
+    workspace.findFiles = (async (glob: string) => (glob.includes('{kt,kts,java') ? [uri] : [])) as any;
+    workspace.fs.readFile = (async () => Buffer.from('class Old')) as any;
+    (workspace as any).textDocuments = [];
+    try {
+      const first = await corpus.get();
+      expect(first.sources.map(s => s.text)).toEqual(['class Old']);
+      // L'utilisateur édite sans sauvegarder : le cache de 60 s servait encore
+      // l'ancien texte, et la suppression d'un quick fix tombait à côté.
+      (workspace as any).textDocuments = [{ isDirty: true, uri: { fsPath: uri.fsPath }, getText: () => 'class New' }];
+      const second = await corpus.get();
+      expect(second.sources.map(s => s.text)).toEqual(['class New']);
+    } finally {
+      workspace.findFiles = origFind;
+      workspace.fs.readFile = origRead;
+      (workspace as any).textDocuments = origDocs;
     }
   });
 

@@ -165,6 +165,18 @@ describe('withoutDeclaration', () => {
     expect(withoutDeclaration(results, uri, 3, 4).map(r => r.character)).toEqual([30, 2]);
   });
 
+  it('la déclaration n\'est pas toujours le premier jeton de sa ligne', () => {
+    // `@JvmName("send") fun send()` : le premier « send » de la ligne est dans
+    // l'annotation, la déclaration est le second. En retirant le premier, la
+    // déclaration restait comptée comme usage et une vraie mention partait.
+    const sameLine = [
+      { uri: {} as any, uriString: uri, line: 7, character: 10, lineText: '' },
+      { uri: {} as any, uriString: uri, line: 7, character: 21, lineText: '' },
+      { uri: {} as any, uriString: uri, line: 9, character: 4, lineText: '' },
+    ];
+    expect(withoutDeclaration(sameLine, uri, 7, 21).map(r => r.character)).toEqual([10, 4]);
+  });
+
   it('sans colonne exacte, retire le premier résultat de la ligne', () => {
     expect(withoutDeclaration(results, uri, 3, 99).map(r => r.character)).toEqual([30, 2]);
     expect(withoutDeclaration(results, uri, 3).map(r => r.character)).toEqual([30, 2]);

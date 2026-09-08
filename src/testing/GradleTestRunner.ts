@@ -973,7 +973,7 @@ async function parseCoverage(modulePath: string): Promise<vscode.FileCoverage[]>
   for (const xmlPath of candidates) {
     try {
       const xml = fs.readFileSync(xmlPath, 'utf8');
-      parseCoverageXml(xml, results);
+      parseCoverageXml(xml, results, modulePath);
       if (results.length > 0) break; // use first successful parse
     } catch { /* file not found */ }
   }
@@ -981,9 +981,13 @@ async function parseCoverage(modulePath: string): Promise<vscode.FileCoverage[]>
   return results;
 }
 
-function parseCoverageXml(xml: string, results: vscode.FileCoverage[]): void {
+function parseCoverageXml(xml: string, results: vscode.FileCoverage[], modulePath?: string): void {
   // Parse <class name="..." sourcefilename="..."> with <counter type="LINE" covered="X" missed="Y"/>
-  const RE_CLASS_BLOCK = /<class\s[^>]*name="([^"]*)"[^>]*>([\s\S]*?)<\/class>/g;
+  // Greedy `[^>]*` before `name="` backtracked to the LAST `name="` of the
+  // tag, the one inside `sourcefilename="`: the class name read `Foo.kt`, no
+  // source ever resolved, and coverage never appeared. `\b` forbids matching
+  // inside another attribute.
+  const RE_CLASS_BLOCK = /<class\s[^>]*?\bname="([^"]*)"[^>]*>([\s\S]*?)<\/class>/g;
   const RE_COUNTER = /<counter\s+type="(\w+)"\s+missed="(\d+)"\s+covered="(\d+)"/g;
 
   let cm: RegExpExecArray | null;
@@ -1003,7 +1007,7 @@ function parseCoverageXml(xml: string, results: vscode.FileCoverage[]): void {
     }
 
     // Find the source file URI via workspace
-    const sourceFile = findSourceUri(name);
+    const sourceFile = findSourceUri(name, modulePath);
     if (!sourceFile) continue;
 
     const statementCov = new vscode.TestCoverageCount(linesCovered, linesCovered + linesMissed);
@@ -1017,20 +1021,41 @@ function parseCoverageXml(xml: string, results: vscode.FileCoverage[]): void {
   }
 }
 
-function findSourceUri(className: string): vscode.Uri | undefined {
-  // className is like "com/example/news/foo/Bar" — convert to file path fragment
-  const fragment = className.replace(/\$/g, '.') + '.kt';
-  const folders = vscode.workspace.workspaceFolders;
-  if (!folders) return undefined;
-  // Best-effort: construct URI from first workspace folder
-  const root = folders[0].uri.fsPath;
-  const candidates = [
-    path.join(root, 'src', 'main', 'kotlin', fragment),
-    path.join(root, 'src', 'main', 'java', fragment),
-  ];
-  const fs = require('fs');
-  for (const c of candidates) {
-    try { fs.accessSync(c); return vscode.Uri.file(c); } catch { /* not found */ }
+/** Source sets a JVM class can come from, in the order Gradle lays them out. */
+const COVERAGE_SOURCE_SETS = ['main', 'commonMain', 'jvmMain', 'androidMain', 'debug', 'release'];
+const COVERAGE_SOURCE_DIRS = ['kotlin', 'java'];
+
+/**
+ * The file a coverage entry belongs to. The class name is a JVM path such as
+ * com/example/news/Foo, and a nested class lives in the file of its outer one.
+ *
+ * Searched under the MODULE that ran the tests first, then the workspace
+ * roots. Looking only under src/main/kotlin of the first workspace folder,
+ * with a forced .kt, meant no multi module project, no KMP source set and no
+ * Java class ever resolved, so their coverage was silently dropped.
+ */
+export function coverageCandidatePaths(className: string, modulePath?: string): string[] {
+  const outer = className.split('#')[0].replace(/[$].*$/, '');
+  const roots: string[] = [];
+  if (modulePath) roots.push(modulePath);
+  for (const folder of vscode.workspace.workspaceFolders ?? []) {
+    if (!roots.includes(folder.uri.fsPath)) roots.push(folder.uri.fsPath);
+  }
+  const out: string[] = [];
+  for (const root of roots) {
+    for (const set of COVERAGE_SOURCE_SETS) {
+      for (const dir of COVERAGE_SOURCE_DIRS) {
+        for (const ext of ['.kt', '.java']) out.push(path.join(root, 'src', set, dir, outer + ext));
+      }
+    }
+  }
+  return out;
+}
+
+function findSourceUri(className: string, modulePath?: string): vscode.Uri | undefined {
+  const fsMod = require('fs') as typeof import('fs');
+  for (const candidate of coverageCandidatePaths(className, modulePath)) {
+    try { fsMod.accessSync(candidate); return vscode.Uri.file(candidate); } catch { /* not found */ }
   }
   return undefined;
 }

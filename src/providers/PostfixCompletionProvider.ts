@@ -105,10 +105,15 @@ export function expandPostfix(
   template: string,
   rawReceiver: string,
 ): string | null {
-  const numeric = NUMERIC_LITERAL.test(rawReceiver);
+  // `viewModel?.` hands us `viewModel?`: the safe call's `?` belongs to the
+  // dot, not to the receiver. Left in, every template but `let` produced
+  // Kotlin that does not compile (`if (viewModel? == null)`).
+  const base     = rawReceiver.replace(/\?+$/, '');
+  const safeCall = base !== rawReceiver;
+  const numeric = NUMERIC_LITERAL.test(base);
   // The receiver lands in a SnippetString: `$name` and `${total}` would be
   // read as snippet variables and vanish. Escape what the snippet grammar owns.
-  const receiver = rawReceiver.replace(/[\\$}]/g, '\\$&');
+  const receiver = base.replace(/[\\$}]/g, '\\$&');
   const inner = '    ';
   /** `head { body }` block, one level of relative indentation. */
   const block = (head: string, body: string) =>
@@ -116,7 +121,7 @@ export function expandPostfix(
 
   switch (template as PostfixTemplate) {
     case 'let':
-      return `${receiver}.let { $0 }`;
+      return `${receiver}${safeCall ? '?' : ''}.let { $0 }`;
     case 'val':
       return `val \${1:value} = ${receiver}`;
     case 'if':

@@ -134,10 +134,10 @@ export class WhatsNewPanel {
   private static buildHtml(data: WhatsNewData, cspSource: string = ''): string {
     const title = this.escapeHtml(data.title || "What's New in Kotlin Jump");
     const version = this.escapeHtml(data.version);
-    const tagline = this.escapeHtml(
+    const tagline = this.richText(
       data.tagline || 'Fast scan. Clear value. No fluff.'
     );
-    const summary = this.escapeHtml(data.summary);
+    const summary = this.richText(data.summary);
 
     const highlightsHtml = (data.highlights || [])
       .slice(0, 3)
@@ -151,10 +151,10 @@ export class WhatsNewPanel {
         return `
           <article class="card">
             <div class="badge ${badgeClass}">${this.escapeHtml(badgeLabel)}</div>
-            <h3>${this.escapeHtml(highlight.title)}</h3>
+            <h3>${this.richText(highlight.title)}</h3>
             ${
               highlight.description
-                ? `<p>${this.escapeHtml(highlight.description)}</p>`
+                ? `<p>${this.richText(highlight.description)}</p>`
                 : ''
             }
             ${mediaHtml}
@@ -170,7 +170,7 @@ export class WhatsNewPanel {
             (bullet) => `
               <div class="item">
                 <span class="bullet"></span>
-                <p>${this.escapeHtml(bullet)}</p>
+                <p>${this.richText(bullet)}</p>
               </div>
             `
           )
@@ -182,7 +182,7 @@ export class WhatsNewPanel {
 
         return `
           <section class="section">
-            <h2>${this.escapeHtml(section.heading)}</h2>
+            <h2>${this.richText(section.heading)}</h2>
             <div class="list">
               ${bullets}
             </div>
@@ -402,6 +402,14 @@ export class WhatsNewPanel {
       color: var(--vscode-editor-foreground);
     }
 
+    code {
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 0.92em;
+      padding: 0.1em 0.35em;
+      border-radius: 4px;
+      background: var(--vscode-textCodeBlock-background, rgba(127, 127, 127, 0.18));
+    }
+
     .footer {
       display: flex;
       flex-wrap: wrap;
@@ -525,6 +533,17 @@ export class WhatsNewPanel {
       default:
         return 'badge-note';
     }
+  }
+
+  /**
+   * Escapes, then turns `code spans` written in the notes into real <code>.
+   * Everything is escaped BEFORE the spans are cut, so nothing inside them can
+   * open a tag. Without this the panel printed the backticks verbatim, and a
+   * bullet naming a file or a flag showed its punctuation to the reader.
+   * A lone backtick, or a pair straddling a line break, stays literal.
+   */
+  private static richText(value: string): string {
+    return this.escapeHtml(value).replace(/`([^`\n]+)`/g, '<code>$1</code>');
   }
 
   private static escapeHtml(value: string): string {

@@ -1,34 +1,34 @@
 {
-  "version": "1.42.30",
+  "version": "1.42.31",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Delete actions you can trust",
-  "summary": "Kotlin Jump 1.42.30 fixes the dead code family where it could break a build or a running app: a Delete quick fix that landed on the wrong lines after an unsaved edit, a manifest activity reported as missing on a large project and offered for removal, a custom view constructor whose `attrs` parameter looked unused, a shrinker keep list reported as an unused resource, and Room enums whose entries come back from the database.",
+  "tagline": "Three features that were simply broken",
+  "summary": "Kotlin Jump 1.42.31 repairs three things that were plainly broken: Organize Imports could turn the rest of a file into a comment, test coverage never appeared at all, and a `\"\"\"` written inside a comment killed the semantic colours from that line to the end of the file. Postfix completion on a safe call also stops producing Kotlin that does not compile.",
   "highlights": [
     {
-      "title": "The fix deletes the right lines",
+      "title": "Organize Imports keeps your file",
       "kind": "fix",
-      "description": "Removal extents are recomputed on the current text, so an unsaved edit above a declaration no longer shifts the deletion, and annotations spanning several lines go with their declaration."
+      "description": "A `/* … */` comment inside the import block is copied verbatim. Losing its closing line used to comment out the rest of the file."
     },
     {
-      "title": "Nothing removed on a guess",
+      "title": "Coverage finally shows up",
       "kind": "fix",
-      "description": "A capped file listing no longer reports a live activity as missing, a custom view keeps its inflation constructor, and a shrinker keep list keeps the resources it protects."
+      "description": "The class name was read from the wrong attribute of the report, so every entry was dropped. Sources are now searched under the tested module, the KMP source sets and Java files."
     },
     {
-      "title": "Runtime readers respected",
+      "title": "Colours survive a quoted example",
       "kind": "fix",
-      "description": "Room enums, strings reached by getIdentifier, Kotlin test classes outside a Gradle test source set and modules published through a version catalog are no longer reported as dead."
+      "description": "A `\"\"\"` written inside a comment no longer opens a raw string that never closes, which killed semantic colours and KDoc folding to the end of the file."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Quick fixes recompute their extent on the current text, and the shared corpus refreshes as soon as an open editor differs from the scan.",
-        "A multiline annotation, an annotation holding a keyword in its argument, and a qualified `@Subscribe` are removed with their declaration.",
-        "Past the source file cap, no manifest component and no dependency is offered for removal.",
-        "`attrs: AttributeSet?`, `res/raw/keep.xml` and the resources its wildcards protect, and strings reached by `getIdentifier` stay put.",
-        "Room `@Entity` enums, Kotlin `@Test` classes in any folder, and modules published through a catalog alias are no longer reported as dead."
+        "Organize Imports copies a `/* … */` inside the import block verbatim, and stops sorting a commented out import as a real one.",
+        "Coverage reads the class name from `name`, not `sourcefilename`, and resolves sources under the module, the KMP source sets and `.java` files.",
+        "Postfix completion on `viewModel?.` inserts code that compiles, and `let` keeps its `?.let` form.",
+        "A `\"\"\"` inside a `//` or `/* */` comment no longer disables semantic colours, occurrence highlighting and KDoc folding for the rest of the file.",
+        "The release notes panel renders the quoted file names and flags as code instead of printing backticks."
       ]
     }
   ],

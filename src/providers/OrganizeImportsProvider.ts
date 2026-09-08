@@ -57,11 +57,26 @@ export function organizeImports(
   // comment keeps standing above the import it was written for.
   const parsed: ParsedImport[] = [];
   const separators: { afterIndex: number; text: string }[] = [];
+  // A `/* … */` inside the block is copied verbatim, line by line. Without
+  // the state, an interior line starting with neither `*` nor `//` was
+  // dropped: the comment lost its `*/` and the rest of the FILE became a
+  // comment, so the module stopped compiling.
+  let inBlockComment = false;
   for (let i = firstLine; i <= lastLine; i++) {
+    const trimmed = lines[i].trim();
+    if (inBlockComment) {
+      separators.push({ afterIndex: parsed.length, text: lines[i] });
+      if (trimmed.includes('*/')) inBlockComment = false;
+      continue;
+    }
+    if (trimmed.startsWith('/*')) {
+      separators.push({ afterIndex: parsed.length, text: lines[i] });
+      if (!trimmed.includes('*/')) inBlockComment = true;
+      continue; // a commented out import is not an import
+    }
     const m = RE_IMPORT_LINE.exec(lines[i]);
     if (!m) {
-      const trimmed = lines[i].trim();
-      if (trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*')) separators.push({ afterIndex: parsed.length, text: lines[i] });
+      if (trimmed.startsWith('//') || trimmed.startsWith('*')) separators.push({ afterIndex: parsed.length, text: lines[i] });
       continue; // blank line — dropped
     }
     const path       = m[1];

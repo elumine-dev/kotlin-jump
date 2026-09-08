@@ -456,11 +456,41 @@ export type TripleStringMask = Map<number, [number, number][]>;
 export function computeTripleStringMask(lines: string[]): TripleStringMask {
   const mask: TripleStringMask = new Map();
   let open = false;
+  // A `"""` written inside a comment used to open a raw string that never
+  // closed: semantic colours, occurrence highlighting and KDoc folding died
+  // from that line to the end of the file.
+  let inComment = false;
   for (let li = 0; li < lines.length; li++) {
     const line = lines[li];
     let col = 0;
     let from = open ? 0 : -1;
     while (true) {
+      if (!open) {
+        // Skip what a comment owns before looking for a `"""`.
+        let scan = col;
+        let skipped = false;
+        while (scan < line.length) {
+          if (inComment) {
+            const close = line.indexOf('*/', scan);
+            if (close === -1) { scan = line.length; skipped = true; break; }
+            inComment = false;
+            scan = close + 2;
+            skipped = true;
+            continue;
+          }
+          const lineComment = line.indexOf('//', scan);
+          const blockOpen   = line.indexOf('/*', scan);
+          const triple      = line.indexOf('"""', scan);
+          const firstComment = lineComment === -1 ? blockOpen
+            : blockOpen === -1 ? lineComment : Math.min(lineComment, blockOpen);
+          if (firstComment === -1 || (triple !== -1 && triple < firstComment)) break;
+          if (firstComment === lineComment) { scan = line.length; skipped = true; break; }
+          inComment = true;
+          scan = firstComment + 2;
+          skipped = true;
+        }
+        if (skipped) { col = scan; if (col >= line.length) break; continue; }
+      }
       const at = line.indexOf('"""', col);
       if (at === -1) break;
       if (!open) {

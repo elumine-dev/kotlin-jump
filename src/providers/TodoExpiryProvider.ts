@@ -53,7 +53,7 @@ export function findOverdueTodos(
 }
 
 /** UTC midnight of the local current date (so "today" matches the user's wall clock). */
-function todayUtcMidnight(): number {
+export function todayUtcMidnight(): number {
   const now = new Date();
   return Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
 }

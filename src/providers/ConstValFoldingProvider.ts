@@ -31,6 +31,7 @@ export class ConstValFoldingProvider implements vscode.Disposable {
   // re-emit the cached buckets — they NEVER trigger the heavy regex +
   // index pass, which was the source of perceived fold/unfold lag.
   private _cache = new WeakMap<vscode.TextDocument, CachedDecorations>();
+  private readonly _entriesMemo = new Map<string, ReturnType<SymbolIndex['lookup']>>();
 
   constructor(private readonly index: SymbolIndex) {
     this._subs = [
@@ -82,6 +83,16 @@ export class ConstValFoldingProvider implements vscode.Disposable {
     const optsByLine     = new Map<number, vscode.DecorationOptions[]>();
     const swatchesByLine = new Map<number, vscode.DecorationOptions[]>();
     const lookupMemo     = new Map<string, /* constValue */ string | null>();
+    this._entriesMemo.clear();
+    // A name this file declares resolves here or nowhere: `private val TAG =
+    // "Repo"` was folded to another file's `const val TAG = "MainActivity"`.
+    const localDecls = new Map<string, string | null>();
+    const uriStr = doc.uri?.toString?.();
+    const fileSymbols = uriStr && typeof this.index.getFileSymbols === 'function' ? this.index.getFileSymbols(uriStr) : [];
+    for (const e of fileSymbols) {
+      if ((e.kind !== 'val' && e.kind !== 'var') || !/^[A-Z][A-Z0-9_]+$/.test(e.name)) continue;
+      localDecls.set(e.name, e.isConst && e.constValue ? e.constValue : null);
+    }
 
     // Suivi des raw strings multi-lignes : `COUNT(m.id)` dans un SQL
     // triple-quoted ne doit JAMAIS être replié en `10(m.id)` — le garde
@@ -98,7 +109,7 @@ export class ConstValFoldingProvider implements vscode.Disposable {
       }
       if (triples % 2 !== 0) inRawString = true;
       if (/\bconst\s+val\b/.test(text)) continue;
-      const lineOpts = this._scanLine(i, text, lookupMemo);
+      const lineOpts = this._scanLine(i, text, lookupMemo, localDecls);
       if (lineOpts.opts.length      > 0) optsByLine.set(i,     lineOpts.opts);
       if (lineOpts.swatches.length  > 0) swatchesByLine.set(i, lineOpts.swatches);
     }
@@ -113,19 +124,35 @@ export class ConstValFoldingProvider implements vscode.Disposable {
    *  only bail when values disagree (e.g. `DevConfig.PORT = 8080` vs
    *  `ProdConfig.PORT = 9090` — folding either would lie). Memoized for
    *  the rebuild's lifetime. */
-  private _resolveConstValue(name: string, memo: Map<string, string | null>): string | null {
-    const cached = memo.get(name);
+  private _resolveConstValue(
+    name: string,
+    memo: Map<string, string | null>,
+    qualifier?: string,
+    localDecls?: Map<string, string | null>,
+  ): string | null {
+    if (localDecls?.has(name)) return localDecls.get(name)!;
+    const key = qualifier ? `${qualifier}.${name}` : name;
+    const cached = memo.get(key);
     if (cached !== undefined) return cached;
-    const entries = this.index.lookup(name);
+    // One index lookup per name, whatever the qualifiers on the line.
+    let entries = this._entriesMemo.get(name);
+    if (!entries) { entries = this.index.lookup(name); this._entriesMemo.set(name, entries); }
+    // `Color.RED` is android.graphics.Color, not the project's Palette.RED:
+    // a type-like qualifier must be the object holding the constant. Lower
+    // case qualifiers (`a.b.c.X`, `this.X`, `Manifest.permission.X`) and
+    // `Companion` are left alone, as is an index without FQNs.
+    const typed = qualifier !== undefined && /^[A-Z]/.test(qualifier) && qualifier !== 'Companion'
+      && entries.some(e => typeof e.fqn === 'string');
     let unique: string | null = null;
     let conflict = false;
     for (const e of entries) {
       if (!e.isConst || !e.constValue) continue;
+      if (typed && (typeof e.fqn !== 'string' || e.fqn.split('.').slice(-2, -1)[0] !== qualifier)) continue;
       if (unique === null) unique = e.constValue;
       else if (unique !== e.constValue) { conflict = true; break; }
     }
     const value = conflict ? null : unique;
-    memo.set(name, value);
+    memo.set(key, value);
     return value;
   }
 
@@ -163,7 +190,7 @@ export class ConstValFoldingProvider implements vscode.Disposable {
     ed.setDecorations(this._hideType, opts);
   }
 
-  private _scanLine(i: number, text: string, lookupMemo: Map<string, string | null>): { opts: vscode.DecorationOptions[]; swatches: vscode.DecorationOptions[] } {
+  private _scanLine(i: number, text: string, lookupMemo: Map<string, string | null>, localDecls?: Map<string, string | null>): { opts: vscode.DecorationOptions[]; swatches: vscode.DecorationOptions[] } {
     const opts:     vscode.DecorationOptions[] = [];
     const swatches: vscode.DecorationOptions[] = [];
     CONST_NAME_RE.lastIndex = 0;
@@ -175,7 +202,8 @@ export class ConstValFoldingProvider implements vscode.Disposable {
         // index lookup — this is on the hottest path.
         const before = text.slice(0, m.index);
         if (/\b(?:val|var)\s+$/.test(before)) continue;
-        const val = this._resolveConstValue(m[1], lookupMemo);
+        const qualifier = /([A-Za-z_]\w*)\.$/.exec(before)?.[1];
+        const val = this._resolveConstValue(m[1], lookupMemo, qualifier, localDecls);
         if (val === null) continue;
         const short = val.length > MAX_LABEL_LEN ? val.slice(0, MAX_LABEL_LEN) + '…' : val;
         const isStr = val.startsWith('"') || val.startsWith("'");

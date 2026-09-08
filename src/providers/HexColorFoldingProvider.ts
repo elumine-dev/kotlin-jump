@@ -34,6 +34,7 @@ export class HexColorFoldingProvider implements vscode.Disposable {
         // only by design.
         const lang = e.document.languageId;
         if (lang !== 'kotlin' && lang !== 'java') return;
+        if (!vscode.workspace.getConfiguration('kotlinJump').get<boolean>('hexColorSwatch', true)) return;
         this._applyChanges(e);
       }),
       vscode.workspace.onDidChangeConfiguration(e => {

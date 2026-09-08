@@ -18,6 +18,7 @@ export function computeSeparatorLines(text: string): number[] {
 
   let depth = 0;
   let classDepth = -1;   // brace depth of the enclosing class body
+  let pendingClass = false;
   let membersSeen = 0;
 
   for (let i = 0; i < lines.length; i++) {
@@ -33,15 +34,21 @@ export function computeSeparatorLines(text: string): number[] {
       membersSeen++;
     }
 
-    // Detect entering the body of a file-level class.
-    if (classDepth < 0 && /^\s*(?:@\w+(?:\([^)]*\))?\s+)*(?:(?:public|private|internal|abstract|open|final|sealed|data|enum|annotation)\s+)*(?:class|object|interface)\b/.test(line) && line.includes('{')) {
+    // Detect entering the body of a file-level class. A Hilt header spans
+    // lines (`class Vm @Inject constructor(\n …\n) : ViewModel() {`): the
+    // class is pending until its first `{`.
+    const code = codeOnly(trimmed);
+    if (classDepth < 0 && /^\s*(?:@\w+(?:\([^)]*\))?\s+)*(?:(?:public|private|internal|abstract|open|final|sealed|data|enum|annotation)\s+)*(?:class|object|interface)\b/.test(line)) {
+      if (code.includes('{')) classDepth = depth;
+      else pendingClass = true;
+    } else if (pendingClass && code.includes('{')) {
       classDepth = depth;
+      pendingClass = false;
     }
 
-    // Update the brace depth (approximation that ignores strings, good enough
-    // for formatted code: braces inside strings are rare on declaration
-    // lines).
-    for (const ch of trimmed) {
+    // Update the brace depth on the code part of the line: a `"{"` in a
+    // string used to shift every separator of the rest of the class.
+    for (const ch of code) {
       if (ch === '{') depth++;
       else if (ch === '}') {
         depth--;
@@ -53,6 +60,24 @@ export function computeSeparatorLines(text: string): number[] {
     }
   }
   return separators;
+}
+
+/** The line without its string contents, char literals and line comment. */
+function codeOnly(line: string): string {
+  let out = '';
+  let inStr: string | false = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inStr) {
+      if (ch === '\\') { i++; continue; }
+      if (ch === inStr) inStr = false;
+      continue;
+    }
+    if (ch === '"' || ch === '\'') { inStr = ch; continue; }
+    if (ch === '/' && line[i + 1] === '/') break;
+    out += ch;
+  }
+  return out;
 }
 
 /** The rule goes ABOVE the comments/KDoc/annotations attached to the member

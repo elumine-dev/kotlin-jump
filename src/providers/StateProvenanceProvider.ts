@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { stripKotlinComments } from '../util/xmlRefs';
 
 /**
  * KJ-014: UDF X-Ray, who writes / who reads a ViewModel state.
@@ -69,7 +70,8 @@ function countDirectWrites(property: string, text: string): number {
     `\\b${property}\\.(value\\s*[+\\-*/]?=[^=]|update\\s*[({]|postValue\\s*\\(|setValue\\s*\\(|emit\\s*\\(|tryEmit\\s*\\()`,
     'g',
   );
-  return (text.match(re) ?? []).length;
+  // `// _count.value = 0 used to be here` counted as a write.
+  return (stripKotlinComments(text).match(re) ?? []).length;
 }
 
 export function analyzeStateProvenance(vmText: string): StateProvenance[] {
@@ -177,7 +179,9 @@ export class StateProvenanceProvider implements vscode.CodeLensProvider {
         const writeSites = collectWriteSites(s.property, text);
         const readerSites = collectReaderSites(readerName, text);
         const indirect = s.indirectWriteFns.length > 0 ? ` (+${s.indirectWriteFns.length} indirect)` : '';
-        const title = `✎ ${s.directWrites} write${s.directWrites > 1 ? 's' : ''}${indirect} · 👁 ${readerSites.length} reader${readerSites.length > 1 ? 's' : ''}`;
+        // Readers are counted in this file only (Compose collectors live in
+        // other files): say so rather than show "0 readers" as a fact.
+        const title = `✎ ${s.directWrites} write${s.directWrites !== 1 ? 's' : ''}${indirect} · 👁 ${readerSites.length} reader${readerSites.length !== 1 ? 's' : ''} in this file`;
 
         // Click = native reference peek: writes first, then reads.
         const locations = [...writeSites, ...readerSites].map(

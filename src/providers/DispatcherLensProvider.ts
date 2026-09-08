@@ -31,8 +31,30 @@ export interface DispatcherAnalysis {
 
 // `viewModelScope.launch(Dispatchers.IO)` and `viewState.value = …` are not
 // View access; the old `view\w*` flagged the launching line itself.
-const VIEW_ACCESS_RE = /\b(binding|view(?!Model|State|model)\w*)\s*\.\s*\w/;
-const BLOCKING_RE = /\b(api\w*|dao\w*|repository|retrofit|client|db)\s*\.\s*\w|\.fetch\w*\s*\(/i;
+// `viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO)` is the launching
+// line of a Fragment, not a View touched off Main.
+const VIEW_ACCESS_RE = /\b(binding|view(?!Model|State|model|LifecycleOwner|Lifecycle)\w*)\s*\.\s*\w/;
+// `api\w*` also matched `apiKey.length`.
+const BLOCKING_RE = /\b(api|apiService|\w+Api|dao\w*|repository|retrofit|client|db)\s*\.\s*\w|\.fetch\w*\s*\(/i;
+
+/** The line without string contents and line comment: a `// TODO: move api.fetch` is not a call. */
+function codeOnly(line: string): string {
+  let out = '';
+  let inStr: string | false = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inStr) {
+      if (ch === '\\') { i++; continue; }
+      if (ch === inStr) inStr = false;
+      out += ' ';
+      continue;
+    }
+    if (ch === '"' || ch === '\'') { inStr = ch; out += ' '; continue; }
+    if (ch === '/' && line[i + 1] === '/') break;
+    out += ch;
+  }
+  return out;
+}
 
 function matchBalanced(text: string, openIndex: number, open: string, close: string): number {
   let depth = 0;
@@ -113,10 +135,11 @@ export function analyzeDispatcherScopes(text: string): DispatcherAnalysis {
   for (let i = 0; i < lines.length; i++) {
     const disp = innermostAt(i);
     if (!disp) continue;
-    if ((disp === 'IO' || disp === 'Default') && VIEW_ACCESS_RE.test(lines[i])) {
+    const code = codeOnly(lines[i]);
+    if ((disp === 'IO' || disp === 'Default') && VIEW_ACCESS_RE.test(code)) {
       hints.push({ line: i, kind: 'view-in-io' });
     }
-    if (disp === 'Main' && BLOCKING_RE.test(lines[i])) {
+    if (disp === 'Main' && BLOCKING_RE.test(code)) {
       hints.push({ line: i, kind: 'blocking-in-main' });
     }
   }

@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.42.24
+
+Kotlin Jump 1.42.24 fixes the inline actions that could break code: Surround With turned `$name` into `name`, "Remove expired TODO" cut a URL in half, Extract String Resource made a placeholder out of `$100`, and removing an unused Gradle dependency left its `{ exclude(…) }` block behind. The decorations also stop drifting: method separators in a Hilt ViewModel, `!!` and swatches with the feature off, dispatcher hints on comments.
+
+### Fixes
+- Keeps the selected code intact in Surround With. The selection went into a snippet unescaped: `"$name $total"` came out as `"name total"` and `Regex("\\d+")` lost its backslash ("Illegal escape").
+- Removes exactly the expired TODO comment. The quick fix read the whole file, so the first `//` anywhere above made `"http://x.io" // TODO(2020-01-01)` lose `//x.io"`, a `/* TODO(…) */` was left unclosed, a TODO inside a string got the fix, and one dated today was offered before it was due.
+- Extracts a string resource that compiles. `"Price: $100"` became `%1$s` with a `100` argument; a Java literal was read for Kotlin templates; `"Hello ${user.name ?: "anon"}"` was cut at the inner quote; `"$pct% done"` produced a mix of positional and bare `%` that aapt refuses; `"@home"` became a resource reference; a `@Preview(\n…\n)` above the function hid `@Composable` so `Text(R.string.x)` was inserted; a literal in `onClick = { }` got `stringResource` outside a composable; and `val s = R.string.x` put an Int where a String was.
+- Removes an unused dependency with its block. `implementation("…") { exclude(…) }` lost only its first line.
+- Draws method separators in a class whose header wraps (`class Vm @Inject constructor(\n …\n) : ViewModel() {`, the Hilt shape) and no longer loses them after a `"{"` inside a string.
+- Respects the setting and the language on every keystroke for `!!` highlights and hex swatches: typing brought them back with the feature off, painted `!!` in Java, and with two editor columns the wrong editor was repainted.
+- Stops the dispatcher hints on `viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO)`, on a `// TODO: move api.fetch` comment, on a URL string and on `apiKey.length`.
+- Folds a constant to its own file's value first. `private val TAG = "Repo"` was folded to another file's `const val TAG = "MainActivity"`, and `Color.RED` (the framework's) to the project's `Palette.RED`.
+- Counts state writes on code only (a commented `_count.value = 0` counted), says "readers in this file" instead of a false "0 readers", and gets the plural right.
+- Shows KMP expect badges for the targets of the expect's own module: `shared` no longer gets a ✗ for `composeApp`'s desktop and wasmJs.
+
 ## 1.42.23
 
 Kotlin Jump 1.42.23 tidies the wiring: commands that answered "not found" when a feature was turned off, toolbar buttons dead during the first index, a sealed class hover that listed one subtype out of four, online docs that opened a 404, and the web build missing four providers the desktop had.

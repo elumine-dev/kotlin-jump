@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { SymbolIndex } from '../indexer/SymbolIndex';
 import { analyzeLifecyclePairs, closeFor } from './LifecyclePairingProvider';
-import { findOverdueTodos } from './TodoExpiryProvider';
+import { findOverdueTodos, todayUtcMidnight } from './TodoExpiryProvider';
 import { analyzeDocument } from './SealedWhenCoverageProvider';
 import { buildMissingBranchEdit } from '../commands/addMissingWhenBranches';
 
@@ -135,31 +135,56 @@ export class ExpiredTodoActionProvider implements vscode.CodeActionProvider {
     document: vscode.TextDocument,
     range: vscode.Range | vscode.Selection,
   ): vscode.CodeAction[] {
-    const overdue = findOverdueTodos(document.getText(), Date.now());
+    // One line at a time, like the highlight: on the whole file the first
+    // `//` made everything below "a comment", so a TODO inside a string got
+    // the fix, and the cut at the line's first `//` sliced `http://` in half.
+    const lineNum = range.start.line;
+    const lineText = document.lineAt(lineNum).text;
+    const overdue = findOverdueTodos(lineText, todayUtcMidnight());
     for (const t of overdue) {
-      const start = document.positionAt(t.start);
-      if (start.line !== range.start.line) continue;
-      const lineText = document.lineAt(start.line).text;
       const action = new vscode.CodeAction(
         `Remove expired TODO (${t.dateIso})`,
         vscode.CodeActionKind.QuickFix,
       );
       action.edit = new vscode.WorkspaceEdit();
-      if (lineText.trim().startsWith('//')) {
-        // Whole-line comment: drop the line.
-        action.edit.delete(document.uri, new vscode.Range(start.line, 0, start.line + 1, 0));
+      const span = commentSpanAround(lineText, t.start);
+      if (!span) continue;
+      const wholeLine = lineText.slice(0, span.start).trim() === '' && lineText.slice(span.end).trim() === '';
+      if (wholeLine) {
+        action.edit.delete(document.uri, new vscode.Range(lineNum, 0, lineNum + 1, 0));
       } else {
-        // Trailing comment: cut from the `//` to the end of the line.
-        const cut = lineText.indexOf('//');
-        action.edit.delete(
-          document.uri,
-          new vscode.Range(start.line, cut === -1 ? start.character : cut, start.line, lineText.length),
-        );
+        let from = span.start;
+        while (from > 0 && (lineText[from - 1] === ' ' || lineText[from - 1] === '\t')) from--;
+        action.edit.delete(document.uri, new vscode.Range(lineNum, from, lineNum, span.end));
       }
       return [action];
     }
     return [];
   }
+}
+
+// [start, end) of the comment holding `idx`: a line comment to the end of the
+// line, or a block comment up to its closer.
+function commentSpanAround(line: string, idx: number): { start: number; end: number } | null {
+  let inStr: string | false = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inStr) {
+      if (ch === '\\') { i++; continue; }
+      if (ch === inStr) inStr = false;
+      continue;
+    }
+    if (ch === '"' || ch === '\'') { inStr = ch; continue; }
+    if (ch === '/' && line[i + 1] === '/') return i <= idx ? { start: i, end: line.length } : null;
+    if (ch === '/' && line[i + 1] === '*') {
+      const close = line.indexOf('*/', i + 2);
+      const end = close === -1 ? line.length : close + 2;
+      if (i <= idx && idx < end) return { start: i, end };
+      i = end - 1;
+    }
+  }
+  // A continuation line of a block comment (` * TODO(...)`): the whole line.
+  return /^\s*\*/.test(line) ? { start: 0, end: line.length } : null;
 }
 
 /** Rewrites for `!!` (the highlight flags them, this fixes them). */

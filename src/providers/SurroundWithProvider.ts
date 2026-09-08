@@ -46,12 +46,18 @@ function reindent(selection: string, baseIndent: string): string {
     .join('\n');
 }
 
+/** The selection goes into a SnippetString: `$name` would become a snippet
+ *  variable (the `$` vanished) and `\\d` an escape. Only `$0`/`$1` are tabstops. */
+function snippetText(s: string): string {
+  return s.replace(/[\\$}]/g, m => '\\' + m);
+}
+
 export function surroundSelection(id: string, selection: string, baseIndent: string): string {
   const singleLine = !selection.includes('\n');
 
   // Expression templates: on an intra-line selection, stay an expression.
   if (singleLine) {
-    const expr = selection.trim();
+    const expr = snippetText(selection.trim());
     switch (id) {
       case 'let':
         return `${expr}.let { $0 }`;
@@ -75,7 +81,7 @@ export function surroundSelection(id: string, selection: string, baseIndent: str
     }
   }
 
-  const body = reindent(selection, baseIndent);
+  const body = snippetText(reindent(selection, baseIndent));
   switch (id) {
     case 'if':
       return `if ($1) {\n${body}\n}`;

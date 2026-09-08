@@ -4,6 +4,7 @@ import * as path from 'path';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { resolveAll as resolveModules } from '../gradle/ModuleResolver';
 import { Logger } from '../util/logger';
+import { afterAnnotations } from '../util/kotlinScan';
 import { detectGradleRoot, type DetectionResult, walkUpToGradleRoot } from './GradleRootDetector';
 
 const C = {
@@ -895,7 +896,14 @@ export function displayNameOf(entry: SymbolEntry, sourceLines: SourceLines): str
     if (m) return m[1].replace(/\\(.)/g, '$1');
     if (i === entry.line) continue;
     const t = text.trim();
-    if (t !== '' && !t.startsWith('@') && !t.startsWith('//') && !t.startsWith('*') && !t.startsWith('/*')) break;
+    // La remontée s'arrête à la déclaration précédente. Une ligne vide ne
+    // coupait pas, et `@Test fun add()` passait pour une simple annotation :
+    // le test suivant héritait du @DisplayName du voisin, donc de SON état et
+    // de SA trace d'échec dans le Test Explorer.
+    if (t === '') break;
+    const isCommentLine = t.startsWith('//') || t.startsWith('*') || t.startsWith('/*');
+    const isAnnotationOnly = t.startsWith('@') && afterAnnotations(t) === '';
+    if (!isCommentLine && !isAnnotationOnly) break;
   }
   return undefined;
 }

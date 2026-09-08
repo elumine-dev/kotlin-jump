@@ -6,7 +6,11 @@ import { buildKotlinJarUri } from '../providers/KotlinJarContentProvider';
 import { Logger } from '../util/logger';
 import { detectJdkHome, JdkLocation } from './JavaHomeDetector';
 
-const MAX_ENTRY_BYTES = 200 * 1024;
+// The JDK's own big classes live well past 200 KB: Arrays, Collections,
+// Character, Pattern and BigDecimal were all skipped, so Cmd+Click on them
+// found nothing. The cap only exists to keep one pathological entry from
+// stalling the scan, and 2 MB covers every real source file in src.zip.
+const MAX_ENTRY_BYTES = 2 * 1024 * 1024;
 
 /**
  * Indexes the Java source files inside a JDK's `lib/src.zip`. Mirrors

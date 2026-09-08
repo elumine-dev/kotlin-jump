@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.33
+
+Kotlin Jump 1.42.33 fixes a bug our own previous fix introduced: a `"""` written inside a comment made Find Usages treat the rest of the file as text, so a symbol read "0 usages" and Rename left the old name behind. Large JDK classes such as `Arrays` and `Pattern` are navigable again, and the language server no longer misses a file whose folder name contains a comma or an ampersand.
+
+### Fixes
+- Counts usages again after a comment mentions a raw string. Tracking added in 1.42.26 counted every `"""` on the line, including one written in a `//` or `/* */` comment. From that line on, the whole file was treated as raw text: the lens said "0 usages", Find Usages and Go to References came back empty, and Rename skipped every call below, leaving the old name and a file that no longer compiles. A single scan of the code now decides the state, and a string holding `http://` is no longer read as a comment.
+- Attributes a test result to the right test. The walk looking for a `@DisplayName` above a method crossed blank lines and one line declarations, so a test with no result of its own inherited the name, the state and the failure trace of its neighbour in the Test Explorer.
+- Navigates to the big JDK classes. The scanner skipped any source over 200 KB, which is exactly where `Arrays`, `Collections`, `Character`, `Pattern` and `BigDecimal` live: Cmd+Click on them found nothing.
+- Matches files whatever the editor's URI encoding. A folder named with a comma, an ampersand or a plus produced a different URI on each side, so a deleted file stayed in the index and an unsaved buffer fell back to its disk copy, both without a word. Paths are compared as paths now.
+- Bounds the MCP `get_file_symbols` answer like every other tool, instead of returning a file's entire symbol list.
+
 ## 1.42.32
 
 Kotlin Jump 1.42.32 repairs the standalone language server that Neovim, Helix and Zed talk to. Its index was frozen at startup, it could index your home directory instead of your project, and Go to Definition answered with every class of that name in the workspace. The permission hover also stops missing `SET_ALARM`.

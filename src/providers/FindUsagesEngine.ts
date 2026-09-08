@@ -298,7 +298,7 @@ export async function scanForUsagesWithTarget(
             } else {
               codeStart = rawEnd = close + 3;
               scan = ' '.repeat(codeStart) + line.slice(codeStart);
-              if (countTripleQuotes(scan) % 2 === 0) inRawString = false;
+              inRawString = false; // le reste de la ligne est du code, relu plus bas
             }
           } else if (inBlockComment) {
             const close = line.indexOf('*/');
@@ -314,9 +314,13 @@ export async function scanForUsagesWithTarget(
               trimmed.startsWith('//') ||
               (trimmed.startsWith('*') && !trimmed.startsWith('*/'))
             ) continue;
-            // A `/*` left open mid-line (`val x = 1 /* note`) hides the next lines too.
-            if (scan.includes('/*') && leavesBlockCommentOpen(scan, 0)) inBlockComment = true;
-            if (!inRawString && scan.includes('"""') && countTripleQuotes(scan) % 2 === 1) inRawString = true;
+            // Un seul balayage décide des deux états. Compter les `"""` de la
+            // ligne entière prenait un `// TODO passer en """` pour l'ouverture
+            // d'une chaîne brute : tout le reste du fichier devenait du texte,
+            // les usages disparaissaient et le renommage laissait l'ancien nom.
+            const carried = advanceLineState(scan, codeStart);
+            inRawString = carried.raw;
+            inBlockComment = carried.block;
           }
 
           wordRe.lastIndex = 0;
@@ -446,6 +450,50 @@ function packageRegex(pkg: string): RegExp {
     _packageRegexCache.set(pkg, re);
   }
   return re;
+}
+
+/**
+ * L'état de fin de ligne, en un seul balayage du code : chaîne brute ouverte,
+ * commentaire de bloc ouvert, ou ni l'un ni l'autre. Un `//` arrête la ligne,
+ * une chaîne simple est sautée d'un bloc (un `http://` n'est pas un
+ * commentaire), et ce qui est écrit dans un commentaire n'ouvre rien.
+ */
+export function advanceLineState(
+  text: string,
+  from = 0,
+  start: { raw: boolean; block: boolean } = { raw: false, block: false },
+): { raw: boolean; block: boolean } {
+  let raw = start.raw;
+  let block = start.block;
+  let i = from;
+  while (i < text.length) {
+    if (raw) {
+      if (text.startsWith('"""', i)) { raw = false; i += 3; } else i++;
+      continue;
+    }
+    if (block) {
+      const close = text.indexOf('*/', i);
+      if (close === -1) return { raw, block: true };
+      block = false;
+      i = close + 2;
+      continue;
+    }
+    if (text.startsWith('"""', i)) { raw = true; i += 3; continue; }
+    if (text.startsWith('//', i)) return { raw, block };
+    if (text.startsWith('/*', i)) { block = true; i += 2; continue; }
+    if (text[i] === '"' || text[i] === "'") {
+      const quote = text[i];
+      i++;
+      while (i < text.length) {
+        if (text[i] === '\\') { i += 2; continue; }
+        if (text[i] === quote) { i++; break; }
+        i++;
+      }
+      continue;
+    }
+    i++;
+  }
+  return { raw, block };
 }
 
 /**

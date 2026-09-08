@@ -32,7 +32,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import * as fs from 'fs/promises';
 
 import { SymbolIndex } from '../indexer/SymbolIndex';
-import { wordAt, uriToPath, pathToUri, KIND_MAP, buildHoverMarkdown, resolveWorkspaceRoots, preferByImports } from './utils';
+import { wordAt, uriToPath, KIND_MAP, buildHoverMarkdown, resolveWorkspaceRoots, preferByImports, canonicalUri, openTextByPath } from './utils';
 import { indexFile, scanWorkspace, findUsagesInWorkspace } from './scanner';
 import { runMcpServer } from './mcp';
 
@@ -117,7 +117,7 @@ connection.onInitialized(async () => {
 
 connection.onDidChangeWatchedFiles(async ({ changes }) => {
   for (const change of changes) {
-    if (change.type === FileChangeType.Deleted) index.remove(vscodeUri(change.uri));
+    if (change.type === FileChangeType.Deleted) index.remove(vscodeUri(canonicalUri(change.uri)));
     else await indexFile(uriToPath(change.uri), index);
   }
   index.finalize();
@@ -168,9 +168,10 @@ connection.onReferences(async (params: ReferenceParams) => {
 
   // Read open buffers from the editor, not the disk: with unsaved edits above,
   // every reported position was off by the number of inserted lines.
+  const openTexts = openTextByPath(documents.all());
   const locations = await findUsagesInWorkspace(
     hit.word, index, { isCancellationRequested: false },
-    async p => documents.get(pathToUri(p))?.getText() ?? fs.readFile(p, 'utf8'),
+    async p => openTexts.get(p) ?? fs.readFile(p, 'utf8'),
   );
   if (params.context?.includeDeclaration === false) {
     const decls = index.lookup(hit.word);

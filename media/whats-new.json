@@ -1,31 +1,31 @@
 {
-  "version": "1.42.40",
+  "version": "1.42.41",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Back goes back",
-  "summary": "The navigation history keeps the way back, records where your cursor really is, and the test source set filter works on Windows again.",
+  "tagline": "Logcat after a long session",
+  "summary": "Clear no longer replays the device buffer, the Follow filter forgets dead processes, and Run on device works with adb in a path that has a space.",
   "highlights": [
     {
-      "title": "Back keeps the way back",
+      "title": "Clear stays cleared",
       "kind": "fix",
-      "description": "Pressing Back within half a second of a jump could overwrite the entry you were returning to with the destination you had just left. The way back was gone, and pressing Back again went forward."
+      "description": "The resume anchor was read from the ring buffer that Clear had just emptied, so the next reconnection started with no anchor and replayed every line you had just cleared."
     },
     {
-      "title": "Your cursor, not line 0",
+      "title": "Follow forgets dead processes",
       "kind": "fix",
-      "description": "Switching to a tab you already had open filed the visit at line 0, because no selection event fires for a file you have already seen. The entry now starts from the cursor the editor already carries."
+      "description": "Each restart of the app added a process and kept the previous ones forever. Once Android reused one of those numbers for another app, its lines passed the Follow filter as if they were yours."
     },
     {
-      "title": "Test source sets on Windows",
+      "title": "Run on device under PowerShell",
       "kind": "fix",
-      "description": "The filter compared a path written with backslashes against segments written with slashes, so no file was ever recognised as a test file and the rule ran backwards."
+      "description": "With adb in a path that has a space, the command started with a quoted path. PowerShell prints such a line instead of running it, so the launch failed with nothing useful on screen."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Go to Definition no longer treats a directory that merely starts like a test source set as one. It kept a private copy of the path check, written before the bounded comparison landed.",
-        "Moving through the history closes any pending refinement, so a late event from the previous jump can no longer reach an entry it does not own."
+        "A secondary process of the followed app still joins the filter, so a multi process app keeps showing all of its own lines.",
+        "The resume anchor now follows the last row actually received, not the oldest row still held in memory."
       ]
     }
   ],

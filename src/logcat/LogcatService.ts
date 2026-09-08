@@ -418,22 +418,42 @@ export class LogcatService extends EventEmitter implements vscode.Disposable {
 
   // ── Internals ──────────────────────────────────────────────────────────────
 
+  /** Timestamp of the last row actually received, kept across a Clear so the
+   *  next `adb logcat -T` resumes where the stream stopped. */
+  private _lastSeenTs?: number;
+
+  /** The `-T` anchor for the next stream start, or undefined for a first run. */
+  resumeSince(): string | undefined {
+    return this._lastSeenTs !== undefined ? logcatTimeArg(this._lastSeenTs) : undefined;
+  }
+
+  /**
+   * A new MAIN process for the followed package means the app restarted, so
+   * every PID of the previous generation is dead. Keeping them let a recycled
+   * PID belonging to another app through the Follow filter, and the set only
+   * ever grew.
+   */
+  noteProcessStart(pid: number, pkg: string, secondary: boolean): void {
+    if (!this.filter.followedPackage || pkg !== this.filter.followedPackage) return;
+    if (!secondary) {
+      this.filter.followedPids.clear();
+      this.filter.followedPid = pid;
+    }
+    this.filter.followedPids.add(pid);
+  }
+
   private startStream(): void {
     if (this._disposed) return;
     if (!this.currentSerial || this.stream) return;
     // A restart on the same device resumes after the last buffered row:
     // without `-T`, adb replayed the whole device buffer and every row already
     // on screen came back a second time.
-    const last  = this.buffer.at(this.buffer.size() - 1);
-    const since = last ? logcatTimeArg(last.ts) : undefined;
+    const since = this.resumeSince();
     const stream = new LogcatStream({ serial: this.currentSerial, logger: this.log, since }, this.buffer.allocSeq);
     this.stream = stream;
     stream.on('entry',         e => this.onEntry(e));
-    stream.on('process-start', (pid: number, pkg: string, secondary: boolean) => {
-      if (!this.filter.followedPackage || pkg !== this.filter.followedPackage) return;
-      this.filter.followedPids.add(pid);
-      if (!secondary) this.filter.followedPid = pid;
-    });
+    stream.on('process-start', (pid: number, pkg: string, secondary: boolean) =>
+      this.noteProcessStart(pid, pkg, secondary));
     stream.on('error', err => this.emit('stream-error', err));
     stream.on('close', () => {
       // adb died (device unplugged, server killed, etc.) — try a soft restart in 2s.
@@ -477,6 +497,9 @@ export class LogcatService extends EventEmitter implements vscode.Disposable {
 
   private onEntry(entry: LogEntry): void {
     this.resolver.resolve(entry);
+    // Kept outside the ring buffer on purpose: Clear empties the view, it does
+    // not mean "replay the device buffer from the beginning".
+    this._lastSeenTs = entry.ts;
     this.buffer.push(entry);
     if (!this.paused && this.passesTransportFilter(entry)) {
       this.pending.push(entry);

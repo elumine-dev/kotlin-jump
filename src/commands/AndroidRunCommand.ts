@@ -1391,8 +1391,19 @@ function buildConfig(
   return { ...info, gradleModule, installTask, projectRoot, gradlew };
 }
 
+/**
+ * An adb path as the integrated shell wants it. PowerShell runs a quoted path
+ * only after `&`, exactly like gradleCommandFor: without it an adb installed
+ * under `C:\\Android SDK\\` printed the path back instead of running it.
+ */
+export function adbCommandFor(bin: string, shellPath: string | undefined = vscode.env?.shell): string {
+  if (!/[\s"]/.test(bin)) return bin;
+  const quoted = `"${bin.replace(/"/g, '\\"')}"`;
+  const powershell = process.platform === 'win32' && /pwsh|powershell/i.test(shellPath ?? '');
+  return powershell ? `& ${quoted}` : quoted;
+}
+
 /** The resolved adb binary, quoted for the integrated terminal. */
 function adbForShell(): string {
-  const bin = resolveAdbPath();
-  return /[\s"]/.test(bin) ? `"${bin.replace(/"/g, '\\"')}"` : bin;
+  return adbCommandFor(resolveAdbPath());
 }

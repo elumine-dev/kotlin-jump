@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.41
+
+Kotlin Jump 1.42.41 fixes three things that only show up once you have used the panel for a while: Clear replaying the whole device buffer, the Follow filter letting old processes through, and Run on device failing silently under PowerShell.
+
+### Fixes
+- Clear no longer makes the next stream replay the whole device buffer. The resume anchor was read from the ring buffer that Clear had just emptied, so the reconnection started with no anchor at all and every line already seen came back.
+- Following the app by process no longer keeps dead processes. Each restart added a process and kept the previous ones forever, and once Android reused one of those numbers for another app its lines passed the filter. A new main process for the followed package now clears the previous generation, and secondary processes still add to it.
+- Run on device works when adb sits in a path with a space, under PowerShell. The command started with a quoted path, which PowerShell prints instead of running, so the launch failed with nothing useful on screen. The call operator is now added the same way it already was for gradlew.
+
 ## 1.42.40
 
 Kotlin Jump 1.42.40 fixes Back. Pressing it right after a jump used to overwrite the entry you were trying to return to, and switching to a tab you already had open filed it at line 0.

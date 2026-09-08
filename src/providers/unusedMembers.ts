@@ -299,10 +299,13 @@ export function collectMemberCandidates(
     for (const sym of parsed.symbols) {
       while (stack.length > 0 && stack[stack.length - 1].sym.depth >= sym.depth) stack.pop();
 
-      if (CLASS_LIKE_KINDS.has(sym.kind)) {
+      // The synthetic Companion is not an owner here: its members are reached
+      // through the enclosing class (see companionExtents below).
+      if (CLASS_LIKE_KINDS.has(sym.kind) && !sym.isCompanion) {
         stack.push(enclosingInfo(sym));
         continue;
       }
+      if (sym.isCompanion) continue;
       // A member of an `object :` literal implements the literal's supertype
       // contract; its reachability goes through that contract, not its name.
       if (stack.some(e => e.sym.name.startsWith('$anon'))) continue;

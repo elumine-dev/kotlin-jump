@@ -75,11 +75,31 @@ export class ComposeA11yProvider implements vscode.InlayHintsProvider, vscode.Di
       CLICKABLE_RE.lastIndex = 0;
       while ((m = CLICKABLE_RE.exec(text)) !== null) {
         if (isInsideCommentOrString(text, m.index)) continue;
+        // The call's arguments may continue on the next lines (`role = Role.Button`
+        // on its own line got a "role?" all the same): read up to the closing paren.
+        if (HAS_ROLE_RE.test(callTextFrom(document, ln, m.index + m[0].length - 1, 12))) continue;
         hints.push(makeHint(ln, m.index + '.clickable'.length, '⚠ a11y: role?', ROLE_TOOLTIP));
       }
     }
     return hints;
   }
+}
+
+/** Text from the opening bracket at (line, col) to its balanced close, across at most `maxLines` lines. */
+function callTextFrom(document: vscode.TextDocument, line: number, col: number, maxLines: number): string {
+  let depth = 0;
+  let out = '';
+  for (let ln = line; ln < document.lineCount && ln < line + maxLines; ln++) {
+    const text = document.lineAt(ln).text;
+    for (let i = ln === line ? col : 0; i < text.length; i++) {
+      const ch = text[i];
+      out += ch;
+      if (ch === '(' || ch === '{') depth++;
+      else if (ch === ')' || ch === '}') { depth--; if (depth === 0) return out; }
+    }
+    out += '\n';
+  }
+  return out;
 }
 
 function makeHint(

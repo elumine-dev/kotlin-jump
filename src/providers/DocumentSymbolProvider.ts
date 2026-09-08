@@ -26,8 +26,15 @@ export class KotlinDocumentSymbolProvider implements vscode.DocumentSymbolProvid
     for (let i = 0; i < entries.length; i++) {
       const e = entries[i];
 
+      // Pop before resolving the icon: the stack top must be the parent, not
+      // the previous sibling. With the pop after, the enum class that follows
+      // another enum's entries got the EnumMember icon of that last entry.
+      while (stack.length > 0 && stack[stack.length - 1].depth >= e.depth) {
+        stack.pop();
+      }
+
       const lineText   = document.lineAt(e.line).text;
-      const visibility = extractVisibility(lineText);
+      const visibility = extractVisibility(lineText, e.character);
       const detail     = buildDetail(e, visibility);
       const kind       = resolveKind(e, visibility, stack[stack.length - 1]?.entry);
       const tags: vscode.SymbolTag[] | undefined = e.isDeprecated ? [vscode.SymbolTag.Deprecated] : undefined;
@@ -45,10 +52,6 @@ export class KotlinDocumentSymbolProvider implements vscode.DocumentSymbolProvid
         new vscode.Range(nameStart, nameEnd),
       );
       if (tags) sym.tags = tags;
-
-      while (stack.length > 0 && stack[stack.length - 1].depth >= e.depth) {
-        stack.pop();
-      }
 
       if (stack.length === 0) {
         roots.push(sym);
@@ -94,10 +97,16 @@ function buildDetail(e: SymbolEntry, visibility: string): string {
 
 // ── Visibility extraction ─────────────────────────────────────────────────────
 
-function extractVisibility(lineText: string): string {
-  if (/\bprivate\b/.test(lineText))   return 'private';
-  if (/\bprotected\b/.test(lineText)) return 'protected';
-  if (/\binternal\b/.test(lineText))  return 'internal';
+// Only the modifiers of THIS declaration count: the text before the name,
+// cut at the last delimiter. `class Foo @Inject constructor(private val x)`
+// is a public class, and in `(private val a, val b)` only `a` is private.
+function extractVisibility(lineText: string, nameStart: number): string {
+  const before = lineText.slice(0, nameStart);
+  const cut = Math.max(before.lastIndexOf('('), before.lastIndexOf(','), before.lastIndexOf('{'), before.lastIndexOf(';'));
+  const own = before.slice(cut + 1);
+  if (/\bprivate\b/.test(own))   return 'private';
+  if (/\bprotected\b/.test(own)) return 'protected';
+  if (/\binternal\b/.test(own))  return 'internal';
   return '';
 }
 

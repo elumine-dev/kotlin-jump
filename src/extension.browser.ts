@@ -270,9 +270,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ] : []),
     (() => {
       if (isCompanion) return { dispose: () => {} };
-      const enabled = vscode.workspace.getConfiguration('kotlinJump').get<boolean>('hoverEnabled', true);
-      if (!enabled) return { dispose: () => {} };
-      return vscode.languages.registerHoverProvider(KT_JAVA, new KotlinHoverProvider(index));
+      // Gated per request: the provider used to be registered only when the
+      // setting was on at activation, so the toggle needed a window reload.
+      const hover = new KotlinHoverProvider(index);
+      return vscode.languages.registerHoverProvider(KT_JAVA, {
+        provideHover: (doc, pos, tok) => vscode.workspace.getConfiguration('kotlinJump').get<boolean>('hoverEnabled', true) ? hover.provideHover(doc, pos, tok) : undefined,
+      });
     })(),
     ...(!isCompanion ? [vscode.languages.registerHoverProvider(KT_JAVA, new SuppressHoverProvider())] : []),
     ...(!isCompanion ? [vscode.languages.registerHoverProvider(
@@ -299,9 +302,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.languages.registerDocumentHighlightProvider(KT_JAVA, new KotlinDocumentHighlightProvider(index)),
     vscode.languages.registerSelectionRangeProvider(KT_JAVA, new KotlinSelectionRangeProvider(index)),
     (() => {
-      const enabled = vscode.workspace.getConfiguration('kotlinJump').get<boolean>('foldingEnabled', true);
-      if (!enabled) return { dispose: () => {} };
-      return vscode.languages.registerFoldingRangeProvider(KT_JAVA, new KotlinFoldingRangeProvider(index));
+      const folding = new KotlinFoldingRangeProvider(index);
+      return vscode.languages.registerFoldingRangeProvider(KT_JAVA, {
+        provideFoldingRanges: (doc, ctx, tok) => vscode.workspace.getConfiguration('kotlinJump').get<boolean>('foldingEnabled', true) ? folding.provideFoldingRanges(doc, ctx, tok) : [],
+      });
     })(),
 
     (() => {
@@ -326,13 +330,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     (() => {
       if (isCompanion) return { dispose: () => {} };
-      const enabled = vscode.workspace.getConfiguration('kotlinJump').get<boolean>('signatureHelp', true);
-      if (!enabled) return { dispose: () => {} };
       _signatureHelp = new KotlinSignatureHelpProvider(index);
+      const sig = _signatureHelp;
       return vscode.Disposable.from(
         vscode.languages.registerSignatureHelpProvider(
           KT_JAVA,
-          _signatureHelp,
+          { provideSignatureHelp: (doc, pos, tok, ctx) => vscode.workspace.getConfiguration('kotlinJump').get<boolean>('signatureHelp', true) ? sig.provideSignatureHelp(doc, pos, tok, ctx) : null },
           { triggerCharacters: ['(', ','], retriggerCharacters: [')'] },
         ),
         _signatureHelp,

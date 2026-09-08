@@ -142,18 +142,18 @@ describe('companion object', () => {
     expect(companionFold).toBeDefined();
   });
 
-  it('unnamed companion object → no fold (not indexed by parser)', () => {
+  it('unnamed companion object → folds like a named one (emitted as Companion)', () => {
     const code = [
       'class Bar {',
-      '  companion object {',  // unnamed — NOT indexed
+      '  companion object {',
       '    val TAG = "Bar"',
       '  }',
       '}',
     ].join('\n');
     const rs = regions(code);
-    // Only Bar itself should have a fold; the unnamed companion is not in the index
     const companionFold = rs.find(r => r.start === 1);
-    expect(companionFold).toBeUndefined();
+    expect(companionFold).toBeDefined();
+    expect(companionFold!.end).toBeGreaterThanOrEqual(3);
   });
 });
 

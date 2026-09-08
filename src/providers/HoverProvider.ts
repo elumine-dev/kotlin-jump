@@ -173,6 +173,7 @@ function buildVariantsSection(
     }
     if (e.depth <= parent.depth) break; // left the parent's body
     if (e.depth !== parent.depth + 1)  continue; // skip deeply nested
+    if (e.isCompanion) continue; // a sealed class's companion is not a subtype
     if (isEnum  && e.kind === ENUM_ENTRY_KIND)    children.push(e);
     if (!isEnum && SEALED_CHILD_KINDS.has(e.kind)) children.push(e);
   }

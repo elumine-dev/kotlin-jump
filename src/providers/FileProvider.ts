@@ -77,6 +77,9 @@ export class KotlinFileProvider implements vscode.WorkspaceSymbolProvider {
       if (kinds) entries = entries.filter(e => kinds.has(e.kind));
     }
 
+    // Every unnamed companion answers to "Companion"; none of them is a
+    // destination anyone searches for by that name.
+    entries = entries.filter(e => !e.isCompanion);
     const allowedKinds = vscode.workspace.getConfiguration('kotlinJump').get<string[]>('workspaceSymbolKinds', []);
     if (allowedKinds.length > 0) {
       const allowed = new Set(allowedKinds);

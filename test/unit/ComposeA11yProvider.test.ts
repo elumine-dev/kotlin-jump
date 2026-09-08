@@ -137,3 +137,12 @@ describe('CA-10 — appel multi-ligne', () => {
     expect(h[0].position.line).toBe(2);
   });
 });
+
+describe('CA-multiline — role on the next line of a multi-line clickable (was: "⚠ a11y: role?" all the same)', () => {
+  it('reads the arguments up to the closing paren', () => {
+    const withRole = hintsFor(['Box(Modifier', '    .clickable(', '        role = Role.Button,', '        onClick = onClick,', '    )', ')']);
+    expect(labels(withRole)).not.toContain('⚠ a11y: role?');
+    const without = hintsFor(['Box(Modifier', '    .clickable(', '        onClick = onClick,', '    )', ')']);
+    expect(labels(without)).toContain('⚠ a11y: role?');
+  });
+});

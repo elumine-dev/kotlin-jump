@@ -342,12 +342,16 @@ describe('inline body declarations', () => {
     expect(s?.depth).toBe(1);
   });
 
-  // Known limitation: anonymous `companion object` has no name → not indexed.
-  // Named `companion object Companion` is indexed (companion treated as modifier).
-  it('anonymous companion object — class itself is indexed, companion has no name to index', () => {
+  // An unnamed `companion object` is emitted as "Companion" (flagged
+  // isCompanion) so the Outline can nest its members.
+  it('anonymous companion object — emitted as Companion with isCompanion', () => {
     const syms = symbols('class Foo {\n    companion object {}\n}');
     expect(syms.find(s => s.name === 'Foo')).toBeDefined();
-    expect(syms.find(s => s.kind === 'object')).toBeUndefined();
+    const c = syms.find(s => s.kind === 'object');
+    expect(c?.name).toBe('Companion');
+    expect(c?.isCompanion).toBe(true);
+    expect(c?.depth).toBe(1);
+    expect(c?.character).toBe(4);
   });
 
   // Known limitation: multiple top-level declarations on one line separated by `;`

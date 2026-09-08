@@ -436,7 +436,7 @@ describe('KotlinParser — autres cas limites', () => {
 //
 //   ANON-1  `val x = object : Interface {}` — symbole $anon$N émis avec supertypes
 //   ANON-2  `object : Interface {}` seul sur une ligne (fc='o') — détecté
-//   ANON-3  `companion object : Interface` (pas de nom) — détecté
+//   ANON-3  `companion object : Interface` (pas de nom) — émis comme Companion (isCompanion) avec supertypes
 //   ANON-4  `object Named : Interface` — RE_CLASS le gère, PAS de $anon dupliqué
 //   ANON-5  Deux objets anonymes dans le même fichier → noms distincts ($anon$N / $anon$M)
 //   ANON-6  Objet anonyme dans une raw string → NOT indexé
@@ -483,7 +483,7 @@ describe('Fix B — objets anonymes (object : Interface)', () => {
     expect(sink).toBeDefined();
   });
 
-  it('ANON-3 — companion object : Interface (sans nom) → $anon émis', () => {
+  it('ANON-3 — companion object : Interface (sans nom) → Companion émis avec ses supertypes', () => {
     const code = [
       'interface Factory { fun create(): String }',
       'class Widget {',
@@ -494,9 +494,11 @@ describe('Fix B — objets anonymes (object : Interface)', () => {
     ].join('\n');
 
     const syms = symbols(code);
-    const anon = syms.find(s => s.name.startsWith('$anon$'));
-    expect(anon).toBeDefined();
-    expect(anon!.supertypes).toContain('Factory');
+    expect(syms.find(s => s.name.startsWith('$anon$'))).toBeUndefined();
+    const companion = syms.find(s => s.name === 'Companion');
+    expect(companion).toBeDefined();
+    expect(companion!.isCompanion).toBe(true);
+    expect(companion!.supertypes).toContain('Factory');
   });
 
   it('ANON-4 — object Named : Interface → RE_CLASS seul, PAS de $anon dupliqué', () => {

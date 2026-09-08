@@ -10,7 +10,7 @@ export type { Snapshot, SnapshotFile };
 // by mtime and size, so without this every unchanged .java file would restore
 // with the empty import list persisted before the fix, and Find Usages would
 // stay blind to Java until each file happened to be edited.
-export const SNAPSHOT_VERSION = 21;
+export const SNAPSHOT_VERSION = 22;
 const SNAPSHOT_FILENAME = 'kotlin-jump-index.json'; // historical name; content is gzip from v19+
 
 const gzip   = promisify(zlib.gzip);

@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.42.17
+
+Kotlin Jump 1.42.17 is a parser release. A class, property or enum entry with an annotation on the same line (`@AndroidEntryPoint class`, `@Entity(tableName = "users") data class`, `@Inject lateinit var`, `@SerializedName("a") ACTIVE`) was not indexed at all, so it had no Outline entry, no Go to Definition and no usages. An unnamed `companion object` now appears in the Outline with its members under it. The index snapshot is rebuilt once after the update so the fix reaches files you have not touched.
+
+### Fixes
+- Indexes a declaration whose annotation sits on the same line. `@AndroidEntryPoint class MainActivity`, `@Parcelize data class Point`, `@Inject lateinit var api` and constructor parameters like `@field:SerializedName("user_name") val userName` were skipped by the parser: nothing in the Outline, "No definition found", zero usages, and dead-code checks could not see them. `value class` and the `final` modifier are recognized too.
+- Shows an unnamed `companion object` in the Outline as `Companion`, with its constants and factories nested under it. They used to hang under whatever member came before, usually a function. The FQN of a member stays `Foo.TAG`, the way it is written and imported, and the entry gets no usage lens and no workspace search hit.
+- Indexes enum entries carrying an annotation (`@SerializedName("ACTIVE") ACTIVE`, `@Json(name = "b") INACTIVE(1)`), and puts the column on the entry, not on its copy inside the annotation string. Same for `@JvmName("getFoo") fun getFoo()` and `@SerializedName("Foo") class Foo`, whose Go to Definition landed inside the annotation.
+- Indexes an extension property under its own name. `val List<Int>.sum3` was recorded as a property called `List`.
+- Stops a `;` line in an enum from turning the next uppercase continuation line into a phantom entry. After `GREEN("#0f0"),` and `;`, a `NAME` on the line following `override fun toString() =` showed up as an enum entry in the Outline and in "Add missing when branches".
+- Keeps the brace count right across a block comment in the middle of a line. `class A { /* { */ }` shifted every declaration after it one level deeper, and a `/*` left open at the end of a line hid nothing, so the commented-out code was still indexed.
+- Stops indexing a `val` declared inside a lambda passed as a named argument (`foo(onClick = { val x = 1 })`) as a primary-constructor property of the enclosing class.
+- Fixes the Outline icon of an enum class that follows another enum: it got the EnumMember icon of that enum's last entry. Visibility is now read from the declaration's own modifiers, so `class Foo @Inject constructor(private val x: Int)` is no longer a private class and in `(private val a, val b)` only `a` is a private field.
+- Applies the `hoverEnabled`, `foldingEnabled` and `signatureHelp` settings live. They were read once at activation, so turning one off did nothing until the window was reloaded.
+- Stops the Compose accessibility hint "role?" on a `clickable` whose `role =` argument sits on a following line.
+- Rejects a reversed day-of-week range in the cron tooltip (`5-1`) instead of explaining it as if it were valid.
+
 ## 1.42.16
 
 Kotlin Jump 1.42.16 fixes a regression of 1.42.15 in Java switches, stops the rating prompt from re-arming on every window, renders Javadoc HTML in hovers instead of showing the tags, and corrects the call hierarchy, Expand Selection, the chat participant and the Find Usages panel where they told you something false.

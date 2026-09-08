@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { scanForUsages, scanImports, UsageResult, isExcluded, resolveSearchTarget } from './FindUsagesEngine';
-import { resolveLocalScope, findLocalUsages } from './DefinitionProvider';
+import { resolveLocalScope, findLocalUsages, cachedLocalScopeIndex } from './DefinitionProvider';
 import { isInsideCommentOrString, isInsideStringInterpolation } from '../util/textUtils';
+import { FUN_RE, signatureEnd } from '../util/LocalScopeIndex';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 
@@ -57,6 +58,130 @@ export function computeFileRename(
 }
 
 // ── Provider ──────────────────────────────────────────────────────────────────
+
+/**
+ * Name of the function whose parameter list declares the binding at
+ * `declPos`, or null when the binding is a local of a body, a lambda
+ * parameter or a for-loop variable.
+ */
+function parameterOwner(document: vscode.TextDocument, declPos: vscode.Position, word: string): string | null {
+  const scope = cachedLocalScopeIndex(document);
+  if (declPos.line >= scope.enclosingFun.length) return null;
+  const funLine = scope.enclosingFun[declPos.line];
+  if (funLine < 0 || declPos.line > signatureEnd(scope, funLine)) return null;
+  const header = scope.lines[funLine];
+  const m = FUN_RE.exec(header);
+  if (!m || m[1] === word) return null;
+  // On the header line the binding must sit inside the parentheses, not be
+  // the function name or the receiver.
+  if (declPos.line === funLine && declPos.character < header.indexOf('(', m.index)) return null;
+  // `{ v -> ` on the header line is a lambda default, not a parameter.
+  const before = scope.lines.slice(funLine, declPos.line + 1).join('\n');
+  const upTo = before.length - (scope.lines[declPos.line].length - declPos.character);
+  if (/\{[^}]*$/.test(before.slice(0, upTo))) return null;
+  return m[1];
+}
+
+/**
+ * Ranges of `param =` labels inside calls of `funName`: the live document
+ * first, then the workspace when the index knows exactly one function of
+ * that name (another `Screen` elsewhere would have its own `title`).
+ */
+async function namedArgLabelRanges(
+  document: vscode.TextDocument,
+  funName: string,
+  param: string,
+  index: SymbolIndex,
+  token: vscode.CancellationToken,
+): Promise<[vscode.Uri, vscode.Range][]> {
+  const out: [vscode.Uri, vscode.Range][] = [];
+  const own = document.uri.toString();
+  const callRe = new RegExp(`\\b${funName}\\s*\\(`, 'g');
+  const collect = (lines: string[], uri: vscode.Uri, line: number, col: number) => {
+    for (const r of labelRangesInCall(lines, line, col, param)) out.push([uri, r]);
+  };
+
+  const ownLines = document.getText().split('\n');
+  for (let i = 0; i < ownLines.length; i++) {
+    callRe.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = callRe.exec(ownLines[i]))) {
+      if (isInsideCommentOrString(ownLines[i], m.index)) continue;
+      collect(ownLines, document.uri, i, m.index + m[0].length);
+    }
+  }
+
+  const declared = index.lookup(funName).filter(e => e.kind === 'fun' || e.kind === 'composable');
+  if (declared.length !== 1) return out;
+  const uris = index.fileUriStrings().filter(u => u !== own && !isExcluded(u));
+  const hits = await scanForUsages(funName, document, index, uris, token);
+  const byFile = new Map<string, UsageResult[]>();
+  for (const h of hits) {
+    if (h.uriString === own) continue;
+    const list = byFile.get(h.uriString) ?? [];
+    list.push(h);
+    byFile.set(h.uriString, list);
+  }
+  for (const [uriStr, list] of byFile) {
+    if (token.isCancellationRequested) break;
+    let lines: string[];
+    try { lines = (await vscode.workspace.openTextDocument(vscode.Uri.parse(uriStr))).getText().split('\n'); }
+    catch { continue; }
+    for (const h of list) {
+      const after = lines[h.line]?.slice(h.character + funName.length) ?? '';
+      const paren = /^\s*\(/.exec(after);
+      if (!paren) continue;
+      collect(lines, h.uri, h.line, h.character + funName.length + paren[0].length);
+    }
+  }
+  return out;
+}
+
+/**
+ * `param =` labels at the top level of the argument list that starts right
+ * after the `(` at (line, col). Walks up to 200 lines, balancing every
+ * bracket so a lambda argument's own assignments are not labels.
+ */
+function labelRangesInCall(lines: string[], line: number, col: number, param: string): vscode.Range[] {
+  const out: vscode.Range[] = [];
+  const labelRe = new RegExp(`(^\\s*|[(,]\\s*)(${param})\\s*=(?!=)`, 'g');
+  let depth = 0;
+  const stop = Math.min(lines.length - 1, line + 200);
+  for (let li = line; li <= stop; li++) {
+    const text = lines[li];
+    const from = li === line ? col : 0;
+    // Labels on this line at depth 0 of the call
+    if (depth === 0) {
+      labelRe.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = labelRe.exec(text))) {
+        const at = m.index + m[1].length;
+        if (at < from) continue;
+        if (isInsideCommentOrString(text, at)) continue;
+        if (depthBetween(text, from, at) !== 0) continue;
+        out.push(new vscode.Range(li, at, li, at + param.length));
+      }
+    }
+    for (let c = from; c < text.length; c++) {
+      const ch = text[c];
+      if (ch !== '(' && ch !== ')' && ch !== '{' && ch !== '}' && ch !== '[' && ch !== ']') continue;
+      if (isInsideCommentOrString(text, c)) continue;
+      if (ch === '(' || ch === '{' || ch === '[') depth++;
+      else if (--depth < 0) return out; // the call's closing paren
+    }
+  }
+  return out;
+}
+
+function depthBetween(text: string, from: number, to: number): number {
+  let d = 0;
+  for (let c = from; c < to; c++) {
+    const ch = text[c];
+    if (ch === '(' || ch === '{' || ch === '[') d++;
+    else if (ch === ')' || ch === '}' || ch === ']') d--;
+  }
+  return d;
+}
 
 export class KotlinRenameProvider implements vscode.RenameProvider {
   constructor(private readonly index: SymbolIndex) {}
@@ -123,6 +248,14 @@ export class KotlinRenameProvider implements vscode.RenameProvider {
       // Each usage.
       for (const usage of declUsages) {
         edit.replace(document.uri, usage.range, newName, META_OCCURRENCES);
+      }
+      // A parameter is also named at every call site: `Screen(title = "x")`
+      // kept the old label and stopped compiling.
+      const owner = parameterOwner(document, declPos, word);
+      if (owner) {
+        for (const [uri, range] of await namedArgLabelRanges(document, owner, word, this.index, token)) {
+          edit.replace(uri, range, newName, META_OCCURRENCES);
+        }
       }
       return edit;
     }

@@ -44,7 +44,15 @@ export function extractReceiver(lineText: string, dotIndex: number): string | nu
       i--;
       continue;
     }
-    if (/[\w$?."']/.test(ch)) {
+    if (ch === '"') {
+      // A string literal is one token: `"Hello $name".let` used to stop at
+      // the space and offer `$name".let { }`.
+      const open = stringLiteralStart(lineText, i);
+      if (open < 0) break;
+      i = open - 1;
+      continue;
+    }
+    if (/[\w$?.']/.test(ch)) {
       i--;
       continue;
     }
@@ -62,6 +70,19 @@ export function extractReceiver(lineText: string, dotIndex: number): string | nu
 
   const receiver = lineText.slice(i + 1, dotIndex).trim();
   return receiver.length > 0 ? receiver : null;
+}
+
+/** Index of the `"` opening the literal that closes at `closeIdx`, or -1. */
+function stringLiteralStart(lineText: string, closeIdx: number): number {
+  // `"""` raw string closing here: find the opening `"""`.
+  if (lineText[closeIdx - 1] === '"' && lineText[closeIdx - 2] === '"') {
+    const open = lineText.lastIndexOf('"""', closeIdx - 3);
+    return open;
+  }
+  for (let j = closeIdx - 1; j >= 0; j--) {
+    if (lineText[j] === '"' && lineText[j - 1] !== '\\') return j;
+  }
+  return -1;
 }
 
 // Ints, decimals, hex, binary: `if (3.14)` and `if (0xFF)` are invalid Kotlin.
@@ -82,9 +103,12 @@ const NUMERIC_LITERAL = /^-?(?:0[xXbB][\dA-Fa-f_]+|\d[\d_]*(?:\.\d[\d_]*)?)[LfF]
  */
 export function expandPostfix(
   template: string,
-  receiver: string,
+  rawReceiver: string,
 ): string | null {
-  const numeric = NUMERIC_LITERAL.test(receiver);
+  const numeric = NUMERIC_LITERAL.test(rawReceiver);
+  // The receiver lands in a SnippetString: `$name` and `${total}` would be
+  // read as snippet variables and vanish. Escape what the snippet grammar owns.
+  const receiver = rawReceiver.replace(/[\\$}]/g, '\\$&');
   const inner = '    ';
   /** `head { body }` block, one level of relative indentation. */
   const block = (head: string, body: string) =>

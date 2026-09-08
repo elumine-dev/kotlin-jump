@@ -99,7 +99,15 @@ export function buildLocalScopeIndex(lines: readonly string[], language: 'kotlin
     let found = -1;
     for (let probe = opener; probe >= 0; probe--) {
       const text = lines[probe];
-      if (isHeader(text)) { found = probe; break; }
+      if (isHeader(text)) {
+        // `fun Int.dp() = this * 2` right above `class Repo {`: a one-line
+        // expression body is complete, the block below is not its body. The
+        // members of Repo were taken for locals of dp(), so a rename of
+        // `cache` never left the file.
+        if (probe < opener && isExpressionBodyHeader(text)) break;
+        found = probe; break;
+      }
+      if (CLASS_DECL_RE.test(text)) break;
       if (probe < opener && text.includes('}')) break;
     }
     headerMemo.set(opener, found);
@@ -225,6 +233,27 @@ export function latestBinding(
     best = b;
   }
   return best;
+}
+
+const CLASS_DECL_RE = /^\s*(?:@[\w.]+(?:\([^)]*\))?\s+)*(?:(?:public|private|internal|protected|open|abstract|sealed|data|inner|enum|annotation|final|value|companion|expect|actual)\s+)*(?:class|object|interface)\b/;
+
+/**
+ * `fun x(…) = expr` with no `{` after the `=`: the whole body sits on this
+ * line. A `= run {` still opens a block and is not one.
+ */
+function isExpressionBodyHeader(text: string): boolean {
+  const paren = text.indexOf('(', text.indexOf('fun'));
+  if (paren < 0) return false;
+  let depth = 0, i = paren;
+  for (; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '(') depth++;
+    else if (ch === ')') { depth--; if (depth === 0) break; }
+  }
+  const rest = text.slice(i + 1);
+  const eq = rest.search(/(?<![=!<>])=(?!=)/);
+  if (eq < 0) return false;
+  return !rest.slice(eq).includes('{');
 }
 
 /** True when a `/*` at or after `from` is not closed before the end of the line. */

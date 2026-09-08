@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { importBlockBounds } from '../util/importBlock';
+import { CONVENTION_FUN_NAMES } from '../util/kotlinScan';
 
 export interface OrganizeImportsOptions {
   removeUnused?: boolean; // default: true
@@ -22,8 +23,18 @@ interface ParsedImport {
 
 // Matches Kotlin and Java (static) import lines.
 // Group 1: import path   Group 2: optional alias
+// The optional `;` is Java: without it no Java line was an import at all and
+// "Organize Imports" silently did nothing on a .java file.
 const RE_IMPORT_LINE =
-  /^\s*import\s+(?:static\s+)?([\w.*]+)(?:\s+as\s+(\w+))?\s*(?:\/\/.*)?$/;
+  /^\s*import\s+(?:static\s+)?([\w.*]+)(?:\s+as\s+(\w+))?\s*;?\s*(?:\/\/.*)?$/;
+
+// Names Kotlin resolves by convention, never spelled at the use site:
+// `getValue`/`setValue` behind `by remember`, `plus` behind `a + b`,
+// `component1` behind a destructuring. The unused-import diagnostic already
+// keeps them; this action removed them and the file stopped compiling.
+function isResolvedByConvention(simpleName: string): boolean {
+  return CONVENTION_FUN_NAMES.has(simpleName) || /^component\d+$/.test(simpleName);
+}
 
 // ── Pure function (no vscode dep) ────────────────────────────────────────────
 
@@ -90,7 +101,7 @@ export function organizeImports(
 
   for (const imp of deduped) {
     // Wildcards and aliasless wildcards can't be usage-checked — always keep.
-    if (!removeUnused || imp.isWildcard || !imp.simpleName) {
+    if (!removeUnused || imp.isWildcard || !imp.simpleName || isResolvedByConvention(imp.simpleName)) {
       kept.push(imp);
       continue;
     }

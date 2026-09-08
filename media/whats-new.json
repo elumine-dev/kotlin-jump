@@ -1,20 +1,39 @@
 {
-  "version": "1.42.43",
+  "version": "1.42.44",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A test that watched the clock",
-  "summary": "No change to the extension. One of our own tests measured elapsed time and failed on a loaded build machine, so it now asserts on behaviour instead.",
+  "tagline": "Run over a real codebase",
+  "summary": "Every analysis was driven over a real Android project of 5000 files instead of test fixtures. Expand Selection, test source sets and the Logcat process filter all had bugs only real code showed.",
   "highlights": [
     {
-      "title": "No clock in the test suite",
+      "title": "Expand Selection lands on the cursor",
       "kind": "fix",
-      "description": "A regression test guarded a shortcut with a threshold in milliseconds. It checks the two outcomes that matter instead: a file with no state produces no lens, and a file with a single state keeps its lens and its indirect writes."
+      "description": "On a data class whose parameters each carry an annotation on the line above, putting the cursor on the annotation selected the previous property. Twenty four files of the project were affected."
+    },
+    {
+      "title": "Unit tests in a build variant",
+      "kind": "fix",
+      "description": "The project keeps them in `src/testReplica/java`, and 155 real test files were read as production code. The rule is now anchored where Gradle puts the source set name, the directory right after `src`."
+    },
+    {
+      "title": "A reopened file shows itself",
+      "kind": "fix",
+      "description": "Closing a file without saving and reopening it showed the structure of the previous session, and when the earlier buffer was longer the Outline threw and emptied itself."
     }
   ],
   "sections": [
     {
+      "heading": "Fixes",
+      "bullets": [
+        "A production file named like a test source set, `androidTestHelper.kt`, is no longer hidden from Go to Definition.",
+        "The Logcat process filter keeps the main process instead of retiring it first when the app spawns many processes.",
+        "Reconnecting to the device already selected no longer replays the whole device buffer.",
+        "A state write at the very end of a file is counted, and the lens offers the place to jump to."
+      ]
+    },
+    {
       "heading": "Notes",
       "bullets": [
-        "Nothing shipped in the extension itself. Version 1.42.42 was published correctly; only the test job was red."
+        "The sweep now runs over 3187 Kotlin files, 1901 Java files, 51 manifests and 410 vector drawables, and reports zero anomaly."
       ]
     }
   ],

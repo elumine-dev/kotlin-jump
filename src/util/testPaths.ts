@@ -28,13 +28,29 @@ export function segmentMatchesPath(uriPath: string, segment: string): boolean {
   if (p.includes(`/${s}/`) || p.endsWith(`/${s}`)) return true;
 
   // Gradle builds a variant source set by suffixing the base name in camel
-  // case: `androidTest` becomes `androidTestDebug`, `jvmTest` becomes
-  // `jvmTestFixtures`. Requiring an exact component missed all of them.
-  // The suffix must start with an upper case letter, so `test` still does not
-  // match a directory named `testdata`, and a segment naming a directory pair
-  // such as `test/kotlin` still never matches `test/kotlin-jump-demo`.
-  if (s.includes('/')) return false;
-  return p.split('/').some(c => c.length > s.length && c.startsWith(s) && /^[A-Z]/.test(c[s.length]!));
+  // case: `androidTest` becomes `androidTestDebug`, `test/java` becomes
+  // `testDebug/java`. Requiring an exact component missed all of them.
+  //
+  // The rule is anchored on the component that directly follows `src`, which
+  // is where Gradle puts the source set name. Scanning every component instead
+  // classified a module named `androidTestUtils`, and even a production file
+  // named `androidTestHelper.kt`, as test code, and Go to Definition then
+  // hid them from every production file.
+  const parts = p.split('/');
+  const [base, lang] = s.split('/');
+  for (let i = 1; i < parts.length; i++) {
+    if (parts[i - 1] !== 'src') continue;
+    const sourceSet = parts[i]!;
+    const isVariant = sourceSet.length > base!.length
+      && sourceSet.startsWith(base!)
+      && /^[A-Z]/.test(sourceSet[base!.length]!);
+    if (!isVariant) continue;
+    // `test/java` also pins the language directory: `src/testDebug/java` is a
+    // unit test source set, `src/testDebug/res` is not.
+    if (lang !== undefined && parts[i + 1] !== lang) continue;
+    return true;
+  }
+  return false;
 }
 
 export function isTestPath(uriPath: string, segments: readonly string[]): boolean {

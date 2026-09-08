@@ -8,8 +8,10 @@ export class KotlinFoldingRangeProvider implements vscode.FoldingRangeProvider {
   constructor(private readonly index: SymbolIndex) {}
 
   // `dirty` belongs in the key: saving does not bump document.version, and the
-  // two branches below do not read the same source.
-  private cache = new Map<string, { version: number; dirty: boolean; ranges: vscode.FoldingRange[] }>();
+  // two branches below do not read the same source. So does the length: a
+  // reopened document restarts at version 1, so uri plus version can name two
+  // different texts and the folds of the previous session were replayed.
+  private cache = new Map<string, { version: number; dirty: boolean; length: number; ranges: vscode.FoldingRange[] }>();
 
   provideFoldingRanges(
     document: vscode.TextDocument,
@@ -17,8 +19,12 @@ export class KotlinFoldingRangeProvider implements vscode.FoldingRangeProvider {
     _token: vscode.CancellationToken,
   ): vscode.FoldingRange[] {
     const key = document.uri.toString();
+    const text = document.getText();
     const cached = this.cache.get(key);
-    if (cached && cached.version === document.version && cached.dirty === document.isDirty) {
+    if (cached
+      && cached.version === document.version
+      && cached.dirty === document.isDirty
+      && cached.length === text.length) {
       return cached.ranges;
     }
 
@@ -78,7 +84,7 @@ export class KotlinFoldingRangeProvider implements vscode.FoldingRangeProvider {
     }
 
     const result = ranges.length > 5000 ? ranges.slice(0, 5000) : ranges;
-    this.cache.set(key, { version: document.version, dirty: document.isDirty, ranges: result });
+    this.cache.set(key, { version: document.version, dirty: document.isDirty, length: text.length, ranges: result });
     return result;
   }
 }

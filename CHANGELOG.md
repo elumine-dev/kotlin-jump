@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.44
+
+Kotlin Jump 1.42.44 comes from running the extension over a real Android codebase instead of test fixtures: two apps, 3187 Kotlin files, 1901 Java files, 267 000 lines. Every analysis was driven over every file, and the answers were checked against what the file actually contains.
+
+### Fixes
+- Expand Selection selects around the cursor, not above it. On a data class whose parameters each carry an annotation on the line above, putting the cursor on the annotation selected the PREVIOUS property. The containment test ran before the walk back over annotation lines, and the range that came out no longer held the cursor. Twenty four files of that codebase were affected.
+- Unit tests in a build variant are recognised. That codebase keeps them in `src/testReplica/java` and `src/testAdPreflightLaPresseRelease/java`, and 155 real test files were classified as production code. The variant rule is now anchored where Gradle puts the source set name, the directory right after `src`.
+- A production file is no longer mistaken for a test. The first version of that variant rule looked at every component of the path, so a file named `androidTestHelper.kt` and a module named `androidTestUtils` both counted as test code, and Go to Definition hid them from every production file.
+- Reopening a file after closing it without saving no longer shows the structure of the previous session. A closed document is destroyed and a reopened one restarts at version 1, so the version alone could not tell two texts apart. When the earlier buffer was longer, the Outline threw and emptied itself.
+- The Logcat process filter keeps the main process. It was retired first when the app spawned more processes than the cap, so the rows the reader actually wants disappeared while the noise stayed.
+- Reconnecting to the same device no longer replays the whole device buffer. The resume anchor was dropped on any device switch, including a switch back to the device already selected.
+- A write at the very end of a file counts. The list of write positions behind the state lens still used the older pattern, which needs a character after the equals sign, so the lens said one write and offered no place to jump to.
+
 ## 1.42.43
 
 Kotlin Jump 1.42.43 contains no change to the extension. It replaces one of our own tests that measured a wall clock and failed on a loaded build machine, which left the previous release red even though it shipped correctly.

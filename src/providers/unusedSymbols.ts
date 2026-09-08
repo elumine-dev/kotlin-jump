@@ -11,6 +11,8 @@ import {
   sanitizeForUsageScan,
   suppressesDiagnostic,
   UNUSED_DECLARATION,
+  afterAnnotations,
+  multiLineAnnotationStart,
 } from '../util/kotlinScan';
 import { declarationSpan } from '../util/declarationSpan';
 import { isTestSourceSet } from '../util/testPaths';
@@ -278,8 +280,12 @@ export function removalExtent(
   for (let l = sym.line - 1; l >= 0; l--) {
     const trimmed = (lines[l] ?? '').trim();
     // An annotation line that declares something of its own
-    // (`@Inject lateinit var analytics`) is a neighbour, not ours.
-    if (trimmed.startsWith('@') && !DECL_KEYWORD_RE.test(trimmed)) { firstLine = l; continue; }
+    // (`@Inject lateinit var analytics`) is a neighbour, not ours. The test
+    // runs on what FOLLOWS the annotation: `@Deprecated("Use the val")` read
+    // as a declaration because of the word inside its argument, and stayed.
+    if (trimmed.startsWith('@') && !DECL_KEYWORD_RE.test(afterAnnotations(trimmed))) { firstLine = l; continue; }
+    const annoStart = multiLineAnnotationStart(lines, l);
+    if (annoStart !== -1) { firstLine = annoStart; l = annoStart; continue; }
     // Same walk as unusedDeclarations.ts: only through comment-only lines.
     // `val cache = … /* warm */` also ends with `*/`, and the walk used to
     // climb from there to the licence header and delete the whole file top.
@@ -336,6 +342,36 @@ export function removalExtent(
 }
 
 /** Kotlin declarations of the corpus, top-level only, before any filtering. */
+/**
+ * The removal extent of a top-level declaration recomputed on `text` as it
+ * is NOW. A finding carries offsets from the scan; an unsaved edit above the
+ * declaration shifted them, and the fix deleted a neighbouring line.
+ * Undefined when the declaration is no longer where the scan saw it.
+ */
+export function currentRemovalExtent(
+  path: string,
+  text: string,
+  name: string,
+  kind: UnusedSymbolKind,
+): { removeStart: number; removeEnd: number } | undefined {
+  const parsed = path.endsWith('.java') ? parseJava(path, text) : parse(path, text);
+  const sym = parsed.symbols.find(s => s.depth === 0 && s.name === name && s.kind === kind);
+  if (!sym) return undefined;
+  const clean = sanitizeForUsageScan(text);
+  const lineStarts = buildLineStarts(clean);
+  const lastLine = lineStarts.length - 1;
+  const span = declarationSpan(clean, lineStarts, {
+    kind: sym.kind === 'fun' || sym.kind === 'composable' ? 'fun'
+      : sym.kind === 'val' || sym.kind === 'var' ? 'prop' : 'classLike',
+    name: sym.name,
+    line: sym.line,
+    nameOffset: lineStarts[sym.line] + sym.character,
+    lastLine,
+  });
+  if (!span) return undefined;
+  return removalExtent(text, clean, lineStarts, lastLine, sym, span);
+}
+
 export function collectTopLevelCandidates(
   sources: readonly SymbolSource[],
   testSourceSets: readonly string[],
@@ -393,7 +429,10 @@ export function collectTopLevelCandidates(
       for (const sup of s.supertypes ?? []) parentsOfAnnotatedSubtypes.add(sup.replace(/<.*/, '').trim());
     }
 
-    if (isJava && JAVA_ENTRY_POINT_RE.test(src.text)) exemptByEntryPoint.add(src.path);
+    // A Kotlin `@Test` class is a runner entry point too, wherever it sits:
+    // `src/e2e/kotlin` is no Gradle test source set, and its classes were
+    // offered for deletion.
+    if (isJava ? JAVA_ENTRY_POINT_RE.test(src.text) : parsed.symbols.some(s => s.isTest)) exemptByEntryPoint.add(src.path);
 
     // F18: a generator owns this file, and the next build rewrites it. Acting
     // on a finding here is wasted, and generator conventions read as dead code

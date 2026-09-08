@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.42.30
+
+Kotlin Jump 1.42.30 fixes the dead code family where it could break a build or a running app: a Delete quick fix that landed on the wrong lines after an unsaved edit, a manifest activity reported as missing on a large project and offered for removal, a custom view constructor whose `attrs` parameter looked unused, a shrinker keep list reported as an unused resource, and Room enums whose entries come back from the database.
+
+### Fixes
+- Deletes what you selected, not what moved. A finding carries the offsets of its scan; after an unsaved edit above the declaration the quick fix removed a neighbouring line and left a fragment that did not compile. The extent is now recomputed on the text as it is, a declaration that moved is skipped, and the shared corpus drops its cache as soon as an open editor differs from what was scanned.
+- Removes the annotation with its declaration. A `@Deprecated(` spanning several lines, or one whose argument contains a word like `val`, stayed behind and applied itself to the next declaration. A qualified `@org.greenrobot.eventbus.Subscribe` is now removed with its handler too.
+- Stops offering to remove a live manifest component. Past four thousand source files the listing was capped, the class was simply not in it, and the badge said "class not found" with a Remove action: the app then threw ActivityNotFoundException at launch. A capped listing now proves nothing, for components and for unused dependencies alike.
+- Keeps the constructor that inflates a custom view. `class MyView(context: Context, attrs: AttributeSet? = null)` reported `attrs` as unused; removing it compiled and threw InflateException the moment a layout used the view.
+- Keeps `res/raw/keep.xml` and everything it protects. The shrinker keep list was reported as an unused raw resource with a Delete action, and the drawables named by its `tools:keep` wildcards were reported alongside it.
+- Applies the dynamic lookup guard to resource keys. A string reached through `getIdentifier(key, "string", pkg)`, the shape of server driven copy, was reported unused and deleted; the guard already existed for resource files and now covers the values in them.
+- Leaves Room enums alone. An `@Entity` stores an enum by name without any converter, so an entry no code mentions is still read back from every row already in the database. Deleting one turned an existing row into an exception.
+- Recognises a Kotlin test class wherever it lives. A class holding `@Test` methods under `src/e2e/kotlin` is a runner entry point, not dead code, even though the folder is no Gradle test source set.
+- Withdraws a fix that would break the build. `val (id, name, url) = repo.profile()` reads three fields without naming the class, so the verdict stands but the parameter is no longer offered for removal.
+- Sees a module declared through a version catalog. `alias(libs.plugins.android.library)` and publishing convention plugins were invisible, so a published module's public API read as unreferenced and Remove all would have deleted it. Remote Config also stops reporting keys when the app iterates them all, and a commented out entry is no longer a declaration.
+
 ## 1.42.29
 
 Kotlin Jump 1.42.29 fixes what the panels drew: a vector icon whose background covered its glyph, a badge scaled towards the corner instead of its centre, gradient shapes rendered empty, a preview panel stuck on the previous file, a Screen Flow map with a missing arrow and boxes drawn on top of each other, and a "libs" badge that counted the whole Gradle cache.

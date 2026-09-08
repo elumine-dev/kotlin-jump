@@ -18,11 +18,12 @@ import { UnusedResourceKeyProvider } from './UnusedResourceKeyProvider';
  */
 
 const CACHE_MS = 20_000;
+const MAX_SOURCES = 4000;
 
 export class DeadWeightActionProvider implements vscode.CodeActionProvider {
   static readonly providedCodeActionKinds = [vscode.CodeActionKind.QuickFix];
 
-  private _sources: { at: number; value: UsageSource[] } | undefined;
+  private _sources: { at: number; value: UsageSource[]; truncated: boolean } | undefined;
   private _imports: { at: number; value: string[] } | undefined;
 
   constructor() {
@@ -36,7 +37,7 @@ export class DeadWeightActionProvider implements vscode.CodeActionProvider {
 
   private async scanSources(): Promise<UsageSource[]> {
     const uris = await vscode.workspace.findFiles(
-      '**/*.{kt,java,xml}', '**/{build,.gradle,node_modules}/**', 4000,
+      '**/*.{kt,java,xml}', '**/{build,.gradle,node_modules}/**', MAX_SOURCES,
     );
     const value: UsageSource[] = [];
     for (const uri of uris) {
@@ -47,8 +48,13 @@ export class DeadWeightActionProvider implements vscode.CodeActionProvider {
         });
       } catch { continue; }
     }
-    this._sources = { at: Date.now(), value };
+    this._sources = { at: Date.now(), value, truncated: uris.length >= MAX_SOURCES };
     return value;
+  }
+
+  /** A listing that hit the cap cannot prove a class or an import absent. */
+  private sourcesTruncated(): boolean {
+    return this._sources?.truncated ?? false;
   }
 
   private async workspaceSources(): Promise<UsageSource[]> {
@@ -145,6 +151,7 @@ export class DeadWeightActionProvider implements vscode.CodeActionProvider {
       }
       if (!coordinate) return [];
       const cls = classifyDependency(coordinate, await this.workspaceImports());
+      if (this.sourcesTruncated()) return [];
       if (cls.kind !== 'counted' || cls.imports > 0) return [];
       // `implementation("…") {\n exclude(…)\n}`: the block goes with the line.
       let end = line;
@@ -178,6 +185,9 @@ export class DeadWeightActionProvider implements vscode.CodeActionProvider {
       if (!permMatch && !compMatch) return [];
 
       const sources = await this.workspaceSources();
+      // "class not found" on a live activity once the listing was capped:
+      // the removal would have thrown ActivityNotFoundException at runtime.
+      if (compMatch && this.sourcesTruncated()) return [];
       const project: ProjectSearcher = {
         classExists: fqn => {
           const simple = fqn.split('.').pop() ?? fqn;

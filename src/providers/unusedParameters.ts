@@ -211,6 +211,10 @@ export function findUnusedParameters(text: string): UnusedParam[] {
       if (openParen === -1) continue;
       const closeParen = findMatchingParen(clean, openParen);
       if (closeParen === -1) continue;
+      // `(context: Context, attrs: AttributeSet?)` is the signature the
+      // framework calls to inflate a view: dropping `attrs` compiled and
+      // threw InflateException at runtime.
+      if (/\bAttributeSet\b/.test(clean.slice(openParen, closeParen))) continue;
       let candidates = collectParams(openParen, closeParen, true);
       if (classIsAnnotated) candidates = candidates.filter(c => c.kind !== 'ctorProp');
       // class body extent by brace matching (first `{` after the header)

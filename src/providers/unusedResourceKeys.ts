@@ -22,6 +22,7 @@ import {
   normalizeResourceName,
   styleParentClosure,
   styleableCovers,
+  dynamicallyLookedUpKinds,
 } from '../util/xmlRefs';
 import { isBuildArtifactPath, isVendorOwnedName } from '../util/resourceAllowlists';
 import { ResourceSource } from './UnusedResourceProvider';
@@ -174,6 +175,17 @@ export function findUnusedResourceKeys(input: UnusedKeyScanInput): UnusedResourc
   const libraryModules = new Set(input.libraryModules ?? []);
   const alive = harvest(input.sources);
 
+  // Inherited from KJ-029: a key looked up by a computed name
+  // (`getIdentifier(key, "string", pkg)`) has no reference to find, and the
+  // fix deleted a string the server picked at runtime.
+  const dynamic = new Set<string>();
+  for (const s of input.sources) {
+    if (!/\.(kt|kts|java)$/.test(s.path) || isBuildArtifactPath(s.path)) continue;
+    const kinds = dynamicallyLookedUpKinds(s.text);
+    if (kinds === null) return [];
+    for (const k of kinds) dynamic.add(k);
+  }
+
   // Files that opted out entirely.
   const exempt = new Set(
     input.sources.filter(s => s.text.includes(IGNORE_MARKER)).map(s => s.path),
@@ -227,6 +239,8 @@ export function findUnusedResourceKeys(input: UnusedKeyScanInput): UnusedResourc
     if (!modulesWithCode.has(first.moduleDir)) continue;
 
     if (first.kind === 'attr' && styleableMembers.has(first.name)) continue;
+
+    if (dynamic.has(first.kind) || (dynamic.has('array') && /array$/.test(first.kind))) continue;
 
     if (isReferenced(first, alive, implicitStyleParents)) continue;
 

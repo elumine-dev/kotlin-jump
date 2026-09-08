@@ -1,4 +1,5 @@
 import { isBuildArtifactPath, isGeneratedSource } from '../util/resourceAllowlists';
+import { stripXmlComments } from '../util/xmlRefs';
 import { harvestMentions, SymbolSource } from './unusedSymbols';
 
 /**
@@ -132,9 +133,11 @@ export function collectRemoteConfigKeys(
     if (src.text.includes(IGNORE_MARKER)) continue;
 
     const starts = lineStartsOf(src.text);
+    // A commented-out `<entry>` is not a declaration; offsets are preserved.
+    const live = stripXmlComments(src.text);
     ENTRY_RE.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while ((m = ENTRY_RE.exec(src.text)) !== null) {
+    while ((m = ENTRY_RE.exec(live)) !== null) {
       const key = KEY_RE.exec(m[1]);
       if (!key) continue;
       const keyOffset = m.index + m[0].indexOf(key[0]) + key[0].indexOf(key[1]);
@@ -188,6 +191,11 @@ export function findUnusedRemoteConfigKeys(
 
   const byKey = collectRemoteConfigKeys(input.sources);
   if (byKey.size === 0) return [];
+
+  // `remoteConfig.all` / `getAll()` reads every key without naming one:
+  // an admin screen iterating them kept them all alive, invisibly.
+  if (input.sources.some(s => /\.(kt|java)$/.test(s.path) && /RemoteConfig/.test(s.text)
+      && /\.\s*(?:all\b|getAll\s*\()/.test(s.text))) return [];
 
   const mentions = mentionsOutsideDefaults(input.sources, new Set(byKey.keys()));
   const ignored = input.ignoreNames ?? [];

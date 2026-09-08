@@ -665,7 +665,11 @@ function handlerExtent(
   // Back up to the start of the annotation's line.
   let start = raw.lastIndexOf('\n', Math.max(target - 1, 0));
   // The annotation may sit on its own line above the target.
-  const annoLine = raw.lastIndexOf('@Subscribe', target);
+  // `@org.greenrobot.eventbus.Subscribe` is the same annotation, qualified.
+  let annoLine = -1;
+  const annoRe = /@(?:[\w.]+\.)?Subscribe\b/g;
+  let am: RegExpExecArray | null;
+  while ((am = annoRe.exec(raw)) !== null && am.index < target) annoLine = am.index;
   if (annoLine !== -1) {
     const annoLineStart = raw.lastIndexOf('\n', annoLine);
     if (annoLineStart !== -1 && annoLineStart < start) start = annoLineStart;

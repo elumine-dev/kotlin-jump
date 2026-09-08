@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.36
+
+Kotlin Jump 1.42.36 stops three answers that were confidently wrong. Asking the chat for a fully qualified name answered about a class of another package, asking for implementations of a name the project does not declare returned some other type's, and hovering a suppression id written on its own line showed nothing.
+
+### Fixes
+- Honours the package you typed. `/doc com.app.User` and `/usages com.app.User` fell back to the first `User` in the index when the exact name was not found, so the answer described `com.other.User` with nothing saying so. An unknown qualified name now says it found nothing.
+- Answers `/implementations` only for the name you asked about. The fallback was meant to be case insensitive, but it went through the fuzzy search without checking the match, so a name the workspace does not declare returned the implementations of whatever type ranked first.
+- Shows the hover on a suppression written across several lines. Everything looked at the cursor line only, so an id sitting on its own line under an opening `@Suppress(` had no hover at all, which is the shape used as soon as there are two ids. The id is still read from the cursor line, so an ordinary hover costs one line read.
+
 ## 1.42.35
 
 Kotlin Jump 1.42.35 fixes the Screen Flow map on the commonest way to declare routes, a sealed class of objects. A route holding a path parameter was read as an opening brace, so the screens declared after it lost their qualified name and came back as dynamic routes. The JDK sources are also found on a JDK 8 and indexed four times faster.

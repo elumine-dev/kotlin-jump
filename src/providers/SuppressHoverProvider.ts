@@ -10,6 +10,9 @@ import { SUPPRESS_DESCRIPTIONS, lookupSuppression } from '../data/suppressDescri
 const SITE_TARGETS = '(?:file|get|set|param|property|field|receiver|delegate|setparam):';
 
 /** Quick-reject regex used at the top of provideHover — must be cheap. */
+/** How far above the cursor the opening `@Suppress(` may sit. */
+const SUPPRESS_LOOKBACK_LINES = 12;
+
 const SUPPRESS_ANNOTATION_RE = new RegExp(
   `@(?:${SITE_TARGETS})?(Suppress|SuppressLint|SuppressWarnings)\\b`,
 );
@@ -45,23 +48,29 @@ export class SuppressHoverProvider implements vscode.HoverProvider {
   ): vscode.Hover | null {
     const line = document.lineAt(position.line).text;
 
-    // Quick reject: no annotation on this line. Much cheaper than running
-    // the word-inside-annotation check on every hover in every file.
-    // Site-targets (`@file:`, `@get:`, `@param:`, etc.) are valid Kotlin —
-    // accept the optional prefix so file-level / accessor-level suppressions
-    // resolve like the bare form.
-    if (!SUPPRESS_ANNOTATION_RE.test(line)) return null;
-
     // Extract the string literal under the cursor. Both single- and
     // double-quoted IDs are captured; only double-quoted is Kotlin-valid
-    // but we accept both for the Java case too.
+    // but we accept both for the Java case too. Cheapest possible reject,
+    // and it runs first so an ordinary hover costs one line read.
     const id = extractIdAtCursor(line, position.character);
     if (!id) return null;
+
+    // The annotation head may sit on an earlier line: a `@Suppress(` opened
+    // above with one id per line got no hover at all, because everything
+    // here used to look at the cursor line only. Site-targets (`@file:`,
+    // `@get:`, `@param:`) are valid Kotlin and keep resolving.
+    let head = position.line;
+    let region = line;
+    while (head > 0 && !SUPPRESS_ANNOTATION_RE.test(region) && position.line - head < SUPPRESS_LOOKBACK_LINES) {
+      head--;
+      region = document.lineAt(head).text + '\n' + region;
+    }
+    if (!SUPPRESS_ANNOTATION_RE.test(region)) return null;
 
     // Must be inside the parentheses of @Suppress/@SuppressLint. This
     // guards against false positives like a plain `"UNCHECKED_CAST"`
     // string somewhere else on the same line.
-    if (!isInsideSuppressCall(line, position.character)) return null;
+    if (!isInsideSuppressCall(region, region.length - line.length + position.character)) return null;
 
     const desc = lookupSuppression(id);
     if (!desc) return null;

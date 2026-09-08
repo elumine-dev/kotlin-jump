@@ -17,15 +17,76 @@
  * that false positive while still correctly identifying real test
  * source sets like `".../src/test/kotlin/..."`.
  */
+interface ParsedSegment {
+  /** Normalised segment, e.g. `test/kotlin`. */
+  text: string;
+  /** `/test/kotlin/` and `/test/kotlin`, built once. */
+  inner: string;
+  suffix: string;
+  /** Component that may carry the Gradle variant suffix, absent when the
+   *  segment names nothing beyond `src` and only the exact rule applies. */
+  base: string | undefined;
+  /** What the segment names after that component, required verbatim. */
+  tail: string[];
+}
+
+// The segments come from a setting and never change between calls, but this is
+// called once per candidate on the Go to Definition path and once per symbol in
+// the dead code scan. Parsing them on every call made the whole function three
+// times more expensive than before variant source sets were supported.
+const PARSED = new Map<string, ParsedSegment | null>();
+
+function parseSegment(segment: string): ParsedSegment | null {
+  const hit = PARSED.get(segment);
+  if (hit !== undefined) return hit;
+  const text = segment.replace(/^[/\\]+|[/\\]+$/g, '').replace(/\\/g, '/');
+  const want = text.split('/');
+  // A segment written with its own `src` prefix names the same thing as one
+  // without: only what follows carries the variant suffix.
+  if (want[0] === 'src') want.shift();
+  const [base, ...tail] = want;
+  // `text` empty is the only reason to refuse the segment outright. A segment
+  // of exactly `src` still matches exactly; it simply has no variant to look
+  // for, and dropping it here silently disabled the exact rule as well.
+  const parsed: ParsedSegment | null = text
+    ? { text, inner: `/${text}/`, suffix: `/${text}`, base, tail }
+    : null;
+  PARSED.set(segment, parsed);
+  return parsed;
+}
+
+/** Is the component starting at `from` a variant of `base`, followed by `tail`? */
+function variantAt(p: string, from: number, seg: ParsedSegment): boolean {
+  const { base, tail } = seg;
+  if (base === undefined) return false;
+  if (!p.startsWith(base, from)) return false;
+  const after = from + base.length;
+  const c = p.charCodeAt(after);
+  // The suffix must exist and start upper case: `androidTestDebug` yes,
+  // `testdata` no, and a bare `androidTest` is the exact match handled above.
+  if (!(c >= 65 && c <= 90)) return false;
+
+  let end = p.indexOf('/', after);
+  if (end < 0) end = p.length;
+  for (const want of tail) {
+    if (end >= p.length) return false;
+    let next = p.indexOf('/', end + 1);
+    if (next < 0) next = p.length;
+    if (next - end - 1 !== want.length || !p.startsWith(want, end + 1)) return false;
+    end = next;
+  }
+  return true;
+}
+
 export function segmentMatchesPath(uriPath: string, segment: string): boolean {
-  const s = segment.replace(/^[/\\]+|[/\\]+$/g, '').replace(/\\/g, '/');
-  if (!s) return false;
+  const seg = parseSegment(segment);
+  if (!seg) return false;
   // Callers pass `Uri.fsPath` as often as `Uri.path`, and on Windows fsPath
   // separates with backslashes. Matching only on `/` meant no file was ever
   // recognised as a test file there, so the filter that hides test results
   // from a production file was inverted.
-  const p = uriPath.replace(/\\/g, '/');
-  if (p.includes(`/${s}/`) || p.endsWith(`/${s}`)) return true;
+  const p = uriPath.indexOf('\\') < 0 ? uriPath : uriPath.replace(/\\/g, '/');
+  if (p.includes(seg.inner) || p.endsWith(seg.suffix)) return true;
 
   // Gradle builds a variant source set by suffixing the base name in camel
   // case: `androidTest` becomes `androidTestDebug`, `test/java` becomes
@@ -35,27 +96,12 @@ export function segmentMatchesPath(uriPath: string, segment: string): boolean {
   // is where Gradle puts the source set name. Scanning every component instead
   // classified a module named `androidTestUtils`, and even a production file
   // named `androidTestHelper.kt`, as test code, and Go to Definition then
-  // hid them from every production file.
-  const parts = p.split('/');
-  const want = s.split('/');
-  // A segment written with its own `src` prefix names the same thing as one
-  // without: only what follows carries the variant suffix.
-  if (want[0] === 'src') want.shift();
-  const [base, ...tail] = want;
-  if (!base) return false;
-
-  for (let i = 1; i < parts.length; i++) {
-    if (parts[i - 1] !== 'src') continue;
-    const sourceSet = parts[i]!;
-    const isVariant = sourceSet.length > base.length
-      && sourceSet.startsWith(base)
-      && /^[A-Z]/.test(sourceSet[base.length]!);
-    if (!isVariant) continue;
-    // What the segment names after the source set has to match exactly:
-    // `test/java` makes `src/testDebug/java` a unit test source set, and
-    // leaves `src/testDebug/res` alone.
-    if (tail.some((want, k) => parts[i + 1 + k] !== want)) continue;
-    return true;
+  // hid them from every production file. Walking the few `src` positions
+  // avoids splitting the whole path into components on every call.
+  if (seg.base === undefined) return false;
+  if (p.startsWith('src/') && variantAt(p, 4, seg)) return true;
+  for (let at = p.indexOf('/src/'); at >= 0; at = p.indexOf('/src/', at + 1)) {
+    if (variantAt(p, at + 5, seg)) return true;
   }
   return false;
 }

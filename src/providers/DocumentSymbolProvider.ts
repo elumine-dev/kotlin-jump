@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { rangeEndLine } from '../util/symbolRanges';
 import { parse } from '../indexer/KotlinParser';
+import { parseJava } from '../indexer/JavaParser';
 
 export class KotlinDocumentSymbolProvider implements vscode.DocumentSymbolProvider {
   constructor(private readonly index: SymbolIndex) {}
@@ -64,7 +65,8 @@ export class KotlinDocumentSymbolProvider implements vscode.DocumentSymbolProvid
 
 function liveSymbols(document: vscode.TextDocument): SymbolEntry[] {
   const scratch = new SymbolIndex();
-  scratch.add(parse(document.uri.toString(), document.getText()));
+  const uriStr = document.uri.toString();
+  scratch.add(document.languageId === 'java' ? parseJava(uriStr, document.getText()) : parse(uriStr, document.getText()));
   return scratch.getFileSymbols(document.uri.toString()).filter(e => e.line < document.lineCount);
 }
 

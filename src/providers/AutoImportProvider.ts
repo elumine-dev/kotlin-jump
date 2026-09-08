@@ -41,7 +41,8 @@ export function insertImport(document: vscode.TextDocument, fqn: string): vscode
   const firstImportLine = bounds?.first ?? -1;
   const lastImportLine  = bounds?.last ?? -1;
 
-  const newLine = `import ${fqn}`;
+  // A Java import without its `;` does not compile (the @VisibleForTesting fix runs on Java too).
+  const newLine = document.languageId === 'java' ? `import ${fqn};` : `import ${fqn}`;
 
   if (firstImportLine === -1) {
     // No existing imports — insert after the package line (or at line 0)

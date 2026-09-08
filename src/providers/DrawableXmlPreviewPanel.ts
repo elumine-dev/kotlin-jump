@@ -240,7 +240,9 @@ export class DrawableXmlPreviewPanel implements vscode.Disposable {
         // without the reset, re-enabling autoOpen did nothing for the session.
         if (e.affectsConfiguration('kotlinJump.vectorPreview')) {
           this.dismissed = false;
-          this.evaluate(true);
+          // force only past the dismissal, never past autoOpen: setting it
+          // to false used to open the panel.
+          if (this.autoOpenEnabled()) this.evaluate(true);
         }
       }),
     );

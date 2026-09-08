@@ -38,8 +38,10 @@ export class AdbDeviceWatcher extends EventEmitter {
     } catch (err) {
       this.log?.warn(`[adb:watcher] track-devices spawn failed (${err}) — falling back to poll`);
       // The Logcat panel shows its "adb binary not found" banner off this.
-      this.adbMissing = true;
-      this.emit('adb-missing');
+      if (!this.adbMissing) {
+        this.adbMissing = true;
+        this.emit('adb-missing');
+      }
       this.startPolling();
       return;
     }

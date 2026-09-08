@@ -231,6 +231,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   statusBar.text    = '$(sync~spin) Kotlin Jump: indexing…';
   statusBar.tooltip = 'Kotlin Jump is building the symbol index';
   if (statusBarEnabled) statusBar.show();
+  let statusBarRefreshTimer: ReturnType<typeof setTimeout> | undefined;
+  const refreshStatusBarCount = () => {
+    if (statusBarRefreshTimer) clearTimeout(statusBarRefreshTimer);
+    statusBarRefreshTimer = setTimeout(() => {
+      statusBarRefreshTimer = undefined;
+      if (statusBar.text.includes('sync~spin')) return;
+      const { files, symbols } = index.stats();
+      statusBar.text    = `$(symbol-class) Kotlin Jump: ${symbols.toLocaleString()} symbols${isCompanion ? ' · companion' : ''}`;
+      statusBar.tooltip = `${symbols.toLocaleString()} symbols in ${files} files${isCompanion ? '\nCompanion mode: navigation left to the JetBrains Kotlin extension' : ''}`;
+    }, 300);
+  };
+  context.subscriptions.push({ dispose: () => clearTimeout(statusBarRefreshTimer) });
 
   const KT_JAVA = [{ language: 'kotlin' }, { language: 'java' }];
 
@@ -660,6 +672,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     readProjectConfigs(),
     vscode.workspace.findFiles('**/*.{kt,kts,java}', `{${excludeList.join(',')}}`, maxFiles),
   ]);
+  if (allUris.length >= maxFiles) {
+    log.warn(`[startup] file cap reached: ${maxFiles} files indexed, the rest is invisible`);
+    void vscode.window.showWarningMessage(
+      `Kotlin Jump indexed the first ${maxFiles} files only; the rest is invisible to navigation. Raise kotlinJump.maxIndexedFiles or narrow kotlinJump.excludePatterns.`,
+    );
+  }
 
   const moduleMap = new Map([...jsonModules, ...gradleModules]);
   log.info(`[moduleMap] ${moduleMap.size} module(s) from settings.gradle + kotlin-jump.json`);
@@ -684,6 +702,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     _inlayHints?.evictFile(uri.toString());
     invalidateContentCache(uri.toString());
     _sealedWhen?.bumpEpoch(); // sealed subtype sets may have changed in any file
+    refreshStatusBarCount();
   }, log, uris => {
     for (const uri of uris) {
       _semanticTokens?.invalidate(uri.toString());
@@ -693,6 +712,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       invalidateContentCache(uri.toString());
     }
     _sealedWhen?.bumpEpoch();
+    refreshStatusBarCount();
   }, isExcludedPath);
   context.subscriptions.push(watcher, { dispose: () => scanner.destroy() });
 
@@ -870,6 +890,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // KJ-029 : workspace scan through vscode APIs only, so the web build too
   const unusedResourceProviderWeb = new UnusedResourceProvider();
   const resourceCorpusWeb = new ResourceCorpus();
+  context.subscriptions.push(
+    vscode.workspace.onDidCreateFiles(() => resourceCorpusWeb.invalidate()),
+    vscode.workspace.onDidDeleteFiles(() => resourceCorpusWeb.invalidate()),
+    vscode.workspace.onDidSaveTextDocument(doc => {
+      if (/[\\/]res[\\/]/.test(doc.uri.path) || /\.(?:kt|kts|java|xml|gradle|toml)$/.test(doc.uri.path)) resourceCorpusWeb.invalidate();
+    }),
+  );
   const deadCodeSweepReportWeb = new DeadCodeSweepReport();
   const unusedResourceKeyProviderWeb = new UnusedResourceKeyProvider();
   const unusedSymbolProviderWeb = new UnusedSymbolProvider();
@@ -881,6 +908,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const deadIslandProviderWeb = new DeadIslandProvider();
   const unusedDtoFieldProviderWeb = new UnusedDtoFieldProvider();
   const writeOnlyKeyProviderWeb = new WriteOnlyKeyProvider();
+  const deadCodeProvidersWeb: Array<[string, { clear(): void }]> = [['unusedResources', unusedResourceProviderWeb], ['unusedSymbols', unusedSymbolProviderWeb], ['unheardEvents', unheardEventProviderWeb], ['unusedEnumEntries', unusedEnumEntryProviderWeb], ['unusedRemoteConfigKeys', remoteConfigKeyProviderWeb], ['unusedGradleDependencies', gradleDependencyProviderWeb], ['unusedMembers', unusedMemberProviderWeb], ['deadIslands', deadIslandProviderWeb], ['unusedDtoFields', unusedDtoFieldProviderWeb], ['writeOnlyKeys', writeOnlyKeyProviderWeb], ['unusedResourceKeys', unusedResourceKeyProviderWeb]];
+  context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(e => {
+    for (const [key, provider] of deadCodeProvidersWeb) {
+      if (e.affectsConfiguration(`kotlinJump.${key}`) && !vscode.workspace.getConfiguration('kotlinJump').get<boolean>(key, true)) provider.clear();
+    }
+  }));
   context.subscriptions.push(
     unusedResourceProviderWeb,
     vscode.languages.registerCodeActionsProvider(
@@ -1404,7 +1437,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const handleTomlChanged = async (uri: vscode.Uri) => {
       try {
         const bytes = await vscode.workspace.fs.readFile(uri);
-        vcIndex.reindexFile(new TextDecoder().decode(bytes), uri.toString());
+        vcIndex.reindexFile(new TextDecoder().decode(bytes), uri.fsPath);
       } catch { /* skip */ }
     };
 
@@ -1415,7 +1448,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const tomlW = vscode.workspace.createFileSystemWatcher('**/gradle/libs.versions.toml');
     tomlW.onDidCreate(handleTomlChanged);
     tomlW.onDidChange(handleTomlChanged);
-    tomlW.onDidDelete(uri => vcIndex.removeFile(uri.toString()));
+    tomlW.onDidDelete(uri => vcIndex.removeFile(uri.fsPath));
 
     context.subscriptions.push(
       tomlW,

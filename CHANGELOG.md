@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.42.13
+
+Kotlin Jump 1.42.13 re-checks every fix shipped since 1.42.3 against the code and completes the ones that had a hole: a Remove All that still read the disk, a Java import without its semicolon, a header rule that lost the import block behind a multi-line file annotation, a catalog lookup defeated by a space in the path, and a few more.
+
+### Fixes
+- Makes "Remove All Unreferenced Symbols" read open editors too. The corpus took its offsets from the editor's unsaved text since 1.42.11, but Remove All still read the disk copy, so a deletion in a file being edited landed lines off. The single-finding fix already read the document; both agree now.
+- Ends a Java import with its semicolon. The `@VisibleForTesting` quick fix added the annotation and `import androidx.annotation.VisibleForTesting` without the `;`, which does not compile in Java.
+- Keeps the import block behind a multi-line `@file:Suppress(`. The header rule introduced in 1.42.9 stopped at the annotation's argument lines, so Organize Imports did nothing, unused imports were no longer grayed and Add import inserted under `package`, above the block.
+- Keys version catalogs by file path instead of percent-encoded URI. A project directory with a space or an accent never matched the build file's path, and the hover fell back to the first catalog read. The same applies to the catalog removed on delete.
+- Scans the active editor last when the hex colour swatches rescan a split. The line map is one per provider; left on the other editor, the next keystroke painted that file's swatches into the active one.
+- Parses a dirty Java document with the Java parser for the outline. The 1.42.9 live outline used the Kotlin parser for every language, so typing in a `.java` file emptied methods and fields from the outline until the save.
+- Stops setting `kotlinJump.vectorPreview.autoOpen` to false from opening the panel. The 1.42.3 change forced an evaluation on any change of the setting, past the auto-open check.
+- Brings four 1.42.10 to 1.42.12 fixes to the web extension: the dead-code corpus is invalidated on save, create and delete; the status bar counter follows the watcher; turning a detector off clears its warnings; and the file cap warning shows. On the desktop, turning `kotlinJump.unusedResources` off now clears its warnings too, and "· companion" is written on every status bar update, not only the deferred one.
+- Leaves the Logcat device alone while it is briefly offline. The picker still chose the first ready device and asked the host to switch when its own device dropped to offline or unauthorized for a moment, which cut the stream of a running app and emptied the buffer.
+- Recognises a Java method header behind an annotation with arguments (`@SuppressWarnings("unchecked") public void foo(Bundle b)`), which the 1.42.10 rule missed, letting Rename on `b` reach the workspace again; and no longer reads `case RED -> paint()` as a lambda binding `RED`.
+- Opens the online documentation page when its tab is actually shown, not when VS Code resolves its text for the Cmd+hover preview. Removes a manifest component from the `android:name` line too, the line the badge sits on when Android Studio splits the tag. Keeps soft-wrapped Logcat rows across an append batch (the 1.42.3 renderer was defeated by a full recycle before each render). Counts neither `"\$name"` nor a `// … $name` comment as a template usage in Rename. Emits the "adb not found" event once on the synchronous failure path, like the asynchronous one.
+
 ## 1.42.12
 
 Kotlin Jump 1.42.12 looks at the web extension and the indexing pipeline. Companion mode never detected the JetBrains Kotlin extension, the dead-code family published its findings on phantom paths on github.dev, a dozen providers were advertised on the web with nothing behind them, and Re-index silently dropped the bundled stdlib.

@@ -46,14 +46,17 @@ export class HexColorFoldingProvider implements vscode.Disposable {
   }
 
   invalidateAll(): void {
-    for (const editor of vscode.window.visibleTextEditors) {
+    // The active editor is scanned LAST: _lineDecos and _rawState are one
+    // map, and they must describe the editor that onDidChangeTextDocument
+    // will repaint; otherwise the next keystroke painted another file's
+    // swatches into the active one.
+    const active = vscode.window.activeTextEditor;
+    const others = vscode.window.visibleTextEditors.filter(e => e !== active);
+    for (const editor of [...others, ...(active ? [active] : [])]) {
       this._editor = editor;
       this._fullScan(editor);
     }
-    // onDidChangeTextDocument only follows this._editor: left on the last
-    // visible editor, typing in the active one (in a split) no longer moved
-    // the swatch until the next editor switch.
-    this._editor = vscode.window.activeTextEditor;
+    this._editor = active;
   }
 
   // ── Layer 1: raw-string oracle ─────────────────────────────────────────────

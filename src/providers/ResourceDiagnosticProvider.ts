@@ -5,8 +5,8 @@ import { isInsideCommentOrString } from '../util/textUtils';
 
 // `android.R.string.ok`, `androidx.core.R.x` and Material's R live outside the
 // workspace index; a project R qualified by its module package stays in.
-const R_STRING_RE = /(?<!\bandroid\.)(?<!\bandroidx\.[\w.]*)(?<!\bcom\.google\.android\.material[\w.]*\.)\bR\.string\.([A-Za-z_]\w*)\b/g;
-const R_COLOR_RE  = /(?<!\bandroid\.)(?<!\bandroidx\.[\w.]*)(?<!\bcom\.google\.android\.material[\w.]*\.)\bR\.color\.([A-Za-z_]\w*)\b/g;
+const R_STRING_RE = /(?<!(?<![\w.])android\.)(?<!(?<![\w.])androidx\.[\w.]*)(?<!(?<![\w.])com\.google\.(?:android|firebase)[\w.]*\.)\bR\.string\.([A-Za-z_]\w*)\b/g;
+const R_COLOR_RE  = /(?<!(?<![\w.])android\.)(?<!(?<![\w.])androidx\.[\w.]*)(?<!(?<![\w.])com\.google\.(?:android|firebase)[\w.]*\.)\bR\.color\.([A-Za-z_]\w*)\b/g;
 
 export class ResourceDiagnosticProvider implements vscode.Disposable {
   private readonly _diag = vscode.languages.createDiagnosticCollection('kotlin-jump-resources');

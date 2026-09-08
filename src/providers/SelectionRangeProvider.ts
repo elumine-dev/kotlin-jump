@@ -26,7 +26,15 @@ export class KotlinSelectionRangeProvider implements vscode.SelectionRangeProvid
       // Build SelectionRange chain from outermost (shallowest) to innermost (deepest).
       // Each symbol wraps the previous as its parent — VS Code walks .parent to expand.
       let current: vscode.SelectionRange = fileSelRange;
-      for (const { e, end } of containing) {
+      for (const { e, end: rawEnd } of containing) {
+        // rangeEndLine stops one line before the next symbol, which is the
+        // next declaration's KDoc and annotations: walk back over them.
+        let end = rawEnd;
+        while (end > e.line) {
+          const t = document.lineAt(end).text.trim();
+          if (t === '' || t.startsWith('@') || t.startsWith('/**') || t.startsWith('*') || t.startsWith('//')) end--;
+          else break;
+        }
         const symRange = new vscode.Range(
           new vscode.Position(e.line, 0),
           document.lineAt(end).range.end,

@@ -92,7 +92,7 @@ export function findDisplaySites(resName: string, files: SourceFile[], token?: v
     // extractSpans walks the whole file (two regexes plus brace matching);
     // on a 2000 file project that ran for every file on every hover.
     if (!file.text.includes(needle)) continue;
-    const usageRe = new RegExp(`(?<!\\bandroid\\.)(?<!\\bandroidx\\.[\\w.]*)(?<!\\bcom\\.google\\.android\\.material[\\w.]*\\.)\\bR\\.string\\.${resName}\\b`, 'g');
+    const usageRe = new RegExp(`(?<!(?<![\\w.])android\\.)(?<!(?<![\\w.])androidx\\.[\\w.]*)(?<!(?<![\\w.])com\\.google\\.(?:android|firebase)[\\w.]*\\.)\\bR\\.string\\.${resName}\\b`, 'g');
     const funs = extractSpans(file.text, 'fun');
     const classes = extractSpans(file.text, 'class');
 
@@ -191,7 +191,7 @@ export class StringXmlHoverProvider implements vscode.HoverProvider {
       const m = /<string\s+name="(\w+)"/.exec(line);
       if (m && position.character >= line.indexOf(m[1])) resName = m[1];
     } else {
-      const re = /(?<!\bandroid\.)(?<!\bandroidx\.[\w.]*)(?<!\bcom\.google\.android\.material[\w.]*\.)\bR\.string\.(\w+)/g;
+      const re = /(?<!(?<![\w.])android\.)(?<!(?<![\w.])androidx\.[\w.]*)(?<!(?<![\w.])com\.google\.(?:android|firebase)[\w.]*\.)\bR\.string\.(\w+)/g;
       let m: RegExpExecArray | null;
       while ((m = re.exec(line)) !== null) {
         if (position.character >= m.index && position.character <= m.index + m[0].length) {

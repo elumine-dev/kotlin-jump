@@ -17,11 +17,14 @@ export function parseNaturalLanguage(prompt: string): { cmd: ChatCommand; query:
   let m: RegExpMatchArray | null;
   // (\w(?:[\w.$]*\w)?) captures a valid Java/Kotlin identifier or FQN and stops
   // before trailing punctuation — (\S+) would swallow "Foo." or "Foo?".
-  if ((m = prompt.match(/\bimplementations?\s+of\s+(\w(?:[\w.$]*\w)?)/i)))
+  // "of the UserRepository class", "of `Foo`": the article and the quotes are
+  // not the symbol, and used to be answered with "Symbol `the` not found".
+  const SYM = String.raw`(?:the\s+|an?\s+)?[\`'"]?(\w(?:[\w.$]*\w)?)[\`'"]?`;
+  if ((m = prompt.match(new RegExp(String.raw`\bimplementations?\s+of\s+` + SYM, 'i'))))
     return { cmd: 'implementations', query: m[1] };
-  if ((m = prompt.match(/\busages?\s+of\s+(\w(?:[\w.$]*\w)?)/i)))
+  if ((m = prompt.match(new RegExp(String.raw`\busages?\s+of\s+` + SYM, 'i'))))
     return { cmd: 'usages', query: m[1] };
-  if ((m = prompt.match(/\b(?:k?doc|documentation)\s+(?:for|of)\s+(\w(?:[\w.$]*\w)?)/i)))
+  if ((m = prompt.match(new RegExp(String.raw`\b(?:k?doc|documentation)\s+(?:for|of)\s+` + SYM, 'i'))))
     return { cmd: 'doc', query: m[1] };
   return undefined;
 }

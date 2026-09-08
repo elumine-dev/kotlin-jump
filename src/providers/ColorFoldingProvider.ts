@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { ColorResourceIndex } from '../indexer/ColorResourceIndex';
 import { isInsideCommentOrString, isInsideStringInterpolation } from '../util/textUtils';
 
-const R_COLOR_RE = /(?<!\bandroid\.)(?<!\bandroidx\.[\w.]*)(?<!\bcom\.google\.android\.material[\w.]*\.)\bR\.color\.([A-Za-z_]\w*)\b/g;
+const R_COLOR_RE = /(?<!(?<![\w.])android\.)(?<!(?<![\w.])androidx\.[\w.]*)(?<!(?<![\w.])com\.google\.(?:android|firebase)[\w.]*\.)\bR\.color\.([A-Za-z_]\w*)\b/g;
 // `<color name="X">VALUE</color>` — captures the name (group 1) and the
 // raw value text (group 2). The value can be either a literal hex or a
 // `@color/Y` reference; we resolve that downstream.

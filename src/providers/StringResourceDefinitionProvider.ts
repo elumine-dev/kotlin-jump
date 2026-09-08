@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { StringResourceIndex } from '../indexer/StringResourceIndex';
 
-const R_RE = /(?<!\bandroid\.)(?<!\bandroidx\.[\w.]*)(?<!\bcom\.google\.android\.material[\w.]*\.)\bR\.(string|plurals|array)\.([A-Za-z_]\w*)\b/g;
+const R_RE = /(?<!(?<![\w.])android\.)(?<!(?<![\w.])androidx\.[\w.]*)(?<!(?<![\w.])com\.google\.(?:android|firebase)[\w.]*\.)\bR\.(string|plurals|array)\.([A-Za-z_]\w*)\b/g;
 
 export class StringResourceDefinitionProvider implements vscode.DefinitionProvider {
   constructor(private readonly index: StringResourceIndex) {}

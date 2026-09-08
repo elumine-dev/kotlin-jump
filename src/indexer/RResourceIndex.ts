@@ -4,7 +4,7 @@ export interface RUsageEntry {
   character: number;
 }
 
-const R_RE = /(?<!\bandroid\.)(?<!\bandroidx\.[\w.]*)(?<!\bcom\.google\.android\.material[\w.]*\.)\bR\.(string|plurals|array|color|drawable|mipmap|dimen)\.([A-Za-z_]\w*)\b/g;
+const R_RE = /(?<!(?<![\w.])android\.)(?<!(?<![\w.])androidx\.[\w.]*)(?<!(?<![\w.])com\.google\.(?:android|firebase)[\w.]*\.)\bR\.(string|plurals|array|color|drawable|mipmap|dimen)\.([A-Za-z_]\w*)\b/g;
 
 export type RType = 'string' | 'plurals' | 'array' | 'color' | 'drawable' | 'mipmap' | 'dimen';
 

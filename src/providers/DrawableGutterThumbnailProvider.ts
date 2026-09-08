@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 import { DrawableResourceIndex, DrawableVariant } from '../indexer/DrawableResourceIndex';
 import { vectorXmlToSvg } from '../util/vectorToSvg';
 
-const R_DRAWABLE_RE = /(?<!\bandroid\.)(?<!\bandroidx\.[\w.]*)(?<!\bcom\.google\.android\.material[\w.]*\.)\bR\.(drawable|mipmap)\.([A-Za-z_]\w*)\b/g;
+const R_DRAWABLE_RE = /(?<!(?<![\w.])android\.)(?<!(?<![\w.])androidx\.[\w.]*)(?<!(?<![\w.])com\.google\.(?:android|firebase)[\w.]*\.)\bR\.(drawable|mipmap)\.([A-Za-z_]\w*)\b/g;
 
 // Hard cap on file size we're willing to copy into the cache folder.
 // Larger rasters get skipped (rare — launcher backgrounds etc.) — the

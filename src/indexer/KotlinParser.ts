@@ -38,6 +38,7 @@ export interface RawSymbol {
   isIgnored?:       boolean; // fun annotated with @Ignore / @Disabled
   isLifecycle?:     boolean; // fun annotated with @Before / @After etc. (excluded from test discovery)
   isCompanion?:     boolean; // unnamed `companion object`, emitted as "Companion" so the Outline nests its members
+  isLocal?:         boolean; // val/var declared inside a function body or a property initializer, not a member
 }
 
 export interface ParsedFile {
@@ -217,6 +218,10 @@ export function parse(uriString: string, text: string): ParsedFile {
       // Only look ahead for `) : Types` if the line has an unclosed paren (multi-line constructor)
       if (supertypes.length === 0 && hasUnclosedParen(raw, nameEnd)) {
         supertypes = lookAheadSupertypes(text, nl + 1);
+      } else if (headerContinues(raw, nameEnd)) {
+        // `class LongActivity :\n    AppCompatActivity(),\n    Callback {` is how
+        // ktlint wraps a long header: the list goes on below.
+        supertypes = extractSupertypes(raw + ' ' + collectHeaderContinuation(text, nl + 1), nameEnd);
       }
 
       // Slice up to the class NAME (not cm.index which is always 0) so modifiers
@@ -468,6 +473,7 @@ export function parse(uriString: string, text: string): ParsedFile {
         isComposable: false,
         depth: propDepth,
         isExtension: pm[2] ? true : undefined,
+        isLocal: undefined, // set by markLocals(); declared here so the object keeps one shape
         isConst,
         isAbstract,
         isLateinit,
@@ -517,6 +523,7 @@ export function parse(uriString: string, text: string): ParsedFile {
     lineNum++;
   }
 
+  markLocals(symbols);
   return { uriString, packageName, imports, symbols };
 }
 
@@ -637,22 +644,96 @@ function lookAheadSupertypes(text: string, start: number): string[] {
     if (nl === -1) nl = text.length;
     const line = text.slice(p, nl).trimStart();
     const m = /^\)\s*:\s*(.+)/.exec(line);
-    if (m) return parseTypeNames(m[1]);
+    if (m) {
+      let rest = stripTrailingLineComment(m[1]).trimEnd();
+      if (!rest.includes('{') && (rest.endsWith(',') || rest.endsWith(':'))) rest += ' ' + collectHeaderContinuation(text, nl + 1);
+      return parseTypeNames(rest);
+    }
     if (line.startsWith('{')) return [];
     p = nl + 1;
   }
   return [];
 }
 
-const RE_TYPE_NAME = /\b([A-Z]\w*)\b/g;
+// True when the header line ends (comment stripped) with `:` or `,` after
+// the name and has not opened its body: the supertype list continues below.
+function headerContinues(raw: string, nameEnd: number): boolean {
+  const tail = stripTrailingLineComment(raw.slice(nameEnd)).trimEnd();
+  if (tail.includes('{')) return false;
+  return tail.endsWith(':') || tail.endsWith(',');
+}
 
+// The next lines of a wrapped header, joined, up to (excluding) its `{`.
+// Stops after a line that does not end with `,` or `:`, or at a declaration.
+function collectHeaderContinuation(text: string, start: number): string {
+  let out = '';
+  let p = start;
+  for (let i = 0; i < 10 && p < text.length; i++) {
+    let nl = text.indexOf('\n', p);
+    if (nl === -1) nl = text.length;
+    const t = stripTrailingLineComment(text.slice(p, nl)).trim();
+    p = nl + 1;
+    if (!t) continue;
+    if (/^(?:fun|val|var|class|object|interface|@|\/\*|\*)/.test(t)) break;
+    const brace = t.indexOf('{');
+    if (brace !== -1) { out += ' ' + t.slice(0, brace); break; }
+    out += ' ' + t;
+    if (!t.endsWith(',') && !t.endsWith(':')) break;
+  }
+  return out;
+}
+
+// One name per top-level comma-separated entry: the type itself, without
+// its generic arguments, constructor arguments or `by` delegate. Taking every
+// capitalized word made `ListAdapter<Item, ItemViewHolder>(DiffCb)` a subtype
+// of Item, and `BaseViewModel<UiState>(Dispatchers.IO)` a subtype of UiState,
+// which the type hierarchy, the implementation lenses and the sealed `when`
+// coverage all believed.
 function parseTypeNames(s: string): string[] {
   const clean = s.split(/\bwhere\b/)[0].split('{')[0];
   const types: string[] = [];
-  RE_TYPE_NAME.lastIndex = 0;
-  let m;
-  while ((m = RE_TYPE_NAME.exec(clean))) types.push(m[1]);
+  let depth = 0, seg = '';
+  const flush = () => {
+    const m = /^\s*([\w.]+)/.exec(seg);
+    // `RecyclerView.Adapter`: both segments, the hierarchy is looked up by
+    // simple name and the outer one is what a nested type is filed under.
+    if (m) for (const part of m[1].split('.')) if (/^[A-Z]/.test(part)) types.push(part);
+    seg = '';
+  };
+  for (let i = 0; i < clean.length; i++) {
+    const ch = clean[i];
+    if (ch === '<' || ch === '(') { depth++; continue; }
+    if (ch === '>' || ch === ')') { if (depth > 0) depth--; continue; }
+    if (depth > 0) continue;
+    if (ch === ',') { flush(); continue; }
+    seg += ch;
+  }
+  flush();
   return types;
+}
+
+// Flags a val/var whose nearest enclosing symbol is a function or a property
+// initializer as a local, not a member: the Outline, folding and selection
+// ranges skip it. One pass with a per-depth table of the enclosing kinds (a
+// backward walk per property was quadratic in a class with many members).
+function markLocals(symbols: RawSymbol[]): void {
+  // Latest symbol seen at each depth, and its position: the enclosing symbol
+  // of one at depth d is the most recent of the shallower ones.
+  const kindAtDepth: SymbolKind[] = [];
+  const seenAtDepth: number[] = [];
+  for (let i = 0; i < symbols.length; i++) {
+    const s = symbols[i];
+    if ((s.kind === 'val' || s.kind === 'var') && !s.isPrimaryCtorParam) {
+      let enclosing: SymbolKind | undefined;
+      let latest = -1;
+      for (let d = s.depth - 1; d >= 0; d--) {
+        if (d < seenAtDepth.length && seenAtDepth[d] > latest) { latest = seenAtDepth[d]; enclosing = kindAtDepth[d]; }
+      }
+      if (enclosing === 'fun' || enclosing === 'composable' || enclosing === 'val' || enclosing === 'var') s.isLocal = true;
+    }
+    kindAtDepth[s.depth] = s.kind;
+    seenAtDepth[s.depth] = i;
+  }
 }
 
 // Parses member declarations from the inline body of a class/interface/object.

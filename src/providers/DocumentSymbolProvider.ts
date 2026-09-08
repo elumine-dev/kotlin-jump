@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
-import { rangeEndLine } from '../util/symbolRanges';
+import { bodyEndLine } from '../util/symbolRanges';
 import { parse } from '../indexer/KotlinParser';
 import { parseJava } from '../indexer/JavaParser';
 
@@ -14,12 +14,16 @@ export class KotlinDocumentSymbolProvider implements vscode.DocumentSymbolProvid
     // The index follows the file on disk. While the document is dirty the
     // outline pointed lines above or below its targets, and a deletion at
     // the end of the file made lineAt() throw and emptied the outline.
-    const entries = document.isDirty
+    // Locals of a function body are indexed (Go to Definition needs them)
+    // but they are not structure: IntelliJ's view does not list them either.
+    const entries = (document.isDirty
       ? liveSymbols(document)
-      : this.index.getFileSymbols(document.uri.toString()).filter(e => e.line < document.lineCount);
+      : this.index.getFileSymbols(document.uri.toString()).filter(e => e.line < document.lineCount)
+    ).filter(e => !e.isLocal);
     if (entries.length === 0) return [];
 
     const lastLine = document.lineCount - 1;
+    const docLines = document.getText().split('\n');
     const roots: vscode.DocumentSymbol[] = [];
     const stack: { sym: vscode.DocumentSymbol; entry: SymbolEntry; depth: number }[] = [];
 
@@ -41,7 +45,7 @@ export class KotlinDocumentSymbolProvider implements vscode.DocumentSymbolProvid
 
       const nameStart = new vscode.Position(e.line, e.character);
       const nameEnd   = new vscode.Position(e.line, e.character + e.name.length);
-      const endLine   = rangeEndLine(entries, i, lastLine);
+      const endLine   = bodyEndLine(docLines, entries, i, lastLine);
       const bodyEnd   = document.lineAt(endLine).range.end;
 
       const sym = new vscode.DocumentSymbol(

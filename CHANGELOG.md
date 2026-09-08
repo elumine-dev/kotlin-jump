@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.42.20
+
+Kotlin Jump 1.42.20 fixes the ranges behind folding, Expand Selection and the Outline, stops generic and constructor arguments from posing as supertypes, and repairs signature help on the shapes every Android project has: a comma inside a string, `emptyMap<String, Int>()`, `private val` constructor parameters, overloads. The index snapshot is rebuilt once after the update.
+
+### Fixes
+- Ends a member's folding range at its own closing brace. It ran to the line before the next member, so folding `first()` hid the KDoc and the `@Suppress` of `last()`, and folding the last member of a class hid the class's `}`. Expand Selection from inside the last function of a class selected up to that `}` too, and its Outline entry claimed the same lines. A one-line `val` no longer gets a folding chevron of its own.
+- Keeps locals out of the Outline, folding and selection. A `val result = withContext(IO) { … }` inside a function was listed as a child in the Outline and carried a chevron that folded the rest of the function. Locals stay indexed for Go to Definition.
+- Records only the type as a supertype. `class ItemAdapter : ListAdapter<Item, ItemViewHolder>(DiffCb)` made ItemAdapter a subtype of `Item`, of `ItemViewHolder` and of `DiffCb` in the type hierarchy, the `⬇ implementations` lens and Go to Implementation; `BaseViewModel<UiState>(Dispatchers.IO)` put a ViewModel among the subtypes of `UiState`, which the sealed `when` coverage then counted. Generic arguments, constructor arguments and `by` delegates are ignored now.
+- Reads a supertype list that continues on the next lines. `class LongActivity :\n    AppCompatActivity(),\n    Callback {` (the ktlint layout for a long header) recorded no supertype at all, and `) : Base(),\n    Callback {` after a multi-line constructor kept only `Base`: the subtypes of `Callback` missed them.
+- Makes signature help count arguments correctly. A comma inside `"Hello, world"` or inside `emptyMap<String, Int>()` moved the highlight one parameter over; a `)` inside `":)"` dismissed the popup; a `// TODO: see show(` comment above the call brought up show's signature; and a call inside a `"${greet(` template showed nothing.
+- Lists the constructor parameters of `class MainViewModel(private val repo: Repo, private val logger: Logger)`. The visibility modifier hid every parameter, and `data class Ok(override val id: Int, val payload: String)` highlighted `payload` for the first argument. Java methods (`String tag, String msg`) get their parameters too.
+- Shows every overload. `load(` with `fun load(id: Int)` and `fun load(name: String, force: Boolean)` showed nothing at all (two matches were read as an ambiguity); both signatures are listed now and the active one follows the arguments already typed.
+- Puts the `⬇ implementations` lens on an interface member declared after a nested class. `interface Repo { data class Params(…); val name: String; fun load(p: Params) }` had no lens on `name` or `load`, because the nested class was taken for their owner; `val` members count as implementations too.
+- Attributes a call in a property initializer or an `init` block to that property or class in the call hierarchy. `val state = flow.map { other() }` and `init { helper() }` were dropped, so `other` showed "No callers".
+- Labels an anonymous object in the type hierarchy as "Anonymous object (line N)" instead of `$anon$4`.
+- Stops highlighting the inside of a KDoc or of a `"""` block. The `@param name` line and the SQL of a Room `@Query("""…""")` lit up with the parameter's occurrences.
+
 ## 1.42.19
 
 Kotlin Jump 1.42.19 is about editing: three renames that broke the build, an Organize Imports that removed the import behind `by remember`, and a handful of smaller wrongs in Find Usages, auto-import and postfix completion.

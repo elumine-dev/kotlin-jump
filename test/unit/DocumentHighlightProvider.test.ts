@@ -583,10 +583,10 @@ describe('KotlinDocumentHighlightProvider — adversarial: triple-quoted string 
     const token = { isCancellationRequested: false } as any;
     const result = provider.provideDocumentHighlights(doc, pos, token)!;
 
-    // The occurrence on line 4 (inside the triple-quoted string body) IS highlighted
-    // because isInsideCommentOrString processes line 4 in isolation and sees no delimiter.
-    const falsePositiveLine = result.filter(h => h.range.start.line === 4);
-    expect(falsePositiveLine.length).toBeGreaterThan(0);
-    // Document this as a known limitation: triple-quoted string content is NOT filtered.
+    // The occurrence on line 4 sits inside the triple-quoted string body: the
+    // """ mask now spans lines, so it is not highlighted.
+    const insideRawString = result.filter(h => h.range.start.line === 4);
+    expect(insideRawString.length).toBe(0);
+    expect(result.some(h => h.range.start.line === 6)).toBe(true);
   });
 });

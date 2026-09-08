@@ -4,7 +4,7 @@ import { resolveBest } from '../util/ImportResolver';
 import { readSignature, parseParams, extractReturnType, KtParam } from '../util/SignatureReader';
 import { isInsideCommentOrString } from '../util/textUtils';
 import { Logger, NullLogger } from '../util/logger';
-import { resolveLocalScope, paramLocationInSignature } from './DefinitionProvider';
+import { resolveLocalScope, paramLocationInSignature, buildLocalScopeIndex } from './DefinitionProvider';
 
 interface CachedParams {
   params:    KtParam[];
@@ -97,6 +97,7 @@ export class KotlinInlayHintsProvider implements vscode.InlayHintsProvider {
     const cfg = vscode.workspace.getConfiguration('kotlinJump');
     const showParamNames    = cfg.get<boolean>('inlayHints.parameterNames', true);
     const showInferredTypes = cfg.get<boolean>('inlayHints.inferredTypes', true);
+    const scope = buildLocalScopeIndex(document.getText().split(/\r?\n/));
 
     this.log.debug(
       `[InlayHints] provideInlayHints — file=${document.fileName?.split('/').pop() ?? '<doc>'} ` +
@@ -165,7 +166,7 @@ export class KotlinInlayHintsProvider implements vscode.InlayHintsProvider {
           // Showing parameter names from the workspace `send(...)` of
           // the same name would be wrong info.
           const callPos = new vscode.Position(lineNum, match.index);
-          if (resolveLocalScope(document, callPos, name)) continue;
+          if (resolveLocalScope(document, callPos, name, scope)) continue;
 
           const entry = this.resolveCallEntry(name, document);
           if (!entry) {
@@ -293,7 +294,7 @@ export class KotlinInlayHintsProvider implements vscode.InlayHintsProvider {
 
             if (isInsideCommentOrString(text, callOffset)) {
               this.log.debug(`[InlayHints] pass2 line ${lineNum} — "${callName}" is inside string/comment, skip`);
-            } else if (resolveLocalScope(document, new vscode.Position(lineNum, callOffset), callName)) {
+            } else if (resolveLocalScope(document, new vscode.Position(lineNum, callOffset), callName, scope)) {
               this.log.debug(`[InlayHints] pass2 line ${lineNum} — "${callName}" is a local binding, skip`);
             } else {
               const entry = this.resolveCallEntry(callName, document);

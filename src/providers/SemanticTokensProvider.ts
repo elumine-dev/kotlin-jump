@@ -3,7 +3,7 @@ import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { SymbolKind } from '../indexer/KotlinParser';
 import { resolveBest } from '../util/ImportResolver';
 import { isInsideCommentOrString } from '../util/textUtils';
-import { resolveLocalScope } from './DefinitionProvider';
+import { resolveLocalScope, buildLocalScopeIndex } from './DefinitionProvider';
 
 // ── Legend arrays (order = index) ────────────────────────────────────────────
 
@@ -292,6 +292,9 @@ export class KotlinSemanticTokensProvider
     // Per-run cache: same word resolves identically within one document version.
     // Eliminates redundant resolveBest() calls for repeated symbols.
     const wordCache = new Map<string, SymbolEntry | undefined>();
+    // One pass for the whole document: the per-token backward walk made a
+    // keystroke in a 5000 line file cost seconds (quadratic outside functions).
+    const scope = buildLocalScopeIndex(lines);
 
     for (let li = 0; li < lines.length; li++) {
       if (ct.isCancellationRequested) break;
@@ -341,7 +344,7 @@ export class KotlinSemanticTokensProvider
         // workspace top-level `val repository`, which is wrong info.
         // Cheap because we only pay it when an entry is otherwise
         // about to be emitted — most words skip out before this point.
-        if (resolveLocalScope(doc, new vscode.Position(li, col), word)) continue;
+        if (resolveLocalScope(doc, new vscode.Position(li, col), word, scope)) continue;
 
         const type = kindToTypeIndex(entry.kind, entry.depth);
         if (type === undefined) continue;

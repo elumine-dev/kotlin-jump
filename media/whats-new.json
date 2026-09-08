@@ -1,33 +1,31 @@
 {
-  "version": "1.42.5",
+  "version": "1.42.6",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Hints and lenses that follow your edits",
-  "summary": "Kotlin Jump 1.42.5 is the third pass of the display sweep, this time on what the editor shows inline: two caches that outlived the files they described, a hover reading the wrong annotation, a swatch that stopped following the cursor, a history that sorted every jump destination last, and two settings whose toggle did nothing.",
+  "tagline": "No more frozen keystrokes on big files",
+  "summary": "Kotlin Jump 1.42.6 fixes the slowest thing in the extension and seven display defects around it. On a 5000 line file outside any function, a Koin module or a design system object, every keystroke walked backwards through the file once per coloured token: 13.9 seconds of frozen extension host, measured. It is one pass now.",
   "highlights": [
     {
-      "title": "Hints that follow a rename",
+      "title": "One scope index per document",
       "kind": "fix",
-      "description": "Parameter name and inferred type hints were cached per symbol for the whole session: rename a parameter, save, and every call site kept the old name until a reload. The file watcher now evicts them, and the \"N usages\" lens of a symbol declared elsewhere updates when a call is added in another file."
+      "description": "Semantic highlighting asked \"is this a local?\" for every token and each answer walked back through the file. Measured on a 5000 line object: 13.9 s per keystroke before, under 0.5 s for the same 5000 queries after. Inlay hints share the index."
     },
     {
-      "title": "The right @Deprecated message",
+      "title": "Stop leaves tests unmarked",
       "kind": "fix",
-      "description": "Two deprecated declarations within eight lines of each other made the hover show the upper one's message and ReplaceWith on the lower symbol. It now reads the annotation glued to the hovered symbol, and a signature read from an unsaved file is located by name rather than by a stale line."
+      "description": "Stopping a run killed Gradle and turned every test red with \"Gradle exited with code 1\". Resource diagnostics also follow typing now instead of waiting for a save, and clear when the setting goes off."
     },
     {
-      "title": "Faster R.string hover",
-      "kind": "improvement",
-      "description": "Two quick hovers each re-read up to 4000 files, and every file went through span extraction even without the key. One shared load, files without the key skipped, cancellation honoured, unsaved editor text used over the disk snapshot."
+      "title": "Hovers that tell the truth",
+      "kind": "fix",
+      "description": "R.mipmap.ic_launcher shows its raster instead of nothing, the string hover lists locales only (no more values-night with a ✗), and items.first() on a plain list no longer wears a ⚡ borrowed from Flow."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Keeps the hex colour swatch following the active editor in a split view; it used to stick to the last visible editor until the next switch.",
-        "Sorts jump destinations correctly in Recent Locations: the refined entry lost its timestamp and every destination sorted last.",
-        "Makes the kotlinJump.gradleTaskLens and kotlinJump.kmpTargetBadges toggles take effect immediately instead of on the next edit.",
-        "Gives each inlay hint pass its own call regex; a shared one duplicated or dropped hints on first paint with two editors open."
+        "Refreshes lenses, colours and usage counts when a file is deleted; they used to keep the deleted symbols until the next save.",
+        "Keeps Room warnings on screen while a save re-reads the workspace, reads files sixteen at a time, and underlines an unsaved entity on the right line."
       ]
     }
   ],

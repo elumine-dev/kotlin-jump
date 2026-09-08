@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import { corpusUri } from '../util/corpusUri';
+import { insertImport } from './AutoImportProvider';
 import { parse } from '../indexer/KotlinParser';
 import {
   UnusedSymbol,
@@ -66,7 +68,7 @@ export class UnusedSymbolProvider implements vscode.CodeActionProvider, vscode.D
       byFile.set(f.path, diags);
     }
 
-    for (const [p, diags] of byFile) this.collection.set(vscode.Uri.file(p), diags);
+    for (const [p, diags] of byFile) this.collection.set(corpusUri(p), diags);
   }
 
   clear(): void {
@@ -121,6 +123,11 @@ export class UnusedSymbolProvider implements vscode.CodeActionProvider, vscode.D
       const edit = new vscode.WorkspaceEdit();
       const indent = /^[ \t]*/.exec(document.lineAt(hit.line).text)?.[0] ?? '';
       edit.insert(document.uri, new vscode.Position(hit.line, 0), `${indent}@VisibleForTesting\n`);
+      // The annotation alone left an unresolved reference until the import was typed by hand.
+      if (!/^\s*import\s+androidx\.annotation\.VisibleForTesting\b/m.test(document.getText())) {
+        const imp = insertImport(document, 'androidx.annotation.VisibleForTesting');
+        edit.insert(document.uri, imp.range.start, imp.newText);
+      }
       annotate.edit = edit;
       actions.push(annotate);
     }
@@ -139,7 +146,7 @@ export class UnusedSymbolProvider implements vscode.CodeActionProvider, vscode.D
   }
 
   private forget(path: string): void {
-    this.collection.delete(vscode.Uri.file(path));
+    this.collection.delete(corpusUri(path));
     this.byPath.delete(path);
   }
 
@@ -169,7 +176,7 @@ export async function buildSymbolRemovalEdit(
   const textOf = async (p: string): Promise<string | undefined> => {
     if (openDocument && openDocument.uri.fsPath === p) return openDocument.getText();
     try {
-      return decoder.decode(await vscode.workspace.fs.readFile(vscode.Uri.file(p)));
+      return decoder.decode(await vscode.workspace.fs.readFile(corpusUri(p)));
     } catch {
       return undefined;
     }
@@ -196,7 +203,7 @@ export async function buildSymbolRemovalEdit(
     // Never a deleteFile AND range edits on the same URI in one WorkspaceEdit.
     if (deleted.has(p)) {
       edit.deleteFile(
-        vscode.Uri.file(p),
+        corpusUri(p),
         { ignoreIfNotExists: true },
         { needsConfirmation: true, label: `Delete ${basename(p)}` },
       );
@@ -212,7 +219,7 @@ export async function buildSymbolRemovalEdit(
         if (r.start < previousEnd) continue; // overlapping extents: keep the first
         previousEnd = r.end;
         edit.replace(
-          vscode.Uri.file(p),
+          corpusUri(p),
           new vscode.Range(posAt(starts, r.start), posAt(starts, r.end)),
           '',
           { needsConfirmation: true, label: `Remove unreferenced declaration` },
@@ -232,7 +239,7 @@ export async function buildSymbolRemovalEdit(
         // Re-verify: an import that moved since the scan is skipped, not guessed.
         if (line === undefined || !new RegExp(`^\\s*import\\s+[\\w.]*\\b${f.name}\\b`).test(line)) continue;
         edit.delete(
-          vscode.Uri.file(stale.path),
+          corpusUri(stale.path),
           new vscode.Range(stale.line, 0, stale.line + 1, 0),
           { needsConfirmation: true, label: `Remove stale import of ${f.name}` },
         );

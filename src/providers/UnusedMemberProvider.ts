@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import { corpusUri } from '../util/corpusUri';
+import { insertImport } from './AutoImportProvider';
 import {
   UnusedMember,
   deleteTitleFor,
@@ -64,7 +66,7 @@ export class UnusedMemberProvider implements vscode.CodeActionProvider, vscode.D
       byFile.set(m.path, diags);
     }
 
-    for (const [p, diags] of byFile) this.collection.set(vscode.Uri.file(p), diags);
+    for (const [p, diags] of byFile) this.collection.set(corpusUri(p), diags);
   }
 
   clear(): void {
@@ -129,6 +131,10 @@ export class UnusedMemberProvider implements vscode.CodeActionProvider, vscode.D
       const edit = new vscode.WorkspaceEdit();
       const indent = /^[ \t]*/.exec(lineText)?.[0] ?? '';
       edit.insert(document.uri, new vscode.Position(hit.line, 0), `${indent}@VisibleForTesting\n`);
+      if (!/^\s*import\s+androidx\.annotation\.VisibleForTesting\b/m.test(document.getText())) {
+        const imp = insertImport(document, 'androidx.annotation.VisibleForTesting');
+        edit.insert(document.uri, imp.range.start, imp.newText);
+      }
       annotate.edit = edit;
       actions.push(annotate);
     }
@@ -147,7 +153,7 @@ export class UnusedMemberProvider implements vscode.CodeActionProvider, vscode.D
   }
 
   private forget(path: string): void {
-    this.collection.delete(vscode.Uri.file(path));
+    this.collection.delete(corpusUri(path));
     this.byPath.delete(path);
   }
 

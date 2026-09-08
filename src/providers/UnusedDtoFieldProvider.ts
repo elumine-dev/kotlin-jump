@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { corpusUri } from '../util/corpusUri';
 import { UnusedDtoField, deleteTitleFor, messageFor } from './unusedDtoFields';
 
 /** KJ-044 VS Code shell. */
@@ -46,7 +47,7 @@ export class UnusedDtoFieldProvider implements vscode.CodeActionProvider, vscode
       diags.push(d);
       byFile.set(f.path, diags);
     }
-    for (const [p, diags] of byFile) this.collection.set(vscode.Uri.file(p), diags);
+    for (const [p, diags] of byFile) this.collection.set(corpusUri(p), diags);
   }
 
   clear(): void {
@@ -89,7 +90,7 @@ export class UnusedDtoFieldProvider implements vscode.CodeActionProvider, vscode
   }
 
   private forget(path: string): void {
-    this.collection.delete(vscode.Uri.file(path));
+    this.collection.delete(corpusUri(path));
     this.byPath.delete(path);
   }
 

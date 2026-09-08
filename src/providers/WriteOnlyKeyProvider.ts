@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { corpusUri } from '../util/corpusUri';
 import { WriteOnlyKey, WriteOnlyKeyScan, messageFor } from './writeOnlyKeys';
 
 /** KJ-045 VS Code shell. Diagnostics only: the fix is writing the reader. */
@@ -36,7 +37,7 @@ export class WriteOnlyKeyProvider implements vscode.Disposable {
       d.code = `write-only-${f.kind}`;
       add(f.path, d);
     }
-    for (const [p, diags] of byFile) this.collection.set(vscode.Uri.file(p), diags);
+    for (const [p, diags] of byFile) this.collection.set(corpusUri(p), diags);
   }
 
   clear(): void {

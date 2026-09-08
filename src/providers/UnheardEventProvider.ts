@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { corpusUri } from '../util/corpusUri';
 import {
   DeadSubscription,
   UnheardEvent,
@@ -83,8 +84,8 @@ export class UnheardEventProvider implements vscode.CodeActionProvider, vscode.D
       byFile.set(u.path, diags);
     }
     for (const [p, diags] of byFile) {
-      const existing = this.collection.get(vscode.Uri.file(p)) ?? [];
-      this.collection.set(vscode.Uri.file(p), [...existing, ...diags]);
+      const existing = this.collection.get(corpusUri(p)) ?? [];
+      this.collection.set(corpusUri(p), [...existing, ...diags]);
     }
   }
 
@@ -114,7 +115,7 @@ export class UnheardEventProvider implements vscode.CodeActionProvider, vscode.D
       byFile.set(f.path, diags);
     }
 
-    for (const [p, diags] of byFile) this.collection.set(vscode.Uri.file(p), diags);
+    for (const [p, diags] of byFile) this.collection.set(corpusUri(p), diags);
   }
 
   /**
@@ -144,7 +145,7 @@ export class UnheardEventProvider implements vscode.CodeActionProvider, vscode.D
       byFile.set(s.path, diags);
     }
 
-    for (const [p, diags] of byFile) this.collection.set(vscode.Uri.file(p), diags);
+    for (const [p, diags] of byFile) this.collection.set(corpusUri(p), diags);
   }
 
   clear(): void {
@@ -235,7 +236,7 @@ export class UnheardEventProvider implements vscode.CodeActionProvider, vscode.D
   }
 
   private forget(path: string): void {
-    this.collection.delete(vscode.Uri.file(path));
+    this.collection.delete(corpusUri(path));
     this.byPath.delete(path);
     this.deadByPath.delete(path);
   }

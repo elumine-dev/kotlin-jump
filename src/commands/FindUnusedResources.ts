@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { corpusUri } from '../util/corpusUri';
 import { ResourceCorpus } from '../indexer/ResourceCorpus';
 import {
   UnusedResourceProvider,
@@ -49,7 +50,7 @@ export async function findUnusedResourcesCommand(
       const sizes = new Map<string, number>();
       await Promise.all(findings.flatMap(f => f.paths.map(async p => {
         try {
-          sizes.set(p, (await vscode.workspace.fs.stat(vscode.Uri.file(p))).size);
+          sizes.set(p, (await vscode.workspace.fs.stat(corpusUri(p))).size);
         } catch {
           // a file we cannot stat simply contributes no bytes
         }

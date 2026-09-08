@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { mapBatched } from '../util/batched';
+import { rememberCorpusUri } from '../util/corpusUri';
 import { makeExclusionMatcher } from '../util/pathExclusion';
 import { FileResourceIndex } from './FileResourceIndex';
 import { ResourceSource } from '../providers/UnusedResourceProvider';
@@ -106,13 +107,13 @@ export class ResourceCorpus {
     // that did not compile. The editor's text is the truth for open files.
     const open = new Map<string, string>();
     for (const d of vscode.workspace.textDocuments) {
-      if (d.uri.scheme === 'file' && d.isDirty) open.set(d.uri.fsPath, d.getText());
+      if (d.isDirty) open.set(d.uri.fsPath, d.getText());
     }
     await mapBatched(keptSources, async uri => {
       if (token?.isCancellationRequested) { readFailed = true; return; }
       try {
         const fromEditor = open.get(uri.fsPath);
-        sources.push({ path: uri.fsPath, text: fromEditor ?? decoder.decode(await vscode.workspace.fs.readFile(uri)) });
+        sources.push({ path: rememberCorpusUri(uri), text: fromEditor ?? decoder.decode(await vscode.workspace.fs.readFile(uri)) });
       } catch {
         // one unreadable file is enough to void the "nothing references it" claim
         readFailed = true;
@@ -120,7 +121,7 @@ export class ResourceCorpus {
     });
 
     const index = new FileResourceIndex();
-    for (const uri of keptRes) index.addFile(uri.fsPath, moduleDirs);
+    for (const uri of keptRes) index.addFile(rememberCorpusUri(uri), moduleDirs);
 
     const modulesWithCode = moduleDirs.filter(dir =>
       sources.some(s => s.path.startsWith(`${dir}/`) && /\.(kt|java)$/.test(s.path)),

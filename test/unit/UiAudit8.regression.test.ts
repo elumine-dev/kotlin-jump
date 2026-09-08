@@ -86,3 +86,29 @@ describe('Smart join — call chain after a trailing comment (was: the chain bec
     expect(smartJoin('val url = "http://x" ', '    .trim()').joined).toBe('val url = "http://x".trim()');
   });
 });
+
+describe('@VisibleForTesting quick fix (was: the annotation was inserted without its import)', () => {
+  it('adds the androidx.annotation import alongside the annotation, once', async () => {
+    const { UnusedSymbolProvider } = await import('../../src/providers/UnusedSymbolProvider');
+    const { Position, Range } = await import('./__mocks__/vscode');
+    const { mockDocument } = await import('./helpers');
+    const path = '/p/app/src/main/kotlin/com/x/Utils.kt';
+    const utils = 'package com.x\n\nimport com.x.other.Thing\n\nfun b() = 2\n';
+    const test = 'package com.x\nimport org.junit.Test\nclass UtilsTest { @Test fun t() { b() } }\n';
+    const findings = findUnusedSymbols({
+      sources: [{ path, text: utils }, { path: '/p/app/src/test/kotlin/com/x/UtilsTest.kt', text: test }],
+      testSourceSets: [],
+    });
+    expect(findings.find(f => f.name === 'b')?.verdict).toBe('testOnly');
+    const provider = new UnusedSymbolProvider();
+    provider.setFindings(findings);
+    const doc = Object.assign(mockDocument(`file://${path}`, utils), { uri: { fsPath: path, path, toString: () => `file://${path}`, scheme: 'file' } });
+    const actions = await provider.provideCodeActions(doc as any, new Range(new Position(4, 4), new Position(4, 4)));
+    const annotate = actions.find(a => a.title.includes('@VisibleForTesting'))!;
+    expect(annotate).toBeDefined();
+    const serialized = JSON.stringify((annotate.edit as any).entries?.() ?? (annotate.edit as any)._edits ?? annotate.edit);
+    expect(serialized).toContain('@VisibleForTesting\\n');
+    expect(serialized).toContain('import androidx.annotation.VisibleForTesting\\n');
+    expect(serialized).toContain('"line":2'); // alphabetically before `import com.x.other.Thing`, inside the header block
+  });
+});

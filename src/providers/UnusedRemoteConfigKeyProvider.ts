@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { corpusUri } from '../util/corpusUri';
 import { UnusedRemoteConfigKey, deleteTitleFor, messageFor } from './unusedRemoteConfigKeys';
 
 /** KJ-040 VS Code shell: diagnostics and the removal quick fix. */
@@ -49,7 +50,7 @@ export class UnusedRemoteConfigKeyProvider implements vscode.CodeActionProvider,
       }
     }
 
-    for (const [p, diags] of byFile) this.collection.set(vscode.Uri.file(p), diags);
+    for (const [p, diags] of byFile) this.collection.set(corpusUri(p), diags);
   }
 
   clear(): void {
@@ -93,7 +94,7 @@ export class UnusedRemoteConfigKeyProvider implements vscode.CodeActionProvider,
   }
 
   private forget(path: string): void {
-    this.collection.delete(vscode.Uri.file(path));
+    this.collection.delete(corpusUri(path));
     this.byPath.delete(path);
   }
 

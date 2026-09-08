@@ -104,7 +104,7 @@ import { KotlinSemanticTokensProvider, TOKEN_TYPES, TOKEN_MODIFIERS } from './pr
 import { Logger } from './util/logger';
 import { mapBatched } from './util/batched';
 import { makeExclusionMatcher } from './util/pathExclusion';
-import { resolveCompanionMode } from './util/companionMode';
+import { resolveCompanionMode, isJetBrainsKotlinInstalled } from './util/companionMode';
 import { resolveAll as resolveModules } from './gradle/ModuleResolver';
 import { resolveBest } from './util/ImportResolver';
 import { readProjectConfigs } from './util/ProjectConfig';
@@ -259,13 +259,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const companionMode = cfg0.get<string>('companionMode', 'auto');
   const isCompanion = resolveCompanionMode(
     companionMode,
-    vscode.extensions.getExtension('JetBrains.kotlin-lsp') !== undefined,
+    isJetBrainsKotlinInstalled(id => vscode.extensions.getExtension(id)),
   );
 
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBar.text    = '$(sync~spin) Kotlin Jump: indexing…';
   statusBar.tooltip = 'Kotlin Jump is building the symbol index';
   if (statusBarEnabled) statusBar.show();
+  // The counter was written at activation, Re-index and JAR scans only: a
+  // checkout of 300 files or a deleted file left it stale until a reload.
+  let statusBarRefreshTimer: ReturnType<typeof setTimeout> | undefined;
+  const refreshStatusBarCount = () => {
+    if (statusBarRefreshTimer) clearTimeout(statusBarRefreshTimer);
+    statusBarRefreshTimer = setTimeout(() => {
+      statusBarRefreshTimer = undefined;
+      if (statusBar.text.includes('sync~spin')) return; // a scan owns the text right now
+      const { files, symbols } = index.stats();
+      statusBar.text    = `$(symbol-class) Kotlin Jump: ${symbols.toLocaleString()} symbols${isCompanion ? ' · companion' : ''}`;
+      statusBar.tooltip = `${symbols.toLocaleString()} symbols in ${files} files${isCompanion ? '\nCompanion mode: navigation left to the JetBrains Kotlin extension' : ''}`;
+    }, 300);
+  };
+  context.subscriptions.push({ dispose: () => clearTimeout(statusBarRefreshTimer) });
 
   registerAndroidRunCommand(context, log);
   registerLogcat(context, log, index);
@@ -821,7 +835,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // ── Resolve Gradle modules and find all .kt files ─────────────────────────
   const cfg         = vscode.workspace.getConfiguration('kotlinJump');
   const excludeList = cfg.get<string[]>('excludePatterns') ?? ['**/build/**', '**/.gradle/**'];
-  const isExcludedPath = makeExclusionMatcher(excludeList);
+  // Rebuilt on change: the matcher was captured once, so a folder added to
+  // excludePatterns kept feeding the watchers until a reload.
+  let excludedMatcher = makeExclusionMatcher(excludeList);
+  const isExcludedPath = (p: string) => excludedMatcher(p);
+  context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(e => {
+    if (e.affectsConfiguration('kotlinJump.excludePatterns')) {
+      excludedMatcher = makeExclusionMatcher(vscode.workspace.getConfiguration('kotlinJump').get<string[]>('excludePatterns') ?? excludeList);
+    }
+  }));
   const maxFiles    = cfg.get<number>('maxIndexedFiles') ?? 10000;
 
   const [gradleModules, { moduleMap: jsonModules, sourceRoots }, allUris] = await Promise.all([
@@ -829,6 +851,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     readProjectConfigs(),
     vscode.workspace.findFiles('**/*.{kt,kts,java}', `{${excludeList.join(',')}}`, maxFiles),
   ]);
+
+  if (allUris.length >= maxFiles) {
+    // Silent before: 2000 files of a 12000 file project were invisible to
+    // navigation and the tooltip read "in 10000 files" as if that were all.
+    log.warn(`[startup] file cap reached: ${maxFiles} files indexed, the rest is invisible`);
+    void vscode.window.showWarningMessage(
+      `Kotlin Jump indexed the first ${maxFiles} files only; the rest is invisible to navigation. Raise kotlinJump.maxIndexedFiles or narrow kotlinJump.excludePatterns.`,
+    );
+  }
 
   // Gradle takes precedence over kotlin-jump.json when both define the same module
   const moduleMap = new Map([...jsonModules, ...gradleModules]);
@@ -845,6 +876,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     invalidateContentCache(uri.toString()); // file changed — next scan re-reads from disk
     _sealedWhen?.bumpEpoch();               // sealed subtype sets may have changed in any file
     testCtrl.notifyFileIndexed(uri);    // index is fresh — safe to refresh test tree now
+    refreshStatusBarCount();
   }, log, uris => {
     // Burst path (git checkout/rebase): per-file cache evictions are O(1)
     // each, but the sealed epoch bump and the test-tree refresh happen ONCE
@@ -857,6 +889,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       invalidateContentCache(uri.toString());
     }
     _sealedWhen?.bumpEpoch();
+    refreshStatusBarCount();
     testCtrl.notifyScanComplete();
   }, isExcludedPath);
   context.subscriptions.push(watcher, { dispose: () => scanner.destroy() });
@@ -1212,6 +1245,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const deadIslandProvider = new DeadIslandProvider();
   const unusedDtoFieldProvider = new UnusedDtoFieldProvider();
   const writeOnlyKeyProvider = new WriteOnlyKeyProvider();
+  // Disabling a detector used to leave its strike-through warnings in
+  // Problems until the next edit of each file.
+  const deadCodeProviders: Array<[string, { clear(): void }]> = [
+    ['unusedResourceKeys', unusedResourceKeyProvider], ['unusedSymbols', unusedSymbolProvider],
+    ['unheardEvents', unheardEventProvider], ['unusedEnumEntries', unusedEnumEntryProvider],
+    ['unusedRemoteConfigKeys', remoteConfigKeyProvider], ['unusedGradleDependencies', gradleDependencyProvider],
+    ['unusedMembers', unusedMemberProvider], ['deadIslands', deadIslandProvider],
+    ['unusedDtoFields', unusedDtoFieldProvider], ['writeOnlyKeys', writeOnlyKeyProvider],
+  ];
+  context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(e => {
+    for (const [key, provider] of deadCodeProviders) {
+      if (e.affectsConfiguration(`kotlinJump.${key}`) && !vscode.workspace.getConfiguration('kotlinJump').get<boolean>(key, true)) provider.clear();
+    }
+  }));
   context.subscriptions.push(
     unusedResourceProvider,
     vscode.languages.registerCodeActionsProvider(
@@ -2105,9 +2152,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       scanner.cancel();
       index.clear();
       clearContentCache(); // workspace re-indexed — cached content is stale
+      // clear() drops the bundled stdlib entries too: without this, Cmd+Click
+      // on listOf answered "No definition found" until the next reload.
+      void bundledStdlib.load().catch((e: Error) => log.warn(`[bundled-stdlib] ${e.message}`));
       await scanner.scanAll();
+      const live = vscode.workspace.getConfiguration('kotlinJump');
       const freshUris = await vscode.workspace.findFiles(
-        '**/*.{kt,kts,java}', `{${excludeList.join(',')}}`, maxFiles,
+        '**/*.{kt,kts,java}',
+        `{${(live.get<string[]>('excludePatterns') ?? excludeList).join(',')}}`,
+        live.get<number>('maxIndexedFiles') ?? maxFiles,
       );
       await collectStats(freshUris);
       const { files, symbols } = index.stats();

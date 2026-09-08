@@ -140,7 +140,7 @@ export async function runMcpServer(root: string): Promise<void> {
     'Fuzzy-search symbols by name query, optionally filtered by kind. Returns up to 50 results.',
     {
       query: z.string().describe('Search query, e.g. "ViewModel" or "getUser"'),
-      kind:  z.enum(['class', 'interface', 'object', 'enum', 'fun', 'composable', 'val', 'var', 'typealias']).optional()
+      kind:  z.enum(['class', 'dataClass', 'sealedClass', 'annotation', 'interface', 'object', 'enum', 'fun', 'composable', 'val', 'var', 'typealias']).optional()
                .describe('Optional kind filter'),
     },
     async ({ query, kind }) => ({ content: [{ type: 'text' as const, text: toText(handleSearchSymbols(index, query, kind)) }] }),

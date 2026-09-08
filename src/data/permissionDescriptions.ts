@@ -325,6 +325,15 @@ const PREFIX = 'android.permission.';
 
 /** Accepts `CAMERA` or `android.permission.CAMERA`. */
 export function lookupPermission(name: string): PermissionDescription | undefined {
-  const key = name.startsWith(PREFIX) ? name.slice(PREFIX.length) : name;
-  return PERMISSION_DESCRIPTIONS[key];
+  // Not every permission lives under `android.permission.`: SET_ALARM is
+  // `com.android.alarm.permission.SET_ALARM`, and several vendor ones follow
+  // the same shape. Anything up to the last `permission.` is a namespace.
+  const key = name.startsWith(PREFIX)
+    ? name.slice(PREFIX.length)
+    : name.replace(/^[\w.]*\.permission\./, '');
+  // A manifest naming `constructor` or `toString` would otherwise pull a
+  // function off Object.prototype and render as a hover.
+  return Object.prototype.hasOwnProperty.call(PERMISSION_DESCRIPTIONS, key)
+    ? PERMISSION_DESCRIPTIONS[key]
+    : undefined;
 }

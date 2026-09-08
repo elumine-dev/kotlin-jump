@@ -1,34 +1,34 @@
 {
-  "version": "1.42.31",
+  "version": "1.42.32",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Three features that were simply broken",
-  "summary": "Kotlin Jump 1.42.31 repairs three things that were plainly broken: Organize Imports could turn the rest of a file into a comment, test coverage never appeared at all, and a `\"\"\"` written inside a comment killed the semantic colours from that line to the end of the file. Postfix completion on a safe call also stops producing Kotlin that does not compile.",
+  "tagline": "The server outside VS Code, repaired",
+  "summary": "Kotlin Jump 1.42.32 repairs the standalone language server that Neovim, Helix and Zed talk to. Its index was frozen at startup, it could index your home directory instead of your project, and Go to Definition answered with every class of that name in the workspace. The permission hover also stops missing `SET_ALARM`.",
   "highlights": [
     {
-      "title": "Organize Imports keeps your file",
+      "title": "The index follows your edits",
       "kind": "fix",
-      "description": "A `/* … */` comment inside the import block is copied verbatim. Losing its closing line used to comment out the rest of the file."
+      "description": "The server now asks for save notifications and watches the files, so a deleted or renamed class no longer survives until the next restart."
     },
     {
-      "title": "Coverage finally shows up",
+      "title": "Your project, not your home",
       "kind": "fix",
-      "description": "The class name was read from the wrong attribute of the report, so every entry was dropped. Sources are now searched under the tested module, the KMP source sets and Java files."
+      "description": "`workspaceFolders` is honoured, every root is indexed, and no announced root means nothing is scanned instead of falling back to the working directory."
     },
     {
-      "title": "Colours survive a quoted example",
+      "title": "One definition, the imported one",
       "kind": "fix",
-      "description": "A `\"\"\"` written inside a comment no longer opens a raw string that never closes, which killed semantic colours and KDoc folding to the end of the file."
+      "description": "Three same named classes no longer all show up: the file's imports decide, then its own package."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Organize Imports copies a `/* … */` inside the import block verbatim, and stops sorting a commented out import as a real one.",
-        "Coverage reads the class name from `name`, not `sourcefilename`, and resolves sources under the module, the KMP source sets and `.java` files.",
-        "Postfix completion on `viewModel?.` inserts code that compiles, and `let` keeps its `?.let` form.",
-        "A `\"\"\"` inside a `//` or `/* */` comment no longer disables semantic colours, occurrence highlighting and KDoc folding for the rest of the file.",
-        "The release notes panel renders the quoted file names and flags as code instead of printing backticks."
+        "The language server asks for save notifications and registers a file watcher, so deletions and renames reach the index.",
+        "`workspaceFolders` and multiple roots are honoured; nothing falls back to the process working directory.",
+        "Go to Definition narrows same named classes by explicit import, then wildcard import, then the file's own package.",
+        "References read open buffers instead of the disk copy, and `includeDeclaration: false` is honoured.",
+        "A README no longer becomes symbols, a symlink no longer walks the scan out of the project, and the permission hover finds `com.android.alarm.permission.SET_ALARM`."
       ]
     }
   ],

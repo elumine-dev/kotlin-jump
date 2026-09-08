@@ -112,3 +112,55 @@ export function buildHoverMarkdown(
   }
   return lines.join('\n').trimEnd();
 }
+
+
+/** Extensions the index understands. Saving a README used to inject ghost symbols. */
+export const INDEXABLE_RE = /\.(kt|kts|java)$/;
+
+/**
+ * The roots to index, from the initialize params. `workspaceFolders` wins
+ * (LSP 3.6+ clients send it with `rootUri: null`), then `rootUri`, then the
+ * deprecated `rootPath`. NEVER `process.cwd()`: on an editor started from
+ * the home directory that scanned everything the user owns, and served
+ * symbols from unrelated projects.
+ */
+export function resolveWorkspaceRoots(params: {
+  rootUri?: string | null;
+  rootPath?: string | null;
+  workspaceFolders?: { uri: string }[] | null;
+}): string[] {
+  const folders = params.workspaceFolders ?? [];
+  if (folders.length > 0) return folders.map(f => uriToPath(f.uri));
+  if (params.rootUri) return [uriToPath(params.rootUri)];
+  if (params.rootPath) return [params.rootPath];
+  return [];
+}
+
+/**
+ * Narrows same named declarations with what the file actually imports.
+ * A project with a domain `User`, a network `User` and a database `User`
+ * offered all three on every Cmd+Click; an explicit import settles it, and a
+ * declaration of the file's own package wins over a foreign one.
+ */
+export function preferByImports<T extends { fqn?: string; packageName?: string }>(
+  text: string,
+  decls: readonly T[],
+): T[] {
+  if (decls.length < 2) return [...decls];
+  const imported = new Set<string>();
+  let ownPackage = '';
+  for (const raw of text.split('\n', 400)) {
+    const line = raw.trim();
+    if (line.startsWith('package ')) { ownPackage = line.slice(8).trim().replace(/;$/, ''); continue; }
+    if (!line.startsWith('import ')) continue;
+    const path = line.slice(7).trim().replace(/;$/, '').split(/\s+as\s+/)[0];
+    if (path) imported.add(path);
+  }
+  const exact = decls.filter(d => d.fqn !== undefined && imported.has(d.fqn));
+  if (exact.length > 0) return exact;
+  const wildcard = decls.filter(d => d.packageName && imported.has(`${d.packageName}.*`));
+  if (wildcard.length > 0) return wildcard;
+  const samePackage = ownPackage ? decls.filter(d => d.packageName === ownPackage) : [];
+  if (samePackage.length > 0) return samePackage;
+  return [...decls];
+}

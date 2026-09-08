@@ -24,7 +24,7 @@ export class VersionCatalogHoverProvider implements vscode.HoverProvider {
       const start = m.index;
       const end   = m.index + m[0].length;
       if (position.character < start || position.character > end) continue;
-      const entry = this.index.getByAccessor(m[1]);
+      const entry = this.index.getByAccessor(m[1], document.uri?.fsPath ?? fname);
       if (!entry) continue;
       const coords = `${entry.group}:${entry.name}:${entry.version}`;
       return new vscode.Hover(

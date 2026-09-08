@@ -181,6 +181,16 @@ export class KotlinSemanticTokensProvider
   private readonly _onChange = new vscode.EventEmitter<void>();
   readonly onDidChangeSemanticTokens = this._onChange.event;
 
+  /** Setting changed: drop every cached result and ask VS Code to re-request. */
+  refresh(): void {
+    this.cache.clear();
+    this._onChange.fire();
+  }
+
+  private static enabled(): boolean {
+    return vscode.workspace.getConfiguration('kotlinJump').get<boolean>('semanticHighlighting', true);
+  }
+
   constructor(
     private readonly index: SymbolIndex,
     private readonly legend: vscode.SemanticTokensLegend,
@@ -259,6 +269,14 @@ export class KotlinSemanticTokensProvider
   ): vscode.SemanticTokens {
     const tokens: TokenEntry[] = [];
     const declKeys = new Set<string>();
+    // The provider used to be registered only when the setting was on at
+    // activation, so toggling it did nothing until Reload Window.
+    if (!KotlinSemanticTokensProvider.enabled()) {
+      const resultId = String(this.nextId++);
+      const data = new Uint32Array(0);
+      if (!range) this.cache.set(doc.uri.toString(), { version: doc.version, data, resultId });
+      return new vscode.SemanticTokens(data, resultId);
+    }
     const docLines = doc.getText().split('\n');
 
     // ── Phase 1: declaration sites (exact, from index) ─────────────────────

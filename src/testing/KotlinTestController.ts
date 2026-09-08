@@ -106,11 +106,18 @@ export class KotlinTestController implements vscode.Disposable {
   private async discoverAllClasses(): Promise<void> {
     const segs = this.getExtraSegs();
     let classCount = 0;
+    const live = new Set<string>();
     for (const uriStr of this.index.fileUriStrings()) {
       if (!isTestFile(uriStr, segs)) continue;
       const entries = this.index.getFileSymbols(uriStr);
-      classCount += this.buildClassItems(entries, segs);
+      classCount += this.buildClassItems(entries, segs, live);
     }
+    // A checkout of nine files or more goes through this pass, which only
+    // ever added: classes deleted or renamed by the checkout stayed in the
+    // tree as ghosts until a reload.
+    const stale = [...this.classItems.keys()].filter(id => !live.has(id)).sort((a, b) => b.length - a.length);
+    for (const id of stale) this.deleteClassItem(id);
+    if (stale.length > 0) this.log.info(`[test:discover] removed ${stale.length} stale class item(s)`);
     this.log.info(`[test:discover] discovered ${classCount} test class(es)`);
   }
 
@@ -119,7 +126,7 @@ export class KotlinTestController implements vscode.Disposable {
    * Handles nested inner test classes: outer classes are created as containers even if they have
    * no direct @Test methods themselves.
    */
-  private buildClassItems(entries: SymbolEntry[], segs: string[]): number {
+  private buildClassItems(entries: SymbolEntry[], segs: string[], live?: Set<string>): number {
     const allClassEntries = new Map<string, SymbolEntry>(
       entries.filter(e => isClassLike(e.kind) && !e.isPrivate).map(e => [e.fqn, e]),
     );
@@ -150,12 +157,18 @@ export class KotlinTestController implements vscode.Disposable {
 
     for (const classEntry of sorted) {
       const classItem = this.getOrCreateClassItem(classEntry, allFqns);
+      live?.add(classItem.id);
       if (!classesWithTests.has(classEntry.fqn)) continue; // container only — no direct tests
 
       const prefix = classEntry.fqn + '.';
       const methods = entries.filter(e => isTestFun(e, segs) && e.depth === classEntry.depth + 1 && e.fqn.startsWith(prefix));
       this.log.debug(`[test:discover] class ${classEntry.name} — ${methods.length} test method(s)`);
-      for (const method of methods) this.upsertMethodItem(classItem, method);
+      const methodIds = new Set<string>();
+      for (const method of methods) methodIds.add(this.upsertMethodItem(classItem, method).id);
+      // Methods removed from the class leave the tree too (nested classes keep their own ids).
+      const gone: string[] = [];
+      classItem.children.forEach(child => { if (child.id.startsWith('mth|') && !methodIds.has(child.id)) gone.push(child.id); });
+      for (const id of gone) classItem.children.delete(id);
     }
 
     return classesWithTests.size;

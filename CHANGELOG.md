@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.42.7
+
+Kotlin Jump 1.42.7 closes the list left by the third display audit: multi-root workspaces that ran tests against the wrong Gradle build and read the wrong version catalog, a Find Usages panel that disagreed with its own lens, a Recent Locations picker that opened a hundred files before showing up, and a few settings and pills that did not do what they said.
+
+### Fixes
+- Runs each test against the Gradle project its file belongs to. The root came from the active editor, so with two Gradle projects in the workspace a class run from the Test Explorer while another project's file had focus went to the wrong build: "No tests found for given includes" and every test errored.
+- Keeps one version catalog per project. A single in-memory catalog meant the last `libs.versions.toml` read won, so a hover in project A showed project B's versions, and deleting any toml emptied every hover. The build file's own project now answers.
+- Applies `kotlinJump.excludeFromReferences` in the Find Usages panel. The lens said "3 usages" and the panel opened with "5 usages", listing the excluded files.
+- Shows Recent Locations without opening its files. The picker opened up to a hundred documents one by one for their excerpts, each open waking every scanner listening for opened documents. Open editors lend their text, the rest is read as bytes, sixteen at a time. File names are decoded too: `Caf%C3%A9.kt` reads `Café.kt`.
+- Puts a permission pill on a `<uses-permission>` split over several lines, the way Android Studio writes it as soon as the tag carries `android:maxSdkVersion` or a `tools:` attribute. The line scan never saw those.
+- Makes `kotlinJump.semanticHighlighting` take effect without Reload Window. The provider was only registered when the setting was on at activation.
+- Removes classes and methods that a checkout deleted or renamed from the Test Explorer. The discovery pass that follows a change of nine files or more only ever added, so the old names stayed as ghosts.
+- Stops reporting `@Ignore` and `@Embedded` fields as missing a Room migration. Neither is a column of its own.
+
 ## 1.42.6
 
 Kotlin Jump 1.42.6 fixes the slowest thing in the extension and seven display defects around it. On a 5000 line file outside any function, a Koin module or a design system object, every keystroke walked backwards through the file once per coloured token: 13.9 seconds of frozen extension host, measured. It is one pass now.

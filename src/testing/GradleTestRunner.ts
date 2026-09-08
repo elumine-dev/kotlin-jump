@@ -4,7 +4,7 @@ import * as path from 'path';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { resolveAll as resolveModules } from '../gradle/ModuleResolver';
 import { Logger } from '../util/logger';
-import { detectGradleRoot, type DetectionResult } from './GradleRootDetector';
+import { detectGradleRoot, type DetectionResult, walkUpToGradleRoot } from './GradleRootDetector';
 
 const C = {
   reset:  '\x1b[0m',
@@ -53,27 +53,45 @@ export class GradleTestRunner {
   ): Promise<void> {
     if (specs.length === 0) return;
 
-    const projectRoot = findProjectRoot(this.log);
-    if (!projectRoot) {
-      this.log.error('[test:runner] could not find project root (no settings.gradle)');
-      run.appendOutput('\r\n[kotlin-jump] Could not find project root (settings.gradle not found)\r\n');
-      for (const s of specs) run.errored(s.item, new vscode.TestMessage('Project root not found'));
-      return;
-    }
-
-    this.log.info(`[test:runner] project root: ${projectRoot}`);
     const moduleMap = await resolveModules();
     this.log.debug(`[test:runner] moduleMap has ${moduleMap.size} entries: [${[...moduleMap.keys()].join(', ')}]`);
-    const byModule = groupByModule(specs);
-    this.log.info(`[test:runner] grouped into ${byModule.size} module(s): [${[...byModule.keys()].map(m => m || '(root)').join(', ')}]`);
-
-    for (const [moduleName, moduleSpecs] of byModule) {
-      if (token.isCancellationRequested) {
-        this.log.info('[test:runner] cancelled — stopping');
-        break;
+    for (const [projectRoot, rootSpecs] of this.groupByRoot(specs, run)) {
+      this.log.info(`[test:runner] project root: ${projectRoot}`);
+      const byModule = groupByModule(rootSpecs);
+      this.log.info(`[test:runner] grouped into ${byModule.size} module(s): [${[...byModule.keys()].map(m => m || '(root)').join(', ')}]`);
+      for (const [moduleName, moduleSpecs] of byModule) {
+        if (token.isCancellationRequested) {
+          this.log.info('[test:runner] cancelled — stopping');
+          return;
+        }
+        await this.runModule(moduleSpecs, run, token, projectRoot, moduleName, moduleMap, false, this.log);
       }
-      await this.runModule(moduleSpecs, run, token, projectRoot, moduleName, moduleMap, false, this.log);
     }
+  }
+
+  /**
+   * Root per test, from the test's own file. The root used to come from the
+   * active editor: with two Gradle projects in the workspace, a class run from
+   * the Test Explorer while another project's file had focus went to the wrong
+   * build ("No tests found for given includes", every test errored).
+   */
+  private groupByRoot(specs: TestSpec[], run: vscode.TestRun): Map<string, TestSpec[]> {
+    const folders = (vscode.workspace.workspaceFolders ?? []).map(f => f.uri.fsPath);
+    const fallback = findProjectRoot(this.log);
+    const byRoot = new Map<string, TestSpec[]>();
+    for (const spec of specs) {
+      const root = walkUpToGradleRoot(spec.entry.uri.fsPath, folders) ?? fallback;
+      if (!root) {
+        this.log.error(`[test:runner] could not find project root for ${spec.entry.uri.fsPath}`);
+        run.appendOutput('\r\n[kotlin-jump] Could not find project root (settings.gradle not found)\r\n');
+        run.errored(spec.item, new vscode.TestMessage('Project root not found'));
+        continue;
+      }
+      const arr = byRoot.get(root) ?? [];
+      arr.push(spec);
+      byRoot.set(root, arr);
+    }
+    return byRoot;
   }
 
   async runWithCoverage(
@@ -84,16 +102,14 @@ export class GradleTestRunner {
   ): Promise<void> {
     if (specs.length === 0) return;
 
-    const projectRoot = findProjectRoot(this.log);
-    if (!projectRoot) return;
-
-    this.log.info(`[test:runner] coverage run — project root: ${projectRoot}`);
     const moduleMap = await resolveModules();
-    const byModule = groupByModule(specs);
-
-    for (const [moduleName, moduleSpecs] of byModule) {
-      if (token.isCancellationRequested) break;
-      await this.runModule(moduleSpecs, run, token, projectRoot, moduleName, moduleMap, true, this.log);
+    for (const [projectRoot, rootSpecs] of this.groupByRoot(specs, run)) {
+      this.log.info(`[test:runner] coverage run — project root: ${projectRoot}`);
+      const byModule = groupByModule(rootSpecs);
+      for (const [moduleName, moduleSpecs] of byModule) {
+        if (token.isCancellationRequested) return;
+        await this.runModule(moduleSpecs, run, token, projectRoot, moduleName, moduleMap, true, this.log);
+      }
     }
   }
 

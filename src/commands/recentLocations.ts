@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { mapBatched } from '../util/batched';
 import { NavigationHistoryProvider } from '../providers/NavigationHistoryProvider';
 
 /**
@@ -35,7 +36,9 @@ function dedupRecent(entries: RecentLocationEntry[]): RecentLocationEntry[] {
 
 function shortName(file: string): string {
   const idx = Math.max(file.lastIndexOf('/'), file.lastIndexOf('\\'));
-  return idx >= 0 ? file.slice(idx + 1) : file;
+  const last = idx >= 0 ? file.slice(idx + 1) : file;
+  // The history stores URIs: `Caf%C3%A9.kt` and `My%20File.kt` were shown as is.
+  try { return decodeURIComponent(last); } catch { return last; }
 }
 
 /** QuickPick items, most recent first, code excerpt in the detail field. */
@@ -59,16 +62,23 @@ export async function recentLocationsCommand(history: NavigationHistoryProvider)
     return;
   }
 
-  // Preload the text of the documents involved, for the excerpts.
+  // Text for the excerpts. openTextDocument was used here, one file at a
+  // time, up to 100 of them before the picker appeared, and each open woke
+  // every onDidOpenTextDocument scanner. Open editors give their live text,
+  // the rest is read as bytes, sixteen at a time, without opening anything.
   const docs = new Map<string, string[]>();
-  for (const file of new Set(entries.map(x => x.file))) {
+  const open = new Map(vscode.workspace.textDocuments.map(d => [d.uri.toString(), d]));
+  const files = [...new Set(entries.map(x => x.file))];
+  await mapBatched(files, async file => {
+    const doc = open.get(file);
+    if (doc) { docs.set(file, doc.getText().split('\n')); return; }
     try {
-      const doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(file));
-      docs.set(file, doc.getText().split('\n'));
+      const bytes = await vscode.workspace.fs.readFile(vscode.Uri.parse(file));
+      docs.set(file, new TextDecoder().decode(bytes).split('\n'));
     } catch {
       // file gone: entry still listed, without an excerpt
     }
-  }
+  }, 16);
   const excerptOf = (file: string, line: number): string => {
     const lines = docs.get(file);
     if (!lines) return '';

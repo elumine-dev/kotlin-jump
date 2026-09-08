@@ -15,6 +15,30 @@ const BADGE: Record<PermissionBadge['risk'], string> = {
   unknown:   '⚪ unknown',
 };
 
+/**
+ * Scans a whole manifest. Android Studio splits a tag over several lines as
+ * soon as it carries `android:maxSdkVersion` or a `tools:` attribute, and the
+ * line-by-line scan found nothing on those. The pill goes at the end of the
+ * line that holds the `android:name` value.
+ */
+export function findManifestPermissionsInText(text: string): Array<PermissionBadge & { line: number }> {
+  const out: Array<PermissionBadge & { line: number }> = [];
+  const re = new RegExp(USES_PERMISSION_RE.source, 'g');
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const info = lookupPermission(m[1]);
+    const risk = info?.protection ?? 'unknown';
+    const end = m.index + m[0].length;
+    const line = text.slice(0, end).split('\n').length - 1;
+    const lineStart = text.lastIndexOf('\n', end - 1) + 1;
+    let lineEnd = text.indexOf('\n', end);
+    if (lineEnd < 0) lineEnd = text.length;
+    const lineText = text.slice(lineStart, lineEnd).replace(/\r$/, '');
+    out.push({ line, column: lineText.length, text: BADGE[risk], risk });
+  }
+  return out;
+}
+
 /** Scans one manifest line for uses-permission entries. Exported for tests. */
 export function findManifestPermissions(text: string): PermissionBadge[] {
   const out: PermissionBadge[] = [];
@@ -84,9 +108,9 @@ export class ManifestPermissionProvider implements vscode.Disposable {
     }
 
     const decos: vscode.DecorationOptions[] = [];
-    for (let ln = 0; ln < editor.document.lineCount; ln++) {
-      const text = editor.document.lineAt(ln).text;
-      for (const badge of findManifestPermissions(text)) {
+    {
+      for (const badge of findManifestPermissionsInText(editor.document.getText())) {
+        const ln = badge.line;
         decos.push({
           range: new vscode.Range(ln, badge.column, ln, badge.column),
           renderOptions: {

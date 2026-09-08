@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.42.37
+
+Kotlin Jump 1.42.37 restores partially qualified names in the chat. Tightening the previous release so it would stop answering about another package went one step too far and lost `Outer.Inner`, the natural way to name a nested class.
+
+### Fixes
+- Resolves `Outer.Inner` again. For a nested class the outer name is part of the qualified name, not of the package, so the package equality rule added last release could never be satisfied and the answer became "not found". Three rules apply in order now: the exact qualified name, then a matching package, then a qualified suffix while it points at a single entry.
+- Still refuses to guess. A suffix that matches two entries, such as `Holder.Item` declared in two packages, answers nothing rather than picking one, and an unknown package still answers nothing.
+
 ## 1.42.36
 
 Kotlin Jump 1.42.36 stops three answers that were confidently wrong. Asking the chat for a fully qualified name answered about a class of another package, asking for implementations of a name the project does not declare returned some other type's, and hovering a suppression id written on its own line showed nothing.

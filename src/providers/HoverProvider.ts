@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { SymbolKind as KtKind } from '../indexer/KotlinParser';
-import { resolveBest } from '../util/ImportResolver';
-import { readSignature, extractKDoc, formatKDoc, escapeAngleBrackets } from '../util/SignatureReader';
+import { resolveBest, resolveExplicit } from '../util/ImportResolver';
+import { readSignature, extractKDoc, formatKDoc, escapeAngleBrackets, locateDeclLine } from '../util/SignatureReader';
 import { isInsideCommentOrString, isInsideStringInterpolation } from '../util/textUtils';
 import { resolveLocalScope } from './DefinitionProvider';
 
@@ -54,6 +54,11 @@ export class KotlinHoverProvider implements vscode.HoverProvider {
     } else if (resolved.matches.length > 1) {
       return null; // ambiguous wildcard imports — avoid showing the wrong symbol
     }
+    // A word on an import or package line is a path segment, not a symbol.
+    if (/^\s*(?:import|package)\s/.test(document.lineAt(position.line).text)) return null;
+    // `import com.example.util.format` names a target the index does not hold
+    // (a library without sources): a same-named symbol elsewhere is not it.
+    if (!entry && resolveExplicit(word, document).exact.length > 0) return null;
     if (!entry) {
       const hits = this.index.lookup(word);
       if (hits.length === 1) {
@@ -84,7 +89,10 @@ export class KotlinHoverProvider implements vscode.HoverProvider {
 
     if (token.isCancellationRequested) return null;
 
-    const kDoc = declDoc ? extractKDoc(declDoc, entry.line) : null;
+    // The index follows the file on disk: while the declaring document is
+    // dirty, entry.line can point at the neighbour's KDoc. readSignature
+    // relocates the declaration; the KDoc must follow it.
+    const kDoc = declDoc ? extractKDoc(declDoc, locateDeclLine(declDoc, entry)) : null;
     const sig  = declDoc
       ? (readSignature(declDoc, entry) ?? fallbackSig(entry))
       : fallbackSig(entry);
@@ -106,7 +114,7 @@ export class KotlinHoverProvider implements vscode.HoverProvider {
         if (baseEntry) {
           let baseDoc: vscode.TextDocument | null = null;
           try { baseDoc = await vscode.workspace.openTextDocument(baseEntry.uri); } catch { /* non-fatal */ }
-          if (baseDoc) resolvedKDoc = extractKDoc(baseDoc, baseEntry.line);
+          if (baseDoc) resolvedKDoc = extractKDoc(baseDoc, locateDeclLine(baseDoc, baseEntry));
         }
       }
     }
@@ -135,7 +143,15 @@ export class KotlinHoverProvider implements vscode.HoverProvider {
     // ── Variants for sealed classes and enum entries ──────────────────────────
     if (entry.kind === 'sealedClass' || entry.kind === 'enum') {
       const fileSymbols = this.index.getFileSymbols(entry.uri.toString());
-      const variantsMd  = buildVariantsSection(entry, fileSymbols, declDoc);
+      // Subtypes live anywhere in the package (top level, other files), not
+      // only nested in the body: `data class Err : Result()` after the class
+      // and every `sealed interface` implementation were missing.
+      const impls = entry.kind === 'sealedClass'
+        ? this.index.lookupImplementations(entry.name).filter(e =>
+          e.packageName === entry!.packageName && !e.isCompanion && !e.name.startsWith('$')
+          && e.supertypes?.includes(entry!.name) && SEALED_CHILD_KINDS.has(e.kind))
+        : [];
+      const variantsMd  = buildVariantsSection(entry, fileSymbols, declDoc, impls);
       if (variantsMd) sections.push(variantsMd);
     }
 
@@ -160,9 +176,11 @@ function buildVariantsSection(
   parent: SymbolEntry,
   fileSymbols: SymbolEntry[],
   doc: vscode.TextDocument | null,
+  impls: readonly SymbolEntry[] = [],
 ): vscode.MarkdownString | null {
   const isEnum   = parent.kind === 'enum';
   const children: SymbolEntry[] = [];
+  const seen = new Set<string>();
 
   // Collect direct children: symbols after the parent line at depth+1
   let seenParent = false;
@@ -174,8 +192,13 @@ function buildVariantsSection(
     if (e.depth <= parent.depth) break; // left the parent's body
     if (e.depth !== parent.depth + 1)  continue; // skip deeply nested
     if (e.isCompanion) continue; // a sealed class's companion is not a subtype
-    if (isEnum  && e.kind === ENUM_ENTRY_KIND)    children.push(e);
-    if (!isEnum && SEALED_CHILD_KINDS.has(e.kind)) children.push(e);
+    if (isEnum  && e.kind === ENUM_ENTRY_KIND)    { children.push(e); seen.add(e.fqn); }
+    if (!isEnum && SEALED_CHILD_KINDS.has(e.kind)) { children.push(e); seen.add(e.fqn); }
+  }
+  for (const e of impls) {
+    if (seen.has(e.fqn)) continue;
+    seen.add(e.fqn);
+    children.push(e);
   }
 
   if (children.length === 0) return null;

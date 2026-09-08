@@ -22,7 +22,7 @@ afterEach(() => { (vscode.workspace as any).getConfiguration = originalGetConfig
 describe('onlineDocsUrl', () => {
   it('maps stdlib types and functions to dokka slugs', () => {
     expect(onlineDocsUrl('kotlin.collections.HashMap')).toBe('https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-hash-map/');
-    expect(onlineDocsUrl('kotlin.collections.listOf')).toBe('https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/list-of/');
+    expect(onlineDocsUrl('kotlin.collections.listOf')).toBe('https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/list-of.html');
     expect(onlineDocsUrl('kotlin.String')).toBe('https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-string/');
   });
 

@@ -68,8 +68,29 @@ export function registerLogcat(
   index: SymbolIndex,
 ): LogcatService {
   const cfg = vscode.workspace.getConfiguration('kotlinJump');
-  if (!cfg.get<boolean>('logcat.enabled', true)) {
+  const enabled = cfg.get<boolean>('logcat.enabled', true);
+  void vscode.commands.executeCommand('setContext', 'kotlinJump.logcat.enabled', enabled);
+  if (!enabled) {
     log.info('[logcat] disabled via kotlinJump.logcat.enabled');
+    // The commands stay declared in package.json (palette, ctrl+alt+l): without
+    // a handler VS Code showed "command 'kotlinJump.logcat.show' not found".
+    const disabled = async () => {
+      const pick = await vscode.window.showInformationMessage(
+        'Kotlin Jump: Logcat is disabled by the kotlinJump.logcat.enabled setting.', 'Enable and reload');
+      if (pick) {
+        await vscode.workspace.getConfiguration('kotlinJump').update('logcat.enabled', true, vscode.ConfigurationTarget.Global);
+        await vscode.commands.executeCommand('workbench.action.reloadWindow');
+      }
+    };
+    for (const id of ['show', 'pause', 'resume', 'clear', 'stop', 'start', 'export', 'pickDevice']) {
+      context.subscriptions.push(vscode.commands.registerCommand(`kotlinJump.logcat.${id}`, disabled));
+    }
+    context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(async e => {
+      if (!e.affectsConfiguration('kotlinJump.logcat.enabled')) return;
+      if (!vscode.workspace.getConfiguration('kotlinJump').get<boolean>('logcat.enabled', true)) return;
+      const pick = await vscode.window.showInformationMessage('Kotlin Jump: reload the window to start Logcat.', 'Reload');
+      if (pick) await vscode.commands.executeCommand('workbench.action.reloadWindow');
+    }));
     return new LogcatService(index, log);
   }
 

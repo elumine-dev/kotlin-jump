@@ -266,6 +266,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   statusBar.text    = '$(sync~spin) Kotlin Jump: indexing…';
   statusBar.tooltip = 'Kotlin Jump is building the symbol index';
   if (statusBarEnabled) statusBar.show();
+  context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(e => {
+    if (!e.affectsConfiguration('kotlinJump.statusBarEnabled')) return;
+    if (vscode.workspace.getConfiguration('kotlinJump').get<boolean>('statusBarEnabled', true)) statusBar.show();
+    else statusBar.hide();
+  }));
   // The counter was written at activation, Re-index and JAR scans only: a
   // checkout of 300 files or a deleted file left it stale until a reload.
   let statusBarRefreshTimer: ReturnType<typeof setTimeout> | undefined;
@@ -650,9 +655,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     vscode.commands.registerCommand('kotlin-jump.findUsages', async (args?: { excludeUri?: string; excludeLine?: number }) => {
       const editor = vscode.window.activeTextEditor;
-      if (!editor) return;
-      const lang = editor.document.languageId;
-      if (lang !== 'kotlin' && lang !== 'java') return;
+      const lang = editor?.document.languageId;
+      if (!editor || (lang !== 'kotlin' && lang !== 'java')) {
+        // Clicked from the walkthrough page: nothing was focused and the link did nothing.
+        void vscode.window.showInformationMessage('Kotlin Jump: open a Kotlin or Java file and put the cursor on a symbol first.');
+        return;
+      }
       const smartNav = vscode.workspace.getConfiguration('kotlinJump').get<boolean>('smartNavigation', false);
       if (!smartNav && !args) {
         await vscode.commands.executeCommand('editor.action.goToReferences');
@@ -689,7 +697,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     vscode.commands.registerCommand('kotlin-jump.goToTest', async () => {
       const editor = vscode.window.activeTextEditor;
-      if (!editor) return;
+      if (!editor) {
+        void vscode.window.showInformationMessage('Kotlin Jump: open a Kotlin or Java file first.');
+        return;
+      }
       const uri = editor.document.uri;
       const path = uri.path;
       const basename = path.split('/').pop() ?? '';
@@ -896,6 +907,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     testCtrl.notifyScanComplete();
   }, isExcludedPath);
   context.subscriptions.push(watcher, { dispose: () => scanner.destroy() });
+
+  // ── Inline feature toggles — buttons in editor/title + master toggle ──────
+  // Shared with extension.browser.ts (see InlineFeatureToggles.ts). Registered
+  // before the initial scan: on a cold large project the buttons answered
+  // "command not found" for the whole indexing time.
+  registerInlineFeatureToggles(context);
 
   // ── String Resource Folding ────────────────────────────────────────────────
   const stringIndex = new StringResourceIndex();
@@ -2042,7 +2059,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     vscode.commands.registerCommand('kotlin-jump.copyFqn', async () => {
       const editor = vscode.window.activeTextEditor;
-      if (!editor || editor.document.languageId !== 'kotlin') return;
+      // Java is offered the shortcut and the palette entry too.
+      if (!editor || (editor.document.languageId !== 'kotlin' && editor.document.languageId !== 'java')) return;
 
       const doc = editor.document;
       const wordRange = doc.getWordRangeAtPosition(editor.selection.active, WORD_RE);
@@ -2292,10 +2310,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   void bundledStdlib.load().then(() => { _bundledStdlibLoaded = true; }).catch((e: Error) => log.warn(`[bundled-stdlib] ${e.message}`));
 
   runJarScan();
-
-  // ── Inline feature toggles — buttons in editor/title + master toggle ──────
-  // Shared with extension.browser.ts (see InlineFeatureToggles.ts).
-  registerInlineFeatureToggles(context);
 
   // ── Chat Participant (F7) ─────────────────────────────────────────────────
   registerChatParticipant(context, index);

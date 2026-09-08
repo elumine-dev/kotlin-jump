@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.42.23
+
+Kotlin Jump 1.42.23 tidies the wiring: commands that answered "not found" when a feature was turned off, toolbar buttons dead during the first index, a sealed class hover that listed one subtype out of four, online docs that opened a 404, and the web build missing four providers the desktop had.
+
+### Fixes
+- Keeps every declared command alive when Logcat or Android Run is turned off. `kotlinJump.logcat.enabled: false` removed the eight Logcat commands, so the palette entry and `ctrl+alt+l` showed "command 'kotlinJump.logcat.show' not found" and the Logcat views said "no data provider registered"; `androidRunEnabled: false` did the same to the eight Android commands. They now explain that the feature is disabled and offer to enable it and reload; the Logcat views hide while the feature is off.
+- Registers the inline feature toggles before the first index on desktop. On a cold large project the editor title buttons (color folding, const folding, hex swatch, null assertion highlight) and `shift+alt+i` answered "command not found" for the whole indexing time, with the icons showing the features as disabled.
+- Lists every subtype in a sealed class hover. `data class Err : Result()` declared after the class, `object Loading` in another file and every implementation of a `sealed interface` were missing: "Subtypes (1)" for a hierarchy of four. The companion object is still not one.
+- Reads the KDoc where the declaration actually is. While the declaring file was open with lines added above, the signature followed the declaration but the KDoc came from the indexed line, which was the neighbour's.
+- Stops the name fallback from contradicting an explicit import. With `import com.example.util.format` naming a library the index does not hold, hover on `format` showed `fun format` of another package; a word on an import line showed a class of that name.
+- Opens the right online documentation page. Dokka publishes a function as `launch.html`, not `launch/`: every function of kotlinx and the stdlib opened a 404 when the online docs fallback was on. A composable call (`Text(`, `Column {`) opens the package summary anchor instead of a type page that does not exist.
+- Gives the web build the four providers the desktop had: lifecycle pairing, Room migration drift, resource shadowing and the strings.xml hover; their settings did nothing on vscode.dev. The web now indexes every `values*/*.xml`, not only `strings.xml` and `colors.xml`.
+- Hides the internal test and Find Usages commands from the palette ("Debug Test" did nothing, "Run Test" answered "test not found in index: undefined"), activates on Java projects too, applies `statusBarEnabled` without a reload, lets "Copy FQN" work in Java, tells you to open a file when a walkthrough link is clicked with none focused, and describes what Alt+F7 does in the walkthrough.
+- Shows the library sources bar as scanning from activation instead of "0 libs" with an "all indexed" tooltip.
+- Cleans the hover text: a commented-out line, a `// region` or a `// TODO` above a declaration is no longer its documentation, a multi-line `@Suppress(\n…\n)` no longer hides the KDoc, `@property` renders like `@param`, a `*/` on the last line is dropped, an enum entry shows its own segment instead of the whole `RED, GREEN, BLUE` line, and a `where` clause stays in the signature.
+
 ## 1.42.22
 
 Kotlin Jump 1.42.22 fixes the resource layer and the version catalogs. A commented-out `<string>` was a real resource, a library's or an SDK's `R.string` was a red error, a second catalog had every alias reported dead, and a Gradle version written `strictly = "[4.0, 5.0["` made its catalog unreadable.

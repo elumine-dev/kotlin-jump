@@ -36,7 +36,9 @@ export class SourcesStatusBar implements vscode.Disposable {
     jdk:           'absent',
     bundledStdlib: false,
     missingCoords: 0,
-    scanning:      false,
+    // The JAR scan starts right after activation; until it reports, the bar
+    // said "0 libs" with an "all sources indexed" tooltip.
+    scanning:      true,
     networkError:  false,
   };
 

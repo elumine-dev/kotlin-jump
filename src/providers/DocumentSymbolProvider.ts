@@ -1,8 +1,7 @@
 import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { bodyEndLine } from '../util/symbolRanges';
-import { parse } from '../indexer/KotlinParser';
-import { parseJava } from '../indexer/JavaParser';
+import { symbolsForDocument } from '../util/liveSymbols';
 
 export class KotlinDocumentSymbolProvider implements vscode.DocumentSymbolProvider {
   constructor(private readonly index: SymbolIndex) {}
@@ -16,10 +15,7 @@ export class KotlinDocumentSymbolProvider implements vscode.DocumentSymbolProvid
     // the end of the file made lineAt() throw and emptied the outline.
     // Locals of a function body are indexed (Go to Definition needs them)
     // but they are not structure: IntelliJ's view does not list them either.
-    const entries = (document.isDirty
-      ? liveSymbols(document)
-      : this.index.getFileSymbols(document.uri.toString()).filter(e => e.line < document.lineCount)
-    ).filter(e => !e.isLocal);
+    const entries = symbolsForDocument(this.index, document).filter(e => !e.isLocal);
     if (entries.length === 0) return [];
 
     const lastLine = document.lineCount - 1;
@@ -68,13 +64,6 @@ export class KotlinDocumentSymbolProvider implements vscode.DocumentSymbolProvid
 
     return roots;
   }
-}
-
-function liveSymbols(document: vscode.TextDocument): SymbolEntry[] {
-  const scratch = new SymbolIndex();
-  const uriStr = document.uri.toString();
-  scratch.add(document.languageId === 'java' ? parseJava(uriStr, document.getText()) : parse(uriStr, document.getText()));
-  return scratch.getFileSymbols(document.uri.toString()).filter(e => e.line < document.lineCount);
 }
 
 // ── Detail field ─────────────────────────────────────────────────────────────

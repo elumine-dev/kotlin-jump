@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { lookupPermission } from '../data/permissionDescriptions';
+import { stripXmlComments } from '../util/xmlRefs';
 
 // <uses-permission android:name="android.permission.CAMERA" />
 // and the <uses-permission-sdk-23> variant.
@@ -23,9 +24,13 @@ const BADGE: Record<PermissionBadge['risk'], string> = {
  */
 export function findManifestPermissionsInText(text: string): Array<PermissionBadge & { line: number }> {
   const out: Array<PermissionBadge & { line: number }> = [];
+  // A permission the developer commented out is not requested by the app, so
+  // it must not get a risk pill. stripXmlComments keeps offsets and line
+  // breaks, so every position below still points into the real text.
+  const scan = stripXmlComments(text);
   const re = new RegExp(USES_PERMISSION_RE.source, 'g');
   let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) {
+  while ((m = re.exec(scan)) !== null) {
     const info = lookupPermission(m[1]);
     const risk = info?.protection ?? 'unknown';
     const end = m.index + m[0].length;

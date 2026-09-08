@@ -1,26 +1,40 @@
 {
-  "version": "1.42.37",
+  "version": "1.42.38",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Nested names answer again",
-  "summary": "Kotlin Jump 1.42.37 restores partially qualified names in the chat. Tightening the previous release so it would stop answering about another package went one step too far and lost `Outer.Inner`, the natural way to name a nested class.",
+  "tagline": "The structure follows what you type",
+  "summary": "Outline, folding and Expand Selection now read the live buffer, a malformed vector drawable no longer empties the preview, and the state provenance lens got about 40 times faster.",
   "highlights": [
     {
-      "title": "Partially qualified names work",
+      "title": "Structure follows the live buffer",
       "kind": "fix",
-      "description": "`Outer.Inner` resolves again: for a nested class the outer name belongs to the qualified name, not to the package."
+      "description": "Outline, breadcrumbs, folding and Expand Selection read the text on screen while the file is unsaved. They used to read the index of the last saved version, so an edit that moved a declaration pushed every fold and every selection step onto the wrong lines."
     },
     {
-      "title": "Ambiguity still answers nothing",
+      "title": "State provenance 40 times faster",
+      "kind": "improvement",
+      "description": "The lens that shows who writes and who reads a ViewModel state scanned the whole file once per state. A ViewModel of 19 000 lines cost 1.5 s per refresh and now costs 34 ms, and the result is cached per document version."
+    },
+    {
+      "title": "The vector preview survives a bad path",
       "kind": "fix",
-      "description": "A suffix matching two entries, or a package the workspace does not have, returns no answer rather than an arbitrary one."
+      "description": "A numeric character reference above the last Unicode code point threw a RangeError and left the preview panel empty. The entity is now left as written and the drawable still renders."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "The chat resolves a name by exact qualified name, then matching package, then unique qualified suffix.",
-        "An ambiguous suffix and an unknown package both answer that nothing was found."
+        "Outline, breadcrumbs, folding and Expand Selection follow the unsaved text. Expand Selection could jump straight to the whole file when no indexed symbol still covered the cursor.",
+        "The folding cache no longer replays ranges computed while the buffer was unsaved. Saving does not change the document version, so the version alone could not tell the two states apart.",
+        "A `<uses-permission>` written inside an XML comment no longer gets a risk pill: the app does not request it.",
+        "The Reference link of the suppression hover points somewhere real. One lint check has no published page and its link answered 404."
+      ]
+    },
+    {
+      "heading": "Improvements",
+      "bullets": [
+        "A state declared inside a comment is no longer counted as a real state.",
+        "The write count on the lens now agrees with the list of writes behind it: both read the same text with comments removed."
       ]
     }
   ],

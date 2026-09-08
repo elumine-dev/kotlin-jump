@@ -64,18 +64,46 @@ function extractFunctions(text: string): FunSpan[] {
   return spans;
 }
 
+// value = / += / -= / *= / /=, but not ==
+const WRITE_TAIL =
+  '\\.(value\\s*[+\\-*/]?=[^=]|update\\s*[({]|postValue\\s*\\(|setValue\\s*\\(|emit\\s*\\(|tryEmit\\s*\\()';
+const READ_TAIL = '\\.(collectAsState|collectAsStateWithLifecycle|collect|observe)\\b';
+
+// One pass over the text instead of one pass per property. The analysis used
+// to build a fresh RegExp per property and rescan the whole file with it, so a
+// ViewModel with 30 states scanned itself 30 times per keystroke.
+const ANY_WRITE_RE = new RegExp(`\\b(\\w+)${WRITE_TAIL}`, 'g');
+const ANY_READ_RE = new RegExp(`\\b(\\w+)${READ_TAIL}`, 'g');
+const CALL_RE = /\b(\w+)\s*\(/g;
+
+function countByName(text: string, re: RegExp): Map<string, number> {
+  const out = new Map<string, number>();
+  re.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) out.set(m[1], (out.get(m[1]) ?? 0) + 1);
+  return out;
+}
+
+function namesMatching(text: string, re: RegExp): Set<string> {
+  const out = new Set<string>();
+  re.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) out.add(m[1]);
+  return out;
+}
+
 function countDirectWrites(property: string, text: string): number {
-  // value = / += / -= / *= / /=, but not ==
-  const re = new RegExp(
-    `\\b${property}\\.(value\\s*[+\\-*/]?=[^=]|update\\s*[({]|postValue\\s*\\(|setValue\\s*\\(|emit\\s*\\(|tryEmit\\s*\\()`,
-    'g',
-  );
   // `// _count.value = 0 used to be here` counted as a write.
-  return (stripKotlinComments(text).match(re) ?? []).length;
+  return countByName(stripKotlinComments(text), ANY_WRITE_RE).get(property) ?? 0;
 }
 
 export function analyzeStateProvenance(vmText: string): StateProvenance[] {
-  const lines = vmText.split('\n');
+  // Stripped once, then reused everywhere below. stripKotlinComments keeps
+  // offsets and line breaks, so line numbers stay those of the real file, and
+  // a declaration written inside a comment no longer counts as a state.
+  const code = stripKotlinComments(vmText);
+  const lines = code.split('\n');
+  const fileWrites = countByName(code, ANY_WRITE_RE);
   const results: StateProvenance[] = [];
 
   for (let i = 0; i < lines.length; i++) {
@@ -92,14 +120,14 @@ export function analyzeStateProvenance(vmText: string): StateProvenance[] {
         `va[lr]\\s+(\\w+)(?:\\s*:\\s*[^=]+?)?\\s*=\\s*${property}(?:\\.as\\w+\\(\\))?\\s*(?:\\/\\/.*)?$`,
         'm',
       );
-      const expo = expoRe.exec(vmText);
+      const expo = expoRe.exec(code);
       if (expo) exposedAs = expo[1];
     }
 
     results.push({
       property,
       ...(exposedAs !== undefined ? { exposedAs } : {}),
-      directWrites: countDirectWrites(property, vmText),
+      directWrites: fileWrites.get(property) ?? 0,
       indirectWriteFns: [],
       kind,
       line: i,
@@ -107,15 +135,23 @@ export function analyzeStateProvenance(vmText: string): StateProvenance[] {
   }
 
   // Indirect writes: F calls G, G writes P directly, F does not.
-  const fns = extractFunctions(vmText);
+  // Each body is scanned twice in total (what it writes, what it calls), not
+  // once per state and per writer: the old shape recompiled a RegExp for every
+  // state x function x writer triple.
+  const fns = extractFunctions(code).map(f => ({
+    name: f.name,
+    writes: namesMatching(f.body, ANY_WRITE_RE),
+    // Skip the opening brace so the signature is not read as a call.
+    calls: namesMatching(f.body.slice(f.body.indexOf('{') + 1), CALL_RE),
+  }));
   for (const state of results) {
-    const directWriters = fns.filter(f => countDirectWrites(state.property, f.body) > 0);
+    const writers = new Set(fns.filter(f => f.writes.has(state.property)).map(f => f.name));
+    if (writers.size === 0) continue;
     for (const f of fns) {
-      if (directWriters.some(d => d.name === f.name)) continue;
-      const callsWriter = directWriters.some(d =>
-        new RegExp(`\\b${d.name}\\s*\\(`).test(f.body.slice(f.body.indexOf('{') + 1)),
-      );
-      if (callsWriter) state.indirectWriteFns.push(f.name);
+      if (writers.has(f.name)) continue;
+      for (const callee of f.calls) {
+        if (writers.has(callee)) { state.indirectWriteFns.push(f.name); break; }
+      }
     }
   }
   return results;
@@ -151,11 +187,49 @@ export function collectWriteSites(property: string, fileText: string): SitePosit
 
 function collectMatches(text: string, re: RegExp): SitePosition[] {
   const out: SitePosition[] = [];
+  // The cursor only moves forward, so the whole scan is linear. Slicing the
+  // text from 0 on every match made a file with many writes quadratic.
+  let line = 0;
+  let lineStart = 0;
+  let scanned = 0;
+  re.lastIndex = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
-    const before = text.slice(0, m.index);
-    const line = (before.match(/\n/g) ?? []).length;
-    out.push({ line, character: m.index - (before.lastIndexOf('\n') + 1) });
+    while (scanned < m.index) {
+      if (text.charCodeAt(scanned) === 10) { line++; lineStart = scanned + 1; }
+      scanned++;
+    }
+    out.push({ line, character: m.index - lineStart });
+  }
+  return out;
+}
+
+/** Every write position of the file, grouped by property. One pass. */
+export function collectWriteSitesByName(text: string): Map<string, SitePosition[]> {
+  return collectMatchesByName(text, ANY_WRITE_RE);
+}
+
+/** Every read position of the file, grouped by exposed name. One pass. */
+export function collectReaderSitesByName(text: string): Map<string, SitePosition[]> {
+  return collectMatchesByName(text, ANY_READ_RE);
+}
+
+function collectMatchesByName(text: string, re: RegExp): Map<string, SitePosition[]> {
+  const out = new Map<string, SitePosition[]>();
+  let line = 0;
+  let lineStart = 0;
+  let scanned = 0;
+  re.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    while (scanned < m.index) {
+      if (text.charCodeAt(scanned) === 10) { line++; lineStart = scanned + 1; }
+      scanned++;
+    }
+    const at = { line, character: m.index - lineStart };
+    const bucket = out.get(m[1]);
+    if (bucket) bucket.push(at);
+    else out.set(m[1], [at]);
   }
   return out;
 }
@@ -163,21 +237,40 @@ function collectMatches(text: string, re: RegExp): SitePosition[] {
 export class StateProvenanceProvider implements vscode.CodeLensProvider {
   private readonly _onDidChange = new vscode.EventEmitter<void>();
   readonly onDidChangeCodeLenses = this._onDidChange.event;
+  /** VS Code asks for lenses again on every scroll and every keystroke. */
+  private readonly _cache = new Map<string, { version: number; lenses: vscode.CodeLens[] }>();
 
   provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
     const cfg = vscode.workspace.getConfiguration('kotlinJump');
     if (!cfg.get<boolean>('stateProvenance', true)) return [];
     if (document.languageId !== 'kotlin') return [];
 
+    const key = document.uri.toString();
+    const hit = this._cache.get(key);
+    if (hit && hit.version === document.version) return hit.lenses;
+
+    const lenses = this._compute(document);
+    if (this._cache.size > 64) this._cache.clear();
+    this._cache.set(key, { version: document.version, lenses });
+    return lenses;
+  }
+
+  private _compute(document: vscode.TextDocument): vscode.CodeLens[] {
     const text = document.getText();
     if (!/Mutable(StateFlow|LiveData|SharedFlow)|mutableStateOf/.test(text)) return [];
+
+    // Same stripped text for the counts and for the peek, so the lens title
+    // and the list of locations behind it can no longer disagree.
+    const code = stripKotlinComments(text);
+    const writesByName = collectWriteSitesByName(code);
+    const readersByName = collectReaderSitesByName(code);
 
     return analyzeStateProvenance(text)
       .filter(s => s.line !== undefined)
       .map(s => {
         const readerName = s.exposedAs ?? s.property;
-        const writeSites = collectWriteSites(s.property, text);
-        const readerSites = collectReaderSites(readerName, text);
+        const writeSites = writesByName.get(s.property) ?? [];
+        const readerSites = readersByName.get(readerName) ?? [];
         const indirect = s.indirectWriteFns.length > 0 ? ` (+${s.indirectWriteFns.length} indirect)` : '';
         // Readers are counted in this file only (Compose collectors live in
         // other files): say so rather than show "0 readers" as a fact.

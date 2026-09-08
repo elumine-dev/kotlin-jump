@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.42.38
+
+Kotlin Jump 1.42.38 makes the structure of a file follow the text on screen. Three features were reading the index of the last saved version, so any unsaved edit that moved a declaration pushed them onto the wrong lines. The state provenance lens also got its cost back under control.
+
+### Fixes
+- Outline, breadcrumbs, folding and Expand Selection now read the live buffer while it is dirty. The index follows the file on disk and is refreshed 150 ms after a save, so between a keystroke and that save every fold and every selection step landed on the lines of the older text. Expand Selection could even jump straight to the whole file, when no indexed symbol still covered the cursor.
+- The folding cache no longer replays ranges computed while the buffer was unsaved. Saving does not change the document version, so the version alone could not tell the two states apart.
+- A `<uses-permission>` written inside an XML comment no longer gets a risk pill. The manifest scan read the raw text, so a permission the app never requests still showed as dangerous.
+- A vector drawable whose path holds a numeric character reference above the last Unicode code point no longer takes down the preview. It threw a RangeError and the panel stayed empty.
+- The Reference link of the suppression hover now points somewhere real. One lint check has no published page and its link answered 404, and the Kotlin link went through a redirect stub.
+
+### Improvements
+- State provenance analyses a large ViewModel about 40 times faster. It used to strip the comments of the whole file once per state, then build a fresh regular expression for every state, function and writer triple. A ViewModel of 19 000 lines cost 1.5 s per refresh and now costs 34 ms.
+- That lens caches its result per document version, so scrolling and typing elsewhere no longer recompute anything.
+- A state declared inside a comment is no longer counted as a real state, and the count on the lens now agrees with the list of writes behind it.
+
 ## 1.42.37
 
 Kotlin Jump 1.42.37 restores partially qualified names in the chat. Tightening the previous release so it would stop answering about another package went one step too far and lost `Outer.Inner`, the natural way to name a nested class.

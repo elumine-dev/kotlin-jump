@@ -24,11 +24,13 @@ export interface SuppressionDescription {
 }
 
 /** Official Kotlin reference for compiler-diagnostic IDs. Per-ID anchors
- *  are not stable across Kotlin versions, so we use the root. */
-const KOTLIN_DOCS = 'https://kotlinlang.org/docs/reference/';
+ *  are not stable across Kotlin versions, so we use the docs home. The old
+ *  `/docs/reference/` path is only a meta refresh stub now. */
+const KOTLIN_DOCS = 'https://kotlinlang.org/docs/home.html';
 
-/** Android lint docs don't have stable per-check URLs either — `checks/`
- *  listing is the cleanest anchor. */
+/** Android lint docs publish one page per check under `checks/`. The page
+ *  name is the check id, so an entry may only carry a docUrl when a page for
+ *  that exact id exists; `checks/` itself is a 404. */
 const LINT_DOCS = 'https://googlesamples.github.io/android-custom-lint-rules/checks/';
 
 export const SUPPRESS_DESCRIPTIONS: Record<string, SuppressionDescription> = {
@@ -243,7 +245,7 @@ export const SUPPRESS_DESCRIPTIONS: Record<string, SuppressionDescription> = {
   'ObsoleteLintCustomCheck': {
     kind: 'Android Lint',
     text: 'The custom lint rule was compiled against an older lint API and may not work on newer versions.',
-    docUrl: LINT_DOCS + 'ObsoleteLintCustomCheck.md.html',
+    // No page under checks/ for this id, so no Reference link rather than a 404.
   },
   'InvalidPackage': {
     kind: 'Android Lint',

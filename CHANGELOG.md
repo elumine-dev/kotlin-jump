@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.42.46
+
+Kotlin Jump 1.42.46 pays back the cost of the last two releases. Recognising build variant test source sets had made the path check three times slower, and it runs once per candidate on the Go to Definition path and once per symbol in the dead code scan.
+
+### Improvements
+- The test source set check no longer allocates on every call. It split the setting and the whole path into components each time, for every configured segment; it now parses each setting once and walks only the few `src` positions of the path. Measured over the 5088 files of a real Android project, a full pass fell from 26.1 ms to 9.9 ms. Against the release before variant support it is 17 percent slower rather than 209 percent, and it recognises 155 more real test files.
+- The answer is unchanged. The rewrite was checked against the previous one over 94 440 combinations of real path and setting, with no difference.
+
 ## 1.42.45
 
 Kotlin Jump 1.42.45 finishes the test source set rule shipped in the previous release. Writing the setting with its own `src` prefix used to lose the build variants.

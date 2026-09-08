@@ -1,21 +1,21 @@
 {
-  "version": "1.42.45",
+  "version": "1.42.46",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Finishing the source set rule",
-  "summary": "A test source set written with its own src prefix now covers its build variants, the same way the shorter form already did.",
+  "tagline": "Paying back the source set check",
+  "summary": "Recognising build variant test source sets had made the path check three times slower. A full pass over a real project of 5088 files fell from 26.1 ms to 9.9 ms, with the same answer.",
   "highlights": [
     {
-      "title": "Source sets written with src",
-      "kind": "fix",
-      "description": "A setting of `src/test/kotlin` now covers `src/testDebug/kotlin` too. The rule read it as the pair `src` then `test`, looked for a variant of `src`, and found none."
+      "title": "The path check stops allocating",
+      "kind": "improvement",
+      "description": "It split the setting and the whole path into components on every call, for every configured segment. Each setting is now parsed once, and only the few `src` positions of the path are walked."
     }
   ],
   "sections": [
     {
       "heading": "Notes",
       "bullets": [
-        "What the setting names after the source set is still required exactly, so `src/testDebug/res` stays out.",
-        "Checked against a real Android project of 5088 files: the sweep reports zero anomaly and no production file is read as test code."
+        "Measured over the 5088 files of a real Android project: a full pass fell from 26.1 ms to 9.9 ms, and against the release before variant support it is 17 percent slower rather than 209 percent.",
+        "The rewrite was checked against the previous one over 94 440 combinations of real path and setting, with no difference in the answer."
       ]
     }
   ],

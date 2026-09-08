@@ -1,32 +1,31 @@
 {
-  "version": "1.42.39",
+  "version": "1.42.40",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The Screen Flow map stops guessing",
-  "summary": "A navigation whose destination is a variable no longer draws an arrow to an arbitrary screen, and the legend counts what is actually on screen.",
+  "tagline": "Back goes back",
+  "summary": "The navigation history keeps the way back, records where your cursor really is, and the test source set filter works on Windows again.",
   "highlights": [
     {
-      "title": "No arrow without evidence",
+      "title": "Back keeps the way back",
       "kind": "fix",
-      "description": "A `navigate(dest)` the parser cannot resolve used to match the first declared route with the same number of segments. On a graph with a profile screen and an orders screen, both taking one argument, the arrow was a coin flip. It now draws nothing."
+      "description": "Pressing Back within half a second of a jump could overwrite the entry you were returning to with the destination you had just left. The way back was gone, and pressing Back again went forward."
     },
     {
-      "title": "Interpolated routes keep what they know",
+      "title": "Your cursor, not line 0",
       "kind": "fix",
-      "description": "`navigate(\"${Screen.Profile.route}/$userId\")` is resolved against the route constants of the workspace before the placeholders are applied, so a target the parser could pin exactly is no longer thrown away."
+      "description": "Switching to a tab you already had open filed the visit at line 0, because no selection event fires for a file you have already seen. The entry now starts from the cursor the editor already carries."
     },
     {
-      "title": "The legend matches the drawing",
+      "title": "Test source sets on Windows",
       "kind": "fix",
-      "description": "Navigations from outside any composable, and targets no screen declares, have no box to start or end at. They were counted in the header and never drawn."
+      "description": "The filter compared a path written with backslashes against segments written with slashes, so no file was ever recognised as a test file and the rule ran backwards."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Two declared routes matching the same target no longer let the map pick one. It keeps the literal target, which is either a real screen or nothing.",
-        "A route constant declared with the same name and two different values in two modules resolves to nothing, instead of taking the value of whichever file was read last.",
-        "An arrow no longer changes destination after a file rename, since it no longer depends on the order the workspace is scanned in."
+        "Go to Definition no longer treats a directory that merely starts like a test source set as one. It kept a private copy of the path check, written before the bounded comparison landed.",
+        "Moving through the history closes any pending refinement, so a late event from the previous jump can no longer reach an entry it does not own."
       ]
     }
   ],

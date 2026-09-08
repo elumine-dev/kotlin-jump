@@ -3,6 +3,7 @@ import { SymbolIndex } from '../indexer/SymbolIndex';
 import { resolveBest } from '../util/ImportResolver';
 import { onlineDocsLocation } from './OnlineDocsFallback';
 import { isInsideCommentOrString, isInsideStringInterpolation } from '../util/textUtils';
+import { isTestPath } from '../util/testPaths';
 import { buildLocalScopeIndex, latestBinding, signatureEnd, type LocalScopeIndex } from '../util/LocalScopeIndex';
 export { buildLocalScopeIndex, type LocalScopeIndex } from '../util/LocalScopeIndex';
 import { Logger } from '../util/logger';
@@ -430,10 +431,6 @@ function isAtDeclaration(
     && entry.line === position.line
     && position.character >= entry.character
     && position.character < entry.character + entry.name.length;
-}
-
-function isTestPath(uriPath: string, segments: string[]): boolean {
-  return segments.some(s => uriPath.includes(s));
 }
 
 // Returns true if the symbol's enclosing class is visible from the document

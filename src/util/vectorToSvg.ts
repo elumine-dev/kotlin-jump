@@ -200,11 +200,19 @@ function attrOf(attrs: string, name: string): string | undefined {
   return raw === undefined ? undefined : decodeXmlEntities(raw);
 }
 
+/** `&#1114112;` is past the last Unicode code point: String.fromCodePoint
+ *  throws a RangeError on it, and that killed the whole preview. Leave the
+ *  entity as written rather than lose the drawable. */
+function codePointOr(raw: string, value: number): string {
+  if (!Number.isInteger(value) || value < 0 || value > 0x10ffff) return raw;
+  return String.fromCodePoint(value);
+}
+
 function decodeXmlEntities(v: string): string {
   if (!v.includes('&')) return v;
   return v
-    .replace(/&#x([0-9a-f]+);/gi, (_s, h) => String.fromCodePoint(parseInt(h, 16)))
-    .replace(/&#(\d+);/g, (_s, d) => String.fromCodePoint(parseInt(d, 10)))
+    .replace(/&#x([0-9a-f]+);/gi, (s, h) => codePointOr(s, parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (s, d) => codePointOr(s, parseInt(d, 10)))
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'")
     .replace(/&amp;/g, '&');
 }

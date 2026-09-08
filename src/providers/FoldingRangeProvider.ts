@@ -1,12 +1,15 @@
 import * as vscode from 'vscode';
 import { SymbolIndex } from '../indexer/SymbolIndex';
 import { bodyEndLine } from '../util/symbolRanges';
+import { symbolsForDocument } from '../util/liveSymbols';
 import { organizeImports } from './OrganizeImportsProvider';
 
 export class KotlinFoldingRangeProvider implements vscode.FoldingRangeProvider {
   constructor(private readonly index: SymbolIndex) {}
 
-  private cache = new Map<string, { version: number; ranges: vscode.FoldingRange[] }>();
+  // `dirty` belongs in the key: saving does not bump document.version, and the
+  // two branches below do not read the same source.
+  private cache = new Map<string, { version: number; dirty: boolean; ranges: vscode.FoldingRange[] }>();
 
   provideFoldingRanges(
     document: vscode.TextDocument,
@@ -15,7 +18,9 @@ export class KotlinFoldingRangeProvider implements vscode.FoldingRangeProvider {
   ): vscode.FoldingRange[] {
     const key = document.uri.toString();
     const cached = this.cache.get(key);
-    if (cached && cached.version === document.version) return cached.ranges;
+    if (cached && cached.version === document.version && cached.dirty === document.isDirty) {
+      return cached.ranges;
+    }
 
     const ranges: vscode.FoldingRange[] = [];
     const lastLine = document.lineCount - 1;
@@ -61,7 +66,9 @@ export class KotlinFoldingRangeProvider implements vscode.FoldingRangeProvider {
 
     // 3. Symbol blocks: the real `}` of each body, so a folded member does
     // not swallow the next member's KDoc or the class's closing brace.
-    const entries = this.index.getFileSymbols(key);
+    // Same reason as the outline: while the buffer is dirty the indexed lines
+    // are those of the saved text, and the folds landed on the wrong lines.
+    const entries = symbolsForDocument(this.index, document);
     const lines = document.getText().split('\n');
     for (let i = 0; i < entries.length; i++) {
       const endLine = bodyEndLine(lines, entries, i, lastLine);
@@ -71,7 +78,7 @@ export class KotlinFoldingRangeProvider implements vscode.FoldingRangeProvider {
     }
 
     const result = ranges.length > 5000 ? ranges.slice(0, 5000) : ranges;
-    this.cache.set(key, { version: document.version, ranges: result });
+    this.cache.set(key, { version: document.version, dirty: document.isDirty, ranges: result });
     return result;
   }
 }

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { SymbolIndex } from '../indexer/SymbolIndex';
 import { bodyEndLine } from '../util/symbolRanges';
+import { symbolsForDocument } from '../util/liveSymbols';
 
 export class KotlinSelectionRangeProvider implements vscode.SelectionRangeProvider {
   constructor(private readonly index: SymbolIndex) {}
@@ -10,7 +11,10 @@ export class KotlinSelectionRangeProvider implements vscode.SelectionRangeProvid
     positions: vscode.Position[],
     _token: vscode.CancellationToken,
   ): vscode.SelectionRange[] {
-    const entries = this.index.getFileSymbols(document.uri.toString());
+    // On a dirty buffer the disk index still holds the symbols of the saved
+    // text, so Expand Selection jumped to the wrong bounds, or straight to
+    // the whole file when the edit had shifted every declaration.
+    const entries = symbolsForDocument(this.index, document);
     const lastLine = document.lineCount - 1;
     const lines = document.getText().split('\n');
     const fileRange = new vscode.Range(new vscode.Position(0, 0), document.lineAt(lastLine).range.end);

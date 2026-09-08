@@ -1,31 +1,43 @@
 {
-  "version": "1.42.16",
+  "version": "1.42.17",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Java switches, Javadoc, and a prompt that keeps its word",
-  "summary": "Kotlin Jump 1.42.16 fixes a regression of 1.42.15 in Java switches, stops the rating prompt from re-arming on every window, renders Javadoc HTML in hovers instead of showing the tags, and corrects the call hierarchy, Expand Selection, the chat participant and the Find Usages panel where they told you something false.",
+  "tagline": "Annotated declarations indexed, companion objects in the Outline",
+  "summary": "A class, property or enum entry with an annotation on the same line was not indexed at all: no Outline entry, no Go to Definition, no usages. An unnamed companion object now appears in the Outline with its members under it. The index snapshot is rebuilt once after the update.",
   "highlights": [
     {
-      "title": "Lambda parameters on a case line, back",
-      "kind": "fix",
-      "description": "The 1.42.15 rule for switch arms stopped at -> but not at :, so `case RED: items.forEach(i -> log(i))` lost the binding of i and Rename treated it as a workspace symbol. Fixed, with the arrow form still handled."
+      "title": "Annotated declarations are back",
+      "description": "`@AndroidEntryPoint class`, `@Entity(...) data class`, `@Inject lateinit var`, `@field:SerializedName(\"a\") val` in a constructor and `@SerializedName(\"ACTIVE\") ACTIVE` were skipped by the parser. They are indexed again, with the column on the name and not on its copy inside the annotation string.",
+      "kind": "fix"
     },
     {
-      "title": "Javadoc rendered, not shown",
-      "kind": "fix",
-      "description": "Since 1.42.14 the generic escape showed <p>, <code> and <ul> literally on Java methods. The common tags and {@code} / {@link} become Markdown, generics still survive, and the rating prompt persists its count before showing so it stops re-arming on every window."
+      "title": "Companion objects in the Outline",
+      "description": "An unnamed `companion object` shows as `Companion` with its constants and factories nested under it, instead of hanging under the previous function. Member names still resolve as `Foo.TAG`.",
+      "kind": "improvement"
     },
     {
-      "title": "Call hierarchy and Expand Selection told the truth",
-      "kind": "fix",
-      "description": "A call in a property initializer was attributed to the function above it and an overload's declaration was listed as a caller; Expand Selection swallowed the next declaration's KDoc and @Composable. Both stop at the right line now, and the chat participant reads \"usages of the Foo class\"."
+      "title": "Brace count survives mid-line comments",
+      "description": "`class A { /* { */ }` no longer shifts every following declaration one level deeper, and a `/*` left open at the end of a line now hides the commented-out code from the index.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
+      "heading": "Parser",
+      "bullets": [
+        "Indexes declarations whose annotation sits on the same line, plus `value class` and the `final` modifier.",
+        "Shows an unnamed `companion object` in the Outline; no usage lens and no workspace search hit for the synthetic name.",
+        "Indexes annotated enum entries and extension properties (`val List<Int>.sum3` was recorded as `List`).",
+        "A `;` line in an enum no longer turns the next uppercase continuation line into a phantom entry.",
+        "A `val` inside a lambda passed as a named argument is no longer a primary-constructor property."
+      ]
+    },
+    {
       "heading": "Fixes",
       "bullets": [
-        "Anchors the qualified-R rule at the start of the qualifier: a module named com.example.android keeps its R, and Google gms/firebase R classes are excluded like AndroidX.",
-        "Says when the Find Usages panel is stale after an edit, and highlights $name in string templates like Find Usages counts it."
+        "Outline: an enum class following another enum got the EnumMember icon; `class Foo @Inject constructor(private val x: Int)` was shown as a private class.",
+        "The `hoverEnabled`, `foldingEnabled` and `signatureHelp` settings apply without a window reload.",
+        "No \"role?\" accessibility hint on a `clickable` whose `role =` argument sits on a following line.",
+        "The cron tooltip rejects a reversed day-of-week range (`5-1`)."
       ]
     }
   ],

@@ -61,3 +61,11 @@ describe('Expand Selection (was: the range of a function swallowed the KDoc and 
     expect(range.range.end.line).toBe(2);
   });
 });
+
+describe('Cron tooltip — reversed day range', () => {
+  it('returns nothing for `5-1`, which cron rejects', async () => {
+    const { describeCron } = await import('../../src/providers/LiteralTooltipProvider');
+    expect(describeCron('0 9 * * 5-1')).toBeNull();
+    expect(describeCron('0 9 * * 1-5')).toContain('Mon to Fri');
+  });
+});

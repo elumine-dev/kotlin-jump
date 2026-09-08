@@ -38,6 +38,7 @@ export interface SymbolEntry {
   isTestClass?:     boolean; // class annotated with @RunWith
   isIgnored?:       boolean; // fun annotated with @Ignore / @Disabled
   isLifecycle?:     boolean; // fun annotated with @Before / @After etc.
+  isCompanion?:     boolean; // synthetic "Companion" for an unnamed companion object
 }
 
 export class SymbolIndex {
@@ -111,8 +112,10 @@ export class SymbolIndex {
       const parts = pkg ? [pkg, ...qualifiers, sym.name] : [...qualifiers, sym.name];
       const fqn = parts.join('.');
 
-      // Class-like symbols join the chain so their nested members can reference them
-      if (CLASS_LIKE.has(sym.kind)) {
+      // Class-like symbols join the chain so their nested members can reference them.
+      // An unnamed companion stays out: its members resolve as `Foo.TAG`, the
+      // way they are written and imported, not `Foo.Companion.TAG`.
+      if (CLASS_LIKE.has(sym.kind) && !sym.isCompanion) {
         classStack.push({ name: sym.name, depth: sym.depth });
       }
 
@@ -150,6 +153,7 @@ export class SymbolIndex {
         isTestClass:     sym.isTestClass,
         isIgnored:       sym.isIgnored,
         isLifecycle:     sym.isLifecycle,
+        isCompanion:     sym.isCompanion,
       };
 
       fileEntries.push(entry);

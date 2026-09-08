@@ -71,6 +71,7 @@ function describeDays(dow: string): string | null {
   const name = (n: number): string | null => (n <= 7 ? DAY_NAMES[n % 7] : null);
   const range = /^(\d+)-(\d+)$/.exec(dow);
   if (range) {
+    if (Number(range[1]) > Number(range[2])) return null; // `5-1`: cron rejects a reversed range
     const a = name(Number(range[1])), b = name(Number(range[2]));
     return a && b ? `${a} to ${b}` : null;
   }

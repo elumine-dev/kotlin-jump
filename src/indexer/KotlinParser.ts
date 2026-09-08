@@ -37,6 +37,7 @@ export interface RawSymbol {
   isTestClass?:     boolean; // class annotated with @RunWith
   isIgnored?:       boolean; // fun annotated with @Ignore / @Disabled
   isLifecycle?:     boolean; // fun annotated with @Before / @After etc. (excluded from test discovery)
+  isCompanion?:     boolean; // unnamed `companion object`, emitted as "Companion" so the Outline nests its members
 }
 
 export interface ParsedFile {
@@ -56,20 +57,39 @@ const RE_TEST        = /@(?:Test|ParameterizedTest|RepeatedTest|TestFactory|Test
 const RE_RUN_WITH    = /@RunWith\b/;
 const RE_IGNORE      = /@(?:Ignore|Disabled)\b/;
 const RE_LIFECYCLE   = /@(?:Before|After|BeforeEach|AfterEach|BeforeAll|AfterAll|BeforeClass|AfterClass)\b/;
-const RE_CLASS      = /^\s*(?:(?:public|private|internal|protected|open|abstract|inner|sealed|data|annotation|enum|actual|expect|companion)\s+)*?(data\s+class|sealed\s+class|sealed\s+interface|fun\s+interface|enum\s+class|annotation\s+class|class|interface|object)\s+([\p{L}\p{N}_]+)/u;
+// Same-line annotations before a declaration: `@AndroidEntryPoint class`,
+// `@Entity(tableName = "x") data class`, `@Inject lateinit var`,
+// `@field:SerializedName("a") val`. One level of nested parens covers
+// `@Foo(bar = baz())`; the character classes keep matching linear.
+const ANNOT = String.raw`(?:@(?:\w+:)?[\w.]+(?:\((?:[^()]|\([^()]*\))*\))?\s+)*`;
+const MODS_CLASS = 'public|private|internal|protected|open|final|abstract|inner|sealed|data|value|inline|annotation|enum|actual|expect|companion|external';
+// The name is the last group and the match ends on it, so its column is
+// `m[0].length - name.length`: an indexOf() would find the name inside a
+// preceding annotation string (`@SerialName("user") class user`).
+const RE_CLASS      = new RegExp(String.raw`^\s*${ANNOT}(?:(?:${MODS_CLASS})\s+)*?(data\s+class|sealed\s+class|sealed\s+interface|fun\s+interface|enum\s+class|annotation\s+class|value\s+class|class|interface|object)\s+([\p{L}\p{N}_]+)`, 'u');
+// Unnamed `companion object` (RE_CLASS needs a name after the keyword).
+// Group 1 = leading modifiers, so the column of `companion` is its length.
+const RE_COMPANION  = /^(\s*(?:(?:public|private|internal|protected)\s+)*)companion\s+object\b(?!\s*[\p{L}\p{N}_])/u;
 // Matches anonymous objects: `object : Interface` (no name between `object` and `:`)
 const RE_ANON_OBJECT = /\bobject\s*:/;
 // After optional generics, allow an optional `ReceiverType.` prefix so that
 // `fun Modifier.customBackground()` captures "customBackground", not "Modifier".
 // Handles: simple (Modifier.), nullable (Modifier?.), generic (List<T>.), qualified (Modifier.Companion.)
-const RE_FUN        = /^\s*(?:@\w+(?:\([^)]*\))?\s+)*(?:(?:public|private|protected|internal|override|abstract|open|actual|expect|suspend|inline|noinline|crossinline|infix|operator|tailrec|external)\s+)*fun\s+(?:<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>\s+)?(?:(?:\w+(?:<(?:[^<>]|<[^<>]*>)*>)?[?]?\.)+)?([\p{L}\p{N}_]+|`[^`]+`)\s*[(<]/u;
-const RE_PROP       = /^\s*(?:(?:public|private|protected|internal|override|open|abstract|actual|expect|lateinit|const)\s+)*(val|var)\s+([\p{L}\p{N}_]+)\s*(?:[=:(<]|\bby\b)/u;
+const RE_FUN        = new RegExp(String.raw`^\s*${ANNOT}(?:(?:public|private|protected|internal|override|final|abstract|open|actual|expect|suspend|inline|noinline|crossinline|infix|operator|tailrec|external)\s+)*fun\s+(?:<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>\s+)?(?:(?:\w+(?:<(?:[^<>]|<[^<>]*>)*>)?[?]?\.)+)?([\p{L}\p{N}_]+|\x60[^\x60]+\x60)(?=\s*[(<])`, 'u'); // \x60 = backtick (String.raw keeps the backslash of \`)
+// Group 1 = val/var, group 2 = extension receiver (`List<Int>.`), group 3 = name.
+// The trailer is a lookahead so the match ends on the name (see RE_CLASS).
+const RE_PROP       = new RegExp(String.raw`^\s*${ANNOT}(?:(?:public|private|protected|internal|override|open|final|abstract|actual|expect|lateinit|const|inline|external)\s+)*(val|var)\s+(?:<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>\s+)?((?:\w+(?:<(?:[^<>]|<[^<>]*>)*>)?[?]?\.)+)?([\p{L}\p{N}_]+)(?=\s*(?:[=:(<]|\bby\b))`, 'u');
 const RE_TYPEALIAS  = /^\s*(?:(?:public|private|internal|actual)\s+)?typealias\s+([\p{L}\p{N}_]+)(?:<[^>]*>)?\s*=\s*(.+)/u;
 // Enum entries may be SCREAMING_CASE or UpperCamelCase (both are legal and
 // idiomatic Kotlin). The name must exhaust the identifier: requiring a
 // delimiter (or EOL/comment) right after prevents `Home` from being indexed
 // as a phantom entry `H`.
-const RE_ENUM_ENTRY = /^\s*([A-Z]\w*)\s*(?:[,(;({]|\/\/|$)/;
+// Group 1 = whitespace + same-line annotations (`@SerializedName("a") ACTIVE`),
+// so the entry column is its length: the name can also appear inside the
+// annotation string. Group 2 = the entry name.
+const RE_ENUM_ENTRY = new RegExp(String.raw`^(\s*${ANNOT})([A-Z]\w*)\s*(?:[,(;({]|//|$)`);
+// Per-segment variant once a line is split at depth-0 commas.
+const RE_ENTRY_NAME = new RegExp(String.raw`^(\s*${ANNOT})([A-Z]\w*)\s*(?:[({]|//|$)`);
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -83,6 +103,12 @@ export function parse(uriString: string, text: string): ParsedFile {
   let braceDepth     = 0;
   let parenDepth     = 0; // tracks ( ) so constructor params are not mistaken for class members
   let enumBraceDepth = -1; // -1 = not inside an enum body
+  // A class header left its primary-constructor paren open on this brace
+  // depth. parenDepth === 1 alone also matched a lambda passed as a named
+  // argument (`foo(onClick = { val x = 1 })`) and indexed its locals as
+  // constructor properties.
+  let ctorParamsActive = false;
+  let ctorBraceDepth   = -1;
 
   // 3-line sliding window for @Composable detection before fun
   const annotationWindow: string[] = [];
@@ -90,6 +116,15 @@ export function parse(uriString: string, text: string): ParsedFile {
   const len = text.length;
   let pos     = 0;
   let lineNum = 0;
+
+  // Per-line depth bookkeeping shared by every branch below.
+  const advance = (nl: number): void => {
+    const r = countDepth(text, pos, nl, braceDepth, parenDepth);
+    braceDepth = r[0]; parenDepth = r[1];
+    if (r[2]) inBlockComment = true; // `/*` opened mid-line and not closed
+    if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+    if (parenDepth === 0) ctorParamsActive = false;
+  };
 
   while (pos < len) {
     // ── Find line boundaries without allocating an array ───────────────────
@@ -113,18 +148,23 @@ export function parse(uriString: string, text: string): ParsedFile {
 
     // ── Block comment open ─────────────────────────────────────────────────
     if (fc === '/' && fc1 === '*') {
-      const closePos = text.indexOf('*/', fns + 2);
-      if (closePos === -1 || closePos >= nl) inBlockComment = true;
-      // count braces/parens even in single-line block comment lines
-      [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
-      if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+      // countDepth skips the comment itself but still counts code after `*/`
+      // (and flags a comment left open on this line).
+      advance(nl);
       pos = nl + 1; lineNum++; continue;
     }
 
     // ── Inside block comment ───────────────────────────────────────────────
     if (inBlockComment) {
       const close = text.indexOf('*/', pos);
-      if (close !== -1 && close < nl) inBlockComment = false;
+      if (close !== -1 && close < nl) {
+        inBlockComment = false;
+        // `*/ }` : the brace after the close still counts.
+        const r = countDepth(text, close + 2, nl, braceDepth, parenDepth);
+        braceDepth = r[0]; parenDepth = r[1];
+        if (r[2]) inBlockComment = true;
+        if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+      }
       pos = nl + 1; lineNum++; continue;
     }
 
@@ -132,8 +172,7 @@ export function parse(uriString: string, text: string): ParsedFile {
     if (inRawString) {
       const lineStr = text.slice(pos, nl);
       if (countTripleQuoteToggles(lineStr) % 2 !== 0) inRawString = false;
-      [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
-      if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+      advance(nl);
       pos = nl + 1; lineNum++; continue;
     }
 
@@ -143,8 +182,7 @@ export function parse(uriString: string, text: string): ParsedFile {
     const atEnumEntryDepth = enumBraceDepth !== -1 && braceDepth === enumBraceDepth + 1;
     if (!DECL_START[fc] && !atEnumEntryDepth) {
       const prevParenDepth = parenDepth;
-      [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
-      if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+      advance(nl);
       // Only clear annotation window when not inside a multi-line annotation's paren args
       if (fc !== '@' && prevParenDepth === 0) annotationWindow.length = 0;
       pos = nl + 1; lineNum++; continue;
@@ -169,10 +207,11 @@ export function parse(uriString: string, text: string): ParsedFile {
     // ── Class-like declarations ────────────────────────────────────────────
     const cm = RE_CLASS.exec(raw);
     if (cm) {
-      const keyword = cm[1].replace(/\s+/g, ' ');
-      const name    = cm[2];
-      const kind    = toClassKind(keyword);
-      const nameEnd = raw.indexOf(name, cm.index) + name.length;
+      const keyword   = cm[1].replace(/\s+/g, ' ');
+      const name      = cm[2];
+      const kind      = toClassKind(keyword);
+      const nameStart = cm[0].length - name.length;
+      const nameEnd   = cm[0].length;
 
       let supertypes = extractSupertypes(raw, nameEnd);
       // Only look ahead for `) : Types` if the line has an unclosed paren (multi-line constructor)
@@ -182,16 +221,16 @@ export function parse(uriString: string, text: string): ParsedFile {
 
       // Slice up to the class NAME (not cm.index which is always 0) so modifiers
       // before the keyword are captured: "private data class Foo" → "private data class "
-      const preClass        = raw.slice(0, raw.indexOf(name, cm.index));
+      const preClass        = raw.slice(0, nameStart);
       const isAbstract      = /\babstract\b/.test(preClass) || undefined;
       const isPrivate       = /\bprivate\b/.test(preClass)  || undefined;
-      const isHiltViewModel = annotationWindow.some(l => /@HiltViewModel\b/.test(l)) || undefined;
-      const isDeprecated    = annotationWindow.some(l => RE_DEPRECATED.test(l))      || undefined;
-      const isTestClass     = annotationWindow.some(l => RE_RUN_WITH.test(l))        || undefined;
+      const isHiltViewModel = annotationWindow.some(l => /@HiltViewModel\b/.test(l)) || /@HiltViewModel\b/.test(preClass) || undefined;
+      const isDeprecated    = annotationWindow.some(l => RE_DEPRECATED.test(l))      || RE_DEPRECATED.test(preClass)      || undefined;
+      const isTestClass     = annotationWindow.some(l => RE_RUN_WITH.test(l))        || RE_RUN_WITH.test(preClass)        || undefined;
       const isExpect        = /\bexpect\b/.test(preClass)   || undefined;
       const isActual        = /\bactual\b/.test(preClass)   || undefined;
 
-      symbols.push({ name, kind, line: lineNum, character: raw.indexOf(name, cm.index), isComposable: false, depth: braceDepth, supertypes: supertypes.length > 0 ? supertypes : undefined, isAbstract, isPrivate, isHiltViewModel, isDeprecated, isTestClass, isExpect, isActual });
+      symbols.push({ name, kind, line: lineNum, character: nameStart, isComposable: false, depth: braceDepth, supertypes: supertypes.length > 0 ? supertypes : undefined, isAbstract, isPrivate, isHiltViewModel, isDeprecated, isTestClass, isExpect, isActual });
 
       if (kind === 'enum') enumBraceDepth = braceDepth;
 
@@ -230,13 +269,10 @@ export function parse(uriString: string, text: string): ParsedFile {
               // Same full-identifier rule as RE_ENUM_ENTRY: the name must be
               // followed by ctor args, a body, a comment, or end of segment —
               // never a partial match (`Home` must not index as `H`).
-              const sm  = /^\s*([A-Z]\w*)\s*(?:[({]|\/\/|$)/.exec(seg);
-              // seg.indexOf, not sm[0] arithmetic: sm[0] swallows the trailing
-              // delimiter, which would shift `character` past the name and
-              // produce overlapping semantic tokens.
+              const sm  = RE_ENTRY_NAME.exec(seg);
               if (sm) symbols.push({
-                name: sm[1], kind: 'enum', line: lineNum,
-                character: enumBodyOpen + 1 + segStart + seg.indexOf(sm[1]),
+                name: sm[2], kind: 'enum', line: lineNum,
+                character: enumBodyOpen + 1 + segStart + sm[1].length,
                 isComposable: false, depth: braceDepth + 1,
               });
               if (ch === ';') break;
@@ -249,7 +285,7 @@ export function parse(uriString: string, text: string): ParsedFile {
       // ── Inline primary-constructor val/var (single-line: class Foo(val x: Int)) ──
       // When class + constructor are on one line, RE_PROP never runs on those params.
       // Find the balanced () of the primary constructor and extract val/var inside it.
-      const ctorOpen = raw.indexOf('(', nameEnd - name.length);
+      const ctorOpen = raw.indexOf('(', nameStart);
       if (ctorOpen !== -1) {
         let pd = 0, ctorClose = -1;
         for (let ci = ctorOpen; ci < raw.length; ci++) {
@@ -274,8 +310,33 @@ export function parse(uriString: string, text: string): ParsedFile {
         }
       }
 
-      [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
-      if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+      advance(nl);
+      if (parenDepth > 0) { ctorParamsActive = true; ctorBraceDepth = braceDepth; }
+      annotationWindow.length = 0;
+      if (lineTripleQuotes % 2 !== 0) inRawString = true;
+      pos = nl + 1; lineNum++; continue;
+    }
+
+    // ── Unnamed companion object ────────────────────────────────────────────
+    // Emitted as "Companion" (9 chars, like the keyword it sits on) so the
+    // Outline nests its members instead of hanging them under the previous
+    // member. SymbolIndex keeps it out of member FQNs (`Foo.TAG`, not
+    // `Foo.Companion.TAG`) via isCompanion.
+    const km = RE_COMPANION.exec(raw);
+    if (km) {
+      const character  = km[1].length;
+      const objectEnd  = raw.indexOf('object', character) + 'object'.length;
+      const supertypes = extractSupertypes(raw, objectEnd);
+      symbols.push({
+        name: 'Companion', kind: 'object', line: lineNum, character,
+        isComposable: false, depth: braceDepth,
+        supertypes: supertypes.length > 0 ? supertypes : undefined,
+        isPrivate: /\bprivate\b/.test(km[1]) || undefined,
+        isCompanion: true,
+      });
+      const bodyOpen = raw.indexOf('{', objectEnd);
+      if (bodyOpen !== -1) emitInlineBodySymbols(raw, bodyOpen, lineNum, braceDepth + 1, symbols);
+      advance(nl);
       annotationWindow.length = 0;
       if (lineTripleQuotes % 2 !== 0) inRawString = true;
       pos = nl + 1; lineNum++; continue;
@@ -283,14 +344,23 @@ export function parse(uriString: string, text: string): ParsedFile {
 
     // ── Enum entries ───────────────────────────────────────────────────────
     if (enumBraceDepth !== -1 && braceDepth === enumBraceDepth + 1) {
+      // `;` alone on its line (ktlint style after a trailing comma) closes the
+      // entry section: what follows are members, and an uppercase continuation
+      // line (`= \n NAME`) must not become a phantom entry.
+      if (raw.charCodeAt(fns - pos) === 59 /* ';' */) {
+        enumBraceDepth = -1;
+        advance(nl);
+        if (lineTripleQuotes % 2 !== 0) inRawString = true;
+        pos = nl + 1; lineNum++; continue;
+      }
       const em = RE_ENUM_ENTRY.exec(raw);
       if (em) {
         // Split the line at depth-0 commas so that `REGULAR, EXTRA` on one line
         // indexes both entries. Paren depth is tracked so commas inside constructor
         // args like `ACTIVE(1), INACTIVE(0)` don't create spurious splits.
-        const RE_ENTRY_NAME = /^\s*([A-Z]\w*)\s*(?:[({]|\/\/|$)/;
         let parenD = 0;
         let segStart = 0;
+        let sawSemicolon = false;
         for (let i = 0; i <= raw.length; i++) {
           const ch = i < raw.length ? raw[i] : '\0';
           if      (ch === '(' || ch === '[') { parenD++; continue; }
@@ -299,15 +369,14 @@ export function parse(uriString: string, text: string): ParsedFile {
           if (ch === ',' || ch === ';' || ch === '{' || i === raw.length) {
             const seg = raw.slice(segStart, i);
             const sm = RE_ENTRY_NAME.exec(seg);
-            // seg.indexOf(name): RE_ENTRY_NAME's match includes the trailing
-            // delimiter, so sm[0]-length arithmetic would shift the column.
-            if (sm) symbols.push({ name: sm[1], kind: 'enum', line: lineNum, character: segStart + seg.indexOf(sm[1]), isComposable: false, depth: braceDepth });
-            if (ch === ';' || ch === '{') break;
+            if (sm) symbols.push({ name: sm[2], kind: 'enum', line: lineNum, character: segStart + sm[1].length, isComposable: false, depth: braceDepth });
+            if (ch === ';') { sawSemicolon = true; break; }
+            if (ch === '{') break;
             segStart = i + 1;
           }
         }
-        [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
-        if (braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+        advance(nl);
+        if (sawSemicolon) enumBraceDepth = -1;
         if (lineTripleQuotes % 2 !== 0) inRawString = true;
         pos = nl + 1; lineNum++; continue;
       }
@@ -326,7 +395,8 @@ export function parse(uriString: string, text: string): ParsedFile {
       const isTest        = annotationWindow.some(l => RE_TEST.test(l))       || RE_TEST.test(raw)       || undefined;
       const isIgnored     = annotationWindow.some(l => RE_IGNORE.test(l))     || RE_IGNORE.test(raw)     || undefined;
       const isLifecycle   = annotationWindow.some(l => RE_LIFECYCLE.test(l))  || RE_LIFECYCLE.test(raw)  || undefined;
-      const preFun        = raw.slice(0, raw.lastIndexOf('fun'));
+      const nameStart     = fm[0].length - rawName.length;
+      const preFun        = raw.slice(0, nameStart);
       const isSuspend     = /\bsuspend\b/.test(preFun)  || undefined;
       const isAbstract    = /\babstract\b/.test(preFun)  || undefined;
       const isInline      = /\binline\b/.test(preFun)    || undefined;
@@ -341,7 +411,7 @@ export function parse(uriString: string, text: string): ParsedFile {
         name: funName,
         kind: isComposable ? 'composable' : 'fun',
         line: lineNum,
-        character: raw.indexOf(rawName, fm.index),
+        character: nameStart,
         isComposable,
         depth: braceDepth,
         isSuspend,
@@ -360,8 +430,7 @@ export function parse(uriString: string, text: string): ParsedFile {
         isExpect,
         isActual,
       });
-      [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
-      if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+      advance(nl);
       annotationWindow.length = 0;
       if (lineTripleQuotes % 2 !== 0) inRawString = true;
       pos = nl + 1; lineNum++; continue;
@@ -373,26 +442,29 @@ export function parse(uriString: string, text: string): ParsedFile {
     // primary-constructor properties only. Use braceDepth+1 as effective depth so
     // they are treated as class members, not top-level symbols.
     const pm = RE_PROP.exec(raw);
-    const isPrimaryCtorParam = parenDepth === 1;
+    const isPrimaryCtorParam = parenDepth === 1 && ctorParamsActive && braceDepth === ctorBraceDepth;
     if (pm && (parenDepth === 0 || isPrimaryCtorParam)) {
+      const propName     = pm[3];
+      const nameStart    = pm[0].length - propName.length;
       const propDepth    = isPrimaryCtorParam ? braceDepth + 1 : braceDepth;
-      const propPre      = raw.slice(0, raw.indexOf(pm[1]));
+      const propPre      = raw.slice(0, nameStart);
       const isConst      = /\bconst\b/.test(propPre)    || undefined;
       const isAbstract   = /\babstract\b/.test(propPre) || (!isPrimaryCtorParam && isInInterfaceBodyAt(symbols, braceDepth)) || undefined;
       const isLateinit   = /\blateinit\b/.test(propPre) || undefined;
       const isOverride   = /\boverride\b/.test(propPre) || undefined;
       const isPrivate    = /\bprivate\b/.test(propPre)  || undefined;
-      const isDeprecated = annotationWindow.some(l => RE_DEPRECATED.test(l)) || undefined;
+      const isDeprecated = annotationWindow.some(l => RE_DEPRECATED.test(l)) || RE_DEPRECATED.test(propPre) || undefined;
       const isExpect     = /\bexpect\b/.test(propPre)   || undefined;
       const isActual     = /\bactual\b/.test(propPre)   || undefined;
       const constValue   = isConst ? extractConstValue(raw, pm[0].length) : undefined;
       symbols.push({
-        name: pm[2],
+        name: propName,
         kind: pm[1] === 'val' ? 'val' : 'var',
         line: lineNum,
-        character: raw.indexOf(pm[2], pm.index),
+        character: nameStart,
         isComposable: false,
         depth: propDepth,
+        isExtension: pm[2] ? true : undefined,
         isConst,
         isAbstract,
         isLateinit,
@@ -406,8 +478,7 @@ export function parse(uriString: string, text: string): ParsedFile {
       });
       // val x = object : Interface — anonymous object on same line as property
       emitAnonObjectIfPresent(raw, lineNum, braceDepth, symbols);
-      [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
-      if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+      advance(nl);
       annotationWindow.length = 0;
       if (lineTripleQuotes % 2 !== 0) inRawString = true;
       pos = nl + 1; lineNum++; continue;
@@ -418,8 +489,7 @@ export function parse(uriString: string, text: string): ParsedFile {
     if (ta) {
       const isDeprecated = annotationWindow.some(l => RE_DEPRECATED.test(l)) || undefined;
       symbols.push({ name: ta[1], kind: 'typealias', line: lineNum, character: raw.indexOf(ta[1], ta.index), isComposable: false, depth: braceDepth, aliasTarget: ta[2]?.trim(), isDeprecated });
-      [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
-      if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+      advance(nl);
       annotationWindow.length = 0;
       if (lineTripleQuotes % 2 !== 0) inRawString = true;
       pos = nl + 1; lineNum++; continue;
@@ -438,8 +508,7 @@ export function parse(uriString: string, text: string): ParsedFile {
     // (not caught by RE_CLASS which requires a name after the keyword)
     emitAnonObjectIfPresent(raw, lineNum, braceDepth, symbols);
 
-    [braceDepth, parenDepth] = countDepth(text, pos, nl, braceDepth, parenDepth);
-    if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+    advance(nl);
     if (lineTripleQuotes % 2 !== 0) inRawString = true;
     pos = nl + 1;
     lineNum++;
@@ -461,10 +530,12 @@ function countTripleQuoteToggles(s: string): number {
   return count;
 }
 
-// Count { } and ( ) in text[start..end) — operates on original text, no slice
+// Count { } and ( ) in text[start..end) — operates on original text, no slice.
+// The third element is true when a `/*` opened in this range is not closed
+// before `end` (the caller then enters block-comment mode).
 function countDepth(
   text: string, start: number, end: number, braces: number, parens: number,
-): [number, number] {
+): [number, number, boolean] {
   let inStr: string | false = false; // tracks ' or " when inside a string
   for (let i = start; i < end; i++) {
     const c = text[i];
@@ -484,14 +555,23 @@ function countDepth(
       continue;
     }
     if (c === '"' || c === '\'') { inStr = c; continue; }
-    // Stop at trailing line comment
-    if (c === '/' && i + 1 < end && text[i + 1] === '/') break;
+    if (c === '/' && i + 1 < end) {
+      // Stop at trailing line comment
+      if (text[i + 1] === '/') break;
+      // Skip a mid-line block comment: `fun f() { /* { */ }` must stay balanced
+      if (text[i + 1] === '*') {
+        const close = text.indexOf('*/', i + 2);
+        if (close === -1 || close >= end) return [braces, parens, true];
+        i = close + 1;
+        continue;
+      }
+    }
     if      (c === '{') braces++;
     else if (c === '}') { if (braces > 0) braces--; } // clamp — unmatched } in malformed input must not produce negative depth
     else if (c === '(') parens++;
     else if (c === ')') { if (parens > 0) parens--; } // same for unmatched )
   }
-  return [braces, parens];
+  return [braces, parens, false];
 }
 
 // O(1) lookup table — true means the character can start a Kotlin declaration
@@ -608,7 +688,7 @@ function emitInlineBodySymbols(
     if (cm) {
       const kw = cm[1].replace(/\s+/g, ' ');
       const n  = cm[2];
-      const ni = seg.indexOf(n, cm.index);
+      const ni = cm[0].length - n.length;
       const pre = seg.slice(0, ni);
       const st  = extractSupertypes(seg, ni + n.length);
       symbols.push({
@@ -647,10 +727,10 @@ function emitInlineBodySymbols(
     // ── fun ────────────────────────────────────────────────────────────────
     const fm = RE_FUN.exec(seg);
     if (fm) {
-      const preFun = seg.slice(0, seg.lastIndexOf('fun'));
+      const preFun = seg.slice(0, fm[0].length - fm[1].length);
       symbols.push({
         name: fm[1], kind: RE_COMPOSABLE.test(preFun) ? 'composable' : 'fun', line: lineNum,
-        character: offset + seg.indexOf(fm[1], fm.index),
+        character: offset + fm[0].length - fm[1].length,
         isComposable: RE_COMPOSABLE.test(preFun),
         depth: memberDepth,
         isSuspend:   /\bsuspend\b/.test(preFun)   || undefined,
@@ -669,13 +749,14 @@ function emitInlineBodySymbols(
     // ── val / var ──────────────────────────────────────────────────────────
     const pm = RE_PROP.exec(seg);
     if (pm) {
-      const propPre  = seg.slice(0, seg.indexOf(pm[1]));
+      const propPre  = seg.slice(0, pm[0].length - pm[3].length);
       const isConst  = /\bconst\b/.test(propPre) || undefined;
       symbols.push({
-        name: pm[2], kind: pm[1] === 'val' ? 'val' : 'var',
+        name: pm[3], kind: pm[1] === 'val' ? 'val' : 'var',
         line: lineNum,
-        character: offset + seg.indexOf(pm[2], pm.index),
+        character: offset + pm[0].length - pm[3].length,
         isComposable: false, depth: memberDepth,
+        isExtension: pm[2] ? true : undefined,
         isConst,
         constValue:  isConst ? extractConstValue(seg, pm[0].length) : undefined,
         isOverride:  /\boverride\b/.test(propPre) || undefined,
@@ -728,19 +809,11 @@ function isInInterfaceBodyAt(symbols: RawSymbol[], depth: number): boolean {
 }
 
 // Extracts the literal value from a const val declaration.
-// `matchEnd` is the index right after the RE_PROP match (which includes the delimiter char).
-function extractConstValue(raw: string, matchEnd: number): string | undefined {
-  const delim = raw[matchEnd - 1];
-  const rest  = raw.slice(matchEnd);
-  let valueStr: string;
-  if (delim === '=') {
-    valueStr = rest.trim();
-  } else {
-    const eqI = rest.indexOf('=');
-    if (eqI === -1) return undefined;
-    valueStr = rest.slice(eqI + 1).trim();
-  }
-  const clean = stripTrailingLineComment(valueStr).trim();
+// `nameEnd` is the index right after the property name (end of the RE_PROP match).
+function extractConstValue(raw: string, nameEnd: number): string | undefined {
+  const eqI = raw.indexOf('=', nameEnd);
+  if (eqI === -1) return undefined;
+  const clean = stripTrailingLineComment(raw.slice(eqI + 1).trim()).trim();
   return clean.slice(0, 80) || undefined;
 }
 
@@ -752,6 +825,7 @@ function toClassKind(keyword: string): SymbolKind {
     case 'fun interface':    return 'interface';
     case 'enum class':       return 'enum';
     case 'annotation class': return 'annotation';
+    case 'value class':      return 'class';
     case 'interface':        return 'interface';
     case 'object':           return 'object';
     default:                 return 'class';

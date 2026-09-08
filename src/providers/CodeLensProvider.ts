@@ -68,6 +68,12 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
       }
       // Skip synthetic anonymous-object entries ($anon$N — no named symbol to display)
       if (entry.name.startsWith('$')) continue;
+      // An unnamed companion is "Companion" only for the Outline: a usage count
+      // for that word would be noise on the `companion object` line.
+      if (entry.isCompanion) {
+        classStack.push({ kind: entry.kind, depth: entry.depth, entry });
+        continue;
+      }
 
       const range = new vscode.Range(entry.line, 0, entry.line, 0);
 

@@ -37,6 +37,7 @@ export interface SnapshotFile {
   tc?: Record<number, 1>;  // isTestClass
   ig?: Record<number, 1>;  // isIgnored
   lc?: Record<number, 1>;  // isLifecycle
+  cn?: Record<number, 1>;  // isCompanion
   im?: string[];           // raw imports; used to reconstruct word index on restore
   cv?: Record<number, string>; // constValue; raw literal for const val folding
 }
@@ -100,6 +101,7 @@ export function buildSnapshotFile(
     if (e.isTestClass)      { sf.tc = sf.tc ?? {}; sf.tc[idx] = 1; }
     if (e.isIgnored)        { sf.ig = sf.ig ?? {}; sf.ig[idx] = 1; }
     if (e.isLifecycle)      { sf.lc = sf.lc ?? {}; sf.lc[idx] = 1; }
+    if (e.isCompanion)      { sf.cn = sf.cn ?? {}; sf.cn[idx] = 1; }
     if (e.constValue)       { sf.cv = sf.cv ?? {}; sf.cv[idx] = e.constValue; }
   });
 
@@ -131,7 +133,8 @@ export function restoreSnapshotFile(uriStr: string, sf: SnapshotFile, index: Sym
     const qualifiers = classStack.map(s => s.name);
     const parts = sf.p ? [sf.p, ...qualifiers, name] : [...qualifiers, name];
     const fqn = parts.join('.');
-    if (RESTORE_CLASS_LIKE.has(kind)) classStack.push({ name, depth });
+    const isCompanion = sf.cn?.[i] === 1 || undefined;
+    if (RESTORE_CLASS_LIKE.has(kind) && !isCompanion) classStack.push({ name, depth });
 
     return {
       name,
@@ -163,6 +166,7 @@ export function restoreSnapshotFile(uriStr: string, sf: SnapshotFile, index: Sym
       isTestClass:     sf.tc?.[i] === 1 || undefined,
       isIgnored:       sf.ig?.[i] === 1 || undefined,
       isLifecycle:     sf.lc?.[i] === 1 || undefined,
+      isCompanion,
       constValue:      sf.cv?.[i],
     };
   });

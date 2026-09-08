@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { corpusUri } from '../util/corpusUri';
 import { FileResEntry, FileResKind, FileResourceIndex } from '../indexer/FileResourceIndex';
 import {
   bindingClassTokens,
@@ -289,7 +290,7 @@ export class UnusedResourceProvider implements vscode.CodeActionProvider, vscode
       d.code = 'unused-resource';
       for (const p of f.paths) {
         this.byPath.set(p, f);
-        this.collection.set(vscode.Uri.file(p), [d]);
+        this.collection.set(corpusUri(p), [d]);
       }
     }
     reportDecorations('unusedResources', findings.length);
@@ -310,7 +311,7 @@ export class UnusedResourceProvider implements vscode.CodeActionProvider, vscode
     const edit = new vscode.WorkspaceEdit();
     for (const p of finding.paths) {
       edit.deleteFile(
-        vscode.Uri.file(p),
+        corpusUri(p),
         { ignoreIfNotExists: true },
         { needsConfirmation: true, label: `Delete ${p.split('/').pop()}` },
       );

@@ -1,30 +1,31 @@
 {
-  "version": "1.42.11",
+  "version": "1.42.12",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Dead-code fixes that delete only the dead code",
-  "summary": "Kotlin Jump 1.42.11 audits the edits the dead-code family writes. A removal that could climb to the licence header, a catalog fix that broke the next alias, a \"Delete file\" offered on a file a test still needs, offsets computed on the disk copy of a file you were editing, and a manifest removal that stopped at the first child tag.",
+  "tagline": "Companion mode that detects, a web extension that delivers",
+  "summary": "Kotlin Jump 1.42.12 looks at the web extension and the indexing pipeline. Companion mode never detected the JetBrains Kotlin extension, the dead-code family published its findings on phantom paths on github.dev, a dozen providers were advertised on the web with nothing behind them, and Re-index silently dropped the bundled stdlib.",
   "highlights": [
     {
-      "title": "Removal extents that stay put",
+      "title": "Companion mode finally detects JetBrains",
       "kind": "fix",
-      "description": "A /* warm */ at the end of the line above made \"Delete unreferenced …\" climb to the licence header. The extent now walks only through comment-only lines, skips annotation lines that declare something of their own, and this feeds the member, island and \"Delete file\" fixes too."
+      "description": "companionMode: auto looked for JetBrains.kotlin-lsp, an id that never existed, so with the JetBrains Kotlin extension installed every provider was registered twice: doubled hovers, two outline groups, duplicate hints. The real ids are checked, and the status bar says \"· companion\"."
     },
     {
-      "title": "Catalog and file deletions that keep the build green",
+      "title": "Dead code that shows up on github.dev",
       "kind": "fix",
-      "description": "A shared [versions] entry is freed only by its last referrer, \"Delete X.kt\" is offered only when nothing test-only remains in it, and a Remove All never mixes a file deletion with a text edit on the same file."
+      "description": "Findings were published on file:// paths rebuilt from fsPath, which point nowhere on the web: phantom entries in Problems, no squiggles, quick fixes reading a missing file. The editor's own URIs are used now, and a dozen desktop-only providers join the web extension."
     },
     {
-      "title": "Edits on the text you see",
+      "title": "Re-index keeps the stdlib",
       "kind": "fix",
-      "description": "The corpus reads open editors with unsaved changes, so offsets match the document instead of the disk copy. A manifest component is removed whole, comments inside the import block survive Organize Imports, and Smart Join moves a trailing comment after the chain."
+      "description": "Re-index cleared the bundled stdlib with everything else and never reloaded it: Cmd+Click on listOf answered \"No definition found\" until a reload. It also re-reads excludePatterns and maxIndexedFiles, which the watchers now follow live too."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "The Remote Config quick fix title says it edits this file only, and \"Find Everything Unused\" runs the symbol scan once instead of twice."
+        "Warns when kotlinJump.maxIndexedFiles caps the index, and keeps the status bar counter current after a checkout or a deleted file.",
+        "Adds the androidx.annotation.VisibleForTesting import with the annotation, and clears a detector's warnings as soon as its setting goes off."
       ]
     }
   ],

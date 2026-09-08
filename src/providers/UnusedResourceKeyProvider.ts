@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { corpusUri } from '../util/corpusUri';
 import {
   ValueKeyDeclaration,
   collectValueKeyDeclarations,
@@ -75,7 +76,7 @@ export class UnusedResourceKeyProvider implements vscode.CodeActionProvider, vsc
     }
 
     for (const [p, diagnostics] of diagnosticsByPath) {
-      this.collection.set(vscode.Uri.file(p), diagnostics);
+      this.collection.set(corpusUri(p), diagnostics);
     }
   }
 
@@ -115,7 +116,7 @@ export class UnusedResourceKeyProvider implements vscode.CodeActionProvider, vsc
   }
 
   private forget(path: string): void {
-    this.collection.delete(vscode.Uri.file(path));
+    this.collection.delete(corpusUri(path));
     this.byPath.delete(path);
   }
 
@@ -148,7 +149,7 @@ export async function buildRemovalEdit(
       text = openDocument.getText();
     } else {
       try {
-        text = decoder.decode(await vscode.workspace.fs.readFile(vscode.Uri.file(p)));
+        text = decoder.decode(await vscode.workspace.fs.readFile(corpusUri(p)));
       } catch {
         text = undefined;
       }
@@ -190,7 +191,7 @@ export async function buildRemovalEdit(
       if (r.start < previousEnd) continue; // overlapping entries: keep the first
       previousEnd = r.end;
       edit.replace(
-        vscode.Uri.file(p),
+        corpusUri(p),
         new vscode.Range(offsetToPosition(lineStarts, r.start), offsetToPosition(lineStarts, r.end)),
         '',
         { needsConfirmation: true, label: r.label },

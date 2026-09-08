@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.42.12
+
+Kotlin Jump 1.42.12 looks at the web extension and the indexing pipeline. Companion mode never detected the JetBrains Kotlin extension, the dead-code family published its findings on phantom paths on github.dev, a dozen providers were advertised on the web with nothing behind them, and Re-index silently dropped the bundled stdlib.
+
+### Fixes
+- Detects the JetBrains Kotlin extension under its real ids. `companionMode: auto` looked for `JetBrains.kotlin-lsp`, which never existed; the Marketplace id is `JetBrains.kotlin-server` and the GitHub VSIX is `JetBrains.kotlin`. With the JetBrains extension installed, every navigation provider was registered twice: doubled hovers, two groups in the outline, duplicate parameter hints. The status bar now says "· companion" when the mode is on.
+- Publishes dead-code findings on the editor's own URIs. The corpus keyed files by `fsPath` and rebuilt `file://` URIs from it, which on vscode.dev and github.dev point nowhere: the Problems panel listed phantom paths, no squiggle appeared and the quick fixes read a file that does not exist. The original URI is kept per path, and the code actions no longer demand the `file` scheme.
+- Reloads the bundled stdlib after "Re-index workspace". The command cleared the whole index, stdlib entries included, and only the JAR scan ran again: Cmd+Click on `listOf` or `String` answered "No definition found" until a reload, always on the web. Re-index also re-reads `excludePatterns` and `maxIndexedFiles` instead of the values captured at activation.
+- Registers on the web the providers that only the desktop had: unused-import graying and its quick fix, method separators, dispatcher lenses, state provenance lenses, postfix completion, hardcoded-string lint, resource and dependency usage badges, manifest necessity badges, the dead-weight quick fixes, the expired-TODO, `!!` and missing-branch lightbulbs, and Extract string resource. Their settings were shown on vscode.dev with nothing behind them, and the `kmpTargetBadges` toggle now fires on the web too.
+- Follows `kotlinJump.excludePatterns` live in the file watchers. The matcher was built once at activation, so a folder added to the exclusions kept feeding the index on every save until a reload.
+- Says when the file cap is reached. A 12000 file project indexed 10000 of them without a word, and the tooltip read "in 10000 files" as if that were all. A warning names `kotlinJump.maxIndexedFiles`.
+- Keeps the status bar counter current. It was written at activation, Re-index and JAR scans only, so a checkout of 300 files or a deleted file left it stale.
+- Adds the `androidx.annotation.VisibleForTesting` import with the annotation the quick fix inserts, and clears a dead-code detector's warnings from Problems the moment its setting is turned off.
+
 ## 1.42.11
 
 Kotlin Jump 1.42.11 audits the edits the dead-code family writes. A removal that could climb to the licence header, a catalog fix that broke the next alias, a "Delete file" offered on a file a test still needs, offsets computed on the disk copy of a file you were editing, and a manifest removal that stopped at the first child tag.

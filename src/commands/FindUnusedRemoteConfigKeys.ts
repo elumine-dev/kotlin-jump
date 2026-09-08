@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { corpusUri } from '../util/corpusUri';
 import { ResourceCorpus } from '../indexer/ResourceCorpus';
 import {
   UnusedRemoteConfigKey,
@@ -92,7 +93,7 @@ export async function removeAllUnusedRemoteConfigKeysCommand(
       const edit = new vscode.WorkspaceEdit();
       const decoder = new TextDecoder();
       for (const [path, declarations] of byFile) {
-        const uri = vscode.Uri.file(path);
+        const uri = corpusUri(path);
         let text: string;
         try {
           text = decoder.decode(await vscode.workspace.fs.readFile(uri));

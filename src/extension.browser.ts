@@ -16,6 +16,18 @@
 // Move File, and bundled Kotlin stdlib navigation (a prebuilt JSON index,
 // see src/kotlin/BundledStdlibProvider.ts, not the raw JAR).
 import * as vscode from 'vscode';
+import { DeadWeightActionProvider } from './providers/DeadWeightActionProvider';
+import { ManifestNecessityProvider } from './providers/ManifestNecessityProvider';
+import { DependencyUsageBadgeProvider } from './providers/DependencyUsageBadgeProvider';
+import { ResourceUsageBadgeProvider } from './providers/ResourceUsageBadgeProvider';
+import { DispatcherLensProvider } from './providers/DispatcherLensProvider';
+import { StateProvenanceProvider } from './providers/StateProvenanceProvider';
+import { MethodSeparatorProvider } from './providers/MethodSeparatorProvider';
+import { UnusedImportProvider, UnusedImportCodeActionProvider } from './providers/UnusedImportProvider';
+import { ExpiredTodoActionProvider, NullAssertionActionProvider, MissingWhenBranchesActionProvider } from './providers/DiscoverabilityQuickFixes';
+import { ExtractStringResourceProvider } from './providers/ExtractStringResourceProvider';
+import { HardcodedStringProvider } from './providers/HardcodedStringProvider';
+import { PostfixCompletionProvider } from './providers/PostfixCompletionProvider';
 import * as path from 'path';
 import { SymbolIndex } from './indexer/SymbolIndex';
 import { FileScanner } from './indexer/FileScanner';
@@ -44,7 +56,7 @@ import { KotlinSemanticTokensProvider, TOKEN_TYPES, TOKEN_MODIFIERS } from './pr
 import { Logger } from './util/logger';
 import { mapBatched } from './util/batched';
 import { makeExclusionMatcher } from './util/pathExclusion';
-import { resolveCompanionMode } from './util/companionMode';
+import { resolveCompanionMode, isJetBrainsKotlinInstalled } from './util/companionMode';
 import { resolveAll as resolveModules } from './gradle/ModuleResolver';
 import { resolveBest } from './util/ImportResolver';
 import { readProjectConfigs } from './util/ProjectConfig';
@@ -165,6 +177,7 @@ let _semanticTokens:   KotlinSemanticTokensProvider | undefined;
 let _sealedWhen:       SealedWhenCoverageProvider | undefined;
 let _signatureHelp:    KotlinSignatureHelpProvider  | undefined;
 let _inlayHints:       KotlinInlayHintsProvider     | undefined;
+let kmpProvider: KmpExpectActualProvider | undefined;
 let _snapshotEnabled:  boolean = true;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -211,7 +224,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const companionMode = cfg0.get<string>('companionMode', 'auto');
   const isCompanion = resolveCompanionMode(
     companionMode,
-    vscode.extensions.getExtension('JetBrains.kotlin-lsp') !== undefined,
+    isJetBrainsKotlinInstalled(id => vscode.extensions.getExtension(id)),
   );
 
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -631,7 +644,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   const cfg         = vscode.workspace.getConfiguration('kotlinJump');
   const excludeList = cfg.get<string[]>('excludePatterns') ?? ['**/build/**', '**/.gradle/**'];
-  const isExcludedPath = makeExclusionMatcher(excludeList);
+  // Rebuilt on change: the matcher was captured once, so a folder added to
+  // excludePatterns kept feeding the watchers until a reload.
+  let excludedMatcher = makeExclusionMatcher(excludeList);
+  const isExcludedPath = (p: string) => excludedMatcher(p);
+  context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(e => {
+    if (e.affectsConfiguration('kotlinJump.excludePatterns')) {
+      excludedMatcher = makeExclusionMatcher(vscode.workspace.getConfiguration('kotlinJump').get<string[]>('excludePatterns') ?? excludeList);
+    }
+  }));
   const maxFiles    = cfg.get<number>('maxIndexedFiles') ?? 10000;
 
   const [gradleModules, { moduleMap: jsonModules, sourceRoots }, allUris] = await Promise.all([
@@ -863,7 +884,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     unusedResourceProviderWeb,
     vscode.languages.registerCodeActionsProvider(
-      { scheme: 'file', pattern: '**/res/**' },
+      { pattern: '**/res/**' },
       unusedResourceProviderWeb,
       { providedCodeActionKinds: UnusedResourceProvider.providedCodeActionKinds },
     ),
@@ -885,7 +906,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     unusedResourceKeyProviderWeb,
     vscode.languages.registerCodeActionsProvider(
-      { scheme: 'file', pattern: '**/res/values*/*.xml' },
+      { pattern: '**/res/values*/*.xml' },
       unusedResourceKeyProviderWeb,
       { providedCodeActionKinds: UnusedResourceKeyProvider.providedCodeActionKinds },
     ),
@@ -900,7 +921,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     unusedSymbolProviderWeb,
     vscode.languages.registerCodeActionsProvider(
-      { scheme: 'file', language: 'kotlin' },
+      { language: 'kotlin' },
       unusedSymbolProviderWeb,
       { providedCodeActionKinds: UnusedSymbolProvider.providedCodeActionKinds },
     ),
@@ -915,12 +936,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     unheardEventProviderWeb,
     vscode.languages.registerCodeActionsProvider(
-      { scheme: 'file', language: 'kotlin' },
+      { language: 'kotlin' },
       unheardEventProviderWeb,
       { providedCodeActionKinds: UnheardEventProvider.providedCodeActionKinds },
     ),
     vscode.languages.registerCodeActionsProvider(
-      { scheme: 'file', language: 'java' },
+      { language: 'java' },
       unheardEventProviderWeb,
       { providedCodeActionKinds: UnheardEventProvider.providedCodeActionKinds },
     ),
@@ -935,12 +956,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     unusedEnumEntryProviderWeb,
     vscode.languages.registerCodeActionsProvider(
-      { scheme: 'file', language: 'kotlin' },
+      { language: 'kotlin' },
       unusedEnumEntryProviderWeb,
       { providedCodeActionKinds: UnusedEnumEntryProvider.providedCodeActionKinds },
     ),
     vscode.languages.registerCodeActionsProvider(
-      { scheme: 'file', language: 'java' },
+      { language: 'java' },
       unusedEnumEntryProviderWeb,
       { providedCodeActionKinds: UnusedEnumEntryProvider.providedCodeActionKinds },
     ),
@@ -952,7 +973,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     remoteConfigKeyProviderWeb,
     vscode.languages.registerCodeActionsProvider(
-      { scheme: 'file', pattern: '**/res/xml*/*.xml' },
+      { pattern: '**/res/xml*/*.xml' },
       remoteConfigKeyProviderWeb,
       { providedCodeActionKinds: UnusedRemoteConfigKeyProvider.providedCodeActionKinds },
     ),
@@ -967,7 +988,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     gradleDependencyProviderWeb,
     vscode.languages.registerCodeActionsProvider(
-      { scheme: 'file', pattern: '**/*.versions.toml' },
+      { pattern: '**/*.versions.toml' },
       gradleDependencyProviderWeb,
       { providedCodeActionKinds: UnusedGradleDependencyProvider.providedCodeActionKinds },
     ),
@@ -979,12 +1000,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     unusedMemberProviderWeb,
     vscode.languages.registerCodeActionsProvider(
-      { scheme: 'file', language: 'kotlin' },
+      { language: 'kotlin' },
       unusedMemberProviderWeb,
       { providedCodeActionKinds: UnusedMemberProvider.providedCodeActionKinds },
     ),
     vscode.languages.registerCodeActionsProvider(
-      { scheme: 'file', language: 'java' },
+      { language: 'java' },
       unusedMemberProviderWeb,
       { providedCodeActionKinds: UnusedMemberProvider.providedCodeActionKinds },
     ),
@@ -996,12 +1017,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     deadIslandProviderWeb,
     vscode.languages.registerCodeActionsProvider(
-      { scheme: 'file', language: 'kotlin' },
+      { language: 'kotlin' },
       deadIslandProviderWeb,
       { providedCodeActionKinds: DeadIslandProvider.providedCodeActionKinds },
     ),
     vscode.languages.registerCodeActionsProvider(
-      { scheme: 'file', language: 'java' },
+      { language: 'java' },
       deadIslandProviderWeb,
       { providedCodeActionKinds: DeadIslandProvider.providedCodeActionKinds },
     ),
@@ -1013,7 +1034,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     unusedDtoFieldProviderWeb,
     vscode.languages.registerCodeActionsProvider(
-      { scheme: 'file', language: 'kotlin' },
+      { language: 'kotlin' },
       unusedDtoFieldProviderWeb,
       { providedCodeActionKinds: UnusedDtoFieldProvider.providedCodeActionKinds },
     ),
@@ -1166,10 +1187,44 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   })();
 
   context.subscriptions.push(
-    vscode.languages.registerCodeLensProvider({ language: 'kotlin' }, new KmpExpectActualProvider(index)),
+    vscode.languages.registerCodeLensProvider({ language: 'kotlin' }, (kmpProvider = new KmpExpectActualProvider(index))),
     vscode.commands.registerCommand('kotlin-jump.showActuals',
       (fqn: string, name: string) => showActuals(index, fqn, name)),
   );
+
+  // These providers are pure vscode modules that only the desktop entry point
+  // registered; their settings, menus and lenses were advertised on the web
+  // with nothing behind them (unused-import graying, method separators, the
+  // `!!` / expired TODO / missing branch lightbulbs, extract string, …).
+  {
+    const kmpToggle = vscode.workspace.onDidChangeConfiguration(e => {
+      if (e.affectsConfiguration('kotlinJump.kmpTargetBadges')) kmpProvider?.fireChange();
+    });
+    context.subscriptions.push(
+      kmpToggle,
+      ...(!isCompanion ? [
+        vscode.languages.registerCompletionItemProvider({ language: 'kotlin' }, new PostfixCompletionProvider(), '.'),
+      ] : []),
+      vscode.languages.registerCodeActionsProvider([{ language: 'kotlin' }, { language: 'java' }], new ExpiredTodoActionProvider(), { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] }),
+      vscode.languages.registerCodeActionsProvider({ language: 'kotlin' }, new NullAssertionActionProvider(), { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] }),
+      vscode.languages.registerCodeActionsProvider({ language: 'kotlin' }, new MissingWhenBranchesActionProvider(index), { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] }),
+      new HardcodedStringProvider(),
+      new UnusedImportProvider(),
+      vscode.languages.registerCodeActionsProvider({ language: 'kotlin' }, new UnusedImportCodeActionProvider(), { providedCodeActionKinds: UnusedImportCodeActionProvider.providedCodeActionKinds }),
+      new DispatcherLensProvider(),
+      new ResourceUsageBadgeProvider(),
+      new DependencyUsageBadgeProvider(),
+      new ManifestNecessityProvider(),
+      vscode.languages.registerCodeActionsProvider([{ language: 'xml' }, { pattern: '**/build.gradle{,.kts}' }], new DeadWeightActionProvider(), { providedCodeActionKinds: DeadWeightActionProvider.providedCodeActionKinds }),
+      new MethodSeparatorProvider(),
+      vscode.languages.registerCodeLensProvider({ language: 'kotlin' }, new StateProvenanceProvider()),
+      vscode.languages.registerCodeActionsProvider([{ language: 'kotlin' }, { language: 'java' }], new ExtractStringResourceProvider(stringIndex), { providedCodeActionKinds: [vscode.CodeActionKind.RefactorExtract] }),
+      vscode.commands.registerCommand('kotlin-jump.extractString.saveTarget', async (uri: vscode.Uri) => {
+        const doc = vscode.workspace.textDocuments.find(d => d.uri.toString() === uri.toString());
+        if (doc?.isDirty) await doc.save();
+      }),
+    );
+  }
 
   (() => {
     const df = new DataClassFieldProvider(index);
@@ -1540,9 +1595,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       scanner.cancel();
       index.clear();
       clearContentCache();
+      void bundledStdlib.load().catch((e: Error) => log.warn(`[bundled-stdlib] ${e.message}`));
       await scanner.scanAll();
+      const live = vscode.workspace.getConfiguration('kotlinJump');
       const freshUris = await vscode.workspace.findFiles(
-        '**/*.{kt,kts,java}', `{${excludeList.join(',')}}`, maxFiles,
+        '**/*.{kt,kts,java}',
+        `{${(live.get<string[]>('excludePatterns') ?? excludeList).join(',')}}`,
+        live.get<number>('maxIndexedFiles') ?? maxFiles,
       );
       await collectStats(freshUris);
       const { files, symbols } = index.stats();

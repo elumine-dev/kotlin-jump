@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { corpusUri } from '../util/corpusUri';
 import {
   UnusedEnumEntry,
   deleteTitleFor,
@@ -61,7 +62,7 @@ export class UnusedEnumEntryProvider implements vscode.CodeActionProvider, vscod
       byFile.set(f.path, diags);
     }
 
-    for (const [p, diags] of byFile) this.collection.set(vscode.Uri.file(p), diags);
+    for (const [p, diags] of byFile) this.collection.set(corpusUri(p), diags);
   }
 
   clear(): void {
@@ -120,7 +121,7 @@ export class UnusedEnumEntryProvider implements vscode.CodeActionProvider, vscod
   }
 
   private forget(path: string): void {
-    this.collection.delete(vscode.Uri.file(path));
+    this.collection.delete(corpusUri(path));
     this.byPath.delete(path);
   }
 

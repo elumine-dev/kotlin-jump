@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { corpusUri } from '../util/corpusUri';
 import { DeadIsland, deleteTitleFor, messageFor } from './deadIslands';
 
 /**
@@ -100,7 +101,7 @@ export class DeadIslandProvider implements vscode.CodeActionProvider, vscode.Dis
         byFile.set(m.path, diags);
       }
     }
-    for (const [p, diags] of byFile) this.collection.set(vscode.Uri.file(p), diags);
+    for (const [p, diags] of byFile) this.collection.set(corpusUri(p), diags);
   }
 
   provideCodeActions(
@@ -122,11 +123,11 @@ export class DeadIslandProvider implements vscode.CodeActionProvider, vscode.Dis
     const action = new vscode.CodeAction(deleteTitleFor(hit.island), vscode.CodeActionKind.QuickFix);
     const edit = new vscode.WorkspaceEdit();
     for (const e of hit.edits) {
-      edit.delete(vscode.Uri.file(e.path), e.range,
+      edit.delete(corpusUri(e.path), e.range,
         { needsConfirmation: true, label: deleteTitleFor(hit.island) });
     }
     for (const imp of hit.island.staleImports) {
-      edit.delete(vscode.Uri.file(imp.path), new vscode.Range(imp.line, 0, imp.line + 1, 0),
+      edit.delete(corpusUri(imp.path), new vscode.Range(imp.line, 0, imp.line + 1, 0),
         { needsConfirmation: true, label: `Remove stale import of ${imp.name}` });
     }
     action.edit = edit;

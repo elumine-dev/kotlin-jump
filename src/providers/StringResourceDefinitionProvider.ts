@@ -20,9 +20,10 @@ export class StringResourceDefinitionProvider implements vscode.DefinitionProvid
 
       const type = m[1] as 'string' | 'plurals' | 'array';
       const key  = m[2];
-      const entry = type === 'string'  ? this.index.getValue(key)
-                  : type === 'plurals' ? this.index.getPluralsValue(key)
-                  :                      this.index.getArrayValue(key);
+      const near = document.uri?.path;
+      const entry = type === 'string'  ? this.index.getValue(key, near)
+                  : type === 'plurals' ? this.index.getPluralsValue(key, near)
+                  :                      this.index.getArrayValue(key, near);
       if (!entry) return undefined;
 
       const pos = new vscode.Position(entry.line, 0);

@@ -1,3 +1,4 @@
+import { stripXmlComments } from '../util/xmlRefs';
 interface UriLike { toString(): string; }
 
 export interface DimenEntry {
@@ -15,14 +16,17 @@ export interface DimenEntry {
 export class DimenResourceIndex {
   private readonly files = new Map<string, Map<string, DimenEntry>>();
 
-  reindexFile(uri: UriLike, content: string): void {
+  reindexFile(uri: UriLike, rawContent: string): void {
     const dims = new Map<string, DimenEntry>();
-    const RE = /<dimen\s+name="([^"]+)"[^>]*>([\s\S]*?)<\/dimen>/g;
+    const content = stripXmlComments(rawContent);
+    const RE = /<dimen\b([^>]*)>([\s\S]*?)<\/dimen>/g;
     let m: RegExpExecArray | null;
     while ((m = RE.exec(content))) {
+      const name = /\bname\s*=\s*"([^"]+)"/.exec(m[1])?.[1];
+      if (!name) continue;
       const value = m[2].trim();
       const line  = content.slice(0, m.index).split('\n').length - 1;
-      dims.set(m[1], { value, uri, line });
+      dims.set(name, { value, uri, line });
     }
     this.files.set(uri.toString(), dims);
   }

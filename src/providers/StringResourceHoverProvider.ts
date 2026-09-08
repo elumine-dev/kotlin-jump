@@ -20,15 +20,16 @@ export class StringResourceHoverProvider implements vscode.HoverProvider {
     const lineText = document.lineAt(position.line).text;
 
     return (
-      this._tryString(lineText, position) ??
-      this._tryPlurals(lineText, position) ??
-      this._tryArray(lineText, position)
+      this._tryString(lineText, position, document.uri?.path) ??
+      this._tryPlurals(lineText, position, document.uri?.path) ??
+      this._tryArray(lineText, position, document.uri?.path)
     );
   }
 
   private _tryString(
     lineText: string,
     position: vscode.Position,
+    nearPath?: string,
   ): vscode.Hover | undefined {
     R_STRING_RE.lastIndex = 0;
     let m: RegExpExecArray | null;
@@ -38,7 +39,7 @@ export class StringResourceHoverProvider implements vscode.HoverProvider {
       if (position.character < start || position.character >= end) continue;
 
       const key   = m[1];
-      const entry = this.index.getValue(key);
+      const entry = this.index.getValue(key, nearPath);
       if (!entry) return;
 
       const md = new vscode.MarkdownString();
@@ -54,6 +55,7 @@ export class StringResourceHoverProvider implements vscode.HoverProvider {
   private _tryPlurals(
     lineText: string,
     position: vscode.Position,
+    nearPath?: string,
   ): vscode.Hover | undefined {
     R_PLURALS_RE.lastIndex = 0;
     let m: RegExpExecArray | null;
@@ -63,7 +65,7 @@ export class StringResourceHoverProvider implements vscode.HoverProvider {
       if (position.character < start || position.character >= end) continue;
 
       const key   = m[1];
-      const entry = this.index.getPluralsValue(key);
+      const entry = this.index.getPluralsValue(key, nearPath);
       if (!entry) return;
 
       const md = new vscode.MarkdownString();
@@ -85,6 +87,7 @@ export class StringResourceHoverProvider implements vscode.HoverProvider {
   private _tryArray(
     lineText: string,
     position: vscode.Position,
+    nearPath?: string,
   ): vscode.Hover | undefined {
     R_ARRAY_RE.lastIndex = 0;
     let m: RegExpExecArray | null;
@@ -94,7 +97,7 @@ export class StringResourceHoverProvider implements vscode.HoverProvider {
       if (position.character < start || position.character >= end) continue;
 
       const key   = m[1];
-      const entry = this.index.getArrayValue(key);
+      const entry = this.index.getArrayValue(key, nearPath);
       if (!entry) return;
 
       const md = new vscode.MarkdownString();

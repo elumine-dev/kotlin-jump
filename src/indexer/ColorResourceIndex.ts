@@ -1,3 +1,5 @@
+import { stripXmlComments } from '../util/xmlRefs';
+import { moduleRootOfPath } from './StringResourceIndex';
 interface UriLike { toString(): string; }
 
 export interface ColorEntry {
@@ -9,14 +11,17 @@ export interface ColorEntry {
 export class ColorResourceIndex {
   private readonly files = new Map<string, Map<string, ColorEntry>>();
 
-  reindexFile(uri: UriLike, content: string): void {
+  reindexFile(uri: UriLike, rawContent: string): void {
     const colors = new Map<string, ColorEntry>();
-    const RE_COLOR = /<color\s+name="([^"]+)"[^>]*>([\s\S]*?)<\/color>/g;
+    const content = stripXmlComments(rawContent);
+    const RE_COLOR = /<color\b([^>]*)>([\s\S]*?)<\/color>/g;
     let m: RegExpExecArray | null;
     while ((m = RE_COLOR.exec(content))) {
+      const name = /\bname\s*=\s*"([^"]+)"/.exec(m[1])?.[1];
+      if (!name) continue;
       const value = m[2].trim();
       const line  = content.slice(0, m.index).split('\n').length - 1;
-      colors.set(m[1], { value, uri, line });
+      colors.set(name, { value, uri, line });
     }
     this.files.set(uri.toString(), colors);
   }
@@ -35,17 +40,17 @@ export class ColorResourceIndex {
     return out;
   }
 
-  getValue(key: string): ColorEntry | undefined {
+  getValue(key: string, nearPath?: string): ColorEntry | undefined {
+    const nearModule = nearPath ? moduleRootOfPath(nearPath) : undefined;
+    let best: ColorEntry | undefined;
+    let bestScore = -1;
     for (const [fUri, map] of this.files) {
-      if (/\/values\/[^/]+$/.test(fUri)) {
-        const e = map.get(key);
-        if (e) return e;
-      }
-    }
-    for (const [, map] of this.files) {
       const e = map.get(key);
-      if (e) return e;
+      if (!e) continue;
+      const fModule = moduleRootOfPath(fUri);
+      const score = (nearModule !== undefined && fModule === nearModule ? 2 : 0) + (/\/values\/[^/]+$/.test(fUri) ? 1 : 0);
+      if (score > bestScore) { best = e; bestScore = score; }
     }
-    return undefined;
+    return best;
   }
 }

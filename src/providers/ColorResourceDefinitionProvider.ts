@@ -24,7 +24,7 @@ export class ColorResourceDefinitionProvider implements vscode.DefinitionProvide
       if (position.character < start || position.character >= end) continue;
 
       const key = m[1];
-      const entry = this.index.getValue(key);
+      const entry = this.index.getValue(key, document.uri?.path);
       if (!entry) return undefined;
 
       const pos = new vscode.Position(entry.line, 0);

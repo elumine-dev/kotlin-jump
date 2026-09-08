@@ -60,6 +60,7 @@ export class DrawableXmlInlinePreviewProvider implements vscode.Disposable {
   }
 
   private async flush(): Promise<void> {
+    const inUse = new Set<string>();
     for (const editor of vscode.window.visibleTextEditors) {
       const doc = editor.document;
       if (doc.languageId !== 'xml' || !DRAWABLE_PATH_RE.test(doc.uri.path)) {
@@ -67,11 +68,23 @@ export class DrawableXmlInlinePreviewProvider implements vscode.Disposable {
         for (const type of this.typeByCachePath.values()) editor.setDecorations(type, []);
         continue;
       }
-      await this.applyForEditor(editor);
+      const used = await this.applyForEditor(editor);
+      if (used) inUse.add(used);
+    }
+    // Every distinct SVG gets its own type (the icon is baked into the type),
+    // so typing in a vector file minted one per keystroke and none was ever
+    // released: the map, the setDecorations loops above and the cache dir all
+    // grew for the whole session. Keep only what a visible editor shows.
+    for (const [cachePath, type] of this.typeByCachePath) {
+      if (inUse.has(cachePath)) continue;
+      type.dispose();
+      this.typeByCachePath.delete(cachePath);
+      try { fs.unlinkSync(cachePath); } catch { /* already gone */ }
     }
   }
 
-  private async applyForEditor(editor: vscode.TextEditor): Promise<void> {
+  /** @returns the cache path whose decoration type this editor now shows, if any. */
+  private async applyForEditor(editor: vscode.TextEditor): Promise<string | undefined> {
     const doc = editor.document;
     const text = doc.getText();
     const vectorMatch = VECTOR_OPEN_RE.exec(text);
@@ -81,7 +94,7 @@ export class DrawableXmlInlinePreviewProvider implements vscode.Disposable {
       // decoration on this editor so a stale icon doesn't survive an edit
       // that turned a vector into another drawable type.
       for (const type of this.typeByCachePath.values()) editor.setDecorations(type, []);
-      return;
+      return undefined;
     }
 
     const cachePath = this.cachePathFor(doc.uri, svg);
@@ -98,6 +111,7 @@ export class DrawableXmlInlinePreviewProvider implements vscode.Disposable {
       editor.setDecorations(otherType, []);
     }
     editor.setDecorations(type, [{ range: new vscode.Range(startPos, endPos) }]);
+    return cachePath;
   }
 
   private cachePathFor(uri: vscode.Uri, svg: string): string {
@@ -122,6 +136,12 @@ export class DrawableXmlInlinePreviewProvider implements vscode.Disposable {
     this.typeByCachePath.set(cachePath, type);
     return type;
   }
+
+  /** Test hook: number of live decoration types (one per distinct SVG on screen). */
+  _liveTypeCount(): number { return this.typeByCachePath.size; }
+
+  /** Test hook: runs a flush now instead of after the 80 ms debounce. */
+  _flushNow(): Promise<void> { clearTimeout(this.flushTimer); return this.flush(); }
 
   dispose(): void {
     clearTimeout(this.flushTimer);

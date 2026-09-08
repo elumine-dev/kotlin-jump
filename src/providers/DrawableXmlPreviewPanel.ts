@@ -411,15 +411,21 @@ function buildHtml(svg: string, filename: string): string {
       align-items: center;
       justify-content: center;
       /* Checkered background so transparent regions in the vector are
-         legible — same convention as Photoshop, Figma, Android Studio. */
+         legible — same convention as Photoshop, Figma, Android Studio.
+         Drawn as a translucent grey over the editor background: the old
+         #2a2a2a / #1e1e1e squares made a black icon (the default for an
+         unresolved ?attr colour) invisible on a light theme. */
+      --checker: rgba(128, 128, 128, 0.28);
       background-image:
-        linear-gradient(45deg, #2a2a2a 25%, transparent 25%),
-        linear-gradient(-45deg, #2a2a2a 25%, transparent 25%),
-        linear-gradient(45deg, transparent 75%, #2a2a2a 75%),
-        linear-gradient(-45deg, transparent 75%, #2a2a2a 75%);
+        linear-gradient(45deg, var(--checker) 25%, transparent 25%),
+        linear-gradient(-45deg, var(--checker) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, var(--checker) 75%),
+        linear-gradient(-45deg, transparent 75%, var(--checker) 75%);
       background-size: 16px 16px;
       background-position: 0 0, 0 8px, 8px -8px, -8px 0;
-      background-color: #1e1e1e;
+      background-color: var(--vscode-editor-background);
+      /* Theme colour references convert to currentColor. */
+      color: var(--vscode-foreground);
     }
     main > svg {
       max-width: 90%;

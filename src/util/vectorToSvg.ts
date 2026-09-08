@@ -133,6 +133,11 @@ function findBalancedGroupEnd(
  */
 export function androidColor(value: string | undefined): { color?: string; alpha?: number } {
   if (value === undefined) return {};
+  // `?attr/colorControlNormal`, `@color/primary`, `@android:color/white`: the
+  // real value lives in a theme or a resource file. Passed verbatim, SVG
+  // treated it as an invalid paint (black fill, no stroke). currentColor lets
+  // the surface choose: the preview panel sets it to the editor foreground.
+  if (/^[?@]/.test(value.trim())) return { color: 'currentColor' };
   const m = /^#([0-9a-f]{4}|[0-9a-f]{8})$/i.exec(value.trim());
   if (!m) return { color: value };
   const hex = m[1];

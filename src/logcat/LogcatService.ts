@@ -34,11 +34,11 @@ interface FilterState {
   followedPackage: string | undefined;
 }
 
-/** Device wall-clock of `ts` as `adb logcat -T` and the export want it: `YYYY-MM-DD HH:MM:SS.mmm`. */
 /** A followed app rarely has more than a handful of processes. The cap only
  *  exists so a very long session cannot accumulate dead PIDs forever. */
 const MAX_FOLLOWED_PIDS = 16;
 
+/** Device wall-clock of `ts` as `adb logcat -T` and the export want it: `YYYY-MM-DD HH:MM:SS.mmm`. */
 export function logcatTimeArg(ts: number): string {
   const d = new Date(ts);
   const p = (n: number, w = 2) => String(n).padStart(w, '0');
@@ -142,13 +142,16 @@ export class LogcatService extends EventEmitter implements vscode.Disposable {
   switchDevice(serial: string): void {
     if (this._disposed) return;
     if (this.stream && this.currentSerial === serial) return;
+    const sameDevice = this.currentSerial === serial;
     this.stopStream();
     this.currentSerial = serial;
     this.buffer.clear();
     // The resume anchor is a timestamp read from the PREVIOUS device's clock.
     // An emulator on UTC and a phone on local time are hours apart, so the new
     // stream started with a `-T` from the future and showed nothing at all.
-    this._lastSeenTs = undefined;
+    // Reconnecting to the SAME device is not that case: dropping the anchor
+    // there replays the whole device buffer, which is the bug v1.42.41 fixed.
+    if (!sameDevice) this._lastSeenTs = undefined;
     this.emit('reset');
     this.startStream();
     // The followed PID belongs to the previous device: with it kept, every
@@ -455,8 +458,15 @@ export class LogcatService extends EventEmitter implements vscode.Disposable {
       this.filter.followedPid = pid;
     }
     pids.add(pid);
-    // Insertion order, so the oldest goes first.
-    while (pids.size > MAX_FOLLOWED_PIDS) pids.delete(pids.values().next().value as number);
+    // Insertion order, so the oldest goes first. The main process is the one
+    // the user actually wants to see, and it is inserted first, so plain FIFO
+    // evicted it as soon as the app spawned enough secondaries: its rows then
+    // vanished from the panel while the noise stayed.
+    for (const old of pids) {
+      if (pids.size <= MAX_FOLLOWED_PIDS) break;
+      if (old === this.filter.followedPid) continue;
+      pids.delete(old);
+    }
   }
 
   private startStream(): void {

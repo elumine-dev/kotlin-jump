@@ -186,10 +186,10 @@ export function collectReaderSites(exposedName: string, fileText: string): SiteP
 
 /** Positions of the direct writes of a property. */
 export function collectWriteSites(property: string, fileText: string): SitePosition[] {
-  const re = new RegExp(
-    `\\b${property}\\.(value\\s*[+\\-*/]?=[^=]|update\\s*[({]|postValue\\s*\\(|setValue\\s*\\(|emit\\s*\\(|tryEmit\\s*\\()`,
-    'g',
-  );
+  // Same tail as ANY_WRITE_RE, negative lookahead included: this copy still
+  // had `[^=]`, which consumes the next character, so it disagreed with the
+  // count shown on the lens for two writes glued together.
+  const re = new RegExp(`\\b${property}${WRITE_TAIL}`, 'g');
   return collectMatches(fileText, re);
 }
 

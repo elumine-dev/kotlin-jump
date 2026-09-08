@@ -74,10 +74,10 @@ export interface DtoFieldExplanation {
 const IGNORE_MARKER = 'kotlin-jump:ignore unused-dto-field';
 
 /** Suffixes that mark a class as a wire contract by convention. */
-const DTO_NAME_RE = /(?:DO|DTO|Response|Request|Payload|Entity)$/;
+export const DTO_NAME_RE = /(?:DO|DTO|Response|Request|Payload|Entity)$/;
 
 /** Annotations that mark a class or a field as serialized. */
-const SERIALIZATION_ANNOTATIONS = new Set([
+export const SERIALIZATION_ANNOTATIONS = new Set([
   'Serializable', 'SerializedName', 'Json', 'JsonClass', 'JsonProperty', 'SerialName',
 ]);
 
@@ -188,6 +188,10 @@ export function collectDtoFields(
             ? segments[segIndex].end
             : segments[segIndex].end + 1;
           if (segIndex === 0 && segments.length > 1) removeEnd = segments[1].start;
+          // ktlint's trailing comma: the last segment still owns a `,`. The
+          // previous separator is already in the range, so leaving this one
+          // produced `val name: String,,`.
+          if (segIndex === segments.length - 1 && clean[removeEnd] === ',') removeEnd++;
         }
 
         candidates.push({
@@ -232,6 +236,11 @@ export function findUnusedDtoFields(input: UnusedDtoFieldScanInput): UnusedDtoFi
   // away, so the fix is withdrawn while the verdict stands. Constructed-by-
   // library classes have no such site.
   const constructedClasses = constructionGuard(input.sources, classNames);
+  // A class the app builds itself in main code (`api.login(LoginRequest(mail, pwd))`)
+  // is a producer: its fields are read by the serializer, never deserialized.
+  // "deserialized but never read" was a lie on every request body.
+  const constructedInMain = constructionGuard(
+    input.sources.filter(s => !isTestSourceSet(s.path, input.testSourceSets)), classNames);
 
   const declCount = new Map<string, number>();
   for (const c of candidates) declCount.set(c.name, (declCount.get(c.name) ?? 0) + 1);
@@ -243,6 +252,9 @@ export function findUnusedDtoFields(input: UnusedDtoFieldScanInput): UnusedDtoFi
     const reachableArity = destructuredArity.get(c.className);
     if (reachableArity !== undefined && c.position <= reachableArity) continue; // D1
     if (harvest.aliased.has(c.name)) continue;                        // H10
+    // D5 keeps the verdict for a hand-built ConfigDO (the fixture's rule);
+    // a request body is the one shape the app never deserializes.
+    if (/(?:Request|Payload)$/.test(c.className) && constructedInMain.has(c.className)) continue;
     if (ignored.has(c.className) || ignored.has(`${c.className}.${c.name}`)) continue;
 
     // Every mention beyond the declarations themselves keeps every bearer

@@ -42,6 +42,8 @@ export interface UnusedParam {
   kind: UnusedParamKind;
   /** Index in the declaration's parameter list (positional argument removal). */
   paramIndex: number;
+  /** Size of the declaration's parameter list: a trailing lambda at a call site is its last parameter. */
+  paramCount?: number;
   /** Class or function owning the parameter (call-site search). */
   ownerName: string;
   /** Absolute offsets of the declaration segment to delete (comma included). */
@@ -145,6 +147,7 @@ export function findUnusedParameters(text: string): UnusedParam[] {
         name: c.name,
         kind: c.kind,
         paramIndex: c.segIndex,
+        paramCount: c.segs.length,
         ownerName: owner.name,
         declStart: del.start,
         declEnd: del.end,
@@ -279,7 +282,7 @@ export interface CallScanResult {
  */
 export function computeCallSiteEdits(
   text: string,
-  param: Pick<UnusedParam, 'name' | 'paramIndex' | 'ownerName' | 'kind'>,
+  param: Pick<UnusedParam, 'name' | 'paramIndex' | 'ownerName' | 'kind' | 'paramCount'>,
   lang: 'kotlin' | 'java' = 'kotlin',
 ): CallScanResult {
   const clean = sanitizeForUsageScan(text);
@@ -388,7 +391,26 @@ export function computeCallSiteEdits(
     const closeParen = findMatchingParen(clean, openParen);
     if (closeParen === -1) { skipped++; continue; }
     const segs = splitParamSegments(clean, openParen + 1, closeParen, text);
-    if (segs.length === 0) continue; // no args passed (defaults)
+
+    // `showDialog("Hi") { … }`: the lambda outside the parentheses is the
+    // LAST parameter. It was invisible to the segment split, so removing that
+    // parameter left the lambda behind and the call stopped compiling.
+    // A `{` after `: Owner(a, b)` or Java's `new Owner(a, b)` is a class
+    // body, never an argument.
+    const lambdaOpen = lang === 'kotlin' && !isSupertypeCall(clean, openParen, param.ownerName)
+      ? trailingLambdaOpen(clean, closeParen) : -1;
+    if (lambdaOpen !== -1 && param.paramCount !== undefined && param.paramIndex === param.paramCount - 1) {
+      const lambdaClose = findMatchingBrace(clean, lambdaOpen);
+      if (lambdaClose === -1) { skipped++; continue; }
+      edits.push({ start: closeParen + 1, end: lambdaClose + 1 });
+      continue;
+    }
+    if (segs.length === 0) {
+      // `show { … }` with an unknown parameter count: the lambda may be the
+      // parameter. Say so rather than leave it behind in silence.
+      if (lambdaOpen !== -1 && param.paramCount === undefined) skipped++;
+      continue; // no args passed (defaults)
+    }
 
     const namedIdx = segs.findIndex(s =>
       new RegExp(`^\\s*${param.name}\\s*=(?!=)`).test(clean.slice(s.start, s.end)),
@@ -400,7 +422,10 @@ export function computeCallSiteEdits(
     // not passed at all: not by name (namedIdx === -1) and not positionally
     // (fewer args than paramIndex+1 — positional args keep their index even
     // mixed with named-in-position args) → nothing to remove at this site
-    if (segs.length <= param.paramIndex) continue;
+    if (segs.length <= param.paramIndex) {
+      if (lambdaOpen !== -1 && param.paramCount === undefined) skipped++;
+      continue;
+    }
     // positional removal: every arg up to paramIndex must itself be positional
     const namedFlags = segs.map(s => /^\s*\w+\s*=(?!=)/.test(clean.slice(s.start, s.end)));
     if (namedFlags.every(Boolean)) continue; // fully-named call without our param
@@ -410,4 +435,26 @@ export function computeCallSiteEdits(
   }
 
   return { edits, skipped };
+}
+
+/** `: Owner(…)` in a class header or an `object :` expression: the braces that follow are a body. */
+function isSupertypeCall(clean: string, openParen: number, ownerName: string): boolean {
+  const before = clean.slice(Math.max(0, openParen - ownerName.length - 60), openParen);
+  return new RegExp(`:\\s*(?:[\\w.]+\\.)?${ownerName}\\s*(?:<[^>]*>)?\\s*$`).test(before);
+}
+
+/** Index of the `{` of a trailing lambda right after the call's `)`, or -1. */
+function trailingLambdaOpen(clean: string, closeParen: number): number {
+  let i = closeParen + 1;
+  while (i < clean.length && (clean[i] === ' ' || clean[i] === '\t')) i++;
+  return clean[i] === '{' ? i : -1;
+}
+
+function findMatchingBrace(clean: string, openIdx: number): number {
+  let depth = 0;
+  for (let i = openIdx; i < clean.length; i++) {
+    if (clean[i] === '{') depth++;
+    else if (clean[i] === '}') { depth--; if (depth === 0) return i; }
+  }
+  return -1;
 }

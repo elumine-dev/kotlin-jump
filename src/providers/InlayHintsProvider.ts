@@ -97,7 +97,7 @@ export class KotlinInlayHintsProvider implements vscode.InlayHintsProvider {
     const cfg = vscode.workspace.getConfiguration('kotlinJump');
     const showParamNames    = cfg.get<boolean>('inlayHints.parameterNames', true);
     const showInferredTypes = cfg.get<boolean>('inlayHints.inferredTypes', true);
-    const scope = buildLocalScopeIndex(document.getText().split(/\r?\n/));
+    const scope = buildLocalScopeIndex(document.getText().split(/\r?\n/), document.languageId);
 
     this.log.debug(
       `[InlayHints] provideInlayHints — file=${document.fileName?.split('/').pop() ?? '<doc>'} ` +

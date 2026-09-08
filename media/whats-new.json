@@ -1,31 +1,31 @@
 {
-  "version": "1.42.9",
+  "version": "1.42.10",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Edits that no longer eat your code",
-  "summary": "Kotlin Jump 1.42.9 fixes edits that destroyed code. Organize Imports could replace a class body, Remove unused function could delete everything up to the file header, Rename rewrote imports of unrelated symbols, and a quick fix that was supposed to add a release() call had never appeared at all.",
+  "tagline": "Java locals, honest caches, a Run button that runs",
+  "summary": "Kotlin Jump 1.42.10 closes the fifth audit: a dead-code corpus that a cancelled scan could poison, Java parameters that Rename treated as workspace symbols, an Android Run button that could pin a non-existent Gradle task forever, and a Logcat banner whose trigger could never fire.",
   "highlights": [
     {
-      "title": "Organize Imports keeps the class body",
+      "title": "A cancelled scan cannot poison Remove All",
       "kind": "fix",
-      "description": "An import inside a raw string or a KDoc sample used to mark the end of the import block, and everything between the real imports and that line was replaced. The block is bounded to the file header now, for Organize Imports, Add import and the unused-import check alike."
+      "description": "A dead-code scan cut short by Cancel left no trace of the files it skipped, was cached for a minute, and \"Remove All Unreferenced Symbols\" could delete code those files use. Cancelled scans are never cached, and saving a source invalidates the corpus."
     },
     {
-      "title": "Remove unused function stays on the function",
+      "title": "Java parameters are locals",
       "kind": "fix",
-      "description": "A /* px */ at the end of the line above made the removal climb to the nearest /* in the file. Rename also touches only the import of the renamed symbol, and follows $name into string templates."
+      "description": "The scope index only knew Kotlin's fun. In a Java method, Cmd+Click on a parameter jumped to a Kotlin property elsewhere and F2 renamed every same-named symbol the workspace could reach. Parameters, locals and lambda parameters resolve inside the method now."
     },
     {
-      "title": "A quick fix that finally shows up",
+      "title": "Android Run that recovers",
       "kind": "fix",
-      "description": "\"Add release() in onStop()\" looked up its pairing table by the wrong name and never appeared; it does now, inside the class, with the enclosing function's indentation. The outline reads the live document while it is dirty."
+      "description": "A discovery timeout no longer pins a non-existent install task forever, the Run button gets its command back once the project resolves, the launch uses the resolved adb binary, and the Logcat \"adb not found\" banner finally has a trigger that fires."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Offers no cross-file \"Remove unused parameter\" edit when the owner's name is declared elsewhere too, and computes edits on open editors' unsaved text.",
-        "Resolves \"Add names to call arguments\" through the file's imports instead of the first homonym indexed."
+        "Fetches AndroidX and Google library sources from Google's Maven, counts progress once per coordinate, and reports failures in a message.",
+        "Reads the library sources bar right (missing/total, real stdlib state, live reaction to kotlinJump.indexSourcesJars) and fixes plurals and empty summaries in the dead-code commands."
       ]
     }
   ],

@@ -18,11 +18,11 @@ const META_IMPORTS: vscode.WorkspaceEditEntryMetadata = {
   label: 'Update imports',
 };
 
-function metaFile(oldName: string, newName: string): vscode.WorkspaceEditEntryMetadata {
+function metaFile(oldName: string, newName: string, ext = '.kt'): vscode.WorkspaceEditEntryMetadata {
   return {
     needsConfirmation: true,
     label: 'Rename file',
-    description: `${oldName}.kt → ${newName}.kt`,
+    description: `${oldName}${ext} → ${newName}${ext}`,
   };
 }
 
@@ -195,7 +195,7 @@ export class KotlinRenameProvider implements vscode.RenameProvider {
           fileEntry.uri,
           newUri,
           { overwrite: false },
-          metaFile(fileEntry.name, newName),
+          metaFile(fileEntry.name, newName, fileEntry.uri.path.endsWith('.java') ? '.java' : '.kt'),
         );
       }
     }

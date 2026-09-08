@@ -59,7 +59,10 @@ export class ResourceCorpus {
       return this.cache.corpus;
     }
     const corpus = await this.scan(token);
-    this.cache = { at: Date.now(), corpus };
+    // A scan cut short by Cancel skipped files without marking anything:
+    // cached, it served "unreferenced" verdicts for symbols the unread files
+    // use, and "Remove All" deleted live code on the next click.
+    if (!token?.isCancellationRequested) this.cache = { at: Date.now(), corpus };
     return corpus;
   }
 
@@ -99,7 +102,7 @@ export class ResourceCorpus {
     let readFailed = false;
     const sources: ResourceSource[] = [];
     await mapBatched(keptSources, async uri => {
-      if (token?.isCancellationRequested) return;
+      if (token?.isCancellationRequested) { readFailed = true; return; }
       try {
         sources.push({ path: uri.fsPath, text: decoder.decode(await vscode.workspace.fs.readFile(uri)) });
       } catch {

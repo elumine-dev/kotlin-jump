@@ -75,7 +75,7 @@ export class SourcesStatusBar implements vscode.Disposable {
     }
     if (s.missingCoords > 0) {
       const total = s.libsIndexed + s.missingCoords;
-      this.item.text    = `$(cloud-download) KJ: ${s.libsIndexed}/${total} libs missing`;
+      this.item.text    = `$(cloud-download) KJ: ${s.missingCoords}/${total} libs missing`;
       this.item.tooltip = this.buildTooltip(`${s.missingCoords} sources can be downloaded. Click to fetch.`);
       this.item.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
       return;
@@ -101,6 +101,13 @@ export class SourcesStatusBar implements vscode.Disposable {
       suffix,
     ];
     return lines.join('\n');
+  }
+
+  /** Wired to onDidChangeConfiguration: the bar used to keep its state until the next scan. */
+  onConfigurationChanged(e: vscode.ConfigurationChangeEvent): void {
+    if (e.affectsConfiguration('kotlinJump.indexSourcesJars') || e.affectsConfiguration('kotlinJump.companionMode')) {
+      this.applyVisibility();
+    }
   }
 
   private applyVisibility(): void {

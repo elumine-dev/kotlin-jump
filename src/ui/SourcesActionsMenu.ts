@@ -145,8 +145,10 @@ export class SourcesActionsMenu implements vscode.Disposable {
 
         const results = await downloader.downloadAll(coordsAll, undefined, (update) => {
           const pct = Math.round((update.current / update.total) * 100);
+          // 'started' and 'completed' both arrive per coordinate; counting
+          // both put the bar at 100% halfway through.
           progress.report({
-            increment: (1 / update.total) * 100,
+            increment: update.state === 'started' ? 0 : (1 / update.total) * 100,
             message:   `${pct}% · ${formatCoords(update.coords)}`,
           });
         });
@@ -155,8 +157,13 @@ export class SourcesActionsMenu implements vscode.Disposable {
         const fail = results.length - ok;
         const totalBytes = results.reduce((s, r) => s + r.bytes, 0);
         this.log.info(`[http-dl] done: ${ok} OK, ${fail} failed, ${(totalBytes / 1024).toFixed(0)} KB`);
-        if (fail > 0) {
-          this.statusBar.setState({ networkError: true });
+        if (fail > 0 && !token.isCancellationRequested) {
+          // The bar's networkError state was overwritten by the refresh right
+          // after, so no failure was ever visible.
+          const sample = results.filter(r => r.error).slice(0, 3).map(r => formatCoords(r.coords)).join(', ');
+          void vscode.window.showWarningMessage(
+            `Kotlin Jump: ${ok} source JAR${ok === 1 ? '' : 's'} downloaded, ${fail} not found (${sample}${fail > 3 ? ', …' : ''}). See the Kotlin Jump output for details.`,
+          );
         }
       },
     );

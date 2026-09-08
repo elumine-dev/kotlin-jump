@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.42.10
+
+Kotlin Jump 1.42.10 closes the fifth audit: a dead-code corpus that a cancelled scan could poison, Java parameters that Rename treated as workspace symbols, an Android Run button that could pin a non-existent Gradle task forever, and a Logcat banner whose trigger could never fire.
+
+### Fixes
+- Never caches a dead-code corpus cut short by Cancel. The files skipped after the click left no trace, the partial corpus was served for a minute, and "Remove All Unreferenced Symbols" could delete code those unread files use. Saving a Kotlin, Java, XML, Gradle or TOML file now invalidates the corpus too, so a fixed finding does not linger at its old line.
+- Resolves Java parameters, locals and lambda parameters as locals. The scope index only knew Kotlin's `fun`, so in a Java method Cmd+Click on `name` jumped to a Kotlin property elsewhere and F2 on a parameter renamed every `name` the workspace could reach.
+- Stops Android Run from caching a fallback `install<Variant>` task when discovery timed out. A cold Gradle daemon over 30 s counted as "no install tasks", the fallback was pinned in workspace state, and every later Run failed with "Task 'installDebug' not found" until a manual reset. A timeout now tries the fallback once, uncached.
+- Restores the Run button's command once the Gradle project resolves. After a "Pick Gradle Project" or an invalid setting, the label read Run but a click still opened the picker or the settings page. The persisted project choice is honoured by Run itself, not only by the diagnostic. Escape in the variant picker no longer leaves the button on "Detecting tasks…".
+- Launches the app with the resolved adb binary. The build used the configured path, the launch step typed a bare `adb` into the terminal, and a PATH without platform-tools ended in "adb: command not found" after a successful build.
+- Shows the Logcat "adb binary not found" banner when adb really is missing. Node does not throw when spawning a missing binary, it reports the error a tick later, so the banner's only trigger never fired and the watcher retried every 3 seconds instead of polling.
+- Fetches AndroidX, Android Gradle plugin and Google library sources from Google's Maven instead of failing three times each on Maven Central. The download progress counts each coordinate once instead of reaching 100% halfway, and failures are reported in a message rather than in a status that the next refresh erased.
+- Reads the library sources bar right: "7/10 libs missing" when 7 are missing, "stdlib ✓" only when the bundled stdlib loaded, and the bar hides or shows as soon as `kotlinJump.indexSourcesJars` changes.
+- Fixes texts: "No unreferenced top-level symbols, 3 used only from tests" instead of "0 unreferenced top-level symbols ()", singular forms for one symbol, key, declaration or file, the file rename label for a Java file, and a warning when "Remove All Unread Remote Config Keys" gives up on a truncated corpus.
+
 ## 1.42.9
 
 Kotlin Jump 1.42.9 fixes edits that destroyed code. Organize Imports could replace a class body, Remove unused function could delete everything up to the file header, Rename rewrote imports of unrelated symbols, and a quick fix that was supposed to add a release() call had never appeared at all.

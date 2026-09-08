@@ -348,10 +348,10 @@ describe('ADV-9 — non-ASCII content', () => {
   });
 });
 
-// ── ADV-10 — Multi-line annotations (known limitation) ───────────────────
+// ── ADV-10 — Multi-line annotations (limitation lifted) ──────────────────
 
-describe('ADV-10 — multi-line annotation: documented limitation', () => {
-  it('cursor on continuation line of a multi-line @Suppress does NOT fire', () => {
+describe('ADV-10 — multi-line annotation: now resolves', () => {
+  it('cursor on a continuation line of a multi-line @Suppress fires', () => {
     // Real Kotlin code can wrap long @Suppress lists across lines:
     //   @Suppress(
     //     "UNCHECKED_CAST",
@@ -369,8 +369,9 @@ describe('ADV-10 — multi-line annotation: documented limitation', () => {
     ];
     const col = lines[1].indexOf('UNCHECKED_CAST') + 2;
     const h = hover(lines, 1, col);
-    // Today: returns null. If we ever lift this limitation, flip the assertion.
-    expect(h, 'multi-line @Suppress is a known limitation').toBeNull();
+    // Limitation lifted: the provider walks up a bounded number of lines to
+    // find the annotation head, so one id per line resolves like the inline form.
+    expect(h, 'a continuation line of @Suppress now has a hover').not.toBeNull();
   });
 });
 

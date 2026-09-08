@@ -114,11 +114,17 @@ function mdCode(s: string): string {
 
 // Resolves a query to a SymbolEntry: FQN lookup for dot-qualified queries,
 // with a fallback to simple-name lookup on the last segment if FQN yields nothing.
-function resolveEntry(index: SymbolIndex, query: string): SymbolEntry | undefined {
+export function resolveEntry(index: SymbolIndex, query: string): SymbolEntry | undefined {
   if (!query.includes('.')) return index.lookup(query)[0];
   const lastSegment = query.split('.').pop()!;
   if (!lastSegment) return undefined; // query is "." or ends with "."
-  return index.lookupFqn(query) ?? index.lookup(lastSegment)[0];
+  const byFqn = index.lookupFqn(query);
+  if (byFqn) return byFqn;
+  // The user wrote a package: honour it. Falling back to the first homonym in
+  // the index answered about `com.other.User` when `com.app.User` was asked
+  // for, with nothing saying so.
+  const pkg = query.slice(0, query.length - lastSegment.length - 1);
+  return index.lookup(lastSegment).find(e => e.packageName === pkg);
 }
 
 function streamEntries(entries: SymbolEntry[], stream: vscode.ChatResponseStream, label: string): vscode.ChatResult {
@@ -154,7 +160,11 @@ export function resolveImplementations(index: SymbolIndex, query: string): Symbo
 
   // BUG-1 fix: case-insensitive fallback via search(), which normalises to lowercase
   const resolved = index.lookup(simpleName)[0] ?? index.search(simpleName)[0];
-  if (resolved && resolved.name !== simpleName) {
+  // `search()` is fuzzy: without the equality check it answered with the
+  // implementations of whatever type it happened to rank first, for a name
+  // the workspace does not even declare.
+  if (resolved && resolved.name !== simpleName
+      && resolved.name.toLowerCase() === simpleName.toLowerCase()) {
     return index.lookupImplementations(resolved.name).slice(0, 10);
   }
   return [];

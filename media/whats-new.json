@@ -1,34 +1,32 @@
 {
-  "version": "1.42.35",
+  "version": "1.42.36",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Every screen back on the map",
-  "summary": "Kotlin Jump 1.42.35 fixes the Screen Flow map on the commonest way to declare routes, a sealed class of objects. A route holding a path parameter was read as an opening brace, so the screens declared after it lost their qualified name and came back as dynamic routes. The JDK sources are also found on a JDK 8 and indexed four times faster.",
+  "tagline": "No more confidently wrong answers",
+  "summary": "Kotlin Jump 1.42.36 stops three answers that were confidently wrong. Asking the chat for a fully qualified name answered about a class of another package, asking for implementations of a name the project does not declare returned some other type's, and hovering a suppression id written on its own line showed nothing.",
   "highlights": [
     {
-      "title": "Sealed route hierarchies read right",
+      "title": "The package you typed is honoured",
       "kind": "fix",
-      "description": "A route holding a path parameter was taken for an opening brace, so the screens after it lost their qualified name and drew as dynamic routes."
+      "description": "A fully qualified name that is not in the index no longer answers about the first same named class of another package."
     },
     {
-      "title": "Route files no longer skipped",
+      "title": "Implementations of the right type",
       "kind": "fix",
-      "description": "The filter that keeps the map from freezing now knows both shapes it must read, the constant and the object hierarchy."
+      "description": "The case insensitive fallback went through fuzzy search unchecked, so an unknown name returned another type's implementations."
     },
     {
-      "title": "JDK sources found and lighter",
+      "title": "Hover on a wrapped suppression",
       "kind": "fix",
-      "description": "A JDK 8 keeps `src.zip` at its root, a runtime without sources is only a fallback, and the scan drops the four fifths nobody opens."
+      "description": "An id on its own line under an opening `@Suppress(` had no hover, which is the shape used as soon as there are two ids."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Braces inside a route string no longer open a block, so a sealed hierarchy keeps the qualified name of every screen.",
-        "A file declaring routes as objects is no longer skipped by the map's pre filter.",
-        "`src.zip` is looked for at the root as well as under `lib`, which is where a JDK 8 puts it.",
-        "`JAVA_HOME` pointing at a runtime without sources no longer ends the search for a JDK.",
-        "The JDK scan keeps `java.base` and the modules actually navigated, cutting four fifths of the work."
+        "`/doc` and `/usages` with a qualified name only answer when the package matches, and say so when nothing matches.",
+        "`/implementations` requires the resolved name to equal the one asked for, case aside.",
+        "The suppression hover walks up to the opening `@Suppress(` instead of reading the cursor line alone."
       ]
     }
   ],

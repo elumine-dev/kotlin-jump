@@ -8,6 +8,7 @@ import { findUnusedRemoteConfigKeys } from '../../src/providers/unusedRemoteConf
 import { buildWorkspaceNavigation } from '../../src/ui/ScreenFlowPanel';
 import { gatherRouteConstants } from '../../src/indexer/NavigationIndex';
 import { keepJdkEntry } from '../../src/jdk/JdkSourcesScanner';
+import { resolveEntry, resolveImplementations } from '../../src/ai/KotlinJumpChatParticipant';
 
 // Audit 30 : régressions que nos propres correctifs des versions 1.42.27 à
 // 1.42.30 avaient introduites, trouvées par la chasse adversariale.
@@ -164,5 +165,30 @@ describe('Modules du JDK indexés', () => {
       'jdk.jshell/jdk/jshell/JShell.java',
       'java.management/sun/management/Agent.java',
     ]) expect(keepJdkEntry(dropped), dropped).toBe(false);
+  });
+});
+
+describe('Réponses du participant de chat', () => {
+  const index = new SymbolIndex();
+  index.add(parse('file:///proj/app/User.kt', 'package com.app\n\ndata class User(val id: Int)'));
+  index.add(parse('file:///proj/other/User.kt', 'package com.other\n\ndata class User(val ref: String)'));
+  index.add(parse('file:///proj/app/Repo.kt', 'package com.app\n\ninterface Repo\nclass RepoImpl : Repo'));
+  index.finalize();
+
+  it('un nom qualifié honore le package écrit, et ne retombe pas sur un homonyme', () => {
+    expect(resolveEntry(index, 'com.app.User')?.packageName).toBe('com.app');
+    expect(resolveEntry(index, 'com.other.User')?.packageName).toBe('com.other');
+    // Avant : renvoyait le premier User de l'index, sans le dire.
+    expect(resolveEntry(index, 'com.missing.User')).toBeUndefined();
+    expect(resolveEntry(index, 'User')).toBeDefined();
+  });
+
+  it('/implementations ne répond que pour une correspondance exacte à la casse près', () => {
+    expect(resolveImplementations(index, 'Repo').map(e => e.name)).toEqual(['RepoImpl']);
+    expect(resolveImplementations(index, 'repo').map(e => e.name)).toEqual(['RepoImpl']);
+    // Un nom que le workspace ne déclare pas ne doit pas ramener les
+    // implémentations d'un type choisi par la recherche floue.
+    expect(resolveImplementations(index, 'Rep')).toEqual([]);
+    expect(resolveImplementations(index, 'Zzz')).toEqual([]);
   });
 });

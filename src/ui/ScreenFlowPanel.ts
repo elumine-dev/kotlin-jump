@@ -46,6 +46,10 @@ export async function buildWorkspaceNavigation(): Promise<MergedNavigation> {
   }
 
   const constants = new Map<string, string>();
+  // `const val MAIN` declared in two modules with two values used to keep
+  // whichever file was read last, so an arrow could point at another module's
+  // screen. An ambiguous name resolves to nothing instead.
+  const ambiguous = new Set<string>();
   for (const t of texts.values()) {
     // gatherRouteConstants goes through stripComments, a character by
     // character scan. Paying it on 20000 files, most of which hold neither a
@@ -55,8 +59,13 @@ export async function buildWorkspaceNavigation(): Promise<MergedNavigation> {
     // only the first dropped every Screen.kt, and named screens came back as
     // dynamic routes on the map.
     if (!MAY_DECLARE_ROUTES.test(t)) continue;
-    for (const [k, v] of gatherRouteConstants(t)) constants.set(k, v);
+    for (const [k, v] of gatherRouteConstants(t)) {
+      const seen = constants.get(k);
+      if (seen !== undefined && seen !== v) ambiguous.add(k);
+      else constants.set(k, v);
+    }
   }
+  for (const k of ambiguous) constants.delete(k);
 
   const merged: MergedNavigation = {
     nodes: [], edges: [], deepLinks: [], startDestinations: [], graphs: [],
@@ -100,8 +109,10 @@ export async function buildWorkspaceNavigation(): Promise<MergedNavigation> {
   const declared = merged.nodes.filter(n => !n.dynamic).map(n => n.route);
   for (const e of merged.edges) {
     if (declared.includes(e.to)) continue;
-    const hit = declared.find(r => routeMatches(e.to, r));
-    if (hit) e.to = hit;
+    // find() took the first route in workspace scan order, so the arrow could
+    // move to another screen after a rename or on another machine.
+    const hits = declared.filter(r => routeMatches(e.to, r));
+    if (hits.length === 1) e.to = hits[0];
   }
 
   // The same route in two files (src/main and src/debug, two modules) drew
@@ -202,7 +213,7 @@ function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 }
 
-function renderHtml(nav: MergedNavigation): string {
+export function renderHtml(nav: MergedNavigation): string {
   const orphans = new Set(findOrphans(nav));
   const deepLinked = new Set(nav.deepLinks.map(d => d.route));
   const layers = layerNodes(nav);
@@ -228,7 +239,10 @@ function renderHtml(nav: MergedNavigation): string {
   const height =
     60 + Math.max(1, ...[...byLayer.values()].map(l => l.length)) * (NODE_H + GAP_Y);
 
-  const arrows = nav.edges
+  // An edge whose ends have no box is never drawn: a navigate() outside any
+  // composable, or a target no screen declares. The legend counted them.
+  const drawnEdges = nav.edges.filter(e => pos.has(e.from) && pos.has(e.to));
+  const arrows = drawnEdges
     .map(e => {
       const a = pos.get(e.from);
       const b = pos.get(e.to);
@@ -258,7 +272,7 @@ function renderHtml(nav: MergedNavigation): string {
     })
     .join('');
 
-  const legend = `${nav.nodes.length} screens · ${nav.edges.length} navigations · ${
+  const legend = `${nav.nodes.length} screens · ${drawnEdges.length} navigations · ${
     nav.deepLinks.length
   } deeplinks · ${orphans.size} orphan(s)${nav.truncated ? ` · only the first ${MAX_KT_FILES} Kotlin files were read` : ''}`;
 

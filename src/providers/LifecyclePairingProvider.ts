@@ -13,7 +13,7 @@ import * as vscode from 'vscode';
 // bindService(intent, CONNECTION, flags) is identified by its connection.
 const PAIRS: { open: string; closes: string[]; argIndex?: number }[] = [
   { open: 'registerReceiver', closes: ['unregisterReceiver'] },
-  { open: 'requestLocationUpdates', closes: ['removeUpdates'] },
+  { open: 'requestLocationUpdates', closes: ['removeUpdates', 'removeLocationUpdates'] },
   { open: 'addListener', closes: ['removeListener'] },
   { open: 'addObserver', closes: ['removeObserver'] },
   { open: 'addCallback', closes: ['removeCallback'] },
@@ -61,14 +61,41 @@ interface FunSpan {
   name: string;
   body: string;
   startLine: number;
+  /** Index of the innermost class/object holding the function, -1 at top level. */
+  classId: number;
+}
+
+/** Spans of every class/object/interface body, for grouping functions. */
+function classSpans(text: string): { start: number; end: number }[] {
+  const out: { start: number; end: number }[] = [];
+  const re = /\b(?:class|object|interface)\s+\w+[^{;\n]*\{/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const open = m.index + m[0].length - 1;
+    let depth = 0;
+    for (let i = open; i < text.length; i++) {
+      if (text[i] === '{') depth++;
+      else if (text[i] === '}') { depth--; if (depth === 0) { out.push({ start: m.index, end: i }); break; } }
+    }
+  }
+  return out;
 }
 
 function extractFunctions(text: string): FunSpan[] {
   const spans: FunSpan[] = [];
-  const re = /\bfun\s+(\w+)\s*\([^)]*\)[^{=\n]*\{/g;
+  const classes = classSpans(text);
+  const re = /\bfun\s+(\w+)\s*\(([^)]*)\)[^{=\n]*\{/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
+    // `onStop(owner: LifecycleOwner)` is a DefaultLifecycleObserver callback,
+    // not the Activity's mirror: it stole the release and made a false orphan.
+    if (/LifecycleOwner/.test(m[2])) continue;
     const open = m.index + m[0].length - 1;
+    let classId = -1, best = Infinity;
+    for (let c = 0; c < classes.length; c++) {
+      const span = classes[c];
+      if (m.index > span.start && m.index < span.end && span.end - span.start < best) { classId = c; best = span.end - span.start; }
+    }
     let depth = 0;
     for (let i = open; i < text.length; i++) {
       if (text[i] === '{') depth++;
@@ -79,6 +106,7 @@ function extractFunctions(text: string): FunSpan[] {
             name: m[1],
             body: text.slice(open, i + 1),
             startLine: (text.slice(0, m.index).match(/\n/g) ?? []).length,
+            classId,
           });
           break;
         }
@@ -88,25 +116,45 @@ function extractFunctions(text: string): FunSpan[] {
   return spans;
 }
 
+const IDENT_RE = /^[A-Za-z_]\w*$/;
+const NOT_A_RESOURCE = new Set(['this', 'object', 'null', 'true', 'false', 'it']);
+/** Receivers whose observers detach themselves: `lifecycle.addObserver(x)`. */
+const SELF_DETACHING_RECEIVER = /(?:^|\.)lifecycle$/;
+
 /** Calls of one half of a pair: optional receiver plus the identifying
  *  argument (the 1st by default; bindService is identified by the 2nd). */
 function findHalfCalls(
   body: string,
   method: string,
   argIndex = 0,
-): { resource: string; offsetLines: number }[] {
-  const out: { resource: string; offsetLines: number }[] = [];
+): { resource: string; candidates: string[]; offsetLines: number }[] {
+  const out: { resource: string; candidates: string[]; offsetLines: number }[] = [];
   // `this.resource` as an argument means `resource` (otherwise false orphan).
-  const ARG = `(?:this\\s*\\.\\s*)?(\\w+)?`;
+  const ARG = `(?:this\\s*\\.\\s*)?([\\w.]+)?`;
   const re = new RegExp(
     // `disposable?.dispose()` and `d!!.dispose()` release the same receiver.
-    `(?:(\\w+)\\s*(?:\\?\\.|!!\\.|\\.)\\s*)?${method}\\s*\\(\\s*${ARG}(?:\\s*,\\s*${ARG})?`,
+    // `(?<![\\w.])`: `bus.unsubscribe(h)` is not a `subscribe(`.
+    `(?:([\\w.]+)\\s*(?:\\?\\.|!!\\.|\\.)\\s*|(?<![\\w.]))${method}\\s*\\(\\s*${ARG}(?:\\s*,\\s*${ARG})?(?:\\s*,\\s*${ARG})?(?:\\s*,\\s*${ARG})?`,
     'g',
   );
   let m: RegExpExecArray | null;
   while ((m = re.exec(body)) !== null) {
-    const args = [m[2], m[3]];
-    let resource = args[argIndex] ?? args[0] ?? m[1];
+    const receiver = m[1];
+    // `FragmentDetailBinding.bind(view)` is ViewBinding, released by
+    // `_binding = null`; `lifecycle.addObserver(x)` detaches itself;
+    // `onBackPressedDispatcher.addCallback(viewLifecycleOwner) { }` too.
+    if (method === 'bind' && receiver && /Binding$|DataBindingUtil$/.test(receiver)) continue;
+    if (method === 'addObserver' && receiver && SELF_DETACHING_RECEIVER.test(receiver)) continue;
+    if (method === 'addCallback' && /^(?:this|viewLifecycleOwner|owner|activity|requireActivity\(\))$/.test(m[2] ?? '')) continue;
+    const rawArgs = [m[2], m[3], m[4], m[5]].map(a => a?.replace(/^this\s*\.\s*/, ''));
+    // Only an identifier can be released later: `acquire(10 * 60 * 1000L)`
+    // and `registerReceiver(this, receiver, filter)` used to yield `10` and
+    // `this` as the resource, and a quick fix that did not compile.
+    const usable = (a: string | undefined) => a !== undefined && IDENT_RE.test(a) && !NOT_A_RESOURCE.has(a);
+    let resource: string | undefined;
+    if (method === 'acquire' || method === 'release') resource = receiver?.split('.').pop();
+    else if (usable(rawArgs[argIndex])) resource = rawArgs[argIndex];
+    else resource = rawArgs.find(usable) ?? (receiver?.split('.').pop());
     // `disposable = observable.subscribe(::render)`: what gets released is the
     // Disposable assigned, not the observable; the receiver made a false orphan.
     if (method === 'subscribe') {
@@ -115,8 +163,14 @@ function findHalfCalls(
       else if (/\.(?:add|plusAssign)\s*\(\s*$/.test(body.slice(Math.max(0, m.index - 40), m.index)) || /\+=\s*$/.test(body.slice(Math.max(0, m.index - 20), m.index))) continue; // owned by a CompositeDisposable
     }
     if (!resource) continue;
+    // `fusedClient.requestLocationUpdates(request, callback, looper)` is
+    // released by `removeLocationUpdates(callback)`: any identifier argument
+    // may be the one the mirror names.
+    const candidates = [resource, ...rawArgs.filter(usable) as string[]];
+    if (receiver) candidates.push(receiver.split('.').pop()!);
     out.push({
       resource,
+      candidates: [...new Set(candidates)],
       offsetLines: (body.slice(0, m.index).match(/\n/g) ?? []).length,
     });
   }
@@ -125,29 +179,32 @@ function findHalfCalls(
 
 export function analyzeLifecyclePairs(text: string): LifecycleAnalysis {
   const fns = extractFunctions(text);
-  const byName = new Map(fns.map(f => [f.name, f]));
+  // Functions are matched within their own class: an inner observer's
+  // `onStop` or a second class in the file used to be taken for the mirror.
+  const key = (classId: number, name: string) => `${classId}:${name}`;
+  const byName = new Map(fns.map(f => [key(f.classId, f.name), f]));
   const complete: CompletePair[] = [];
   const orphans: OrphanPair[] = [];
 
-  const closesIn = (fn: FunSpan | undefined, closeMethod: string, resource: string): boolean => {
+  const closesIn = (fn: FunSpan | undefined, closeMethod: string, resources: readonly string[]): boolean => {
     if (!fn) return false;
-    if (findHalfCalls(fn.body, closeMethod).some(c => c.resource === resource)) return true;
+    const releases = (body: string) => findHalfCalls(body, closeMethod).some(c => resources.includes(c.resource) || c.candidates.some(x => resources.includes(x)));
+    if (releases(fn.body)) return true;
     // 1 level of indirection: helpers called from the mirror.
     const calledHelpers = [...fn.body.matchAll(/(?<![\w.])(\w+)\s*\(/g)]
       .map(c => c[1])
-      .filter(name => byName.has(name) && name !== fn.name);
-    return calledHelpers.some(h =>
-      findHalfCalls(byName.get(h)!.body, closeMethod).some(c => c.resource === resource),
-    );
+      .filter(name => byName.has(key(fn.classId, name)) && name !== fn.name);
+    return calledHelpers.some(h => releases(byName.get(key(fn.classId, h))!.body));
   };
 
-  for (const [lifecycle, mirror] of Object.entries(MIRRORS)) {
-    const openFn = byName.get(lifecycle);
-    if (!openFn) continue;
+  for (const openFn of fns) {
+    const mirror = MIRRORS[openFn.name];
+    if (!mirror) continue;
+    const lifecycle = openFn.name;
 
     for (const pair of PAIRS) {
       for (const call of findHalfCalls(openFn.body, pair.open, pair.argIndex ?? 0)) {
-        const closed = pair.closes.some(c => closesIn(byName.get(mirror), c, call.resource));
+        const closed = pair.closes.some(c => closesIn(byName.get(key(openFn.classId, mirror)), c, call.candidates));
         if (closed) {
           complete.push({ open: lifecycle, close: mirror, resource: call.resource });
         } else {

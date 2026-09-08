@@ -31,9 +31,11 @@ export function buildReleaseCall(
   resource: string,
 ): string {
   const methodForm = new RegExp(`\\b${resource}\\s*[.!?]+\\s*${open}\\s*\\(`);
-  return methodForm.test(acquisitionLine)
-    ? `${resource}.${close}()`
-    : `${close}(${resource})`;
+  if (methodForm.test(acquisitionLine)) return `${resource}.${close}()`;
+  // `lifecycle.addObserver(x)` / `manager.addListener(x)`: the release goes
+  // through the same receiver, or `removeObserver(x)` resolved to nothing.
+  const receiver = new RegExp(`([\\w.]+)\\s*(?:\\?\\.|!!\\.|\\.)\\s*${open}\\s*\\(`).exec(acquisitionLine)?.[1];
+  return receiver ? `${receiver}.${close}(${resource})` : `${close}(${resource})`;
 }
 
 export interface NullAssertionRewrite {
@@ -101,16 +103,32 @@ export class LifecycleReleaseActionProvider implements vscode.CodeActionProvider
     while (funLine > 0 && !/^\s*(?:override\s+)?(?:\w+\s+)*fun\b/.test(lines[funLine])) funLine--;
     const fnIndent = lines[funLine].match(/^\s*/)?.[0] ?? '';
     const unit = fnIndent.includes('\t') ? '\t' : '    ';
-    const mirrorRe = new RegExp(`^${fnIndent}(?:\\w+\\s+)*override\\s+fun\\s+${orphan.expectedIn}\\s*\\([^)]*\\)\\s*\\{`);
+    const mirrorRe = new RegExp(`^${fnIndent}(?:\\w+\\s+)*override\\s+fun\\s+${orphan.expectedIn}\\s*\\([^)]*\\)`);
     // Same indentation as the acquiring function: the mirror of this class,
     // not the first onStop in the file.
     const mirrorLine = lines.findIndex(l => mirrorRe.test(l));
     if (mirrorLine >= 0) {
-      action.edit.insert(
-        document.uri,
-        new vscode.Position(mirrorLine + 1, 0),
-        `${fnIndent}${unit}${call}\n`,
-      );
+      const mirrorText = lines[mirrorLine];
+      const afterSig = mirrorText.slice(mirrorText.indexOf(')') + 1);
+      if (/^\s*=/.test(afterSig)) return []; // expression body: nowhere to add a statement
+      const opens = (afterSig.match(/\{/g) ?? []).length;
+      const closes = (afterSig.match(/\}/g) ?? []).length;
+      if (opens > 0 && opens === closes) {
+        // `override fun onStop() { super.onStop() }` on one line: the call
+        // used to land after the closing brace, inside the class body.
+        const closeAt = mirrorText.lastIndexOf('}');
+        action.edit.replace(
+          document.uri,
+          new vscode.Range(mirrorLine, closeAt, mirrorLine, closeAt),
+          `\n${fnIndent}${unit}${call}\n${fnIndent}`,
+        );
+      } else {
+        action.edit.insert(
+          document.uri,
+          new vscode.Position(mirrorLine + 1, 0),
+          `${fnIndent}${unit}${call}\n`,
+        );
+      }
     } else {
       let depth = 0;
       let closeLine = funLine;
@@ -119,10 +137,12 @@ export class LifecycleReleaseActionProvider implements vscode.CodeActionProvider
         if (depth <= 0 && i > funLine) { closeLine = i; break; }
         closeLine = i;
       }
+      // Activities and Fragments require the super call; without it the
+      // generated method threw SuperNotCalledException at the next stop.
       action.edit.insert(
         document.uri,
         new vscode.Position(closeLine + 1, 0),
-        `\n${fnIndent}override fun ${orphan.expectedIn}() {\n${fnIndent}${unit}${call}\n${fnIndent}}\n`,
+        `\n${fnIndent}override fun ${orphan.expectedIn}() {\n${fnIndent}${unit}super.${orphan.expectedIn}()\n${fnIndent}${unit}${call}\n${fnIndent}}\n`,
       );
     }
     return [action];

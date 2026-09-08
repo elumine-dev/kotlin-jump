@@ -43,7 +43,7 @@ export async function buildWorkspaceNavigation(): Promise<MergedNavigation> {
     nodes: [], edges: [], deepLinks: [], startDestinations: [], graphs: [],
   };
   for (const [file, t] of texts) {
-    if (!/\b(NavHost|composable)\s*\(/.test(t)) continue;
+    if (!/\b(NavHost|composable|navigate)\s*\(/.test(t)) continue;
     const parsed = parseNavigation(t, constants);
     merged.nodes.push(...parsed.nodes.map(n => ({ ...n, file })));
     merged.edges.push(...parsed.edges);

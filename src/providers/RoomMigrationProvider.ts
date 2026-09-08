@@ -41,7 +41,11 @@ export class RoomMigrationProvider implements vscode.Disposable {
   private async _roomFiles(): Promise<Map<string, string>> {
     if (this._cache && Date.now() - this._cache.at < CACHE_MS) return this._cache.files;
     const files = new Map<string, string>();
-    const uris = await vscode.workspace.findFiles('**/*.kt', '**/{build,.gradle}/**', 3000);
+    // Past the cap the file holding the migrations may be the one left out,
+    // and every "hole" or "no ADD COLUMN" would be invented: stay silent.
+    const cap = vscode.workspace.getConfiguration('kotlinJump').get<number>('maxIndexedFiles', 3000);
+    const uris = await vscode.workspace.findFiles('**/*.kt', '**/{build,.gradle}/**', cap + 1);
+    if (uris.length > cap) { this._cache = { at: Date.now(), files }; return files; }
     // Reads used to be sequential: a save waited on up to 3000 round trips.
     const open = new Map<string, string>();
     for (const d of vscode.workspace.textDocuments) {
@@ -99,7 +103,9 @@ export class RoomMigrationProvider implements vscode.Disposable {
         (l, i) => i >= entityAt && new RegExp(`va[lr]\\s+${missing.field}\\b`).test(l),
       );
       if (fieldAt < 0) continue;
-      const col = lines[fieldAt].indexOf(missing.field);
+      // The property, not the `"nickname"` inside its @ColumnInfo.
+      const nameM = new RegExp(`va[lr]\\s+(${missing.field})\\b`).exec(lines[fieldAt]);
+      const col = nameM ? nameM.index + nameM[0].length - missing.field.length : lines[fieldAt].indexOf(missing.field);
       const d = new vscode.Diagnostic(
         new vscode.Range(fieldAt, col, fieldAt, col + missing.field.length),
         `${missing.entity}.${missing.field}: no ADD COLUMN in any migration and no defaultValue. This crashes on upgrade.`,

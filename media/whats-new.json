@@ -1,34 +1,34 @@
 {
-  "version": "1.42.27",
+  "version": "1.42.28",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Logcat that survives a device switch, and a Run that asks",
-  "summary": "Kotlin Jump 1.42.27 fixes the Logcat panel and Android Run: a device switch that left the panel empty, an unplugged phone that respawned adb every two seconds and then replayed its whole buffer, accents turned into replacement characters, a secondary process hijacking the PID filter, a Run that picked the emulator over the phone without asking, and a build command Windows could not run.",
+  "tagline": "An index that forgets what you deleted",
+  "summary": "Kotlin Jump 1.42.28 fixes what the index remembered wrongly: ghosts of renamed functions after a restart, a \"not in equals/copy\" hint on every data class property until the file was edited, a workspace class shadowed by its published JAR, a Cmd+T list full of local variables, files of `:app-widgets` filed under `:app`, and folders deleted or renamed in the explorer that stayed navigable.",
   "highlights": [
     {
-      "title": "Logcat follows the device",
+      "title": "No more ghosts after a restart",
       "kind": "fix",
-      "description": "Switching devices keeps the app filter working, an unplugged phone stops the stream instead of respawning adb, and its return resumes after the last row rather than replaying the whole buffer."
+      "description": "A file restored from the snapshot no longer keeps the entries of an earlier scan, so a renamed function leaves Cmd+T and a deleted class stops resolving."
     },
     {
-      "title": "Rows read as the device wrote them",
+      "title": "Snapshot keeps every flag",
       "kind": "fix",
-      "description": "UTF-8 split across chunks, buffer markers glued to messages, mangled Kotlin and R8 frames, and an export in UTC are all fixed; the scroll position holds while the buffer evicts."
+      "description": "expect, actual and primary constructor parameters survive a restart: no false \"not in equals/copy\" hint on data classes, KMP badges back at once."
     },
     {
-      "title": "Run picks the right device",
+      "title": "The right file, the right module",
       "kind": "fix",
-      "description": "A picker appears when several devices are connected, the build command works in PowerShell and cmd.exe, and a disabled launcher alias no longer wins over the real activity."
+      "description": "A workspace class beats its JAR copy, Cmd+T skips local variables, a file joins its most specific Gradle module, and a deleted or renamed folder leaves the index."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "A device switch re-resolves the followed PID; a secondary `:sync` process is followed alongside the main one instead of replacing it.",
-        "An unplugged device shows a stream error, stops the retries, and resumes with `-T` after the last buffered row when it comes back.",
-        "UTF-8 sequences split across stdout chunks, `--------- beginning of` markers, `toString-impl` and `SourceFile` frames, `UtilsKt` top-level functions and the export timestamp are handled.",
-        "Reading back through a full buffer no longer scrolls under your eyes, and adb installed mid-session is found without a reload.",
-        "Run asks which device when several are connected, quotes nothing PowerShell rejects, and skips disabled launcher aliases."
+        "Restoring a file from the snapshot replaces its entries instead of stacking them on the ones from an open editor's scan.",
+        "Snapshot version 24 persists `expect`, `actual` and primary constructor parameters; `actual` wins over `expect` in any restore order.",
+        "Cmd+Click prefers a workspace file over the same symbol in a JAR, and the bundled stdlib over another JAR.",
+        "Cmd+T ignores local variables; `:app-widgets` files no longer belong to `:app`, and Windows paths match their module.",
+        "Folders deleted or renamed in the explorer or a terminal, and workspace folders added or removed, update the index; a file that outgrew the size limit is emptied; `app/build/**` also excludes in the watchers."
       ]
     }
   ],

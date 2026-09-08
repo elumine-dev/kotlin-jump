@@ -10,7 +10,10 @@ export type { Snapshot, SnapshotFile };
 // by mtime and size, so without this every unchanged .java file would restore
 // with the empty import list persisted before the fix, and Find Usages would
 // stay blind to Java until each file happened to be edited.
-export const SNAPSHOT_VERSION = 23;
+// bumped to 24: isExpect / isActual / isPrimaryCtorParam were never persisted,
+// so after every restart each data class property got a "not in equals/copy"
+// hint and the KMP badges vanished until the file was edited.
+export const SNAPSHOT_VERSION = 24;
 const SNAPSHOT_FILENAME = 'kotlin-jump-index.json'; // historical name; content is gzip from v19+
 
 const gzip   = promisify(zlib.gzip);

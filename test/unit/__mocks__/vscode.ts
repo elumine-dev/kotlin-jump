@@ -544,6 +544,10 @@ export class TestMessage {
   constructor(public message: string | MarkdownString) {}
 }
 
+export class RelativePattern {
+  constructor(public base: any, public pattern: string) {}
+}
+
 export class CancellationTokenSource {
   token = {
     isCancellationRequested: false,

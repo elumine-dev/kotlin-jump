@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.42.28
+
+Kotlin Jump 1.42.28 fixes what the index remembered wrongly: ghosts of renamed functions after a restart, a "not in equals/copy" hint on every data class property until the file was edited, a workspace class shadowed by its published JAR, a Cmd+T list full of local variables, files of `:app-widgets` filed under `:app`, and folders deleted or renamed in the explorer that stayed navigable.
+
+### Fixes
+- Restores a file from the snapshot without leaving ghosts. A file open at startup was scanned, restored, then scanned again, and the entries of the first scan stayed behind: a renamed function was still in Cmd+T and Cmd+Click jumped to its old line, a deleted class still resolved. The restore now replaces the file's entries like a scan does.
+- Persists `expect`, `actual` and primary constructor parameters in the snapshot (version 24). After every restart, each property of a data class received the "not in equals/copy" hint, the KMP badges vanished and "show actuals" found nothing until the file was edited. `actual` also wins over `expect` whatever the restore order.
+- Prefers the workspace over a JAR for the same symbol. With a library checked out next to an app that depends on its published artefact, Cmd+Click on `Result` opened the read-only JAR source. The bundled stdlib wins over another JAR the same way; among workspace files the newest still wins.
+- Keeps local variables out of Cmd+T. 250 functions with a `val item` filled the 200-result cap before `ItemRepository`, which VS Code never received.
+- Attaches a file to the most specific Gradle module. `:app-widgets` files were filed under `:app`, `:feature:home` under `:feature`, and on Windows nothing matched at all; "Run test" then ran the wrong Gradle task and answered "No tests found".
+- Follows folders deleted or renamed in the explorer, `rm -rf` from a terminal, and workspace folders added or removed. VS Code reports one event for the folder, none for the files inside, so the index kept them: Cmd+T listed the classes, Cmd+Click opened "file not found", the renamed folder's files did not exist for navigation.
+- Empties a file the rescan skips. A file that outgrew the size limit while VS Code was closed kept its old symbols and line numbers after the restore.
+- Applies a relative exclude pattern in the watchers too. `app/build/**` is valid for the initial scan, but the watcher matched only absolute paths, and the first Gradle build indexed `app/build/generated/**`: duplicates in Cmd+T and two candidates on Cmd+Click.
+
 ## 1.42.27
 
 Kotlin Jump 1.42.27 fixes the Logcat panel and Android Run: a device switch that left the panel empty, an unplugged phone that respawned adb every two seconds and then replayed its whole buffer, accents turned into replacement characters, a secondary process hijacking the PID filter, a Run that picked the emulator over the phone without asking, and a build command Windows could not run.

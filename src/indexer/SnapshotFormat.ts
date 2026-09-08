@@ -39,6 +39,9 @@ export interface SnapshotFile {
   lc?: Record<number, 1>;  // isLifecycle
   cn?: Record<number, 1>;  // isCompanion
   lo?: Record<number, 1>;  // isLocal
+  ep?: Record<number, 1>;  // isExpect
+  ac?: Record<number, 1>;  // isActual
+  pc?: Record<number, 1>;  // isPrimaryCtorParam
   im?: string[];           // raw imports; used to reconstruct word index on restore
   cv?: Record<number, string>; // constValue; raw literal for const val folding
 }
@@ -104,6 +107,9 @@ export function buildSnapshotFile(
     if (e.isLifecycle)      { sf.lc = sf.lc ?? {}; sf.lc[idx] = 1; }
     if (e.isCompanion)      { sf.cn = sf.cn ?? {}; sf.cn[idx] = 1; }
     if (e.isLocal)          { sf.lo = sf.lo ?? {}; sf.lo[idx] = 1; }
+    if (e.isExpect)         { sf.ep = sf.ep ?? {}; sf.ep[idx] = 1; }
+    if (e.isActual)         { sf.ac = sf.ac ?? {}; sf.ac[idx] = 1; }
+    if (e.isPrimaryCtorParam) { sf.pc = sf.pc ?? {}; sf.pc[idx] = 1; }
     if (e.constValue)       { sf.cv = sf.cv ?? {}; sf.cv[idx] = e.constValue; }
   });
 
@@ -172,6 +178,9 @@ export function restoreSnapshotFile(uriStr: string, sf: SnapshotFile, index: Sym
       isCompanion,
       isEnumEntry,
       isLocal:         sf.lo?.[i] === 1 || undefined,
+      isExpect:        sf.ep?.[i] === 1 || undefined,
+      isActual:        sf.ac?.[i] === 1 || undefined,
+      isPrimaryCtorParam: sf.pc?.[i] === 1 || undefined,
       constValue:      sf.cv?.[i],
     };
   });

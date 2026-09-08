@@ -851,11 +851,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const excludeList = cfg.get<string[]>('excludePatterns') ?? ['**/build/**', '**/.gradle/**'];
   // Rebuilt on change: the matcher was captured once, so a folder added to
   // excludePatterns kept feeding the watchers until a reload.
-  let excludedMatcher = makeExclusionMatcher(excludeList);
+  const workspaceRoots = () => (vscode.workspace.workspaceFolders ?? []).map(f => f.uri.path);
+  let excludedMatcher = makeExclusionMatcher(excludeList, workspaceRoots());
   const isExcludedPath = (p: string) => excludedMatcher(p);
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(e => {
     if (e.affectsConfiguration('kotlinJump.excludePatterns')) {
-      excludedMatcher = makeExclusionMatcher(vscode.workspace.getConfiguration('kotlinJump').get<string[]>('excludePatterns') ?? excludeList);
+      excludedMatcher = makeExclusionMatcher(vscode.workspace.getConfiguration('kotlinJump').get<string[]>('excludePatterns') ?? excludeList, workspaceRoots());
     }
   }));
   const maxFiles    = cfg.get<number>('maxIndexedFiles') ?? 10000;
@@ -1466,8 +1467,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       ),
     ),
     vscode.workspace.onDidCreateFiles(() => resourceCorpus.invalidate()),
-    vscode.workspace.onDidDeleteFiles(() => resourceCorpus.invalidate()),
-    vscode.workspace.onDidRenameFiles(() => resourceCorpus.invalidate()),
+    // The explorer reports a deleted or renamed folder as one event for the
+    // folder: the files inside never reached the per-file watchers.
+    vscode.workspace.onDidDeleteFiles(e => {
+      resourceCorpus.invalidate();
+      for (const uri of e.files) watcher.removeTree(uri);
+    }),
+    vscode.workspace.onDidRenameFiles(e => {
+      resourceCorpus.invalidate();
+      for (const { oldUri, newUri } of e.files) { watcher.removeTree(oldUri); void watcher.addTree(newUri); }
+    }),
+    vscode.workspace.onDidChangeWorkspaceFolders(e => {
+      for (const f of e.removed) watcher.removeTree(f.uri);
+      void resolveModules().then(fresh => {
+        moduleMap.clear();
+        for (const [name, dir] of [...jsonModules, ...fresh]) moduleMap.set(name, dir);
+        for (const f of e.added) void watcher.addTree(f.uri);
+      });
+    }),
     vscode.workspace.onDidSaveTextDocument(doc => {
       // Sources are part of the corpus too: a finding fixed and saved kept
       // its line number for a minute, and the squiggle landed on unrelated code.

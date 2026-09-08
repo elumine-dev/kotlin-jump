@@ -13,9 +13,12 @@ import { Logger } from '../util/logger';
  */
 const BURST_THRESHOLD = 8;
 
+const SOURCE_EXT_RE = /\.(?:kt|kts|java)$/;
+
 export class FileWatcher implements vscode.Disposable {
   private readonly ktWatcher:   vscode.FileSystemWatcher;
   private readonly javaWatcher: vscode.FileSystemWatcher;
+  private readonly treeWatcher: vscode.FileSystemWatcher;
   private readonly pendingScan = new Set<string>();
   private flushTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -43,6 +46,52 @@ export class FileWatcher implements vscode.Disposable {
     this.javaWatcher.onDidCreate(uri => this.queue(uri));
     this.javaWatcher.onDidChange(uri => this.queue(uri));
     this.javaWatcher.onDidDelete(uri => this.onDeleted(uri));
+
+    // A folder deleted outside VS Code (rm -rf, a checkout) is one event for
+    // the folder path, which `**/*.kt` never matches: its files stayed
+    // indexed, Cmd+T still listed them and Cmd+Click opened "file not found".
+    this.treeWatcher = vscode.workspace.createFileSystemWatcher('**', true, true, false);
+    this.treeWatcher.onDidDelete(uri => { if (!SOURCE_EXT_RE.test(uri.path)) this.removeTree(uri); });
+  }
+
+  /** Drops every indexed file under `folder` (a deleted or renamed folder, a removed workspace folder). */
+  removeTree(folder: vscode.Uri): vscode.Uri[] {
+    if (SOURCE_EXT_RE.test(folder.path)) return [];
+    const prefix = folder.toString().replace(/\/$/, '') + '/';
+    const gone = this.index.fileUriStrings().filter(k => k.startsWith(prefix)).map(k => vscode.Uri.parse(k));
+    if (gone.length === 0) return gone;
+    this.log?.info(`[watcher] folder gone: ${fileName(folder)} — ${gone.length} file(s) dropped`);
+    for (const uri of gone) {
+      this.pendingScan.delete(uri.toString());
+      evict(uri);
+      this.index.remove(uri);
+    }
+    this.notify(gone);
+    return gone;
+  }
+
+  /** Indexes every source file under a folder that appeared (rename target, added workspace folder). */
+  async addTree(folder: vscode.Uri): Promise<vscode.Uri[]> {
+    if (SOURCE_EXT_RE.test(folder.path)) return [];
+    const cfg = vscode.workspace.getConfiguration('kotlinJump');
+    const excludeList = cfg.get<string[]>('excludePatterns') ?? ['**/build/**', '**/.gradle/**'];
+    const found = await vscode.workspace.findFiles(
+      new vscode.RelativePattern(folder, '**/*.{kt,kts,java}'),
+      `{${excludeList.join(',')}}`,
+      cfg.get<number>('maxIndexedFiles') ?? 10000,
+    );
+    const uris = found.filter(u => !this.isExcluded(u.path));
+    if (uris.length === 0) return uris;
+    this.log?.info(`[watcher] folder added: ${fileName(folder)} — ${uris.length} file(s)`);
+    for (const uri of uris) { evict(uri); this.index.remove(uri); }
+    await this.scanner.rescan(uris);
+    this.notify(uris);
+    return uris;
+  }
+
+  private notify(uris: vscode.Uri[]): void {
+    if (uris.length > BURST_THRESHOLD && this.onBurstIndexed) this.onBurstIndexed(uris);
+    else for (const uri of uris) this.onFileIndexed?.(uri);
   }
 
   /**
@@ -107,6 +156,7 @@ export class FileWatcher implements vscode.Disposable {
   dispose(): void {
     this.ktWatcher.dispose();
     this.javaWatcher.dispose();
+    this.treeWatcher.dispose();
     if (this.flushTimer) clearTimeout(this.flushTimer);
     this.pendingScan.clear();
   }

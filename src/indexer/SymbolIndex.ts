@@ -177,7 +177,7 @@ export class SymbolIndex {
       // file the jar's zip entries happened to iterate last — surfacing a
       // signature with no body and a useless "Go to Definition" experience.
       const existing = this.byFqn.get(fqn);
-      if (!existing || !entry.isExpect || existing.isExpect) {
+      if (!existing || SymbolIndex.fqnRank(entry) >= SymbolIndex.fqnRank(existing)) {
         this.byFqn.set(fqn, entry);
       }
 
@@ -312,7 +312,9 @@ export class SymbolIndex {
   // O(log N) prefix match + O(N) fuzzy fallback.
   // kindFilter: when provided, the 200-result cap applies only within that kind —
   // symbols of other kinds are skipped before the cap is checked.
-  search(query: string, kindFilter?: string): SymbolEntry[] {
+  // `skipLocals`: a workspace search wants declarations, and 250 functions
+  // with a `val item` filled the 200-result cap before `ItemRepository`.
+  search(query: string, kindFilter?: string, skipLocals = false): SymbolEntry[] {
     if (!query) return EMPTY;
 
     if (this.dirty) this.rebuildSorted();
@@ -336,6 +338,7 @@ export class SymbolIndex {
       if (set) {
         for (const e of set) {
           if (kindFilter && e.kind !== kindFilter) continue;
+          if (skipLocals && e.isLocal) continue;
           results.push(e);
           if (results.length >= 200) return results;
         }
@@ -355,7 +358,7 @@ export class SymbolIndex {
           if (score > 0) {
             const set = this.byName.get(name);
             if (set) {
-              const entries = kindFilter ? [...set].filter(e => e.kind === kindFilter) : [...set];
+              const entries = [...set].filter(e => (!kindFilter || e.kind === kindFilter) && !(skipLocals && e.isLocal));
               if (entries.length > 0) scored.push({ entries, score });
             }
           }
@@ -369,7 +372,7 @@ export class SymbolIndex {
         if (score > 0) {
           const set = this.byName.get(name);
           if (set) {
-            const entries = kindFilter ? [...set].filter(e => e.kind === kindFilter) : [...set];
+            const entries = [...set].filter(e => (!kindFilter || e.kind === kindFilter) && !(skipLocals && e.isLocal));
             if (entries.length > 0) scored.push({ entries, score });
           }
         }
@@ -482,11 +485,11 @@ export class SymbolIndex {
   }
 
   // Returns up to `limit` entries whose kind is in the given set — used for "@class:" queries
-  filterByKind(kinds: Set<string>, limit = 200): SymbolEntry[] {
+  filterByKind(kinds: Set<string>, limit = 200, skipLocals = false): SymbolEntry[] {
     const results: SymbolEntry[] = [];
     for (const entries of this.byFile.values()) {
       for (const e of entries) {
-        if (kinds.has(e.kind)) {
+        if (kinds.has(e.kind) && !(skipLocals && e.isLocal)) {
           results.push(e);
           if (results.length >= limit) return results;
         }
@@ -556,12 +559,18 @@ export class SymbolIndex {
 
   // Directly restores pre-built entries from a snapshot — no ParsedFile needed
   restoreFile(uriString: string, entries: SymbolEntry[], imports: string[] = []): void {
+    // Idempotent like add(): an open editor is scanned before the snapshot
+    // restores the same file, and the entries left behind in byName/byFqn
+    // were ghosts that outlived every later edit (a renamed function stayed
+    // in Cmd+T, a deleted class still resolved).
+    this.removeByKey(uriString);
     this.byFile.set(uriString, entries);
     for (const e of entries) {
       let set = this.byName.get(e.name);
       if (!set) { set = new Set(); this.byName.set(e.name, set); this.addToTrigram(e.name); }
       set.add(e);
-      this.byFqn.set(e.fqn, e);
+      const existing = this.byFqn.get(e.fqn);
+      if (!existing || SymbolIndex.fqnRank(e) >= SymbolIndex.fqnRank(existing)) this.byFqn.set(e.fqn, e);
       if (e.supertypes) {
         for (const st of e.supertypes) {
           let sset = this.bySuper.get(st);
@@ -604,6 +613,16 @@ export class SymbolIndex {
 
   // ── Internals ─────────────────────────────────────────────────────────────
 
+  // Which of two entries with the same FQN lookupFqn() returns: a workspace
+  // file over a JAR (a checked-out library used to lose to its published
+  // artefact, and Cmd+Click opened the read-only JAR source), and an
+  // `actual` over an `expect`. Between equals the newer entry wins, as before.
+  private static fqnRank(e: SymbolEntry): number {
+    const scheme = e.uri.scheme;
+    const source = scheme === 'kotlin-jar' ? 0 : scheme === 'kotlin-stdlib-jar' ? 1 : 2;
+    return source * 2 + (e.isExpect ? 0 : 1);
+  }
+
   private removeByKey(key: string): void {
     const entries = this.byFile.get(key);
     if (!entries) return;
@@ -620,9 +639,11 @@ export class SymbolIndex {
         // Restore to a surviving entry with the same FQN (entry already removed from byName above)
         const survivors = this.byName.get(entry.name);
         if (survivors) {
+          let best: SymbolEntry | undefined;
           for (const s of survivors) {
-            if (s.fqn === entry.fqn) { this.byFqn.set(entry.fqn, s); break; }
+            if (s.fqn === entry.fqn && (!best || SymbolIndex.fqnRank(s) > SymbolIndex.fqnRank(best))) best = s;
           }
+          if (best) this.byFqn.set(entry.fqn, best);
         }
       }
       if (entry.supertypes) {

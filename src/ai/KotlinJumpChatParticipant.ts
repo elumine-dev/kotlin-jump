@@ -120,11 +120,18 @@ export function resolveEntry(index: SymbolIndex, query: string): SymbolEntry | u
   if (!lastSegment) return undefined; // query is "." or ends with "."
   const byFqn = index.lookupFqn(query);
   if (byFqn) return byFqn;
+  const candidates = index.lookup(lastSegment);
   // The user wrote a package: honour it. Falling back to the first homonym in
   // the index answered about `com.other.User` when `com.app.User` was asked
   // for, with nothing saying so.
   const pkg = query.slice(0, query.length - lastSegment.length - 1);
-  return index.lookup(lastSegment).find(e => e.packageName === pkg);
+  const samePackage = candidates.find(e => e.packageName === pkg);
+  if (samePackage) return samePackage;
+  // `Outer.Inner` is a partially qualified name, the natural way to name a
+  // nested type. Accepted while it points at one entry, refused when several
+  // could match, so the answer is never about a type nobody asked for.
+  const bySuffix = candidates.filter(e => e.fqn.endsWith(`.${query}`));
+  return bySuffix.length === 1 ? bySuffix[0] : undefined;
 }
 
 function streamEntries(entries: SymbolEntry[], stream: vscode.ChatResponseStream, label: string): vscode.ChatResult {

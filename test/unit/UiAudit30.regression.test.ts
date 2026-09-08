@@ -183,6 +183,25 @@ describe('Réponses du participant de chat', () => {
     expect(resolveEntry(index, 'User')).toBeDefined();
   });
 
+  it('un nom partiellement qualifié reste résolu, sauf s\'il est ambigu', () => {
+    const nested = new SymbolIndex();
+    nested.add(parse('file:///p/Outer.kt', 'package com.app\n\nclass Outer {\n    class Inner\n}'));
+    nested.add(parse('file:///p/Other.kt', 'package com.other\n\nclass Wrapper {\n    class Inner\n}'));
+    nested.finalize();
+    // `Outer.Inner` est la façon naturelle de nommer une classe imbriquée. Le
+    // resserrement sur le package l'avait rendue introuvable, car pour une
+    // imbriquée le préfixe fait partie du nom qualifié, pas du package.
+    expect(nested.lookupFqn('com.app.Outer.Inner')).toBeDefined();
+    expect(resolveEntry(nested, 'Outer.Inner')?.fqn).toBe('com.app.Outer.Inner');
+    expect(resolveEntry(nested, 'Wrapper.Inner')?.fqn).toBe('com.other.Wrapper.Inner');
+    // Un suffixe qui désigne deux entrées ne doit pas trancher au hasard.
+    const ambiguous = new SymbolIndex();
+    ambiguous.add(parse('file:///p/A.kt', 'package com.a\n\nclass Holder {\n    class Item\n}'));
+    ambiguous.add(parse('file:///p/B.kt', 'package com.b\n\nclass Holder {\n    class Item\n}'));
+    ambiguous.finalize();
+    expect(resolveEntry(ambiguous, 'Holder.Item')).toBeUndefined();
+  });
+
   it('/implementations ne répond que pour une correspondance exacte à la casse près', () => {
     expect(resolveImplementations(index, 'Repo').map(e => e.name)).toEqual(['RepoImpl']);
     expect(resolveImplementations(index, 'repo').map(e => e.name)).toEqual(['RepoImpl']);

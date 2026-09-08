@@ -1,32 +1,26 @@
 {
-  "version": "1.42.36",
+  "version": "1.42.37",
   "title": "What's New in Kotlin Jump",
-  "tagline": "No more confidently wrong answers",
-  "summary": "Kotlin Jump 1.42.36 stops three answers that were confidently wrong. Asking the chat for a fully qualified name answered about a class of another package, asking for implementations of a name the project does not declare returned some other type's, and hovering a suppression id written on its own line showed nothing.",
+  "tagline": "Nested names answer again",
+  "summary": "Kotlin Jump 1.42.37 restores partially qualified names in the chat. Tightening the previous release so it would stop answering about another package went one step too far and lost `Outer.Inner`, the natural way to name a nested class.",
   "highlights": [
     {
-      "title": "The package you typed is honoured",
+      "title": "Partially qualified names work",
       "kind": "fix",
-      "description": "A fully qualified name that is not in the index no longer answers about the first same named class of another package."
+      "description": "`Outer.Inner` resolves again: for a nested class the outer name belongs to the qualified name, not to the package."
     },
     {
-      "title": "Implementations of the right type",
+      "title": "Ambiguity still answers nothing",
       "kind": "fix",
-      "description": "The case insensitive fallback went through fuzzy search unchecked, so an unknown name returned another type's implementations."
-    },
-    {
-      "title": "Hover on a wrapped suppression",
-      "kind": "fix",
-      "description": "An id on its own line under an opening `@Suppress(` had no hover, which is the shape used as soon as there are two ids."
+      "description": "A suffix matching two entries, or a package the workspace does not have, returns no answer rather than an arbitrary one."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "`/doc` and `/usages` with a qualified name only answer when the package matches, and say so when nothing matches.",
-        "`/implementations` requires the resolved name to equal the one asked for, case aside.",
-        "The suppression hover walks up to the opening `@Suppress(` instead of reading the cursor line alone."
+        "The chat resolves a name by exact qualified name, then matching package, then unique qualified suffix.",
+        "An ambiguous suffix and an unknown package both answer that nothing was found."
       ]
     }
   ],

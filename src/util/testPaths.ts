@@ -37,17 +37,24 @@ export function segmentMatchesPath(uriPath: string, segment: string): boolean {
   // named `androidTestHelper.kt`, as test code, and Go to Definition then
   // hid them from every production file.
   const parts = p.split('/');
-  const [base, lang] = s.split('/');
+  const want = s.split('/');
+  // A segment written with its own `src` prefix names the same thing as one
+  // without: only what follows carries the variant suffix.
+  if (want[0] === 'src') want.shift();
+  const [base, ...tail] = want;
+  if (!base) return false;
+
   for (let i = 1; i < parts.length; i++) {
     if (parts[i - 1] !== 'src') continue;
     const sourceSet = parts[i]!;
-    const isVariant = sourceSet.length > base!.length
-      && sourceSet.startsWith(base!)
-      && /^[A-Z]/.test(sourceSet[base!.length]!);
+    const isVariant = sourceSet.length > base.length
+      && sourceSet.startsWith(base)
+      && /^[A-Z]/.test(sourceSet[base.length]!);
     if (!isVariant) continue;
-    // `test/java` also pins the language directory: `src/testDebug/java` is a
-    // unit test source set, `src/testDebug/res` is not.
-    if (lang !== undefined && parts[i + 1] !== lang) continue;
+    // What the segment names after the source set has to match exactly:
+    // `test/java` makes `src/testDebug/java` a unit test source set, and
+    // leaves `src/testDebug/res` alone.
+    if (tail.some((want, k) => parts[i + 1 + k] !== want)) continue;
     return true;
   }
   return false;

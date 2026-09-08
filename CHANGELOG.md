@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.42.45
+
+Kotlin Jump 1.42.45 finishes the test source set rule shipped in the previous release. Writing the setting with its own `src` prefix used to lose the build variants.
+
+### Fixes
+- A source set written as `src/test/kotlin` in the settings now covers `src/testDebug/kotlin` too, the same way `test/kotlin` already did. The rule read the setting as the pair `src` then `test`, looked for a variant of `src`, and found none. What the setting names after the source set is still required exactly, so `src/testDebug/res` stays out.
+
 ## 1.42.44
 
 Kotlin Jump 1.42.44 comes from running the extension over a real Android codebase instead of test fixtures: two apps, 3187 Kotlin files, 1901 Java files, 267 000 lines. Every analysis was driven over every file, and the answers were checked against what the file actually contains.

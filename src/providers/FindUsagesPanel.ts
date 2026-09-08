@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { SymbolIndex } from '../indexer/SymbolIndex';
-import { scanForUsagesWithTarget, resolveSearchTarget, DEFAULT_TEST_SEGMENTS, UsageResult, isExcluded } from './FindUsagesEngine';
+import { scanForUsagesWithTarget, resolveSearchTarget, DEFAULT_TEST_SEGMENTS, UsageResult, isExcluded, withoutDeclaration } from './FindUsagesEngine';
 import { isTestPath } from '../util/testFilter';
 
 // ── Tree node types ───────────────────────────────────────────────────────────
@@ -78,7 +78,7 @@ export class FindUsagesPanel
   async search(
     document: vscode.TextDocument,
     position: vscode.Position,
-    exclude?: { excludeUri?: string; excludeLine?: number },
+    exclude?: { excludeUri?: string; excludeLine?: number; excludeCharacter?: number },
   ): Promise<boolean> {
     const wordRange = document.getWordRangeAtPosition(position, /[A-Za-z_]\w*/);
     if (!wordRange) return false;
@@ -117,15 +117,20 @@ export class FindUsagesPanel
 
     if (token.isCancellationRequested) return false;
 
-    // Always exclude the declaration site — it is the origin, not a usage
+    // Always exclude the declaration site — it is the origin, not a usage.
+    // Only that token: a recursive call on the declaration line is a usage,
+    // and the lens counted it.
     if (target) {
-      const declUri = target.uri.toString();
-      raw = raw.filter(r => !(r.uriString === declUri && r.line === target.line));
+      raw = withoutDeclaration(raw, target.uri.toString(), target.line, target.character);
     }
 
     // Exclude an explicit position (code lens click) and short-circuit to direct nav
-    if (exclude?.excludeUri !== undefined) {
-      raw = raw.filter(r => !(r.uriString === exclude.excludeUri && r.line === exclude.excludeLine));
+    if (exclude?.excludeUri !== undefined && exclude.excludeLine !== undefined) {
+      const sameAsTarget = target !== undefined
+        && target.uri.toString() === exclude.excludeUri && target.line === exclude.excludeLine;
+      if (!sameAsTarget) {
+        raw = withoutDeclaration(raw, exclude.excludeUri, exclude.excludeLine, exclude.excludeCharacter);
+      }
 
       // Single result → navigate directly instead of showing the panel
       if (raw.length === 1) {
@@ -159,7 +164,7 @@ export class FindUsagesPanel
   async populateFromResults(
     word: string,
     rawResults: UsageResult[],
-    exclude?: { excludeUri?: string; excludeLine?: number },
+    exclude?: { excludeUri?: string; excludeLine?: number; excludeCharacter?: number },
   ): Promise<void> {
     this.cancelSource?.cancel();
     this.currentWord = word;
@@ -178,11 +183,10 @@ export class FindUsagesPanel
         (d.uri.toString() === exclude.excludeUri || d.uri.path === excludePath),
       );
       if (decl) {
-        const declUri = decl.uri.toString();
-        raw = raw.filter(r => !(r.uriString === declUri && r.line === decl.line));
+        raw = withoutDeclaration(raw, decl.uri.toString(), decl.line, decl.character);
       } else {
         // Fallback: plain string match
-        raw = raw.filter(r => !(r.uriString === exclude.excludeUri && r.line === exclude.excludeLine));
+        raw = withoutDeclaration(raw, exclude.excludeUri ?? '', exclude.excludeLine, exclude.excludeCharacter);
       }
     }
 

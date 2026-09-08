@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { resolveBest } from '../util/ImportResolver';
-import { isInsideCommentOrString, isInsideStringInterpolation } from '../util/textUtils';
+import { isInsideCommentOrString, isInsideStringInterpolation, countTripleQuotes } from '../util/textUtils';
 import { decodeUtf8 } from '../util/encoding';
+import { leavesBlockCommentOpen } from '../util/LocalScopeIndex';
 import { Logger } from '../util/logger';
 
 // ── Internal: wildcard import extraction ─────────────────────────────────────
@@ -279,43 +280,68 @@ export async function scanForUsagesWithTarget(
         const fileHitsBefore = results.length;
         const lines = text.split('\n');
         let inBlockComment = false;
+        // Lines inside a `"""` raw string are text: only a `$name` or a
+        // `${…}` template on them references the symbol. A multi-line SQL
+        // string used to count every `id` in it as a usage.
+        let inRawString = false;
         for (let i = 0; i < lines.length; i++) {
-          const trimmed = lines[i].trimStart();
-          if (inBlockComment) {
-            if (lines[i].includes('*/')) inBlockComment = false;
-            else continue; // still inside block comment — skip entire line
-            // Block comment ended mid-line: fall through to scan the code after */
+          const line = lines[i];
+          // `scan` is `line` with a leading comment or raw-string tail
+          // blanked, so the string/comment classifier starts in code.
+          let scan = line;
+          let codeStart = 0; // first column that is code
+          let rawEnd = -1;   // end of the raw-string text on this line
+          if (inRawString) {
+            const close = line.indexOf('"""');
+            if (close < 0) {
+              codeStart = rawEnd = line.length;
+            } else {
+              codeStart = rawEnd = close + 3;
+              scan = ' '.repeat(codeStart) + line.slice(codeStart);
+              if (countTripleQuotes(scan) % 2 === 0) inRawString = false;
+            }
+          } else if (inBlockComment) {
+            const close = line.indexOf('*/');
+            if (close < 0) continue; // still inside block comment — skip entire line
+            inBlockComment = false;
+            codeStart = close + 2;
+            scan = ' '.repeat(codeStart) + line.slice(codeStart);
           }
-          if (trimmed.startsWith('/*')) {
-            if (!lines[i].includes('*/')) { inBlockComment = true; continue; }
-            // Comment opens and closes on same line — fall through; isInsideCommentOrString handles it
+          if (codeStart < line.length) {
+            const trimmed = scan.trimStart();
+            if (
+              trimmed.startsWith('import ') ||
+              trimmed.startsWith('//') ||
+              (trimmed.startsWith('*') && !trimmed.startsWith('*/'))
+            ) continue;
+            // A `/*` left open mid-line (`val x = 1 /* note`) hides the next lines too.
+            if (scan.includes('/*') && leavesBlockCommentOpen(scan, 0)) inBlockComment = true;
+            if (!inRawString && scan.includes('"""') && countTripleQuotes(scan) % 2 === 1) inRawString = true;
           }
-          if (
-            trimmed.startsWith('import ') ||
-            trimmed.startsWith('//') ||
-            (trimmed.startsWith('*') && !trimmed.startsWith('*/'))
-          ) continue;
 
           wordRe.lastIndex = 0;
           let m: RegExpExecArray | null;
-          while ((m = wordRe.exec(lines[i])) !== null) {
+          while ((m = wordRe.exec(line)) !== null) {
             if (results.length >= maxReferences) break;
-            if (isInsideCommentOrString(lines[i], m.index)) {
+            if (m.index < codeStart) {
+              // Comment text is never a reference; raw-string text only through a template.
+              if (!(m.index < rawEnd && inRawTemplate(line, m.index))) continue;
+            } else if (isInsideCommentOrString(scan, m.index)) {
               // `"Hello $name"` and `"${name}"` are code: a rename that
               // skipped them left the template pointing at the old name.
               // `"\$amount"` is an escaped dollar, and a `// … $name` comment is a comment.
-              const escapedDollar = m.index >= 2 && lines[i][m.index - 1] === '$' && lines[i][m.index - 2] === '\\';
-              const shortInterp = m.index >= 1 && lines[i][m.index - 1] === '$' && !escapedDollar;
-              const commentAt = lineCommentStart(lines[i]);
+              const escapedDollar = m.index >= 2 && scan[m.index - 1] === '$' && scan[m.index - 2] === '\\';
+              const shortInterp = m.index >= 1 && scan[m.index - 1] === '$' && !escapedDollar;
+              const commentAt = lineCommentStart(scan);
               if (commentAt >= 0 && commentAt < m.index) continue;
-              if (insideBlockCommentOnLine(lines[i], m.index)) continue;
-              if (!shortInterp && !isInsideStringInterpolation(lines[i], m.index)) continue;
+              if (insideBlockCommentOnLine(scan, m.index)) continue;
+              if (!shortInterp && !isInsideStringInterpolation(scan, m.index)) continue;
             }
             // Kotlin keyword used as method name (e.g. .catch()): require a dot qualifier
             // to avoid matching language constructs like `catch (e: Exception)`.
-            if (KOTLIN_KEYWORDS.has(word) && (m.index === 0 || lines[i][m.index - 1] !== '.')) continue;
-            if (SOFT_KEYWORDS.has(word) && !softKeywordIsIdentifier(lines[i], m.index, word)) continue;
-            results.push({ uri, uriString: uriStr, line: i, character: m.index, lineText: lines[i] });
+            if (KOTLIN_KEYWORDS.has(word) && (m.index === 0 || line[m.index - 1] !== '.')) continue;
+            if (SOFT_KEYWORDS.has(word) && !softKeywordIsIdentifier(line, m.index, word)) continue;
+            results.push({ uri, uriString: uriStr, line: i, character: m.index, lineText: line });
           }
         }
         const hitsInFile = results.length - fileHitsBefore;
@@ -423,6 +449,45 @@ function packageRegex(pkg: string): RegExp {
 }
 
 /**
+ * Inside a raw string, `$name` and `${…name…}` are the only places where
+ * `name` is code. Raw strings have no escapes, so a `$` is always a template.
+ */
+function inRawTemplate(line: string, index: number): boolean {
+  if (index > 0 && line[index - 1] === '$') return true;
+  let braces = 0;
+  for (let i = 0; i < index; i++) {
+    if (braces === 0) {
+      if (line[i] === '$' && line[i + 1] === '{') { braces = 1; i++; }
+    } else if (line[i] === '{') braces++;
+    else if (line[i] === '}') braces--;
+  }
+  return braces > 0;
+}
+
+/**
+ * Drops the declaration token itself from a scan: the name at
+ * (line, character) in the declaring file. Only that token, so a recursive
+ * call or a second mention on the declaration line still counts, and the
+ * lens count agrees with the panel. When no hit sits at that column
+ * (backtick names), the first hit on the line is the declaration.
+ */
+export function withoutDeclaration(
+  results: UsageResult[],
+  uriString: string,
+  line: number,
+  character?: number,
+): UsageResult[] {
+  let idx = character === undefined
+    ? -1
+    : results.findIndex(r => r.uriString === uriString && r.line === line && r.character === character);
+  if (idx < 0) idx = results.findIndex(r => r.uriString === uriString && r.line === line);
+  if (idx < 0) return results;
+  return results.filter((_, i) => i !== idx);
+}
+
+const RE_ANY_PACKAGE = /^\s*package\s+[\w.]+/m;
+
+/**
  * Returns true if a file could plausibly reference the target symbol.
  * Checks: same package, explicit FQN import, or wildcard package import.
  *
@@ -435,6 +500,10 @@ export function fileCouldReference(text: string, target: SymbolEntry, index?: Sy
   if (pkg) {
     // Anchor to start of line (multiline ^) so a `// package foo` comment never matches.
     if (packageRegex(pkg).test(text)) return true;
+  } else if (!RE_ANY_PACKAGE.test(text)) {
+    // Both in the default package, the target's own file included: no
+    // import check below could accept them, and the lens said "0 usages".
+    return true;
   }
   if (importedExactly(text, fqn)) return true;
   // For member FQNs (pkg.Class.method), also check import of the containing class

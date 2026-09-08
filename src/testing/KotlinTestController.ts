@@ -7,6 +7,7 @@ import { Logger } from '../util/logger';
 // (child_process/fs) into the web bundle. Re-exported here for existing
 // importers of this file.
 import { DEFAULT_TEST_SEGS, isTestFun } from './TestAnnotations';
+import { isTestSourceSet } from '../util/testPaths';
 export { DEFAULT_TEST_SEGS, isTestFun } from './TestAnnotations';
 
 export class KotlinTestController implements vscode.Disposable {
@@ -480,9 +481,12 @@ function parseItemId(id: string): { fqn: string; uriStr: string } {
   return { fqn: id.slice(first + 1, second), uriStr: id.slice(second + 1) };
 }
 
-function isTestFile(uriStr: string, extraSegs: string[]): boolean {
+// Bounded path components plus Gradle's own `src/<anything>Test<anything>/`
+// rule: files under `src/testDebug/` or `src/screenshotTest/` got a Run lens
+// and then "test not found in index", since discovery never looked at them.
+export function isTestFile(uriStr: string, extraSegs: string[]): boolean {
   const segs = extraSegs.length > 0 ? [...DEFAULT_TEST_SEGS, ...extraSegs] : DEFAULT_TEST_SEGS;
-  return segs.some(s => uriStr.includes(s));
+  return isTestSourceSet(uriStr, segs);
 }
 
 /**

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.42.43
+
+Kotlin Jump 1.42.43 contains no change to the extension. It replaces one of our own tests that measured a wall clock and failed on a loaded build machine, which left the previous release red even though it shipped correctly.
+
+### Fixes
+- A regression test now asserts on behaviour instead of on elapsed time. It guarded a shortcut that skips scanning function bodies when a file declares no state, and it did so with a threshold in milliseconds. It checks the two outcomes that matter instead: a file with no state produces no lens, and a file with a single state keeps its lens and its indirect writes.
+
 ## 1.42.42
 
 Kotlin Jump 1.42.42 undoes the damage of its own last four releases. An adversarial pass over those diffs found sixteen defects the fixes themselves had introduced, and this release closes them. Most came from the same mistake: a guard added to stop one wrong answer also silenced the right one.

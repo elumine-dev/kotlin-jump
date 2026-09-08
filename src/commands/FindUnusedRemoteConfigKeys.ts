@@ -65,7 +65,11 @@ export async function removeAllUnusedRemoteConfigKeysCommand(
     { location: vscode.ProgressLocation.Notification, title: 'Preparing the removal…', cancellable: true },
     async (_progress, token) => {
       const data = await corpus.get(token);
-      if (token.isCancellationRequested || data.sourcesTruncated) return;
+      if (token.isCancellationRequested) return;
+      if (data.sourcesTruncated) {
+        void vscode.window.showWarningMessage('Could not read the whole workspace, so nothing was removed.');
+        return;
+      }
 
       const found = findUnusedRemoteConfigKeys({ sources: data.sources, ...remoteConfigSettings() });
       provider.setFindings(found);

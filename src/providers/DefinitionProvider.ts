@@ -560,7 +560,7 @@ export function resolveLocalScope(
 
   // Hot callers (semantic tokens, inlay hints) build the index once per run
   // and pass it; a single Go to Definition builds its own, one pass either way.
-  const index = scope ?? buildLocalScopeIndex(document.getText().split(/\r?\n/));
+  const index = scope ?? buildLocalScopeIndex(document.getText().split(/\r?\n/), document.languageId);
   if (position.line >= index.lines.length) return undefined;
 
   // Step 1 — the enclosing function.
@@ -590,6 +590,18 @@ export function resolveLocalScope(
   if (params === undefined) return undefined;
   // Param syntax: `[modifiers] NAME: TYPE [= default]`. Greedy match each
   // top-level `,`-separated chunk and pull the name from before the colon.
+  if (document.languageId === 'java') {
+    // Java: `[final] Type name`, the name is the last identifier of the chunk.
+    // Without this, a Java parameter resolved to a same-named workspace
+    // symbol, and F2 on it renamed the whole workspace.
+    for (const chunk of splitTopLevel(params, ',')) {
+      const nameMatch = /([A-Za-z_$][\w$]*)\s*$/.exec(chunk.replace(/@\w+(?:\([^)]*\))?/g, '').trim());
+      if (!nameMatch || nameMatch[1] !== word) continue;
+      const loc = findInDocumentLines(document, funLine, sigEndLine, name => name === word, /([A-Za-z_$][\w$]*)\s*(?=[,)])/g);
+      if (loc) return loc;
+    }
+    return undefined;
+  }
   for (const chunk of splitTopLevel(params, ',')) {
     const cleaned = chunk.replace(/\bvararg\s+|\bnoinline\s+|\bcrossinline\s+/g, '').trim();
     const nameMatch = /^(?:[A-Z][\w<>?,\s.]*\s+)?(\w+)\s*:/.exec(cleaned);

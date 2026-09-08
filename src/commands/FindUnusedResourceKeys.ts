@@ -85,7 +85,7 @@ export async function findUnusedResourceKeysCommand(
         return;
       }
       void vscode.window.showInformationMessage(
-        `${result.findings.length} unused resource keys: ${summarize(result.findings)}.`,
+        `${result.findings.length} unused resource key${result.findings.length === 1 ? '' : 's'}: ${summarize(result.findings)}.`,
       );
     },
   );

@@ -45,18 +45,36 @@ export class AdbDeviceWatcher extends EventEmitter {
     }
 
     this.process = proc;
-    this.stopPolling(); // Upgrade succeeded — drop the poll machinery.
-    if (this.adbMissing) {
-      this.adbMissing = false;
-      this.emit('adb-found');
-    }
+    // Node does not throw for a missing binary: spawn() returns a process
+    // that emits 'error' (ENOENT) a tick later. The catch above only covers
+    // a resolver that throws; without this the banner never showed and the
+    // watcher retried every 3 s forever instead of polling.
+    let spawnFailed = false;
+    proc.on('spawn', () => {
+      this.stopPolling(); // Upgrade succeeded — drop the poll machinery.
+      if (this.adbMissing) {
+        this.adbMissing = false;
+        this.emit('adb-found');
+      }
+    });
+    proc.once('error', (err: NodeJS.ErrnoException) => {
+      if (err.code !== 'ENOENT' && err.code !== 'EACCES') return;
+      spawnFailed = true;
+      this.process = undefined;
+      this.log?.warn(`[adb:watcher] adb not runnable (${err.code}) — falling back to poll`);
+      if (!this.adbMissing) {
+        this.adbMissing = true;
+        this.emit('adb-missing');
+      }
+      this.startPolling();
+    });
 
     proc.stdout.on('data', () => { void this.refresh(); });
     proc.stderr.on('data', d => this.log?.debug(`[adb:watcher] stderr: ${d.toString().trim()}`));
 
     proc.on('close', () => {
       this.process = undefined;
-      if (this.disposed) return;
+      if (this.disposed || spawnFailed) return;
       this.log?.debug(`[adb:watcher] track-devices closed — retrying in ${RETRY_DELAY_MS} ms`);
       this.retryTimer = setTimeout(() => this.start(), RETRY_DELAY_MS);
     });

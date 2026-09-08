@@ -61,7 +61,7 @@ let _currentAppName: string | undefined;
 let _hasMultipleApps = false;
 let _lastDetection:   DetectionResult | undefined;
 // Deduplicate concurrent task discovery calls for the same module
-const _taskDiscoveryPromises = new Map<string, Promise<string[]>>();
+const _taskDiscoveryPromises = new Map<string, Promise<string[] | null>>();
 
 // ── Cache key helpers ─────────────────────────────────────────────────────────
 
@@ -95,6 +95,7 @@ export function registerAndroidRunCommand(
   context.subscriptions.push(switchBtn);
 
   // Restore app name and multi-app flag from previous session
+  _persistedRootChoice = () => context.workspaceState.get<string>(GRADLE_PROJECT_CHOICE_KEY);
   const cachedExplicit = context.workspaceState.get<string>('androidRunConfigExplicit');
   const cachedAuto     = context.workspaceState.get<AndroidModuleInfo>('androidRunConfig');
   if (cachedExplicit)      { _currentAppName = cachedExplicit; }
@@ -361,7 +362,8 @@ async function runAndroid(
     const resolved = await resolveInstallTask(
       config.gradlew, config.gradleModule, config.projectRoot, context, log,
     );
-    if (!resolved) return;
+    // Escape in the variant picker left the button on "Detecting tasks…".
+    if (!resolved) { setIdle(); return; }
     installTask = resolved;
   }
 
@@ -375,7 +377,11 @@ async function runAndroid(
   // same as the zshrc newsfeed approach. USB and HOST:PORT serials are explicit and safe to pass.
   const isMdnsAuto   = device.startsWith('adb-');
   const serialEnv    = isMdnsAuto ? '' : `ANDROID_SERIAL="${device}" `;
-  const adbTarget    = isMdnsAuto ? 'adb' : `adb -s "${device}"`;
+  // The resolved binary (kotlinJump.adbPath, $ANDROID_HOME), not a bare
+  // `adb` the terminal's PATH may not have: "adb: command not found" after
+  // a successful build.
+  const adbBin       = adbForShell();
+  const adbTarget    = isMdnsAuto ? adbBin : `${adbBin} -s "${device}"`;
   const gradleCmd    = `${serialEnv}"${config.gradlew}" ${installTask}`;
   const launchParams: LaunchParams = {
     device,
@@ -447,7 +453,7 @@ function executeWithShellIntegration(
     // Build ADB command after gradle succeeds: merged manifest is now on disk.
     // Mirrors exactly what Android Studio does — reads the real package + LAUNCHER activity.
     const { device, packageName, projectRoot, gradleModule, installTask } = launchParams;
-    const adbT  = device.startsWith('adb-') ? 'adb' : `adb -s "${device}"`;
+    const adbT  = device.startsWith('adb-') ? adbForShell() : `${adbForShell()} -s "${device}"`;
     const merged = readMergedManifest(projectRoot, gradleModule, installTask);
     let adbCmd: string;
     if (merged) {
@@ -480,7 +486,7 @@ async function backgroundTaskDiscovery(
   log: Logger,
 ): Promise<void> {
   try {
-    const root = findProjectRoot(log);
+    const root = resolvedProjectRoot(log);
     if (!root) return;
     const gradlew = resolveGradleWrapper(root);
 
@@ -513,6 +519,7 @@ async function backgroundTaskDiscovery(
 
       log.debug(`[android:run] bg discovery: ${gradleModule || 'root'}`);
       const tasks = await discoverInstallTasksRaw(gradlew, gradleModule, root, log);
+      if (tasks === null) continue;
 
       if (tasks.length === 1) {
         const fullTask = `${gradleModule}:${tasks[0]}`;
@@ -554,6 +561,16 @@ async function resolveInstallTask(
   // 3. Neither cache exists — run discovery now (first click on a fresh project)
   setDiscoveringTasks();
   const tasks = await discoverInstallTasksRaw(gradlew, gradleModule, projectRoot, log);
+
+  if (tasks === null) {
+    // Timeout or Gradle error: the variant list is unknown, not empty. Caching
+    // the fallback here pinned a non-existent install<Variant> task forever on
+    // flavored projects with a cold daemon.
+    const variant  = vscode.workspace.getConfiguration('kotlinJump').get<string>('androidVariant', 'Debug');
+    const fallback = `${gradleModule}:install${variant}`;
+    log.warn(`[android:run] task discovery inconclusive — trying ${fallback} once, not cached`);
+    return fallback;
+  }
 
   if (tasks.length === 0) {
     // Fallback: honour the legacy androidVariant setting
@@ -608,7 +625,7 @@ async function discoverInstallTasksRaw(
   gradleModule: string,
   projectRoot: string,
   log: Logger,
-): Promise<string[]> {
+): Promise<string[] | null> {
   const key      = gradleModule || 'root';
   const existing = _taskDiscoveryPromises.get(key);
   if (existing) return existing;
@@ -619,17 +636,17 @@ async function discoverInstallTasksRaw(
 
   log.info(`[android:run] discovering tasks: ${cmd}`);
 
-  const promise = new Promise<string[]>(resolve => {
+  const promise = new Promise<string[] | null>(resolve => {
     const timer = setTimeout(() => {
       log.warn('[android:run] task discovery timeout (30s)');
-      resolve([]);
+      resolve(null);
     }, 30_000);
 
     exec(cmd, { cwd: projectRoot }, (err, stdout) => {
       clearTimeout(timer);
       if (err) {
         log.warn(`[android:run] task discovery failed: ${err.message.split('\n')[0]}`);
-        resolve([]);
+        resolve(null);
         return;
       }
       const tasks = parseInstallTasks(stdout);
@@ -984,6 +1001,19 @@ function setIdle(): void {
   if (!_runButton) return;
   _runButton.text            = _currentAppName ? `$(play) ${_currentAppName}` : '$(play) Run';
   _runButton.backgroundColor = undefined;
+  // renderButton() points the button at a picker or a diagnostic; once the
+  // project resolves the label read "Run" but a click still opened them.
+  _runButton.command         = 'kotlin-jump.runAndroid';
+}
+
+// The persisted "Pick Gradle Project" choice: findProjectRoot() ignored it,
+// so an ambiguous workspace kept answering "No Gradle project found" after
+// the user had picked one.
+let _persistedRootChoice: (() => string | undefined) | undefined;
+function resolvedProjectRoot(log: Logger): string | undefined {
+  const r = detectProjectRoot(log, _persistedRootChoice?.());
+  if (r.kind === 'resolved') return r.root;
+  return findProjectRoot(log);
 }
 
 function onSuccess(launchParams: LaunchParams): void {
@@ -1034,7 +1064,7 @@ async function detectAndroidProject(
   context: vscode.ExtensionContext,
   log: Logger,
 ): Promise<AndroidConfig | undefined> {
-  const projectRoot = findProjectRoot(log);
+  const projectRoot = resolvedProjectRoot(log);
   if (!projectRoot) {
     vscode.window.showErrorMessage('Kotlin Jump: No Gradle project found in the workspace.');
     return undefined;
@@ -1293,4 +1323,10 @@ function buildConfig(
   const gradleModule = info.module ? ':' + info.module.replace(/\//g, ':') : '';
   const installTask  = `${gradleModule}:install${variant}`;
   return { ...info, gradleModule, installTask, projectRoot, gradlew };
+}
+
+/** The resolved adb binary, quoted for the integrated terminal. */
+function adbForShell(): string {
+  const bin = resolveAdbPath();
+  return /[\s"]/.test(bin) ? `"${bin.replace(/"/g, '\\"')}"` : bin;
 }

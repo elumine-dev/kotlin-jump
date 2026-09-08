@@ -36,7 +36,27 @@ const FOR_RE     = /\bfor\s*\(\s*(?:\(\s*(\w+)\s*,\s*(\w+)\s*\)|(\w+))(?:\s*:\s*
 // Lambda params: `{ x ->`, `{ x, y ->`, `{ (a, b) ->`.
 const LAMBDA_RE  = /\{\s*(?:\(\s*(\w+)\s*,\s*(\w+)\s*\)|(\w+)(?:\s*,\s*\w+)*)\s*->/g;
 
-export function buildLocalScopeIndex(lines: readonly string[]): LocalScopeIndex {
+// Java: `[modifiers] Type name(` on a line that is not a statement. Control
+// keywords, assignments, qualified calls and `;`-terminated lines are out.
+export function isJavaMethodHeader(text: string): boolean {
+  const t = text.trim();
+  const paren = t.indexOf('(');
+  if (paren <= 0) return false;
+  if (/^(?:if|for|while|switch|catch|return|new|else|do|try|throw|synchronized|case)\b/.test(t)) return false;
+  if (/;\s*$/.test(t)) return false;
+  const before = t.slice(0, paren).replace(/@\w+(?:\([^)]*\))?\s*/g, '').trim();
+  if (/[=.}]/.test(before)) return false;
+  // `Type name` (generics and arrays allowed) or a constructor `public Foo`
+  return /(?:^|\s)[\w$<>\[\],?]+\s+[A-Za-z_$][\w$]*$/.test(before)
+    || /^(?:(?:public|protected|private)\s+)?[A-Z][\w$]*$/.test(before);
+}
+
+const JAVA_LOCAL_RE  = /\b(?!return\b|throw\b|new\b|case\b|else\b|instanceof\b|import\b|package\b|extends\b|implements\b)(?:final\s+)?[A-Za-z_$][\w$.]*(?:<[^>]*>)?(?:\[\])*\s+([A-Za-z_$][\w$]*)\s*(?=[=;:,)])/g;
+const JAVA_LAMBDA_RE = /(?:\(\s*([A-Za-z_$][\w$]*)(?:\s*,\s*([A-Za-z_$][\w$]*))*\s*\)|\b([A-Za-z_$][\w$]*))\s*->/g;
+
+export function buildLocalScopeIndex(lines: readonly string[], language: 'kotlin' | 'java' | string = 'kotlin'): LocalScopeIndex {
+  const isJava = language === 'java';
+  const isHeader = (text: string) => isJava ? isJavaMethodHeader(text) : FUN_RE.test(text);
   const n = lines.length;
   const enclosingFun = new Int32Array(n).fill(-1);
   const bindings = new Map<string, LocalBinding[]>();
@@ -57,7 +77,7 @@ export function buildLocalScopeIndex(lines: readonly string[]): LocalScopeIndex 
     let found = -1;
     for (let probe = opener; probe >= 0; probe--) {
       const text = lines[probe];
-      if (FUN_RE.test(text)) { found = probe; break; }
+      if (isHeader(text)) { found = probe; break; }
       if (probe < opener && text.includes('}')) break;
     }
     headerMemo.set(opener, found);
@@ -85,7 +105,7 @@ export function buildLocalScopeIndex(lines: readonly string[]): LocalScopeIndex 
       stack.push({ line: k, below: prev });
     }
 
-    if (FUN_RE.test(text)) {
+    if (isHeader(text)) {
       enclosingFun[k] = k;
     } else {
       for (let s = stack.length - 1; s >= 0; s--) {
@@ -94,8 +114,21 @@ export function buildLocalScopeIndex(lines: readonly string[]): LocalScopeIndex 
       }
     }
 
-    VAL_VAR_RE.lastIndex = 0;
     let m: RegExpExecArray | null;
+    if (isJava) {
+      JAVA_LOCAL_RE.lastIndex = 0;
+      while ((m = JAVA_LOCAL_RE.exec(text))) record(k, m.index + m[0].lastIndexOf(m[1]), m[1]);
+      JAVA_LAMBDA_RE.lastIndex = 0;
+      while ((m = JAVA_LAMBDA_RE.exec(text))) {
+        const names = m[3] ? [m[3]] : m[0].slice(1, m[0].indexOf(')')).split(',').map(s => s.trim()).filter(Boolean);
+        for (const name of names) {
+          const at = text.indexOf(name, m.index);
+          if (at >= 0) record(k, at, name);
+        }
+      }
+      continue;
+    }
+    VAL_VAR_RE.lastIndex = 0;
     while ((m = VAL_VAR_RE.exec(text))) record(k, m.index + m[0].indexOf(m[1]), m[1]);
     FOR_RE.lastIndex = 0;
     while ((m = FOR_RE.exec(text))) {

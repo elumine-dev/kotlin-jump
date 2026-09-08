@@ -58,7 +58,7 @@ export async function findDeadIslandsCommand(
       const declarations = found.reduce((sum, i) => sum + i.members.length, 0);
       const testOnly = found.filter(i => i.verdict === 'testOnly').length;
       void vscode.window.showInformationMessage(
-        `${found.length} dead island${found.length > 1 ? 's' : ''} (${declarations} declarations that only reference each other)`
+        `${found.length} dead island${found.length > 1 ? 's' : ''} (${declarations} declaration${declarations === 1 ? '' : 's'} that only reference each other)`
         + `${testOnly > 0 ? `, ${testOnly} referenced only from tests` : ''}, across ${data.sources.length} files.`,
       );
     },

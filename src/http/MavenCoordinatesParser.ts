@@ -32,9 +32,20 @@ export function parseCoords(raw: string): MavenCoords | undefined {
  * Builds the Maven Central URL for the `-sources.jar` of a coordinate.
  * Maven Central layout: `<repo>/<group_with_slashes>/<artifact>/<version>/<artifact>-<version>-sources.jar`
  */
+const GOOGLE_MAVEN = 'https://dl.google.com/dl/android/maven2';
+
+/** AndroidX, the Android Gradle plugin and Google's Android libraries are published on Google's Maven, not Central. */
+export function defaultRepoFor(coords: MavenCoords): string {
+  const g = coords.group;
+  if (g.startsWith('androidx.') || g.startsWith('com.android.') || g === 'com.android' || g.startsWith('com.google.android.') || g.startsWith('com.google.firebase') || g.startsWith('com.google.ar')) {
+    return GOOGLE_MAVEN;
+  }
+  return 'https://repo.maven.apache.org/maven2';
+}
+
 export function sourcesJarUrl(
   coords: MavenCoords,
-  repo: string = 'https://repo.maven.apache.org/maven2',
+  repo: string = defaultRepoFor(coords),
 ): string {
   const groupPath = coords.group.replace(/\./g, '/');
   return `${repo}/${groupPath}/${coords.artifact}/${coords.version}/${coords.artifact}-${coords.version}-sources.jar`;
@@ -47,7 +58,7 @@ export function sourcesJarUrl(
  */
 export function sourcesJarSha1Url(
   coords: MavenCoords,
-  repo: string = 'https://repo.maven.apache.org/maven2',
+  repo: string = defaultRepoFor(coords),
 ): string {
   return `${sourcesJarUrl(coords, repo)}.sha1`;
 }

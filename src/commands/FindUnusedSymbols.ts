@@ -97,9 +97,15 @@ export async function findUnusedSymbolsCommand(
         );
         return;
       }
-      const testNote = testOnly.length > 0 ? ` and ${testOnly.length} used only from tests` : '';
+      const files = `${result.files} file${result.files === 1 ? '' : 's'}`;
+      const testNote = testOnly.length > 0 ? `${testOnly.length} used only from tests` : '';
+      if (unreferenced.length === 0) {
+        // Everything found is test-only: "0 unreferenced symbols ()" made no sense.
+        void vscode.window.showInformationMessage(`No unreferenced top-level symbols, ${testNote}, across ${files}.`);
+        return;
+      }
       void vscode.window.showInformationMessage(
-        `${unreferenced.length} unreferenced top-level symbols (${summarize(unreferenced)})${testNote}, across ${result.files} files.`,
+        `${unreferenced.length} unreferenced top-level symbol${unreferenced.length === 1 ? '' : 's'} (${summarize(unreferenced)})${testNote ? ` and ${testNote}` : ''}, across ${files}.`,
       );
     },
   );

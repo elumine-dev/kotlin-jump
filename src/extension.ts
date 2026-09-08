@@ -186,6 +186,8 @@ let _semanticTokens:   KotlinSemanticTokensProvider | undefined;
 let _sealedWhen:       SealedWhenCoverageProvider | undefined;
 let _signatureHelp:    KotlinSignatureHelpProvider  | undefined;
 let _inlayHints:       KotlinInlayHintsProvider     | undefined;
+// "stdlib ✓" in the sources bar used to be hard-coded true.
+let _bundledStdlibLoaded = false;
 let _snapshotEnabled:  boolean = true;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -1398,7 +1400,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.workspace.onDidCreateFiles(() => resourceCorpus.invalidate()),
     vscode.workspace.onDidDeleteFiles(() => resourceCorpus.invalidate()),
     vscode.workspace.onDidSaveTextDocument(doc => {
-      if (/[\\/]res[\\/]/.test(doc.uri.fsPath)) resourceCorpus.invalidate();
+      // Sources are part of the corpus too: a finding fixed and saved kept
+      // its line number for a minute, and the squiggle landed on unrelated code.
+      if (/[\\/]res[\\/]/.test(doc.uri.fsPath) || /\.(?:kt|kts|java|xml|gradle|toml)$/.test(doc.uri.fsPath)) resourceCorpus.invalidate();
     }),
   );
 
@@ -1873,6 +1877,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // Library-sources status bar (separate from the main symbol-count item).
   // Updated after each scan with the scanners' counts.
   const sourcesBar = new SourcesStatusBar();
+    context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(e => sourcesBar.onConfigurationChanged(e)));
   context.subscriptions.push(sourcesBar);
   const sourcesMenu = new SourcesActionsMenu(sourcesBar, log, () => runJarScan());
   context.subscriptions.push(sourcesMenu);
@@ -1936,7 +1941,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           scanning:      false,
           libsIndexed:   totalJars,
           jdk:           jdk.jdkHome ? (jdk.files > 0 ? 'ok' : 'missing') : 'absent',
-          bundledStdlib: true,  // BundledStdlibProvider.load() is best-effort; assume ok if no error
+          bundledStdlib: _bundledStdlibLoaded,
           missingCoords,
           networkError:  false,
         });
@@ -2226,7 +2231,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // include a project-pinned stdlib of the same or a newer version) will
   // overwrite this fallback when they index their own kotlin-stdlib JAR.
   const bundledStdlib = new BundledStdlibProvider(index, log, context.extensionUri);
-  void bundledStdlib.load().catch((e: Error) => log.warn(`[bundled-stdlib] ${e.message}`));
+  void bundledStdlib.load().then(() => { _bundledStdlibLoaded = true; }).catch((e: Error) => log.warn(`[bundled-stdlib] ${e.message}`));
 
   runJarScan();
 

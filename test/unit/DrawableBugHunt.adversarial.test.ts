@@ -214,14 +214,14 @@ describe('BUG-VECTOR-ARGB — Android #AARRGGBB is not CSS #RRGGBBAA (was: every
   it('still converts a self-closing path whose colour is a resource reference (was: [^/] in the regex dropped every @color/ and ?attr/ path, so the drawable had no preview at all)', () => {
     const svg = vectorXmlToSvg(wrap('<path android:pathData="M0,0h24v24H0z" android:fillColor="@color/primary"/><path android:pathData="M2,2Z" android:fillColor="#FF000000"/>'));
     expect(svg).toBeDefined();
-    expect(svg!).toContain('fill="@color/primary"');
+    expect(svg!).toContain('fill="currentColor"');
     expect(svg!).toContain('fill="#000000"');
   });
 
-  it('leaves 6-digit, 3-digit and theme references untouched', () => {
+  it('leaves 6-digit and 3-digit colours untouched, and turns a theme reference into currentColor', () => {
     const svg = vectorXmlToSvg(wrap('<path android:pathData="M0,0Z" android:fillColor="#F00" android:strokeColor="?attr/colorControlNormal"/>'))!;
     expect(svg).toContain('fill="#F00"');
-    expect(svg).toContain('stroke="?attr/colorControlNormal"');
+    expect(svg).toContain('stroke="currentColor"');
     expect(svg).not.toContain('opacity');
   });
 });

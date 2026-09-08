@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.4
+
+Kotlin Jump 1.42.4 finishes the display sweep started in 1.42.3 with the four items that audit left open: a vector preview that could not be read on a light theme, theme colours that rendered black, a decoration leak in the inline drawable icon, and an Android project view that duplicated every module and never noticed a new file.
+
+### Fixes
+- Draws the vector preview's checkerboard over the editor background instead of two hard coded dark greys. On a light theme a black icon, which is what an unresolved theme colour falls back to, was invisible on it.
+- Converts `?attr/…`, `@color/…` and `@android:color/…` colours to `currentColor` instead of passing them through as an invalid paint, which meant a black fill and no stroke. The preview panel sets that colour to the editor foreground, so a themed icon reads on both themes.
+- Releases the gutter icon's decoration types. Every distinct SVG minted its own type and its own cache file and none was ever disposed, so typing in a vector file grew both for the whole session and every refresh re-applied the whole pile. Only the SVGs a visible editor shows are kept.
+- Stops the Android project view from listing an "app (root)" module above the declared ones. Its globs ran under the whole workspace, so each module's manifests and res folders appeared twice. A multi module project now shows its modules plus one Gradle Scripts node; a project with no include() keeps the root as its single module.
+- Refreshes the Android project view when a Kotlin, Java, XML or image file is created or deleted. It used to wait for the next settings.gradle or manifest change. One refresh per burst, paths under build/ ignored, and nothing runs while the view is hidden.
+
 ## 1.42.3
 
 Kotlin Jump 1.42.3 is a sweep of the parts users look at rather than the parts that scan code: settings that were declared and never read, a banner that never showed, a Logcat panel that lost its filter on Clear and opened empty after a Run, vector icons that rendered as nothing, and five commands that vscode.dev advertised but could not run.

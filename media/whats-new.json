@@ -1,34 +1,31 @@
 {
-  "version": "1.42.3",
+  "version": "1.42.4",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Settings that apply, panels that show what they hold",
-  "summary": "Kotlin Jump 1.42.3 is a sweep of the parts users look at rather than the parts that scan code: settings that were declared and never read, a banner that never showed, a Logcat panel that lost its filter on Clear and opened empty after a Run, vector icons that rendered as nothing, and five commands that vscode.dev advertised but could not run.",
+  "tagline": "The rest of the display sweep",
+  "summary": "Kotlin Jump 1.42.4 finishes the display sweep started in 1.42.3 with the four items that audit left open: a vector preview that could not be read on a light theme, theme colours that rendered black, a decoration leak in the inline drawable icon, and an Android project view that duplicated every module and never noticed a new file.",
   "highlights": [
     {
-      "title": "Logcat shows what it captured",
+      "title": "Vector preview readable on light themes",
       "kind": "fix",
-      "description": "A panel opened after a Run showed only rows arriving after the click while its counter read thousands; Clear and a device switch silently dropped the filter; the pause button ignored Pause from the palette. The buffer is replayed on open, after Resume and when Follow app PID goes off, the filter survives Clear, and the picker, the Devices tree and the host stay on one device."
+      "description": "The checkerboard was two hard coded dark greys, so a black icon vanished on a light theme. It is now drawn over the editor background, and theme colours (?attr/…, @color/…) convert to currentColor instead of an invalid black paint."
     },
     {
-      "title": "Vector icons that render",
+      "title": "Android project view without duplicates",
       "kind": "fix",
-      "description": "Android writes alpha first (#FF000000) and browsers read it last, so every icon out of Vector Asset Studio previewed as an empty checkerboard. Colours are now split into colour and opacity, and a path coloured @color/x or ?attr/x, which the converter used to drop entirely, gets its preview back."
+      "description": "An \"app (root)\" pseudo module globbed the whole workspace and repeated every module's manifests and res folders. The view now lists the declared modules plus one Gradle Scripts node, and refreshes when a source or resource file is created or deleted."
     },
     {
-      "title": "Five commands working on vscode.dev",
+      "title": "Gutter icon types released",
       "kind": "fix",
-      "description": "Recent Locations, Surround With, Smart Join Lines, Screen Flow Map and Compose Outline were contributed for the web but only registered on desktop: \"command not found\" on their shortcuts, and an empty Compose Outline panel. Logcat settings that were declared and never read now apply too."
+      "description": "Every distinct SVG minted a decoration type and a cache file that were never disposed, so typing in a vector file grew both for the whole session. Only what a visible editor shows is kept."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Reads kotlinJump.logcat.followAppPid and kotlinJump.logcat.colorScheme, which were in the settings UI and never consulted, and shows the \"adb binary not found\" banner that nothing was listening for.",
-        "Removes ghost rows in Logcat soft wrap mode after a filter, a Clear or a wrap toggle, and stops redrawing all 2000 wrapped rows on every batch and scroll frame.",
-        "Stops the Compose Outline from rebuilding on every cursor move and losing what you had expanded; it also empties when the active editor is not Kotlin, and the Screen Flow Map can navigate to routes added since it was first opened.",
-        "Brings the vector preview back when kotlinJump.vectorPreview is edited after a dismissal, and clears the inline drawable icon when a vector becomes another drawable type.",
-        "Implements kotlinJump.fallbackToOnlineDocs, declared and dead until now: Go to Definition on a symbol with no local source opens its reference page, but only when an import pins the symbol down. Off by default."
+        "Converts ?attr/…, @color/… and @android:color/… colours to currentColor; passed verbatim they were an invalid paint, meaning a black fill and no stroke.",
+        "Refreshes the Android project view when a Kotlin, Java, XML or image file is created or deleted, one refresh per burst, paths under build/ ignored, nothing while the view is hidden."
       ]
     }
   ],

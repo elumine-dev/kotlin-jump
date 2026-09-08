@@ -1467,6 +1467,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const settingsWatcher = vscode.workspace.createFileSystemWatcher('**/settings.gradle{,.kts}');
     const manifestWatcher = vscode.workspace.createFileSystemWatcher('**/AndroidManifest.xml');
     const refreshView = () => androidView.refresh();
+    const androidTreeView = vscode.window.createTreeView('kotlinJump.androidProjectView', {
+      treeDataProvider: androidView,
+    });
+    // A new .kt or res file used to show up only after the next settings.gradle
+    // or manifest change. Create/delete only (edits do not move files), one
+    // trailing refresh per burst so a Gradle build regenerating build/ costs
+    // one event, paths under build/ are ignored, and nothing fires while the
+    // view is hidden: it is re-read when it comes back.
+    const sourceWatcher = vscode.workspace.createFileSystemWatcher('**/*.{kt,java,xml,png,webp,jpg}', false, true, false);
+    const isBuildOutput = (uri: vscode.Uri) => /[\\/](build|\.gradle)[\\/]/.test(uri.fsPath);
+    let sourceRefreshTimer: ReturnType<typeof setTimeout> | undefined;
+    let staleWhileHidden = false;
+    const onSourceEvent = (uri: vscode.Uri) => {
+      if (isBuildOutput(uri)) return;
+      if (!androidTreeView.visible) { staleWhileHidden = true; return; }
+      clearTimeout(sourceRefreshTimer);
+      sourceRefreshTimer = setTimeout(refreshView, 500);
+    };
     // La vue n'apparaît que si le workspace ressemble à un projet Android.
     // Réévalué quand un manifeste apparaît ou disparaît : sinon la vue reste
     // cachée jusqu'au reload de la fenêtre après le premier checkout Android.
@@ -1477,9 +1495,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       );
     void markAndroidWorkspace();
     context.subscriptions.push(
-      vscode.window.createTreeView('kotlinJump.androidProjectView', {
-        treeDataProvider: androidView,
+      androidTreeView,
+      sourceWatcher,
+      sourceWatcher.onDidCreate(onSourceEvent),
+      sourceWatcher.onDidDelete(onSourceEvent),
+      androidTreeView.onDidChangeVisibility(e => {
+        if (e.visible && staleWhileHidden) { staleWhileHidden = false; refreshView(); }
       }),
+      { dispose: () => clearTimeout(sourceRefreshTimer) },
       vscode.commands.registerCommand('kotlin-jump._androidViewRoots', () =>
         androidView.getChildren(),
       ),

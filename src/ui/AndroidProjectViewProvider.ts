@@ -82,6 +82,26 @@ interface Node {
   children?: Node[];
 }
 
+/**
+ * Top-level nodes. With modules declared in settings.gradle, the root is not a
+ * module: it used to be listed as "app (root)" with `**` globs under the
+ * workspace, which repeated every module's manifest and res folder under it.
+ * Android Studio shows the declared modules plus one Gradle Scripts node; a
+ * project with no include() keeps the root as its single module.
+ */
+export function rootNodes(settingsText: string | undefined, root: vscode.Uri): Node[] {
+  const modules = settingsText ? parseIncludedModules(settingsText) : [];
+  if (modules.length === 0) return [{ kind: 'module', label: 'app (root)', modulePath: root.fsPath }];
+  return [
+    ...modules.map(m => ({
+      kind: 'module' as const,
+      label: m.replace(/^:/, ''),
+      modulePath: vscode.Uri.joinPath(root, m.replace(/^:/, '').replace(/:/g, '/')).fsPath,
+    })),
+    { kind: 'gradle', label: 'Gradle Scripts', modulePath: root.fsPath },
+  ];
+}
+
 export class AndroidProjectViewProvider implements vscode.TreeDataProvider<Node> {
   private readonly _onDidChange = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this._onDidChange.event;
@@ -117,19 +137,7 @@ export class AndroidProjectViewProvider implements vscode.TreeDataProvider<Node>
     const ws = vscode.workspace.workspaceFolders?.[0];
     if (!ws) return [];
 
-    if (!node) {
-      const settings = await this._readSettings(ws.uri);
-      const modules = settings ? parseIncludedModules(settings) : [];
-      const roots: Node[] = [
-        { kind: 'module', label: 'app (root)', modulePath: ws.uri.fsPath },
-        ...modules.map(m => ({
-          kind: 'module' as const,
-          label: m.replace(/^:/, ''),
-          modulePath: vscode.Uri.joinPath(ws.uri, m.replace(/^:/, '').replace(/:/g, '/')).fsPath,
-        })),
-      ];
-      return roots;
-    }
+    if (!node) return rootNodes(await this._readSettings(ws.uri), ws.uri);
 
     if (node.kind === 'module') {
       return [

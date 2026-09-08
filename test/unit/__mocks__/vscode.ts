@@ -226,6 +226,10 @@ export const Uri = {
     return { toString: () => s, path, fsPath: path, scheme };
   },
   file: (p: string) => ({ toString: () => `file://${p}`, path: p, fsPath: p, scheme: 'file' }),
+  joinPath: (base: { scheme: string; path: string }, ...segments: string[]) => {
+    const path = [base.path.replace(/\/$/, ''), ...segments].join('/');
+    return { toString: () => `${base.scheme}://${path}`, path, fsPath: path, scheme: base.scheme };
+  },
 };
 
 export enum OverviewRulerLane {

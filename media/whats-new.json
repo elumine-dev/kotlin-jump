@@ -1,34 +1,34 @@
 {
-  "version": "1.42.32",
+  "version": "1.42.33",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The server outside VS Code, repaired",
-  "summary": "Kotlin Jump 1.42.32 repairs the standalone language server that Neovim, Helix and Zed talk to. Its index was frozen at startup, it could index your home directory instead of your project, and Go to Definition answered with every class of that name in the workspace. The permission hover also stops missing `SET_ALARM`.",
+  "tagline": "A comment no longer hides your usages",
+  "summary": "Kotlin Jump 1.42.33 fixes a bug our own previous fix introduced: a `\"\"\"` written inside a comment made Find Usages treat the rest of the file as text, so a symbol read \"0 usages\" and Rename left the old name behind. Large JDK classes such as `Arrays` and `Pattern` are navigable again, and the language server no longer misses a file whose folder name contains a comma or an ampersand.",
   "highlights": [
     {
-      "title": "The index follows your edits",
+      "title": "Usages survive a comment",
       "kind": "fix",
-      "description": "The server now asks for save notifications and watches the files, so a deleted or renamed class no longer survives until the next restart."
+      "description": "A `\"\"\"` written in a comment used to turn the rest of the file into text: no usages, and Rename left the old name behind in code that then failed to compile."
     },
     {
-      "title": "Your project, not your home",
+      "title": "Big JDK classes navigable",
       "kind": "fix",
-      "description": "`workspaceFolders` is honoured, every root is indexed, and no announced root means nothing is scanned instead of falling back to the working directory."
+      "description": "`Arrays`, `Collections`, `Character`, `Pattern` and `BigDecimal` sit above the old 200 KB limit and were never indexed."
     },
     {
-      "title": "One definition, the imported one",
+      "title": "Right result on the right test",
       "kind": "fix",
-      "description": "Three same named classes no longer all show up: the file's imports decide, then its own package."
+      "description": "A test with no result of its own inherited the `@DisplayName`, the state and the failure trace of the test above it."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "The language server asks for save notifications and registers a file watcher, so deletions and renames reach the index.",
-        "`workspaceFolders` and multiple roots are honoured; nothing falls back to the process working directory.",
-        "Go to Definition narrows same named classes by explicit import, then wildcard import, then the file's own package.",
-        "References read open buffers instead of the disk copy, and `includeDeclaration: false` is honoured.",
-        "A README no longer becomes symbols, a symlink no longer walks the scan out of the project, and the permission hover finds `com.android.alarm.permission.SET_ALARM`."
+        "A `\"\"\"` inside a `//` or `/* */` comment no longer opens a raw string that swallows the rest of the file for Find Usages, Go to References and Rename.",
+        "The `@DisplayName` walk stops at a blank line and at a one line declaration, so a test no longer inherits its neighbour's result.",
+        "JDK sources larger than 200 KB are indexed, which covers `Arrays`, `Collections`, `Pattern` and `BigDecimal`.",
+        "The language server compares files by path, so a folder named with a comma or an ampersand no longer breaks deletion tracking and unsaved buffer reads.",
+        "The MCP `get_file_symbols` tool is bounded like the others."
       ]
     }
   ],

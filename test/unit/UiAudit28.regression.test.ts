@@ -2,9 +2,11 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { resolveWorkspaceRoots, preferByImports, INDEXABLE_RE } from '../../src/server/utils';
+import { resolveWorkspaceRoots, preferByImports, INDEXABLE_RE, canonicalUri, openTextByPath, pathToUri } from '../../src/server/utils';
 import { indexFile, scanWorkspace, MAX_SCANNED_FILES } from '../../src/server/scanner';
 import { SymbolIndex } from '../../src/indexer/SymbolIndex';
+import { parse } from '../../src/indexer/KotlinParser';
+import { handleGetFileSymbols, FILE_SYMBOLS_LIMIT } from '../../src/server/mcp';
 import { lookupPermission } from '../../src/data/permissionDescriptions';
 import { lookupSuppression } from '../../src/data/suppressDescriptions';
 
@@ -108,5 +110,43 @@ describe('Dictionnaires de survol', () => {
 
   it('une permission inconnue reste sans survol', () => {
     expect(lookupPermission('com.acme.permission.WHATEVER')).toBeUndefined();
+  });
+});
+
+describe('Encodage des URI entre client et serveur', () => {
+  // Un client encode selon le RFC 3986, le serveur encodait chaque segment
+  // avec encodeURIComponent. Les deux divergent sur , & + $ : la suppression
+  // ne trouvait pas sa clé, et le tampon ouvert retombait sur le disque.
+  const clientUri = (p: string) =>
+    'file://' + p.split('/').map(encodeURIComponent).join('/')
+      .replace(/%2C/g, ',').replace(/%26/g, '&').replace(/%2B/g, '+');
+
+  it('canonicalUri ramène l\'URI du client à la forme de l\'index', () => {
+    for (const p of ['/proj/app/Main.kt', '/proj/My Projects/Main.kt', '/proj/a,b/Main.kt', '/proj/Q&A/Main.kt', '/proj/c++/Main.kt']) {
+      expect(canonicalUri(clientUri(p)), p).toBe(pathToUri(p));
+    }
+  });
+
+  it('un tampon ouvert est retrouvé par son chemin, quel que soit l\'encodage reçu', () => {
+    const docs = [
+      { uri: clientUri('/proj/a,b/Main.kt'), getText: () => 'contenu non sauvegardé' },
+      { uri: clientUri('/proj/app/Other.kt'), getText: () => 'autre' },
+    ];
+    const open = openTextByPath(docs);
+    expect(open.get('/proj/a,b/Main.kt')).toBe('contenu non sauvegardé');
+    expect(open.get('/proj/app/Other.kt')).toBe('autre');
+    expect(open.get('/proj/absent.kt')).toBeUndefined();
+  });
+});
+
+describe('Réponses du serveur MCP', () => {
+  it('get_file_symbols est borné comme les autres handlers', () => {
+    const index = new SymbolIndex();
+    const uri = 'file:///proj/Big.kt';
+    const body = Array.from({ length: FILE_SYMBOLS_LIMIT + 200 }, (_, i) => `fun f${i}() {}`).join('\n');
+    index.add(parse(uri, 'package p\n' + body));
+    // Sans borne, une seule réponse d'outil pouvait atteindre 1,79 Mo.
+    expect(handleGetFileSymbols(index, uri).length).toBe(FILE_SYMBOLS_LIMIT);
+    expect(handleGetFileSymbols(index, 'file:///proj/Absent.kt')).toEqual([]);
   });
 });

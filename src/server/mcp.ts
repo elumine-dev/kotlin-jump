@@ -105,8 +105,11 @@ function normalizeUri(uri: string): string {
   return `file://${uri}`;
 }
 
+/** Same bound as the other handlers: an unbounded answer once reached 1.79 MB, which no agent can read. */
+export const FILE_SYMBOLS_LIMIT = 500;
+
 export function handleGetFileSymbols(index: SymbolIndex, uri: string): SymbolResult[] {
-  return index.getFileSymbols(normalizeUri(uri)).map(toSymbolResult);
+  return index.getFileSymbols(normalizeUri(uri)).slice(0, FILE_SYMBOLS_LIMIT).map(toSymbolResult);
 }
 
 // ── MCP server entry point ────────────────────────────────────────────────────

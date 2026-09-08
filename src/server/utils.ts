@@ -164,3 +164,24 @@ export function preferByImports<T extends { fqn?: string; packageName?: string }
   if (samePackage.length > 0) return samePackage;
   return [...decls];
 }
+
+
+/**
+ * The same file, written the way this server writes it. A client encodes a
+ * URI per RFC 3986, we encode each segment with encodeURIComponent, and the
+ * two disagree on `,`, `&`, `+` and `$`: comparing the raw strings made a
+ * deletion miss the index and an open buffer fall back to the disk copy,
+ * both in silence. Going through the path first settles it.
+ */
+export function canonicalUri(uri: string): string {
+  return pathToUri(uriToPath(uri));
+}
+
+/** Open buffers by file path, so a lookup never depends on the client's encoding. */
+export function openTextByPath(
+  docs: readonly { uri: string; getText(): string }[],
+): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const doc of docs) out.set(uriToPath(doc.uri), doc.getText());
+  return out;
+}

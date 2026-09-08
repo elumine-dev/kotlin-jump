@@ -35,10 +35,15 @@ export class NullAssertionProvider implements vscode.Disposable {
   }
 
   invalidateAll(): void {
-    for (const editor of vscode.window.visibleTextEditors) {
+    // The active editor is scanned LAST so _lineDecos describes the editor
+    // the next keystroke repaints (same fix as HexColorFoldingProvider).
+    const active = vscode.window.activeTextEditor;
+    const others = vscode.window.visibleTextEditors.filter(e => e !== active);
+    for (const editor of [...others, ...(active ? [active] : [])]) {
       this._editor = editor;
       this._fullScan(editor);
     }
+    this._editor = active;
   }
 
   // ── Layer 1: raw-string oracle ─────────────────────────────────────────────
@@ -94,6 +99,10 @@ export class NullAssertionProvider implements vscode.Disposable {
   // ── Incremental orchestrator (per keystroke) ───────────────────────────────
   private _applyChanges(e: vscode.TextDocumentChangeEvent): void {
     const doc = e.document;
+    // A keystroke used to bring the highlight back with the setting off, and
+    // to paint `!!` in a Java file (a boolean double negation there).
+    if (doc.languageId !== 'kotlin') return;
+    if (!vscode.workspace.getConfiguration('kotlinJump').get<boolean>('nullAssertionHighlight', true)) return;
 
     // Sort bottom→top so line-number shifts don't cascade
     const sorted = [...e.contentChanges].sort(

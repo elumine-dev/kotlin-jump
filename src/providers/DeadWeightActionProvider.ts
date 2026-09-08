@@ -146,7 +146,16 @@ export class DeadWeightActionProvider implements vscode.CodeActionProvider {
       if (!coordinate) return [];
       const cls = classifyDependency(coordinate, await this.workspaceImports());
       if (cls.kind !== 'counted' || cls.imports > 0) return [];
-      return [this.deleteLines(document, `Remove unused dependency ${coordinate}`, line)];
+      // `implementation("…") {\n exclude(…)\n}`: the block goes with the line.
+      let end = line;
+      if (/\{\s*$/.test(lineText)) {
+        let depth = 1;
+        for (let l = line + 1; l < document.lineCount && depth > 0; l++) {
+          for (const ch of document.lineAt(l).text) { if (ch === '{') depth++; else if (ch === '}') depth--; }
+          end = l;
+        }
+      }
+      return [this.deleteLines(document, `Remove unused dependency ${coordinate}`, line, end)];
     }
 
     // ── Manifest: permission with no code, component with no class ───────

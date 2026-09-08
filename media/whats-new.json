@@ -1,42 +1,43 @@
 {
-  "version": "1.42.23",
+  "version": "1.42.24",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Commands that answer, hovers that tell the whole story",
-  "summary": "Turning Logcat or Android Run off made their commands \"not found\"; toolbar toggles were dead during the first index; a sealed class hover listed one subtype out of four; online docs opened a 404 for every function; the web build lacked four providers the desktop had. All fixed, with cleaner KDoc rendering.",
+  "tagline": "Inline actions that leave the code intact",
+  "summary": "Surround With turned `$name` into `name`, \"Remove expired TODO\" cut a URL in half, Extract String Resource made a placeholder out of `$100`, and removing an unused Gradle dependency left its block behind. All fixed, along with method separators in Hilt ViewModels, `!!` and swatch decorations that ignored the setting, and dispatcher hints on comments.",
   "highlights": [
     {
-      "title": "Commands that answer",
-      "description": "With Logcat or Android Run disabled, the palette and shortcuts said \"command not found\" and the Logcat views \"no data provider\". The commands now explain the setting and offer to enable it; the inline toggles are registered before the first index so the toolbar buttons work at once.",
+      "title": "Surround With and TODO fixes that keep the code",
+      "description": "The selection is no longer read as snippet syntax (`$name` and `\\\\d` survive), and the expired TODO quick fix removes exactly the comment: `\"http://x.io\" // TODO` keeps its URL, a block comment stays closed, a TODO in a string is left alone.",
       "kind": "fix"
     },
     {
-      "title": "Sealed hover lists every subtype",
-      "description": "Subtypes declared after the class, in another file, or implementing a sealed interface were missing from the hover (\"Subtypes (1)\" for four). The KDoc also follows a relocated declaration, and a name imported from an unindexed library no longer gets another package's hover.",
+      "title": "Extract string resource that compiles",
+      "description": "`$100` is a literal, Java has no templates, nested quotes in `${…}` are read, `%` is doubled next to placeholders, a leading `@` is escaped, `@Preview(…)` no longer hides `@Composable`, and a String gets `getString(R.string.x)` rather than an Int.",
       "kind": "fix"
     },
     {
-      "title": "Web parity and docs that exist",
-      "description": "vscode.dev gets lifecycle pairing, Room migration drift, resource shadowing and the strings.xml hover, and indexes every values*/*.xml. The online docs fallback opens `launch.html` instead of a 404, and a composable call opens the package summary anchor.",
+      "title": "Decorations that stay put",
+      "description": "Method separators in a wrapped Hilt class header, `!!` and hex swatches that respect the setting on every keystroke, dispatcher hints off comments and strings, constants folded to their own file first, KMP badges scoped to the module.",
       "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Wiring",
+      "heading": "Code actions",
       "bullets": [
-        "Logcat and Android Run commands stay registered when disabled; the Logcat views hide while off.",
-        "Inline feature toggles work during the first index on desktop.",
-        "Internal test and Find Usages commands leave the palette; Java projects activate the extension; `statusBarEnabled` applies live; Copy FQN works in Java.",
-        "The library sources bar starts as scanning; walkthrough links say to open a file first."
+        "Surround With escapes `$`, `\\\\` and `}` of the selection.",
+        "\"Remove expired TODO\" works one line at a time and removes the exact comment span.",
+        "Extract String Resource: literal `$100`, Java literals, nested `${…}` quotes, `%%`, `\\\\@`, multi-line `@Preview`, event lambdas, `getString` for Strings.",
+        "Removing an unused dependency takes its `{ … }` block with it."
       ]
     },
     {
-      "heading": "Hover and docs",
+      "heading": "Decorations and lenses",
       "bullets": [
-        "Every sealed subtype is listed, from any file; the companion object is not.",
-        "KDoc read at the relocated declaration; no name fallback against an explicit import; nothing on import lines.",
-        "Dokka function pages and composable anchors in the online docs fallback.",
-        "`// TODO` and commented code are not documentation; multi-line annotations, `@property`, trailing `*/`, enum entries and `where` clauses render right."
+        "Method separators in a wrapped class header; a `\"{\"` in a string no longer shifts them.",
+        "`!!` highlight and hex swatches respect the setting and the language on each keystroke, in the active editor.",
+        "Dispatcher hints skip `viewLifecycleOwner`, comments, strings and `apiKey`.",
+        "Const folding prefers the file's own declaration; `Color.RED` is not `Palette.RED`.",
+        "State provenance counts code only and says \"in this file\"; KMP badges show the module's own targets."
       ]
     }
   ],

@@ -80,7 +80,13 @@ export class KmpExpectActualProvider implements vscode.CodeLensProvider {
       .filter(s => s.isExpect);
     if (symbols.length === 0) return [];
 
-    const expected = collectProjectTargets(this.index.fileUriStrings());
+    // Only the module holding the expect: `shared` has no desktop target
+    // even when `composeApp` does, and a ✗ for it was wrong.
+    const uriStr = document.uri.toString();
+    const srcAt = uriStr.indexOf('/src/');
+    const moduleRoot = srcAt === -1 ? undefined : uriStr.slice(0, srcAt + 5);
+    const inModule = moduleRoot ? this.index.fileUriStrings().filter(u => u.startsWith(moduleRoot)) : this.index.fileUriStrings();
+    const expected = collectProjectTargets(inModule);
     if (expected.size === 0) return [];
 
     const lenses: vscode.CodeLens[] = [];

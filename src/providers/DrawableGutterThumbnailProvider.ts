@@ -164,7 +164,14 @@ export class DrawableGutterThumbnailProvider implements vscode.Disposable {
           const variant = pickThumbnailVariant(entry.variants);
           if (!variant) continue;
 
-          const cachePath = await this.ensureCached(variant);
+          let cachePath = await this.ensureCached(variant);
+          // An XML that is not a vector (adaptive icon, selector) renders to
+          // nothing; the density raster beside it did not get a chance.
+          if (!cachePath && variant.ext === 'xml') {
+            const raster = entry.variants.find(v => v.ext !== 'xml' && v.ext !== 'svg' && (v.qualifier === 'drawable' || v.qualifier === 'mipmap'))
+              ?? entry.variants.find(v => v.ext !== 'xml' && v.ext !== 'svg');
+            if (raster) cachePath = await this.ensureCached(raster);
+          }
           if (!cachePath) continue;
           const type = this.getOrCreateDecorationType(cachePath);
 

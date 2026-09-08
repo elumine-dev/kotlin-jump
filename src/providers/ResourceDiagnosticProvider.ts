@@ -9,6 +9,7 @@ const R_COLOR_RE  = /\bR\.color\.([A-Za-z_]\w*)\b/g;
 export class ResourceDiagnosticProvider implements vscode.Disposable {
   private readonly _diag = vscode.languages.createDiagnosticCollection('kotlin-jump-resources');
   private readonly _subs: vscode.Disposable[];
+  private readonly _pending = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor(
     private readonly strings: StringResourceIndex,
@@ -17,13 +18,35 @@ export class ResourceDiagnosticProvider implements vscode.Disposable {
     this._subs = [
       vscode.workspace.onDidOpenTextDocument(doc => this._scan(doc)),
       vscode.workspace.onDidSaveTextDocument(doc => this._scan(doc)),
-      vscode.workspace.onDidCloseTextDocument(doc => this._diag.delete(doc.uri)),
+      vscode.workspace.onDidCloseTextDocument(doc => { this._cancel(doc); this._diag.delete(doc.uri); }),
+      // Only open/save used to trigger a scan: a fixed key stayed red, with
+      // the old name in the message, until the next save.
+      vscode.workspace.onDidChangeTextDocument(e => this._scheduleScan(e.document)),
+      // Turning the setting off left every error in Problems until each file
+      // was saved or reopened; _scan() deletes when disabled.
+      vscode.workspace.onDidChangeConfiguration(e => {
+        if (e.affectsConfiguration('kotlinJump.resourceDiagnostics')) this.invalidateAll();
+      }),
     ];
     for (const ed of vscode.window.visibleTextEditors) this._scan(ed.document);
   }
 
   invalidateAll(): void {
     for (const ed of vscode.window.visibleTextEditors) this._scan(ed.document);
+  }
+
+  private _scheduleScan(doc: vscode.TextDocument): void {
+    if (doc.languageId !== 'kotlin' && doc.languageId !== 'java') return;
+    this._cancel(doc);
+    this._pending.set(doc.uri.toString(), setTimeout(() => {
+      this._pending.delete(doc.uri.toString());
+      this._scan(doc);
+    }, 300));
+  }
+
+  private _cancel(doc: vscode.TextDocument): void {
+    const t = this._pending.get(doc.uri.toString());
+    if (t) { clearTimeout(t); this._pending.delete(doc.uri.toString()); }
   }
 
   private _scan(doc: vscode.TextDocument): void {
@@ -70,6 +93,8 @@ export class ResourceDiagnosticProvider implements vscode.Disposable {
   }
 
   dispose(): void {
+    for (const t of this._pending.values()) clearTimeout(t);
+    this._pending.clear();
     this._diag.dispose();
     for (const s of this._subs) s.dispose();
   }

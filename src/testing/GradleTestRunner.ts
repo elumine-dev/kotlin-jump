@@ -238,7 +238,12 @@ export class GradleTestRunner {
     run.appendOutput(`\r\n${C.dim}──────────────────────────────────────────────────${C.reset}\r\n`);
     run.appendOutput(`  ${summaryLine}  ${C.dim}(${formatDuration(elapsedMs)})${C.reset}\r\n`);
 
-    if (exitCode !== 0 && results.size === 0) {
+    if (token.isCancellationRequested) {
+      // Stop kills the process (exit null → 1) and nothing parsed: that used
+      // to mark every test "errored: Gradle exited with code 1".
+      log.info('[test:runner] run cancelled by the user — leaving the tests unmarked');
+      run.appendOutput(`  ${C.yellow}─  cancelled${C.reset}\r\n`);
+    } else if (exitCode !== 0 && results.size === 0) {
       log.warn(`[test:runner] gradle failed (exit ${exitCode}) and no results parsed — marking all as errored`);
       for (const s of specs) {
         run.errored(s.item, new vscode.TestMessage(`Gradle exited with code ${exitCode}`));

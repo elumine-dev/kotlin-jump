@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { SymbolIndex } from '../indexer/SymbolIndex';
 import { isInsideCommentOrString, countTripleQuotes } from '../util/textUtils';
+import { resolveExplicit } from '../util/ImportResolver';
 
 // Matches lowercase-starting call expressions: fetchUser(, loadPosts(, delay(
 const CALL_RE = /\b([a-z][A-Za-z0-9_]*)\s*\(/g;
@@ -87,7 +88,17 @@ export class SuspendMarkerProvider implements vscode.InlayHintsProvider, vscode.
         if (isInsideCommentOrString(text, m.index)) continue;
         if (badgeAt.has(m.index)) continue; // already has a dispatcher badge
         const entries = this.index.lookup(m[1]);
-        if (!entries.some(e => e.isSuspend)) continue;
+        const suspend = entries.filter(e => e.isSuspend);
+        if (suspend.length === 0) continue;
+        // With kotlinx-coroutines sources indexed, `first`, `count`, `single`,
+        // `last` and `toList` all have a suspend Flow overload, so any
+        // `items.first()` got a ⚡. When the name also resolves to a
+        // non-suspend declaration, only an explicit import of one of the
+        // suspend candidates settles it.
+        if (suspend.length < entries.length) {
+          const { exact } = resolveExplicit(m[1], document);
+          if (!suspend.some(e => exact.includes(e.fqn))) continue;
+        }
         hints.push(makeHint(ln, m.index, '⚡'));
       }
     }

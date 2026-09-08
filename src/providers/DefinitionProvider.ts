@@ -3,6 +3,8 @@ import { SymbolIndex } from '../indexer/SymbolIndex';
 import { resolveBest } from '../util/ImportResolver';
 import { onlineDocsLocation } from './OnlineDocsFallback';
 import { isInsideCommentOrString, isInsideStringInterpolation } from '../util/textUtils';
+import { buildLocalScopeIndex, latestBinding, signatureEnd, type LocalScopeIndex } from '../util/LocalScopeIndex';
+export { buildLocalScopeIndex, type LocalScopeIndex } from '../util/LocalScopeIndex';
 import { Logger } from '../util/logger';
 
 const WORD_RE = /[A-Za-z_]\w*/;
@@ -551,132 +553,24 @@ export function resolveLocalScope(
   document: vscode.TextDocument,
   position: vscode.Position,
   word: string,
+  scope?: LocalScopeIndex,
 ): vscode.Location | undefined {
   if (document.languageId !== 'kotlin' && document.languageId !== 'java') return undefined;
   if (word.length < 2) return undefined;
 
-  const MAX_SCAN_LINES = 5000;
+  // Hot callers (semantic tokens, inlay hints) build the index once per run
+  // and pass it; a single Go to Definition builds its own, one pass either way.
+  const index = scope ?? buildLocalScopeIndex(document.getText().split(/\r?\n/));
+  if (position.line >= index.lines.length) return undefined;
 
-  // Permissive `fun NAME(` matcher: `[^(]*?` non-greedily skips the
-  // generic-parameter list (with arbitrarily nested `<>`), the
-  // optional receiver (`String.`), and any other signature noise
-  // until the actual identifier right before `(`.
-  const FUN_RE = /\bfun\b[^(]*?\b(\w+)\s*\(/;
-
-  // Step 1 — find the line that opens the enclosing function. Walk
-  // backward balancing `{`/`}`. Every time we cross an opening brace
-  // (depth would go negative) we have found AN enclosing scope, but
-  // it may be a sibling block (`for { … }`, `Column { … }`, lambda
-  // body) rather than the function itself. So we record the crossing
-  // line, RESET the balance, and keep walking until we find a line
-  // that actually declares a function.
-  const start = Math.max(0, position.line - MAX_SCAN_LINES);
-  let braceDepth = 0;
-  let funLine = -1;
-  let funLineText = '';
-
-  // Single-expression body fast path: `fun NAME(...): T = expr` has no
-  // body braces, so the brace-balance walker will never trigger. If
-  // the cursor's own line declares a function, that's the enclosing
-  // function — no walking needed.
-  const cursorLineText = document.lineAt(position.line).text;
-  if (FUN_RE.test(cursorLineText)) {
-    funLine = position.line;
-    funLineText = cursorLineText;
-  } else {
-    for (let i = position.line; i >= start; i--) {
-      const text = document.lineAt(i).text;
-      // Balance from RIGHT to LEFT.
-      for (let c = text.length - 1; c >= 0; c--) {
-        const ch = text[c];
-        if (ch === '}')      braceDepth++;
-        else if (ch === '{') braceDepth--;
-      }
-      if (braceDepth < 0) {
-        // Crossed a `{`. Walk up looking for `fun NAME(` — handles
-        // multi-line signatures by continuing past param-decl lines.
-        // Stops if we cross a `}` (sibling function close above).
-        let probe = i;
-        while (probe >= start) {
-          const probeText = document.lineAt(probe).text;
-          if (FUN_RE.test(probeText)) {
-            funLine = probe;
-            funLineText = probeText;
-            break;
-          }
-          // Tolerate `}` on the FIRST iteration (the `{` line itself
-          // may have a sibling `}` like `} else {`). Bail on later
-          // iterations — we'd be entering a previous function.
-          if (probe < i && probeText.includes('}')) break;
-          probe--;
-        }
-        if (funLine >= 0) break;
-        braceDepth = 0;
-      }
-    }
-  }
+  // Step 1 — the enclosing function.
+  const funLine = index.enclosingFun[position.line];
   if (funLine < 0) return undefined;
+  const sigEndLine = Math.min(signatureEnd(index, funLine), position.line);
+  const sigText = index.lines.slice(funLine, sigEndLine + 1).join('\n');
 
-  // Collect signature text across continuation lines until balanced `(...)`.
-  let sigText = funLineText;
-  let parenDepth = countChar(sigText, '(') - countChar(sigText, ')');
-  let sigEndLine = funLine;
-  for (let i = funLine + 1; parenDepth > 0 && i <= position.line && i < document.lineCount; i++) {
-    const t = document.lineAt(i).text;
-    sigText += '\n' + t;
-    parenDepth += countChar(t, '(') - countChar(t, ')');
-    sigEndLine = i;
-  }
-
-  // Step 2 — bindings between sigEndLine and the cursor: local val/var,
-  // for-loop bindings (`for (x in xs)`), and lambda parameters
-  // (`{ x ->` / `{ x, y ->`). Walk forward; the LATEST binding before
-  // the cursor wins because it shadows any earlier same-name binding.
-  // We over-approximate scope (a `for` body is treated as in-scope
-  // until end-of-function rather than end-of-loop) — cheap, correct in
-  // practice for typical code, and never returns a false positive
-  // outside the enclosing function.
-  type Binding = { line: number; col: number };
-  let bestBinding: Binding | undefined;
-  const recordIfMatch = (i: number, t: string, name: string, nameStart: number): void => {
-    if (name !== word) return;
-    if (i === position.line && nameStart >= position.character) return; // cursor not after this binding
-    bestBinding = { line: i, col: nameStart };
-  };
-
-  const VAL_VAR_RE = /\b(?:val|var)\s+(\w+)\b/g;
-  // `for (x in xs)` and `for ((a, b) in xs)`. Also catches `for (x: T in xs)`.
-  const FOR_RE     = /\bfor\s*\(\s*(?:\(\s*(\w+)\s*,\s*(\w+)\s*\)|(\w+))(?:\s*:\s*[\w<>?,\s.]+)?\s+in\b/g;
-  // Lambda params: `{ x ->`, `{ x, y ->`, `{ (a, b) ->`. Inline string
-  // matchers — we don't try to handle `it` since it's keyword-magic.
-  const LAMBDA_RE  = /\{\s*(?:\(\s*(\w+)\s*,\s*(\w+)\s*\)|(\w+)(?:\s*,\s*\w+)*)\s*->/g;
-
-  for (let i = sigEndLine; i <= position.line && i < document.lineCount; i++) {
-    const t = document.lineAt(i).text;
-    VAL_VAR_RE.lastIndex = 0;
-    let m: RegExpExecArray | null;
-    while ((m = VAL_VAR_RE.exec(t))) {
-      recordIfMatch(i, t, m[1], m.index + m[0].indexOf(m[1]));
-    }
-    FOR_RE.lastIndex = 0;
-    while ((m = FOR_RE.exec(t))) {
-      // Group 1+2 = destructuring; group 3 = single var.
-      const candidates = m[3] ? [m[3]] : [m[1], m[2]];
-      for (const name of candidates) {
-        const nameIdx = t.indexOf(name, m.index);
-        if (nameIdx >= 0) recordIfMatch(i, t, name, nameIdx);
-      }
-    }
-    LAMBDA_RE.lastIndex = 0;
-    while ((m = LAMBDA_RE.exec(t))) {
-      const candidates = m[3] ? splitTopLevel(m[0].slice(1, m[0].indexOf('->')), ',').map(s => s.trim()) : [m[1], m[2]];
-      for (const raw of candidates) {
-        const name = raw.replace(/[()\s]/g, '');
-        const nameIdx = t.indexOf(name, m.index);
-        if (nameIdx >= 0) recordIfMatch(i, t, name, nameIdx);
-      }
-    }
-  }
+  // Step 2 — the latest local binding before the cursor.
+  const bestBinding = latestBinding(index, word, sigEndLine, position.line, position.character);
   if (bestBinding) {
     return new vscode.Location(
       document.uri,

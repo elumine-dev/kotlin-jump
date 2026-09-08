@@ -43,12 +43,19 @@ export class DrawableHoverProvider implements vscode.HoverProvider {
       const entry = this.index.get(key);
       if (!entry) return;
 
-      const pick = pickPreviewVariant(entry.variants);
+      let pick = pickPreviewVariant(entry.variants);
       const md   = new vscode.MarkdownString();
       md.supportHtml = true;
       md.isTrusted   = true;
 
-      await appendPreview(md, pick);
+      const rendered = await appendPreview(md, pick);
+      // `mipmap-anydpi-v26/ic_launcher.xml` is an <adaptive-icon>, not a
+      // vector: the XML won first and the hover showed no image although the
+      // density rasters were right there in the variants.
+      if (!rendered && pick.ext === 'xml') {
+        const raster = pickRasterVariant(entry.variants);
+        if (raster) { pick = raster; await appendPreview(md, raster); }
+      }
       appendHeader(md, kind, key, pick);
       appendVariantList(md, entry.variants);
 
@@ -67,12 +74,19 @@ function pickPreviewVariant(variants: readonly DrawableVariant[]): DrawableVaria
   );
 }
 
-async function appendPreview(md: vscode.MarkdownString, v: DrawableVariant): Promise<void> {
+/** First raster of the default density, then any raster. */
+function pickRasterVariant(variants: readonly DrawableVariant[]): DrawableVariant | undefined {
+  const rasters = variants.filter(v => v.ext !== 'xml' && v.ext !== 'svg');
+  return rasters.find(v => v.qualifier === 'drawable' || v.qualifier === 'mipmap') ?? rasters[0];
+}
+
+/** @returns whether an image was embedded. */
+async function appendPreview(md: vscode.MarkdownString, v: DrawableVariant): Promise<boolean> {
   try {
     const bytes = await vscode.workspace.fs.readFile(v.uri as vscode.Uri);
     if (bytes.byteLength > MAX_EMBED_BYTES && v.ext !== 'xml') {
       // Too big — file-info only. Caller still gets path + size afterwards.
-      return;
+      return false;
     }
 
     if (v.ext === 'xml') {
@@ -82,28 +96,30 @@ async function appendPreview(md: vscode.MarkdownString, v: DrawableVariant): Pro
         const dataUri = `data:image/svg+xml;base64,${utf8ToBase64(svg)}`;
         const alt = escapeHtmlAttr(v.uri.path.split('/').pop() ?? 'vector');
         md.appendMarkdown(`<img src="${dataUri}" width="128" height="128" alt="${alt}" />\n\n`);
-        return;
+        return true;
       }
       // Non-vector XML (selector, shape, layer-list, ripple, …) — we can't
       // render it as an image, but we can name its root element so the dev
       // isn't confused about why there's no thumbnail.
       const root = detectXmlRoot(xml);
       if (root) md.appendMarkdown(`*drawable type:* \`<${root}>\`\n\n`);
-      return;
+      return false;
     }
 
     if (v.ext === 'svg') {
       const dataUri = `data:image/svg+xml;base64,${bytesToBase64(bytes)}`;
       md.appendMarkdown(`<img src="${dataUri}" width="128" height="128" alt="svg" />\n\n`);
-      return;
+      return true;
     }
 
     const mime    = MIME_BY_EXT[v.ext] ?? 'image/png';
     const dataUri = `data:${mime};base64,${bytesToBase64(bytes)}`;
     const ninePatchNote = v.isNinePatch ? ' *(9-patch)*' : '';
     md.appendMarkdown(`<img src="${dataUri}" width="128" alt="${escapeHtmlAttr(v.ext)}" />${ninePatchNote}\n\n`);
+    return true;
   } catch {
     /* file unreadable — fall through to file-info only */
+    return false;
   }
 }
 

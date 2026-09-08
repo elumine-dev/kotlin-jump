@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { mapBatched } from '../util/batched';
 import { analyzeRoomSchema } from '../indexer/RoomSchemaIndex';
 
 /**
@@ -41,13 +42,27 @@ export class RoomMigrationProvider implements vscode.Disposable {
     if (this._cache && Date.now() - this._cache.at < CACHE_MS) return this._cache.files;
     const files = new Map<string, string>();
     const uris = await vscode.workspace.findFiles('**/*.kt', '**/{build,.gradle}/**', 3000);
-    for (const uri of uris) {
+    // Reads used to be sequential: a save waited on up to 3000 round trips.
+    const open = new Map<string, string>();
+    for (const d of vscode.workspace.textDocuments) {
+      if (d.languageId === 'kotlin') open.set(d.uri.toString(), d.getText());
+    }
+    const texts = new Map<string, string>();
+    await mapBatched(uris, async uri => {
+      const key = uri.toString();
+      // Unsaved edits: the ranges are computed from this text, so the disk
+      // copy put the underline on the wrong line while Entity.kt was dirty.
+      const fromEditor = open.get(key);
+      if (fromEditor !== undefined) { texts.set(key, fromEditor); return; }
       try {
-        const text = new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
-        if (ROOM_MARKER.test(text)) files.set(uri.toString(), text);
-      } catch {
-        continue;
-      }
+        texts.set(key, new TextDecoder().decode(await vscode.workspace.fs.readFile(uri)));
+      } catch { /* unreadable: skipped */ }
+    }, 16);
+    // Map insertion order must follow findFiles order: the analyzer's
+    // fileIndex refers to positions in the list built from it.
+    for (const uri of uris) {
+      const text = texts.get(uri.toString());
+      if (text !== undefined && ROOM_MARKER.test(text)) files.set(uri.toString(), text);
     }
     this._cache = { at: Date.now(), files };
     return files;
@@ -57,11 +72,12 @@ export class RoomMigrationProvider implements vscode.Disposable {
     const enabled = vscode.workspace
       .getConfiguration('kotlinJump')
       .get<boolean>('roomMigrationDrift', true);
-    this._diag.clear();
-    if (!enabled) return;
+    if (!enabled) { this._diag.clear(); return; }
 
+    // Clear only once the new set is ready: every save used to blank all
+    // Room warnings for the seconds the workspace read took.
     const files = await this._roomFiles();
-    if (files.size === 0) return;
+    if (files.size === 0) { this._diag.clear(); return; }
 
     // Keep the array in Map insertion order: the analyzer's fileIndex refers
     // to positions in this list.
@@ -110,6 +126,7 @@ export class RoomMigrationProvider implements vscode.Disposable {
       push(uriStr, d);
     }
 
+    this._diag.clear();
     for (const [uriStr, diags] of perFile) {
       this._diag.set(vscode.Uri.parse(uriStr), diags);
     }

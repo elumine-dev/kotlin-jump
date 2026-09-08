@@ -140,8 +140,15 @@ export class StringResourceIndex {
   // Returns all locale qualifiers present in the index.
   getKnownLocales(): string[] {
     const locales = new Set<string>();
-    for (const fUri of this.files.keys()) {
-      locales.add(extractLocaleQualifier(fUri));
+    for (const [fUri, strings] of this.files) {
+      // values-night, values-v23, values-sw600dp, values-land are not
+      // locales: they showed up in the hover grid with a ✗, as if a
+      // translation were missing. A values-fr with no <string> at all
+      // (dimens only) is not a translation either.
+      const q = extractLocaleQualifier(fUri);
+      if (!isLocaleQualifier(q)) continue;
+      if (strings.size === 0 && q !== 'values') continue;
+      locales.add(q);
     }
     return [...locales].sort();
   }
@@ -160,6 +167,11 @@ export class StringResourceIndex {
     }
     return undefined;
   }
+}
+
+/** `values`, `values-fr`, `values-fr-rCA`, `values-b+sr+Latn`; nothing else. */
+export function isLocaleQualifier(q: string): boolean {
+  return /^values(?:-(?:[a-z]{2,3}(?:-r[A-Z]{2})?|b\+[A-Za-z0-9]+(?:\+[A-Za-z0-9]+)*))?$/.test(q);
 }
 
 function extractLocaleQualifier(uriStr: string): string {

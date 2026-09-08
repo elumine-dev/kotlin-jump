@@ -323,3 +323,20 @@ describe('KJD-DHP-4 — graceful failure', () => {
     expect(md).not.toContain('data:image/svg+xml');
   });
 });
+
+// ── Adaptive icon beside rasters (was: the XML won and the hover showed no image) ──
+
+describe('R.mipmap.ic_launcher — adaptive-icon XML beside density rasters', () => {
+  it('falls back to the raster when the XML variant is not a vector', async () => {
+    const idx = new DrawableResourceIndex();
+    registerFile(idx, '/r/res/mipmap-anydpi-v26/ic_launcher.xml',
+      '<?xml version="1.0"?><adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android"><background android:drawable="@color/bg"/></adaptive-icon>');
+    registerFile(idx, '/r/res/mipmap-hdpi/ic_launcher.webp', new Uint8Array([0x52, 0x49, 0x46, 0x46, 1, 2, 3, 4]));
+    const provider = new DrawableHoverProvider(idx);
+    const line = 'setIcon(R.mipmap.ic_launcher)';
+    const hover = await provider.provideHover(doc(line), new vscode.Position(0, line.indexOf('ic_launcher') + 2));
+    const md = (hover!.contents[0] as vscode.MarkdownString).value;
+    expect(md).toContain('data:image/webp;base64,');
+    expect(md).toContain('mipmap-hdpi/ic_launcher.webp');
+  });
+});

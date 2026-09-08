@@ -98,6 +98,10 @@ export class FileWatcher implements vscode.Disposable {
     this.pendingScan.delete(uri.toString());
     evict(uri);
     this.index.remove(uri);
+    // The same listeners as after a scan: without them a deleted sealed
+    // subtype kept its "missing branch" lens, a deleted class kept its
+    // colour in open editors and its "N usages" kept counting.
+    this.onFileIndexed?.(uri);
   }
 
   dispose(): void {

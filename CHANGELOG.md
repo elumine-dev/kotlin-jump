@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.42.6
+
+Kotlin Jump 1.42.6 fixes the slowest thing in the extension and seven display defects around it. On a 5000 line file outside any function, a Koin module or a design system object, every keystroke walked backwards through the file once per coloured token: 13.9 seconds of frozen extension host, measured. It is one pass now.
+
+### Fixes
+- Replaces the per-token backward scope walk with one index per document. Semantic highlighting asked "is this word a local?" for every reference token, and each answer scanned upwards to the enclosing function, or through 5000 lines when there was none. Measured on a 5000 line `object`: 13.9 s per keystroke before, under 0.5 s for the same 5000 queries after, with the 27 existing scope tests unchanged. Inlay hints share the index.
+- Leaves tests unmarked when a run is stopped. Stop killed Gradle, nothing was parsed, and every test in the run turned red with "Gradle exited with code 1".
+- Re-checks `R.string` and `R.color` references while typing, 300 ms after the last edit, and clears them when `kotlinJump.resourceDiagnostics` is turned off. A fixed key stayed red with the old name until the next save, and the setting left every error in Problems until each file was reopened.
+- Stops marking `items.first()`, `.count()`, `.single()`, `.last()` and `.toList()` with ⚡ on ordinary collections. With the coroutines sources indexed, each name also has a suspend Flow overload and any homonym was enough. When a name resolves to both, only an explicit import of a suspend candidate earns the marker.
+- Shows `R.mipmap.ic_launcher` in the hover and the gutter. The adaptive-icon XML won over the density rasters and rendered to nothing; when the XML is not a vector, the default density raster beside it is used.
+- Lists only locales in the string hover grid. `values-night`, `values-v23`, `values-sw600dp` and `values-land` appeared with a ✗, as if a translation were missing, and so did a `values-fr` holding only dimensions.
+- Refreshes lenses, colours and counts when a file is deleted. Removing a sealed subtype's file kept its "missing branch" lens, its colour in open editors and its place in every usage count until the next save of any Kotlin file.
+- Keeps Room warnings on screen while a save re-reads the workspace, reads the files sixteen at a time instead of one by one, and computes ranges from the open editor's text so an unsaved entity is underlined on the right line.
+
 ## 1.42.5
 
 Kotlin Jump 1.42.5 is the third pass of the display sweep, this time on what the editor shows inline: two caches that outlived the files they described, a hover reading the wrong annotation, a swatch that stopped following the cursor, a history that sorted every jump destination last, and two settings whose toggle did nothing.

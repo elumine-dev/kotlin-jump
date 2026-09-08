@@ -318,9 +318,16 @@ export class KotlinTestController implements vscode.Disposable {
     }
     this.log.info(`[test:run] running ${toRun.length} test(s): [${toRun.map(s => s.entry.name).join(', ')}]`);
 
+    // runItems() (the ▶ Run lens) passes a token nobody ever cancels; the
+    // Stop button cancels the TestRun's own token. Either one stops Gradle.
+    const cts = new vscode.CancellationTokenSource();
+    const subs: vscode.Disposable[] = [token.onCancellationRequested(() => cts.cancel())];
+    if (run.token?.onCancellationRequested) subs.push(run.token.onCancellationRequested(() => cts.cancel()));
     try {
-      await this.runner.runAll(toRun, run, token, this.index);
+      await this.runner.runAll(toRun, run, cts.token, this.index);
     } finally {
+      for (const s of subs) s.dispose();
+      cts.dispose();
       run.end();
       this.lastFailedItems = failedItems;
       if (failedItems.length > 0)

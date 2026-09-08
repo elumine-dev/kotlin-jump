@@ -746,6 +746,24 @@ async function parseXmlResults(modulePath: string, testTask: string, startMs: nu
   return results;
 }
 
+/**
+ * JUnit XML method name → the index's method name (no params, no index).
+ * Handles JUnit 5 @ParameterizedTest patterns: "myTest(String)[1] - val",
+ * "myTest[1]" and the plain "()" suffix. The trailing group is matched
+ * without nested parentheses: a greedy `\(.*\)$` cut a backtick name such as
+ * `returns 404 (not found)()` down to "returns 404", which matched nothing
+ * in the index and reported the test as skipped.
+ */
+export function normalizeJUnitName(raw: string): string {
+  return raw
+    .replace(/\([^()]*\)\s*\[\d+\].*$/, '') // "myTest(String)[1] - val" → "myTest"
+    .replace(/\s*\[\d+\].*$/, '')            // "myTest[1]" → "myTest"
+    // "myTest()" → "myTest", "myTest(String, Int)" → "myTest"; a trailing
+    // group of words with spaces ("(not found)") is part of a backtick name.
+    .replace(/\((?:[\w.<>?\[\]]+(?:,\s*[\w.<>?\[\]]+)*)?\)$/, '')
+    .trim();
+}
+
 function parseJUnitXml(xml: string, results: Map<string, TestResult>): void {
   // Parse <testcase classname="..." name="..." time="..."> elements.
   // Uses alternation: either full open/close form or self-closing form.
@@ -766,10 +784,7 @@ function parseJUnitXml(xml: string, results: Map<string, TestResult>): void {
     // Normalize method name to match symbol index (which has no annotations or params).
     // Handles JUnit 5 @ParameterizedTest patterns: "myTest(String)[1] - val", "myTest[1]"
     // and plain JUnit 5 "()" suffix: "myTest()"
-    const name = (attrs['name'] ?? '')
-      .replace(/\(.*?\)\s*\[\d+\].*$/, '') // "myTest(String)[1] - val" → "myTest"
-      .replace(/\s*\[\d+\].*$/, '')         // "myTest[1]" → "myTest"
-      .replace(/\(.*\)$/, '');              // "myTest()" → "myTest"
+    const name = normalizeJUnitName(attrs['name'] ?? '');
     const timeStr   = attrs['time'] ?? '0';
     const durationMs = Math.round(parseFloat(timeStr) * 1000);
     const body = m[2] ?? '';

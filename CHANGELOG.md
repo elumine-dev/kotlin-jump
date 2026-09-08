@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.42.8
+
+Kotlin Jump 1.42.8 finishes the third display audit's list: a test run you could not stop, test source sets the explorer never looked at, a backtick test name reported as skipped, the wrong module's icon in a multi-module project, and a string extraction that mangled raw strings.
+
+### Fixes
+- Lets Stop end a run started from the ▶ Run lens. That path handed the runner a cancellation token nobody ever cancelled, so the Test Explorer's Stop button did nothing until Gradle finished on its own.
+- Discovers tests under `androidUnitTest/`, `sharedTest/` and the KMP target source sets (`iosTest/`, `jsTest/`, `nativeTest/`, `desktopTest/`). Their classes had a ▶ lens, and clicking it said "test not found in index".
+- Matches a backtick test name ending with a parenthesis to its result. `returns 404 (not found)()` in the JUnit report was cut to `returns 404`, which matched nothing, and the test showed as skipped. Only an empty or type-list parameter group is stripped now.
+- Shows the referencing module's drawable when two modules declare the same name. The first module indexed won in the hover and the gutter.
+- Extracts a single-line raw string as a whole. `Text("""Hello""")` was seen as three literals and only the middle one was replaced, leaving `""stringResource(…)""` behind. An escaped `\# Changelog
+
+ is now a literal dollar instead of a template with a bogus argument.
+- Clears only the gutter icons an editor actually showed, and releases the decoration types no visible editor uses. Every flush, 32 ms after a keystroke, called setDecorations once per type minted in the session, per editor.
+
 ## 1.42.7
 
 Kotlin Jump 1.42.7 closes the list left by the third display audit: multi-root workspaces that ran tests against the wrong Gradle build and read the wrong version catalog, a Find Usages panel that disagreed with its own lens, a Recent Locations picker that opened a hundred files before showing up, and a few settings and pills that did not do what they said.

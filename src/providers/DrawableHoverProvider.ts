@@ -40,7 +40,7 @@ export class DrawableHoverProvider implements vscode.HoverProvider {
 
       const kind = m[1]; // drawable | mipmap
       const key  = m[2];
-      const entry = this.index.get(key);
+      const entry = this.index.get(key, document.uri?.path);
       if (!entry) return;
 
       let pick = pickPreviewVariant(entry.variants);

@@ -1,39 +1,20 @@
 {
-  "version": "1.42.42",
+  "version": "1.42.43",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Undoing our own last four releases",
-  "summary": "An adversarial pass over the last four releases found sixteen defects the fixes themselves had introduced. Screen Flow, Go to Definition in test source sets and Logcat device switching all work again.",
+  "tagline": "A test that watched the clock",
+  "summary": "No change to the extension. One of our own tests measured elapsed time and failed on a loaded build machine, so it now asserts on behaviour instead.",
   "highlights": [
     {
-      "title": "Screen Flow has arrows again",
+      "title": "No clock in the test suite",
       "kind": "fix",
-      "description": "The ambiguity guard added last release caught two ordinary shapes: the same route declared in two flavors, and a parameterised screen beside a literal sibling. On a project with flavors the map became a grid of boxes with no links."
-    },
-    {
-      "title": "Variant test source sets",
-      "kind": "fix",
-      "description": "Gradle names them by suffix, `androidTest` becoming `androidTestDebug`. The bounded path comparison recognised none of them, so Go to Definition from a test in one of those directories returned nothing."
-    },
-    {
-      "title": "Switching Logcat device",
-      "kind": "fix",
-      "description": "The resume anchor is a timestamp from the previous device clock, and it was carried over. An emulator and a phone are hours apart, so the new stream asked for logs from the future and showed nothing."
+      "description": "A regression test guarded a shortcut with a threshold in milliseconds. It checks the two outcomes that matter instead: a file with no state produces no lens, and a file with a single state keeps its lens and its indirect writes."
     }
   ],
   "sections": [
     {
-      "heading": "Fixes",
+      "heading": "Notes",
       "bullets": [
-        "A second process of the followed app no longer vanishes from Logcat when the app restarts. A receiver in a `:push` process often starts before the main one, and a foreground service outlives the interface.",
-        "The state provenance lens counts a write glued to another: `_a.value=_b.emit(v)` used to eat the first character of the second write.",
-        "Reopening a file that changed while its tab was closed no longer shows the previous lenses."
-      ]
-    },
-    {
-      "heading": "Improvements",
-      "bullets": [
-        "The structure of an unsaved buffer is analysed once per keystroke instead of three times. On a file of 5000 lines the outline and folding pair fell from 9 ms to 4.8 ms.",
-        "A file that declares no state costs almost nothing to the provenance lens."
+        "Nothing shipped in the extension itself. Version 1.42.42 was published correctly; only the test job was red."
       ]
     }
   ],

@@ -106,26 +106,33 @@ describe('Analyse de provenance sur un gros ViewModel', () => {
     spy.mockRestore();
   });
 
-  it('un fichier sans aucun état ne paie pas le balayage des fonctions', async () => {
+  it('un fichier sans aucun état ne rend aucun lens, et le raccourci ne va pas trop loin', async () => {
     const mod = await import('../../src/providers/StateProvenanceProvider');
     // Un écran Compose qui utilise `by mutableStateOf` sans jamais déclarer
     // `val _x = mutableStateOf(...)` passe le pré-filtre mais ne produit aucun
-    // état. Le balayage de tous les corps de fonction était pur gaspillage.
+    // état. Le balayage de tous les corps de fonction est alors pur
+    // gaspillage : mesuré à 4,4 ms par frappe sur un fichier de 74 Ko, ramené
+    // à 0,3 ms. Pas d'assertion sur le temps ici : une horloge dans une suite
+    // qui tourne sur une machine partagée finit toujours par mentir.
+    const body = (i: number) => `    fun render${i}(v: Int) { var s by mutableStateOf(v); helper${i % 7}(s) }`;
     const L = ['package p', 'class Screen {'];
-    for (let i = 0; i < 400; i++) {
-      L.push(`    fun render${i}(v: Int) { var s by mutableStateOf(v); helper${i % 7}(s) }`);
-    }
+    for (let i = 0; i < 400; i++) L.push(body(i));
     L.push('}');
     const text = L.join('\n');
     expect(mod.analyzeStateProvenance(text)).toEqual([]);
-    const provider = new mod.StateProvenanceProvider();
-    const t0 = performance.now();
-    for (let i = 0; i < 20; i++) provider.provideCodeLenses(lensDoc(text, 100 + i));
-    const ms = (performance.now() - t0) / 20;
-    expect(provider.provideCodeLenses(lensDoc(text, 500))).toEqual([]);
-    // Mesuré autour de 0,3 ms ; le seuil laisse de la marge à une machine
-    // chargée tout en attrapant le retour du balayage complet (4,4 ms).
-    expect(ms).toBeLessThan(2);
+    expect(new mod.StateProvenanceProvider().provideCodeLenses(lensDoc(text, 100))).toEqual([]);
+
+    // Le sens dangereux du raccourci : couper trop tôt. Le même fichier avec un
+    // seul vrai état doit garder son lens ET ses écritures indirectes.
+    const W = ['package p', 'class Screen {', '    private val _sel = MutableStateFlow(0)'];
+    W.push('    fun choose(v: Int) { _sel.value = v }');
+    W.push('    fun onTap(v: Int) { choose(v) }');
+    for (let i = 0; i < 400; i++) W.push(body(i));
+    W.push('}');
+    const withState = mod.analyzeStateProvenance(W.join('\n'));
+    expect(withState.map(s => s.property)).toEqual(['_sel']);
+    expect(withState[0].directWrites).toBe(1);
+    expect(withState[0].indirectWriteFns).toEqual(['onTap']);
   });
 
   it('le résultat est inchangé : écritures directes et indirectes', async () => {

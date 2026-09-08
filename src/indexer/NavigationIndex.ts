@@ -147,9 +147,16 @@ function resolveRouteExpr(
 
   const literal = /^"((?:[^"\\]|\\.)*)"$/.exec(trimmed);
   if (literal) {
+    // `"${Screen.Profile.route}/$userId"` : the first half names a route the
+    // workspace declares, and blanking it into a placeholder threw away the
+    // only piece of the target we actually knew.
+    const substitute = (name: string): string => {
+      const known = constants.get(name);
+      return known !== undefined ? known : `{${name}}`;
+    };
     const route = literal[1]
-      .replace(/\$\{([^}]+)\}/g, (_s, inner) => `{${String(inner).trim()}}`)
-      .replace(/\$(\w+)/g, '{$1}');
+      .replace(/\$\{([^}]+)\}/g, (_s, inner) => substitute(String(inner).trim()))
+      .replace(/\$(\w+)/g, (_s, name) => substitute(String(name)));
     return { route };
   }
   const constant = constants.get(trimmed);
@@ -163,6 +170,10 @@ export function routeMatches(target: string, declared: string): boolean {
   const t = target.split('/');
   const d = declared.split('/');
   if (t.length !== d.length) return false;
+  // A target made only of placeholders says nothing about where it goes. It
+  // used to match the first declared route with the same segment count, so a
+  // `navigate(dest)` drew an arrow to an arbitrary screen.
+  if (t.every(seg => seg.startsWith('{'))) return false;
   return t.every((seg, i) => seg === d[i] || seg.startsWith('{') || d[i].startsWith('{'));
 }
 
@@ -271,8 +282,10 @@ export function parseNavigation(
     const target = resolveRouteExpr(args[0], constants);
     if (!target.route) continue;
 
-    const declared = nodes.find(n => !n.dynamic && routeMatches(target.route!, n.route));
-    const to = declared?.route ?? target.route;
+    // Two declared routes matching the same target is not a reason to pick
+    // one: keep the literal target, which is either a real screen or nothing.
+    const hits = nodes.filter(n => !n.dynamic && routeMatches(target.route!, n.route));
+    const to = hits.length === 1 ? hits[0].route : target.route;
     const fromRoute = from?.route ?? '«global»';
     if (!edges.some(e => e.from === fromRoute && e.to === to)) {
       edges.push({ from: fromRoute, to });

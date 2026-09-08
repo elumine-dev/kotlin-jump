@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.39
+
+Kotlin Jump 1.42.39 stops the Screen Flow map from drawing arrows it cannot justify. A navigation whose destination was a variable used to land on whichever screen happened to be declared first, and the map read as a fact.
+
+### Fixes
+- A `navigate(dest)` whose target the parser cannot resolve draws no arrow. The target became a placeholder, and a placeholder matched any declared route with the same number of segments, so the first one won. On a graph with a profile screen and an orders screen, both taking one argument, the arrow was a coin flip.
+- `navigate("${Screen.Profile.route}/$userId")` now keeps the half it knows. The interpolation was blanked before the route constants were consulted, although the workspace declares that exact constant, so a target the parser could have resolved exactly became a wildcard.
+- Two declared routes matching the same target no longer let the map pick one. It keeps the literal target instead, which is either a real screen or nothing at all.
+- A route constant declared with the same name and two different values in two modules resolves to nothing. The scan kept whichever file was read last, so an arrow could point at another module's screen, and the answer changed with the file order.
+- The legend counts the arrows on screen. Navigations from outside any composable, and targets no screen declares, have no box to start or end at, so they were counted and never drawn.
+
 ## 1.42.38
 
 Kotlin Jump 1.42.38 makes the structure of a file follow the text on screen. Three features were reading the index of the last saved version, so any unsaved edit that moved a declaration pushed them onto the wrong lines. The state provenance lens also got its cost back under control.

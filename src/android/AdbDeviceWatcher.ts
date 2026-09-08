@@ -25,6 +25,7 @@ export class AdbDeviceWatcher extends EventEmitter {
   private recoveryTimer?: NodeJS.Timeout;
   private disposed     = false;
   private lastSerials  = new Set<string>();
+  private adbMissing   = false;
 
   constructor(private readonly log?: Logger) { super(); }
 
@@ -36,12 +37,19 @@ export class AdbDeviceWatcher extends EventEmitter {
       proc = spawnAdb(['track-devices']);
     } catch (err) {
       this.log?.warn(`[adb:watcher] track-devices spawn failed (${err}) — falling back to poll`);
+      // The Logcat panel shows its "adb binary not found" banner off this.
+      this.adbMissing = true;
+      this.emit('adb-missing');
       this.startPolling();
       return;
     }
 
     this.process = proc;
     this.stopPolling(); // Upgrade succeeded — drop the poll machinery.
+    if (this.adbMissing) {
+      this.adbMissing = false;
+      this.emit('adb-found');
+    }
 
     proc.stdout.on('data', () => { void this.refresh(); });
     proc.stderr.on('data', d => this.log?.debug(`[adb:watcher] stderr: ${d.toString().trim()}`));

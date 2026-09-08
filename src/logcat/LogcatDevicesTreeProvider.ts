@@ -17,6 +17,7 @@ export class LogcatDevicesTreeProvider implements vscode.TreeDataProvider<Device
   }
 
   setActive(serial: string | undefined): void {
+    if (serial === this.activeSerial) return; // 'state' ticks every second
     this.activeSerial = serial;
     this._onDidChange.fire(undefined);
   }
@@ -35,11 +36,17 @@ export class LogcatDevicesTreeProvider implements vscode.TreeDataProvider<Device
         : 'circle-slash',
       node.serial === this.activeSerial ? new vscode.ThemeColor('charts.green') : undefined,
     );
-    item.command = {
-      command: 'kotlinJump.logcat.pickDevice',
-      title:   'Switch Device',
-      arguments: [node.serial],
-    };
+    // Switching to an offline/unauthorized device tears down the live stream
+    // and clears the buffer for nothing, so only a ready device is a target.
+    if (node.state === 'device') {
+      item.command = {
+        command: 'kotlinJump.logcat.pickDevice',
+        title:   'Switch Device',
+        arguments: [node.serial],
+      };
+    } else if (node.serial) {
+      item.tooltip = `Device is ${node.state}`;
+    }
     return item;
   }
 

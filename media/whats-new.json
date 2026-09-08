@@ -1,26 +1,34 @@
 {
-  "version": "1.42.2",
+  "version": "1.42.3",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Three false positives found by running the checks against real projects",
-  "summary": "Kotlin Jump 1.42.2 fixes three false positives in the dead-code family, found by running it against real Android and Kotlin projects rather than trusting it. The first one gave advice that stops a module from compiling: on a 4100 file project the import check reported 222 findings, and 206 of them were this defect.",
+  "tagline": "Settings that apply, panels that show what they hold",
+  "summary": "Kotlin Jump 1.42.3 is a sweep of the parts users look at rather than the parts that scan code: settings that were declared and never read, a banner that never showed, a Logcat panel that lost its filter on Clear and opened empty after a Run, vector icons that rendered as nothing, and five commands that vscode.dev advertised but could not run.",
   "highlights": [
     {
-      "title": "Imports Kotlin resolves by convention",
+      "title": "Logcat shows what it captured",
       "kind": "fix",
-      "description": "import androidx.compose.runtime.getValue is required by var state by remember { … }, and the word getValue appears nowhere in the file, so the import check called it unused. Removing it on that advice fails the build with \"Property delegate must have a getValue(…) method\", verified with a real Gradle compile. The same held for componentN from destructuring, div behind basePath / \"sub\", set behind x[i] and every other operator convention. On a 4100 file project: 222 findings before, 16 after. The name list already existed and already guarded declarations, it had never been applied to imports."
+      "description": "A panel opened after a Run showed only rows arriving after the click while its counter read thousands; Clear and a device switch silently dropped the filter; the pause button ignored Pause from the palette. The buffer is replayed on open, after Resume and when Follow app PID goes off, the filter survives Clear, and the picker, the Devices tree and the host stay on one device."
     },
     {
-      "title": "Find Dead Islands now agrees with the member scan",
+      "title": "Vector icons that render",
       "kind": "fix",
-      "description": "Kotlin reads a Java getBar() as the property bar, so no call site can spell the method name. The member scan has known that since 1.42.1, the island scan did not. On a real project it reported 12 accessors, 6 of them referenced from production Kotlin, and one of those dragged a live class into an island with it."
+      "description": "Android writes alpha first (#FF000000) and browsers read it last, so every icon out of Vector Asset Studio previewed as an empty checkerboard. Colours are now split into colour and opacity, and a path coloured @color/x or ?attr/x, which the converter used to drop entirely, gets its preview back."
+    },
+    {
+      "title": "Five commands working on vscode.dev",
+      "kind": "fix",
+      "description": "Recent Locations, Surround With, Smart Join Lines, Screen Flow Map and Compose Outline were contributed for the web but only registered on desktop: \"command not found\" on their shortcuts, and an empty Compose Outline panel. Logcat settings that were declared and never read now apply too."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Counts f.isBar = true as a write to a Java setBar(). A Java isX()/setX() pair becomes one Kotlin property named isX, so the setter is never written f.x = v, and it was reported as unreferenced.",
-        "The island harness takes --name=, which prints why each matching candidate is alive, with the file and line that keep it so. The outcome histogram collapsed that detail away."
+        "Reads kotlinJump.logcat.followAppPid and kotlinJump.logcat.colorScheme, which were in the settings UI and never consulted, and shows the \"adb binary not found\" banner that nothing was listening for.",
+        "Removes ghost rows in Logcat soft wrap mode after a filter, a Clear or a wrap toggle, and stops redrawing all 2000 wrapped rows on every batch and scroll frame.",
+        "Stops the Compose Outline from rebuilding on every cursor move and losing what you had expanded; it also empties when the active editor is not Kotlin, and the Screen Flow Map can navigate to routes added since it was first opened.",
+        "Brings the vector preview back when kotlinJump.vectorPreview is edited after a dismissal, and clears the inline drawable icon when a vector becomes another drawable type.",
+        "Implements kotlinJump.fallbackToOnlineDocs, declared and dead until now: Go to Definition on a symbol with no local source opens its reference page, but only when an import pins the symbol down. Off by default."
       ]
     }
   ],

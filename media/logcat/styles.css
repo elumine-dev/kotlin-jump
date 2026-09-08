@@ -198,6 +198,20 @@ input[type="search"] { width: 180px; }
 .entry.lvl-F .level { color: var(--vscode-errorForeground); }
 .entry.lvl-F           { background: rgba(255, 60, 60, 0.12); font-weight: 500; }
 
+/* kotlinJump.logcat.colorScheme — the host sets body[data-scheme] on init and on change. */
+body[data-scheme="monochrome"] .entry .level { color: var(--vscode-foreground); opacity: 1; }
+body[data-scheme="monochrome"] .entry.lvl-W,
+body[data-scheme="monochrome"] .entry.lvl-E,
+body[data-scheme="monochrome"] .entry.lvl-F { background: none; font-weight: normal; }
+body[data-scheme="monochrome"] .entry.lvl-F .level { font-weight: bold; }
+
+body[data-scheme="high-contrast"] .entry.lvl-V .level { opacity: 1; }
+body[data-scheme="high-contrast"] .entry.lvl-W { background: rgba(255, 193, 7, 0.18); }
+body[data-scheme="high-contrast"] .entry.lvl-E { background: rgba(255, 60, 60, 0.22); }
+body[data-scheme="high-contrast"] .entry.lvl-F { background: rgba(255, 60, 60, 0.35); font-weight: bold; }
+body[data-scheme="high-contrast"] .entry.lvl-E .msg,
+body[data-scheme="high-contrast"] .entry.lvl-F .msg { color: var(--vscode-errorForeground); }
+
 .entry .frame {
   color: var(--vscode-textLink-foreground);
   text-decoration: underline;

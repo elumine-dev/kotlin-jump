@@ -20,6 +20,7 @@ import * as path from 'path';
 import { SymbolIndex } from './indexer/SymbolIndex';
 import { FileScanner } from './indexer/FileScanner';
 import { FileWatcher } from './watcher/FileWatcher';
+import { ONLINE_DOCS_SCHEME, OnlineDocsContentProvider } from './providers/OnlineDocsFallback';
 import { KotlinDefinitionProvider, getPendingDeclNav, clearPendingDeclNav, navigateFromInlay, isInlayNavSuppressed } from './providers/DefinitionProvider';
 import { KotlinDocumentSymbolProvider } from './providers/DocumentSymbolProvider';
 import { KotlinHoverProvider } from './providers/HoverProvider';
@@ -133,6 +134,11 @@ import { ResourceDiagnosticProvider } from './providers/ResourceDiagnosticProvid
 import { VersionCatalogHoverProvider } from './providers/VersionCatalogHoverProvider';
 import { OverrideGutterProvider } from './providers/OverrideGutterProvider';
 import { NavigationHistoryProvider } from './providers/NavigationHistoryProvider';
+import { recentLocationsCommand } from './commands/recentLocations';
+import { SurroundWithProvider, applySurround, surroundWithQuickPick } from './providers/SurroundWithProvider';
+import { smartJoinLinesCommand, SmartJoinLinesProvider } from './commands/smartJoinLines';
+import { ScreenFlowPanel } from './ui/ScreenFlowPanel';
+import { ComposeOutlineProvider } from './providers/ComposeOutlineProvider';
 import { SuppressHoverProvider } from './providers/SuppressHoverProvider';
 import { PermissionHoverProvider } from './providers/PermissionHoverProvider';
 import { DeprecationHoverProvider } from './providers/DeprecationHoverProvider';
@@ -232,6 +238,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     usagesPanel,
     usagesView,
     vscode.languages.registerDefinitionProvider(KT_JAVA, new KotlinDefinitionProvider(index, log)),
+    vscode.workspace.registerTextDocumentContentProvider(ONLINE_DOCS_SCHEME, new OnlineDocsContentProvider()),
     ...(!isCompanion ? [
       vscode.languages.registerDocumentSymbolProvider(KT_JAVA, new KotlinDocumentSymbolProvider(index)),
     ] : []),
@@ -275,7 +282,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (isCompanion) return { dispose: () => {} };
       const cfg = vscode.workspace.getConfiguration('kotlinJump');
       const showParamNames    = cfg.get<boolean>('inlayHints.parameterNames', true);
-      const showInferredTypes = cfg.get<boolean>('inlayHints.inferredTypes', false);
+      const showInferredTypes = cfg.get<boolean>('inlayHints.inferredTypes', true);
       log.info(`[InlayHints] registered — showParamNames=${showParamNames} showInferredTypes=${showInferredTypes}`);
       const provider = new KotlinInlayHintsProvider(index, log);
       return vscode.Disposable.from(
@@ -1054,7 +1061,60 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   })();
 
   context.subscriptions.push(new ConstValFoldingProvider(index));
-  context.subscriptions.push(new NavigationHistoryProvider());
+
+  // These five are pure-vscode modules that only extension.ts registered.
+  // package.json contributes them with no web gate, so on vscode.dev their
+  // keybindings (Cmd+Shift+E, Cmd+Alt+T, Ctrl+Shift+J) and palette entries
+  // used to fail with "command not found", and the Compose Outline view was
+  // an empty panel with "no data provider registered".
+  const navigationHistory = new NavigationHistoryProvider();
+  context.subscriptions.push(
+    navigationHistory,
+    vscode.commands.registerCommand('kotlin-jump.recentLocations', () =>
+      recentLocationsCommand(navigationHistory),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.surroundWith', () => {
+      const editor = vscode.window.activeTextEditor;
+      if (editor) void surroundWithQuickPick(editor);
+    }),
+    vscode.commands.registerCommand(
+      'kotlin-jump.surroundWith.apply',
+      (_uri: vscode.Uri, _range: vscode.Range, templateId: string) => {
+        const editor = vscode.window.activeTextEditor;
+        if (editor) void applySurround(editor, templateId);
+      },
+    ),
+    vscode.languages.registerCodeActionsProvider(
+      { language: 'kotlin' },
+      new SurroundWithProvider(),
+      { providedCodeActionKinds: [vscode.CodeActionKind.RefactorRewrite] },
+    ),
+    vscode.commands.registerCommand('kotlin-jump.smartJoinLines', () => {
+      const editor = vscode.window.activeTextEditor;
+      if (editor) void smartJoinLinesCommand(editor);
+    }),
+    vscode.languages.registerCodeActionsProvider(
+      { language: 'kotlin' },
+      new SmartJoinLinesProvider(),
+      { providedCodeActionKinds: [vscode.CodeActionKind.RefactorRewrite] },
+    ),
+    vscode.commands.registerCommand('kotlin-jump.screenFlowMap', () => ScreenFlowPanel.show()),
+  );
+
+  {
+    const composeOutline = new ComposeOutlineProvider();
+    const composeOutlineView = vscode.window.createTreeView('kotlinJump.composeOutline', {
+      treeDataProvider: composeOutline,
+    });
+    context.subscriptions.push(
+      composeOutlineView,
+      vscode.window.onDidChangeTextEditorSelection(e =>
+        composeOutline.refreshFromEditor(e.textEditor),
+      ),
+      vscode.window.onDidChangeActiveTextEditor(e => composeOutline.refreshFromEditor(e)),
+    );
+    composeOutline.refreshFromEditor(vscode.window.activeTextEditor);
+  }
 
   (() => {
     const sp = new SuspendMarkerProvider(index);

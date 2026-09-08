@@ -236,7 +236,12 @@ export class DrawableXmlPreviewPanel implements vscode.Disposable {
       vscode.window.onDidChangeActiveTextEditor(e => this.onActiveEditor(e)),
       vscode.workspace.onDidChangeTextDocument(e => this.onDocChange(e)),
       vscode.workspace.onDidChangeConfiguration(e => {
-        if (e.affectsConfiguration('kotlinJump.vectorPreview')) this.evaluate();
+        // Editing the setting is an explicit "bring it back" after a dismissal;
+        // without the reset, re-enabling autoOpen did nothing for the session.
+        if (e.affectsConfiguration('kotlinJump.vectorPreview')) {
+          this.dismissed = false;
+          this.evaluate(true);
+        }
       }),
     );
     // Evaluate on activation so a vector XML already-open at startup

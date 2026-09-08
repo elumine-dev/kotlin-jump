@@ -4,7 +4,8 @@ interface DocCache {
   version: number;
   packageName: string;
   exact: string[];            // "com.example.Foo"
-  wildcardPrefixes: string[]; // "com.example" (from "import com.example.*")
+  wildcardPrefixes: string[]; // "com.example" (from "import com.example.*"), defaults appended
+  userWildcardPrefixes: string[]; // the wildcards the file actually declares, no defaults
   aliases: Map<string, string>; // alias → original FQN (from "import com.example.Foo as Bar")
 }
 
@@ -68,6 +69,24 @@ export function resolve(simpleName: string, document: vscode.TextDocument): stri
 }
 
 /**
+ * Candidate FQNs backed by imports the file spells out: exact imports and
+ * aliases, and separately the file's own wildcard imports. Kotlin's implicit
+ * defaults (`kotlin.*`, `java.lang.*`, ...) are left out on purpose: a guess
+ * like `kotlin.List` for `List` would be wrong half the time, and the online
+ * docs fallback would rather open nothing than a 404.
+ */
+export function resolveExplicit(
+  simpleName: string,
+  document: vscode.TextDocument,
+): { exact: string[]; wildcards: string[] } {
+  const c = getCache(document);
+  return {
+    exact:     [...new Set(exactCandidates(simpleName, c))],
+    wildcards: c.userWildcardPrefixes.map(prefix => `${prefix}.${simpleName}`),
+  };
+}
+
+/**
  * Resolves the highest-priority candidate group for a symbol:
  * exact import > same package > wildcard imports.
  * If the chosen group contains multiple matches, the caller can treat it as ambiguous.
@@ -127,6 +146,7 @@ function getCache(document: vscode.TextDocument): DocCache {
   // Append language-specific implicit wildcard imports so resolution of
   // stdlib symbols (e.g. `listOf`, `println`, `String`) doesn't require
   // an explicit `import kotlin.collections.*` in every file.
+  const userWildcardPrefixes = [...wildcardPrefixes];
   const defaults =
     document.languageId === 'kotlin' ? KOTLIN_DEFAULT_IMPORTS
     : document.languageId === 'java' ? JAVA_DEFAULT_IMPORTS
@@ -140,6 +160,7 @@ function getCache(document: vscode.TextDocument): DocCache {
     packageName: pkgMatch ? pkgMatch[1] : '',
     exact,
     wildcardPrefixes,
+    userWildcardPrefixes,
     aliases,
   };
   cache.set(key, entry);

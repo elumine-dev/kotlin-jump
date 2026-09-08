@@ -36,6 +36,10 @@ let searchQuery  = '';
 let followAppPid = true;
 let softWrap     = false;
 let paused       = false;
+// Device the host is streaming from, per its last 'init'/'state'. onDevices()
+// must not auto-pick option 0 over it: doing so switched the stream away from
+// the phone a Run had just targeted, and emptied the buffer.
+let hostSerial: string | undefined;
 let autoScroll   = true;
 
 // Precomputed once per filter edit, not per row — matches() in logMirror.ts reads
@@ -78,6 +82,7 @@ const elStatus   = $<HTMLSpanElement>('status-pill');
 const elBanner   = $<HTMLDivElement>('release-banner');
 const elBannerX  = $<HTMLButtonElement>('banner-dismiss');
 const elError    = $<HTMLDivElement>('stream-error');
+const ADB_MISSING_TEXT = 'adb binary not found. Set kotlinJump.adbPath or add adb to PATH.';
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
@@ -103,8 +108,19 @@ window.addEventListener('message', ev => {
       bufferCap    = msg.state.bufferCap;
       mirror.resizeCapacity(bufferCap, filterState);
       elFollow.checked = followAppPid;
+      applyColorScheme(msg.state.colorScheme);
       paused = msg.state.paused;
       updatePauseButton();
+      hostSerial = msg.state.selectedSerial;
+      if (msg.state.selectedPackage) elPackage.value = msg.state.selectedPackage;
+      break;
+
+    case 'settings':
+      // The host already applied followAppPid to its filter; only the checkbox
+      // needs to catch up here, so no setFollowAppPid round trip.
+      followAppPid = msg.followAppPid;
+      elFollow.checked = followAppPid;
+      applyColorScheme(msg.colorScheme);
       break;
 
     case 'append':
@@ -140,7 +156,17 @@ window.addEventListener('message', ev => {
       }
       elBuffer.textContent  = `${formatNum(msg.bufferUsed)} / ${formatNum(msg.bufferCap)}`;
       elThrough.textContent = `${msg.throughputPerSec}/s`;
-      elStatus.textContent  = msg.paused ? 'paused' : 'streaming';
+      // Pause/Stop can come from the command palette or the status bar, so the
+      // button and the pill follow the host rather than the last local click.
+      elStatus.textContent  = msg.paused ? 'paused' : msg.streaming === false ? 'stopped' : 'streaming';
+      if (typeof msg.paused === 'boolean' && msg.paused !== paused) {
+        paused = msg.paused;
+        updatePauseButton();
+      }
+      syncDevicePicker(msg.serial);
+      if (typeof msg.followedPackage === 'string' && document.activeElement !== elPackage && elPackage.value !== msg.followedPackage) {
+        elPackage.value = msg.followedPackage;
+      }
       break;
 
     case 'release-build-detected':
@@ -154,7 +180,12 @@ window.addEventListener('message', ev => {
 
     case 'adb-missing':
       elError.hidden = false;
-      elError.textContent = 'adb binary not found. Set kotlinJump.adbPath or add adb to PATH.';
+      elError.textContent = ADB_MISSING_TEXT;
+      break;
+
+    case 'adb-found':
+      // Only the adb banner: a stream error still on screen is a different fault.
+      if (elError.textContent === ADB_MISSING_TEXT) elError.hidden = true;
       break;
 
     case '_demoFlash':
@@ -162,6 +193,10 @@ window.addEventListener('message', ev => {
       break;
   }
 });
+
+function applyColorScheme(scheme: string): void {
+  document.body.dataset.scheme = scheme;
+}
 
 function flashRowForDemo(seq: number): void {
   // Locate the displayIndex of the entry with the requested seq, then briefly
@@ -286,6 +321,9 @@ function onHydrate(rows: LogEntry[]): void {
 
 function onReset(): void {
   mirror.reset();
+  // reset() drops the filter flag; the chips and inputs still show it, so
+  // re-arm it or every row after Clear / a device switch shows unfiltered.
+  mirror.rebuild(filterState);
   invalidateAllRows();
   updateVirtualHeight();
   renderVisible();
@@ -301,13 +339,24 @@ function onDevices(devices: AdbDevice[]): void {
     opt.textContent = `${d.model ?? d.serial} (${d.serial})`;
     elDevice.appendChild(opt);
   }
-  if (previous && Array.from(elDevice.options).some(o => o.value === previous)) {
+  const has = (serial: string | undefined) => !!serial && Array.from(elDevice.options).some(o => o.value === serial);
+  if (has(previous)) {
     elDevice.value = previous;
+  } else if (has(hostSerial)) {
+    // The host already streams from it; selecting it is enough.
+    elDevice.value = hostSerial!;
+    post({ type: 'requestPackages', serial: hostSerial! });
   } else if (elDevice.options.length > 0) {
     elDevice.selectedIndex = 0;
     post({ type: 'pickDevice', serial: elDevice.value });
     post({ type: 'requestPackages', serial: elDevice.value });
   }
+}
+
+function syncDevicePicker(serial: string | undefined): void {
+  hostSerial = serial;
+  if (!serial || elDevice.value === serial) return;
+  if (Array.from(elDevice.options).some(o => o.value === serial)) elDevice.value = serial;
 }
 
 function onPackages(packages: string[]): void {
@@ -346,7 +395,12 @@ function updateVirtualHeight(): void {
 
 function invalidateAllRows(): void {
   for (const node of renderedNodes.values()) {
+    // Detach rather than park off-screen: a soft-wrap row has
+    // `transform: none !important` and stays in flow, so parking left ghost
+    // rows above the results after a filter, a Clear or a wrap toggle.
+    if (node.parentElement) node.parentElement.removeChild(node);
     node.style.transform = 'translateY(-9999px)';
+    node.style.position  = 'absolute';
     nodePool.push(node);
   }
   renderedNodes.clear();
@@ -411,21 +465,36 @@ function renderFlow(total: number): void {
   // natural content height.
   elViewport.style.height = '';
 
-  // Recycle every absolutely-positioned row.
-  for (const [, node] of renderedNodes) {
+  const start = Math.max(0, total - FLOW_CAP);
+
+  // This runs on every append batch (~60 Hz) and every scroll frame, and it
+  // used to rebuild all FLOW_CAP rows each time. Rows are kept when their
+  // display index still holds the same entry; that fails only after the ring
+  // evicted (every index shifts), which is the one case needing a full redraw.
+  const recycle = (idx: number, node: HTMLDivElement) => {
+    if (node.parentElement) node.parentElement.removeChild(node);
     node.style.transform = 'translateY(-9999px)';
     node.style.position  = 'absolute';
-    if (node.parentElement) node.parentElement.removeChild(node);
     nodePool.push(node);
+    renderedNodes.delete(idx);
+  };
+  let aligned = true;
+  for (const [idx, node] of renderedNodes) {
+    if (idx < start || idx >= total) continue;
+    const entry = entryAt(idx);
+    if (!entry || node.dataset['seq'] !== String(entry.seq)) { aligned = false; break; }
   }
-  renderedNodes.clear();
+  for (const [idx, node] of [...renderedNodes]) {
+    if (!aligned || idx < start || idx >= total) recycle(idx, node);
+  }
 
-  const start = Math.max(0, total - FLOW_CAP);
   for (let i = start; i < total; i++) {
+    if (renderedNodes.has(i)) continue;
     const entry = entryAt(i);
     if (!entry) continue;
     const node = nodePool.pop() ?? document.createElement('div');
     node.className = `entry lvl-${entry.level} soft-wrap`;
+    node.dataset['seq'] = String(entry.seq);
     node.style.position  = 'relative';
     node.style.transform = '';
     node.innerHTML = renderEntryHtml(entry);

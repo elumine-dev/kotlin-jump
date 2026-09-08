@@ -15,6 +15,8 @@ export interface OutlineNode {
   cycle?: boolean;
   /** Nesting level from the root composable; drives the default expansion. */
   depth?: number;
+  /** Stable path from the root (root/0/2); lets VS Code keep a node's expansion across refreshes. */
+  id?: string;
 }
 
 /** Levels expanded by default in the tree view. Beyond that, the structure
@@ -263,30 +265,56 @@ export function buildOutline(
   };
 }
 
+function assignIds(node: OutlineNode, id: string): OutlineNode {
+  node.id = id;
+  node.children.forEach((child, i) => assignIds(child, `${id}/${i}`));
+  return node;
+}
+
 export class ComposeOutlineProvider implements vscode.TreeDataProvider<OutlineNode> {
   private readonly _onDidChange = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this._onDidChange.event;
   private _root: OutlineNode | undefined;
+  // (uri, version, composable) of the current tree. Cursor moves inside the
+  // same composable used to reparse the whole file and fire() a brand new
+  // tree per keystroke, which also reset every node the user had expanded.
+  private _key: string | undefined;
 
   refreshFromEditor(editor: vscode.TextEditor | undefined): void {
-    if (!editor || editor.document.languageId !== 'kotlin') return;
+    // Every exit that finds no composable empties the view: otherwise the tree
+    // of the previous file stays on screen after switching to a repository
+    // class, a JSON file or the terminal.
+    if (!editor || editor.document.languageId !== 'kotlin') { this.clear(); return; }
     const enabled = vscode.workspace
       .getConfiguration('kotlinJump')
       .get<boolean>('composeOutline', true);
-    if (!enabled) return;
+    if (!enabled) { this.clear(); return; }
 
     const text = editor.document.getText();
     const line = editor.selection.active.line;
     // Composable enclosing the cursor: last @Composable declaration above it.
     const lines = text.split('\n').slice(0, line + 1);
+    let defs: Map<string, string> | undefined;
     for (let i = lines.length - 1; i >= 0; i--) {
       const m = /\bfun\s+([A-Z]\w*)\s*\(/.exec(lines[i]);
-      if (m && extractComposableDefs(text).has(m[1])) {
-        this._root = buildOutline(text, m[1]);
-        this._onDidChange.fire();
-        return;
-      }
+      if (!m) continue;
+      defs ??= extractComposableDefs(text);
+      if (!defs.has(m[1])) continue;
+      const key = `${editor.document.uri.toString()}#${editor.document.version}#${m[1]}`;
+      if (key === this._key) return;
+      this._key = key;
+      this._root = assignIds(buildOutline(text, m[1]), 'root');
+      this._onDidChange.fire();
+      return;
     }
+    this.clear();
+  }
+
+  private clear(): void {
+    this._key = undefined;
+    if (this._root === undefined) return;
+    this._root = undefined;
+    this._onDidChange.fire();
   }
 
   getTreeItem(node: OutlineNode): vscode.TreeItem {
@@ -304,6 +332,7 @@ export class ComposeOutlineProvider implements vscode.TreeDataProvider<OutlineNo
       node.cycle ? '↺' : '',
     ].filter(Boolean);
     item.description = tags.join(' ');
+    if (node.id) item.id = node.id;
     return item;
   }
 

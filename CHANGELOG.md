@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.42.3
+
+Kotlin Jump 1.42.3 is a sweep of the parts users look at rather than the parts that scan code: settings that were declared and never read, a banner that never showed, a Logcat panel that lost its filter on Clear and opened empty after a Run, vector icons that rendered as nothing, and five commands that vscode.dev advertised but could not run.
+
+### Fixes
+- Reads `kotlinJump.logcat.followAppPid` and `kotlinJump.logcat.colorScheme`. Both were in the settings UI and neither was ever consulted: the panel always opened following the app PID with the studio colours, and the monochrome and high contrast schemes had no CSS behind them. They now apply when the panel opens and live when they change, and the host filter is kept in step with the checkbox, so an unchecked box no longer hides rows from other processes.
+- Shows the "adb binary not found" banner in the Logcat panel. The device watcher raised the event, nothing listened to it, and the webview handler for it was dead code. The banner also has to be replayed after the webview's ready handshake, since the watcher starts before it, and it clears on its own when adb turns up again.
+- Addresses filtered Logcat rows by position instead of sequence number. The host only forwards rows that pass the follow PID filter, so the mirror's ring has holes in its numbering, and a search or level filter could put the wrong line under the cursor.
+- Fills the Logcat panel with what was already captured when it opens. After a Run, the stream auto-starts before the panel exists and every batch was dropped for lack of a visible view, so a panel opened a few seconds later showed only new rows while its counter read thousands; hiding and re-showing the tab was the only way to get the history. The buffer is now replayed on the first open, and again after Resume and when Follow app PID is turned off, since rows held back by the filter were counted and exported but never shown.
+- Keeps the Logcat filter across Clear and a device switch. Both emptied the mirror and silently dropped the filter flag while the level chips and the tag field still showed it, so every new row came through unfiltered until the next edit.
+- Keeps the device picker, the Devices tree and the host on the same device. Opening the panel with two devices connected picked the first one in the list and switched the stream away from the phone a Run had just targeted; picking in the tree left the dropdown on the old device and picking in the dropdown left the tree's marker on the old one. The host's current device and package are now the single source and every surface follows them.
+- Makes the pause button and the status pill follow Pause and Stop from the command palette and the status bar. The button kept its last local state, so it took two clicks to resume, and Stop still read "streaming".
+- Removes ghost rows in soft wrap mode. Rows recycled after a filter, a Clear or a wrap toggle were parked off screen with a transform the soft wrap rule overrode, so they stayed in the flow above the real results. The soft wrap renderer also redrew all of its 2000 rows on every batch and every scroll frame; it now keeps the rows that did not move.
+- Renders vector drawables written with Android's alpha first colours. `#FF000000`, the fill every icon out of Vector Asset Studio carries, was passed to the browser as CSS `#RRGGBBAA`, meaning red at alpha zero: an empty checkerboard in the preview panel, the hover and the gutter. 8 and 4 digit colours are now split into colour and opacity, and the opacity multiplies with `fillAlpha`.
+- Previews a vector whose path colour is a resource reference. A self closing `<path>` with `android:fillColor="@color/primary"` or `?attr/colorControlNormal` never matched the path pattern, which refused a slash inside the tag, so the drawable converted to nothing and had no preview at all.
+- Stops the Compose Outline from rebuilding on every cursor move. Each keystroke reparsed the whole file and replaced the tree with new nodes, which also reset every node the user had expanded; the tree is now kept while the cursor stays in the same composable, and nodes carry stable ids so the expansion survives a refresh.
+- Makes only a ready device clickable in the Logcat devices tree. Switching to an offline or unauthorized device tore down the live stream and emptied the buffer for nothing; those now show their state in a tooltip instead.
+- Registers Recent Locations, Surround With, Smart Join Lines, Screen Flow Map and Compose Outline in the web extension. They were contributed with no web gate but only the desktop entry point registered them, so on vscode.dev their shortcuts failed with "command not found" and the Compose Outline view was an empty panel.
+- Empties the Compose Outline when the active editor is not a Kotlin file, or the feature is turned off. The tree of the previous file stayed on screen after switching to a repository class, a JSON file or the terminal.
+- Lets the Screen Flow Map navigate to routes added since it was first opened. Reopening it redrew them, but the click handler still read the navigation graph from the first render.
+- Brings the vector preview back when `kotlinJump.vectorPreview` is edited after a dismissal. Re-enabling auto open did nothing for the rest of the session.
+- Clears the inline drawable icon when an edit turns a vector into another drawable type. The old code returned early on a file with no `<vector>` tag and left the previous icon in the gutter.
+- Shows the Android project view without a window reload once the first `AndroidManifest.xml` appears, and hides it again if the last one goes. The check ran once at activation.
+- Hides the Android project view and the Android Run and JAR sources walkthrough steps in the web extension, where Gradle and adb cannot run, and scopes the Toggle All Inline Features shortcut to Kotlin and Java files so it stops intercepting Shift+Alt+I elsewhere.
+
+### Improvements
+- Implements `kotlinJump.fallbackToOnlineDocs`, which was declared and did nothing. With it on, Go to Definition on a symbol with no local source opens its reference page in the browser: kotlinlang.org for `kotlin.*` and `kotlinx.*`, docs.oracle.com for the JDK, developer.android.com for `android.*` and `androidx.*`. The symbol must be pinned down by an explicit import, or by the file's only wildcard import; a name that could belong to two wildcards opens nothing rather than a 404. Off by default since it opens external tabs.
+
 ## 1.42.2
 
 Three false positives found by running the dead-code checks against real Android and Kotlin projects instead of trusting them. The first one gave advice that stops a module from compiling.

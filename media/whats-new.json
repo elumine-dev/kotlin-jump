@@ -1,21 +1,25 @@
 {
-  "version": "1.42.46",
+  "version": "1.42.47",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Paying back the source set check",
-  "summary": "Recognising build variant test source sets had made the path check three times slower. A full pass over a real project of 5088 files fell from 26.1 ms to 9.9 ms, with the same answer.",
+  "tagline": "A test that launched adb",
+  "summary": "No change to the extension. Two of our own Logcat tests were launching a real adb process while the suite ran, and passed either way.",
   "highlights": [
     {
-      "title": "The path check stops allocating",
+      "title": "The suite stops launching adb",
+      "kind": "fix",
+      "description": "Two tests called the device switch directly, which starts the stream, which spawns adb. The result depended on whether adb was installed on the machine, and each run left the two second reconnection timer behind."
+    },
+    {
+      "title": "A guard against the next one",
       "kind": "improvement",
-      "description": "It split the setting and the whole path into components on every call, for every configured segment. Each setting is now parsed once, and only the few `src` positions of the path are walked."
+      "description": "A new test replaces the adb entry point with one that refuses to run, and asserts that switching device, clearing, following a process and disposing all reach it zero times."
     }
   ],
   "sections": [
     {
       "heading": "Notes",
       "bullets": [
-        "Measured over the 5088 files of a real Android project: a full pass fell from 26.1 ms to 9.9 ms, and against the release before variant support it is 17 percent slower rather than 209 percent.",
-        "The rewrite was checked against the previous one over 94 440 combinations of real path and setting, with no difference in the answer."
+        "Nothing shipped in the extension itself. Every release from 1.42.38 onward was checked against a real Android project of 5088 files, with no difference in what the analyses answer."
       ]
     }
   ],

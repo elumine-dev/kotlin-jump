@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { importBlockBounds } from '../util/importBlock';
 import { SymbolIndex } from '../indexer/SymbolIndex';
 import { resolveBest } from '../util/ImportResolver';
 import { buildAllowFilter } from '../util/testFilter';
@@ -36,14 +37,9 @@ export function insertImport(document: vscode.TextDocument, fqn: string): vscode
   const text  = document.getText();
   const lines = text.split('\n');
 
-  let firstImportLine = -1;
-  let lastImportLine  = -1;
-  for (let i = 0; i < lines.length; i++) {
-    if (RE_IMPORT_LINE.test(lines[i])) {
-      if (firstImportLine === -1) firstImportLine = i;
-      lastImportLine = i;
-    }
-  }
+  const bounds = importBlockBounds(lines, l => RE_IMPORT_LINE.test(l));
+  const firstImportLine = bounds?.first ?? -1;
+  const lastImportLine  = bounds?.last ?? -1;
 
   const newLine = `import ${fqn}`;
 

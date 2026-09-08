@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { importBlockBounds } from '../util/importBlock';
 
 export interface OrganizeImportsOptions {
   removeUnused?: boolean; // default: true
@@ -34,15 +35,10 @@ export function organizeImports(
   const lines = text.split('\n');
 
   // ── 1. Find import block boundaries ──────────────────────────────────────
-  let firstLine = -1;
-  let lastLine  = -1;
-  for (let i = 0; i < lines.length; i++) {
-    if (RE_IMPORT_LINE.test(lines[i])) {
-      if (firstLine === -1) firstLine = i;
-      lastLine = i;
-    }
-  }
-  if (firstLine === -1) return null;
+  const bounds = importBlockBounds(lines, l => RE_IMPORT_LINE.test(l));
+  if (!bounds) return null;
+  const firstLine = bounds.first;
+  const lastLine  = bounds.last;
 
   // ── 2. Parse each import line in the block ────────────────────────────────
   const parsed: ParsedImport[] = [];

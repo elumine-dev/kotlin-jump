@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { resolveBest } from '../util/ImportResolver';
-import { isInsideCommentOrString } from '../util/textUtils';
+import { isInsideCommentOrString, isInsideStringInterpolation } from '../util/textUtils';
 import { decodeUtf8 } from '../util/encoding';
 import { Logger } from '../util/logger';
 
@@ -278,7 +278,12 @@ export async function scanForUsagesWithTarget(
           let m: RegExpExecArray | null;
           while ((m = wordRe.exec(lines[i])) !== null) {
             if (results.length >= maxReferences) break;
-            if (isInsideCommentOrString(lines[i], m.index)) continue;
+            if (isInsideCommentOrString(lines[i], m.index)) {
+              // `"Hello $name"` and `"${name}"` are code: a rename that
+              // skipped them left the template pointing at the old name.
+              const shortInterp = m.index >= 1 && lines[i][m.index - 1] === '$';
+              if (!shortInterp && !isInsideStringInterpolation(lines[i], m.index)) continue;
+            }
             // Kotlin keyword used as method name (e.g. .catch()): require a dot qualifier
             // to avoid matching language constructs like `catch (e: Exception)`.
             if (KOTLIN_KEYWORDS.has(word) && (m.index === 0 || lines[i][m.index - 1] !== '.')) continue;
@@ -330,15 +335,20 @@ export async function scanImports(
   index: SymbolIndex,
   uriStrings: string[],
   token: vscode.CancellationToken,
+  target?: SymbolEntry | null,
 ): Promise<UsageResult[]> {
   if (index.lookup(word).length === 0) return [];
 
   const maxReferences = vscode.workspace
     .getConfiguration('kotlinJump')
     .get<number>('maxReferences', 500);
-  const wordRe = new RegExp(`\\b${escapeRegex(word)}\\b`, 'g');
   const results: UsageResult[] = [];
   let cursor = 0;
+  // Only the imported name itself, and only when it is the renamed symbol.
+  // Any `\bword\b` on an import line used to qualify: renaming `State`
+  // rewrote `import androidx.compose.runtime.State`, and renaming a property
+  // `repository` rewrote `import com.app.repository.UserRepo`.
+  const importRe = /^(\s*import\s+(?:static\s+)?)([\w.]+)(?:\.\*)?(?:\s+as\s+(\w+))?/;
 
   const worker = async () => {
     while (cursor < uriStrings.length) {
@@ -347,21 +357,21 @@ export async function scanImports(
       const uriStr = uriStrings[cursor++];
       const uri = vscode.Uri.parse(uriStr);
       try {
-        const bytes = await vscode.workspace.fs.readFile(uri);
-        const text  = decodeUtf8(bytes);
+        const text = await readCachedFile(uri, uriStr);
         if (!text.includes(word)) continue;
 
         const lines = text.split('\n');
         for (let i = 0; i < lines.length; i++) {
           if (results.length >= maxReferences) break;
-          if (!lines[i].trimStart().startsWith('import ')) continue;
-
-          wordRe.lastIndex = 0;
-          let m: RegExpExecArray | null;
-          while ((m = wordRe.exec(lines[i])) !== null) {
-            if (results.length >= maxReferences) break;
-            results.push({ uri, uriString: uriStr, line: i, character: m.index, lineText: lines[i] });
-          }
+          const im = importRe.exec(lines[i]);
+          if (!im) continue;
+          const path = im[2];
+          const lastDot = path.lastIndexOf('.');
+          const lastSegment = lastDot >= 0 ? path.slice(lastDot + 1) : path;
+          if (lastSegment !== word) continue;
+          if (target && target.fqn !== path) continue;
+          const character = im[1].length + (lastDot >= 0 ? lastDot + 1 : 0);
+          results.push({ uri, uriString: uriStr, line: i, character, lineText: lines[i] });
         }
       } catch { /* skip unreadable */ }
     }

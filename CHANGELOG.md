@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.42.9
+
+Kotlin Jump 1.42.9 fixes edits that destroyed code. Organize Imports could replace a class body, Remove unused function could delete everything up to the file header, Rename rewrote imports of unrelated symbols, and a quick fix that was supposed to add a release() call had never appeared at all.
+
+### Fixes
+- Bounds the import block to the file header. The block used to run from the first `import` line to the last one anywhere in the file, so an `import` inside a raw string or a KDoc sample became its end, and Organize Imports replaced the class body in between with the sorted imports. Add import and the unused-import check used the same bound.
+- Keeps "Remove unused function/property" to the declaration and its own doc comment. A `/* px */` at the end of the line above satisfied the "ends with `*/`" test, the walk climbed to the nearest `/*` in the file, and the removal started there.
+- Renames only the import of the renamed symbol. Any import line containing the word qualified: renaming `State` rewrote `import androidx.compose.runtime.State`, and renaming a property `repository` rewrote `import com.app.repository.UserRepo`. The imported name has to be the word, and the path has to be the symbol's own.
+- Renames `$name` and `${name}` in string templates for members and constructor properties. The workspace scan skipped them as string content, so `"Hello $name"` kept the old name after the rename. Find References had the same hole.
+- Offers no cross-file "Remove unused parameter" edit when the owner's name is declared elsewhere too. Only the homonym's own file was skipped; the callers of the other declaration were edited. The count of ambiguous sites is still reported. Open editors' unsaved text is used over the disk copy, so the edit lands on the right line.
+- Reads the outline and breadcrumbs from the live document while it is dirty. The index follows the file on disk, so after inserting lines an outline click landed above its target, and deleting the last lines emptied the outline with a range error.
+- Makes the "Add release() in onStop()" quick fix appear, and land inside the class. It looked up the pairing table by the lifecycle method name instead of the acquiring call, so it never showed; and its indentation arithmetic assumed four spaces, which put the new function outside the class with tabs. The enclosing function's own indentation is used now, tabs included.
+- Resolves "Add names to call arguments" through the file's imports. With two functions of the same name and arity in different packages, the first one indexed won and produced parameter names the compiler refused.
+
 ## 1.42.8
 
 Kotlin Jump 1.42.8 finishes the third display audit's list: a test run you could not stop, test source sets the explorer never looked at, a backtick test name reported as skipped, the wrong module's icon in a multi-module project, and a string extraction that mangled raw strings.

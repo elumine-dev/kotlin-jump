@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { rangeEndLine } from '../util/symbolRanges';
+import { parse } from '../indexer/KotlinParser';
 
 export class KotlinDocumentSymbolProvider implements vscode.DocumentSymbolProvider {
   constructor(private readonly index: SymbolIndex) {}
@@ -9,7 +10,12 @@ export class KotlinDocumentSymbolProvider implements vscode.DocumentSymbolProvid
     document: vscode.TextDocument,
     _token: vscode.CancellationToken,
   ): vscode.DocumentSymbol[] {
-    const entries = this.index.getFileSymbols(document.uri.toString());
+    // The index follows the file on disk. While the document is dirty the
+    // outline pointed lines above or below its targets, and a deletion at
+    // the end of the file made lineAt() throw and emptied the outline.
+    const entries = document.isDirty
+      ? liveSymbols(document)
+      : this.index.getFileSymbols(document.uri.toString()).filter(e => e.line < document.lineCount);
     if (entries.length === 0) return [];
 
     const lastLine = document.lineCount - 1;
@@ -54,6 +60,12 @@ export class KotlinDocumentSymbolProvider implements vscode.DocumentSymbolProvid
 
     return roots;
   }
+}
+
+function liveSymbols(document: vscode.TextDocument): SymbolEntry[] {
+  const scratch = new SymbolIndex();
+  scratch.add(parse(document.uri.toString(), document.getText()));
+  return scratch.getFileSymbols(document.uri.toString()).filter(e => e.line < document.lineCount);
 }
 
 // ── Detail field ─────────────────────────────────────────────────────────────

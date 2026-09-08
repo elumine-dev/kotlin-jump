@@ -42,7 +42,10 @@ export interface CompletePair {
 }
 
 export interface OrphanPair {
+  /** Lifecycle method holding the acquisition (`onStart`). */
   open: string;
+  /** The acquiring call (`acquire`, `registerReceiver`): what the release pairs with. */
+  method: string;
   expectedIn: string;
   resource: string;
   /** 0-based line of the acquisition call. */
@@ -142,6 +145,7 @@ export function analyzeLifecyclePairs(text: string): LifecycleAnalysis {
         } else {
           orphans.push({
             open: lifecycle,
+            method: pair.open,
             expectedIn: mirror,
             resource: call.resource,
             line: openFn.startLine + call.offsetLines,

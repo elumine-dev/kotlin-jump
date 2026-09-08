@@ -142,7 +142,7 @@ export class KotlinRenameProvider implements vscode.RenameProvider {
     // Both scans run in parallel
     const [codeResults, importResults] = await Promise.all([
       scanForUsages(word, document, this.index, uriStrings, token),
-      scanImports(word, this.index, uriStrings, token),
+      scanImports(word, this.index, uriStrings, token, target),
     ]);
 
     if (token.isCancellationRequested) return null;

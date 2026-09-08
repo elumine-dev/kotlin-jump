@@ -1,3 +1,4 @@
+import { importBlockBounds } from '../util/importBlock';
 /**
  * KJ-009: unused import graying, grays out imports whose effective name
  * (alias included) never appears in the code. Mentions inside a comment or a
@@ -51,7 +52,9 @@ export function findUnusedImports(text: string): UnusedImport[] {
   const lines = text.split('\n');
   const imports: { line: number; statement: string; effectiveName: string; wildcard: boolean }[] = [];
 
-  for (let i = 0; i < lines.length; i++) {
+  const bounds = importBlockBounds(lines, l => IMPORT_RE.test(l));
+  if (!bounds) return [];
+  for (let i = bounds.first; i <= bounds.last; i++) {
     const m = IMPORT_RE.exec(lines[i]);
     if (!m) continue;
     const path = m[1];

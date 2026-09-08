@@ -197,9 +197,18 @@ export function findUnusedDeclarations(text: string, lang: 'kotlin' | 'java' = '
     for (let l = sym.line - 1; l >= 0; l--) {
       const trimmed = lines[l].trim();
       if (trimmed.startsWith('@')) { firstLine = l; continue; }
-      if (trimmed.endsWith('*/')) {
+      // A doc comment right above: walk up through lines that are comment
+      // only. `fun keep() = 1 /* px */` also ends with `*/`, and the walk used
+      // to climb from there to the nearest `/*` in the file, then delete
+      // everything in between.
+      if (trimmed.endsWith('*/') && (trimmed.startsWith('/*') || trimmed.startsWith('*'))) {
         let k = l;
-        while (k >= 0 && !lines[k].trim().startsWith('/*')) k--;
+        while (k >= 0) {
+          const t = lines[k].trim();
+          if (t.startsWith('/*')) break;
+          if (!t.startsWith('*')) { k = -1; break; }
+          k--;
+        }
         if (k >= 0) { firstLine = k; l = k; continue; }
       }
       break;

@@ -1,31 +1,33 @@
 {
-  "version": "1.42.4",
+  "version": "1.42.5",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The rest of the display sweep",
-  "summary": "Kotlin Jump 1.42.4 finishes the display sweep started in 1.42.3 with the four items that audit left open: a vector preview that could not be read on a light theme, theme colours that rendered black, a decoration leak in the inline drawable icon, and an Android project view that duplicated every module and never noticed a new file.",
+  "tagline": "Hints and lenses that follow your edits",
+  "summary": "Kotlin Jump 1.42.5 is the third pass of the display sweep, this time on what the editor shows inline: two caches that outlived the files they described, a hover reading the wrong annotation, a swatch that stopped following the cursor, a history that sorted every jump destination last, and two settings whose toggle did nothing.",
   "highlights": [
     {
-      "title": "Vector preview readable on light themes",
+      "title": "Hints that follow a rename",
       "kind": "fix",
-      "description": "The checkerboard was two hard coded dark greys, so a black icon vanished on a light theme. It is now drawn over the editor background, and theme colours (?attr/…, @color/…) convert to currentColor instead of an invalid black paint."
+      "description": "Parameter name and inferred type hints were cached per symbol for the whole session: rename a parameter, save, and every call site kept the old name until a reload. The file watcher now evicts them, and the \"N usages\" lens of a symbol declared elsewhere updates when a call is added in another file."
     },
     {
-      "title": "Android project view without duplicates",
+      "title": "The right @Deprecated message",
       "kind": "fix",
-      "description": "An \"app (root)\" pseudo module globbed the whole workspace and repeated every module's manifests and res folders. The view now lists the declared modules plus one Gradle Scripts node, and refreshes when a source or resource file is created or deleted."
+      "description": "Two deprecated declarations within eight lines of each other made the hover show the upper one's message and ReplaceWith on the lower symbol. It now reads the annotation glued to the hovered symbol, and a signature read from an unsaved file is located by name rather than by a stale line."
     },
     {
-      "title": "Gutter icon types released",
-      "kind": "fix",
-      "description": "Every distinct SVG minted a decoration type and a cache file that were never disposed, so typing in a vector file grew both for the whole session. Only what a visible editor shows is kept."
+      "title": "Faster R.string hover",
+      "kind": "improvement",
+      "description": "Two quick hovers each re-read up to 4000 files, and every file went through span extraction even without the key. One shared load, files without the key skipped, cancellation honoured, unsaved editor text used over the disk snapshot."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Converts ?attr/…, @color/… and @android:color/… colours to currentColor; passed verbatim they were an invalid paint, meaning a black fill and no stroke.",
-        "Refreshes the Android project view when a Kotlin, Java, XML or image file is created or deleted, one refresh per burst, paths under build/ ignored, nothing while the view is hidden."
+        "Keeps the hex colour swatch following the active editor in a split view; it used to stick to the last visible editor until the next switch.",
+        "Sorts jump destinations correctly in Recent Locations: the refined entry lost its timestamp and every destination sorted last.",
+        "Makes the kotlinJump.gradleTaskLens and kotlinJump.kmpTargetBadges toggles take effect immediately instead of on the next edit.",
+        "Gives each inlay hint pass its own call regex; a shared one duplicated or dropped hints on first paint with two editors open."
       ]
     }
   ],

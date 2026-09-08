@@ -176,7 +176,10 @@ export class NavigationHistoryProvider implements vscode.Disposable {
     // programmatic-kind event (VS Code's restore + our explicit editor.selection set).
     // Don't clear _pendingToUri here; the 500ms timer from _onEditorChanged does that.
     if (this._pendingToUri === uri && (kind === undefined || kind === vscode.TextEditorSelectionChangeKind.Command)) {
-      this._history[this._cursor] = { uri, line: pos.line, character: pos.character };
+      // Keep the visit time: without it the jump destination sorted last in
+      // Recent Locations (timestamp 0), behind positions from long before.
+      const timestamp = this._history[this._cursor]?.timestamp ?? Date.now();
+      this._history[this._cursor] = { uri, line: pos.line, character: pos.character, timestamp };
       this._lastKnownPositions.set(uri, { line: pos.line, character: pos.character });
       this._updateContext();
       return;

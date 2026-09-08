@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.42.5
+
+Kotlin Jump 1.42.5 is the third pass of the display sweep, this time on what the editor shows inline: two caches that outlived the files they described, a hover reading the wrong annotation, a swatch that stopped following the cursor, a history that sorted every jump destination last, and two settings whose toggle did nothing.
+
+### Fixes
+- Refreshes parameter name and inferred type hints when a declaration changes. Both caches were keyed by symbol and lived for the whole session, so after renaming a parameter or changing a return type and saving, every call site kept showing the old `name:` and `: OldType` until a settings toggle or a reload. The file watcher now evicts the symbols of the changed file and every cached signature pointing into it.
+- Refreshes the "N usages" lens of a symbol declared in another file. Adding a call to `foo()` in B and saving left A reading "1 usage": the eviction only dropped the symbols declared in B. It now also drops the counts whose results reached into B and those whose name appears in B's new text, still one file at a time rather than a wholesale clear.
+- Reads the `@Deprecated` annotation glued to the hovered symbol. Two deprecated declarations within eight lines of each other put both annotations in the window, and the hover showed the upper one's message and ReplaceWith on the lower symbol.
+- Keeps the hex colour swatch following the active editor in a split. Re-scanning all visible editors left the tracked editor on the last one, so typing in the active one no longer moved the swatch until the next editor switch.
+- Sorts jump destinations correctly in Recent Locations. The entry refined after a file switch lost its timestamp, so every destination sorted last with time zero, behind positions from long before.
+- Makes the `kotlinJump.gradleTaskLens` and `kotlinJump.kmpTargetBadges` toggles take effect immediately. Neither provider raised a change event, so the lenses and badges stayed, or stayed away, until the next edit of the file.
+- Reads a signature from the right line of an unsaved file. The index only moves on save, so after inserting lines at the top of a file the hover showed the KDoc or the previous declaration as the signature. The declaration is now located by name around the indexed line.
+- Stops the `R.string` hover from re-reading the workspace twice and parsing files that cannot match. Two hovers inside the load window each started a full read of up to 4000 files; every file then went through function and class span extraction even without the key. One load is shared, files without the key are skipped, the hover honours cancellation, and open editors' unsaved text is used over the disk snapshot.
+- Gives each inlay hint pass its own call regex. A shared global one had its position clobbered by a concurrent pass in a second editor, which duplicated or dropped hints on first paint.
+
 ## 1.42.4
 
 Kotlin Jump 1.42.4 finishes the display sweep started in 1.42.3 with the four items that audit left open: a vector preview that could not be read on a light theme, theme colours that rendered black, a decoration leak in the inline drawable icon, and an Android project view that duplicated every module and never noticed a new file.

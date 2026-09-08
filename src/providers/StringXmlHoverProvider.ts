@@ -75,11 +75,16 @@ function extractSpans(text: string, kind: 'fun' | 'class'): Span[] {
   return spans;
 }
 
-export function findDisplaySites(resName: string, files: SourceFile[]): DisplaySite[] {
+export function findDisplaySites(resName: string, files: SourceFile[], token?: vscode.CancellationToken): DisplaySite[] {
   const sites: DisplaySite[] = [];
   const seen = new Set<string>();
+  const needle = `R.string.${resName}`;
 
   for (const file of files) {
+    if (token?.isCancellationRequested) break;
+    // extractSpans walks the whole file (two regexes plus brace matching);
+    // on a 2000 file project that ran for every file on every hover.
+    if (!file.text.includes(needle)) continue;
     const usageRe = new RegExp(`\\bR\\.string\\.${resName}\\b`, 'g');
     const funs = extractSpans(file.text, 'fun');
     const classes = extractSpans(file.text, 'class');
@@ -122,30 +127,52 @@ const CACHE_MS = 20_000;
 
 export class StringXmlHoverProvider implements vscode.HoverProvider {
   private _cache: { at: number; files: SourceFile[] } | undefined;
+  // Two hovers inside the load window used to start two full workspace
+  // reads; every caller now awaits the same one.
+  private _loading: Promise<SourceFile[]> | undefined;
 
-  private async _sources(): Promise<SourceFile[]> {
-    if (this._cache && Date.now() - this._cache.at < CACHE_MS) return this._cache.files;
-    const uris = await vscode.workspace.findFiles(
-      '**/*.{kt,java}', '**/{build,.gradle}/**', 4000,
-    );
-    const files: SourceFile[] = [];
-    for (const uri of uris) {
-      try {
-        files.push({
-          path: uri.fsPath,
-          text: new TextDecoder().decode(await vscode.workspace.fs.readFile(uri)),
-        });
-      } catch {
-        continue;
+  private _sources(): Promise<SourceFile[]> {
+    if (this._cache && Date.now() - this._cache.at < CACHE_MS) return Promise.resolve(this._cache.files);
+    if (this._loading) return this._loading;
+    this._loading = (async () => {
+      const uris = await vscode.workspace.findFiles(
+        '**/*.{kt,java}', '**/{build,.gradle}/**', 4000,
+      );
+      const files: SourceFile[] = [];
+      for (const uri of uris) {
+        try {
+          files.push({
+            path: uri.fsPath,
+            text: new TextDecoder().decode(await vscode.workspace.fs.readFile(uri)),
+          });
+        } catch {
+          continue;
+        }
       }
+      this._cache = { at: Date.now(), files };
+      return files;
+    })().finally(() => { this._loading = undefined; });
+    return this._loading;
+  }
+
+  /** Disk snapshot with the open editors' current text on top: the "Shown on"
+   *  list otherwise ignored unsaved edits for up to 20 s after a save. */
+  private static withOpenDocuments(files: SourceFile[]): SourceFile[] {
+    const open = new Map<string, string>();
+    for (const d of vscode.workspace.textDocuments) {
+      if ((d.languageId === 'kotlin' || d.languageId === 'java') && d.uri.scheme === 'file') open.set(d.uri.fsPath, d.getText());
     }
-    this._cache = { at: Date.now(), files };
-    return files;
+    if (open.size === 0) return files;
+    return files.map(f => {
+      const text = open.get(f.path);
+      return text === undefined ? f : { path: f.path, text };
+    });
   }
 
   async provideHover(
     document: vscode.TextDocument,
     position: vscode.Position,
+    token?: vscode.CancellationToken,
   ): Promise<vscode.Hover | undefined> {
     const cfg = vscode.workspace.getConfiguration('kotlinJump');
     if (!cfg.get<boolean>('reverseStringMap', true)) return undefined;
@@ -168,7 +195,9 @@ export class StringXmlHoverProvider implements vscode.HoverProvider {
     }
     if (!resName) return undefined;
 
-    const sites = findDisplaySites(resName, await this._sources());
+    const files = StringXmlHoverProvider.withOpenDocuments(await this._sources());
+    if (token?.isCancellationRequested) return undefined;
+    const sites = findDisplaySites(resName, files, token);
     if (sites.length === 0) return undefined;
 
     const screens = sites.filter(s => s.isComposable);

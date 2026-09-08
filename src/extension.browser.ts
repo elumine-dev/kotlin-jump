@@ -164,6 +164,7 @@ let _stats:            Map<string, { mtime: number; size: number }> = new Map();
 let _semanticTokens:   KotlinSemanticTokensProvider | undefined;
 let _sealedWhen:       SealedWhenCoverageProvider | undefined;
 let _signatureHelp:    KotlinSignatureHelpProvider  | undefined;
+let _inlayHints:       KotlinInlayHintsProvider     | undefined;
 let _snapshotEnabled:  boolean = true;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -285,6 +286,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const showInferredTypes = cfg.get<boolean>('inlayHints.inferredTypes', true);
       log.info(`[InlayHints] registered — showParamNames=${showParamNames} showInferredTypes=${showInferredTypes}`);
       const provider = new KotlinInlayHintsProvider(index, log);
+      _inlayHints = provider;
       return vscode.Disposable.from(
         vscode.languages.registerInlayHintsProvider(KT_JAVA, provider),
         vscode.workspace.onDidChangeConfiguration(e => {
@@ -657,6 +659,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     _semanticTokens?.invalidate(uri.toString());
     codeLens.evictFile(uri.toString());
     _signatureHelp?.evictFile(uri.toString());
+    _inlayHints?.evictFile(uri.toString());
     invalidateContentCache(uri.toString());
     _sealedWhen?.bumpEpoch(); // sealed subtype sets may have changed in any file
   }, log, uris => {
@@ -664,6 +667,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       _semanticTokens?.invalidate(uri.toString());
       codeLens.evictFile(uri.toString());
       _signatureHelp?.evictFile(uri.toString());
+      _inlayHints?.evictFile(uri.toString());
       invalidateContentCache(uri.toString());
     }
     _sealedWhen?.bumpEpoch();

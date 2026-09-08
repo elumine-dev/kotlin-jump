@@ -53,11 +53,14 @@ export function escapeForStringsXml(literal: string): string {
  *  arguments at the call site. */
 export function extractTemplateArgs(literal: string): { xmlValue: string; args: string[] } {
   const args: string[] = [];
+  // `\$` is a literal dollar, not a template: "Price: \$100" was turned
+  // into "Price: %1$s" with a bogus `100` argument.
   const xmlValue = literal
-    .replace(/\$\{([^}]+)\}|\$(\w+)/g, (_m, braced, bare) => {
+    .replace(/(?<!\\)\$\{([^}]+)\}|(?<!\\)\$(\w+)/g, (_m, braced, bare) => {
       args.push((braced ?? bare).trim());
       return `%${args.length}$s`;
-    });
+    })
+    .replace(/\\\$/g, '$');
   return { xmlValue, args };
 }
 
@@ -98,14 +101,23 @@ export function isComposableContext(lines: string[], lineNum: number): boolean {
 }
 
 const STRING_LITERAL_RE = /"((?:[^"\\\n]|\\.)*)"/g;
+// Single-line raw string. The plain matcher saw `"""Hello"""` as `""`,
+// `"Hello"`, `""` and replaced only the middle one: `""stringResource(…)""`.
+const RAW_LITERAL_RE = /"""([\s\S]*?)"""/g;
 
 /** String literal UNDER the cursor, not just the first one on the line. */
 export function literalAtPosition(
   lineText: string,
   character: number,
-): { literal: string; start: number; length: number } | null {
-  STRING_LITERAL_RE.lastIndex = 0;
+): { literal: string; start: number; length: number; raw?: boolean } | null {
+  RAW_LITERAL_RE.lastIndex = 0;
   let m: RegExpExecArray | null;
+  while ((m = RAW_LITERAL_RE.exec(lineText)) !== null) {
+    if (character >= m.index && character <= m.index + m[0].length) {
+      return { literal: m[1], start: m.index, length: m[0].length, raw: true };
+    }
+  }
+  STRING_LITERAL_RE.lastIndex = 0;
   while ((m = STRING_LITERAL_RE.exec(lineText)) !== null) {
     if (character >= m.index && character <= m.index + m[0].length) {
       return { literal: m[1], start: m.index, length: m[0].length };

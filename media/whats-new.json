@@ -1,32 +1,30 @@
 {
-  "version": "1.42.7",
+  "version": "1.42.8",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Multi-root workspaces done right",
-  "summary": "Kotlin Jump 1.42.7 closes the list left by the third display audit: multi-root workspaces that ran tests against the wrong Gradle build and read the wrong version catalog, a Find Usages panel that disagreed with its own lens, a Recent Locations picker that opened a hundred files before showing up, and a few settings and pills that did not do what they said.",
+  "tagline": "Test runs you can stop, tests it can find",
+  "summary": "Kotlin Jump 1.42.8 finishes the third display audit's list: a test run you could not stop, test source sets the explorer never looked at, a backtick test name reported as skipped, the wrong module's icon in a multi-module project, and a string extraction that mangled raw strings.",
   "highlights": [
     {
-      "title": "Tests run against the right Gradle build",
+      "title": "Stop works from the ▶ Run lens",
       "kind": "fix",
-      "description": "The project root came from the active editor: with two Gradle projects open, a class run from the Test Explorer while the other project had focus ended in \"No tests found\" and every test errored. Each test now uses the project its file belongs to."
+      "description": "A run started from the lens carried a token nobody cancelled, so the Test Explorer's Stop button waited for Gradle to finish. The run's own token now stops it, and a backtick name ending with a parenthesis is no longer reported as skipped."
     },
     {
-      "title": "One version catalog per project",
+      "title": "More test source sets discovered",
       "kind": "fix",
-      "description": "The last libs.versions.toml read used to win, so a hover in project A showed project B's versions and deleting any toml emptied every hover. The build file's own project answers now."
+      "description": "androidUnitTest/, sharedTest/ and the KMP targets (iosTest/, jsTest/, nativeTest/, desktopTest/) join the explorer. Their classes used to get a ▶ lens that answered \"test not found in index\"."
     },
     {
-      "title": "Recent Locations without opening files",
+      "title": "Right module, whole raw string",
       "kind": "fix",
-      "description": "The picker opened up to a hundred documents one by one for their excerpts, each open waking every scanner. Bytes are read sixteen at a time instead, and file names are decoded (Café.kt, not Caf%C3%A9.kt)."
+      "description": "With the same drawable name in two modules the hover and gutter showed the first one indexed; the referencing module wins now. Extracting Text(\"\"\"Hello\"\"\") replaces the whole literal, and \\$ stays a literal dollar."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Applies kotlinJump.excludeFromReferences in the Find Usages panel, which used to list files the lens had excluded.",
-        "Puts a permission pill on a <uses-permission> tag split over several lines, and makes kotlinJump.semanticHighlighting toggle without a reload.",
-        "Removes classes and methods deleted by a checkout from the Test Explorer, and stops flagging @Ignore and @Embedded fields as missing a Room migration."
+        "Clears only the gutter icons an editor showed and releases unused decoration types, instead of one setDecorations per type ever minted on every flush."
       ]
     }
   ],

@@ -34,6 +34,12 @@ const PATH_RE = new RegExp(
  * Unlike `ColorResourceIndex` and friends, the "content" of a drawable IS
  * the whole file, so we index paths rather than parsed XML entries.
  */
+/** `<module>/src/<sourceSet>/...` → `<module>`; the whole path when there is no src/. */
+function moduleRootOf(p: string): string {
+  const i = p.indexOf('/src/');
+  return i >= 0 ? p.slice(0, i) : p;
+}
+
 export class DrawableResourceIndex {
   private readonly byKey  = new Map<string, DrawableVariant[]>();
   private readonly byPath = new Map<string, string>();
@@ -81,10 +87,22 @@ export class DrawableResourceIndex {
     this._onDidChange.fire();
   }
 
-  get(key: string): DrawableEntry | undefined {
+  /**
+   * `nearPath` is the file referencing the drawable: with the same name in
+   * two modules, its own module's variants come first. Without it the
+   * first module indexed won, and the hover and gutter showed the other
+   * module's icon.
+   */
+  get(key: string, nearPath?: string): DrawableEntry | undefined {
     const variants = this.byKey.get(key);
     if (!variants || variants.length === 0) return undefined;
+    const nearModule = nearPath ? moduleRootOf(nearPath) : undefined;
     const sorted = [...variants].sort((a, b) => {
+      if (nearModule !== undefined) {
+        const aSame = moduleRootOf(a.uri.path) === nearModule ? 0 : 1;
+        const bSame = moduleRootOf(b.uri.path) === nearModule ? 0 : 1;
+        if (aSame !== bSame) return aSame - bSame;
+      }
       const aDefault = (a.qualifier === 'drawable' || a.qualifier === 'mipmap') ? 0 : 1;
       const bDefault = (b.qualifier === 'drawable' || b.qualifier === 'mipmap') ? 0 : 1;
       return aDefault - bDefault || a.qualifier.localeCompare(b.qualifier);

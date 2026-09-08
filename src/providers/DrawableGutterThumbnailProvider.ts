@@ -44,6 +44,11 @@ export class DrawableGutterThumbnailProvider implements vscode.Disposable {
   // for O(1) lookup on the hot path. Maintained via change/save/close
   // listeners — `vscode.workspace.textDocuments` would be O(N) per render.
   private readonly dirtyXmlUris = new Set<string>();
+  // Types last applied per editor, so a flush clears those instead of every
+  // type minted in the session (one per drawable ever shown: each flush,
+  // 32 ms after a keystroke, called setDecorations once per type per editor).
+  private readonly appliedTypes = new WeakMap<vscode.TextEditor, Set<vscode.TextEditorDecorationType>>();
+  private inFlight = 0;
   private readonly subs: vscode.Disposable[] = [];
   private flushTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -147,8 +152,9 @@ export class DrawableGutterThumbnailProvider implements vscode.Disposable {
     // before, otherwise stale icons linger after the setting flips off
     // or after the editor switches to a non-Kotlin file.
     const decorsByType = new Map<vscode.TextEditorDecorationType, vscode.DecorationOptions[]>();
-    for (const t of this.typeByCachePath.values()) decorsByType.set(t, []);
-
+    for (const t of this.appliedTypes.get(editor) ?? []) decorsByType.set(t, []);
+    this.inFlight++;
+    try {
     if (enabled && langOk) {
       for (let line = 0; line < doc.lineCount; line++) {
         const text = doc.lineAt(line).text;
@@ -159,7 +165,7 @@ export class DrawableGutterThumbnailProvider implements vscode.Disposable {
         // (different editor) can run concurrently.
         for (const m of text.matchAll(R_DRAWABLE_RE)) {
           const key   = m[2];
-          const entry = this.index.get(key);
+          const entry = this.index.get(key, doc.uri?.path);
           if (!entry) continue;
           const variant = pickThumbnailVariant(entry.variants);
           if (!variant) continue;
@@ -188,8 +194,31 @@ export class DrawableGutterThumbnailProvider implements vscode.Disposable {
     // type we queued may already have been disposed. Cross-check against
     // the live map before calling setDecorations — a disposed type throws.
     const liveTypes = new Set(this.typeByCachePath.values());
+    const applied = new Set<vscode.TextEditorDecorationType>();
     for (const [type, decors] of decorsByType) {
-      if (liveTypes.has(type)) editor.setDecorations(type, decors);
+      if (!liveTypes.has(type)) continue;
+      editor.setDecorations(type, decors);
+      if (decors.length > 0) applied.add(type);
+    }
+    this.appliedTypes.set(editor, applied);
+    } finally {
+      this.inFlight--;
+      // Only between flushes: a concurrent flush may be about to apply a
+      // type it just created, and a disposed type throws in setDecorations.
+      if (this.inFlight === 0) this.evictUnusedTypes();
+    }
+  }
+
+  /** Types no visible editor shows any more are disposed; the cache file stays and the type is recreated on demand. */
+  private evictUnusedTypes(): void {
+    const used = new Set<vscode.TextEditorDecorationType>();
+    for (const ed of vscode.window.visibleTextEditors) {
+      for (const t of this.appliedTypes.get(ed) ?? []) used.add(t);
+    }
+    for (const [cachePath, type] of this.typeByCachePath) {
+      if (used.has(type)) continue;
+      type.dispose();
+      this.typeByCachePath.delete(cachePath);
     }
   }
 

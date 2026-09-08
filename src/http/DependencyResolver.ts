@@ -118,7 +118,8 @@ export class DependencyResolver {
     const versions = new Map<string, string>();
     const versionsBlock = /\[versions\]([\s\S]*?)(?=\n\[|$)/.exec(text);
     if (versionsBlock) {
-      const reLine = /^([a-zA-Z0-9_.-]+)\s*=\s*"([^"]+)"\s*$/gm;
+      // `retrofit = "2.9.0" # keep in sync`: the comment is not the value.
+      const reLine = /^([a-zA-Z0-9_.-]+)\s*=\s*"([^"]+)"\s*(?:#.*)?$/gm;
       let m: RegExpExecArray | null;
       while ((m = reLine.exec(versionsBlock[1])) !== null) {
         versions.set(m[1], m[2]);
@@ -132,16 +133,18 @@ export class DependencyResolver {
     // Each line: `alias = { group = "g", name = "a", version.ref = "v" }` or
     //            `alias = { module = "g:a", version = "x.y.z" }` or
     //            `alias = "g:a:x.y.z"` (shorthand)
+    // A multi-line inline table (`compose-bom = {\n module = …\n}`) is joined
+    // back on one line before reading; it used to be skipped.
+    const joined = libsBlock[1].replace(/\{[^}]*\}/g, t => t.replace(/\s*\n\s*/g, ' '));
     const reLine = /^([a-zA-Z0-9_.-]+)\s*=\s*(.+)$/gm;
     let m: RegExpExecArray | null;
-    while ((m = reLine.exec(libsBlock[1])) !== null) {
+    while ((m = reLine.exec(joined)) !== null) {
       const alias = m[1];
       const rhs   = m[2].trim();
       const coords = this.parseLibraryEntry(rhs, versions);
       if (coords) {
-        // Convert alias dashes to dots so `compose-ui` becomes `libs.compose.ui`
-        // (matches Gradle Version Catalog generated accessor naming).
-        const aliasPath = alias.replace(/-/g, '.');
+        // Gradle maps `-` and `_` alike to `.`: `okhttp_core` is `libs.okhttp.core`.
+        const aliasPath = alias.replace(/[-_]/g, '.');
         map.set(`libs.${aliasPath}`, coords);
       }
     }
@@ -193,6 +196,8 @@ export class DependencyResolver {
     const reDirect = /\b(?:implementation|api|compileOnly|runtimeOnly|testImplementation|testRuntimeOnly|annotationProcessor|kapt|ksp)\s*[(\s]\s*["']([^"']+:[^"']+:[^"']+)["']/g;
     let m: RegExpExecArray | null;
     while ((m = reDirect.exec(text)) !== null) {
+      // `"com.foo:bar:$fooVersion"`: a template, not a version to download.
+      if (m[1].includes('$')) continue;
       const c = parseCoords(m[1]);
       if (c) results.push(c);
     }

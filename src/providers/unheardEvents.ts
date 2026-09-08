@@ -169,7 +169,8 @@ function couldMentionBus(text: string): boolean {
     || text.includes('.post(')
     || text.includes('.register(')
     || text.includes('.unregister(')
-    || text.includes('postSticky(');
+    || text.includes('postSticky(')
+    || text.includes('StickyEvent(');
 }
 
 /**
@@ -605,6 +606,16 @@ export function collectSubscriptions(
       lineStarts ??= buildLineStarts(file.clean);
       return offsetToPos(lineStarts, offset);
     };
+
+    // `getStickyEvent(SessionEvent::class.java)` reads a `postSticky` back
+    // without any @Subscribe: that is a subscription too.
+    const stickyRe = /\b(?:get|remove)StickyEvent\s*\(\s*([A-Za-z_][\w.]*?)\s*(?:::class(?:\.java)?|\.class)\s*\)/g;
+    let sm: RegExpExecArray | null;
+    while ((sm = stickyRe.exec(file.clean)) !== null) {
+      out.anySubscription = true;
+      const bag = file.isTest ? out.test : out.main;
+      for (const t of resolveRef(table, file.path, sm[1])) bag.add(t);
+    }
 
     for (const anno of collectAnnotationTargets(file.clean)) {
       if (anno.name !== 'Subscribe') continue;

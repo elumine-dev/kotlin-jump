@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.42.22
+
+Kotlin Jump 1.42.22 fixes the resource layer and the version catalogs. A commented-out `<string>` was a real resource, a library's or an SDK's `R.string` was a red error, a second catalog had every alias reported dead, and a Gradle version written `strictly = "[4.0, 5.0["` made its catalog unreadable.
+
+### Fixes
+- Reads `strings.xml` the way aapt does. A commented-out `<!-- <string name="old_title"> -->` was indexed: hover showed it, Go to Definition landed in the comment, and the "cannot resolve" error stayed silent on a key that does not compile. `<string translatable="false" name="app_name">` (name in second position), `<string name="empty"/>` and `<item type="string" name="x">` were invisible instead. Same for `<color>` and `<dimen>`.
+- Stops flagging generated and library strings. `R.string.default_web_client_id`, `google_app_id` and the other SDK-owned keys, a `resValue("string", "build_time", …)` from a build script, and a qualified `com.other.lib.R.string.x` were all "Cannot resolve string resource" errors on code that compiles.
+- Resolves `R.string.x` to the module of the file that names it. With `error_generic` defined in `app` and `core:ui`, hover and Go to Definition showed whichever module was indexed first; the drawable index already did this right.
+- Shows Android escapes decoded in the string hover: `Don\'t panic&#8230; %1$s\nnext` reads as "Don't panic… %1$s" on two lines.
+- Keeps two version catalogs apart. `create("libs") { from(files("gradle/libs.versions.toml")) }` next to `create("testLibs") { … }` mapped both files to `libs`, so every alias of the second catalog was "never referenced by any build file", with a Delete quick fix.
+- Parses a rich version. `okhttp = { strictly = "[4.0, 5.0[", prefer = "4.12.0" }` (the example in Gradle's own documentation) swallowed the rest of the file: the hover showed `okhttp:okhttp:okhttp` and the dead alias check went silent for that catalog. A multi-line entry now carries its diagnostic on the alias line, not on the closing brace, so its quick fix is offered.
+- Reads convention plugins from any included build. `includeBuild("gradle/plugins")` in settings was not one of the two hardcoded names, so the aliases those plugins reference with `findLibrary(…)` were reported dead.
+- Scores `app/` as the application in the resource shadowing hover. Only a single-module project at the workspace root was recognized, so the "wins" badge went to the library and the app's own value was struck through.
+- Puts the "▶ Run task" lens on module build scripts only. On a precompiled script plugin under `buildSrc/src/main/kotlin` the click ran `:buildSrc:src:main:kotlin:task`.
+- Downloads the right sources. A version with a trailing comment (`retrofit = "2.9.0" # keep in sync`), a multi-line catalog entry and an `okhttp_core` alias were skipped by "Download library sources", and `"com.foo:bar:$fooVersion"` was requested from Maven as written.
+- Hears a sticky event read back by hand. `getStickyEvent(SessionEvent::class.java)` counts as a subscription, so a `postSticky` consumed that way is no longer "nothing subscribes".
+
 ## 1.42.21
 
 Kotlin Jump 1.42.21 repairs the actions that edit code. Two quick fixes left the build broken (a trailing lambda after "Remove unused parameter", a double comma after "Delete unread DTO field"), the sealed `when` branch insertion could not compile in a file that imports its subtypes one by one, and Move File forgot the Java importers and the same-package neighbours. Two detectors also stop calling live code dead.

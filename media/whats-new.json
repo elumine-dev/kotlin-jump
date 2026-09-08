@@ -1,41 +1,43 @@
 {
-  "version": "1.42.21",
+  "version": "1.42.22",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Quick fixes that compile, moves that keep their imports",
-  "summary": "Two quick fixes left the build broken (a trailing lambda after \"Remove unused parameter\", a double comma after \"Delete unread DTO field\"); the sealed when branch insertion could not compile in a file importing its subtypes one by one; Move File forgot Java importers and same-package neighbours. Both are repaired, and two detectors stop calling runtime-resolved enums and request bodies dead.",
+  "tagline": "Resources read like aapt, catalogs kept apart",
+  "summary": "A commented-out <string> was a real resource and a name in second position was invisible; a library's or an SDK's R.string was a red error; a second version catalog had every alias reported dead and a rich version made its catalog unreadable. All fixed, with module-aware resolution of R.string and decoded escapes in the hover.",
   "highlights": [
     {
-      "title": "Quick fixes that compile",
-      "description": "\"Remove unused parameter\" left `showDialog(\"Hi\") { … }` with one argument too many; \"Delete unread DTO field\" produced `val name: String,,` under ktlint's trailing comma. The trailing lambda goes with its parameter, and the last comma goes with the field.",
+      "title": "strings.xml read like aapt",
+      "description": "A commented-out `<string>` no longer exists for hover, Go to Definition or the diagnostics; `<string translatable=\"false\" name=\"x\">`, `<string name=\"x\"/>` and `<item type=\"string\">` now do. `R.string.x` resolves to the module of the file naming it, and the hover decodes `\\'`, `\\n` and numeric entities.",
       "kind": "fix"
     },
     {
-      "title": "Sealed when branches that resolve",
-      "description": "The inserted `A ->` branch gets its `import com.demo.S.A` when the file imports subtypes one by one. A condition wrapped before its arrow no longer counts as missing, and a comment before the arrow no longer hides the branch.",
+      "title": "No red error on code that compiles",
+      "description": "`default_web_client_id` and the other SDK-owned keys, a `resValue(\"string\", …)` from a build script and a qualified `com.other.lib.R.string.x` were \"Cannot resolve string resource\" errors.",
       "kind": "fix"
     },
     {
-      "title": "Move File keeps the build green",
-      "description": "Java `import …;` and `import static …Kt.…;` are rewritten, and same-package neighbours, wildcard importers and the moved file itself get the imports the move made necessary. Unsaved editors are edited as displayed.",
+      "title": "Version catalogs kept apart",
+      "description": "Two `create(...) { from(files(...)) }` blocks mapped both files to `libs`, so the second catalog was all dead aliases. `strictly = \"[4.0, 5.0[\"` no longer swallows the file, a multi-line entry carries its diagnostic on the alias line, and `includeBuild(\"gradle/plugins\")` counts as convention plugins.",
       "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Code actions",
+      "heading": "Resources",
       "bullets": [
-        "\"Remove unused parameter\" removes a trailing lambda with its parameter; a class body after `: Owner(a, b)` is never taken for one.",
-        "\"Delete unread DTO field\" handles the trailing comma of the last field.",
-        "Missing `when` branches bring their imports; wrapped or commented conditions are read.",
-        "Move File rewrites Java importers and adds imports to old-package neighbours and to the moved file."
+        "Commented-out resources are not indexed; `name` in any position, self-closing strings and `<item type=\"string\">` are.",
+        "SDK-owned keys, `resValue` strings and library-qualified `R` are not errors.",
+        "Hover and Go to Definition prefer the module of the referencing file; Android escapes are decoded.",
+        "`app/` scores as the application in the shadowing hover."
       ]
     },
     {
-      "heading": "Detectors",
+      "heading": "Gradle",
       "bullets": [
-        "`enumValueOf<Mode>()`, `enumValues<Mode>()`, `Mode.class`, a DTO field typed with the enum and a Room `@TypeConverter` keep its entries alive.",
-        "A request body the app builds (`LoginRequest(mail, pwd)`) is not \"deserialized but never read\".",
-        "The Compose outline ignores comments and char literals and shows named slots (`topBar = { … }`)."
+        "Each `create(...) { from(files(...)) }` block maps its own catalog.",
+        "Rich versions with brackets in strings parse; multi-line entries report on the alias line.",
+        "Convention plugins from any `includeBuild` are read; the Run task lens stays on `build.gradle.kts`.",
+        "\"Download library sources\" reads commented versions, multi-line entries and `_` aliases, and skips `$var` coordinates.",
+        "A `postSticky` read back with `getStickyEvent(X::class.java)` is heard."
       ]
     }
   ],

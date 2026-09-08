@@ -22,7 +22,10 @@ export function definitionFromPath(
   const m = /(?:^|[\\/])([^\\/]+)[\\/]src[\\/]([^\\/]+)[\\/]res[\\/]([^\\/]+)[\\/]/.exec(uriStr);
   if (!m) return null;
   const [, moduleDir, sourceSet, folder] = m;
-  const isRoot = moduleDir === rootName;
+  // The canonical Android Studio layout puts the application in `app/`;
+  // `isRoot` alone only knew a single-module project at the workspace root,
+  // so `app` was scored as a library and the "wins" badge went the wrong way.
+  const isRoot = moduleDir === rootName || moduleDir === 'app';
   return {
     module: isRoot ? 'app' : moduleDir,
     moduleType: isRoot ? 'app' : 'library',

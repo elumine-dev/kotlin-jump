@@ -88,8 +88,23 @@ const IGNORE_MARKER = 'kotlin-jump:ignore unused-gradle-dependency';
  * every such alias into a finding, which is the first cause of false "dead
  * alias" reports. Whoever narrows the glob later must see this sentence.
  */
-function isConventionPluginPath(path: string): boolean {
-  return /(?:^|[\\/])(?:buildSrc|build-logic)[\\/]/.test(path);
+function isConventionPluginPath(path: string, extraDirs: readonly string[] = []): boolean {
+  if (/(?:^|[\\/])(?:buildSrc|build-logic)[\\/]/.test(path)) return true;
+  // `includeBuild("gradle/plugins")` in settings: the same convention plugins
+  // under a name of the project's choosing.
+  return extraDirs.some(d => path.includes(`/${d}/`) || path.includes(`\\${d}\\`));
+}
+
+/** Directories of the builds a settings file includes, as written. */
+export function includedBuildDirs(settingsTexts: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const settings of settingsTexts) {
+    for (const m of settings.matchAll(/\bincludeBuild\s*\(\s*["']([^"']+)["']/g)) {
+      const dir = m[1].replace(/^\.\//, '').replace(/\/$/, '');
+      if (dir && !out.includes(dir)) out.push(dir);
+    }
+  }
+  return out;
 }
 
 
@@ -100,9 +115,9 @@ function isConventionPluginPath(path: string): boolean {
  * convention plugin is ordinary Kotlin, and it is very often the ONLY thing
  * naming an alias, through `findLibrary("…")`.
  */
-function canReferenceAlias(path: string): boolean {
+function canReferenceAlias(path: string, extraDirs: readonly string[] = []): boolean {
   return /(?:\.gradle|\.gradle\.kts|\.kts)$/.test(path)
-    || (isConventionPluginPath(path) && /\.(kt|java)$/.test(path));
+    || (isConventionPluginPath(path, extraDirs) && /\.(kt|java)$/.test(path));
 }
 
 /**
@@ -126,9 +141,15 @@ export function catalogRootOf(path: string, settingsTexts: readonly string[]): s
     const created = [...settings.matchAll(/create\s*\(\s*"([^"]+)"\s*\)/g)].map(m => m[1]);
     const froms = [...settings.matchAll(/from\s*\(\s*files\s*\(\s*"([^"]+)"/g)].map(m => m[1]);
     // `create("deps") { from(files("gradle/libs.versions.toml")) }`: the root
-    // is the created name, not the file name.
-    for (let i = 0; i < created.length; i++) {
-      if (froms.some(f => f.endsWith(fileName))) return created[i];
+    // is the created name, not the file name. Each block is read on its own:
+    // with two catalogs, every file used to map to the first `create`.
+    for (const block of settings.matchAll(/create\s*\(\s*"([^"]+)"\s*\)\s*\{([^}]*)\}/g)) {
+      const from = /from\s*\(\s*files\s*\(\s*"([^"]+)"/.exec(block[2])?.[1];
+      if (from && (from === fileName || from.endsWith('/' + fileName))) return block[1];
+    }
+    if (froms.some(f => f === fileName || f.endsWith('/' + fileName))) {
+      // A `from` naming this file outside a readable block: unknown root.
+      return created.length === 1 ? created[0] : undefined;
     }
     if (created.length > 0 && froms.length === 0 && created[0] !== fromName) {
       // Renamed without an explicit `from`: Gradle still maps the default file.
@@ -167,9 +188,11 @@ export function collectAliasReferences(
   const rootAlternatives = [...roots].map(r => r.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
   const accessorRe = new RegExp(`\\b(?:${rootAlternatives})((?:\\.[A-Za-z0-9_]+)+)`, 'g');
   const lookupRe = /\bfind(Library|Plugin|Version|Bundle)\s*\(\s*"([^"]+)"/g;
+  const extraDirs = includedBuildDirs(
+    sources.filter(s => /(?:^|[\\/])settings\.gradle(?:\.kts)?$/.test(s.path)).map(s => s.text));
 
   for (const src of sources) {
-    if (!canReferenceAlias(src.path)) continue;
+    if (!canReferenceAlias(src.path, extraDirs)) continue;
     if (isBuildArtifactPath(src.path)) continue;
     const text = stripKotlinComments(src.text);
 

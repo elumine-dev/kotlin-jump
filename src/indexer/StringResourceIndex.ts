@@ -1,4 +1,16 @@
+import { stripXmlComments } from '../util/xmlRefs';
+
 interface UriLike { toString(): string; }
+
+const NAME_ATTR_RE = /\bname\s*=\s*"([^"]+)"/;
+
+/** Module root of a resource or source path: everything before `/src/`. */
+export function moduleRootOfPath(p: string): string {
+  // Index keys are URIs (`file:///P/app/...`), callers pass fsPaths (`/P/app/...`).
+  const noScheme = p.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '');
+  const i = noScheme.indexOf('/src/');
+  return i === -1 ? noScheme : noScheme.slice(0, i);
+}
 
 interface StringEntry {
   value: string;
@@ -24,40 +36,57 @@ export class StringResourceIndex {
   private readonly pluralsFiles = new Map<string, Map<string, StringEntry>>();
   private readonly arraysFiles  = new Map<string, Map<string, StringEntry>>();
 
-  reindexFile(uri: UriLike, content: string): void {
+  reindexFile(uri: UriLike, rawContent: string): void {
     const strings  = new Map<string, StringEntry>();
     const plurals  = new Map<string, StringEntry>();
     const arrays   = new Map<string, StringEntry>();
+    // A commented-out `<string name="old_title">` was indexed as real: hover
+    // showed it, Go to Definition landed in the comment, and the "cannot
+    // resolve" warning stayed silent on a key that does not compile.
+    const content = stripXmlComments(rawContent);
 
-    const RE_STRING = /<string\s+name="([^"]+)"[^>]*>([\s\S]*?)<\/string>/g;
+    // `name` in any attribute position (`translatable="false" name="x"`),
+    // self-closing `<string name="x"/>` and `<item type="string" name="x">`.
+    const RE_STRING = /<string\b([^>]*?)(?:\/>|>([\s\S]*?)<\/string>)/g;
     let m: RegExpExecArray | null;
     while ((m = RE_STRING.exec(content))) {
-      const raw   = m[2].trim();
+      const name = NAME_ATTR_RE.exec(m[1])?.[1];
+      if (!name) continue;
+      const raw   = (m[2] ?? '').trim();
       const value = unescapeXml(stripCdata(raw));
       const line  = content.slice(0, m.index).split('\n').length - 1;
-      strings.set(m[1], { value, uri, line });
+      strings.set(name, { value, uri, line });
+    }
+    const RE_ITEM_STRING = /<item\b([^>]*\btype\s*=\s*"string"[^>]*)>([\s\S]*?)<\/item>/g;
+    while ((m = RE_ITEM_STRING.exec(content))) {
+      const name = NAME_ATTR_RE.exec(m[1])?.[1];
+      if (!name || strings.has(name)) continue;
+      const line  = content.slice(0, m.index).split('\n').length - 1;
+      strings.set(name, { value: unescapeXml(stripCdata(m[2].trim())), uri, line });
     }
 
-    const RE_PLURALS = /<plurals\s+name="([^"]+)"[^>]*>([\s\S]*?)<\/plurals>/g;
-    const RE_PLURAL_ITEM = /<item\s+quantity="([^"]+)"[^>]*>([\s\S]*?)<\/item>/g;
+    const RE_PLURALS = /<plurals\b([^>]*)>([\s\S]*?)<\/plurals>/g;
+    const RE_PLURAL_ITEM = /<item\b([^>]*\bquantity\s*=\s*"([^"]+)"[^>]*)>([\s\S]*?)<\/item>/g;
     while ((m = RE_PLURALS.exec(content))) {
-      const name  = m[1];
+      const name  = NAME_ATTR_RE.exec(m[1])?.[1];
+      if (!name) continue;
       const block = m[2];
       const line  = content.slice(0, m.index).split('\n').length - 1;
       const quantities = new Map<string, string>();
       RE_PLURAL_ITEM.lastIndex = 0;
       let qm: RegExpExecArray | null;
       while ((qm = RE_PLURAL_ITEM.exec(block))) {
-        quantities.set(qm[1], unescapeXml(stripCdata(qm[2].trim())));
+        quantities.set(qm[2], unescapeXml(stripCdata(qm[3].trim())));
       }
       const chosen = QUANTITY_PRIORITY.find(q => quantities.has(q));
       const value  = chosen ? quantities.get(chosen)! : '';
       plurals.set(name, { value, uri, line, quantities, chosenQuantity: chosen });
     }
 
-    const RE_ARRAY = /<string-array\s+name="([^"]+)"[^>]*>([\s\S]*?)<\/string-array>/g;
+    const RE_ARRAY = /<string-array\b([^>]*)>([\s\S]*?)<\/string-array>/g;
     while ((m = RE_ARRAY.exec(content))) {
-      const name  = m[1];
+      const name  = NAME_ATTR_RE.exec(m[1])?.[1];
+      if (!name) continue;
       const block = m[2];
       const line  = content.slice(0, m.index).split('\n').length - 1;
       const items: string[] = [];
@@ -114,16 +143,17 @@ export class StringResourceIndex {
     return out;
   }
 
-  getValue(key: string): StringEntry | undefined {
-    return this.lookupIn(this.files, key);
+  /** `nearPath`: the file referencing the key; its own module's definition wins. */
+  getValue(key: string, nearPath?: string): StringEntry | undefined {
+    return this.lookupIn(this.files, key, nearPath);
   }
 
-  getPluralsValue(key: string): StringEntry | undefined {
-    return this.lookupIn(this.pluralsFiles, key);
+  getPluralsValue(key: string, nearPath?: string): StringEntry | undefined {
+    return this.lookupIn(this.pluralsFiles, key, nearPath);
   }
 
-  getArrayValue(key: string): StringEntry | undefined {
-    return this.lookupIn(this.arraysFiles, key);
+  getArrayValue(key: string, nearPath?: string): StringEntry | undefined {
+    return this.lookupIn(this.arraysFiles, key, nearPath);
   }
 
   // Returns all locale entries for a given string key (Feature 6 — translation completeness).
@@ -153,19 +183,21 @@ export class StringResourceIndex {
     return [...locales].sort();
   }
 
-  private lookupIn(store: Map<string, Map<string, StringEntry>>, key: string): StringEntry | undefined {
-    // Default locale (/values/) takes priority over qualifiers (/values-fr/ etc.)
+  private lookupIn(store: Map<string, Map<string, StringEntry>>, key: string, nearPath?: string): StringEntry | undefined {
+    // Default locale (/values/) takes priority over qualifiers (/values-fr/
+    // etc.), and the referencing file's own module over another module's:
+    // with `error_generic` in app and core:ui, the first module indexed won.
+    const nearModule = nearPath ? moduleRootOfPath(nearPath) : undefined;
+    let best: StringEntry | undefined;
+    let bestScore = -1;
     for (const [fUri, map] of store) {
-      if (/\/values\/[^/]+$/.test(fUri)) {
-        const e = map.get(key);
-        if (e) return e;
-      }
-    }
-    for (const [, map] of store) {
       const e = map.get(key);
-      if (e) return e;
+      if (!e) continue;
+      const score = (nearModule !== undefined && moduleRootOfPath(fUri) === nearModule ? 2 : 0)
+        + (/\/values\/[^/]+$/.test(fUri) ? 1 : 0);
+      if (score > bestScore) { best = e; bestScore = score; }
     }
-    return undefined;
+    return best;
   }
 }
 
@@ -184,11 +216,18 @@ function stripCdata(s: string): string {
   return m ? m[1] : s;
 }
 
+// XML entities, numeric ones included, then the escapes Android strips at
+// build time (`Don\'t`, `\n`, `\@`): the hover showed them raw.
 function unescapeXml(s: string): string {
   return s
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&')
     .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'");
+    .replace(/&apos;/g, "'")
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(parseInt(d, 10)))
+    .replace(/&amp;/g, '&')
+    .replace(/\\([\\'"@?])/g, '$1')
+    .replace(/\\n/g, '\n')
+    .replace(/\\t/g, '\t');
 }

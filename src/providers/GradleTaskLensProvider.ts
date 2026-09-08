@@ -64,7 +64,9 @@ export class GradleTaskLensProvider implements vscode.CodeLensProvider {
   provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
     const cfg = vscode.workspace.getConfiguration('kotlinJump');
     if (!cfg.get<boolean>('gradleTaskLens', true)) return [];
-    if (!document.uri.fsPath.endsWith('.gradle.kts')) return [];
+    // A precompiled script plugin (`buildSrc/src/main/kotlin/x.gradle.kts`)
+    // has no module path: the lens ran `:buildSrc:src:main:kotlin:task`.
+    if (!/(?:^|[\\/])build\.gradle\.kts$/.test(document.uri.fsPath)) return [];
 
     const lenses: vscode.CodeLens[] = [];
     for (let ln = 0; ln < document.lineCount; ln++) {

@@ -139,8 +139,19 @@ export function parseCatalog(text: string, root = 'libs'): Catalog {
     // TOML 1.0 forbids a multi-line inline table, but real catalogs contain
     // them. Reading only the first line would misparse the entry, and a
     // misparse can turn a live alias into a finding.
-    const opens = (s: string, o: string, c: string) =>
-      (s.split(o).length - 1) - (s.split(c).length - 1);
+    // Counted outside strings: `strictly = "[4.0, 5.0["` (the Gradle doc's
+    // own example) swallowed the rest of the file and flagged it unparsed.
+    const opens = (s: string, o: string, c: string) => {
+      let n = 0, inStr = false;
+      for (let k = 0; k < s.length; k++) {
+        const ch = s[k];
+        if (inStr) { if (ch === '\\') k++; else if (ch === '"') inStr = false; continue; }
+        if (ch === '"') { inStr = true; continue; }
+        if (ch === o) n++; else if (ch === c) n--;
+      }
+      return n;
+    };
+    const firstLine = i;
     let braces = opens(value, '{', '}');
     let brackets = opens(value, '[', ']');
     while ((braces > 0 || brackets > 0) && lastLine + 1 < lines.length) {
@@ -166,7 +177,9 @@ export function parseCatalog(text: string, root = 'libs'): Catalog {
     const common = {
       raw: alias,
       segments: aliasSegments(alias),
-      line: i,
+      // The alias line, not the `}` closing a multi-line entry: the
+      // diagnostic sat on the brace and the quick fix never found the name.
+      line: firstLine,
       character: character < 0 ? 0 : character,
       removeStart: start,
       removeEnd: end,

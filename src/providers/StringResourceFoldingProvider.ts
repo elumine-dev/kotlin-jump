@@ -108,7 +108,7 @@ export class StringResourceFoldingProvider implements vscode.Disposable {
       while ((m = FORMAT_CALL_RE.exec(text))) {
         if (isInsideCommentOrString(text, m.index)) continue;
         const key   = m[2];
-        const entry = this.index.getValue(key);
+        const entry = this.index.getValue(key, editor.document.uri?.path);
         if (!entry) continue;
         const args     = extractFormatArgs(text, m.index + m[0].length);
         const rendered = args.length > 0 ? renderFormatString(entry.value, args) : entry.value;
@@ -126,7 +126,7 @@ export class StringResourceFoldingProvider implements vscode.Disposable {
       while ((m = R_STRING_RE.exec(text))) {
         if (formattedCols.has(m.index)) continue;
         if (isInsideCommentOrString(text, m.index)) continue;
-        const entry = this.index.getValue(m[1]);
+        const entry = this.index.getValue(m[1], editor.document.uri?.path);
         if (!entry) continue;
         opts.push(buildStringDecoration(i, m.index, m[0].length, entry.value));
       }
@@ -134,7 +134,7 @@ export class StringResourceFoldingProvider implements vscode.Disposable {
       R_PLURALS_RE.lastIndex = 0;
       while ((m = R_PLURALS_RE.exec(text))) {
         if (isInsideCommentOrString(text, m.index)) continue;
-        const entry = this.index.getPluralsValue(m[1]);
+        const entry = this.index.getPluralsValue(m[1], editor.document.uri?.path);
         if (!entry) continue;
         opts.push(buildPluralsDecoration(i, m.index, m[0].length, entry.value));
       }
@@ -142,7 +142,7 @@ export class StringResourceFoldingProvider implements vscode.Disposable {
       R_ARRAY_RE.lastIndex = 0;
       while ((m = R_ARRAY_RE.exec(text))) {
         if (isInsideCommentOrString(text, m.index)) continue;
-        const entry = this.index.getArrayValue(m[1]);
+        const entry = this.index.getArrayValue(m[1], editor.document.uri?.path);
         if (!entry) continue;
         opts.push(buildArrayDecoration(i, m.index, m[0].length, entry.value));
       }

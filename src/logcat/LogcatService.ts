@@ -27,8 +27,18 @@ interface FilterState {
   search:        string;
   tagFilter:     string;
   followAppPid:  boolean;
+  /** Main process of the followed package (from pidof or "Start proc"). */
   followedPid:   number | undefined;
+  /** Every process of the followed package, `:sync`-style secondaries included. */
+  followedPids:  Set<number>;
   followedPackage: string | undefined;
+}
+
+/** Device wall-clock of `ts` as `adb logcat -T` and the export want it: `YYYY-MM-DD HH:MM:SS.mmm`. */
+export function logcatTimeArg(ts: number): string {
+  const d = new Date(ts);
+  const p = (n: number, w = 2) => String(n).padStart(w, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`;
 }
 
 /**
@@ -62,12 +72,16 @@ export class LogcatService extends EventEmitter implements vscode.Disposable {
 
   private paused = false;
   private _disposed = false;
+  // Set when the device vanished mid-stream: the 'change' handler restarts
+  // the stream once the watcher sees the serial again.
+  private awaitingDevice = false;
   private filter: FilterState = {
     levels:          new Set<LogLevel>(['V', 'D', 'I', 'W', 'E', 'F']),
     search:          '',
     tagFilter:       '',
     followAppPid:    true,
     followedPid:     undefined,
+    followedPids:    new Set<number>(),
     followedPackage: undefined,
   };
 
@@ -80,7 +94,16 @@ export class LogcatService extends EventEmitter implements vscode.Disposable {
     this.buffer   = new LogcatRingBuffer(bufferCap);
     this.resolver = new LogcatStackResolver(index);
     this.watcher  = new AdbDeviceWatcher(log);
-    this.watcher.on('change', devs => this.emit('devices', devs));
+    this.watcher.on('change', (devs: AdbDevice[]) => {
+      this.emit('devices', devs);
+      if (this.awaitingDevice && this.currentSerial && !this.stream
+          && devs.some(d => d.serial === this.currentSerial && d.state === 'device')) {
+        this.awaitingDevice = false;
+        this.log.info(`[logcat] ${this.currentSerial} is back — resuming the stream`);
+        this.startStream();
+        this.emit('state', this.snapshotState());
+      }
+    });
     this.watcher.on('adb-missing', () => this.emit('adb-missing'));
     this.watcher.on('adb-found',   () => this.emit('adb-found'));
   }
@@ -120,6 +143,9 @@ export class LogcatService extends EventEmitter implements vscode.Disposable {
     this.buffer.clear();
     this.emit('reset');
     this.startStream();
+    // The followed PID belongs to the previous device: with it kept, every
+    // row of the new device failed the filter and the panel stayed empty.
+    if (this.filter.followedPackage) this.setFollowedPackage(this.filter.followedPackage);
     // Emit immediately rather than waiting for the next 1s throughput tick —
     // without this, the status bar pill can flash "Stopped" for up to a
     // second after switching devices (stale `streaming` from a prior stop).
@@ -130,6 +156,7 @@ export class LogcatService extends EventEmitter implements vscode.Disposable {
     if (this._disposed) return;
     this.filter.followedPackage = packageName;
     this.filter.followedPid     = undefined;
+    this.filter.followedPids    = new Set<number>();
     const epoch = ++this.followedPackageEpoch;
     // The package input in the panel and the auto-start toast must agree.
     this.emit('state', this.snapshotState());
@@ -139,7 +166,11 @@ export class LogcatService extends EventEmitter implements vscode.Disposable {
         // also if the service has been disposed in the meantime.
         if (this._disposed) return;
         if (epoch !== this.followedPackageEpoch) return;
-        this.filter.followedPid = pids[0];
+        this.filter.followedPid  = pids[0];
+        this.filter.followedPids = new Set(pids);
+        // Rows queued while the filter was open would follow the filtered
+        // replay as an unfiltered tail.
+        this.pending = [];
         this.emit('transport-changed');
       });
     }
@@ -155,6 +186,9 @@ export class LogcatService extends EventEmitter implements vscode.Disposable {
     if (this._disposed) return;
     if (this.filter.followAppPid === enabled) return;
     this.filter.followAppPid = enabled;
+    // Up to 16 ms of rows from other processes were still queued and showed
+    // up under the filtered replay.
+    this.pending = [];
     this.emit('transport-changed');
   }
   setLevels(levels: LogLevel[]): void {
@@ -231,7 +265,8 @@ export class LogcatService extends EventEmitter implements vscode.Disposable {
     const lines: string[] = [];
     for (const e of this.buffer.range(0, this.buffer.size())) {
       if (!this.passesFilter(e)) continue;
-      const ts = new Date(e.ts).toISOString();
+      // The screen shows the device wall-clock; the export used to switch to UTC.
+      const ts = logcatTimeArg(e.ts);
       const indented = e.message.replace(/\n/g, '\n    ');
       lines.push(`${ts}  ${e.level}  ${e.pid}/${e.tid}  ${e.tag}: ${indented}`);
     }
@@ -386,13 +421,18 @@ export class LogcatService extends EventEmitter implements vscode.Disposable {
   private startStream(): void {
     if (this._disposed) return;
     if (!this.currentSerial || this.stream) return;
-    const stream = new LogcatStream({ serial: this.currentSerial, logger: this.log }, this.buffer.allocSeq);
+    // A restart on the same device resumes after the last buffered row:
+    // without `-T`, adb replayed the whole device buffer and every row already
+    // on screen came back a second time.
+    const last  = this.buffer.at(this.buffer.size() - 1);
+    const since = last ? logcatTimeArg(last.ts) : undefined;
+    const stream = new LogcatStream({ serial: this.currentSerial, logger: this.log, since }, this.buffer.allocSeq);
     this.stream = stream;
     stream.on('entry',         e => this.onEntry(e));
-    stream.on('process-start', (pid, pkg) => {
-      if (this.filter.followedPackage && pkg === this.filter.followedPackage) {
-        this.filter.followedPid = pid;
-      }
+    stream.on('process-start', (pid: number, pkg: string, secondary: boolean) => {
+      if (!this.filter.followedPackage || pkg !== this.filter.followedPackage) return;
+      this.filter.followedPids.add(pid);
+      if (!secondary) this.filter.followedPid = pid;
     });
     stream.on('error', err => this.emit('stream-error', err));
     stream.on('close', () => {
@@ -405,6 +445,14 @@ export class LogcatService extends EventEmitter implements vscode.Disposable {
         if (!this.currentSerial) return;
         stream.dispose();
         this.stream = undefined;
+        // Unplugged: respawning adb every 2 s only filled the log while the
+        // pill said "streaming". Wait for the watcher to see it again.
+        if (this.watcher.stateOf(this.currentSerial) === 'absent') {
+          this.awaitingDevice = true;
+          this.log.info(`[logcat] ${this.currentSerial} is gone — stream stopped until it returns`);
+          this.emit('state', this.snapshotState());
+          return;
+        }
         this.startStream();
       }, 2000);
     });
@@ -419,6 +467,7 @@ export class LogcatService extends EventEmitter implements vscode.Disposable {
   }
 
   private stopStream(): void {
+    this.awaitingDevice = false;
     this.stream?.dispose();
     this.stream = undefined;
     this.flushPending(); // don't lose <16ms of already-parsed entries in flight
@@ -463,8 +512,9 @@ export class LogcatService extends EventEmitter implements vscode.Disposable {
    * applied client-side so toggling them is instant and lossless.
    */
   private passesTransportFilter(entry: LogEntry): boolean {
-    if (this.filter.followAppPid && this.filter.followedPid !== undefined && entry.pid !== this.filter.followedPid) return false;
-    return true;
+    if (!this.filter.followAppPid) return true;
+    const pids = this.filter.followedPids;
+    return pids.size === 0 || pids.has(entry.pid);
   }
 
   /**

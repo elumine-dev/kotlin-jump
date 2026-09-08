@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
-import { spawnAdb, type AdbProcess } from '../android/AdbBinary';
+import { StringDecoder } from 'string_decoder';
+import { spawnAdb, invalidateAdbPathCache, type AdbProcess } from '../android/AdbBinary';
 import { LogcatLineParser } from './LogcatLineParser';
 import type { LogEntry } from './messages';
 import type { Logger } from '../util/logger';
@@ -12,6 +13,8 @@ interface StreamOpts {
    * catch native SIGSEGV traces and ActivityManager process events.
    */
   buffers?: string[];
+  /** `adb logcat -T` bound: only lines after this device time (`YYYY-MM-DD HH:MM:SS.mmm`). */
+  since?: string;
 }
 
 /**
@@ -20,15 +23,17 @@ interface StreamOpts {
  *
  * Events:
  *   - 'entry'        (entry: LogEntry)        — emitted for every completed log line
- *   - 'process-start'(pid: number, package: string) — sniffed from ActivityManager
- *   - 'error'        (err: Error)             — non-fatal warnings + ENOENT
- *   - 'close'                                 — adb child closed; consumer may decide to restart
+ *   - 'process-start'(pid: number, package: string, secondary: boolean) — sniffed from ActivityManager
+ *   - 'error'        (err: Error)             — ENOENT, and a non-zero adb exit (device gone)
+ *   - 'close'        (code: number | null)    — adb child closed; consumer may decide to restart
  */
 export class LogcatStream extends EventEmitter {
   private process?: AdbProcess;
   private parser   = new LogcatLineParser();
   private stdoutBuffer = '';
   private stderrBuffer = '';
+  // A UTF-8 sequence split across two stdout chunks came out as two U+FFFD.
+  private decoder = new StringDecoder('utf8');
   private allocSeq:    () => number;
   private disposed = false;
 
@@ -42,6 +47,7 @@ export class LogcatStream extends EventEmitter {
 
     const buffers = (this.opts.buffers ?? ['main', 'system', 'crash']).join(',');
     const args = ['-s', this.opts.serial, 'logcat', '-v', 'threadtime,year', '-b', buffers];
+    if (this.opts.since) args.push('-T', this.opts.since);
 
     let proc: AdbProcess;
     try {
@@ -55,13 +61,28 @@ export class LogcatStream extends EventEmitter {
     proc.stdout.on('data', (chunk: Buffer) => this.consumeStdout(chunk));
     proc.stderr.on('data', (chunk: Buffer) => this.consumeStderr(chunk));
     proc.on('close', code => {
+      this.stdoutBuffer += this.decoder.end();
+      if (this.stdoutBuffer.length > 0) {
+        this.handleLine(this.stdoutBuffer.replace(/\r$/, ''));
+        this.stdoutBuffer = '';
+      }
       this.flushPendingEntry();
       this.opts.logger?.debug(`[logcat:stream] adb logcat closed (code=${code ?? '?'})`);
       this.process = undefined;
-      if (!this.disposed) this.emit('close');
+      if (this.disposed) return;
+      // A non-zero exit is adb refusing to stream (device unplugged, offline):
+      // its only trace used to be a debug line while the pill said "streaming".
+      if (typeof code === 'number' && code !== 0) {
+        const reason = this.stderrBuffer.trim().split('\n').filter(Boolean).pop()
+          ?? `adb logcat exited with code ${code}`;
+        this.emit('error', new Error(reason));
+      }
+      this.emit('close', code);
     });
     proc.on('error', err => {
       this.opts.logger?.warn(`[logcat:stream] adb logcat error: ${err.message}`);
+      // The cached path was wrong or adb went away: probe again next time.
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') invalidateAdbPathCache();
       this.emit('error', err);
     });
   }
@@ -82,7 +103,7 @@ export class LogcatStream extends EventEmitter {
   // ── Stream consumers ───────────────────────────────────────────────────────
 
   private consumeStdout(chunk: Buffer): void {
-    this.stdoutBuffer += chunk.toString('utf8');
+    this.stdoutBuffer += this.decoder.write(chunk);
     let nl = this.stdoutBuffer.indexOf('\n');
     while (nl >= 0) {
       const line = this.stdoutBuffer.slice(0, nl);
@@ -123,11 +144,14 @@ export class LogcatStream extends EventEmitter {
    */
   private sniffActivityManager(entry: LogEntry): void {
     if (entry.tag !== 'ActivityManager' && entry.tag !== 'ActivityTaskManager') return;
-    const m = /Start proc (\d+):([\w.]+)/.exec(entry.message);
+    // "Start proc 4600:com.example.app:sync/u0a99 for service …" is a
+    // secondary process of the same app: it used to replace the main PID and
+    // the main process vanished from the panel.
+    const m = /Start proc (\d+):([\w.]+)((?::[\w.]+)?)(?:\/|\s|$)/.exec(entry.message);
     if (m) {
       const pid = parseInt(m[1]!, 10);
       const pkg = m[2]!;
-      this.emit('process-start', pid, pkg);
+      this.emit('process-start', pid, pkg, m[3]!.length > 0);
     }
   }
 }

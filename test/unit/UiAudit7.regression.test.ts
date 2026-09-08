@@ -19,6 +19,7 @@ vi.mock('../../src/android/AdbBinary', () => ({
     return proc;
   },
   listConnectedDevices: async () => [],
+  invalidateAdbPathCache: () => {},
 }));
 
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });

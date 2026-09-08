@@ -42,6 +42,10 @@ export class LogcatLineParser {
       return completed;
     }
 
+    // `--------- beginning of system` and `--------- switch to main` are
+    // logcat's own buffer markers, not the tail of the previous message.
+    if (BUFFER_MARKER_REGEX.test(line)) return null;
+
     if (this.current) {
       this.current.message += '\n' + line;
       if (!this.current.isStackFrame && STACK_FRAME_REGEX.test(line)) {
@@ -70,8 +74,15 @@ const PREFIX_REGEX =
  * Detects Java/Kotlin/Compose/coroutines stack frames. Used to flag continuation
  * lines that contain frames so `is:stacktrace`-style filters can hit them later.
  */
+//
+// The method may carry a Kotlin mangling suffix (`toString-impl` of a value
+// class, `main$lambda-3`), and R8 rewrites the file to `SourceFile` or
+// `Unknown Source`: those frames were invisible, so the release-build banner
+// never showed on an actual release build.
 export const STACK_FRAME_REGEX =
-  /^\s*at\s+(?<fqn>[\w$.]+)\.(?<method>[\w$<>]+)\((?<file>[\w$]+\.(?:kt|java)):(?<line>\d+)\)/;
+  /^\s*at\s+(?<fqn>[\w$.]+)\.(?<method>[\w$<>-]+)\((?<file>[\w$ .-]+?):(?<line>\d+)\)/;
+
+const BUFFER_MARKER_REGEX = /^--------- (?:beginning of|switch to) \w+$/;
 
 function parseTs(date: string, time: string): number {
   // date = "YYYY-MM-DD", time = "HH:MM:SS.mmm" — built-in Date parses ISO with T separator.

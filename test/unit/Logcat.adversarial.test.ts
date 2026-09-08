@@ -580,6 +580,7 @@ describe('AdbDeviceWatcher — falls back to poll then RECOVERS to track-devices
     let allowSpawn    = false;
     vi.doMock('../../src/android/AdbBinary', () => ({
       listConnectedDevices: () => Promise.resolve([]),
+      invalidateAdbPathCache: () => {},
       spawnAdb: () => {
         spawnAttempts++;
         if (!allowSpawn) throw new Error('spawn refused');

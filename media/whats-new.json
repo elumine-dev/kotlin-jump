@@ -1,34 +1,34 @@
 {
-  "version": "1.42.26",
+  "version": "1.42.27",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Hints on the right argument, counts the panel agrees with",
-  "summary": "Kotlin Jump 1.42.26 fixes what the counters and the hints showed: a parameter hint placed inside a string, \"0 usages\" on every symbol of the default package, a lens count that disagreed with the panel it opened, a Test Explorer that skipped `src/testDebug/` and reported a `@DisplayName` test as skipped, and test names with spaces that Gradle on Windows never found.",
+  "tagline": "Logcat that survives a device switch, and a Run that asks",
+  "summary": "Kotlin Jump 1.42.27 fixes the Logcat panel and Android Run: a device switch that left the panel empty, an unplugged phone that respawned adb every two seconds and then replayed its whole buffer, accents turned into replacement characters, a secondary process hijacking the PID filter, a Run that picked the emulator over the phone without asking, and a build command Windows could not run.",
   "highlights": [
     {
-      "title": "Hints land on the argument",
+      "title": "Logcat follows the device",
       "kind": "fix",
-      "description": "A comma inside a string, a comment among the arguments or a raw string spanning lines no longer shifts the parameter hints, and an imported library function stops wearing a workspace homonym's parameter names."
+      "description": "Switching devices keeps the app filter working, an unplugged phone stops the stream instead of respawning adb, and its return resumes after the last row rather than replaying the whole buffer."
     },
     {
-      "title": "One count, lens and panel",
+      "title": "Rows read as the device wrote them",
       "kind": "fix",
-      "description": "Only the declaration token is left out of the count, a cancelled lens request no longer leaves a partial count behind, and symbols in the default package finally have usages."
+      "description": "UTF-8 split across chunks, buffer markers glued to messages, mangled Kotlin and R8 frames, and an export in UTC are all fixed; the scroll position holds while the buffer evicts."
     },
     {
-      "title": "Tests found and matched",
+      "title": "Run picks the right device",
       "kind": "fix",
-      "description": "Every Gradle test source set is discovered, a @DisplayName test gets its result, @Nested classes run on every Gradle version, and test names with spaces survive cmd.exe."
+      "description": "A picker appears when several devices are connected, the build command works in PowerShell and cmd.exe, and a disabled launcher alias no longer wins over the real activity."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Parameter hints skip commas and brackets inside strings, raw strings and comments, and a call inside a multi-line block comment gets none.",
-        "A `launch(a, b)` call under `import kotlinx.coroutines.launch` no longer shows the parameters of the project's own `launch`.",
-        "The lens and the panel exclude the same declaration token, a cancelled request never caches a partial scan, and two files without a `package` line reference each other.",
-        "Raw-string text is not a usage (its `$name` templates are), and a `/*` opened mid-line hides the following lines until `*/`.",
-        "The Test Explorer discovers `src/testDebug/` and `src/screenshotTest/`, matches `@DisplayName` tests, targets `@Nested` classes under both spellings, and quotes test names on Windows."
+        "A device switch re-resolves the followed PID; a secondary `:sync` process is followed alongside the main one instead of replacing it.",
+        "An unplugged device shows a stream error, stops the retries, and resumes with `-T` after the last buffered row when it comes back.",
+        "UTF-8 sequences split across stdout chunks, `--------- beginning of` markers, `toString-impl` and `SourceFile` frames, `UtilsKt` top-level functions and the export timestamp are handled.",
+        "Reading back through a full buffer no longer scrolls under your eyes, and adb installed mid-session is found without a reload.",
+        "Run asks which device when several are connected, quotes nothing PowerShell rejects, and skips disabled launcher aliases."
       ]
     }
   ],

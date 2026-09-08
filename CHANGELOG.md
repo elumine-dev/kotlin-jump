@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.42.27
+
+Kotlin Jump 1.42.27 fixes the Logcat panel and Android Run: a device switch that left the panel empty, an unplugged phone that respawned adb every two seconds and then replayed its whole buffer, accents turned into replacement characters, a secondary process hijacking the PID filter, a Run that picked the emulator over the phone without asking, and a build command Windows could not run.
+
+### Fixes
+- Follows the app on the device you switch to. The PID resolved on the previous device stayed in the filter, so every row of the new device was dropped and the panel stayed empty until the app was launched again.
+- Handles an unplugged device. adb exited at once and was respawned every two seconds with no message while the pill said "streaming"; when the device came back, adb replayed its whole buffer and every row already on screen appeared a second time. The stream now stops with a "Stream error" banner (it clears when rows flow again) and resumes from the last row once the device is listed again.
+- Decodes UTF-8 across stdout chunks. A multi-byte character split between two chunks came out as two replacement characters in the panel, the search and the export.
+- Keeps the main process when a secondary one starts. `Start proc 4600:com.app:sync` used to replace the followed PID, and the main process vanished; both are followed now. Turning the PID filter on also drops the rows still queued from other processes, which used to appear under the filtered replay.
+- Reads logcat like the device writes it: `--------- beginning of system` is no longer glued to the previous message, frames such as `toString-impl`, `main$lambda-3`, `SourceFile:12` and `Unknown Source` are recognised (so the release build banner shows on an actual release build), a top-level function is found through its `UtilsKt` frame, and the export keeps the device wall-clock instead of switching to UTC.
+- Keeps the rows under your eyes while the buffer is full. Reading back through a stack trace, every batch shifted the content up by the number of evicted rows; the scroll position now moves with them.
+- Finds adb installed later in the session. The resolved path was cached, so the "adb binary not found" banner never went away after installing Android Studio without a reload.
+- Asks which device to run on. With a phone and an emulator connected, Run installed on the first one adb listed, usually the emulator, with the phone's app never updated. A picker now appears, with the last choice first.
+- Runs the build on Windows. `ANDROID_SERIAL="x" gradlew.bat …` is a POSIX spelling that PowerShell and cmd.exe rejected; the serial now travels in the terminal's environment and PowerShell gets its `&` before the quoted path.
+- Launches the enabled launcher. Alternative app icons are `<activity-alias android:enabled="false">` entries carrying LAUNCHER; the first one used to win over the real MAIN activity and the launch failed after a successful build.
+
 ## 1.42.26
 
 Kotlin Jump 1.42.26 fixes what the counters and the hints showed: a parameter hint placed inside a string, "0 usages" on every symbol of the default package, a lens count that disagreed with the panel it opened, a Test Explorer that skipped `src/testDebug/` and reported a `@DisplayName` test as skipped, and test names with spaces that Gradle on Windows never found.

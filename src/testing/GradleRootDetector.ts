@@ -164,7 +164,7 @@ function hasGradleMarker(dir: string): boolean {
  *
  * Stays strictly within `workspaceFolders` (never escalates above the open folder).
  */
-function walkUpToGradleRoot(startPath: string, workspaceFolders: readonly string[]): string | undefined {
+export function walkUpToGradleRoot(startPath: string, workspaceFolders: readonly string[]): string | undefined {
   let current = fs.existsSync(startPath) && fs.statSync(startPath).isDirectory()
     ? startPath
     : path.dirname(startPath);

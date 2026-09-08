@@ -318,8 +318,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     (() => {
       if (isCompanion) return { dispose: () => {} };
-      const enabled = vscode.workspace.getConfiguration('kotlinJump').get<boolean>('semanticHighlighting', true);
-      if (!enabled) return { dispose: () => {} };
       const legend = new vscode.SemanticTokensLegend(TOKEN_TYPES, TOKEN_MODIFIERS);
       const sp = new KotlinSemanticTokensProvider(index, legend);
       _semanticTokens = sp;
@@ -327,6 +325,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         sp,
         vscode.languages.registerDocumentSemanticTokensProvider({ language: 'kotlin' }, sp, legend),
         vscode.languages.registerDocumentRangeSemanticTokensProvider({ language: 'kotlin' }, sp, legend),
+        vscode.workspace.onDidChangeConfiguration(e => {
+          if (e.affectsConfiguration('kotlinJump.semanticHighlighting')) sp.refresh();
+        }),
       );
     })(),
 
@@ -1348,7 +1349,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const handleTomlChanged = async (uri: vscode.Uri) => {
       try {
         const bytes = await vscode.workspace.fs.readFile(uri);
-        vcIndex.reindexFile(new TextDecoder().decode(bytes));
+        vcIndex.reindexFile(new TextDecoder().decode(bytes), uri.toString());
       } catch { /* skip */ }
     };
 
@@ -1359,7 +1360,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const tomlW = vscode.workspace.createFileSystemWatcher('**/gradle/libs.versions.toml');
     tomlW.onDidCreate(handleTomlChanged);
     tomlW.onDidChange(handleTomlChanged);
-    tomlW.onDidDelete(() => vcIndex.reindexFile(''));
+    tomlW.onDidDelete(uri => vcIndex.removeFile(uri.toString()));
 
     context.subscriptions.push(
       tomlW,

@@ -117,6 +117,10 @@ function parseEntities(text: string, fileIndex: number): EntityDecl[] {
     for (const param of splitTopLevelArguments(text.slice(open + 1, close))) {
       const fieldM = /va[lr]\s+(\w+)\s*:/.exec(param);
       if (!fieldM) continue;
+      // @Ignore is not persisted; @Embedded flattens another class's columns
+      // under a prefix we cannot see from here. Both were reported as
+      // "no ADD COLUMN in any migration".
+      if (/@(?:Ignore|Embedded)\b/.test(param)) continue;
       const field = fieldM[1];
       const columnM = /@ColumnInfo\s*\(([^)]*)\)/.exec(param);
       const nameM = columnM ? /name\s*=\s*"([^"]+)"/.exec(columnM[1]) : null;

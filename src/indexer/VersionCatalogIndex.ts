@@ -221,22 +221,37 @@ export function resolveAccessor(
   return best;
 }
 
-export class VersionCatalogIndex {
-  private entries = new Map<string, CatalogEntry>();
-  private catalog: Catalog = { root: 'libs', aliases: [], unparsed: false };
+interface ParsedCatalog { entries: Map<string, CatalogEntry>; catalog: Catalog; projectDir: string }
 
-  reindexFile(content: string): void {
-    this.entries.clear();
-    this.catalog = parseCatalog(content);
+const EMPTY_CATALOG: Catalog = { root: 'libs', aliases: [], unparsed: false };
+
+export class VersionCatalogIndex {
+  // One catalog per libs.versions.toml. A single in-memory catalog meant
+  // that in a multi-root workspace the last file read won and a delete of
+  // any toml emptied everything.
+  private readonly catalogs = new Map<string, ParsedCatalog>();
+
+  private primary(): ParsedCatalog | undefined {
+    return this.catalogs.values().next().value;
+  }
+
+  removeFile(key: string): void {
+    this.catalogs.delete(key);
+  }
+
+  /** `key` is the toml's uri (or path); omitted, the catalog is the workspace's only one. */
+  reindexFile(content: string, key = ''): void {
+    const catalog = parseCatalog(content);
+    const entries = new Map<string, CatalogEntry>();
 
     const versions = new Map<string, string>();
-    for (const a of this.catalog.aliases) {
+    for (const a of catalog.aliases) {
       if (a.namespace === 'versions') {
         versions.set(a.raw, /"([^"]+)"/.exec(content.slice(a.removeStart, a.removeEnd))?.[1] ?? '?');
       }
     }
 
-    for (const a of this.catalog.aliases) {
+    for (const a of catalog.aliases) {
       if (a.namespace !== 'libraries' || !a.coordinate) continue;
       const [group, name] = a.coordinate.split(':');
       const entryText = content.slice(a.removeStart, a.removeEnd);
@@ -247,13 +262,33 @@ export class VersionCatalogIndex {
       const version = a.versionRef
         ? (versions.get(a.versionRef) ?? a.versionRef)
         : (literal ?? '?');
-      this.entries.set(a.raw, { group, name, version, alias: a.raw });
+      entries.set(a.raw, { group, name, version, alias: a.raw });
     }
+
+    // `<project>/gradle/libs.versions.toml`: the project dir is two levels up.
+    const projectDir = key.replace(/^file:\/\//, '').replace(/[\\/]gradle[\\/][^\\/]+$/, '');
+    this.catalogs.set(key, { entries, catalog, projectDir });
+  }
+
+  /**
+   * The catalog that applies to a build file: the one whose project dir is
+   * the longest prefix of `contextPath`; with a single catalog, that one.
+   */
+  private catalogFor(contextPath?: string): ParsedCatalog | undefined {
+    if (this.catalogs.size <= 1 || !contextPath) return this.primary();
+    let best: ParsedCatalog | undefined;
+    for (const c of this.catalogs.values()) {
+      const dir = c.projectDir;
+      if (!dir) continue;
+      const inside = contextPath.startsWith(dir + '/') || contextPath.startsWith(dir + '\\');
+      if (inside && (!best || dir.length > best.projectDir.length)) best = c;
+    }
+    return best ?? this.primary();
   }
 
   /** The parsed catalog, for callers that need aliases rather than coordinates. */
   parsed(): Catalog {
-    return this.catalog;
+    return this.primary()?.catalog ?? EMPTY_CATALOG;
   }
 
   /**
@@ -261,10 +296,13 @@ export class VersionCatalogIndex {
    *
    * Split on the same separators as an alias: callers pass the dotted accessor
    * (`coroutines.core`) or the raw alias (`coroutines-core`) interchangeably,
-   * and Gradle considers the two identical.
+   * and Gradle considers the two identical. `contextPath` is the build file
+   * asking, so a multi-root workspace reads its own project's catalog.
    */
-  getByAccessor(accessor: string): CatalogEntry | undefined {
-    const alias = resolveAccessor(this.catalog.aliases, 'libraries', aliasSegments(accessor));
-    return alias ? this.entries.get(alias.raw) : undefined;
+  getByAccessor(accessor: string, contextPath?: string): CatalogEntry | undefined {
+    const c = this.catalogFor(contextPath);
+    if (!c) return undefined;
+    const alias = resolveAccessor(c.catalog.aliases, 'libraries', aliasSegments(accessor));
+    return alias ? c.entries.get(alias.raw) : undefined;
   }
 }

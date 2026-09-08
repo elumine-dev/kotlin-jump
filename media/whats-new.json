@@ -1,31 +1,32 @@
 {
-  "version": "1.42.6",
+  "version": "1.42.7",
   "title": "What's New in Kotlin Jump",
-  "tagline": "No more frozen keystrokes on big files",
-  "summary": "Kotlin Jump 1.42.6 fixes the slowest thing in the extension and seven display defects around it. On a 5000 line file outside any function, a Koin module or a design system object, every keystroke walked backwards through the file once per coloured token: 13.9 seconds of frozen extension host, measured. It is one pass now.",
+  "tagline": "Multi-root workspaces done right",
+  "summary": "Kotlin Jump 1.42.7 closes the list left by the third display audit: multi-root workspaces that ran tests against the wrong Gradle build and read the wrong version catalog, a Find Usages panel that disagreed with its own lens, a Recent Locations picker that opened a hundred files before showing up, and a few settings and pills that did not do what they said.",
   "highlights": [
     {
-      "title": "One scope index per document",
+      "title": "Tests run against the right Gradle build",
       "kind": "fix",
-      "description": "Semantic highlighting asked \"is this a local?\" for every token and each answer walked back through the file. Measured on a 5000 line object: 13.9 s per keystroke before, under 0.5 s for the same 5000 queries after. Inlay hints share the index."
+      "description": "The project root came from the active editor: with two Gradle projects open, a class run from the Test Explorer while the other project had focus ended in \"No tests found\" and every test errored. Each test now uses the project its file belongs to."
     },
     {
-      "title": "Stop leaves tests unmarked",
+      "title": "One version catalog per project",
       "kind": "fix",
-      "description": "Stopping a run killed Gradle and turned every test red with \"Gradle exited with code 1\". Resource diagnostics also follow typing now instead of waiting for a save, and clear when the setting goes off."
+      "description": "The last libs.versions.toml read used to win, so a hover in project A showed project B's versions and deleting any toml emptied every hover. The build file's own project answers now."
     },
     {
-      "title": "Hovers that tell the truth",
+      "title": "Recent Locations without opening files",
       "kind": "fix",
-      "description": "R.mipmap.ic_launcher shows its raster instead of nothing, the string hover lists locales only (no more values-night with a ✗), and items.first() on a plain list no longer wears a ⚡ borrowed from Flow."
+      "description": "The picker opened up to a hundred documents one by one for their excerpts, each open waking every scanner. Bytes are read sixteen at a time instead, and file names are decoded (Café.kt, not Caf%C3%A9.kt)."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Refreshes lenses, colours and usage counts when a file is deleted; they used to keep the deleted symbols until the next save.",
-        "Keeps Room warnings on screen while a save re-reads the workspace, reads files sixteen at a time, and underlines an unsaved entity on the right line."
+        "Applies kotlinJump.excludeFromReferences in the Find Usages panel, which used to list files the lens had excluded.",
+        "Puts a permission pill on a <uses-permission> tag split over several lines, and makes kotlinJump.semanticHighlighting toggle without a reload.",
+        "Removes classes and methods deleted by a checkout from the Test Explorer, and stops flagging @Ignore and @Embedded fields as missing a Room migration."
       ]
     }
   ],

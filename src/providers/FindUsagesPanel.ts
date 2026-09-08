@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { SymbolIndex } from '../indexer/SymbolIndex';
-import { scanForUsagesWithTarget, resolveSearchTarget, DEFAULT_TEST_SEGMENTS, UsageResult } from './FindUsagesEngine';
+import { scanForUsagesWithTarget, resolveSearchTarget, DEFAULT_TEST_SEGMENTS, UsageResult, isExcluded } from './FindUsagesEngine';
 import { isTestPath } from '../util/testFilter';
 
 // ── Tree node types ───────────────────────────────────────────────────────────
@@ -89,9 +89,11 @@ export class FindUsagesPanel
     // `private` has no cross-file callers in valid code — scan ONLY the
     // declaring file. Saves ~all of the perceived Cmd+Click latency on
     // large projects (matches `scanForUsagesWithTarget`'s own restriction).
+    // Same exclude filter as the lens and Go to References: the lens said
+    // "3 usages" and the panel opened with 5, listing the excluded files.
     const uriStrings = target?.isPrivate
       ? [target.uri.toString()]
-      : this.index.fileUriStrings();
+      : this.index.fileUriStrings().filter(u => !isExcluded(u));
 
     let raw = await scanForUsagesWithTarget(
       word,

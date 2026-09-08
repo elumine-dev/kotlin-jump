@@ -1,43 +1,42 @@
 {
-  "version": "1.42.17",
+  "version": "1.42.18",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Annotated declarations indexed, companion objects in the Outline",
-  "summary": "A class, property or enum entry with an annotation on the same line was not indexed at all: no Outline entry, no Go to Definition, no usages. An unnamed companion object now appears in the Outline with its members under it. The index snapshot is rebuilt once after the update.",
+  "tagline": "Java fields and enum constants indexed, captured locals resolved",
+  "summary": "The Java parser gets the same treatment the Kotlin one got in 1.42.17: fields without a modifier, annotations with nested parentheses, enum constants read in full, comments and text blocks kept out of the brace count. Go to Definition no longer lands inside a string or a comment, and resolves a local captured by an anonymous class.",
   "highlights": [
     {
-      "title": "Annotated declarations are back",
-      "description": "`@AndroidEntryPoint class`, `@Entity(...) data class`, `@Inject lateinit var`, `@field:SerializedName(\"a\") val` in a constructor and `@SerializedName(\"ACTIVE\") ACTIVE` were skipped by the parser. They are indexed again, with the column on the name and not on its copy inside the annotation string.",
+      "title": "Java fields without a modifier",
+      "description": "`@Inject AnalyticsAdapter analytics;`, `@Mock UserRepository repository;` and interface constants were never indexed, and their annotations leaked onto the next method (`@Deprecated String legacy;` struck through the method below). They have an Outline entry, a hover and usages now.",
       "kind": "fix"
     },
     {
-      "title": "Companion objects in the Outline",
-      "description": "An unnamed `companion object` shows as `Companion` with its constants and factories nested under it, instead of hanging under the previous function. Member names still resolve as `Foo.TAG`.",
-      "kind": "improvement"
+      "title": "Captured locals resolve",
+      "description": "Inside `new View.OnClickListener() { public void onClick(View v) { open(url, title); } }` the parameter and the local of the enclosing method resolved to nothing or to a stranger elsewhere. Same fix for a Kotlin `object : Listener`. A binding sitting inside a string or a comment is no longer a destination.",
+      "kind": "fix"
     },
     {
-      "title": "Brace count survives mid-line comments",
-      "description": "`class A { /* { */ }` no longer shifts every following declaration one level deeper, and a `/*` left open at the end of a line now hides the commented-out code from the index.",
+      "title": "Enum colours and comments",
+      "description": "A nested `enum class State` and every `Foo.State` reference took the enum member colour. Code commented out with a multi-line `/* … */` kept its class and function colours. Both are fixed, and a backtick test name gets one declaration token on the name itself.",
       "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Parser",
+      "heading": "Java parser",
       "bullets": [
-        "Indexes declarations whose annotation sits on the same line, plus `value class` and the `final` modifier.",
-        "Shows an unnamed `companion object` in the Outline; no usage lens and no workspace search hit for the synthetic name.",
-        "Indexes annotated enum entries and extension properties (`val List<Int>.sum3` was recorded as `List`).",
-        "A `;` line in an enum no longer turns the next uppercase continuation line into a phantom entry.",
-        "A `val` inside a lambda passed as a named argument is no longer a primary-constructor property."
+        "Fields without a modifier are indexed at class level; locals inside method bodies stay out.",
+        "Same-line annotations with nested parentheses (`@Query(\"SELECT count(*) …\")`) and a package-private `@interface` no longer hide the declaration.",
+        "Enum constants are read in full (`Home` was `H`), multi-line arguments and a constructor after `};` are not constants, `@Deprecated OLD,` does not mark the next method.",
+        "A `/*` left open, a `/* { */`, a Javadoc `{@code` and the lines of a `\"\"\"` text block no longer shift the Outline or produce phantom methods."
       ]
     },
     {
-      "heading": "Fixes",
+      "heading": "Navigation and colours",
       "bullets": [
-        "Outline: an enum class following another enum got the EnumMember icon; `class Foo @Inject constructor(private val x: Int)` was shown as a private class.",
-        "The `hoverEnabled`, `foldingEnabled` and `signatureHelp` settings apply without a window reload.",
-        "No \"role?\" accessibility hint on a `clickable` whose `role =` argument sits on a following line.",
-        "The cron tooltip rejects a reversed day-of-week range (`5-1`)."
+        "Go to Definition ignores a local binding that sits inside a string or a comment (Java and Kotlin).",
+        "A local or parameter captured by an anonymous class or a Kotlin `object :` resolves to the enclosing function.",
+        "The continuation of a Java ternary (`? format(value)`) is not a method header.",
+        "Nested `enum class` painted as enum, no semantic colours inside a multi-line block comment, backtick names get one declaration token."
       ]
     }
   ],

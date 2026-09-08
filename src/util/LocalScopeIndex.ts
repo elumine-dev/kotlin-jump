@@ -16,12 +16,22 @@
  * itself declares a function is its own scope (single-expression bodies).
  */
 
+import { isInsideCommentOrString } from './textUtils';
+
 export interface LocalBinding { line: number; col: number; ord: number }
 
 export interface LocalScopeIndex {
   readonly lines: readonly string[];
   /** Per line: line of the enclosing `fun` declaration, or -1. */
   readonly enclosingFun: Int32Array;
+  /**
+   * Per line: the function enclosing the BLOCK the line sits in, ignoring the
+   * "a header line is its own scope" rule. For a header this is the function
+   * around it (`onClick` inside `new OnClickListener() { }` inside `setup`),
+   * or -1; resolveLocalScope follows this chain so a captured local or
+   * parameter of `setup` resolves from inside `onClick`.
+   */
+  readonly outerFun: Int32Array;
   /** Local val/var, for-loop and lambda bindings by name, in document order. */
   readonly bindings: ReadonlyMap<string, LocalBinding[]>;
 }
@@ -48,8 +58,10 @@ export function isJavaMethodHeader(text: string): boolean {
   if (/;\s*$/.test(t)) return false;
   const before = t.slice(0, paren).replace(/@\w+(?:\([^)]*\))?\s*/g, '').trim();
   if (/[=.}]/.test(before)) return false;
-  // `Type name` (generics and arrays allowed) or a constructor `public Foo`
-  return /(?:^|\s)[\w$<>\[\],?]+\s+[A-Za-z_$][\w$]*$/.test(before)
+  // `Type name` (generics and arrays allowed) or a constructor `public Foo`.
+  // The type starts with a letter, `_`, `$` or `<`: a ternary continuation
+  // `? format(value)` is not a method header.
+  return /(?:^|\s)[A-Za-z_$<][\w$<>\[\],?]*\s+[A-Za-z_$][\w$]*$/.test(before)
     || /^(?:(?:public|protected|private)\s+)?[A-Z][\w$]*$/.test(before);
 }
 
@@ -61,9 +73,17 @@ export function buildLocalScopeIndex(lines: readonly string[], language: 'kotlin
   const isHeader = (text: string) => isJava ? isJavaMethodHeader(text) : FUN_RE.test(text);
   const n = lines.length;
   const enclosingFun = new Int32Array(n).fill(-1);
+  const outerFun     = new Int32Array(n).fill(-1);
   const bindings = new Map<string, LocalBinding[]>();
   let ord = 0;
+  // Column before which the current line is still inside a `/* … */` opened
+  // on an earlier line (line.length when it does not close on this line).
+  let commentUntil = 0;
+  let inBlockComment = false;
   const record = (line: number, col: number, name: string) => {
+    // `"user name = " + name` and `// default timeout = 30`: a binding read
+    // inside a string or a comment sent Go to Definition into that text.
+    if (col < commentUntil || isInsideCommentOrString(lines[line], col)) return;
     let list = bindings.get(name);
     if (!list) { list = []; bindings.set(name, list); }
     list.push({ line, col, ord: ord++ });
@@ -94,6 +114,16 @@ export function buildLocalScopeIndex(lines: readonly string[], language: 'kotlin
 
   for (let k = 0; k < n; k++) {
     const text = lines[k];
+    if (inBlockComment) {
+      const close = text.indexOf('*/');
+      if (close === -1) { commentUntil = text.length; }
+      else { commentUntil = close + 2; inBlockComment = false; }
+    } else {
+      commentUntil = 0;
+    }
+    // A `/*` opened on this line and still open at its end hides the next
+    // lines (isInsideCommentOrString already masks the rest of THIS line).
+    if (!inBlockComment && leavesBlockCommentOpen(text, commentUntil)) inBlockComment = true;
     let opens = 0, closes = 0;
     for (let i = 0; i < text.length; i++) {
       const ch = text.charCodeAt(i);
@@ -107,14 +137,12 @@ export function buildLocalScopeIndex(lines: readonly string[], language: 'kotlin
       stack.push({ line: k, below: prev });
     }
 
-    if (isHeader(text)) {
-      enclosingFun[k] = k;
-    } else {
-      for (let s = stack.length - 1; s >= 0; s--) {
-        const f = funHeader(stack[s].line);
-        if (f >= 0) { enclosingFun[k] = f; break; }
-      }
+    for (let s = stack.length - 1; s >= 0; s--) {
+      if (stack[s].line === k) continue; // the block this line opens is not around it
+      const f = funHeader(stack[s].line);
+      if (f >= 0) { outerFun[k] = f; break; }
     }
+    enclosingFun[k] = isHeader(text) ? k : outerFun[k];
 
     let m: RegExpExecArray | null;
     if (isJava) {
@@ -160,7 +188,7 @@ export function buildLocalScopeIndex(lines: readonly string[], language: 'kotlin
     }
   }
 
-  return { lines, enclosingFun, bindings };
+  return { lines, enclosingFun, outerFun, bindings };
 }
 
 /** Last line of the signature that starts at `funLine`: parentheses balanced. */
@@ -197,6 +225,27 @@ export function latestBinding(
     best = b;
   }
   return best;
+}
+
+/** True when a `/*` at or after `from` is not closed before the end of the line. */
+function leavesBlockCommentOpen(s: string, from: number): boolean {
+  let inStr: string | false = false;
+  for (let i = from; i < s.length; i++) {
+    const c = s[i];
+    if (inStr) {
+      if (c === '\\') { i++; continue; }
+      if (c === inStr) inStr = false;
+      continue;
+    }
+    if (c === '"' || c === '\'') { inStr = c; continue; }
+    if (c === '/' && s[i + 1] === '/') return false;
+    if (c === '/' && s[i + 1] === '*') {
+      const close = s.indexOf('*/', i + 2);
+      if (close === -1) return true;
+      i = close + 1;
+    }
+  }
+  return false;
 }
 
 function countParens(s: string): number {

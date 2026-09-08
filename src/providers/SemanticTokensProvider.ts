@@ -61,7 +61,7 @@ const M_OVERRIDE     = 1 << 14;
 
 // ── SymbolKind → token type index ────────────────────────────────────────────
 
-function kindToTypeIndex(kind: SymbolKind, depth: number): number | undefined {
+function kindToTypeIndex(kind: SymbolKind, depth: number, isEnumEntry?: boolean): number | undefined {
   switch (kind) {
     case 'class':       return 1;
     case 'dataClass':   return 2;
@@ -70,7 +70,9 @@ function kindToTypeIndex(kind: SymbolKind, depth: number): number | undefined {
     case 'object':      return 5;
     case 'annotation':  return 12;
     case 'typealias':   return 5;
-    case 'enum':        return depth > 0 ? 8 : 3; // enumMember vs enum class
+    // A nested `enum class State` also has depth > 0: only the parent tells
+    // an entry from an enum class.
+    case 'enum':        return isEnumEntry ? 8 : 3; // enumMember vs enum class
     case 'fun':
     case 'composable':  return depth === 0 ? 9 : 10;
     case 'val':
@@ -268,7 +270,9 @@ export class KotlinSemanticTokensProvider
     ct: vscode.CancellationToken,
   ): vscode.SemanticTokens {
     const tokens: TokenEntry[] = [];
-    const declKeys = new Set<string>();
+    // Declaration token spans per line: a word INSIDE one (`user` in
+    // \`returns user when found\`) is not a reference.
+    const declSpans = new Map<number, [number, number][]>();
     // The provider used to be registered only when the setting was on at
     // activation, so toggling it did nothing until Reload Window.
     if (!KotlinSemanticTokensProvider.enabled()) {
@@ -282,7 +286,7 @@ export class KotlinSemanticTokensProvider
     // ── Phase 1: declaration sites (exact, from index) ─────────────────────
     for (const entry of this.index.getFileSymbols(doc.uri.toString())) {
       if (range && (entry.line < range.start.line || entry.line > range.end.line)) continue;
-      const type = kindToTypeIndex(entry.kind, entry.depth);
+      const type = kindToTypeIndex(entry.kind, entry.depth, entry.isEnumEntry);
       if (type === undefined) continue;
       // The index tracks the file ON DISK; an unsaved edit that removes a
       // line shifts everything and a stale declaration token lands on the
@@ -297,7 +301,9 @@ export class KotlinSemanticTokensProvider
         type,
         mods: buildModifiers(entry, true),
       });
-      declKeys.add(`${entry.line}:${entry.character}`);
+      const spans = declSpans.get(entry.line) ?? [];
+      spans.push([entry.character, entry.character + entry.name.length]);
+      declSpans.set(entry.line, spans);
     }
 
     // ── Phase 2: reference sites (regex scan) ──────────────────────────────
@@ -307,6 +313,10 @@ export class KotlinSemanticTokensProvider
     // @Query("""…""") got semantic tokens that overrode the embedded SQL
     // grammar (FROM/BY painted white, Kevin 25/07). Mask them out.
     const tripleMask = computeTripleStringMask(lines);
+    // Same for `/* … */` spanning lines: only lines starting with `*` were
+    // skipped, so code commented out in a block kept its class and function
+    // colours over the comment grammar.
+    const commentMask = computeBlockCommentMask(lines, tripleMask);
     // Per-run cache: same word resolves identically within one document version.
     // Eliminates redundant resolveBest() calls for repeated symbols.
     const wordCache = new Map<string, SymbolEntry | undefined>();
@@ -335,9 +345,10 @@ export class KotlinSemanticTokensProvider
         const col  = m.index;
 
         if (KOTLIN_KEYWORDS.has(word)) continue;
-        if (declKeys.has(`${li}:${col}`)) continue;
+        if (inTripleStringMask(declSpans, li, col)) continue;
         if (isInsideCommentOrString(line, col)) continue;
         if (inTripleStringMask(tripleMask, li, col)) continue;
+        if (inTripleStringMask(commentMask, li, col)) continue;
 
         // ── Check hardcoded stdlib sets first (no index lookup needed) ──────
         const hardcoded = resolveHardcoded(word, li, col);
@@ -364,7 +375,7 @@ export class KotlinSemanticTokensProvider
         // about to be emitted — most words skip out before this point.
         if (resolveLocalScope(doc, new vscode.Position(li, col), word, scope)) continue;
 
-        const type = kindToTypeIndex(entry.kind, entry.depth);
+        const type = kindToTypeIndex(entry.kind, entry.depth, entry.isEnumEntry);
         if (type === undefined) continue;
 
         tokens.push({
@@ -470,6 +481,55 @@ export function computeTripleStringMask(lines: string[]): TripleStringMask {
       mask.set(li, list);
     } else if (open) {
       mask.set(li, [[0, line.length]]);
+    }
+  }
+  return mask;
+}
+
+/**
+ * Per-line intervals inside a `/* … *\/` comment, including the ones that
+ * span lines. Strings, `//` comments and `"""` blocks (via `tripleMask`)
+ * cannot open one.
+ */
+export function computeBlockCommentMask(lines: string[], tripleMask: TripleStringMask): TripleStringMask {
+  const mask: TripleStringMask = new Map();
+  let open = false;
+  for (let li = 0; li < lines.length; li++) {
+    const line = lines[li];
+    let i = 0;
+    let from = open ? 0 : -1;
+    let inStr: string | false = false;
+    while (i < line.length) {
+      const c = line[i];
+      if (open) {
+        if (c === '*' && line[i + 1] === '/') {
+          open = false;
+          const list = mask.get(li) ?? [];
+          list.push([from, i + 2]);
+          mask.set(li, list);
+          from = -1;
+          i += 2;
+          continue;
+        }
+        i++;
+        continue;
+      }
+      if (inStr) {
+        if (c === '\\') { i += 2; continue; }
+        if (c === inStr) inStr = false;
+        i++;
+        continue;
+      }
+      if (inTripleStringMask(tripleMask, li, i)) { i++; continue; }
+      if (c === '"' || c === '\'') { inStr = c; i++; continue; }
+      if (c === '/' && line[i + 1] === '/') break;
+      if (c === '/' && line[i + 1] === '*') { open = true; from = i; i += 2; continue; }
+      i++;
+    }
+    if (open && from !== -1) {
+      const list = mask.get(li) ?? [];
+      list.push([from, line.length]);
+      mask.set(li, list);
     }
   }
   return mask;

@@ -25,7 +25,16 @@ export function segmentMatchesPath(uriPath: string, segment: string): boolean {
   // recognised as a test file there, so the filter that hides test results
   // from a production file was inverted.
   const p = uriPath.replace(/\\/g, '/');
-  return p.includes(`/${s}/`) || p.endsWith(`/${s}`);
+  if (p.includes(`/${s}/`) || p.endsWith(`/${s}`)) return true;
+
+  // Gradle builds a variant source set by suffixing the base name in camel
+  // case: `androidTest` becomes `androidTestDebug`, `jvmTest` becomes
+  // `jvmTestFixtures`. Requiring an exact component missed all of them.
+  // The suffix must start with an upper case letter, so `test` still does not
+  // match a directory named `testdata`, and a segment naming a directory pair
+  // such as `test/kotlin` still never matches `test/kotlin-jump-demo`.
+  if (s.includes('/')) return false;
+  return p.split('/').some(c => c.length > s.length && c.startsWith(s) && /^[A-Z]/.test(c[s.length]!));
 }
 
 export function isTestPath(uriPath: string, segments: readonly string[]): boolean {

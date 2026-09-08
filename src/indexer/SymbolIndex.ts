@@ -91,7 +91,15 @@ export class SymbolIndex {
   private readonly kindPool  = new Map<string, string>();
   private readonly superPool = new Map<string, string>();
 
-  add(file: ParsedFile, moduleName?: string): void {
+  /**
+   * @param fileOnly Populate only the per file list that `getFileSymbols`
+   *   reads, and skip the lookup maps (by name, by FQN, by supertype, the
+   *   trigram and word indexes). For a scratch index built to answer a single
+   *   question about one open buffer, filling those costs about three quarters
+   *   of the call and nothing ever reads them. Never use it for the real
+   *   workspace index: every lookup would come back empty.
+   */
+  add(file: ParsedFile, moduleName?: string, fileOnly = false): void {
     const uri = vscode.Uri.parse(file.uriString);
     const key  = file.uriString;
     this.removeByKey(key);
@@ -166,6 +174,8 @@ export class SymbolIndex {
 
       fileEntries.push(entry);
 
+      if (fileOnly) continue;
+
       let set = this.byName.get(sym.name);
       if (!set) { set = new Set(); this.byName.set(sym.name, set); this.addToTrigram(sym.name); }
       set.add(entry);
@@ -193,6 +203,7 @@ export class SymbolIndex {
     this.byFile.set(key, fileEntries);
     this.dirty = true;
     this._modificationsSinceFinalize++;
+    if (fileOnly) return;
 
     // ── Populate inverted word index ─────────────────────────────────────────
     const fileWords = new Set<string>();

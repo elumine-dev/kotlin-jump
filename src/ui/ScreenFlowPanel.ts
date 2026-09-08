@@ -7,6 +7,7 @@ import {
   parseNavigation,
   parseNavigationXml,
   routeMatches,
+  resolveTargetRoute,
 } from '../indexer/NavigationIndex';
 
 /**
@@ -111,8 +112,8 @@ export async function buildWorkspaceNavigation(): Promise<MergedNavigation> {
     if (declared.includes(e.to)) continue;
     // find() took the first route in workspace scan order, so the arrow could
     // move to another screen after a rename or on another machine.
-    const hits = declared.filter(r => routeMatches(e.to, r));
-    if (hits.length === 1) e.to = hits[0];
+    const hit = resolveTargetRoute(e.to, declared);
+    if (hit) e.to = hit;
   }
 
   // The same route in two files (src/main and src/debug, two modules) drew

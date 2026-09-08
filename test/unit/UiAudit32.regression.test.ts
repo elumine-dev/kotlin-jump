@@ -51,9 +51,20 @@ describe('Interpolation dont le préfixe est une route connue', () => {
   });
 
   it('une interpolation inconnue reste un joker', () => {
-    const kt = 'fun graph(nc: NavHostController) {\n    composable("home") { Home(go = { nc.navigate("${unknownRoute}") }) }\n    composable("settings") { Settings() }\n}';
+    // `settings` est déclaré AVANT `home` : avec l'ancien code la cible
+    // entièrement joker prenait la première route d'un segment, donc
+    // `settings`, et une assertion sur `settings` seul aurait pu passer par
+    // accident. On assert l'ensemble des arêtes.
+    const kt = [
+      'fun graph(nc: NavHostController) {',
+      '    composable("settings") { Settings() }',
+      '    composable("home") { Home(go = { nc.navigate("${unknownRoute}") }) }',
+      '}',
+    ].join('\n');
     const nav = parseNavigation(kt, new Map());
-    expect(nav.edges.filter(e => e.to === 'settings')).toEqual([]);
+    // La cible reste telle quelle : aucune boîte ne porte ce nom, donc aucune
+    // flèche ne sera dessinée. Avant, elle valait `settings`.
+    expect(nav.edges).toEqual([{ from: 'home', to: '{unknownRoute}' }]);
   });
 });
 

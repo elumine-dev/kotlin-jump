@@ -75,6 +75,10 @@ describe('Back pressé juste après un saut', () => {
 
     // Back dans la fenêtre de 500 ms.
     await registeredCmds.get('kotlinJump.navigateBack')!();
+    // _isNavigating est remis à faux par un setTimeout(0) : sans cette attente
+    // l'évènement tardif est absorbé par ce garde là et n'atteint jamais la
+    // branche de raffinement, donc le test passait aussi sur le code d'avant.
+    await new Promise(r => setTimeout(r, 5));
     // Évènement tardif pour B, du genre restauration de vue par VS Code.
     selectionListener(selectionEvent('file:///B.kt', 10, vscode.TextEditorSelectionChangeKind.Command, 0));
 

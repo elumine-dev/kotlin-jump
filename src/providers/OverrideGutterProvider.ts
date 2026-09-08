@@ -43,10 +43,7 @@ export class OverrideGutterProvider implements vscode.CodeLensProvider {
           if (isAbstractType) {
             const rawImpls = this.index.lookupImplementations(entry.name).filter((e: any) => allow(e.uri.path));
             const allParents = this.index.lookup(entry.name).filter((e: any) => CLASS_LIKE.has(e.kind) && allow(e.uri.path));
-            const impls = allParents.length <= 1 ? rawImpls : rawImpls.filter((impl: any) =>
-              impl.packageName === entry.packageName ||
-              !allParents.some((p: any) => p.packageName === impl.packageName)
-            );
+            const impls = allParents.length <= 1 ? rawImpls : rawImpls.filter((impl: any) => this.index.implementsExactly(impl, entry));
             if (impls.length > 0) {
               const range = new vscode.Range(entry.line, 0, entry.line, 0);
               lenses.push(new vscode.CodeLens(range, {

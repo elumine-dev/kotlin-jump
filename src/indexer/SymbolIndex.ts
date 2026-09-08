@@ -243,6 +243,21 @@ export class SymbolIndex {
     return s ? [...s] : EMPTY;
   }
 
+  /**
+   * True when `impl` names `parent` specifically: same package, or an import
+   * of the parent's FQN or of its package. With `Handler` in two packages,
+   * the implementor of one used to count for both.
+   */
+  implementsExactly(impl: SymbolEntry, parent: SymbolEntry): boolean {
+    if (impl.packageName === parent.packageName) return true;
+    const imports = this.fileImports.get(impl.uri.toString()) ?? [];
+    if (imports.includes(parent.fqn) || imports.includes(`${parent.packageName}.*`)) return true;
+    // No import at all naming this parent's package: only ambiguous when
+    // another parent of that name exists in a package the file does import.
+    const others = this.lookup(parent.name).filter(e => e !== parent && CLASS_LIKE.has(e.kind));
+    return !others.some(o => imports.includes(o.fqn) || imports.includes(`${o.packageName}.*`) || o.packageName === impl.packageName);
+  }
+
   /** URI strings of the indexed files declaring `package pkg`. */
   filesInPackage(pkg: string): string[] {
     const s = this.byPkg.get(pkg);
@@ -265,7 +280,7 @@ export class SymbolIndex {
     if (!container) return EMPTY;
 
     // Find all classes that implement the container
-    const impls = this.lookupImplementations(container.name);
+    const impls = this.lookupImplementations(container.name).filter(impl => this.implementsExactly(impl, container));
     if (impls.length === 0) return EMPTY;
 
     // Find methods with the same name inside implementing classes (not the interface itself)
@@ -280,8 +295,12 @@ export class SymbolIndex {
           break;
         }
       }
+      // Only a direct member that overrides: a private homonym, a companion
+      // helper or a nested object's method counted as an implementation.
+      const java = impl.uri.path.endsWith('.java');
       for (const s of implSymbols) {
         if (s.name === methodName && s.line > impl.line && s.line < implEnd
+            && s.depth === impl.depth + 1 && (s.isOverride || java)
             && (s.kind === 'fun' || s.kind === 'composable' || s.kind === 'val' || s.kind === 'var')) {
           results.push(s);
         }

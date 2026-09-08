@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.42.25
+
+Kotlin Jump 1.42.25 fixes the Android detectors: lifecycle warnings on code that releases itself (and a quick fix that did not compile), Room migration drift on entities it could not even see, a Screen Flow map that painted reachable screens as orphans, implementation counts inflated by homonyms, and a raw resource offered for deletion while a video player named it.
+
+### Fixes
+- Stops the lifecycle warning on `FragmentDetailBinding.bind(view)`, `lifecycle.addObserver(x)`, `ProcessLifecycleOwner.get().lifecycle.addObserver(…)` and `onBackPressedDispatcher.addCallback(viewLifecycleOwner) { }`: the binding is released by `_binding = null`, the others detach themselves. The quick fix used to insert `unbind(view)`, `removeObserver(x)` without receiver or `removeCallback(viewLifecycleOwner)`, none of which compiled.
+- Reads the resource of an acquisition from the right place. `wakeLock.acquire(10 * 60 * 1000L)` reported "10", `requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 10f, listener)` reported "LocationManager", `ContextCompat.registerReceiver(this, receiver, filter, flags)` reported "this", and `fusedClient.requestLocationUpdates(request, callback, looper)` was never matched by `removeLocationUpdates(callback)`. Any identifier argument or the receiver now pairs with the release; `bus.unsubscribe(h)` is no longer a `subscribe`.
+- Pairs lifecycle methods within their own class. A `DefaultLifecycleObserver` declared in the Activity, or a second class in the file, used to be taken for the mirror `onStop`: a false orphan, and a quick fix that added a second `unregisterReceiver` ("Receiver not registered" at runtime).
+- Generates a lifecycle mirror that behaves: `super.onStop()` first (Activities and Fragments throw without it), the release goes through the acquiring receiver (`manager.removeListener(l)`), a one-line `override fun onStop() { super.onStop() }` receives the call inside its braces instead of after them, and an expression-bodied mirror gets no fix rather than a duplicate method.
+- Sees every Room entity. `@Entity(tableName = "x", indices = [Index(value = ["name"])])` and `@Entity(…)` followed by `@Parcelize` were silently skipped, so the database looked clean. `AutoMigration(from = 1, to = 2, spec = …)` no longer reads as a hole in the chain.
+- Reads migration coverage per table. `ALTER TABLE pokemon ADD COLUMN updatedAt` served as the baseline of a `Trainer` entity with its own `updatedAt`, which then reported `badges`; a `CREATE TABLE pokemon_new (… nickname …)` migration (the SQLite way to change a column) now counts for the columns it lists. The diagnostic underlines the property, not the `"name"` inside its `@ColumnInfo`, and the provider stays silent past `maxIndexedFiles` instead of inventing holes.
+- Draws the Screen Flow edges that start inside a screen. `navController.navigate("detail/42")` in `HomeScreen`'s own file was dropped, so `detail/{id}` showed as an orphan in red; the edge now comes from the screen, and a literal target reaches its declared pattern. `object Home : Screen("home")` resolves `Screen.Home.route`.
+- Counts implementations honestly. A private homonym, a companion helper or a nested object's method counted as an implementation of an interface method; with `Handler` in two packages, the implementor of one counted for both. Only direct overrides count, and the parent is matched through the implementor's imports.
+- Keeps a raw resource named in a URI. `"android.resource://" + packageName + "/raw/intro_video"` left `intro_video` "never referenced" with a Delete quick fix.
+
 ## 1.42.24
 
 Kotlin Jump 1.42.24 fixes the inline actions that could break code: Surround With turned `$name` into `name`, "Remove expired TODO" cut a URL in half, Extract String Resource made a placeholder out of `$100`, and removing an unused Gradle dependency left its `{ exclude(…) }` block behind. The decorations also stop drifting: method separators in a Hilt ViewModel, `!!` and swatches with the feature off, dispatcher hints on comments.

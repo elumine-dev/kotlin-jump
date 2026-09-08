@@ -143,7 +143,7 @@ describe('Lifecycle quick fix — indentation (was: 4-space arithmetic put onSto
     expect(actions).toHaveLength(1);
     const edits = (actions[0]!.edit as any).entries?.() ?? (actions[0]!.edit as any)._edits;
     const inserted = JSON.stringify(edits);
-    expect(inserted).toContain('\\toverride fun onStop() {\\n\\t\\twakeLock.release()\\n\\t}');
+    expect(inserted).toContain('\\toverride fun onStop() {\\n\\t\\tsuper.onStop()\\n\\t\\twakeLock.release()\\n\\t}');
     expect(inserted).toContain('"line":4');
   });
 });

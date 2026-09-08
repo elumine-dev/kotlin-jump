@@ -37,6 +37,7 @@ export type RoomFileInput = string | { path?: string; text: string };
 
 interface EntityDecl {
   entity: string;
+  tableName?: string;
   fields: EntityField[];
   fileIndex: number;
 }
@@ -45,6 +46,8 @@ interface MigrationSpan {
   from: number;
   to: number;
   addedColumns: string[];
+  /** Columns per table (lower case): `ALTER TABLE t ADD COLUMN c` and the columns of a `CREATE TABLE t (…)`. */
+  columnsByTable: Map<string, Set<string>>;
   name: string | undefined;
   fileIndex: number;
 }
@@ -105,11 +108,27 @@ function closingParen(text: string, openIndex: number): number {
 
 function parseEntities(text: string, fileIndex: number): EntityDecl[] {
   const decls: EntityDecl[] = [];
-  const entityRe = /@Entity(?:\s*\([^)]*\))?\s*(?:data\s+)?class\s+(\w+)\s*\(/g;
+  // `@Entity(tableName = "x", indices = [Index(value = ["name"])])` has nested
+  // parens, and `@Entity(...) @Parcelize data class` another annotation: both
+  // made the entity invisible, so the database looked clean.
+  const entityRe = /@Entity\b/g;
+  const headRe = /^\s*(?:@[\w.]+(?:\([^)]*\))?\s*)*(?:(?:internal|open|public|private)\s+)*(?:data\s+)?class\s+(\w+)\s*\(/;
   let m: RegExpExecArray | null;
   while ((m = entityRe.exec(text)) !== null) {
-    const entity = m[1];
-    const open = m.index + m[0].length - 1;
+    let after = m.index + m[0].length;
+    let args = '';
+    const ws = /\s*/y; ws.lastIndex = after; ws.exec(text); after = ws.lastIndex;
+    if (text[after] === '(') {
+      const argsClose = closingParen(text, after);
+      if (argsClose < 0) continue;
+      args = text.slice(after + 1, argsClose);
+      after = argsClose + 1;
+    }
+    const head = headRe.exec(text.slice(after, after + 400));
+    if (!head) continue;
+    const entity = head[1];
+    const tableName = /tableName\s*=\s*"([^"]+)"/.exec(args)?.[1];
+    const open = after + head[0].length - 1;
     const close = closingParen(text, open);
     if (close < 0) continue;
 
@@ -132,7 +151,7 @@ function parseEntities(text: string, fileIndex: number): EntityDecl[] {
         hasDefault: columnM ? /defaultValue\s*=/.test(columnM[1]) : false,
       });
     }
-    decls.push({ entity, fields, fileIndex });
+    decls.push({ entity, tableName, fields, fileIndex });
   }
   return decls;
 }
@@ -181,9 +200,32 @@ function parseMigrations(text: string, fileIndex: number): MigrationSpan[] {
       from: Number(m[1]),
       to: Number(m[2]),
       addedColumns: [...body.matchAll(/ADD\s+COLUMN\s+[`"]?(\w+)/gi)].map(a => a[1]),
+      columnsByTable: columnsByTableOf(body),
       name: migrationName(text.slice(Math.max(0, m.index - 160), m.index)),
       fileIndex,
     });
+  }
+  return out;
+}
+
+/** Columns a migration body adds or creates, per table. A `CREATE TABLE
+ *  t_new (… nickname …)` followed by DROP/RENAME is how SQLite changes a
+ *  column, and it used to count for nothing. */
+function columnsByTableOf(body: string): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  const add = (table: string, col: string) => {
+    const t = table.toLowerCase();
+    const set = out.get(t) ?? new Set<string>();
+    set.add(col.toLowerCase());
+    out.set(t, set);
+  };
+  for (const a of body.matchAll(/ALTER\s+TABLE\s+[`"]?(\w+)[`"]?\s+ADD\s+COLUMN\s+[`"]?(\w+)/gi)) add(a[1], a[2]);
+  for (const c of body.matchAll(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`"]?(\w+)[`"]?\s*\(([^;]*?)\)\s*(?:;|"|$)/gi)) {
+    const table = c[1].replace(/_new$|_tmp$|_temp$/i, '');
+    for (const seg of c[2].split(',')) {
+      const col = /^\s*[`"]?([A-Za-z_]\w*)/.exec(seg)?.[1];
+      if (col && !/^(?:PRIMARY|FOREIGN|UNIQUE|CHECK|CONSTRAINT)$/i.test(col)) add(table, col);
+    }
   }
   return out;
 }
@@ -206,8 +248,12 @@ function parseDatabases(text: string, fileIndex: number): DatabaseDecl[] {
     out.push({
       className: clsM?.[1],
       version: Number(versionM[1]),
-      autoMigrations: [...header.matchAll(/AutoMigration\s*\(\s*from\s*=\s*(\d+)\s*,\s*to\s*=\s*(\d+)\s*\)/g)]
-        .map(a => ({ from: Number(a[1]), to: Number(a[2]) })),
+      // `AutoMigration(from = 1, to = 2, spec = RenameSpec::class)` used to
+      // be dropped by a regex expecting `)` right after `to`.
+      autoMigrations: [...header.matchAll(/AutoMigration\s*\(([^)]*)\)/g)]
+        .map(a => ({ from: /\bfrom\s*=\s*(\d+)/.exec(a[1])?.[1], to: /\bto\s*=\s*(\d+)/.exec(a[1])?.[1] }))
+        .filter(a => a.from !== undefined && a.to !== undefined)
+        .map(a => ({ from: Number(a.from), to: Number(a.to) })),
       entityNames: entitiesM ? [...entitiesM[1].matchAll(/(\w+)\s*::\s*class/g)].map(a => a[1]) : [],
       fileIndex,
     });
@@ -360,9 +406,23 @@ export function analyzeRoomSchema(inputs: RoomFileInput[]): RoomAnalysis {
     const addedColumns = new Set(
       clusterMigrations.flatMap(m => m.addedColumns).map(c => c.toLowerCase()),
     );
+    const byTable = new Map<string, Set<string>>();
+    for (const m of clusterMigrations) {
+      for (const [t, cols] of m.columnsByTable) {
+        const set = byTable.get(t) ?? new Set<string>();
+        for (const c of cols) set.add(c);
+        byTable.set(t, set);
+      }
+    }
     for (const decl of decls) {
-      const isCovered = (f: EntityField) =>
-        addedColumns.has(f.columnName.toLowerCase()) || addedColumns.has(f.field.toLowerCase());
+      // Coverage is read on the entity's own table when the migrations name
+      // it: `ALTER TABLE pokemon ADD COLUMN updatedAt` used to serve as the
+      // baseline of a Trainer entity that also has an updatedAt.
+      const table = (decl.tableName ?? decl.entity).toLowerCase();
+      const own = byTable.get(table) ?? (byTable.size === 0 ? undefined : new Set<string>());
+      const isCovered = (f: EntityField) => own
+        ? own.has(f.columnName.toLowerCase()) || own.has(f.field.toLowerCase())
+        : addedColumns.has(f.columnName.toLowerCase()) || addedColumns.has(f.field.toLowerCase());
       for (const f of decl.fields) if (isCovered(f)) coveredFields.push(f.field);
 
       // Baseline per declaration: everything before the first covered field.

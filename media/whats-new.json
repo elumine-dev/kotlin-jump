@@ -1,43 +1,42 @@
 {
-  "version": "1.42.24",
+  "version": "1.42.25",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Inline actions that leave the code intact",
-  "summary": "Surround With turned `$name` into `name`, \"Remove expired TODO\" cut a URL in half, Extract String Resource made a placeholder out of `$100`, and removing an unused Gradle dependency left its block behind. All fixed, along with method separators in Hilt ViewModels, `!!` and swatch decorations that ignored the setting, and dispatcher hints on comments.",
+  "tagline": "Android detectors that read the code they judge",
+  "summary": "Lifecycle warnings on ViewBinding and lifecycle-aware observers are gone and the quick fix compiles; Room sees entities with indices and reads coverage per table; Screen Flow draws the edges that start inside a screen; implementation counts skip homonyms; a raw resource named in a URI is not dead.",
   "highlights": [
     {
-      "title": "Surround With and TODO fixes that keep the code",
-      "description": "The selection is no longer read as snippet syntax (`$name` and `\\\\d` survive), and the expired TODO quick fix removes exactly the comment: `\"http://x.io\" // TODO` keeps its URL, a block comment stays closed, a TODO in a string is left alone.",
+      "title": "Lifecycle pairing that knows Android",
+      "description": "`Binding.bind(view)`, `lifecycle.addObserver(x)` and `addCallback(viewLifecycleOwner)` release themselves. Resources are read from the right argument or the receiver, mirrors are matched within the class, and the generated `onStop()` calls `super`, uses the receiver and lands inside a one-line mirror.",
       "kind": "fix"
     },
     {
-      "title": "Extract string resource that compiles",
-      "description": "`$100` is a literal, Java has no templates, nested quotes in `${…}` are read, `%` is doubled next to placeholders, a leading `@` is escaped, `@Preview(…)` no longer hides `@Composable`, and a String gets `getString(R.string.x)` rather than an Int.",
+      "title": "Room drift on every entity",
+      "description": "`@Entity(tableName = …, indices = […])` and an annotation between `@Entity` and `class` hid the entity; `AutoMigration(…, spec = …)` looked like a hole. Coverage is read per table, `CREATE TABLE` migrations count, the property is underlined, and the provider stays silent on a truncated corpus.",
       "kind": "fix"
     },
     {
-      "title": "Decorations that stay put",
-      "description": "Method separators in a wrapped Hilt class header, `!!` and hex swatches that respect the setting on every keystroke, dispatcher hints off comments and strings, constants folded to their own file first, KMP badges scoped to the module.",
+      "title": "Screen Flow and implementation counts",
+      "description": "A `navigate(\"detail/42\")` inside a screen reaches the declared detail route instead of leaving it an orphan, `object Home : Screen(\"home\")` resolves its route, and `⬇ N implementations` counts direct overrides of the right parent only.",
       "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Code actions",
+      "heading": "Lifecycle and Room",
       "bullets": [
-        "Surround With escapes `$`, `\\\\` and `}` of the selection.",
-        "\"Remove expired TODO\" works one line at a time and removes the exact comment span.",
-        "Extract String Resource: literal `$100`, Java literals, nested `${…}` quotes, `%%`, `\\\\@`, multi-line `@Preview`, event lambdas, `getString` for Strings.",
-        "Removing an unused dependency takes its `{ … }` block with it."
+        "No warning on ViewBinding `bind`, `lifecycle.addObserver` or `addCallback(viewLifecycleOwner)`.",
+        "Resource read from the right argument; any identifier argument or the receiver pairs with the release; mirrors matched within the class.",
+        "Quick fix: `super.onX()` first, receiver kept, one-line mirror handled, expression body skipped.",
+        "Entities with `indices` or an extra annotation are seen; `AutoMigration(spec = …)` parsed; coverage per table; `CREATE TABLE` counts."
       ]
     },
     {
-      "heading": "Decorations and lenses",
+      "heading": "Navigation, implementations, resources",
       "bullets": [
-        "Method separators in a wrapped class header; a `\"{\"` in a string no longer shifts them.",
-        "`!!` highlight and hex swatches respect the setting and the language on each keystroke, in the active editor.",
-        "Dispatcher hints skip `viewLifecycleOwner`, comments, strings and `apiKey`.",
-        "Const folding prefers the file's own declaration; `Color.RED` is not `Palette.RED`.",
-        "State provenance counts code only and says \"in this file\"; KMP badges show the module's own targets."
+        "Screen Flow draws `navigate()` calls made inside screens and matches literals to route patterns.",
+        "`object Home : Screen(\"home\")` resolves `Screen.Home.route`.",
+        "Implementation counts take direct overrides of the parent resolved through imports.",
+        "A raw resource named in an `android.resource://` URI is referenced."
       ]
     }
   ],

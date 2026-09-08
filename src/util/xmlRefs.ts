@@ -123,6 +123,10 @@ export function collectStringLiterals(text: string): Set<string> {
   const re = /"([A-Za-z_][\w]*)"/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) out.add(m[1]);
+  // `"android.resource://" + packageName + "/raw/intro_video"`: the resource
+  // is a path segment of a literal, and deleting it crashed the player.
+  const seg = /\/(?:raw|drawable|mipmap|layout|anim|font|xml)\/([A-Za-z_]\w*)/g;
+  while ((m = seg.exec(text)) !== null) out.add(m[1]);
   return out;
 }
 

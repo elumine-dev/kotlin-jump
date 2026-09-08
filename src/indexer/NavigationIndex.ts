@@ -261,7 +261,11 @@ export function parseNavigation(
   const edges: NavEdge[] = [];
   for (const nav of navigates) {
     const from = innermostComposable(nav.callIndex);
-    if (!from || from.dynamic) continue;
+    // A `navigate("detail/42")` inside a screen composable, not inside the
+    // NavHost's `composable { }`, still reaches its target: it comes from
+    // somewhere («global», as the XML parser already says), the target is not
+    // an orphan.
+    if (from?.dynamic) continue;
 
     const args = splitTopLevelArguments(nav.args);
     const target = resolveRouteExpr(args[0], constants);
@@ -269,8 +273,9 @@ export function parseNavigation(
 
     const declared = nodes.find(n => !n.dynamic && routeMatches(target.route!, n.route));
     const to = declared?.route ?? target.route;
-    if (!edges.some(e => e.from === from.route && e.to === to)) {
-      edges.push({ from: from.route, to });
+    const fromRoute = from?.route ?? '«global»';
+    if (!edges.some(e => e.from === fromRoute && e.to === to)) {
+      edges.push({ from: fromRoute, to });
     }
   }
 
@@ -368,8 +373,11 @@ export function findOrphans(parsed: ParsedNavigation): string[] {
     ...parsed.deepLinks.map(d => d.route),
     ...parsed.startDestinations,
   ]);
+  // An edge parsed in another file targets the literal (`detail/42`), the
+  // node is declared with its pattern (`detail/{id}`).
+  const reached = [...reachable];
   return parsed.nodes
-    .filter(n => !n.dynamic && !reachable.has(n.route))
+    .filter(n => !n.dynamic && !reachable.has(n.route) && !reached.some(r => routeMatches(r, n.route)))
     .map(n => n.route);
 }
 
@@ -382,11 +390,19 @@ export function gatherRouteConstants(text: string): Map<string, string> {
   let depth = 0;
 
   for (const line of lines) {
-    const obj = /^\s*(?:\w+\s+)*object\s+(\w+)/.exec(line);
+    const obj = /^\s*(?:\w+\s+)*(?:object|class|interface)\s+(\w+)/.exec(line);
     if (obj && line.includes('{')) {
       objectStack.push({ name: obj[1], depth });
     }
-    const cv = /\bconst\s+val\s+(\w+)\s*=\s*"([^"]*)"/.exec(line);
+    // `sealed class Screen(val route: String) { object Home : Screen("home") }`:
+    // `Screen.Home.route` and `Home.route` name the constructor literal.
+    const holder = /^\s*(?:\w+\s+)*(?:object|class)\s+(\w+)\s*(?:\([^)]*\))?\s*:\s*\w+\s*\(\s*"([^"]*)"/.exec(line);
+    if (holder) {
+      constants.set(`${holder[1]}.route`, holder[2]);
+      const owner = objectStack[objectStack.length - 1];
+      if (owner && owner.name !== holder[1]) constants.set(`${owner.name}.${holder[1]}.route`, holder[2]);
+    }
+    const cv = /\bconst\s+val\s+(\w+)\s*(?::\s*String)?\s*=\s*"([^"]*)"/.exec(line);
     if (cv) {
       constants.set(cv[1], cv[2]);
       const owner = objectStack[objectStack.length - 1];

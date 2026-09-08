@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
 import { StringResourceIndex } from '../indexer/StringResourceIndex';
 
-const R_STRING_RE  = /\bR\.string\.([A-Za-z_]\w*)\b/g;
-const R_PLURALS_RE = /\bR\.plurals\.([A-Za-z_]\w*)\b/g;
-const R_ARRAY_RE   = /\bR\.array\.([A-Za-z_]\w*)\b/g;
+const R_STRING_RE  = /(?<!\bandroid\.)(?<!\bandroidx\.[\w.]*)(?<!\bcom\.google\.android\.material[\w.]*\.)\bR\.string\.([A-Za-z_]\w*)\b/g;
+const R_PLURALS_RE = /(?<!\bandroid\.)(?<!\bandroidx\.[\w.]*)(?<!\bcom\.google\.android\.material[\w.]*\.)\bR\.plurals\.([A-Za-z_]\w*)\b/g;
+const R_ARRAY_RE   = /(?<!\bandroid\.)(?<!\bandroidx\.[\w.]*)(?<!\bcom\.google\.android\.material[\w.]*\.)\bR\.array\.([A-Za-z_]\w*)\b/g;
 
 // Matches printf-style specifiers: %s, %d, %1$s, %.2f, etc.
 const FMT_RE = /%((\d+)\$)?[-+0 #]*\d*(?:\.\d+)?([sdfeoxXcb%])/g;

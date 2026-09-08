@@ -264,7 +264,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     usagesPanel,
     usagesView,
     vscode.languages.registerDefinitionProvider(KT_JAVA, new KotlinDefinitionProvider(index, log)),
-    vscode.workspace.registerTextDocumentContentProvider(ONLINE_DOCS_SCHEME, new OnlineDocsContentProvider()),
+    (() => { const docs = new OnlineDocsContentProvider(); return vscode.Disposable.from(docs, vscode.workspace.registerTextDocumentContentProvider(ONLINE_DOCS_SCHEME, docs)); })(),
     ...(!isCompanion ? [
       vscode.languages.registerDocumentSymbolProvider(KT_JAVA, new KotlinDocumentSymbolProvider(index)),
     ] : []),
@@ -893,6 +893,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     vscode.workspace.onDidCreateFiles(() => resourceCorpusWeb.invalidate()),
     vscode.workspace.onDidDeleteFiles(() => resourceCorpusWeb.invalidate()),
+    vscode.workspace.onDidRenameFiles(() => resourceCorpusWeb.invalidate()),
     vscode.workspace.onDidSaveTextDocument(doc => {
       if (/[\\/]res[\\/]/.test(doc.uri.path) || /\.(?:kt|kts|java|xml|gradle|toml)$/.test(doc.uri.path)) resourceCorpusWeb.invalidate();
     }),
@@ -1638,7 +1639,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       );
       await collectStats(freshUris);
       const { files, symbols } = index.stats();
-      statusBar.text    = `$(symbol-class) Kotlin Jump: ${symbols.toLocaleString()} symbols`;
+      statusBar.text    = `$(symbol-class) Kotlin Jump: ${symbols.toLocaleString()} symbols${isCompanion ? ' · companion' : ''}`;
       statusBar.tooltip = `${symbols.toLocaleString()} symbols in ${files} files`;
       codeLens.refresh();
     }),
@@ -1733,7 +1734,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     const { files, symbols } = index.stats();
     log.info(`[startup] snapshot restored: ${symbols.toLocaleString()} symbols in ${files} files`);
-    statusBar.text    = `$(symbol-class) Kotlin Jump: ${symbols.toLocaleString()} symbols`;
+    statusBar.text    = `$(symbol-class) Kotlin Jump: ${symbols.toLocaleString()} symbols${isCompanion ? ' · companion' : ''}`;
     statusBar.tooltip = `Restored from snapshot: ${symbols.toLocaleString()} symbols in ${files} files`;
 
     const report = await IndexStore.checkStaleness(snapshot, allUris);
@@ -1762,7 +1763,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   const elapsed = Date.now() - t0;
   const { files, symbols } = index.stats();
-  statusBar.text    = `$(symbol-class) Kotlin Jump: ${symbols.toLocaleString()} symbols`;
+  statusBar.text    = `$(symbol-class) Kotlin Jump: ${symbols.toLocaleString()} symbols${isCompanion ? ' · companion' : ''}`;
   statusBar.tooltip = `${symbols.toLocaleString()} symbols in ${files} files (${elapsed}ms)`;
   log.info(`Index ready: ${symbols} symbols in ${files} files (${elapsed}ms)`);
   _semanticTokens?.invalidate();

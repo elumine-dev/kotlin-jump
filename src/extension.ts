@@ -445,7 +445,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.languages.registerWorkspaceSymbolProvider(new KotlinFileProvider(index, log)),
     vscode.workspace.registerFileSystemProvider(KOTLIN_JAR_SCHEME, new KotlinJarContentProvider(), { isReadonly: true, isCaseSensitive: true }),
     vscode.workspace.registerFileSystemProvider(KOTLIN_STDLIB_JAR_SCHEME, new BundledStdlibFsProvider(), { isReadonly: true, isCaseSensitive: true }),
-    vscode.workspace.registerTextDocumentContentProvider(ONLINE_DOCS_SCHEME, new OnlineDocsContentProvider()),
+    (() => { const docs = new OnlineDocsContentProvider(); return vscode.Disposable.from(docs, vscode.workspace.registerTextDocumentContentProvider(ONLINE_DOCS_SCHEME, docs)); })(),
 
     // ── Semantic Highlighting ─────────────────────────────────────────────
     (() => {
@@ -1447,6 +1447,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.workspace.onDidCreateFiles(() => resourceCorpus.invalidate()),
     vscode.workspace.onDidDeleteFiles(() => resourceCorpus.invalidate()),
+    vscode.workspace.onDidRenameFiles(() => resourceCorpus.invalidate()),
     vscode.workspace.onDidSaveTextDocument(doc => {
       // Sources are part of the corpus too: a finding fixed and saved kept
       // its line number for a minute, and the squiggle landed on unrelated code.

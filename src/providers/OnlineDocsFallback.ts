@@ -6,12 +6,11 @@ import { resolveExplicit } from '../util/ImportResolver';
 // "No definition found" toast.
 //
 // Shape: the definition provider returns a Location on a virtual
-// `kotlin-jump-docs:` document. Opening that document (Cmd+Click, F12, Peek)
-// is what opens the browser, via the content provider below. Returning the
-// Location alone has no side effect, which matters because VS Code also calls
-// provideDefinition on Cmd+hover to decide whether to underline the word; an
-// openExternal() from inside provideDefinition would pop a browser tab on
-// every hover.
+// `kotlin-jump-docs:` document. The browser opens when that document becomes
+// the active editor (Cmd+Click, F12); Peek and the Cmd+hover preview render
+// its text without opening anything. Returning the Location alone has no
+// side effect, which matters because VS Code also calls provideDefinition on
+// Cmd+hover to decide whether to underline the word.
 
 export const ONLINE_DOCS_SCHEME = 'kotlin-jump-docs';
 

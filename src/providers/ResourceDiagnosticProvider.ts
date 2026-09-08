@@ -3,10 +3,10 @@ import { StringResourceIndex } from '../indexer/StringResourceIndex';
 import { ColorResourceIndex } from '../indexer/ColorResourceIndex';
 import { isInsideCommentOrString } from '../util/textUtils';
 
-// `android.R.string.ok` and a library's `com.x.R.color.y` live outside the
-// workspace index; only a bare `R.` is the project's own.
-const R_STRING_RE = /(?<![\w.])R\.string\.([A-Za-z_]\w*)\b/g;
-const R_COLOR_RE  = /(?<![\w.])R\.color\.([A-Za-z_]\w*)\b/g;
+// `android.R.string.ok`, `androidx.core.R.x` and Material's R live outside the
+// workspace index; a project R qualified by its module package stays in.
+const R_STRING_RE = /(?<!\bandroid\.)(?<!\bandroidx\.[\w.]*)(?<!\bcom\.google\.android\.material[\w.]*\.)\bR\.string\.([A-Za-z_]\w*)\b/g;
+const R_COLOR_RE  = /(?<!\bandroid\.)(?<!\bandroidx\.[\w.]*)(?<!\bcom\.google\.android\.material[\w.]*\.)\bR\.color\.([A-Za-z_]\w*)\b/g;
 
 export class ResourceDiagnosticProvider implements vscode.Disposable {
   private readonly _diag = vscode.languages.createDiagnosticCollection('kotlin-jump-resources');

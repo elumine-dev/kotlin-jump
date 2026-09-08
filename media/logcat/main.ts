@@ -351,6 +351,14 @@ function onDevices(devices: AdbDevice[]): void {
   } else if (hostSerial) {
     // The host's device is momentarily offline/unauthorized: picking option 0
     // here switched the stream away and emptied the buffer of a running app.
+    // A <select> shows its first option regardless, which read as "streaming
+    // from B" and swallowed the click on B; a placeholder keeps it honest.
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.disabled = true;
+    placeholder.selected = true;
+    placeholder.textContent = `${hostSerial} (offline)`;
+    elDevice.insertBefore(placeholder, elDevice.firstChild);
   } else if (elDevice.options.length > 0) {
     elDevice.selectedIndex = 0;
     post({ type: 'pickDevice', serial: elDevice.value });

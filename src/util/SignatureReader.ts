@@ -16,7 +16,7 @@ const MAX_DISPLAY_LINES = 8;
  */
 export function escapeAngleBrackets(md: string): string {
   return md.split(/(```[\s\S]*?```|`[^`\n]*`)/).map((part, i) =>
-    i % 2 === 1 ? part : part.replace(/</g, '\\<').replace(/>/g, '\\>')).join('');
+    i % 2 === 1 ? part : part.replace(/<(?=[A-Za-z_*?])/g, '\\<').replace(/(?<=[\w?*\]])>/g, '\\>')).join('');
 }
 
 export function readSignature(doc: vscode.TextDocument, entry: SymbolEntry): string | null {
@@ -34,12 +34,12 @@ export function readSignature(doc: vscode.TextDocument, entry: SymbolEntry): str
     const text = doc.lineAt(i).text;
     let cutAt = -1;
 
-    let inString = false;
+    let quote: string | null = null;
     for (let j = 0; j < text.length; j++) {
       const ch = text[j];
-      // `val OPEN = "{"` was cut at the brace inside the string.
-      if (inString) { if (ch === '\\') j++; else if (ch === '"') inString = false; continue; }
-      if (ch === '"') { inString = true; continue; }
+      // `val OPEN = "{"` and `val C = '{'` were cut at the brace inside the literal.
+      if (quote) { if (ch === '\\') j++; else if (ch === quote) quote = null; continue; }
+      if (ch === '"' || ch === "'") { quote = ch; continue; }
       if      (ch === '(') parenDepth++;
       else if (ch === ')') parenDepth--;
       else if (ch === '{' && parenDepth === 0) { cutAt = j; break; }

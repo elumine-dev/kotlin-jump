@@ -553,13 +553,14 @@ const SCOPE_CACHE_MAX = 8;
 const scopeCache = new Map<string, { version: number; text: string; index: LocalScopeIndex }>();
 
 function cachedLocalScopeIndex(document: vscode.TextDocument): LocalScopeIndex {
-  const key = document.uri.toString();
+  const key = `${document.languageId}:${document.uri.toString()}`;
   const text = document.getText();
   const hit = scopeCache.get(key);
   // The text is compared as well as the version: test doubles keep version 1
   // while their content changes, and a stale scope would resolve wrongly.
   if (hit && hit.version === document.version && hit.text === text) return hit.index;
   const index = buildLocalScopeIndex(text.split(/\r?\n/), document.languageId);
+  scopeCache.delete(key); // re-insert at the end: a rewrite must not evict a neighbour
   if (scopeCache.size >= SCOPE_CACHE_MAX) scopeCache.delete(scopeCache.keys().next().value!);
   scopeCache.set(key, { version: document.version, text, index });
   return index;

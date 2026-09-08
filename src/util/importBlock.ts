@@ -46,10 +46,15 @@ export function importBlockBounds(
   return first === -1 ? null : { first, last };
 }
 
+/** Net `(`/`[` minus `)`/`]` outside string literals: `@file:Suppress("unused(")` and `@file:[ … ]` both balance. */
 function parenBalance(s: string): number {
   let n = 0;
+  let quote: string | null = null;
   for (let i = 0; i < s.length; i++) {
-    if (s[i] === '(') n++; else if (s[i] === ')') n--;
+    const ch = s[i];
+    if (quote) { if (ch === '\\') i++; else if (ch === quote) quote = null; continue; }
+    if (ch === '"' || ch === "'") { quote = ch; continue; }
+    if (ch === '(' || ch === '[') n++; else if (ch === ')' || ch === ']') n--;
   }
   return n;
 }

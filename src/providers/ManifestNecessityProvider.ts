@@ -101,7 +101,8 @@ export function analyzeManifest(manifestXml: string, project: ProjectSearcher): 
     const pkg = fqn.slice(0, fqn.lastIndexOf('.'));
     const inWorkspacePackage = pkg === '' || (packageName !== '' && (pkg === packageName || pkg.startsWith(`${packageName}.`)))
       || (project.packageExists?.(pkg) ?? true);
-    if (inWorkspacePackage && !project.classExists(fqn)) status = 'missing-class';
+    if (!inWorkspacePackage) status = 'ok'; // a library's class: nothing to check, nothing to remove
+    else if (!project.classExists(fqn)) status = 'missing-class';
     else if (hasIntentFilter) status = 'ok';
     else status = project.searchApiUsage([fqn.split('.').pop() ?? fqn]).length > 0 ? 'ok' : 'unreferenced';
 

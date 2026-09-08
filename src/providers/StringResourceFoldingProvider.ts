@@ -4,9 +4,9 @@ import { Logger } from '../util/logger';
 import { isInsideCommentOrString } from '../util/textUtils';
 import { reportDecorations } from '../util/demoProbe';
 
-const R_STRING_RE  = /\bR\.string\.([A-Za-z_]\w*)\b/g;
-const R_PLURALS_RE = /\bR\.plurals\.([A-Za-z_]\w*)\b/g;
-const R_ARRAY_RE   = /\bR\.array\.([A-Za-z_]\w*)\b/g;
+const R_STRING_RE  = /(?<!\bandroid\.)(?<!\bandroidx\.[\w.]*)(?<!\bcom\.google\.android\.material[\w.]*\.)\bR\.string\.([A-Za-z_]\w*)\b/g;
+const R_PLURALS_RE = /(?<!\bandroid\.)(?<!\bandroidx\.[\w.]*)(?<!\bcom\.google\.android\.material[\w.]*\.)\bR\.plurals\.([A-Za-z_]\w*)\b/g;
+const R_ARRAY_RE   = /(?<!\bandroid\.)(?<!\bandroidx\.[\w.]*)(?<!\bcom\.google\.android\.material[\w.]*\.)\bR\.array\.([A-Za-z_]\w*)\b/g;
 const MAX_LABEL_LEN = 40;
 
 // Matches format(R.string.key or getString(R.string.key — captures the R.string ref

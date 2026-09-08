@@ -3,7 +3,7 @@ import { DrawableResourceIndex, DrawableVariant } from '../indexer/DrawableResou
 import { vectorXmlToSvg } from '../util/vectorToSvg';
 import { bytesToBase64, utf8ToBase64 } from '../util/encoding';
 
-const R_DRAWABLE_RE = /\bR\.(drawable|mipmap)\.([A-Za-z_]\w*)\b/g;
+const R_DRAWABLE_RE = /(?<!\bandroid\.)(?<!\bandroidx\.[\w.]*)(?<!\bcom\.google\.android\.material[\w.]*\.)\bR\.(drawable|mipmap)\.([A-Za-z_]\w*)\b/g;
 
 // Cap the file size we'll embed in a hover tooltip. Anything bigger
 // degrades to a file-info hover (path + size + variants) without the

@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.42.15
+
+Kotlin Jump 1.42.15 is the second re-check of recent fixes. It closes the holes the first re-check left: a library component still offered for removal under another label, Remove All Unused Resource Keys still reading the disk, an Rx pairing that missed `?.dispose()`, a KDoc escape that broke the deprecation blockquote, and a qualified-R rule that had gone too far and would have hidden a module's own `R`.
+
+### Fixes
+- Leaves a library component alone entirely. The 1.42.14 change stopped calling `androidx.startup.InitializationProvider` "class not found" but then judged it "never referenced" and still offered "Remove … (declared but never referenced)". A class outside the workspace's packages is now simply fine.
+- Makes "Remove All Unused Resource Keys" read open editors, the way Remove All Unreferenced Symbols does since 1.42.13. Lines added to `strings.xml` without saving shifted every deletion below them.
+- Pairs `disposable?.dispose()` and `d!!.dispose()` with their `subscribe()`, and takes `val d: Disposable = …subscribe(` as an assignment to `d`, not to `Disposable`. The 1.42.14 pairing missed the safe call and reported an orphan again.
+- Escapes only generic-looking brackets in KDoc. The 1.42.14 escape also caught the `>` that opens the deprecation blockquote, which showed a literal `\>` in the hover of every `@deprecated` declaration.
+- Narrows the qualified-`R` rule to the platform and library classes that are never in the index: `android.R`, `androidx.….R`, Material's `R`. The 1.42.14 rule excluded every qualified `R`, which would have hidden a module's own `com.app.feature.R.string.x` from folding, hovers and Go to Definition; it now applies to those surfaces too (folding, hovers, definition, usage badges, resource index), not only to the diagnostics.
+- Shows a disabled "`<serial>` (offline)" placeholder in the Logcat device picker while the host's device is away. The 1.42.13 change stopped switching devices behind the user's back, but a `<select>` displays its first option regardless, which read as streaming from the wrong device and swallowed the click on it.
+- Disposes the online-docs content provider with the extension (its active-editor listener survived deactivation), and writes "· companion" on every status bar update of the web extension too.
+- Treats `case RED, GREEN -> paint()` as a switch arm, not a lambda binding `GREEN`; the 1.42.13 rule only covered a single label. Keeps a Kotlin char literal `'{'` and a `@file:Suppress("unused(")` or a multi-line `@file:[ … ]` header from breaking the signature read and the import block bounds. A `/* … $name */` block comment on one line is not a template usage. `androidNativeMain` covers the `androidNative*` targets. Renaming a file invalidates the dead-code corpus.
+
 ## 1.42.14
 
 Kotlin Jump 1.42.14 corrects what the editor was telling you: an error on `android.R.string.ok`, a "class not found" on a FileProvider from AndroidX with a removal quick fix behind it, a dispatcher lens accusing `viewModelScope` of touching the View, a signature help highlighting the wrong parameter behind a named argument, and a few more. It also removes a small regression of its own: Go to Definition rebuilt the scope index on every call since 1.42.6.

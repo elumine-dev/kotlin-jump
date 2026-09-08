@@ -286,6 +286,7 @@ export async function scanForUsagesWithTarget(
               const shortInterp = m.index >= 1 && lines[i][m.index - 1] === '$' && !escapedDollar;
               const commentAt = lineCommentStart(lines[i]);
               if (commentAt >= 0 && commentAt < m.index) continue;
+              if (insideBlockCommentOnLine(lines[i], m.index)) continue;
               if (!shortInterp && !isInsideStringInterpolation(lines[i], m.index)) continue;
             }
             // Kotlin keyword used as method name (e.g. .catch()): require a dot qualifier
@@ -481,4 +482,11 @@ function lineCommentStart(line: string): number {
     if (ch === '/' && line[i + 1] === '/') return i;
   }
   return -1;
+}
+
+// True when a block comment opens before `index` on this line and is not closed before it.
+function insideBlockCommentOnLine(line: string, index: number): boolean {
+  const open = line.lastIndexOf('/*', index);
+  if (open < 0) return false;
+  return line.indexOf('*/', open + 2) === -1 || line.indexOf('*/', open + 2) > index;
 }

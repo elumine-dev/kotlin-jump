@@ -71,6 +71,12 @@ export function groupResByType(paths: string[]): ResGroup[] {
 
 // ── TreeDataProvider ────────────────────────────────────────────────────────
 
+const MAX_LISTED = 5_000;
+
+function truncatedNode(modulePath: string | undefined): Node {
+  return { kind: 'file', label: `… more files (only the first ${MAX_LISTED} are listed)`, modulePath };
+}
+
 type NodeKind = 'module' | 'manifests' | 'code' | 'res' | 'resType' | 'gradle' | 'file';
 
 interface Node {
@@ -157,11 +163,14 @@ export class AndroidProjectViewProvider implements vscode.TreeDataProvider<Node>
         return files.map(f => this._file(f));
       }
       case 'code': {
-        const files = await vscode.workspace.findFiles(rel('src/**/*.{kt,java}'), '**/build/**', 500);
-        return files.map(f => this._file(f)).sort((a, b) => a.label.localeCompare(b.label));
+        // A cap of 500 sorted afterwards showed an arbitrary subset of an 800
+        // file module with nothing saying so.
+        const files = await vscode.workspace.findFiles(rel('src/**/*.{kt,java}'), '**/build/**', MAX_LISTED);
+        const nodes = files.map(f => this._file(f)).sort((a, b) => a.label.localeCompare(b.label));
+        return files.length >= MAX_LISTED ? [...nodes, truncatedNode(node.modulePath)] : nodes;
       }
       case 'res': {
-        const files = await vscode.workspace.findFiles(rel('**/res/**/*.*'), '**/build/**', 500);
+        const files = await vscode.workspace.findFiles(rel('**/res/**/*.*'), '**/build/**', MAX_LISTED);
         const groups = groupResByType(files.map(f => f.fsPath));
         return groups.map(g => ({
           kind: 'resType' as const,
@@ -171,12 +180,14 @@ export class AndroidProjectViewProvider implements vscode.TreeDataProvider<Node>
         }));
       }
       case 'resType': {
+        // `anim*` also matched `animator/`; only the type and its qualified variants.
         const files = await vscode.workspace.findFiles(
-          rel(`**/res/${node.resType}*/**/*.*`), '**/build/**', 200,
+          rel(`**/res/{${node.resType},${node.resType}-*}/**/*.*`), '**/build/**', MAX_LISTED,
         );
-        return files
+        const nodes = files
           .map(f => this._file(f, /[\\/]res[\\/]([^\\/]+)[\\/]/.exec(f.fsPath)?.[1]))
           .sort((a, b) => a.label.localeCompare(b.label));
+        return files.length >= MAX_LISTED ? [...nodes, truncatedNode(node.modulePath)] : nodes;
       }
       case 'gradle': {
         const files = await vscode.workspace.findFiles(

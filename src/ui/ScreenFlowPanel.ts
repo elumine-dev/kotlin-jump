@@ -6,6 +6,7 @@ import {
   gatherRouteConstants,
   parseNavigation,
   parseNavigationXml,
+  routeMatches,
 } from '../indexer/NavigationIndex';
 
 /**
@@ -16,14 +17,20 @@ import {
 
 interface FileNode extends NavNode {
   file: string;
+  /** The same route declared in several files (flavours, modules): one box, a picker on click. */
+  alternatives?: { file: string; line?: number }[];
 }
 
 interface MergedNavigation extends Omit<ParsedNavigation, 'nodes'> {
   nodes: FileNode[];
+  /** True when the file listing hit its cap: some screens may be missing. */
+  truncated?: boolean;
 }
 
+const MAX_KT_FILES = 20_000;
+
 export async function buildWorkspaceNavigation(): Promise<MergedNavigation> {
-  const files = await vscode.workspace.findFiles('**/*.kt', '**/{build,.gradle}/**', 2000);
+  const files = await vscode.workspace.findFiles('**/*.kt', '**/{build,.gradle}/**', MAX_KT_FILES);
   const texts = new Map<string, string>();
   for (const f of files) {
     try {
@@ -42,10 +49,14 @@ export async function buildWorkspaceNavigation(): Promise<MergedNavigation> {
   const merged: MergedNavigation = {
     nodes: [], edges: [], deepLinks: [], startDestinations: [], graphs: [],
   };
+  merged.truncated = files.length >= MAX_KT_FILES;
   for (const [file, t] of texts) {
     if (!/\b(NavHost|composable|navigate)\s*\(/.test(t)) continue;
     const parsed = parseNavigation(t, constants);
-    merged.nodes.push(...parsed.nodes.map(n => ({ ...n, file })));
+    // A dynamic node is keyed by its line: two files with one at the same
+    // line drew on top of each other and the click always opened the first.
+    const tag = file.split('/').pop() ?? file;
+    merged.nodes.push(...parsed.nodes.map(n => ({ ...n, file, route: n.dynamic ? `${n.route}@${tag}` : n.route })));
     merged.edges.push(...parsed.edges);
     merged.deepLinks.push(...parsed.deepLinks);
     merged.startDestinations.push(...parsed.startDestinations);
@@ -70,6 +81,27 @@ export async function buildWorkspaceNavigation(): Promise<MergedNavigation> {
       continue;
     }
   }
+
+  // A `navigate("detail/42")` parsed in another file than the
+  // `composable("detail/{id}")` kept its literal target: no arrow, and the
+  // screen sat in the unreached column although findOrphans knew better.
+  const declared = merged.nodes.filter(n => !n.dynamic).map(n => n.route);
+  for (const e of merged.edges) {
+    if (declared.includes(e.to)) continue;
+    const hit = declared.find(r => routeMatches(e.to, r));
+    if (hit) e.to = hit;
+  }
+
+  // The same route in two files (src/main and src/debug, two modules) drew
+  // two boxes at the same spot and counted twice in the legend.
+  const byRoute = new Map<string, FileNode>();
+  const nodes: FileNode[] = [];
+  for (const n of merged.nodes) {
+    const first = byRoute.get(n.route);
+    if (!first) { byRoute.set(n.route, n); nodes.push(n); continue; }
+    (first.alternatives ??= [{ file: first.file, line: first.line }]).push({ file: n.file, line: n.line });
+  }
+  merged.nodes = nodes;
   return merged;
 }
 
@@ -107,9 +139,18 @@ export class ScreenFlowPanel {
       if (msg.type !== 'jump') return;
       const node = this.nav.nodes.find(n => n.route === msg.route);
       if (!node) return;
-      const doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(node.file));
+      let target: { file: string; line?: number } = node;
+      if (node.alternatives && node.alternatives.length > 1) {
+        const pick = await vscode.window.showQuickPick(
+          node.alternatives.map(a => ({ label: a.file.split('/').pop() ?? a.file, description: vscode.Uri.parse(a.file).path, alt: a })),
+          { placeHolder: `${node.route} is declared in ${node.alternatives.length} files` },
+        );
+        if (!pick) return;
+        target = pick.alt;
+      }
+      const doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(target.file));
       const editor = await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);
-      const pos = new vscode.Position(Math.min(node.line ?? 0, doc.lineCount - 1), 0);
+      const pos = new vscode.Position(Math.min(target.line ?? 0, doc.lineCount - 1), 0);
       editor.selection = new vscode.Selection(pos, pos);
       editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
     });
@@ -207,7 +248,7 @@ function renderHtml(nav: MergedNavigation): string {
 
   const legend = `${nav.nodes.length} screens · ${nav.edges.length} navigations · ${
     nav.deepLinks.length
-  } deeplinks · ${orphans.size} orphan(s)`;
+  } deeplinks · ${orphans.size} orphan(s)${nav.truncated ? ` · only the first ${MAX_KT_FILES} Kotlin files were read` : ''}`;
 
   return `<!DOCTYPE html><html><body style="margin:0;padding:10px;overflow:auto;">
     <div style="font:12px var(--vscode-font-family);opacity:.75;margin-bottom:8px;">${esc(legend)} · click a screen to jump to the code</div>

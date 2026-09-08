@@ -1,34 +1,34 @@
 {
-  "version": "1.42.28",
+  "version": "1.42.29",
   "title": "What's New in Kotlin Jump",
-  "tagline": "An index that forgets what you deleted",
-  "summary": "Kotlin Jump 1.42.28 fixes what the index remembered wrongly: ghosts of renamed functions after a restart, a \"not in equals/copy\" hint on every data class property until the file was edited, a workspace class shadowed by its published JAR, a Cmd+T list full of local variables, files of `:app-widgets` filed under `:app`, and folders deleted or renamed in the explorer that stayed navigable.",
+  "tagline": "Icons drawn right, a map with every arrow",
+  "summary": "Kotlin Jump 1.42.29 fixes what the panels drew: a vector icon whose background covered its glyph, a badge scaled towards the corner instead of its centre, gradient shapes rendered empty, a preview panel stuck on the previous file, a Screen Flow map with a missing arrow and boxes drawn on top of each other, and a \"libs\" badge that counted the whole Gradle cache.",
   "highlights": [
     {
-      "title": "No more ghosts after a restart",
+      "title": "Vector previews as Android draws them",
       "kind": "fix",
-      "description": "A file restored from the snapshot no longer keeps the entries of an earlier scan, so a renamed function leaves Cmd+T and a deleted class stops resolving."
+      "description": "Groups and paths keep their order, scaling honours the pivot, gradients get a colour, rounded strokes stay round, and the panel follows the file you edit."
     },
     {
-      "title": "Snapshot keeps every flag",
+      "title": "Screen Flow map complete",
       "kind": "fix",
-      "description": "expect, actual and primary constructor parameters survive a restart: no false \"not in equals/copy\" hint on data classes, KMP badges back at once."
+      "description": "Navigations to a route declared in another file get their arrow, duplicate routes share one box with a file picker, and the map reads up to 20000 files."
     },
     {
-      "title": "The right file, the right module",
+      "title": "Library sources counted right",
       "kind": "fix",
-      "description": "A workspace class beats its JAR copy, Cmd+T skips local variables, a file joins its most specific Gradle module, and a deleted or renamed folder leaves the index."
+      "description": "The libs badge compares declared dependencies with the indexed JARs, redirect loops stop after five hops, and a captive portal page is never cached as a JAR."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Restoring a file from the snapshot replaces its entries instead of stacking them on the ones from an open editor's scan.",
-        "Snapshot version 24 persists `expect`, `actual` and primary constructor parameters; `actual` wins over `expect` in any restore order.",
-        "Cmd+Click prefers a workspace file over the same symbol in a JAR, and the bundled stdlib over another JAR.",
-        "Cmd+T ignores local variables; `:app-widgets` files no longer belong to `:app`, and Windows paths match their module.",
-        "Folders deleted or renamed in the explorer or a terminal, and workspace folders added or removed, update the index; a file that outgrew the size limit is emptied; `app/build/**` also excludes in the watchers."
+        "Vector drawables: document paint order, pivot-aware scale, gradient fill, stroke caps and joins, `android:width` read correctly, entities decoded once.",
+        "The Vector Preview panel tracks the active file even before it converts, and its references lens skips JAR entries.",
+        "Screen Flow: cross-file literal targets resolve to their pattern, one box per route with a picker, 20000 file cap with a legend note.",
+        "Missing sources are counted by group and artifact against the indexed JARs; downloads cap redirects and reject non-zip payloads.",
+        "The Android view lists up to 5000 files per node with a closing entry, and `anim` excludes `animator/`."
       ]
     }
   ],

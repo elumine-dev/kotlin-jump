@@ -27,6 +27,10 @@ export class MavenSourcesScanner {
     this.cancelToken.cancelled = true;
   }
 
+  /** `group:artifact:version` of every JAR the last scan indexed. */
+  private lastModules: string[] = [];
+  get indexedModules(): readonly string[] { return this.lastModules; }
+
   async scanAll(): Promise<{ jars: number; files: number }> {
     const token = this.cancelToken = { cancelled: false };
 
@@ -51,6 +55,7 @@ export class MavenSourcesScanner {
 
     const jars = await this.discoverJars(repoDir, maxCount);
     if (token.cancelled) return { jars: 0, files: 0 };
+    this.lastModules = jars.map(j => j.moduleName);
     this.log.info(`[mavenscan] found ${jars.length} -sources.jar`);
 
     let totalFiles = 0;

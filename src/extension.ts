@@ -120,6 +120,7 @@ import { BundledStdlibFsProvider, KOTLIN_STDLIB_JAR_SCHEME } from './providers/B
 import { SourcesStatusBar }     from './ui/SourcesStatusBar';
 import { SourcesActionsMenu }   from './ui/SourcesActionsMenu';
 import { DependencyResolver }   from './http/DependencyResolver';
+import { missingCoords as computeMissingCoords } from './http/MavenCoordinatesParser';
 import { MavenSourcesScanner }  from './gradle/MavenSourcesScanner';
 import { resolveSourceJarPaths } from './gradle/GradleToolingResolver';
 import { KotlinTestController } from './testing/KotlinTestController';
@@ -2014,10 +2015,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           if (folders.length > 0) {
             const resolver = new DependencyResolver();
             const declared = await resolver.resolveAll(folders[0].uri);
-            // A dep is "missing" if neither Gradle nor Maven scanners returned a
-            // matching JAR. Approximation: count of declared coords minus indexed
-            // JARs (gradle.jars + maven.jars). Negative clamped to 0.
-            missingCoords = Math.max(0, declared.length - totalJars);
+            const indexed = [...gradleScanner!.indexedModules, ...mavenScanner!.indexedModules];
+            missingCoords = computeMissingCoords(declared, indexed).length;
           }
         } catch (e) {
           log.warn(`[sources-bar] missing-coords compute failed: ${(e as Error).message}`);

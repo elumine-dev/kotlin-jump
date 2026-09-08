@@ -158,7 +158,7 @@ function resolveRouteExpr(
 }
 
 /** Does the target segment match the declared route? `{x}` = wildcard on both sides. */
-function routeMatches(target: string, declared: string): boolean {
+export function routeMatches(target: string, declared: string): boolean {
   if (target === declared) return true;
   const t = target.split('/');
   const d = declared.split('/');

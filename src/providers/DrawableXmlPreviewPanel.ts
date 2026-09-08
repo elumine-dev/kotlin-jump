@@ -160,7 +160,10 @@ export class DrawableXmlPreviewLensProvider implements vscode.CodeLensProvider, 
   ): Promise<vscode.Location[]> {
     const drawablePrefix = `R.drawable.${name}`;
     const mipmapPrefix   = `R.mipmap.${name}`;
-    const uriStrings = this.index.fileUriStrings().filter(u => !isExcluded(u));
+    // A library JAR cannot reference the app's R.drawable: with a warm
+    // Gradle cache the lens read tens of thousands of JAR entries.
+    const uriStrings = this.index.fileUriStrings()
+      .filter(u => !u.startsWith('kotlin-jar:') && !u.startsWith('kotlin-stdlib-jar:') && !isExcluded(u));
     const re = new RegExp(`\\bR\\.(?:drawable|mipmap)\\.${escapeRegex(name)}\\b`, 'g');
     const out: vscode.Location[] = [];
 
@@ -358,11 +361,18 @@ export class DrawableXmlPreviewPanel implements vscode.Disposable {
 
   private render(doc: vscode.TextDocument): void {
     if (!this.panel) return;
-    const svg = vectorXmlToSvg(doc.getText());
-    if (!svg) return; // user mid-edit may have a temporarily-invalid SVG
+    // Track the document before converting: an unconvertible file kept the
+    // previous file's title and drawing, and edits to it never re-rendered.
+    const switched = this.currentUri?.toString() !== doc.uri.toString();
     this.currentUri = doc.uri;
     const filename = doc.uri.path.split('/').pop() ?? 'vector';
     this.panel.title = `Preview · ${filename}`;
+    const svg = vectorXmlToSvg(doc.getText());
+    if (!svg) {
+      // Mid-edit the SVG is invalid: keep the last drawing of the same file.
+      if (switched) this.panel.webview.html = buildHtml('<p>Not a renderable &lt;vector&gt; yet.</p>', filename);
+      return;
+    }
     this.panel.webview.html = buildHtml(svg, filename);
   }
 

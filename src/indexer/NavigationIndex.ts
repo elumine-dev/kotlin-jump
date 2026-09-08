@@ -177,6 +177,38 @@ export function routeMatches(target: string, declared: string): boolean {
   return t.every((seg, i) => seg === d[i] || seg.startsWith('{') || d[i].startsWith('{'));
 }
 
+/**
+ * The single declared route a target designates, or undefined when the target
+ * is genuinely ambiguous.
+ *
+ * Two subtleties the first version of this got wrong. The same route declared
+ * in two flavors (src/main and src/debug) is ONE destination, not an
+ * ambiguity, so candidates are deduplicated by spelling. And a parameterised
+ * screen sitting next to a literal sibling, `profile/{userId}` beside
+ * `profile/edit`, is the ordinary shape of a Compose graph: a target of
+ * `profile/{id}` designates the parameterised one, because their placeholders
+ * line up, so refusing to choose there erased every arrow to it.
+ */
+export function resolveTargetRoute(target: string, declared: readonly string[]): string | undefined {
+  const hits = [...new Set(declared.filter(r => routeMatches(target, r)))];
+  if (hits.length <= 1) return hits[0];
+  if (hits.includes(target)) return target;
+
+  const t = target.split('/');
+  const score = (route: string): number => {
+    const d = route.split('/');
+    let n = 0;
+    for (let i = 0; i < t.length; i++) {
+      if (t[i] === d[i]) n += 2;
+      else if (t[i]!.startsWith('{') && d[i]!.startsWith('{')) n += 1;
+    }
+    return n;
+  };
+  const ranked = hits.map(r => ({ r, s: score(r) })).sort((a, b) => b.s - a.s);
+  // A tie at the top is a real ambiguity: say nothing rather than guess.
+  return ranked[0]!.s > ranked[1]!.s ? ranked[0]!.r : undefined;
+}
+
 // ── API ─────────────────────────────────────────────────────────────────────
 
 export function parseNavigation(
@@ -282,10 +314,8 @@ export function parseNavigation(
     const target = resolveRouteExpr(args[0], constants);
     if (!target.route) continue;
 
-    // Two declared routes matching the same target is not a reason to pick
-    // one: keep the literal target, which is either a real screen or nothing.
-    const hits = nodes.filter(n => !n.dynamic && routeMatches(target.route!, n.route));
-    const to = hits.length === 1 ? hits[0].route : target.route;
+    const to = resolveTargetRoute(target.route, nodes.filter(n => !n.dynamic).map(n => n.route))
+      ?? target.route;
     const fromRoute = from?.route ?? '«global»';
     if (!edges.some(e => e.from === fromRoute && e.to === to)) {
       edges.push({ from: fromRoute, to });

@@ -35,6 +35,10 @@ interface FilterState {
 }
 
 /** Device wall-clock of `ts` as `adb logcat -T` and the export want it: `YYYY-MM-DD HH:MM:SS.mmm`. */
+/** A followed app rarely has more than a handful of processes. The cap only
+ *  exists so a very long session cannot accumulate dead PIDs forever. */
+const MAX_FOLLOWED_PIDS = 16;
+
 export function logcatTimeArg(ts: number): string {
   const d = new Date(ts);
   const p = (n: number, w = 2) => String(n).padStart(w, '0');
@@ -141,6 +145,10 @@ export class LogcatService extends EventEmitter implements vscode.Disposable {
     this.stopStream();
     this.currentSerial = serial;
     this.buffer.clear();
+    // The resume anchor is a timestamp read from the PREVIOUS device's clock.
+    // An emulator on UTC and a phone on local time are hours apart, so the new
+    // stream started with a `-T` from the future and showed nothing at all.
+    this._lastSeenTs = undefined;
     this.emit('reset');
     this.startStream();
     // The followed PID belongs to the previous device: with it kept, every
@@ -428,18 +436,27 @@ export class LogcatService extends EventEmitter implements vscode.Disposable {
   }
 
   /**
-   * A new MAIN process for the followed package means the app restarted, so
-   * every PID of the previous generation is dead. Keeping them let a recycled
-   * PID belonging to another app through the Follow filter, and the set only
-   * ever grew.
+   * A new MAIN process for the followed package retires the previous main
+   * process, and nothing else.
+   *
+   * Clearing the whole set instead was wrong twice over: a `:push` or
+   * `:remote` process often starts BEFORE the main one, and a foreground
+   * service in `:player` outlives the UI process being killed under memory
+   * pressure. Both were still running and their rows vanished from the panel.
+   * Unbounded growth, the reason the clear was added, is handled by the cap.
    */
   noteProcessStart(pid: number, pkg: string, secondary: boolean): void {
     if (!this.filter.followedPackage || pkg !== this.filter.followedPackage) return;
+    const pids = this.filter.followedPids;
     if (!secondary) {
-      this.filter.followedPids.clear();
+      if (this.filter.followedPid !== undefined && this.filter.followedPid !== pid) {
+        pids.delete(this.filter.followedPid);
+      }
       this.filter.followedPid = pid;
     }
-    this.filter.followedPids.add(pid);
+    pids.add(pid);
+    // Insertion order, so the oldest goes first.
+    while (pids.size > MAX_FOLLOWED_PIDS) pids.delete(pids.values().next().value as number);
   }
 
   private startStream(): void {

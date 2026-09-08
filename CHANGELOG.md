@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.42.42
+
+Kotlin Jump 1.42.42 undoes the damage of its own last four releases. An adversarial pass over those diffs found sixteen defects the fixes themselves had introduced, and this release closes them. Most came from the same mistake: a guard added to stop one wrong answer also silenced the right one.
+
+### Fixes
+- Screen Flow draws its arrows again. Two ordinary shapes had been caught by the ambiguity guard added last release: the same route declared in two flavors, which is one destination and not a conflict, and a parameterised screen sitting beside a literal sibling, `profile/{userId}` next to `profile/edit`, which is how a Compose graph is normally written. On a project with flavors the map had become a grid of boxes with no links at all.
+- Go to Definition works again inside a variant test source set. Gradle names them by suffix, `androidTest` becoming `androidTestDebug`, and the bounded path comparison introduced two releases ago recognised none of them. From a test in one of those directories, Cmd click returned nothing.
+- Switching Logcat device shows rows again. The resume anchor is a timestamp read from the previous device's clock, and it was carried over. An emulator on one clock and a phone on another are hours apart, so the new stream asked for logs from the future.
+- A second process of the followed app no longer disappears from Logcat. Restarting the app dropped every process it knew, but a receiver in a `:push` process often starts before the main one, and a foreground service in `:player` outlives the interface being killed. Only the previous main process is retired now, and the set is capped so it cannot grow forever.
+- The state provenance lens counts a write glued to another. `_a.value=_b.emit(v)`, with no space, ate the first character of the second write, so one of the two states read as never written.
+- Reopening a file that changed while its tab was closed no longer shows the previous lenses. A reopened document starts back at version 1, so the version alone was not an identity for the content.
+
+### Improvements
+- Editing a large file is cheaper. The structure of an unsaved buffer was analysed once for the outline, once for folding and once for Expand Selection, and each analysis also filled lookup tables nothing was going to read. Measured on a file of 5000 lines, the outline and folding pair fell from 9 ms to 4.8 ms.
+- A file that declares no state costs almost nothing to the provenance lens, which used to scan every function body before discovering there was nothing to report.
+
 ## 1.42.41
 
 Kotlin Jump 1.42.41 fixes three things that only show up once you have used the panel for a while: Clear replaying the whole device buffer, the Follow filter letting old processes through, and Run on device failing silently under PowerShell.

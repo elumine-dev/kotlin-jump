@@ -1,31 +1,39 @@
 {
-  "version": "1.42.41",
+  "version": "1.42.42",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Logcat after a long session",
-  "summary": "Clear no longer replays the device buffer, the Follow filter forgets dead processes, and Run on device works with adb in a path that has a space.",
+  "tagline": "Undoing our own last four releases",
+  "summary": "An adversarial pass over the last four releases found sixteen defects the fixes themselves had introduced. Screen Flow, Go to Definition in test source sets and Logcat device switching all work again.",
   "highlights": [
     {
-      "title": "Clear stays cleared",
+      "title": "Screen Flow has arrows again",
       "kind": "fix",
-      "description": "The resume anchor was read from the ring buffer that Clear had just emptied, so the next reconnection started with no anchor and replayed every line you had just cleared."
+      "description": "The ambiguity guard added last release caught two ordinary shapes: the same route declared in two flavors, and a parameterised screen beside a literal sibling. On a project with flavors the map became a grid of boxes with no links."
     },
     {
-      "title": "Follow forgets dead processes",
+      "title": "Variant test source sets",
       "kind": "fix",
-      "description": "Each restart of the app added a process and kept the previous ones forever. Once Android reused one of those numbers for another app, its lines passed the Follow filter as if they were yours."
+      "description": "Gradle names them by suffix, `androidTest` becoming `androidTestDebug`. The bounded path comparison recognised none of them, so Go to Definition from a test in one of those directories returned nothing."
     },
     {
-      "title": "Run on device under PowerShell",
+      "title": "Switching Logcat device",
       "kind": "fix",
-      "description": "With adb in a path that has a space, the command started with a quoted path. PowerShell prints such a line instead of running it, so the launch failed with nothing useful on screen."
+      "description": "The resume anchor is a timestamp from the previous device clock, and it was carried over. An emulator and a phone are hours apart, so the new stream asked for logs from the future and showed nothing."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "A secondary process of the followed app still joins the filter, so a multi process app keeps showing all of its own lines.",
-        "The resume anchor now follows the last row actually received, not the oldest row still held in memory."
+        "A second process of the followed app no longer vanishes from Logcat when the app restarts. A receiver in a `:push` process often starts before the main one, and a foreground service outlives the interface.",
+        "The state provenance lens counts a write glued to another: `_a.value=_b.emit(v)` used to eat the first character of the second write.",
+        "Reopening a file that changed while its tab was closed no longer shows the previous lenses."
+      ]
+    },
+    {
+      "heading": "Improvements",
+      "bullets": [
+        "The structure of an unsaved buffer is analysed once per keystroke instead of three times. On a file of 5000 lines the outline and folding pair fell from 9 ms to 4.8 ms.",
+        "A file that declares no state costs almost nothing to the provenance lens."
       ]
     }
   ],

@@ -52,7 +52,7 @@ describe('Suivi des PID de l\'application', () => {
     return svc;
   }
 
-  it('un redémarrage de l\'application oublie les PID de la génération précédente', () => {
+  it('un redémarrage de l\'application retire l\'ancien processus principal', () => {
     const svc = svcFollowing('com.example.app');
     svc.noteProcessStart(4600, 'com.example.app', false);
     svc.noteProcessStart(4611, 'com.example.app', true);
@@ -60,10 +60,42 @@ describe('Suivi des PID de l\'application', () => {
 
     // L'utilisateur relance l'app depuis le launcher : nouveau processus principal.
     svc.noteProcessStart(5200, 'com.example.app', false);
-    // Avant : {4600, 4611, 5200}, et dès qu'Android recyclait 4600 pour une
-    // autre application ses lignes passaient le filtre Follow.
-    expect([...(svc as any).filter.followedPids]).toEqual([5200]);
+    // L'ancien principal part, le secondaire reste : un service au premier plan
+    // dans un process :player survit à la mort du process d'interface.
+    expect([...(svc as any).filter.followedPids].sort()).toEqual([4611, 5200]);
     expect((svc as any).filter.followedPid).toBe(5200);
+    svc.dispose();
+  });
+
+  it('un processus secondaire démarré AVANT le principal n\'est pas jeté', () => {
+    // Un receveur FCM ou un WorkManager dans un process :push démarre souvent
+    // avant l'interface. Vider l'ensemble sur le principal le faisait
+    // disparaître du panneau alors qu'il tournait encore.
+    const svc = svcFollowing('com.example.app');
+    svc.noteProcessStart(4611, 'com.example.app', true);
+    svc.noteProcessStart(5200, 'com.example.app', false);
+    expect([...(svc as any).filter.followedPids].sort()).toEqual([4611, 5200]);
+    svc.dispose();
+  });
+
+  it('une ligne Start proc répétée pour le même principal ne perd rien', () => {
+    const svc = svcFollowing('com.example.app');
+    svc.noteProcessStart(4600, 'com.example.app', false);
+    svc.noteProcessStart(4700, 'com.example.app', true);
+    svc.noteProcessStart(4600, 'com.example.app', false);
+    expect([...(svc as any).filter.followedPids].sort()).toEqual([4600, 4700]);
+    svc.dispose();
+  });
+
+  it('l\'ensemble reste borné sur une très longue session', () => {
+    const svc = svcFollowing('com.example.app');
+    for (let i = 0; i < 40; i++) svc.noteProcessStart(1000 + i, 'com.example.app', true);
+    const pids = (svc as any).filter.followedPids as Set<number>;
+    // La raison d'être du plafond : sans lui l'ensemble ne faisait que grossir
+    // et un PID recyclé par Android laissait passer une autre application.
+    expect(pids.size).toBeLessThanOrEqual(16);
+    expect(pids.has(1039)).toBe(true);
+    expect(pids.has(1000)).toBe(false);
     svc.dispose();
   });
 

@@ -64,9 +64,11 @@ function extractFunctions(text: string): FunSpan[] {
   return spans;
 }
 
-// value = / += / -= / *= / /=, but not ==
+// value = / += / -= / *= / /=, but not ==. The negative lookahead must not
+// CONSUME the next character: with `[^=]`, `_a.value=_b.emit(x)` swallowed the
+// `_` of `_b`, and the write to `_b` vanished from the count and the peek.
 const WRITE_TAIL =
-  '\\.(value\\s*[+\\-*/]?=[^=]|update\\s*[({]|postValue\\s*\\(|setValue\\s*\\(|emit\\s*\\(|tryEmit\\s*\\()';
+  '\\.(value\\s*[+\\-*/]?=(?!=)|update\\s*[({]|postValue\\s*\\(|setValue\\s*\\(|emit\\s*\\(|tryEmit\\s*\\()';
 const READ_TAIL = '\\.(collectAsState|collectAsStateWithLifecycle|collect|observe)\\b';
 
 // One pass over the text instead of one pass per property. The analysis used
@@ -97,11 +99,13 @@ function countDirectWrites(property: string, text: string): number {
   return countByName(stripKotlinComments(text), ANY_WRITE_RE).get(property) ?? 0;
 }
 
-export function analyzeStateProvenance(vmText: string): StateProvenance[] {
+export function analyzeStateProvenance(vmText: string, stripped?: string): StateProvenance[] {
   // Stripped once, then reused everywhere below. stripKotlinComments keeps
   // offsets and line breaks, so line numbers stay those of the real file, and
   // a declaration written inside a comment no longer counts as a state.
-  const code = stripKotlinComments(vmText);
+  // The CodeLens path already holds the stripped text and passes it in: doing
+  // it twice per keystroke cost as much as the whole analysis.
+  const code = stripped ?? stripKotlinComments(vmText);
   const lines = code.split('\n');
   const fileWrites = countByName(code, ANY_WRITE_RE);
   const results: StateProvenance[] = [];
@@ -133,6 +137,10 @@ export function analyzeStateProvenance(vmText: string): StateProvenance[] {
       line: i,
     });
   }
+
+  // No state, no indirect writes to look for. Scanning every function body of
+  // a large Compose file that declares none was pure waste.
+  if (results.length === 0) return results;
 
   // Indirect writes: F calls G, G writes P directly, F does not.
   // Each body is scanned twice in total (what it writes, what it calls), not
@@ -238,7 +246,7 @@ export class StateProvenanceProvider implements vscode.CodeLensProvider {
   private readonly _onDidChange = new vscode.EventEmitter<void>();
   readonly onDidChangeCodeLenses = this._onDidChange.event;
   /** VS Code asks for lenses again on every scroll and every keystroke. */
-  private readonly _cache = new Map<string, { version: number; lenses: vscode.CodeLens[] }>();
+  private readonly _cache = new Map<string, { version: number; length: number; lenses: vscode.CodeLens[] }>();
 
   provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
     const cfg = vscode.workspace.getConfiguration('kotlinJump');
@@ -246,26 +254,29 @@ export class StateProvenanceProvider implements vscode.CodeLensProvider {
     if (document.languageId !== 'kotlin') return [];
 
     const key = document.uri.toString();
+    const text = document.getText();
     const hit = this._cache.get(key);
-    if (hit && hit.version === document.version) return hit.lenses;
+    // Version alone is not identity: a reopened document starts back at 1, so
+    // a file changed by git while the tab was closed replayed the old lenses.
+    if (hit && hit.version === document.version && hit.length === text.length) return hit.lenses;
 
-    const lenses = this._compute(document);
+    const lenses = this._compute(text, document.uri);
     if (this._cache.size > 64) this._cache.clear();
-    this._cache.set(key, { version: document.version, lenses });
+    this._cache.set(key, { version: document.version, length: text.length, lenses });
     return lenses;
   }
 
-  private _compute(document: vscode.TextDocument): vscode.CodeLens[] {
-    const text = document.getText();
+  private _compute(text: string, uri: vscode.Uri): vscode.CodeLens[] {
     if (!/Mutable(StateFlow|LiveData|SharedFlow)|mutableStateOf/.test(text)) return [];
 
     // Same stripped text for the counts and for the peek, so the lens title
-    // and the list of locations behind it can no longer disagree.
+    // and the list of locations behind it can no longer disagree. Stripped
+    // once and handed to the analysis, which would otherwise redo it.
     const code = stripKotlinComments(text);
     const writesByName = collectWriteSitesByName(code);
     const readersByName = collectReaderSitesByName(code);
 
-    return analyzeStateProvenance(text)
+    return analyzeStateProvenance(text, code)
       .filter(s => s.line !== undefined)
       .map(s => {
         const readerName = s.exposedAs ?? s.property;
@@ -278,14 +289,14 @@ export class StateProvenanceProvider implements vscode.CodeLensProvider {
 
         // Click = native reference peek: writes first, then reads.
         const locations = [...writeSites, ...readerSites].map(
-          p => new vscode.Location(document.uri, new vscode.Position(p.line, p.character)),
+          p => new vscode.Location(uri, new vscode.Position(p.line, p.character)),
         );
         return new vscode.CodeLens(new vscode.Range(s.line!, 0, s.line!, 0), {
           title,
           command: locations.length > 0 ? 'editor.action.showReferences' : '',
           arguments:
             locations.length > 0
-              ? [document.uri, new vscode.Position(s.line!, 0), locations]
+              ? [uri, new vscode.Position(s.line!, 0), locations]
               : undefined,
           tooltip: s.exposedAs
             ? `${s.property} exposed via ${s.exposedAs}. Click to see writes and readers.`

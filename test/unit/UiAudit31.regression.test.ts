@@ -56,6 +56,17 @@ describe('Lien Reference du survol de suppression', () => {
 
 // ── Provenance d'état : coût et exactitude ───────────────────────────────────
 
+// Document minimal pour provideCodeLenses : seuls getText, languageId,
+// version et uri sont lus.
+function lensDoc(text: string, version: number): any {
+  return {
+    uri: { toString: () => 'file:///a31/VM.kt' },
+    languageId: 'kotlin',
+    version,
+    getText: () => text,
+  };
+}
+
 describe('Analyse de provenance sur un gros ViewModel', () => {
   function bigViewModel(states: number, plainFns: number): string {
     const L = ['package com.example', '', 'class BigViewModel : ViewModel() {'];
@@ -75,15 +86,46 @@ describe('Analyse de provenance sur un gros ViewModel', () => {
     const xmlRefs = await import('../../src/util/xmlRefs');
     const spy = vi.spyOn(xmlRefs, 'stripKotlinComments');
     const mod = await import('../../src/providers/StateProvenanceProvider');
+    const text = bigViewModel(30, 300);
+
     spy.mockClear();
-    mod.analyzeStateProvenance(bigViewModel(30, 300));
+    mod.analyzeStateProvenance(text);
     // Avant : un strip par état pour les écritures directes, plus un par
     // état et par fonction pour les indirectes, soit des milliers de passes
     // sur le même texte à chaque frappe. Le budget est maintenant constant.
     // Sans ce garde, un espion qui n'intercepte rien ferait passer le test.
     expect(spy.mock.calls.length).toBeGreaterThan(0);
-    expect(spy.mock.calls.length).toBeLessThanOrEqual(2);
+    expect(spy.mock.calls.length).toBe(1);
+
+    // Le vrai chemin est provideCodeLenses, pas l'analyse seule : c'est lui
+    // qui tourne à chaque frappe, et il nettoyait le fichier une deuxième fois
+    // pour son propre compte.
+    spy.mockClear();
+    new mod.StateProvenanceProvider().provideCodeLenses(lensDoc(text, 1));
+    expect(spy.mock.calls.length).toBe(1);
     spy.mockRestore();
+  });
+
+  it('un fichier sans aucun état ne paie pas le balayage des fonctions', async () => {
+    const mod = await import('../../src/providers/StateProvenanceProvider');
+    // Un écran Compose qui utilise `by mutableStateOf` sans jamais déclarer
+    // `val _x = mutableStateOf(...)` passe le pré-filtre mais ne produit aucun
+    // état. Le balayage de tous les corps de fonction était pur gaspillage.
+    const L = ['package p', 'class Screen {'];
+    for (let i = 0; i < 400; i++) {
+      L.push(`    fun render${i}(v: Int) { var s by mutableStateOf(v); helper${i % 7}(s) }`);
+    }
+    L.push('}');
+    const text = L.join('\n');
+    expect(mod.analyzeStateProvenance(text)).toEqual([]);
+    const provider = new mod.StateProvenanceProvider();
+    const t0 = performance.now();
+    for (let i = 0; i < 20; i++) provider.provideCodeLenses(lensDoc(text, 100 + i));
+    const ms = (performance.now() - t0) / 20;
+    expect(provider.provideCodeLenses(lensDoc(text, 500))).toEqual([]);
+    // Mesuré autour de 0,3 ms ; le seuil laisse de la marge à une machine
+    // chargée tout en attrapant le retour du balayage complet (4,4 ms).
+    expect(ms).toBeLessThan(2);
   });
 
   it('le résultat est inchangé : écritures directes et indirectes', async () => {
@@ -204,21 +246,29 @@ describe('Structure d\'un fichier en cours d\'édition', () => {
     expect(regions).toContainEqual([8, 12]);
   });
 
-  it('le cache de pliage ne rejoue pas un résultat calculé sur le tampon sale', () => {
+  it('le cache de pliage distingue le tampon sale du fichier sauvegardé', () => {
+    // L'index reste celui du texte SAUVEGARDÉ, plus court de six lignes. Le
+    // premier appel, sur tampon sale, lit le tampon et voit deux classes ; le
+    // second, sur le même document sauvegardé et à la MÊME version, doit
+    // revenir à l'index et n'en voir qu'une. Sans le drapeau `dirty` dans la
+    // clé, il rejouait le résultat du tampon et le test échoue.
     const index = staleIndex();
     const provider = new KotlinFoldingRangeProvider(index);
     const dirty = dirtyDoc(EDITED);
-    provider.provideFoldingRanges(dirty, {} as any, {} as any);
-    // Sauvegarder n'incrémente pas document.version : sans le drapeau dirty
-    // dans la clé, le second appel rendait le résultat du premier.
+    const fromBuffer = provider
+      .provideFoldingRanges(dirty, {} as any, {} as any)
+      .filter(r => r.kind === FoldingRangeKind.Region)
+      .map(r => [r.start, r.end]);
+    expect(fromBuffer).toContainEqual([2, 6]);
+    expect(fromBuffer).toContainEqual([8, 12]);
+
     const saved = { ...dirty, isDirty: false };
-    index.remove(URI);
-    index.add(parse(URI, EDITED));
-    const regions = provider
+    const fromIndex = provider
       .provideFoldingRanges(saved as any, {} as any, {} as any)
       .filter(r => r.kind === FoldingRangeKind.Region)
       .map(r => [r.start, r.end]);
-    expect(regions).toContainEqual([8, 12]);
+    expect(fromIndex).toContainEqual([2, 6]);
+    expect(fromIndex).not.toContainEqual([8, 12]);
   });
 });
 

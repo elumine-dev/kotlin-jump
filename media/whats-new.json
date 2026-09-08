@@ -1,43 +1,41 @@
 {
-  "version": "1.42.20",
+  "version": "1.42.21",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Folding and Outline ranges that stop at the brace, honest supertypes, signature help that counts",
-  "summary": "Folding, Expand Selection and the Outline end a member at its own closing brace and skip locals. Generic and constructor arguments are no longer supertypes, and a wrapped supertype list is read in full. Signature help counts arguments across strings and generics, lists overloads and private val parameters. The index snapshot is rebuilt once after the update.",
+  "tagline": "Quick fixes that compile, moves that keep their imports",
+  "summary": "Two quick fixes left the build broken (a trailing lambda after \"Remove unused parameter\", a double comma after \"Delete unread DTO field\"); the sealed when branch insertion could not compile in a file importing its subtypes one by one; Move File forgot Java importers and same-package neighbours. Both are repaired, and two detectors stop calling runtime-resolved enums and request bodies dead.",
   "highlights": [
     {
-      "title": "Ranges end at the brace",
-      "description": "Folding a member hid the next member's KDoc and annotations, folding the last one hid the class's `}`, and Expand Selection from the last function selected up to it. Ranges now stop at the real closing brace, and locals no longer get a chevron or an Outline entry.",
+      "title": "Quick fixes that compile",
+      "description": "\"Remove unused parameter\" left `showDialog(\"Hi\") { … }` with one argument too many; \"Delete unread DTO field\" produced `val name: String,,` under ktlint's trailing comma. The trailing lambda goes with its parameter, and the last comma goes with the field.",
       "kind": "fix"
     },
     {
-      "title": "Only the type is a supertype",
-      "description": "`class ItemAdapter : ListAdapter<Item, ItemViewHolder>(DiffCb)` was a subtype of Item, ItemViewHolder and DiffCb in the hierarchy and the implementation lenses; `BaseViewModel<UiState>(Dispatchers.IO)` put a ViewModel among the subtypes of UiState. A supertype list wrapped over several lines is read in full.",
+      "title": "Sealed when branches that resolve",
+      "description": "The inserted `A ->` branch gets its `import com.demo.S.A` when the file imports subtypes one by one. A condition wrapped before its arrow no longer counts as missing, and a comment before the arrow no longer hides the branch.",
       "kind": "fix"
     },
     {
-      "title": "Signature help that counts",
-      "description": "A comma inside `\"Hello, world\"` or `emptyMap<String, Int>()` no longer shifts the highlighted parameter, `private val` constructor parameters and Java parameters are listed, and every overload of `load(` is shown with the right one active.",
+      "title": "Move File keeps the build green",
+      "description": "Java `import …;` and `import static …Kt.…;` are rewritten, and same-package neighbours, wildcard importers and the moved file itself get the imports the move made necessary. Unsaved editors are edited as displayed.",
       "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Structure",
+      "heading": "Code actions",
       "bullets": [
-        "Folding, Expand Selection and Outline ranges end at the member's closing brace; a one-line `val` has no chevron.",
-        "Locals of a function body are hidden from the Outline, folding and selection.",
-        "Generic arguments, constructor arguments and `by` delegates are not supertypes; a supertype list continued on the next lines is read.",
-        "The `⬇ implementations` lens reaches an interface member declared after a nested class, including `val` members."
+        "\"Remove unused parameter\" removes a trailing lambda with its parameter; a class body after `: Owner(a, b)` is never taken for one.",
+        "\"Delete unread DTO field\" handles the trailing comma of the last field.",
+        "Missing `when` branches bring their imports; wrapped or commented conditions are read.",
+        "Move File rewrites Java importers and adds imports to old-package neighbours and to the moved file."
       ]
     },
     {
-      "heading": "Signature help and hierarchies",
+      "heading": "Detectors",
       "bullets": [
-        "Commas in strings and generics, parentheses in strings, comments above the call and `\"${greet(` templates are handled.",
-        "`private val` and `override val` constructor parameters, and Java `Type name` parameters, are listed.",
-        "Every overload is shown; the active signature follows the arguments typed.",
-        "A call in a property initializer or `init` block has a caller in the call hierarchy; anonymous objects are labelled.",
-        "No highlight inside a KDoc or a `\"\"\"` block."
+        "`enumValueOf<Mode>()`, `enumValues<Mode>()`, `Mode.class`, a DTO field typed with the enum and a Room `@TypeConverter` keep its entries alive.",
+        "A request body the app builds (`LoginRequest(mail, pwd)`) is not \"deserialized but never read\".",
+        "The Compose outline ignores comments and char literals and shows named slots (`topBar = { … }`)."
       ]
     }
   ],

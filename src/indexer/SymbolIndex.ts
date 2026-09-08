@@ -243,6 +243,12 @@ export class SymbolIndex {
     return s ? [...s] : EMPTY;
   }
 
+  /** URI strings of the indexed files declaring `package pkg`. */
+  filesInPackage(pkg: string): string[] {
+    const s = this.byPkg.get(pkg);
+    return s ? [...s] : [];
+  }
+
   // For an interface method, find the corresponding override methods in implementing classes
   lookupMethodImplementations(methodName: string, uriString: string, methodLine: number): SymbolEntry[] {
     // The containing class/interface is the last class-like symbol one level

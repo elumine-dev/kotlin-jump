@@ -11,6 +11,7 @@ import {
 import { isTestSourceSet } from '../util/testPaths';
 import { isBuildArtifactPath, isGeneratedSource } from '../util/resourceAllowlists';
 import { harvestMentions, SymbolSource } from './unusedSymbols';
+import { DTO_NAME_RE, SERIALIZATION_ANNOTATIONS } from './unusedDtoFields';
 
 /**
  * KJ-039: enum entries nothing in the workspace ever names.
@@ -89,7 +90,11 @@ export interface EnumEntryExplanation {
  * `entries[i]`, both already covered. Including it would silence real
  * findings for nothing.
  */
-const WHOLE_ENUM_MEMBERS = ['values', 'entries', 'valueOf', 'enumValueOf'];
+const WHOLE_ENUM_MEMBERS = ['values', 'entries', 'valueOf', 'enumValueOf', 'class'];
+// `enumValueOf<Mode>(s)`, `enumValues<Mode>()`, `enumEntries<Mode>()`: the reified
+// forms name the enum as a type argument, not as a receiver.
+const REIFIED_ENUM_FNS = ['enumValues', 'enumValueOf', 'enumEntries'];
+const DTO_CLASS_KINDS = new Set(['class', 'dataClass', 'sealedClass', 'object', 'interface', 'enum', 'annotation']);
 
 /**
  * Annotations that do NOT make every entry reachable. Everything else does,
@@ -201,18 +206,71 @@ export function findWalkedEnums(
   if (enumNames.size === 0) return walked;
   const re = new RegExp(
     `\\b([A-Z]\\w*)\\s*(?:\\.\\s*(?:${WHOLE_ENUM_MEMBERS.join('|')})\\b|::)`, 'g');
+  const reified = new RegExp(`\\b(?:${REIFIED_ENUM_FNS.join('|')})\\s*<\\s*([A-Z]\\w*)\\s*>`, 'g');
 
   for (const src of sources) {
     if (isBuildArtifactPath(src.path)) continue;
     // Cheap gate: the sanitizer is the expensive part, and a file naming none
     // of these members cannot contribute.
-    if (!WHOLE_ENUM_MEMBERS.some(m => src.text.includes(m)) && !src.text.includes('::')) continue;
+    if (!WHOLE_ENUM_MEMBERS.some(m => src.text.includes(m)) && !src.text.includes('::')
+      && !REIFIED_ENUM_FNS.some(m => src.text.includes(m))) continue;
     const clean = sanitizeForUsageScan(src.text);
     re.lastIndex = 0;
     let m: RegExpExecArray | null;
     while ((m = re.exec(clean)) !== null) if (enumNames.has(m[1])) walked.add(m[1]);
+    reified.lastIndex = 0;
+    while ((m = reified.exec(clean)) !== null) if (enumNames.has(m[1])) walked.add(m[1]);
   }
+  for (const name of findDeserializedEnums(enumNames, sources)) walked.add(name);
   return walked;
+}
+
+/**
+ * Enums that come back from JSON or the database by name: the type of a field
+ * of a DTO (suffix or serialization annotation, same test as KJ-044) or an
+ * enum named in a file with a Room `@TypeConverter`. Gson and Moshi map
+ * such an enum without any annotation, so no entry name ever appears in code,
+ * and deleting one turns a payload into a null or an exception.
+ */
+function findDeserializedEnums(enumNames: ReadonlySet<string>, sources: readonly SymbolSource[]): Set<string> {
+  const out = new Set<string>();
+  for (const src of sources) {
+    if (!/\.(kt|java)$/.test(src.path)) continue;
+    if (isBuildArtifactPath(src.path)) continue;
+    let mentions = false;
+    for (const n of enumNames) if (src.text.includes(n)) { mentions = true; break; }
+    if (!mentions) continue;
+    if (src.text.includes('@TypeConverter')) {
+      for (const n of enumNames) if (new RegExp(`\\b${n}\\b`).test(src.text)) out.add(n);
+      continue;
+    }
+    const isJava = src.path.endsWith('.java');
+    const parsed = isJava ? parseJava(src.path, src.text) : parse(src.path, src.text);
+    const clean = sanitizeForUsageScan(src.text);
+    const lineStarts = buildLineStarts(clean);
+    const annotations = collectAnnotationTargets(clean);
+    const lines = src.text.split('\n');
+    const syms = parsed.symbols;
+    for (let i = 0; i < syms.length; i++) {
+      const cls = syms[i];
+      if (!DTO_CLASS_KINDS.has(cls.kind) || cls.kind === 'enum') continue;
+      const lo = lineStarts[cls.line];
+      const hi = lo + cls.character;
+      const serialized = DTO_NAME_RE.test(cls.name)
+        || annotations.some(a => a.target >= lo && a.target <= hi && SERIALIZATION_ANNOTATIONS.has(a.name));
+      if (!serialized) continue;
+      for (let j = i + 1; j < syms.length && syms[j].depth > cls.depth; j++) {
+        const f = syms[j];
+        if ((f.kind !== 'val' && f.kind !== 'var') || f.depth !== cls.depth + 1) continue;
+        const line = lines[f.line] ?? '';
+        const typeText = isJava
+          ? line.slice(0, f.character)
+          : (/^\w+\s*:\s*([^=,)]+)/.exec(line.slice(f.character))?.[1] ?? '');
+        for (const t of typeText.match(/[A-Z]\w*/g) ?? []) if (enumNames.has(t)) out.add(t);
+      }
+    }
+  }
+  return out;
 }
 
 /** Whole-line extent when the entry sits alone on its line, -1 otherwise. */

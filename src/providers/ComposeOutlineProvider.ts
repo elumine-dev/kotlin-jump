@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { stripKotlinComments } from '../util/xmlRefs';
 
 /**
  * KJ-015: Compose Outline Tree, the structure of a screen without rendering it.
@@ -74,11 +75,36 @@ interface Ctx {
   loop?: boolean;
 }
 
+/** Bodies of the `name = { … }` arguments at the top level of body[from..to), handlers excluded. */
+function namedLambdaSlots(body: string, from: number, to: number): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  for (let i = from; i < to; i++) {
+    const ch = body[i];
+    if (ch === '(' || ch === '[') { depth++; continue; }
+    if (ch === ')' || ch === ']') { depth--; continue; }
+    if (ch === '{') {
+      // A lambda at depth 0 that follows `name =`.
+      const before = /([A-Za-z_]\w*)\s*=\s*$/.exec(body.slice(from, i));
+      const close = matchBalanced(body, i, '{', '}');
+      if (close < 0 || close > to) break;
+      if (depth === 0 && before && !/^on[A-Z]/.test(before[1])) out.push(body.slice(i + 1, close));
+      i = close;
+      continue;
+    }
+  }
+  return out;
+}
+
 export function buildOutline(
-  text: string,
+  rawText: string,
   rootComposable: string,
   maxDepth: number = DEFAULT_MAX_DEPTH,
 ): OutlineNode {
+  // Comments and char literals are not structure: a `// }` closed the
+  // Column and dropped the Footer, a commented `Card { }` was a node, and an
+  // `'{'` emptied the whole tree. Lengths are kept so offsets stay valid.
+  const text = stripKotlinComments(rawText).replace(/'(?:\\.|[^'\\\n])'/g, m => ' '.repeat(m.length));
   const defs = extractComposableDefs(text);
   const rootBody = defs.get(rootComposable) ?? '';
 
@@ -99,7 +125,9 @@ export function buildOutline(
       const whenM = /(?<![\w.])when\s*(\([^)]*\))?\s*\{/.exec(rest);
       const forM = /(?<![\w.])for\s*\(/.exec(rest);
       // Call with parens: Name(...), with an optional trailing lambda after.
-      const callM = /(?<![\w.@])([A-Za-z_]\w*)\s*\(/.exec(rest);
+      // `this@Column.AnimatedVisibility(…)` keeps its node: the labelled
+      // receiver is the one dotted prefix a composable call carries.
+      const callM = /(?<![\w.@])(?:this@\w+\.)?([A-Za-z_]\w*)\s*\(/.exec(rest);
       // Call WITHOUT parens: Column { … }, team.forEach { … }. A dotted
       // receiver is allowed, the captured NAME is the last segment.
       let braceM: RegExpExecArray | null = null;
@@ -232,6 +260,12 @@ export function buildOutline(
         if (ctx.branch) node.branch = ctx.branch;
         if (ctx.loop) node.loop = true;
 
+        // Named slots (`topBar = { TopAppBar(…) }`, `title = { Text(…) }`)
+        // hold half of a Material screen. Event handlers (`onClick = { }`)
+        // are not content.
+        for (const slot of namedLambdaSlots(body, parenOpen + 1, parenClose)) {
+          node.children.push(...parseBody(slot, depth + 1, stack, {}));
+        }
         if (lambdaContent !== null) {
           node.children.push(...parseBody(lambdaContent, depth + 1, stack, {}));
         }

@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.42.21
+
+Kotlin Jump 1.42.21 repairs the actions that edit code. Two quick fixes left the build broken (a trailing lambda after "Remove unused parameter", a double comma after "Delete unread DTO field"), the sealed `when` branch insertion could not compile in a file that imports its subtypes one by one, and Move File forgot the Java importers and the same-package neighbours. Two detectors also stop calling live code dead.
+
+### Fixes
+- Removes the trailing lambda with the parameter it stands for. "Remove unused parameter `onDismiss`" rewrote `showDialog("Yo", onDismiss = { })` and the signature but left `showDialog("Hi") { … }` untouched: "Too many arguments". A lambda outside the parentheses is the last parameter; it goes with it, and a class body after `: Owner(a, b)` is never taken for one.
+- Deletes a DTO field without leaving `,,` behind. With ktlint's trailing comma, "Delete unread DTO field avatarUrl" turned `val name: String,\n val avatarUrl: String,\n)` into `val name: String,,`.
+- Imports the subtype an inserted `when` branch names. In a file that writes `is B ->` after `import com.demo.S.B`, the click inserted `A -> TODO()` with no import: "Unresolved reference: A". The missing import lines are added with the branch.
+- Stops the sealed `when` lens from counting a wrapped condition as missing. `Weather.Sunny\n    -> "a"` showed "2/3 branches, missing: Sunny" and the click inserted a duplicate branch; a `/* legacy */` comment before the arrow hid the branch the same way. Both shapes are read correctly, and a condition the analysis cannot parse now hides the lens instead of miscounting.
+- Rewrites Java importers on Move File. `import com.app.data.UserRepository;` and `import static com.app.data.UserRepositoryKt.helper;` kept the old package ("cannot find symbol"); the `;` and `static` forms are recognized, and the Kotlin file facade name moves with the file.
+- Adds the imports a move makes necessary. A neighbour in the old package (`class UserViewModel(private val repo: UserRepository)`) and a `import com.app.data.*` importer reached the moved class without an import and stopped compiling in silence; the moved file itself lost its old neighbours the same way. Each gets an `import` line. Open editors with unsaved changes are edited as displayed, not as on disk.
+- Keeps an enum that is resolved at runtime out of the dead entries. `enumValueOf<Mode>(s)`, `enumValues<Mode>()`, `enumEntries<Mode>()` and `Mode.class` count as a walk of the whole enum; so does an enum typed on a field of a DTO (Gson and Moshi map it by name with no annotation) or named next to a Room `@TypeConverter`. Deleting such an entry threw at the first payload.
+- Stops reporting a request body as "deserialized but never read". `LoginRequest(mail, pwd)` built by the app is serialized, its fields are read by the JSON library. A hand-built response keeps its verdict without the fix, as before.
+- Reads the Compose outline through comments and char literals. A `// }` closed the Column and dropped the Footer, a commented-out `Card { }` became a node, and an `'{'` emptied the tree. Named slots (`topBar = { TopAppBar(…) }`, `floatingActionButton = { … }`) now show their content, and `this@Column.AnimatedVisibility(…)` keeps its node.
+
 ## 1.42.20
 
 Kotlin Jump 1.42.20 fixes the ranges behind folding, Expand Selection and the Outline, stops generic and constructor arguments from posing as supertypes, and repairs signature help on the shapes every Android project has: a comma inside a string, `emptyMap<String, Int>()`, `private val` constructor parameters, overloads. The index snapshot is rebuilt once after the update.

@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import { SymbolIndex } from '../indexer/SymbolIndex';
 import { Logger } from '../util/logger';
 import { analyzeDocument, WhenAnalysis } from '../providers/SealedWhenCoverageProvider';
+import { resolveBest } from '../util/ImportResolver';
+import { insertImport } from '../providers/AutoImportProvider';
 
 // Click target of the sealed-when coverage CodeLens: inserts the missing
 // branches (before `else` when present, else before the closing brace),
@@ -39,6 +41,27 @@ export function buildMissingBranchEdit(analysis: WhenAnalysis): MissingBranchEdi
   };
 }
 
+/**
+ * FQNs the inserted branches name without a qualifier and that the file does
+ * not resolve. A file importing `com.demo.S.B` alone (the only subtype it
+ * used) gets `A -> TODO()` inserted with the same empty prefix: the branch
+ * did not compile.
+ */
+export function missingImportsFor(
+  analysis: WhenAnalysis,
+  document: vscode.TextDocument,
+  index: SymbolIndex,
+): string[] {
+  if (analysis.insertPrefix !== '') return [];
+  const out: string[] = [];
+  for (const entry of analysis.missing) {
+    const resolution = resolveBest(entry.name, document, fqn => index.lookupFqn(fqn));
+    if (resolution.priority !== 'none') continue;
+    if (!out.includes(entry.fqn)) out.push(entry.fqn);
+  }
+  return out;
+}
+
 export function registerAddMissingWhenBranches(
   context: vscode.ExtensionContext,
   index: SymbolIndex,
@@ -71,6 +94,14 @@ export function registerAddMissingWhenBranches(
         const edit = buildMissingBranchEdit(best);
         const ws = new vscode.WorkspaceEdit();
         ws.insert(uri, edit.insertAt, edit.text);
+        const imports = missingImportsFor(best, document, index);
+        let importLines = 0;
+        for (const fqn of imports) {
+          const te = insertImport(document, fqn);
+          ws.insert(uri, te.range.start, te.newText);
+          if (te.range.start.line <= edit.cursorLine) importLines += te.newText.split('\n').length - 1;
+        }
+        edit.cursorLine += importLines;
         const applied = await vscode.workspace.applyEdit(ws);
         log?.info(
           `[SealedWhen] inserted ${best.missing.length} branch(es) at line ${edit.insertAt.line + 1}` +

@@ -301,7 +301,9 @@ function scanWhen(
 function looksLikeConditionFragment(line: string): boolean {
   const trimmed = line.trim();
   if (/^is\s+[A-Z]/.test(trimmed)) return true;
-  return /^[A-Z][\w.]*\s*,\s*(\/\/.*)?$/.test(trimmed);
+  // `Weather.Sunny` alone, arrow on the next line: counted as uncovered and
+  // re-inserted as a duplicate branch.
+  return /^[A-Z][\w.]*\s*,?\s*(\/\/.*)?$/.test(trimmed);
 }
 
 /** Index of the branch `->` at paren/bracket/brace depth 0, or -1. */
@@ -320,7 +322,8 @@ function findTopLevelArrow(line: string): number {
 /** Splits a branch condition on top-level commas and classifies segments. */
 function parseCondition(cond: string, lineNum: number, raw: RawWhen): void {
   for (const segment of splitTopLevel(cond)) {
-    let seg = segment.trim();
+    // `S.A /* legacy */ -> 1`: the comment is not part of the reference.
+    let seg = segment.replace(/\/\*[\s\S]*?\*\//g, ' ').trim();
     if (!seg) continue;
     if (seg === 'else') {
       raw.hasElse = true;
@@ -352,6 +355,14 @@ function parseCondition(cond: string, lineNum: number, raw: RawWhen): void {
     if (bare) {
       raw.refs.push({ path: bare[1], guarded, qualified: bare[1].includes('.') });
       continue;
+    }
+    // A segment that looks like a type branch but parses as neither
+    // (`is A<T>` noise we do not model, `Foo.Bar()` with a call…): dropping it
+    // silently under-counted coverage. Bail instead.
+    if (/^(?:is\s+)?[A-Z]/.test(seg)) {
+      raw.bailed = true;
+      raw.bailReason = `unrecognized branch condition '${seg}' at line ${lineNum + 1}`;
+      return;
     }
     // Literal, range, function call… — not a type branch, ignore the segment.
   }

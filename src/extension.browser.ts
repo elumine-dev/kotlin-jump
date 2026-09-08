@@ -16,6 +16,10 @@
 // Move File, and bundled Kotlin stdlib navigation (a prebuilt JSON index,
 // see src/kotlin/BundledStdlibProvider.ts, not the raw JAR).
 import * as vscode from 'vscode';
+import { StringXmlHoverProvider } from './providers/StringXmlHoverProvider';
+import { ResourceShadowingProvider } from './providers/ResourceShadowingProvider';
+import { RoomMigrationProvider } from './providers/RoomMigrationProvider';
+import { LifecyclePairingProvider } from './providers/LifecyclePairingProvider';
 import { DeadWeightActionProvider } from './providers/DeadWeightActionProvider';
 import { ManifestNecessityProvider } from './providers/ManifestNecessityProvider';
 import { DependencyUsageBadgeProvider } from './providers/DependencyUsageBadgeProvider';
@@ -760,7 +764,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     rW.onDidDelete(uri => { rPending.delete(uri.toString()); rIndex.removeFile(uri.toString()); });
 
     vscode.workspace.findFiles(
-      '**/res/values*/strings.xml',
+      '**/res/values*/*.xml',
       `{${excludeList.join(',')}}`,
     ).then(uris => {
       log.info(`[StringFolding] found ${uris.length} strings.xml file(s)`);
@@ -783,8 +787,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       stringIndex.removeFile(uri);
       foldingProvider.invalidateAll();
     };
-    const strW1 = vscode.workspace.createFileSystemWatcher('**/res/values/strings.xml');
-    const strW2 = vscode.workspace.createFileSystemWatcher('**/res/values-*/strings.xml');
+    // Not only strings.xml: strings_errors.xml or any split file was invisible on the web.
+    const strW1 = vscode.workspace.createFileSystemWatcher('**/res/values/*.xml');
+    const strW2 = vscode.workspace.createFileSystemWatcher('**/res/values-*/*.xml');
     for (const w of [strW1, strW2]) {
       w.onDidCreate(handleChanged);
       w.onDidChange(handleChanged);
@@ -1254,6 +1259,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       new ManifestNecessityProvider(),
       vscode.languages.registerCodeActionsProvider([{ language: 'xml' }, { pattern: '**/build.gradle{,.kts}' }], new DeadWeightActionProvider(), { providedCodeActionKinds: DeadWeightActionProvider.providedCodeActionKinds }),
       new MethodSeparatorProvider(),
+      // Pure-vscode providers the desktop had and the web did not: their four
+      // settings were offered with nothing behind them.
+      new LifecyclePairingProvider(),
+      new RoomMigrationProvider(),
+      vscode.languages.registerHoverProvider([{ language: 'kotlin' }, { language: 'java' }, { language: 'xml' }], new StringXmlHoverProvider()),
       vscode.languages.registerCodeLensProvider({ language: 'kotlin' }, new StateProvenanceProvider()),
       vscode.languages.registerCodeActionsProvider([{ language: 'kotlin' }, { language: 'java' }], new ExtractStringResourceProvider(stringIndex), { providedCodeActionKinds: [vscode.CodeActionKind.RefactorExtract] }),
       vscode.commands.registerCommand('kotlin-jump.extractString.saveTarget', async (uri: vscode.Uri) => {
@@ -1275,6 +1285,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   })();
 
   const colorIndex = new ColorResourceIndex();
+  // Desktop had the shadowing hover; the web offered its setting with nothing behind it.
+  context.subscriptions.push(vscode.languages.registerHoverProvider(
+    [{ language: 'kotlin' }, { language: 'java' }],
+    new ResourceShadowingProvider(colorIndex, stringIndex),
+  ));
   (() => {
     const colorProvider = new ColorFoldingProvider(colorIndex);
     const resourceDiag  = new ResourceDiagnosticProvider(stringIndex, colorIndex);
@@ -1289,12 +1304,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     };
 
     vscode.workspace.findFiles(
-      '**/res/values*/colors.xml',
+      '**/res/values*/*.xml',
       `{${excludeList.join(',')}}`,
     ).then(uris => mapBatched(uris, handleColorChanged));
 
-    const cW1 = vscode.workspace.createFileSystemWatcher('**/res/values/colors.xml');
-    const cW2 = vscode.workspace.createFileSystemWatcher('**/res/values-*/colors.xml');
+    const cW1 = vscode.workspace.createFileSystemWatcher('**/res/values/*.xml');
+    const cW2 = vscode.workspace.createFileSystemWatcher('**/res/values-*/*.xml');
     for (const w of [cW1, cW2]) {
       w.onDidCreate(handleColorChanged);
       w.onDidChange(handleColorChanged);

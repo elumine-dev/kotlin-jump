@@ -47,6 +47,21 @@ export function readSignature(doc: vscode.TextDocument, entry: SymbolEntry): str
   const cutAtEquals = entry.kind === 'fun' || entry.kind === 'composable';
   const declLine = locateDeclLine(doc, entry);
 
+  // An enum entry shares its line with its siblings (`RED, GREEN, BLUE`):
+  // only its own segment, up to the next comma at depth 0, is its signature.
+  if (entry.isEnumEntry) {
+    const text = doc.lineAt(declLine).text;
+    let depth = 0, end = text.length;
+    for (let j = entry.character; j < text.length; j++) {
+      const ch = text[j];
+      if (ch === '(' || ch === '{') depth++;
+      else if (ch === ')' || ch === '}') { if (depth === 0) { end = j; break; } depth--; }
+      else if ((ch === ',' || ch === ';') && depth === 0) { end = j; break; }
+    }
+    const seg = text.slice(entry.character, end).trim();
+    return seg || null;
+  }
+
   const lines: string[] = [];
   let parenDepth = 0;
 
@@ -78,7 +93,12 @@ export function readSignature(doc: vscode.TextDocument, entry: SymbolEntry): str
 
     lines.push(text.trimEnd());
 
-    if (parenDepth === 0) break;
+    if (parenDepth === 0) {
+      // `fun <T> sort(items: List<T>): List<T>\n    where T : Comparable<T> {`
+      const next = i + 1 < doc.lineCount ? doc.lineAt(i + 1).text.trim() : '';
+      if (/^where\s/.test(next)) continue;
+      break;
+    }
   }
 
   if (lines.length === 0) return null;
@@ -132,9 +152,15 @@ export function locateDeclLine(doc: vscode.TextDocument, entry: SymbolEntry): nu
 
 export function extractKDocFromLines(lines: string[], declarationLine: number): string | null {
   let line = Math.min(declarationLine, lines.length) - 1;
+  // Walk over annotations, including one whose arguments span lines
+  // (`@Suppress(\n "X"\n)`), which used to hide the KDoc above it.
+  let parens = 0;
   while (line >= 0) {
     const t = lines[line].trim();
-    if (t === '' || t.startsWith('@')) { line--; continue; }
+    if (t === '') { line--; continue; }
+    parens += (t.match(/\)/g)?.length ?? 0) - (t.match(/\(/g)?.length ?? 0);
+    if (t.startsWith('@') && parens <= 0) { parens = 0; line--; continue; }
+    if (parens > 0) { line--; continue; }
     break;
   }
   if (line < 0) return null;
@@ -154,9 +180,10 @@ export function extractKDocFromLines(lines: string[], declarationLine: number): 
 
     const content = rawLines.map((l, idx) => {
       const t = l.trim();
-      if (idx === 0) return t.replace(/^\/\*\*\s?/, '');
+      if (idx === 0) return t.replace(/^\/\*\*\s?/, '').replace(/\s*\*\/$/, '');
       if (t === '*/') return null;
-      return t.replace(/^\*\s?/, '');
+      // ` * last line */`: the closer is not documentation text.
+      return t.replace(/^\*\s?/, '').replace(/\s*\*\/$/, '');
     }).filter((l): l is string => l !== null);
 
     return formatKDoc(content);
@@ -169,6 +196,9 @@ export function extractKDocFromLines(lines: string[], declarationLine: number): 
       if (!t.startsWith('//')) break;
       rawLines.unshift(t.replace(/^\/\/\s?/, ''));
     }
+    // Commented-out code, a region marker or a TODO above a declaration is
+    // not its documentation.
+    if (rawLines.length > 0 && /^(?:val|var|fun|class|object|interface|import|package|return|if|for|while|when|@|region\b|endregion\b|TODO\b|FIXME\b|HACK\b|\/)/.test(rawLines[0].trim())) return null;
     return rawLines.length > 0 ? rawLines.join('\n') : null;
   }
 
@@ -194,7 +224,7 @@ export function formatKDoc(lines: string[]): string | null {
       continue;
     }
 
-    const param = /^@param\s+(\w+)\s*(.*)/.exec(line);
+    const param = /^@(?:param|property)\s+(\w+)\s*(.*)/.exec(line);
     if (param) {
       if (!inParam) { result.push(''); inParam = true; }
       result.push(`- \`${param[1]}\`: ${param[2]}`);

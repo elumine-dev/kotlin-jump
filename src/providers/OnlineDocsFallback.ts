@@ -63,7 +63,7 @@ const KOTLINLANG_LIBRARIES: ReadonlyArray<[prefix: string, path: string]> = [
  * Best-effort reference URL for a fully qualified name, or undefined when the
  * package has no known documentation host.
  */
-export function onlineDocsUrl(fqn: string): string | undefined {
+export function onlineDocsUrl(fqn: string, isCall = false): string | undefined {
   const dot = fqn.lastIndexOf('.');
   if (dot <= 0) return undefined;
   const pkg  = fqn.slice(0, dot);
@@ -72,7 +72,11 @@ export function onlineDocsUrl(fqn: string): string | undefined {
 
   for (const [prefix, libPath] of KOTLINLANG_LIBRARIES) {
     if (pkg === prefix || pkg.startsWith(`${prefix}.`)) {
-      return `https://kotlinlang.org/api/${libPath}/${pkg}/${dokkaSlug(name)}/`;
+      // Dokka publishes a type as a directory and a function as a page:
+      // `launch/` and `list-of/` were 404, `launch.html` is the page.
+      return isTypeName(name) && !isCall
+        ? `https://kotlinlang.org/api/${libPath}/${pkg}/${dokkaSlug(name)}/`
+        : `https://kotlinlang.org/api/${libPath}/${pkg}/${dokkaSlug(name)}.html`;
     }
   }
 
@@ -91,7 +95,9 @@ export function onlineDocsUrl(fqn: string): string | undefined {
 
   if (pkg.startsWith('android.') || pkg.startsWith('androidx.') || pkg.startsWith('com.google.android.material')) {
     const pkgPath = pkg.replace(/\./g, '/');
-    return isTypeName(name)
+    // A composable (`Text(…)`, `Column {`) is a function despite its case:
+    // its page is the package summary anchor, the type URL was 404.
+    return isTypeName(name) && !isCall
       ? `https://developer.android.com/reference/kotlin/${pkgPath}/${name}`
       : `https://developer.android.com/reference/kotlin/${pkgPath}/package-summary#${name}`;
   }
@@ -111,12 +117,20 @@ export function isOnlineDocsEnabled(): boolean {
  * two, `import okhttp3.*` + `import kotlinx.coroutines.*` would send every
  * unresolved OkHttp name to a 404 on kotlinlang.org.
  */
-export function onlineDocsLocation(word: string, document: vscode.TextDocument): vscode.Location | null {
+export function onlineDocsLocation(word: string, document: vscode.TextDocument, position?: vscode.Position): vscode.Location | null {
   if (!isOnlineDocsEnabled()) return null;
   const { exact, wildcards } = resolveExplicit(word, document);
   const candidates = exact.length > 0 ? exact : wildcards.length === 1 ? wildcards : [];
+  // `Text(` or `Column {` at the cursor: a call, so a function page.
+  let isCall = false;
+  if (position) {
+    const line = document.lineAt(position.line).text;
+    const range = document.getWordRangeAtPosition(position, /[A-Za-z_]\w*/);
+    const after = range ? line.slice(range.end.character) : '';
+    isCall = /^\s*[({]/.test(after) || /^\s*<[^>]*>\s*[({]/.test(after);
+  }
   for (const fqn of candidates) {
-    const url = onlineDocsUrl(fqn);
+    const url = onlineDocsUrl(fqn, isCall);
     if (url) return new vscode.Location(docsUri(fqn, url), new vscode.Position(0, 0));
   }
   return null;

@@ -1,43 +1,42 @@
 {
-  "version": "1.42.22",
+  "version": "1.42.23",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Resources read like aapt, catalogs kept apart",
-  "summary": "A commented-out <string> was a real resource and a name in second position was invisible; a library's or an SDK's R.string was a red error; a second version catalog had every alias reported dead and a rich version made its catalog unreadable. All fixed, with module-aware resolution of R.string and decoded escapes in the hover.",
+  "tagline": "Commands that answer, hovers that tell the whole story",
+  "summary": "Turning Logcat or Android Run off made their commands \"not found\"; toolbar toggles were dead during the first index; a sealed class hover listed one subtype out of four; online docs opened a 404 for every function; the web build lacked four providers the desktop had. All fixed, with cleaner KDoc rendering.",
   "highlights": [
     {
-      "title": "strings.xml read like aapt",
-      "description": "A commented-out `<string>` no longer exists for hover, Go to Definition or the diagnostics; `<string translatable=\"false\" name=\"x\">`, `<string name=\"x\"/>` and `<item type=\"string\">` now do. `R.string.x` resolves to the module of the file naming it, and the hover decodes `\\'`, `\\n` and numeric entities.",
+      "title": "Commands that answer",
+      "description": "With Logcat or Android Run disabled, the palette and shortcuts said \"command not found\" and the Logcat views \"no data provider\". The commands now explain the setting and offer to enable it; the inline toggles are registered before the first index so the toolbar buttons work at once.",
       "kind": "fix"
     },
     {
-      "title": "No red error on code that compiles",
-      "description": "`default_web_client_id` and the other SDK-owned keys, a `resValue(\"string\", …)` from a build script and a qualified `com.other.lib.R.string.x` were \"Cannot resolve string resource\" errors.",
+      "title": "Sealed hover lists every subtype",
+      "description": "Subtypes declared after the class, in another file, or implementing a sealed interface were missing from the hover (\"Subtypes (1)\" for four). The KDoc also follows a relocated declaration, and a name imported from an unindexed library no longer gets another package's hover.",
       "kind": "fix"
     },
     {
-      "title": "Version catalogs kept apart",
-      "description": "Two `create(...) { from(files(...)) }` blocks mapped both files to `libs`, so the second catalog was all dead aliases. `strictly = \"[4.0, 5.0[\"` no longer swallows the file, a multi-line entry carries its diagnostic on the alias line, and `includeBuild(\"gradle/plugins\")` counts as convention plugins.",
+      "title": "Web parity and docs that exist",
+      "description": "vscode.dev gets lifecycle pairing, Room migration drift, resource shadowing and the strings.xml hover, and indexes every values*/*.xml. The online docs fallback opens `launch.html` instead of a 404, and a composable call opens the package summary anchor.",
       "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Resources",
+      "heading": "Wiring",
       "bullets": [
-        "Commented-out resources are not indexed; `name` in any position, self-closing strings and `<item type=\"string\">` are.",
-        "SDK-owned keys, `resValue` strings and library-qualified `R` are not errors.",
-        "Hover and Go to Definition prefer the module of the referencing file; Android escapes are decoded.",
-        "`app/` scores as the application in the shadowing hover."
+        "Logcat and Android Run commands stay registered when disabled; the Logcat views hide while off.",
+        "Inline feature toggles work during the first index on desktop.",
+        "Internal test and Find Usages commands leave the palette; Java projects activate the extension; `statusBarEnabled` applies live; Copy FQN works in Java.",
+        "The library sources bar starts as scanning; walkthrough links say to open a file first."
       ]
     },
     {
-      "heading": "Gradle",
+      "heading": "Hover and docs",
       "bullets": [
-        "Each `create(...) { from(files(...)) }` block maps its own catalog.",
-        "Rich versions with brackets in strings parse; multi-line entries report on the alias line.",
-        "Convention plugins from any `includeBuild` are read; the Run task lens stays on `build.gradle.kts`.",
-        "\"Download library sources\" reads commented versions, multi-line entries and `_` aliases, and skips `$var` coordinates.",
-        "A `postSticky` read back with `getStickyEvent(X::class.java)` is heard."
+        "Every sealed subtype is listed, from any file; the companion object is not.",
+        "KDoc read at the relocated declaration; no name fallback against an explicit import; nothing on import lines.",
+        "Dokka function pages and composable anchors in the online docs fallback.",
+        "`// TODO` and commented code are not documentation; multi-line annotations, `@property`, trailing `*/`, enum entries and `where` clauses render right."
       ]
     }
   ],

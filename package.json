@@ -2,7 +2,7 @@
   "name": "kotlin-jump",
   "displayName": "Kotlin Jump: Fast Kotlin & Android Studio Navigation",
   "description": "Fast Kotlin & Android Studio navigation. Find Usages, Go to Definition, Compose, R.string, Android Run. No JVM, no language server. The Android Studio experience inside VS Code.",
-  "version": "1.42.22",
+  "version": "1.42.23",
   "publisher": "elumine",
   "license": "MIT",
   "icon": "media/logo.png",
@@ -75,7 +75,9 @@
   ],
   "activationEvents": [
     "onLanguage:kotlin",
+    "onLanguage:java",
     "workspaceContains:**/*.kt",
+    "workspaceContains:**/*.java",
     "onView:kotlinJump.findUsages",
     "onView:kotlinJump.logcat",
     "onView:kotlinJump.logcat.devices",
@@ -144,13 +146,15 @@
         {
           "id": "kotlinJump.logcat",
           "name": "Logs",
-          "type": "webview"
+          "type": "webview",
+          "when": "kotlinJump.logcat.enabled || kotlinJump.logcat.webUnavailable"
         },
         {
           "id": "kotlinJump.logcat.devices",
           "name": "Devices",
           "type": "tree",
-          "visibility": "collapsed"
+          "visibility": "collapsed",
+          "when": "kotlinJump.logcat.enabled || kotlinJump.logcat.webUnavailable"
         }
       ]
     },
@@ -698,6 +702,40 @@
       }
     ],
     "menus": {
+      "commandPalette": [
+        {
+          "command": "kotlin-jump.debugTest",
+          "when": "false"
+        },
+        {
+          "command": "kotlin-jump.runTest",
+          "when": "false"
+        },
+        {
+          "command": "kotlin-jump.runTestClass",
+          "when": "false"
+        },
+        {
+          "command": "kotlin-jump.findUsages.toggleTests",
+          "when": "false"
+        },
+        {
+          "command": "kotlin-jump.findUsages.showTests",
+          "when": "false"
+        },
+        {
+          "command": "kotlin-jump.findUsages.togglePreviews",
+          "when": "false"
+        },
+        {
+          "command": "kotlin-jump.findUsages.showPreviews",
+          "when": "false"
+        },
+        {
+          "command": "kotlin-jump.sources.downloadMissing",
+          "when": "false"
+        }
+      ],
       "editor/title": [
         {
           "command": "kotlinJump.toggleAllInlineFeatures",
@@ -1758,7 +1796,7 @@
           {
             "id": "findUsages",
             "title": "Find Usages",
-            "description": "Press **Alt+F7** on any symbol to open a dedicated panel showing every usage across your project. Filter out test files or Compose previews in one click.\n\n[Open Find Usages](command:kotlin-jump.findUsages)",
+            "description": "Press **Alt+F7** on any symbol: one usage jumps straight to it, several open the references peek. The Find Usages panel (turn on the Smart Navigation setting, or click a usages CodeLens) lists every usage across your project and filters out test files or Compose previews in one click.\n\n[Open Find Usages](command:kotlin-jump.findUsages)",
             "media": {
               "image": "assets/demos/find-usages-test-filter.webp",
               "altText": "Find Usages panel with test filter toggle"

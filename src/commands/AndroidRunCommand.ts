@@ -75,7 +75,29 @@ export function registerAndroidRunCommand(
   log: Logger,
 ): void {
   const cfg = vscode.workspace.getConfiguration('kotlinJump');
-  if (!cfg.get<boolean>('androidRunEnabled', true)) return;
+  if (!cfg.get<boolean>('androidRunEnabled', true)) {
+    // Declared commands keep a handler: the palette and the walkthrough links
+    // showed "command not found" instead of saying why.
+    const disabled = async () => {
+      const pick = await vscode.window.showInformationMessage(
+        'Kotlin Jump: Android Run is disabled by the kotlinJump.androidRunEnabled setting.', 'Enable and reload');
+      if (pick) {
+        await vscode.workspace.getConfiguration('kotlinJump').update('androidRunEnabled', true, vscode.ConfigurationTarget.Global);
+        await vscode.commands.executeCommand('workbench.action.reloadWindow');
+      }
+    };
+    for (const id of ['runAndroid', 'switchAndroidApp', 'connectAdbWifi', 'pairAdbWifi', 'resetAndroidRunConfig',
+      'diagnoseGradleDetection', 'resetGradleProject', 'pickGradleProject']) {
+      context.subscriptions.push(vscode.commands.registerCommand(`kotlin-jump.${id}`, disabled));
+    }
+    context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(async e => {
+      if (!e.affectsConfiguration('kotlinJump.androidRunEnabled')) return;
+      if (!vscode.workspace.getConfiguration('kotlinJump').get<boolean>('androidRunEnabled', true)) return;
+      const pick = await vscode.window.showInformationMessage('Kotlin Jump: reload the window to enable Android Run.', 'Reload');
+      if (pick) await vscode.commands.executeCommand('workbench.action.reloadWindow');
+    }));
+    return;
+  }
 
   // ── Main Run button ───────────────────────────────────────────────────────
   const button = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 10);

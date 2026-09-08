@@ -124,6 +124,9 @@ window.addEventListener('message', ev => {
       break;
 
     case 'append':
+      // Rows flowing again means the stream recovered: the error banner
+      // otherwise stayed up for the rest of the session.
+      if (!elError.hidden && elError.textContent !== ADB_MISSING_TEXT) elError.hidden = true;
       onAppend(msg.rows as LogEntry[]);
       break;
 
@@ -297,15 +300,19 @@ function wireEvents(): void {
 // ── Append / reset ────────────────────────────────────────────────────────────
 
 function onAppend(rows: LogEntry[]): void {
-  mirror.append(rows, filterState);
+  const gone = mirror.append(rows, filterState);
   // In soft wrap mode renderFlow keeps the rows that did not move; recycling
   // them all here forced the full 2000-row redraw on every batch.
   if (!softWrap) invalidateAllRows();
   updateVirtualHeight();
-  renderVisible();
   if (autoScroll) {
     elList.scrollTop = elList.scrollHeight;
+  } else if (gone > 0 && !softWrap) {
+    // The ring is full and evicting: every display index shifted up by
+    // `gone`, so the rows under a reader's eyes moved with each batch.
+    elList.scrollTop = Math.max(0, elList.scrollTop - gone * ROW_HEIGHT);
   }
+  renderVisible();
 }
 
 // Visibility resync — sent once when the panel becomes visible again after

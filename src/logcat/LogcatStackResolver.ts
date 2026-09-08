@@ -43,7 +43,7 @@ export class LogcatStackResolver {
       const startCol  = m.index + (atOffset >= 0 ? atOffset : 0);
       const endCol    = m.index + fullMatch.length;
 
-      const resolved = this.lookupBestMatch(fqn);
+      const resolved = this.lookupBestMatch(fqn, method);
       const obfuscated = !resolved && OBFUSCATED_HINT.test(fqn);
 
       const frame: ResolvedFrame = {
@@ -65,7 +65,7 @@ export class LogcatStackResolver {
    * then strips the trailing class component to attempt the file-level Kotlin name
    * (`com.app.MainActivityKt` → `com.app.MainActivity`).
    */
-  private lookupBestMatch(fqn: string): vscode.Uri | undefined {
+  private lookupBestMatch(fqn: string, method: string): vscode.Uri | undefined {
     const direct = this.index.lookupFqn(fqn);
     if (direct) return direct.uri;
 
@@ -75,9 +75,13 @@ export class LogcatStackResolver {
       if (hit) return hit.uri;
     }
 
-    // Synthetic Kotlin file-class: foo.Bar.bazFn lives in foo.BarKt.kt
+    // Synthetic Kotlin file-class: `com.app.UtilsKt.helper` is the top-level
+    // `fun helper` indexed as `com.app.helper` (a file with no `Utils` class
+    // never resolved), else a `Utils` class in that file.
     if (fqn.endsWith('Kt')) {
-      const hit = this.index.lookupFqn(fqn.slice(0, -2));
+      const pkg = fqn.slice(0, fqn.lastIndexOf('.') + 1);
+      const bare = method.replace(/[$-].*$/, '');
+      const hit = (bare ? this.index.lookupFqn(pkg + bare) : undefined) ?? this.index.lookupFqn(fqn.slice(0, -2));
       if (hit) return hit.uri;
     }
     return undefined;

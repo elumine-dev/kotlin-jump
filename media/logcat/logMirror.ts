@@ -56,14 +56,20 @@ export class LogMirror {
   size(): number { return this.ring.size(); }
   capacityOf(): number { return this.ring.cap(); }
 
-  /** Hot path — called on every batch from the host (~60Hz while streaming). */
-  append(rows: LogEntry[], filter: MirrorFilterState): void {
+  /**
+   * Hot path — called on every batch from the host (~60Hz while streaming).
+   * Returns how many displayed rows the ring evicted from the top, so the
+   * scroller can keep a reader's viewport on the same rows.
+   */
+  append(rows: LogEntry[], filter: MirrorFilterState): number {
+    const evictedBefore = this.evicted();
     for (const r of rows) {
       this.ring.push(r);
       const ordinal = this.pushed++;
       if (this.filterActive && matches(r, filter)) this.filteredOrdinals.push(ordinal);
     }
-    if (this.filterActive) this.trimStale();
+    if (this.filterActive) return this.trimStale();
+    return this.evicted() - evictedBefore;
   }
 
   /** Ordinal of the oldest row still retained by the ring. */
@@ -71,8 +77,10 @@ export class LogMirror {
     return this.pushed - this.ring.size();
   }
 
-  private trimStale(): void {
+  /** Drops evicted ordinals from the filtered view; returns how many went. */
+  private trimStale(): number {
     const oldestOrdinal = this.evicted();
+    const headBefore = this.filteredHead;
     // Amortized O(1): filteredHead only moves forward, so each array index is
     // visited by this loop exactly once, ever.
     while (
@@ -81,10 +89,12 @@ export class LogMirror {
     ) {
       this.filteredHead++;
     }
+    const gone = this.filteredHead - headBefore;
     if (this.filteredHead > COMPACT_THRESHOLD && this.filteredHead * 2 > this.filteredOrdinals.length) {
       this.filteredOrdinals = this.filteredOrdinals.slice(this.filteredHead);
       this.filteredHead = 0;
     }
+    return gone;
   }
 
   /** Full O(size) rescan — call only on: level toggle, tag/search edit, resize, hydrate. */

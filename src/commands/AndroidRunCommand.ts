@@ -6,7 +6,7 @@ import { exec, spawn } from 'child_process';
 import { findProjectRoot, resolveGradleWrapper, detectProjectRoot } from '../testing/GradleTestRunner';
 import type { DetectionResult } from '../testing/GradleRootDetector';
 import { Logger } from '../util/logger';
-import { runAdb, runShell, getFirstConnectedDevice, resolveAdbPath, watchAdbPathSetting } from '../android/AdbBinary';
+import { runAdb, runShell, getFirstConnectedDevice, listConnectedDevices, resolveAdbPath, watchAdbPathSetting } from '../android/AdbBinary';
 import { _emitRunSuccess } from '../android/RunEvents';
 
 const GRADLE_PROJECT_CHOICE_KEY = 'kotlinJump.gradleProjectRoot.resolved';
@@ -371,7 +371,7 @@ async function runAndroid(
   if (!config) return;
 
   // Check device BEFORE building — mirrors _android_check_and_select_emulator() in zshrc
-  const device = await ensureDeviceConnected(log);
+  const device = await ensureDeviceConnected(context, log);
   if (!device) return;
 
   // Resolve the exact Gradle install task:
@@ -391,20 +391,19 @@ async function runAndroid(
 
   setBuilding();
 
-  const terminal = getOrCreateTerminal(config.projectRoot);
-  terminal.show(/* preserveFocus */ true);
-
   // adb-XXXX-YYYY serials (ADB internal mDNS auto-discover) don't work reliably with -s or
   // ANDROID_SERIAL — omit both and let ADB target the only connected device automatically,
   // same as the zshrc newsfeed approach. USB and HOST:PORT serials are explicit and safe to pass.
   const isMdnsAuto   = device.startsWith('adb-');
-  const serialEnv    = isMdnsAuto ? '' : `ANDROID_SERIAL="${device}" `;
+  const terminal = getOrCreateTerminal(config.projectRoot, isMdnsAuto ? undefined : device);
+  terminal.show(/* preserveFocus */ true);
+
   // The resolved binary (kotlinJump.adbPath, $ANDROID_HOME), not a bare
   // `adb` the terminal's PATH may not have: "adb: command not found" after
   // a successful build.
   const adbBin       = adbForShell();
   const adbTarget    = isMdnsAuto ? adbBin : `${adbBin} -s "${device}"`;
-  const gradleCmd    = `${serialEnv}"${config.gradlew}" ${installTask}`;
+  const gradleCmd    = gradleCommandFor(config.gradlew, installTask);
   const launchParams: LaunchParams = {
     device,
     packageName:  config.packageName,
@@ -710,17 +709,31 @@ function parseInstallTasks(output: string): string[] {
 
 // ── Terminal management ───────────────────────────────────────────────────────
 
-function getOrCreateTerminal(projectRoot: string): vscode.Terminal {
+// The target serial travels in the terminal's environment: the former
+// `ANDROID_SERIAL="x" gradlew …` prefix is a POSIX spelling, and on Windows
+// PowerShell and cmd.exe answered "'ANDROID_SERIAL=…' is not recognized".
+function getOrCreateTerminal(projectRoot: string, serial: string | undefined): vscode.Terminal {
   const existing = vscode.window.terminals.find(
     t => t.name === 'Android Run' && t.exitStatus === undefined,
   );
-  if (existing) return existing;
+  if (existing) {
+    const env = (existing.creationOptions as vscode.TerminalOptions).env;
+    if ((env?.['ANDROID_SERIAL'] ?? undefined) === serial) return existing;
+    existing.dispose(); // another device now: a fresh environment
+  }
 
   return vscode.window.createTerminal({
     name: 'Android Run',
     cwd: projectRoot,
     isTransient: true,
+    env: serial ? { ANDROID_SERIAL: serial } : undefined,
   });
+}
+
+/** The install command as the integrated shell wants it: PowerShell runs a quoted path only after `&`. */
+export function gradleCommandFor(gradlew: string, installTask: string, shellPath: string | undefined = vscode.env?.shell): string {
+  const powershell = process.platform === 'win32' && /pwsh|powershell/i.test(shellPath ?? '');
+  return `${powershell ? '& ' : ''}"${gradlew}" ${installTask}`;
 }
 
 // ── Device & emulator management ─────────────────────────────────────────────
@@ -940,9 +953,34 @@ async function startEmulatorAndWait(avdName: string, log: Logger): Promise<strin
   return undefined;
 }
 
+const RUN_DEVICE_KEY = 'kotlinJump.androidRunDevice';
+
 // Ensures a device is connected; offers WiFi discovery or AVD launch if not.
-async function ensureDeviceConnected(log: Logger): Promise<string | undefined> {
-  const device = await getConnectedDevice();
+async function ensureDeviceConnected(context: vscode.ExtensionContext, log: Logger): Promise<string | undefined> {
+  const ready = (await listConnectedDevices()).filter(d => d.state === 'device');
+  // An mDNS auto entry usually duplicates the USB device next to it.
+  const usable = ready.some(d => d.transport !== 'mdns') ? ready.filter(d => d.transport !== 'mdns') : ready;
+  if (usable.length > 1) {
+    // Phone plus emulator used to mean "the first one adb lists", most often
+    // the emulator, with the phone's app never updated and no way to choose.
+    const remembered = context.workspaceState.get<string>(RUN_DEVICE_KEY);
+    const items = usable
+      .map(d => ({
+        label: `$(device-mobile) ${d.model ?? d.serial}`,
+        description: d.serial === remembered ? `${d.serial}  (last used)` : d.serial,
+        serial: d.serial,
+      }))
+      .sort((a, b) => Number(b.serial === remembered) - Number(a.serial === remembered));
+    const pick = await vscode.window.showQuickPick(items, {
+      placeHolder: 'Several devices connected: run on which one?',
+      title: 'Kotlin Jump — Pick Device',
+    });
+    if (!pick) return undefined;
+    await context.workspaceState.update(RUN_DEVICE_KEY, pick.serial);
+    log.debug(`[android:run] device picked: ${pick.serial}`);
+    return pick.serial;
+  }
+  const device = usable[0]?.serial ?? await getConnectedDevice();
   if (device) { log.debug(`[android:run] device: ${device}`); return device; }
 
   log.info('[android:run] no device — showing connection picker');
@@ -1293,12 +1331,18 @@ function readMergedManifest(
 
 // Finds the activity with android.intent.category.LAUNCHER in a merged manifest
 // and returns the fully-qualified "package/ActivityClass" component string.
-function parseLauncherActivity(content: string, packageName: string): string | undefined {
-  const blocks = content.split('<activity');
+// `<activity-alias>` blocks count too (alternative launcher icons), but a
+// disabled one used to win over the real MAIN activity and `am start`
+// answered "Activity class does not exist".
+export function parseLauncherActivity(content: string, packageName: string): string | undefined {
+  const blocks = content.split(/<activity(?:-alias)?(?=[\s>])/);
   for (const block of blocks.slice(1)) {
-    if (!block.includes('android.intent.category.LAUNCHER')) continue;
+    const tagEnd  = block.indexOf('>');
+    const openTag = tagEnd >= 0 ? block.slice(0, tagEnd) : block;
+    if (/android:enabled="false"/.test(openTag)) continue;
+    if (!block.includes('android.intent.category.LAUNCHER') || !block.includes('android.intent.action.MAIN')) continue;
 
-    const name = block.match(/android:name="([^"]+)"/)?.[1];
+    const name = openTag.match(/android:name="([^"]+)"/)?.[1];
     if (!name) continue;
 
     if (name.startsWith('.')) {

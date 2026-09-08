@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { spawnAdb, listConnectedDevices, type AdbDevice, type AdbProcess } from './AdbBinary';
+import { spawnAdb, listConnectedDevices, invalidateAdbPathCache, type AdbDevice, type AdbProcess } from './AdbBinary';
 import type { Logger } from '../util/logger';
 
 const RETRY_DELAY_MS  = 3_000;       // After a track-devices process closes
@@ -25,6 +25,7 @@ export class AdbDeviceWatcher extends EventEmitter {
   private recoveryTimer?: NodeJS.Timeout;
   private disposed     = false;
   private lastSerials  = new Set<string>();
+  private hasSnapshot  = false;
   private adbMissing   = false;
 
   constructor(private readonly log?: Logger) { super(); }
@@ -36,6 +37,7 @@ export class AdbDeviceWatcher extends EventEmitter {
     try {
       proc = spawnAdb(['track-devices']);
     } catch (err) {
+      invalidateAdbPathCache();
       this.log?.warn(`[adb:watcher] track-devices spawn failed (${err}) — falling back to poll`);
       // The Logcat panel shows its "adb binary not found" banner off this.
       if (!this.adbMissing) {
@@ -63,6 +65,9 @@ export class AdbDeviceWatcher extends EventEmitter {
       if (err.code !== 'ENOENT' && err.code !== 'EACCES') return;
       spawnFailed = true;
       this.process = undefined;
+      // The resolved path is cached: without dropping it, an SDK installed
+      // later in the session was never found and the banner stayed forever.
+      invalidateAdbPathCache();
       this.log?.warn(`[adb:watcher] adb not runnable (${err.code}) — falling back to poll`);
       if (!this.adbMissing) {
         this.adbMissing = true;
@@ -92,6 +97,7 @@ export class AdbDeviceWatcher extends EventEmitter {
   /** Forces a one-shot device-list refresh. Useful right after `start()`. */
   async refresh(): Promise<AdbDevice[]> {
     const devices = await listConnectedDevices();
+    this.hasSnapshot = true;
     const next = new Set(devices.map(d => `${d.serial}:${d.state}`));
     let changed = next.size !== this.lastSerials.size;
     if (!changed) {
@@ -102,6 +108,15 @@ export class AdbDeviceWatcher extends EventEmitter {
       this.emit('change', devices);
     }
     return devices;
+  }
+
+  /**
+   * What the last device listing said about `serial`: 'unknown' before the
+   * first listing, so a consumer keeps its old behaviour until there is data.
+   */
+  stateOf(serial: string): 'device' | 'absent' | 'unknown' {
+    if (!this.hasSnapshot) return 'unknown';
+    return this.lastSerials.has(`${serial}:device`) ? 'device' : 'absent';
   }
 
   dispose(): void {
@@ -124,6 +139,7 @@ export class AdbDeviceWatcher extends EventEmitter {
       this.recoveryTimer = setInterval(() => {
         if (this.disposed || this.process) return;
         this.log?.debug('[adb:watcher] retrying track-devices from poll fallback');
+        invalidateAdbPathCache();
         this.start();
       }, POLL_RECOVERY_MS);
     }

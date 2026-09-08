@@ -51,7 +51,12 @@ export class FileWatcher implements vscode.Disposable {
     // the folder path, which `**/*.kt` never matches: its files stayed
     // indexed, Cmd+T still listed them and Cmd+Click opened "file not found".
     this.treeWatcher = vscode.workspace.createFileSystemWatcher('**', true, true, false);
-    this.treeWatcher.onDidDelete(uri => { if (!SOURCE_EXT_RE.test(uri.path)) this.removeTree(uri); });
+    // Without the exclusion filter, every `.class` removed by a `gradlew
+    // clean` triggered a full sweep of the index.
+    this.treeWatcher.onDidDelete(uri => {
+      if (SOURCE_EXT_RE.test(uri.path) || this.isExcluded(uri.path)) return;
+      this.removeTree(uri);
+    });
   }
 
   /** Drops every indexed file under `folder` (a deleted or renamed folder, a removed workspace folder). */
@@ -84,7 +89,7 @@ export class FileWatcher implements vscode.Disposable {
     if (uris.length === 0) return uris;
     this.log?.info(`[watcher] folder added: ${fileName(folder)} — ${uris.length} file(s)`);
     for (const uri of uris) { evict(uri); this.index.remove(uri); }
-    await this.scanner.rescan(uris);
+    await this.scanner.scanFiles(uris);
     this.notify(uris);
     return uris;
   }

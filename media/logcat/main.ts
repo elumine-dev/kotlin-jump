@@ -41,6 +41,8 @@ let paused       = false;
 // the phone a Run had just targeted, and emptied the buffer.
 let hostSerial: string | undefined;
 let autoScroll   = true;
+/** When the last stream error was shown, so rows already in flight do not clear it. */
+let lastStreamErrorAt = 0;
 
 // Precomputed once per filter edit, not per row — matches() in logMirror.ts reads
 // this directly instead of recomputing selectedLevels.size/toLowerCase() per entry.
@@ -124,9 +126,11 @@ window.addEventListener('message', ev => {
       break;
 
     case 'append':
-      // Rows flowing again means the stream recovered: the error banner
-      // otherwise stayed up for the rest of the session.
-      if (!elError.hidden && elError.textContent !== ADB_MISSING_TEXT) elError.hidden = true;
+      // Rows queued when the error fired arrive AFTER it, because the flush
+      // coalesces at 16 ms: they cleared the banner a few milliseconds after
+      // it appeared. Only clearly later rows mean the stream recovered.
+      if (!elError.hidden && elError.textContent !== ADB_MISSING_TEXT
+          && Date.now() - lastStreamErrorAt > 1000) elError.hidden = true;
       onAppend(msg.rows as LogEntry[]);
       break;
 
@@ -177,6 +181,7 @@ window.addEventListener('message', ev => {
       break;
 
     case 'stream-error':
+      lastStreamErrorAt = Date.now();
       elError.hidden = false;
       elError.textContent = `Stream error: ${msg.message}`;
       break;

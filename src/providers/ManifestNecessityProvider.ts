@@ -185,7 +185,10 @@ export class ManifestNecessityProvider implements vscode.Disposable {
     const text = editor.document.getText();
     const lines = text.split('\n');
     const { permissions, components } = analyzeManifest(text, project);
-    if (truncated) for (const c of components) c.status = 'ok';
+    if (truncated) {
+      for (const c of components) c.status = 'ok';
+      for (const p of permissions) p.status = 'maybe-lib';
+    }
 
     const badges: vscode.DecorationOptions[] = [];
     const dead: vscode.Range[] = [];

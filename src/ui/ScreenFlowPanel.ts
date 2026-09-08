@@ -76,10 +76,14 @@ export async function buildWorkspaceNavigation(): Promise<MergedNavigation> {
 export class ScreenFlowPanel {
   static current: ScreenFlowPanel | undefined;
   private readonly panel: vscode.WebviewPanel;
+  private nav: MergedNavigation;
 
   static async show(): Promise<void> {
     const nav = await buildWorkspaceNavigation();
     if (ScreenFlowPanel.current) {
+      // The click handler reads this.nav, so a re-render must swap it too or
+      // routes added since the first open draw fine but never navigate.
+      ScreenFlowPanel.current.nav = nav;
       ScreenFlowPanel.current.panel.webview.html = renderHtml(nav);
       ScreenFlowPanel.current.panel.reveal();
       return;
@@ -88,6 +92,7 @@ export class ScreenFlowPanel {
   }
 
   private constructor(nav: MergedNavigation) {
+    this.nav = nav;
     this.panel = vscode.window.createWebviewPanel(
       'kotlinJump.screenFlowMap',
       'Screen Flow Map',
@@ -100,7 +105,7 @@ export class ScreenFlowPanel {
     });
     this.panel.webview.onDidReceiveMessage(async msg => {
       if (msg.type !== 'jump') return;
-      const node = nav.nodes.find(n => n.route === msg.route);
+      const node = this.nav.nodes.find(n => n.route === msg.route);
       if (!node) return;
       const doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(node.file));
       const editor = await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);

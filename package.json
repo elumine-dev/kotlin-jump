@@ -2,7 +2,7 @@
   "name": "kotlin-jump",
   "displayName": "Kotlin Jump: Fast Kotlin & Android Studio Navigation",
   "description": "Fast Kotlin & Android Studio navigation. Find Usages, Go to Definition, Compose, R.string, Android Run. No JVM, no language server. The Android Studio experience inside VS Code.",
-  "version": "1.42.2",
+  "version": "1.42.3",
   "publisher": "elumine",
   "license": "MIT",
   "icon": "media/logo.png",
@@ -122,7 +122,7 @@
           "id": "kotlinJump.androidProjectView",
           "name": "Android",
           "type": "tree",
-          "when": "config.kotlinJump.androidProjectView && kotlinJump.isAndroidWorkspace",
+          "when": "config.kotlinJump.androidProjectView && kotlinJump.isAndroidWorkspace && !isWeb",
           "visibility": "visible"
         },
         {
@@ -226,7 +226,7 @@
         "command": "kotlinJump.toggleAllInlineFeatures",
         "key": "shift+alt+i",
         "mac": "shift+alt+i",
-        "when": "editorTextFocus"
+        "when": "editorTextFocus && (editorLangId == kotlin || editorLangId == java)"
       },
       {
         "command": "kotlin-jump.copyFqn",
@@ -1227,7 +1227,7 @@
         "kotlinJump.fallbackToOnlineDocs": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "When a symbol can't be resolved locally, open the corresponding online documentation page (kotlinlang.org/api, javadoc.io, etc.) in the system browser. Off by default since it opens external tabs."
+          "markdownDescription": "When Go to Definition finds no local source for a symbol, open its online reference page in the system browser instead of showing *No definition found*. Covers `kotlin.*` and `kotlinx.*` (kotlinlang.org), the JDK (docs.oracle.com) and `android.*` / `androidx.*` (developer.android.com). The symbol must be pinned down by an explicit import, or by the file's only wildcard import. Off by default since it opens external tabs."
         },
         "kotlinJump.useGradleTooling": {
           "type": "boolean",
@@ -1733,7 +1733,8 @@
             },
             "completionEvents": [
               "onCommand:kotlin-jump.runAndroid"
-            ]
+            ],
+            "when": "!isWeb"
           },
           {
             "id": "goToDefinition",
@@ -1751,7 +1752,8 @@
             "media": {
               "image": "assets/demos/lib-jar-coroutines.webp",
               "altText": "Cmd+Click into kotlinx.coroutines JAR source"
-            }
+            },
+            "when": "!isWeb"
           },
           {
             "id": "findUsages",

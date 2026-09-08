@@ -40,8 +40,14 @@ const COMPACT_THRESHOLD = 4_096;
 export class LogMirror {
   private ring: LogcatRingBuffer;
   private filterActive = false;
-  private filteredSeqs: number[] = [];
+  // Filtered rows are addressed by their push ordinal, not by `seq`. The host
+  // assigns seq to every row it ingests but only forwards the rows that pass
+  // its transport filter (follow-PID, pause), so the mirror ring has holes and
+  // `ring.getBySeq()` arithmetic would land on the wrong row. Ordinal minus
+  // the number of evicted rows is the current display position, O(1).
+  private filteredOrdinals: number[] = [];
   private filteredHead = 0;
+  private pushed = 0;
 
   constructor(capacity: number) {
     this.ring = new LogcatRingBuffer(capacity);
@@ -54,24 +60,29 @@ export class LogMirror {
   append(rows: LogEntry[], filter: MirrorFilterState): void {
     for (const r of rows) {
       this.ring.push(r);
-      if (this.filterActive && matches(r, filter)) this.filteredSeqs.push(r.seq);
+      const ordinal = this.pushed++;
+      if (this.filterActive && matches(r, filter)) this.filteredOrdinals.push(ordinal);
     }
     if (this.filterActive) this.trimStale();
   }
 
+  /** Ordinal of the oldest row still retained by the ring. */
+  private evicted(): number {
+    return this.pushed - this.ring.size();
+  }
+
   private trimStale(): void {
-    const oldest = this.ring.at(0);
-    const oldestSeq = oldest ? oldest.seq : Infinity;
+    const oldestOrdinal = this.evicted();
     // Amortized O(1): filteredHead only moves forward, so each array index is
     // visited by this loop exactly once, ever.
     while (
-      this.filteredHead < this.filteredSeqs.length &&
-      this.filteredSeqs[this.filteredHead]! < oldestSeq
+      this.filteredHead < this.filteredOrdinals.length &&
+      this.filteredOrdinals[this.filteredHead]! < oldestOrdinal
     ) {
       this.filteredHead++;
     }
-    if (this.filteredHead > COMPACT_THRESHOLD && this.filteredHead * 2 > this.filteredSeqs.length) {
-      this.filteredSeqs = this.filteredSeqs.slice(this.filteredHead);
+    if (this.filteredHead > COMPACT_THRESHOLD && this.filteredHead * 2 > this.filteredOrdinals.length) {
+      this.filteredOrdinals = this.filteredOrdinals.slice(this.filteredHead);
       this.filteredHead = 0;
     }
   }
@@ -80,39 +91,44 @@ export class LogMirror {
   rebuild(filter: MirrorFilterState): void {
     this.filterActive = isFilterActive(filter);
     if (!this.filterActive) {
-      this.filteredSeqs = [];
+      this.filteredOrdinals = [];
       this.filteredHead = 0;
       return;
     }
-    const seqs: number[] = [];
+    const ordinals: number[] = [];
+    const base = this.evicted();
+    let i = 0;
     for (const e of this.ring.range(0, this.ring.size())) {
-      if (matches(e, filter)) seqs.push(e.seq);
+      if (matches(e, filter)) ordinals.push(base + i);
+      i++;
     }
-    this.filteredSeqs = seqs;
+    this.filteredOrdinals = ordinals;
     this.filteredHead = 0;
   }
 
   displayCount(): number {
-    return this.filterActive ? (this.filteredSeqs.length - this.filteredHead) : this.ring.size();
+    return this.filterActive ? (this.filteredOrdinals.length - this.filteredHead) : this.ring.size();
   }
 
   entryAt(displayIdx: number): LogEntry | undefined {
     if (!this.filterActive) return this.ring.at(displayIdx);
-    const seq = this.filteredSeqs[this.filteredHead + displayIdx];
-    return seq === undefined ? undefined : this.ring.getBySeq(seq);
+    const ordinal = this.filteredOrdinals[this.filteredHead + displayIdx];
+    return ordinal === undefined ? undefined : this.ring.at(ordinal - this.evicted());
   }
 
   reset(): void {
     this.ring.clear();
-    this.filteredSeqs = [];
+    this.filteredOrdinals = [];
     this.filteredHead = 0;
     this.filterActive = false;
+    this.pushed = 0;
   }
 
   /** Bulk replace — used for the visibility resync ("hydrate") message. */
   hydrate(rows: LogEntry[], filter: MirrorFilterState): void {
     this.ring.clear();
-    for (const r of rows) this.ring.push(r);
+    this.pushed = 0;
+    for (const r of rows) { this.ring.push(r); this.pushed++; }
     this.rebuild(filter);
   }
 
@@ -127,5 +143,5 @@ export class LogMirror {
   }
 
   /** @internal test-only — asserts the amortized-compaction memory bound. */
-  _debugFilteredRawLength(): number { return this.filteredSeqs.length; }
+  _debugFilteredRawLength(): number { return this.filteredOrdinals.length; }
 }

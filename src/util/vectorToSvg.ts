@@ -32,7 +32,11 @@ export function vectorXmlToSvg(xml: string): string | undefined {
 
 function convertChildren(body: string): string {
   let out = '';
-  const PATH_RE = /<path\b([^/]*?)\/>|<path\b([^>]*)>([\s\S]*?)<\/path>/gi;
+  // Self-closing form first. Attribute values may hold a '/'
+  // (`@color/primary`, `?attr/colorControlNormal`), so the lazy class must
+  // stop at '>' and not at '/': with [^/] such a path never matched, the body
+  // converted to nothing and the whole drawable lost its preview.
+  const PATH_RE = /<path\b([^>]*?)\/>|<path\b([^>]*)>([\s\S]*?)<\/path>/gi;
 
   // Depth-balanced <group> matching. A lazy regex would stop at the first
   // </group> and cut the outer group short when groups nest — we need to
@@ -78,17 +82,21 @@ function convertChildren(body: string): string {
     const attrs = m[1] ?? m[2] ?? '';
     const d     = attrOf(attrs, 'pathData');
     if (!d) continue;
-    const fill        = attrOf(attrs, 'fillColor')   ?? 'none';
-    const stroke      = attrOf(attrs, 'strokeColor');
+    const fill        = androidColor(attrOf(attrs, 'fillColor') ?? 'none');
+    const stroke      = androidColor(attrOf(attrs, 'strokeColor'));
     const strokeWidth = attrOf(attrs, 'strokeWidth');
     const fillRule    = attrOf(attrs, 'fillType')?.toLowerCase() === 'evenodd' ? 'evenodd' : undefined;
-    const opacity     = attrOf(attrs, 'fillAlpha');
+    const fillAlpha   = attrOf(attrs, 'fillAlpha');
+    const strokeAlpha = attrOf(attrs, 'strokeAlpha');
+    const fillOpacity   = combineAlpha(fillAlpha, fill.alpha);
+    const strokeOpacity = combineAlpha(strokeAlpha, stroke.alpha);
 
-    const parts = [`d="${escapeAttr(d)}"`, `fill="${escapeAttr(fill)}"`];
-    if (stroke)      parts.push(`stroke="${escapeAttr(stroke)}"`);
-    if (strokeWidth) parts.push(`stroke-width="${escapeAttr(strokeWidth)}"`);
-    if (fillRule)    parts.push(`fill-rule="${fillRule}"`);
-    if (opacity)     parts.push(`fill-opacity="${escapeAttr(opacity)}"`);
+    const parts = [`d="${escapeAttr(d)}"`, `fill="${escapeAttr(fill.color ?? 'none')}"`];
+    if (stroke.color)  parts.push(`stroke="${escapeAttr(stroke.color)}"`);
+    if (strokeWidth)   parts.push(`stroke-width="${escapeAttr(strokeWidth)}"`);
+    if (fillRule)      parts.push(`fill-rule="${fillRule}"`);
+    if (fillOpacity)   parts.push(`fill-opacity="${escapeAttr(fillOpacity)}"`);
+    if (strokeOpacity) parts.push(`stroke-opacity="${escapeAttr(strokeOpacity)}"`);
     out += `<path ${parts.join(' ')}/>`;
   }
 
@@ -115,6 +123,31 @@ function findBalancedGroupEnd(
     }
   }
   return -1;
+}
+
+/**
+ * Android hex colours put alpha FIRST (#AARRGGBB, #ARGB); CSS puts it last
+ * (#RRGGBBAA). Every icon out of Vector Asset Studio is written
+ * `#FF000000`, which a browser reads as red at alpha 0: an empty preview.
+ * Alpha comes back separately so it can be multiplied into fillAlpha.
+ */
+export function androidColor(value: string | undefined): { color?: string; alpha?: number } {
+  if (value === undefined) return {};
+  const m = /^#([0-9a-f]{4}|[0-9a-f]{8})$/i.exec(value.trim());
+  if (!m) return { color: value };
+  const hex = m[1];
+  const alphaHex = hex.length === 4 ? hex[0] + hex[0] : hex.slice(0, 2);
+  const rgb      = hex.length === 4 ? hex.slice(1)     : hex.slice(2);
+  const alpha = parseInt(alphaHex, 16) / 255;
+  return { color: `#${rgb}`, alpha: alpha < 1 ? alpha : undefined };
+}
+
+function combineAlpha(attr: string | undefined, colorAlpha: number | undefined): string | undefined {
+  const a = attr !== undefined ? parseFloat(attr) : NaN;
+  const fromAttr = Number.isFinite(a) ? a : undefined;
+  if (fromAttr === undefined && colorAlpha === undefined) return attr;
+  const product = (fromAttr ?? 1) * (colorAlpha ?? 1);
+  return String(Math.round(product * 1000) / 1000);
 }
 
 function attrOf(attrs: string, name: string): string | undefined {

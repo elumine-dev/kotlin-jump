@@ -75,13 +75,11 @@ export class DrawableXmlInlinePreviewProvider implements vscode.Disposable {
     const doc = editor.document;
     const text = doc.getText();
     const vectorMatch = VECTOR_OPEN_RE.exec(text);
-    if (!vectorMatch) return;
-
-    const svg = vectorXmlToSvg(text);
-    if (!svg) {
-      // Drawable XML but not a vector — clear any prior decoration on
-      // this editor so a stale icon doesn't survive an edit that
-      // converted a vector into another drawable type.
+    const svg = vectorMatch ? vectorXmlToSvg(text) : null;
+    if (!vectorMatch || !svg) {
+      // Not a vector (or one that fails to convert) — clear any prior
+      // decoration on this editor so a stale icon doesn't survive an edit
+      // that turned a vector into another drawable type.
       for (const type of this.typeByCachePath.values()) editor.setDecorations(type, []);
       return;
     }

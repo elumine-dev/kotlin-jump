@@ -81,6 +81,8 @@ export class LogcatService extends EventEmitter implements vscode.Disposable {
     this.resolver = new LogcatStackResolver(index);
     this.watcher  = new AdbDeviceWatcher(log);
     this.watcher.on('change', devs => this.emit('devices', devs));
+    this.watcher.on('adb-missing', () => this.emit('adb-missing'));
+    this.watcher.on('adb-found',   () => this.emit('adb-found'));
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -129,6 +131,8 @@ export class LogcatService extends EventEmitter implements vscode.Disposable {
     this.filter.followedPackage = packageName;
     this.filter.followedPid     = undefined;
     const epoch = ++this.followedPackageEpoch;
+    // The package input in the panel and the auto-start toast must agree.
+    this.emit('state', this.snapshotState());
     if (packageName && this.currentSerial) {
       void resolvePids(this.currentSerial, packageName).then(pids => {
         // Discard if a newer setFollowedPackage call superseded this one — and
@@ -136,11 +140,23 @@ export class LogcatService extends EventEmitter implements vscode.Disposable {
         if (this._disposed) return;
         if (epoch !== this.followedPackageEpoch) return;
         this.filter.followedPid = pids[0];
+        this.emit('transport-changed');
       });
     }
   }
 
-  setFollowAppPid(enabled: boolean): void { if (this._disposed) return; this.filter.followAppPid = enabled; }
+  /**
+   * Rows land in the ring whether or not they pass the transport filter, but
+   * only passing rows are forwarded. When the filter loosens (resume, follow
+   * PID off), the rows it held back are already buffered and only a replay
+   * can show them; 'transport-changed' asks the view to hydrate.
+   */
+  setFollowAppPid(enabled: boolean): void {
+    if (this._disposed) return;
+    if (this.filter.followAppPid === enabled) return;
+    this.filter.followAppPid = enabled;
+    this.emit('transport-changed');
+  }
   setLevels(levels: LogLevel[]): void {
     if (this._disposed) return;
     this.filter.levels = new Set(levels.length > 0 ? levels : (['V', 'D', 'I', 'W', 'E', 'F'] as LogLevel[]));
@@ -168,8 +184,12 @@ export class LogcatService extends EventEmitter implements vscode.Disposable {
    */
   resume(): void {
     if (this._disposed) return;
+    const wasPaused = this.paused;
     this.paused = false;
     if (this.currentSerial && !this.stream) this.startStream();
+    // Rows buffered during the pause were counted and exported but never
+    // shown; the replay puts them on screen.
+    if (wasPaused) this.emit('transport-changed');
     this.emit('state', this.snapshotState());
   }
 
@@ -218,13 +238,15 @@ export class LogcatService extends EventEmitter implements vscode.Disposable {
     return lines.join('\n');
   }
 
-  snapshotState(): { paused: boolean; bufferUsed: number; bufferCap: number; throughputPerSec: number; streaming: boolean } {
+  snapshotState(): { paused: boolean; bufferUsed: number; bufferCap: number; throughputPerSec: number; streaming: boolean; serial?: string; followedPackage?: string } {
     return {
       paused:           this.paused,
       bufferUsed:       this.buffer.size(),
       bufferCap:        this.buffer.cap(),
       throughputPerSec: this.computeThroughput(),
       streaming:        !!this.stream,
+      serial:           this.currentSerial,
+      followedPackage:  this.filter.followedPackage,
     };
   }
 

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { SymbolIndex } from '../indexer/SymbolIndex';
 import { resolveBest } from '../util/ImportResolver';
+import { onlineDocsLocation } from './OnlineDocsFallback';
 import { isInsideCommentOrString, isInsideStringInterpolation } from '../util/textUtils';
 import { Logger } from '../util/logger';
 
@@ -260,7 +261,7 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
     // ── 2. Fallback: simple name lookup (same package or stdlib-like names) ──
     const filtered = this.index.lookup(word).filter(e => allow(e.uri.path) && isReachable(e));
     log(`step2 filtered=${filtered.length} → ${filtered.map(e => e.fqn).join(', ') || 'none'}`);
-    if (filtered.length === 0) return null;
+    if (filtered.length === 0) return this.onlineDocs(word, document, log);
 
     const declEntry = filtered.find(e => isAtDeclaration(e, document.uri, position));
     if (declEntry) {
@@ -319,11 +320,19 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
     // (e.g. Compose's `colorResource` — imported but not indexed).
     if (visibleByImport.length === 0 && sameFile.length === 0) {
       log('step2 no visibility evidence → null');
-      return null;
+      return this.onlineDocs(word, document, log);
     }
 
     log(`step2 ambiguous — returning all ${filtered.length} results`);
     return filtered.map(toLocation);
+  }
+
+  // Last resort behind kotlinJump.fallbackToOnlineDocs (off by default): a
+  // Location on the virtual docs page, which opens the browser when followed.
+  private onlineDocs(word: string, document: vscode.TextDocument, log: (msg: string) => void): vscode.Location | null {
+    const loc = onlineDocsLocation(word, document);
+    if (loc) log(`online docs fallback → ${loc.uri.toString()}`);
+    return loc;
   }
 
   // When cursor is on a member after '.', resolve the qualifier first, then

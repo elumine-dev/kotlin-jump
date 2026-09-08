@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { SymbolIndex } from './indexer/SymbolIndex';
 import { FileScanner } from './indexer/FileScanner';
 import { FileWatcher } from './watcher/FileWatcher';
+import { ONLINE_DOCS_SCHEME, OnlineDocsContentProvider } from './providers/OnlineDocsFallback';
 import { KotlinDefinitionProvider, getPendingDeclNav, clearPendingDeclNav, navigateFromInlay, isInlayNavSuppressed } from './providers/DefinitionProvider';
 import { KotlinDocumentSymbolProvider } from './providers/DocumentSymbolProvider';
 import { KotlinHoverProvider } from './providers/HoverProvider';
@@ -385,7 +386,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (isCompanion) return { dispose: () => {} };
       const cfg = vscode.workspace.getConfiguration('kotlinJump');
       const showParamNames    = cfg.get<boolean>('inlayHints.parameterNames', true);
-      const showInferredTypes = cfg.get<boolean>('inlayHints.inferredTypes', false);
+      const showInferredTypes = cfg.get<boolean>('inlayHints.inferredTypes', true);
       log.info(`[InlayHints] registered — showParamNames=${showParamNames} showInferredTypes=${showInferredTypes}`);
       const provider = new KotlinInlayHintsProvider(index, log);
       return vscode.Disposable.from(
@@ -419,6 +420,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.languages.registerWorkspaceSymbolProvider(new KotlinFileProvider(index, log)),
     vscode.workspace.registerFileSystemProvider(KOTLIN_JAR_SCHEME, new KotlinJarContentProvider(), { isReadonly: true, isCaseSensitive: true }),
     vscode.workspace.registerFileSystemProvider(KOTLIN_STDLIB_JAR_SCHEME, new BundledStdlibFsProvider(), { isReadonly: true, isCaseSensitive: true }),
+    vscode.workspace.registerTextDocumentContentProvider(ONLINE_DOCS_SCHEME, new OnlineDocsContentProvider()),
 
     // ── Semantic Highlighting ─────────────────────────────────────────────
     (() => {
@@ -1466,11 +1468,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const manifestWatcher = vscode.workspace.createFileSystemWatcher('**/AndroidManifest.xml');
     const refreshView = () => androidView.refresh();
     // La vue n'apparaît que si le workspace ressemble à un projet Android.
-    void vscode.workspace
+    // Réévalué quand un manifeste apparaît ou disparaît : sinon la vue reste
+    // cachée jusqu'au reload de la fenêtre après le premier checkout Android.
+    const markAndroidWorkspace = () => vscode.workspace
       .findFiles('**/AndroidManifest.xml', '**/build/**', 1)
       .then(found =>
         vscode.commands.executeCommand('setContext', 'kotlinJump.isAndroidWorkspace', found.length > 0),
       );
+    void markAndroidWorkspace();
     context.subscriptions.push(
       vscode.window.createTreeView('kotlinJump.androidProjectView', {
         treeDataProvider: androidView,
@@ -1481,7 +1486,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       settingsWatcher, manifestWatcher,
       settingsWatcher.onDidChange(refreshView),
       settingsWatcher.onDidCreate(refreshView),
-      manifestWatcher.onDidCreate(refreshView),
+      settingsWatcher.onDidDelete(refreshView),
+      manifestWatcher.onDidCreate(() => { void markAndroidWorkspace(); refreshView(); }),
+      manifestWatcher.onDidDelete(() => { void markAndroidWorkspace(); refreshView(); }),
     );
   }
 

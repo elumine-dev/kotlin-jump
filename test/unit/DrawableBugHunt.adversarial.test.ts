@@ -187,6 +187,45 @@ describe('BUG-REGEX — hover regex edge cases', () => {
 
 // ─── VECTOR — XML conversion traps ──────────────────────────────────────────
 
+describe('BUG-VECTOR-ARGB — Android #AARRGGBB is not CSS #RRGGBBAA (was: every Vector Asset Studio icon rendered as an empty checkerboard)', () => {
+  const wrap = (path: string) => `<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">${path}</vector>`;
+
+  it('#FF000000 (opaque black, the Asset Studio default) becomes #000000 with no opacity, not red at alpha 0', () => {
+    const svg = vectorXmlToSvg(wrap('<path android:pathData="M0,0h24v24H0z" android:fillColor="#FF000000"/>'))!;
+    expect(svg).toContain('fill="#000000"');
+    expect(svg).not.toContain('fill-opacity');
+  });
+
+  it('#804CAF50 carries its alpha into fill-opacity and multiplies it with fillAlpha', () => {
+    const svg = vectorXmlToSvg(wrap('<path android:pathData="M0,0Z" android:fillColor="#804CAF50" android:fillAlpha="0.5"/>'))!;
+    expect(svg).toContain('fill="#4CAF50"');
+    expect(svg).toContain('fill-opacity="0.251"'); // 0x80/255 * 0.5
+  });
+
+  it('4-digit #ARGB expands alpha the same way, and strokeColor gets stroke-opacity', () => {
+    const svg = vectorXmlToSvg(wrap('<path android:pathData="M0,0Z" android:fillColor="#8F00" android:strokeColor="#80FFFFFF" android:strokeWidth="2"/>'))!;
+    expect(svg).toContain('fill="#F00"');
+    expect(svg).toContain('fill-opacity="0.533"');
+    expect(svg).toContain('stroke="#FFFFFF"');
+    expect(svg).toContain('stroke-opacity="0.502"');
+  });
+
+  it('still converts a self-closing path whose colour is a resource reference (was: [^/] in the regex dropped every @color/ and ?attr/ path, so the drawable had no preview at all)', () => {
+    const svg = vectorXmlToSvg(wrap('<path android:pathData="M0,0h24v24H0z" android:fillColor="@color/primary"/><path android:pathData="M2,2Z" android:fillColor="#FF000000"/>'));
+    expect(svg).toBeDefined();
+    expect(svg!).toContain('fill="@color/primary"');
+    expect(svg!).toContain('fill="#000000"');
+  });
+
+  it('leaves 6-digit, 3-digit and theme references untouched', () => {
+    const svg = vectorXmlToSvg(wrap('<path android:pathData="M0,0Z" android:fillColor="#F00" android:strokeColor="?attr/colorControlNormal"/>'))!;
+    expect(svg).toContain('fill="#F00"');
+    expect(svg).toContain('stroke="?attr/colorControlNormal"');
+    expect(svg).not.toContain('opacity');
+  });
+});
+
 describe('BUG-VECTOR — vector XML conversion', () => {
   it('vector with UTF-8 BOM is still parseable', () => {
     const bom = '﻿';

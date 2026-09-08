@@ -192,6 +192,42 @@ describe('LogcatLineParser — line splitter edge cases', () => {
 // LogcatService — filter, lifecycle, and race conditions
 // ──────────────────────────────────────────────────────────────────────────────
 
+describe('LogcatService — transport-changed (was: resume and follow-PID off changed the filter, but rows already buffered stayed invisible)', () => {
+  it('resume() after pause() asks for a replay; resume() while running does not', () => {
+    const svc = new LogcatService(noopIndex, noopLog, 100);
+    const events: string[] = [];
+    svc.on('transport-changed', () => events.push('replay'));
+    svc.resume();
+    expect(events).toEqual([]);
+    svc.pause();
+    svc.resume();
+    expect(events).toEqual(['replay']);
+    svc.dispose();
+  });
+
+  it('setFollowAppPid emits only on an actual change (the settings path calls it on every init)', () => {
+    const svc = new LogcatService(noopIndex, noopLog, 100);
+    const events: string[] = [];
+    svc.on('transport-changed', () => events.push('replay'));
+    svc.setFollowAppPid(true);
+    svc.setFollowAppPid(true);
+    expect(events).toEqual([]);
+    svc.setFollowAppPid(false);
+    expect(events).toEqual(['replay']);
+    svc.dispose();
+  });
+
+  it('snapshotState carries the device and package so the picker, the tree and the toast agree', () => {
+    const svc = new LogcatService(noopIndex, noopLog, 100);
+    const states: any[] = [];
+    svc.on('state', s => states.push(s));
+    svc.setFollowedPackage('com.example.app');
+    expect(states.at(-1).followedPackage).toBe('com.example.app');
+    expect(svc.snapshotState().serial).toBeUndefined();
+    svc.dispose();
+  });
+});
+
 describe('LogcatService — filter and lifecycle bug hunt', () => {
   let svc: LogcatService;
 
@@ -281,6 +317,8 @@ describe('LogcatViewProvider — init handshake', () => {
     const fakeService = new (class extends (await import('events')).EventEmitter {
       listDevices() { return Promise.resolve([]); }
       listPackagesFor() { return Promise.resolve([]); }
+      setFollowAppPid() {}
+      refilter() { return []; }
       snapshotState() { return { paused: false, bufferUsed: 0, bufferCap: 100, throughputPerSec: 0 }; }
     })() as any;
 
@@ -297,6 +335,75 @@ describe('LogcatViewProvider — init handshake', () => {
     await Promise.resolve(); // flush listDevices microtask
 
     expect(posts.find(p => p?.type === 'init')).toBeDefined();
+  });
+});
+
+describe('LogcatViewProvider — settings (was: kotlinJump.logcat.followAppPid and colorScheme were declared but never read)', () => {
+  function withConfig(values: Record<string, unknown>): () => void {
+    const original = vscode.workspace.getConfiguration;
+    (vscode.workspace as any).getConfiguration = () => ({
+      get: (key: string, defaultVal: unknown) => key in values ? values[key] : defaultVal,
+      update: async () => {},
+    });
+    return () => { (vscode.workspace as any).getConfiguration = original; };
+  }
+
+  async function makeProvider() {
+    const { LogcatViewProvider } = await import('../../src/logcat/LogcatViewProvider');
+    const followCalls: boolean[] = [];
+    const fakeService = new (class extends (await import('events')).EventEmitter {
+      listDevices() { return Promise.resolve([]); }
+      listPackagesFor() { return Promise.resolve([]); }
+      setFollowAppPid(enabled: boolean) { followCalls.push(enabled); }
+      refilter() { return []; }
+      snapshotState() { return { paused: false, bufferUsed: 0, bufferCap: 100, throughputPerSec: 0 }; }
+    })() as any;
+    const posts: any[] = [];
+    const provider = new LogcatViewProvider(vscode.Uri.parse('file:///ext'), fakeService);
+    (provider as unknown as { post(m: unknown): void }).post = (m: unknown) => { posts.push(m); };
+    const onMsg = (provider as unknown as { onMessage(m: unknown): Promise<void> }).onMessage.bind(provider);
+    return { provider, posts, followCalls, onMsg };
+  }
+
+  it('init snapshot carries the configured followAppPid and colorScheme, and syncs the host filter', async () => {
+    const restore = withConfig({ 'logcat.followAppPid': false, 'logcat.colorScheme': 'monochrome' });
+    try {
+      const { posts, followCalls, onMsg } = await makeProvider();
+      await onMsg({ apiVersion: 1, type: 'ready' });
+      const init = posts.find(p => p?.type === 'init');
+      expect(init.state.followAppPid).toBe(false);
+      expect(init.state.colorScheme).toBe('monochrome');
+      // Without this the checkbox shows unchecked while the service keeps dropping other PIDs.
+      expect(followCalls).toEqual([false]);
+    } finally { restore(); }
+  });
+
+  it('defaults to studio + follow=true when nothing is configured', async () => {
+    const { posts, onMsg } = await makeProvider();
+    await onMsg({ apiVersion: 1, type: 'ready' });
+    const init = posts.find(p => p?.type === 'init');
+    expect(init.state.followAppPid).toBe(true);
+    expect(init.state.colorScheme).toBe('studio');
+  });
+
+  it('falls back to studio when settings.json holds a value outside the enum', async () => {
+    const restore = withConfig({ 'logcat.colorScheme': 'neon' });
+    try {
+      const { posts, onMsg } = await makeProvider();
+      await onMsg({ apiVersion: 1, type: 'ready' });
+      expect(posts.find(p => p?.type === 'init').state.colorScheme).toBe('studio');
+    } finally { restore(); }
+  });
+
+  it('applySettings pushes a settings message and re-syncs the host filter without a reload', async () => {
+    const { provider, posts, followCalls } = await makeProvider();
+    const restore = withConfig({ 'logcat.followAppPid': false, 'logcat.colorScheme': 'high-contrast' });
+    try {
+      provider.applySettings();
+    } finally { restore(); }
+    const msg = posts.find(p => p?.type === 'settings');
+    expect(msg).toEqual({ apiVersion: 1, type: 'settings', followAppPid: false, colorScheme: 'high-contrast' });
+    expect(followCalls).toEqual([false]);
   });
 });
 
@@ -737,6 +844,82 @@ describe('registerLogcat — lazy ADB watcher & command wiring (was: eager uncon
     service.dispose();
     registerSpy.mockRestore();
     spawnSpy.mockRestore();
+  });
+});
+
+describe('LogcatViewProvider — adb-missing (was: the watcher emitted it, nothing listened, the webview never showed its banner)', () => {
+  async function makeProvider() {
+    const { LogcatViewProvider } = await import('../../src/logcat/LogcatViewProvider');
+    const fakeService = new (class extends (await import('events')).EventEmitter {
+      listDevices() { return Promise.resolve([]); }
+      listPackagesFor() { return Promise.resolve([]); }
+      setFollowAppPid() {}
+      refilter() { return []; }
+      snapshotState() { return { paused: false, bufferUsed: 0, bufferCap: 100, throughputPerSec: 0 }; }
+    })() as any;
+    const posts: any[] = [];
+    const provider = new LogcatViewProvider(vscode.Uri.parse('file:///ext'), fakeService);
+    (provider as unknown as { post(m: unknown): void }).post = (m: unknown) => { posts.push(m); };
+    const onMsg = (provider as unknown as { onMessage(m: unknown): Promise<void> }).onMessage.bind(provider);
+    return { fakeService, posts, onMsg };
+  }
+
+  it('replays adb-missing after the init snapshot when the spawn failed before the webview was ready', async () => {
+    const { fakeService, posts, onMsg } = await makeProvider();
+    fakeService.emit('adb-missing'); // startWatching() runs in resolveWebviewView, before 'ready'
+    await onMsg({ apiVersion: 1, type: 'ready' });
+    const types = posts.map(p => p?.type);
+    expect(types.indexOf('adb-missing', types.indexOf('init'))).toBeGreaterThan(types.indexOf('init'));
+  });
+
+  it('posts adb-found when adb comes back, and stops replaying the banner', async () => {
+    const { fakeService, posts, onMsg } = await makeProvider();
+    fakeService.emit('adb-missing');
+    fakeService.emit('adb-found');
+    await onMsg({ apiVersion: 1, type: 'ready' });
+    const types = posts.map(p => p?.type);
+    expect(types).toContain('adb-found');
+    expect(types.filter(t => t === 'adb-missing')).toHaveLength(1);
+  });
+});
+
+describe('LogcatViewProvider — first open replays the buffer (was: a panel opened after auto-start showed only rows arriving after the click)', () => {
+  async function makeProvider(rows: any[], visible: boolean) {
+    const { LogcatViewProvider } = await import('../../src/logcat/LogcatViewProvider');
+    const fakeService = new (class extends (await import('events')).EventEmitter {
+      listDevices() { return Promise.resolve([]); }
+      listPackagesFor() { return Promise.resolve([]); }
+      setFollowAppPid() {}
+      refilter() { return rows; }
+      snapshotState() { return { paused: true, bufferUsed: rows.length, bufferCap: 100, throughputPerSec: 0, streaming: true, serial: 'emu-5554', followedPackage: 'com.foo' }; }
+    })() as any;
+    const posts: any[] = [];
+    const provider = new LogcatViewProvider(vscode.Uri.parse('file:///ext'), fakeService);
+    (provider as unknown as { post(m: unknown): void }).post = (m: unknown) => { posts.push(m); };
+    (provider as any).view = { visible };
+    const onMsg = (provider as unknown as { onMessage(m: unknown): Promise<void> }).onMessage.bind(provider);
+    return { fakeService, posts, onMsg };
+  }
+
+  it('init carries the host device, package and paused flag, then a hydrate with the buffered rows', async () => {
+    const rows = [{ seq: 0 }, { seq: 1 }, { seq: 2 }];
+    const { posts, onMsg } = await makeProvider(rows, true);
+    await onMsg({ apiVersion: 1, type: 'ready' });
+    const init = posts.find(p => p?.type === 'init');
+    expect(init.state).toMatchObject({ paused: true, selectedSerial: 'emu-5554', selectedPackage: 'com.foo' });
+    const hydrate = posts.find(p => p?.type === 'hydrate');
+    expect(hydrate?.rows).toEqual(rows);
+    expect(posts.indexOf(hydrate)).toBeGreaterThan(posts.indexOf(init));
+  });
+
+  it('transport-changed replays through hydrate only while the panel is visible', async () => {
+    const rows = [{ seq: 5 }];
+    const hidden = await makeProvider(rows, false);
+    hidden.fakeService.emit('transport-changed');
+    expect(hidden.posts.filter(p => p?.type === 'hydrate')).toHaveLength(0);
+    const shown = await makeProvider(rows, true);
+    shown.fakeService.emit('transport-changed');
+    expect(shown.posts.filter(p => p?.type === 'hydrate')).toHaveLength(1);
   });
 });
 

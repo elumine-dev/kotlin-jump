@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import type { LogcatService } from './LogcatService';
-import type { LogEntry, ViewToHost } from './messages';
+import type { ColorScheme, LogEntry, ViewToHost } from './messages';
 import { LOGCAT_API_VERSION, makeHostMsg } from './messages';
 import { looksObfuscated } from './LogcatStackResolver';
 
@@ -12,6 +12,10 @@ export class LogcatViewProvider implements vscode.WebviewViewProvider, vscode.Di
   private view?: vscode.WebviewView;
   private htmlCache?: string;
   private warnedReleaseBuild = false;
+  // The watcher starts (and can fail to spawn adb) inside resolveWebviewView,
+  // before the webview's 'ready' handshake, so the event has to be replayed
+  // from the init snapshot or the banner is lost.
+  private adbMissing = false;
   private visibilitySub?: vscode.Disposable;
 
   // Highest seq already delivered to the webview, via 'append' or 'hydrate'.
@@ -50,6 +54,9 @@ export class LogcatViewProvider implements vscode.WebviewViewProvider, vscode.Di
             : (() => { try { return JSON.stringify(err); } catch { return String(err); } })();
       this.post(makeHostMsg({ type: 'stream-error', message }));
     });
+    service.on('transport-changed', () => { if (this.visible) this.resyncAfterVisible(); });
+    service.on('adb-missing', () => { this.adbMissing = true;  this.post(makeHostMsg({ type: 'adb-missing' })); });
+    service.on('adb-found',   () => { this.adbMissing = false; this.post(makeHostMsg({ type: 'adb-found' })); });
     service.on('append',  (rows: LogEntry[]) => this.maybeWarnReleaseBuild(rows));
     service.on('demo-flash', (payload: { seq: number; frameIndex: number }) => {
       this.post({ apiVersion: LOGCAT_API_VERSION, type: '_demoFlash', seq: payload.seq, frameIndex: payload.frameIndex });
@@ -98,15 +105,35 @@ export class LogcatViewProvider implements vscode.WebviewViewProvider, vscode.Di
    */
   private sendInitSnapshot(): void {
     void this.service.listDevices().then(devices => this.post(makeHostMsg({ type: 'devices', devices })));
+    const { followAppPid, colorScheme } = readLogcatSettings();
+    // The host filter must agree with the checkbox the webview is about to
+    // render, otherwise a user who set followAppPid=false sees an unchecked box
+    // while the service still drops every row from other PIDs.
+    this.service.setFollowAppPid(followAppPid);
+    const snapshot = this.service.snapshotState();
     this.post(makeHostMsg({
       type: 'init',
       state: {
-        followAppPid: true,
-        paused:       false,
-        colorScheme:  'studio',
-        bufferCap:    this.service.snapshotState().bufferCap,
+        followAppPid,
+        paused:          snapshot.paused,
+        colorScheme,
+        bufferCap:       snapshot.bufferCap,
+        selectedSerial:  snapshot.serial,
+        selectedPackage: snapshot.followedPackage,
       },
     }));
+    if (this.adbMissing) this.post(makeHostMsg({ type: 'adb-missing' }));
+    // The stream may have been running for a while (auto-start after a Run)
+    // with every batch dropped because no view was visible; onDidChangeVisibility
+    // does not fire for the first resolution, so replay the buffer here.
+    this.resyncAfterVisible();
+  }
+
+  /** Re-reads the user settings and pushes them to the live webview. Wired to onDidChangeConfiguration. */
+  applySettings(): void {
+    const { followAppPid, colorScheme } = readLogcatSettings();
+    this.service.setFollowAppPid(followAppPid);
+    this.post(makeHostMsg({ type: 'settings', followAppPid, colorScheme }));
   }
 
   // ── Inbound ────────────────────────────────────────────────────────────────
@@ -253,4 +280,15 @@ function generateNonce(): string {
   let s = '';
   for (let i = 0; i < 32; i++) s += chars[Math.floor(Math.random() * chars.length)];
   return s;
+}
+
+const COLOR_SCHEMES: ReadonlySet<string> = new Set<ColorScheme>(['studio', 'monochrome', 'high-contrast']);
+
+function readLogcatSettings(): { followAppPid: boolean; colorScheme: ColorScheme } {
+  const cfg = vscode.workspace.getConfiguration('kotlinJump');
+  const rawScheme = cfg.get<string>('logcat.colorScheme', 'studio');
+  return {
+    followAppPid: cfg.get<boolean>('logcat.followAppPid', true),
+    colorScheme:  COLOR_SCHEMES.has(rawScheme) ? rawScheme as ColorScheme : 'studio',
+  };
 }

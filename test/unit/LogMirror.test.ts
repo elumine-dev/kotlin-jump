@@ -114,6 +114,36 @@ describe('LogMirror — correctness', () => {
     expect(mirror.displayCount()).toBe(5);
   });
 
+  it('addresses filtered rows by position, not by seq: the host only forwards rows that pass follow-PID, so seq has holes', () => {
+    // Regression: filteredSeqs + ring.getBySeq() assumed seq == ring offset.
+    // With rows 0, 7, 9, 23 the seq-based lookup landed on the wrong row or
+    // on nothing, and the filtered view showed lines that did not match.
+    const mirror = new LogMirror(3);
+    const filter = searchFilter('needle');
+    mirror.rebuild(filter);
+    const rows = [
+      mk(0,  { message: 'needle a' }),
+      mk(7,  { message: 'nothing' }),
+      mk(9,  { message: 'needle b' }),
+      mk(23, { message: 'needle c' }),
+    ];
+    mirror.append(rows, filter); // cap 3: seq 0 is evicted
+    expect(mirror.displayCount()).toBe(2);
+    expect(mirror.entryAt(0)!.seq).toBe(9);
+    expect(mirror.entryAt(1)!.seq).toBe(23);
+    expect(mirror.entryAt(2)).toBeUndefined();
+
+    // rebuild() over a ring whose seqs are sparse must agree with append().
+    mirror.rebuild(filter);
+    expect(mirror.displayCount()).toBe(2);
+    expect(mirror.entryAt(0)!.message).toBe('needle b');
+
+    // hydrate() restarts the ordinal space from the rows it is given.
+    mirror.hydrate([mk(100, { message: 'needle x' }), mk(105, { message: 'no' }), mk(110, { message: 'needle y' })], filter);
+    expect(mirror.displayCount()).toBe(2);
+    expect(mirror.entryAt(1)!.seq).toBe(110);
+  });
+
   it('resizeCapacity() mid-stream with an active filter forces a correct full rescan', () => {
     const mirror = new LogMirror(200);
     const filter = searchFilter('needle');

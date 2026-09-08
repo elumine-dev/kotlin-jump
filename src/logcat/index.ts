@@ -79,6 +79,7 @@ export function registerLogcat(
 
   const bufferCap = cfg.get<number>('logcat.bufferSize', 100_000);
   const service   = new LogcatService(index, log, bufferCap);
+  service.setFollowAppPid(cfg.get<boolean>('logcat.followAppPid', true));
   // NOTE: the ADB device watcher is started lazily, not here. Starting it
   // unconditionally at activation meant every workspace with a single .kt file
   // spawned `adb track-devices` (or retried every 3s if adb was missing) for
@@ -118,6 +119,9 @@ export function registerLogcat(
   });
   service.on('reset',   () => pill.setState({ error: undefined }));
   service.on('devices', () => pill.setState({ hasSession: !!service.getCurrentSerial() }));
+  // One source of truth for the active device: the picker in the panel, the
+  // tree and the command all end in switchDevice(), which emits this.
+  service.on('state', (s: { serial?: string }) => devicesProvider.setActive(s.serial));
   service.on('stream-error', (err: unknown) => {
     const message = err instanceof Error ? err.message : typeof err === 'string' ? err : 'unknown error';
     pill.setState({ error: { message, at: Date.now() } });
@@ -219,13 +223,17 @@ export function registerLogcat(
     }, ev)),
   );
 
-  // React to buffer-size changes without requiring a reload.
+  // React to settings changes without requiring a reload.
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration(e => {
       if (e.affectsConfiguration('kotlinJump.logcat.bufferSize')) {
         const next = vscode.workspace.getConfiguration('kotlinJump').get<number>('logcat.bufferSize', 100_000);
         service.setBufferCap(next);
         log.info(`[logcat] buffer capacity → ${next}`);
+      }
+      if (e.affectsConfiguration('kotlinJump.logcat.followAppPid') ||
+          e.affectsConfiguration('kotlinJump.logcat.colorScheme')) {
+        viewProvider.applySettings();
       }
     }),
   );

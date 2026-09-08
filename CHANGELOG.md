@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.42.29
+
+Kotlin Jump 1.42.29 fixes what the panels drew: a vector icon whose background covered its glyph, a badge scaled towards the corner instead of its centre, gradient shapes rendered empty, a preview panel stuck on the previous file, a Screen Flow map with a missing arrow and boxes drawn on top of each other, and a "libs" badge that counted the whole Gradle cache.
+
+### Fixes
+- Draws vector paths and groups in document order. A `<group>` background emitted after the top-level `<path>` covered the glyph in the preview panel, the gutter icon and the hovers.
+- Scales a `<group>` about its pivot like Android does. A centred `scaleX="0.5"` badge shrank towards the top-left corner.
+- Fills a `<gradient>` shape with its first colour instead of nothing, keeps `strokeLineCap`, `strokeLineJoin` and `strokeMiterLimit` (rounded outline icons had square ends), reads `android:width` even when `viewportWidth` comes first, and decodes XML entities once (`&amp;` in a path no longer doubles).
+- Keeps the Vector Preview on the file you look at. Switching to a drawable that did not convert yet left the previous file's title and drawing, and edits to the new file never refreshed it. The panel now says the file is not renderable yet and follows the edits.
+- Scans only workspace files for the "N references" lens of a drawable. With a warm Gradle cache every entry of every sources JAR was read, and again after each save.
+- Connects a `navigate("detail/42")` to a `composable("detail/{id}")` declared in another file on the Screen Flow map. The legend counted the navigation but no arrow was drawn and the screen sat in the unreached column.
+- Draws one box per route on the Screen Flow map. The same route in `src/main` and `src/debug`, or two dynamic routes at the same line of two files, drew on top of each other; a click now offers the files. The map reads up to 20000 Kotlin files instead of 2000 and says so when the cap is hit.
+- Counts missing library sources by coordinates. The badge compared the declared dependencies with the size of the whole Gradle cache, so a cache filled by other projects read "300 libs, all indexed" while none of this project's had sources, and the download prompt never showed.
+- Stops following redirects after five hops (a looping mirror kept the progress notification spinning forever) and refuses a captive portal's HTML page in place of a sources JAR, which used to be written to the cache and never retried. The summary says "failed" for a network fault and "not found" for a 404.
+- Lists a module's files honestly in the Android view: 5000 instead of an arbitrary 500, with a closing entry when the cap is hit, and the `anim` folder no longer includes `animator/`.
+
 ## 1.42.28
 
 Kotlin Jump 1.42.28 fixes what the index remembered wrongly: ghosts of renamed functions after a restart, a "not in equals/copy" hint on every data class property until the file was edited, a workspace class shadowed by its published JAR, a Cmd+T list full of local variables, files of `:app-widgets` filed under `:app`, and folders deleted or renamed in the explorer that stayed navigable.

@@ -31,7 +31,9 @@ export function vectorXmlToSvg(xml: string): string | undefined {
 }
 
 function convertChildren(body: string): string {
-  let out = '';
+  // Paths and groups in document order: a `<group>` background emitted
+  // after the top-level glyph `<path>` covered it.
+  const frags: { at: number; svg: string }[] = [];
   // Self-closing form first. Attribute values may hold a '/'
   // (`@color/primary`, `?attr/colorControlNormal`), so the lazy class must
   // stop at '>' and not at '/': with [^/] such a path never matched, the body
@@ -59,9 +61,16 @@ function convertChildren(body: string): string {
     const sy     = attrOf(attrs, 'scaleY');
     const px     = attrOf(attrs, 'pivotX') ?? '0';
     const py     = attrOf(attrs, 'pivotY') ?? '0';
+    const pivoted = px !== '0' || py !== '0';
     if (tx || ty) transforms.push(`translate(${tx ?? '0'},${ty ?? '0'})`);
     if (rotate)   transforms.push(`rotate(${rotate},${px},${py})`);
-    if (sx || sy) transforms.push(`scale(${sx ?? '1'},${sy ?? '1'})`);
+    // Android scales about the pivot too (VGroup: T(-pivot) S R T(pivot +
+    // translate)); a centred 0.5 badge used to shrink towards the corner.
+    if (sx || sy) {
+      if (pivoted) transforms.push(`translate(${px},${py})`);
+      transforms.push(`scale(${sx ?? '1'},${sy ?? '1'})`);
+      if (pivoted) transforms.push(`translate(${negate(px)},${negate(py)})`);
+    }
     const transformAttr = transforms.length > 0 ? ` transform="${transforms.join(' ')}"` : '';
     groupSpans.push({ start: gm.index, end: matched.tagEnd, svg: `<g${transformAttr}>${inner}</g>` });
     skipUntil = matched.tagEnd;
@@ -82,9 +91,15 @@ function convertChildren(body: string): string {
     const attrs = m[1] ?? m[2] ?? '';
     const d     = attrOf(attrs, 'pathData');
     if (!d) continue;
-    const fill        = androidColor(attrOf(attrs, 'fillColor') ?? 'none');
-    const stroke      = androidColor(attrOf(attrs, 'strokeColor'));
+    // `<aapt:attr name="android:fillColor"><gradient …>`: the first stop as
+    // a flat colour, instead of an invisible shape.
+    const inner = m[3] ?? '';
+    const fill        = androidColor(attrOf(attrs, 'fillColor') ?? gradientColor(inner, 'fillColor') ?? 'none');
+    const stroke      = androidColor(attrOf(attrs, 'strokeColor') ?? gradientColor(inner, 'strokeColor'));
     const strokeWidth = attrOf(attrs, 'strokeWidth');
+    const lineCap     = attrOf(attrs, 'strokeLineCap');
+    const lineJoin    = attrOf(attrs, 'strokeLineJoin');
+    const miterLimit  = attrOf(attrs, 'strokeMiterLimit');
     const fillRule    = attrOf(attrs, 'fillType')?.toLowerCase() === 'evenodd' ? 'evenodd' : undefined;
     const fillAlpha   = attrOf(attrs, 'fillAlpha');
     const strokeAlpha = attrOf(attrs, 'strokeAlpha');
@@ -94,14 +109,29 @@ function convertChildren(body: string): string {
     const parts = [`d="${escapeAttr(d)}"`, `fill="${escapeAttr(fill.color ?? 'none')}"`];
     if (stroke.color)  parts.push(`stroke="${escapeAttr(stroke.color)}"`);
     if (strokeWidth)   parts.push(`stroke-width="${escapeAttr(strokeWidth)}"`);
+    if (lineCap)       parts.push(`stroke-linecap="${escapeAttr(lineCap.toLowerCase())}"`);
+    if (lineJoin)      parts.push(`stroke-linejoin="${escapeAttr(lineJoin.toLowerCase())}"`);
+    if (miterLimit)    parts.push(`stroke-miterlimit="${escapeAttr(miterLimit)}"`);
     if (fillRule)      parts.push(`fill-rule="${fillRule}"`);
     if (fillOpacity)   parts.push(`fill-opacity="${escapeAttr(fillOpacity)}"`);
     if (strokeOpacity) parts.push(`stroke-opacity="${escapeAttr(strokeOpacity)}"`);
-    out += `<path ${parts.join(' ')}/>`;
+    frags.push({ at: m.index, svg: `<path ${parts.join(' ')}/>` });
   }
 
-  for (const s of groupSpans) out += s.svg;
-  return out;
+  for (const s of groupSpans) frags.push({ at: s.start, svg: s.svg });
+  return frags.sort((a, b) => a.at - b.at).map(f => f.svg).join('');
+}
+
+function negate(v: string): string {
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? String(-n) : `-${v}`;
+}
+
+function gradientColor(pathInner: string, name: 'fillColor' | 'strokeColor'): string | undefined {
+  const re = new RegExp(`<aapt:attr\\s+name="android:${name}"[^>]*>[\\s\\S]*?<gradient\\b([^>]*)>`, 'i');
+  const m = re.exec(pathInner);
+  if (!m) return undefined;
+  return attrOf(m[1], 'startColor') ?? attrOf(m[1], 'centerColor') ?? attrOf(m[1], 'endColor');
 }
 
 function findBalancedGroupEnd(
@@ -160,9 +190,23 @@ function attrOf(attrs: string, name: string): string | undefined {
   // values. Matching only the double-quoted form silently drops any path
   // whose author reached for a single quote — see PR #… and the
   // corresponding `ADV-VEC` test case.
-  const re = new RegExp(`(?:android:)?${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, 'i');
+  // Anchored on a boundary: unanchored, `width` matched inside
+  // `viewportWidth` and a hand-written file got width="24" instead of 48dp.
+  const re = new RegExp(`(?:^|\\s)(?:android:)?${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, 'i');
   const m  = re.exec(attrs);
-  return m?.[1] ?? m?.[2];
+  const raw = m?.[1] ?? m?.[2];
+  // XML entities are decoded here and re-escaped by escapeAttr: `&amp;`
+  // used to come out as `&amp;amp;`.
+  return raw === undefined ? undefined : decodeXmlEntities(raw);
+}
+
+function decodeXmlEntities(v: string): string {
+  if (!v.includes('&')) return v;
+  return v
+    .replace(/&#x([0-9a-f]+);/gi, (_s, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_s, d) => String.fromCodePoint(parseInt(d, 10)))
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
 }
 
 function stripDp(v: string): string {

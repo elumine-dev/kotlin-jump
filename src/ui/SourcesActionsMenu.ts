@@ -160,9 +160,13 @@ export class SourcesActionsMenu implements vscode.Disposable {
         if (fail > 0 && !token.isCancellationRequested) {
           // The bar's networkError state was overwritten by the refresh right
           // after, so no failure was ever visible.
+          // "not found" only for a 404: a timeout or a captive portal is a network fault, not a missing artefact.
+          const notFound = results.filter(r => r.error === 'HTTP 404').length;
+          const failed   = fail - notFound;
           const sample = results.filter(r => r.error).slice(0, 3).map(r => formatCoords(r.coords)).join(', ');
+          const detail = [notFound > 0 ? `${notFound} not found` : '', failed > 0 ? `${failed} failed` : ''].filter(Boolean).join(', ');
           void vscode.window.showWarningMessage(
-            `Kotlin Jump: ${ok} source JAR${ok === 1 ? '' : 's'} downloaded, ${fail} not found (${sample}${fail > 3 ? ', …' : ''}). See the Kotlin Jump output for details.`,
+            `Kotlin Jump: ${ok} source JAR${ok === 1 ? '' : 's'} downloaded, ${detail} (${sample}${fail > 3 ? ', …' : ''}). See the Kotlin Jump output for details.`,
           );
         }
       },

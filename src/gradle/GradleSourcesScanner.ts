@@ -26,6 +26,10 @@ export class GradleSourcesScanner {
    *   Gradle Tooling API. When provided, bypasses the filesystem discovery scan
    *   and indexes only the listed JARs (up to `sourcesJarsMaxCount`).
    */
+  /** `group:artifact:version` of every JAR the last scan indexed. */
+  private lastModules: string[] = [];
+  get indexedModules(): readonly string[] { return this.lastModules; }
+
   async scanAll(toolingJarPaths?: string[]): Promise<{ jars: number; files: number }> {
     const token = this.cancelToken = { cancelled: false };
 
@@ -65,6 +69,7 @@ export class GradleSourcesScanner {
       jars = await this.discoverJars(cacheDir, maxCount);
     }
     if (token.cancelled) return { jars: 0, files: 0 };
+    this.lastModules = jars.map(j => j.moduleName);
     this.log.info(`[jarscan] found ${jars.length} -sources.jar`);
 
     let totalFiles = 0;

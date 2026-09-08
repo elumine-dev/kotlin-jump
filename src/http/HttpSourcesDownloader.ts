@@ -10,6 +10,7 @@ import { MavenCoords, sourcesJarUrl, formatCoords } from './MavenCoordinatesPars
 
 const TIMEOUT_MS  = 30_000;
 const RETRY_COUNT = 3;
+const MAX_REDIRECTS = 5;
 
 export interface DownloadResult {
   coords:    MavenCoords;
@@ -109,6 +110,11 @@ export class HttpSourcesDownloader {
       }
       try {
         const buffer = await this.fetchBuffer(url);
+        // A captive portal answers 200 with an HTML page: written to the
+        // cache it passed for the JAR forever and the lib was never retried.
+        if (buffer.length < 4 || buffer[0] !== 0x50 || buffer[1] !== 0x4b) {
+          throw new Error('not a zip file (captive portal or mirror error page?)');
+        }
         const sha1   = crypto.createHash('sha1').update(buffer).digest('hex');
         const target = path.join(root, c.group, c.artifact, c.version, sha1);
         await fs.mkdir(target, { recursive: true });
@@ -128,7 +134,8 @@ export class HttpSourcesDownloader {
     return { coords: c, cachePath: undefined, bytes: 0, error: lastErr?.message ?? 'unknown' };
   }
 
-  private fetchBuffer(urlStr: string): Promise<Buffer> {
+  private fetchBuffer(urlStr: string, hops = 0): Promise<Buffer> {
+    if (hops > MAX_REDIRECTS) return Promise.reject(new Error('too many redirects'));
     return new Promise((resolve, reject) => {
       const url = new URL(urlStr);
       const lib = url.protocol === 'https:' ? https : http;
@@ -146,7 +153,7 @@ export class HttpSourcesDownloader {
           if ((res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307 || res.statusCode === 308)
               && res.headers.location) {
             res.resume();  // discard body
-            this.fetchBuffer(new URL(res.headers.location, urlStr).toString())
+            this.fetchBuffer(new URL(res.headers.location, urlStr).toString(), hops + 1)
               .then(resolve, reject);
             return;
           }

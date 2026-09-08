@@ -99,6 +99,22 @@ export function formatCoords(coords: MavenCoords): string {
 }
 
 /**
+ * Declared dependencies with no indexed `-sources.jar`. Matched on
+ * `group:artifact` only: Gradle may resolve another version than the
+ * catalog's. The former estimate, declared count minus the whole cache,
+ * read "300 libs, all indexed" on a machine whose cache came from other
+ * projects while none of this one's had sources.
+ */
+export function missingCoords(declared: readonly MavenCoords[], indexedModules: Iterable<string>): MavenCoords[] {
+  const have = new Set<string>();
+  for (const m of indexedModules) {
+    const parts = m.split(':');
+    if (parts.length >= 2) have.add(`${parts[0]}:${parts[1]}`);
+  }
+  return declared.filter(c => !have.has(`${c.group}:${c.artifact}`));
+}
+
+/**
  * Two coords are equal if their group + artifact + version all match.
  * Used to deduplicate when multiple parsers extract the same dep.
  */

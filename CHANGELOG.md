@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.42.47
+
+Kotlin Jump 1.42.47 contains no change to the extension. Two of our own Logcat tests were launching a real `adb logcat` process while the suite ran.
+
+### Fixes
+- The unit suite no longer starts a child process. Two tests added in the last few releases called the device switch directly, which starts the stream, which spawns adb. They passed either way, so nothing pointed at it: the result depended on whether adb was installed on the machine, and each run left the two second reconnection timer behind.
+- A new test holds the line. It replaces the adb entry point with one that refuses to run and asserts that switching device, clearing, following a process and disposing the service all reach it zero times.
+
 ## 1.42.46
 
 Kotlin Jump 1.42.46 pays back the cost of the last two releases. Recognising build variant test source sets had made the path check three times slower, and it runs once per candidate on the Go to Definition path and once per symbol in the dead code scan.

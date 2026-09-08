@@ -217,6 +217,11 @@ describe('Reconnexion au même appareil Logcat', () => {
     const s: any = new LogcatService({ lookupFqn: () => undefined } as any, {
       channel: { appendLine: () => {} }, debug: () => {}, info: () => {}, warn: () => {}, error: () => {},
     } as any);
+    // startStream lance un vrai `adb logcat`. Le neutraliser garde le test
+    // dans le processus : sans cela la suite unitaire lançait un processus
+    // enfant, dépendait de la présence d'adb sur la machine, et laissait
+    // derrière elle le minuteur de reconnexion de 2 s.
+    s.startStream = () => {};
     s.currentSerial = 'PIXEL7';
     s.onEntry({ ts: Date.UTC(2026, 3, 29, 22, 0, 0), pid: 1, tid: 1, level: 'I', tag: 'T', message: 'm', seq: 1 });
     const anchor = s.resumeSince();

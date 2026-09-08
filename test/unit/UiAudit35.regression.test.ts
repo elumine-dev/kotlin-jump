@@ -191,6 +191,11 @@ describe('Changement d\'appareil Logcat', () => {
     const { LogcatService } = await import('../../src/logcat/LogcatService');
     const noopLog: any = { channel: { appendLine: () => {} }, debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
     const svc: any = new LogcatService({ lookupFqn: () => undefined } as any, noopLog);
+    // startStream lance un vrai `adb logcat`. Le neutraliser garde le test
+    // dans le processus : sans cela la suite unitaire lançait un processus
+    // enfant, dépendait de la présence d'adb sur la machine, et laissait
+    // derrière elle le minuteur de reconnexion de 2 s.
+    svc.startStream = () => {};
     svc.onEntry({ ts: Date.UTC(2026, 3, 29, 22, 0, 0), pid: 1, tid: 1, level: 'I', tag: 'T', message: 'm', seq: 1 });
     expect(svc.resumeSince()).toBeTruthy();
     // L'horodatage vient de l'horloge de l'appareil précédent. Un émulateur en

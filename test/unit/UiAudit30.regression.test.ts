@@ -5,6 +5,9 @@ import { parse } from '../../src/indexer/KotlinParser';
 import { FileWatcher } from '../../src/watcher/FileWatcher';
 import { withoutUnappliedPlugins, declaresPublishing, declaresLibraryPlugin } from '../../src/indexer/ResourceCorpus';
 import { findUnusedRemoteConfigKeys } from '../../src/providers/unusedRemoteConfigKeys';
+import { buildWorkspaceNavigation } from '../../src/ui/ScreenFlowPanel';
+import { gatherRouteConstants } from '../../src/indexer/NavigationIndex';
+import { keepJdkEntry } from '../../src/jdk/JdkSourcesScanner';
 
 // Audit 30 : régressions que nos propres correctifs des versions 1.42.27 à
 // 1.42.30 avaient introduites, trouvées par la chasse adversariale.
@@ -79,5 +82,87 @@ describe('Lecture de toutes les clés Remote Config', () => {
       const sources = [f(defaults, xml), f('/proj/app/src/main/kotlin/Admin.kt', `package p\nfun dump() = ${call}\n`)];
       expect(findUnusedRemoteConfigKeys({ sources }), call).toEqual([]);
     }
+  });
+});
+
+describe('Le pré-filtre de la carte des écrans', () => {
+  // Le filtre ajouté pour éviter le gel ne connaissait que `const val` : un
+  // Screen.kt en hiérarchie scellée, la forme la plus répandue, était écarté
+  // et ses écrans revenaient en « dynamic route » sur la carte.
+  const SCREENS = [
+    'package app.nav',
+    '',
+    'sealed class Screen(val route: String) {',
+    '    object Home : Screen("home")',
+    '    object Detail : Screen("detail/{id}")',
+    '}',
+  ].join('\n');
+  const GRAPH = [
+    'package app.nav',
+    '',
+    'fun NavGraphBuilder.graph(nc: NavHostController) {',
+    '    composable(Screen.Home.route) { HomeScreen(onOpen = { nc.navigate(Screen.Detail.route) }) }',
+    '    composable(Screen.Detail.route) { DetailScreen() }',
+    '}',
+  ].join('\n');
+
+  it('résout les routes déclarées dans un fichier sans const val ni navigation', async () => {
+    const files: Record<string, string> = {
+      'file:///proj/Screen.kt': SCREENS,
+      'file:///proj/Graph.kt': GRAPH,
+      'file:///proj/Repo.kt': 'package app\nclass Repo { fun load() = 1 }',
+    };
+    const origFind = workspace.findFiles;
+    const origRead = workspace.fs.readFile;
+    workspace.findFiles = (async (pattern: any) =>
+      (typeof pattern === 'string' && pattern.startsWith('**/res') ? [] : Object.keys(files).map(u => Uri.parse(u)))) as any;
+    workspace.fs.readFile = (async (u: any) => Buffer.from(files[u.toString()] ?? '')) as any;
+    try {
+      const nav = await buildWorkspaceNavigation();
+      expect(nav.nodes.map(n => n.route).sort()).toEqual(['detail/{id}', 'home']);
+      expect(nav.nodes.some(n => n.dynamic)).toBe(false);
+      expect(nav.edges).toEqual([{ from: 'home', to: 'detail/{id}' }]);
+    } finally {
+      workspace.findFiles = origFind;
+      workspace.fs.readFile = origRead;
+    }
+  });
+});
+
+describe('Routes dont le chemin porte un paramètre', () => {
+  it('une accolade dans la route n\'ouvre pas un bloc', () => {
+    const kt = [
+      'package app.nav',
+      '',
+      'sealed class Screen(val route: String) {',
+      '    object Home : Screen("home")',
+      '    object Detail : Screen("detail/{id}")',
+      '    object Profile : Screen("profile")',
+      '}',
+    ].join('\n');
+    const c = gatherRouteConstants(kt);
+    // `detail/{id}` passait pour l'ouverture d'un bloc : Detail devenait son
+    // propre parent, et tout écran déclaré ensuite perdait son nom qualifié.
+    expect(c.get('Screen.Detail.route')).toBe('detail/{id}');
+    expect(c.get('Screen.Home.route')).toBe('home');
+    expect(c.get('Screen.Profile.route')).toBe('profile');
+  });
+});
+
+describe('Modules du JDK indexés', () => {
+  it('garde ce qu\'on ouvre vraiment et écarte le reste', () => {
+    for (const kept of [
+      'java.base/java/lang/String.java',
+      'java.base/java/util/ArrayList.java',
+      'java.sql/java/sql/Connection.java',
+      'java/lang/String.java',              // JDK 8 : pas de préfixe de module
+    ]) expect(keepJdkEntry(kept), kept).toBe(true);
+
+    for (const dropped of [
+      'java.desktop/javax/swing/JButton.java',
+      'jdk.compiler/com/sun/tools/javac/Main.java',
+      'jdk.jshell/jdk/jshell/JShell.java',
+      'java.management/sun/management/Agent.java',
+    ]) expect(keepJdkEntry(dropped), dropped).toBe(false);
   });
 });

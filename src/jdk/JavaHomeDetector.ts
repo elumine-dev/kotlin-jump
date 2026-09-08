@@ -49,25 +49,38 @@ export async function detectJdkHome(): Promise<JdkLocation | undefined> {
     .getConfiguration('kotlinJump')
     .get<string>('jdkHome', '')
     .trim();
+  // A JDK without sources answers nothing: it is kept as a fallback while the
+  // next candidate is tried. JAVA_HOME pointing at a JRE used to end the
+  // search, so the machine's real JDK was never looked at.
+  let withoutSources: JdkLocation | undefined;
+  const consider = (found: JdkLocation | undefined): JdkLocation | undefined => {
+    if (!found) return undefined;
+    if (found.srcZip) return found;
+    withoutSources ??= found;
+    return undefined;
+  };
+
   if (settingPath) {
-    const validated = await validateJdk(settingPath, 'setting');
-    if (validated) return validated;
+    const settled = consider(await validateJdk(settingPath, 'setting'));
+    if (settled) return settled;
     // Fall through if setting points to invalid path — try other methods.
   }
 
   // 2. JAVA_HOME env var (most common)
   const envHome = (process.env['JAVA_HOME'] ?? '').trim();
   if (envHome) {
-    const validated = await validateJdk(envHome, 'env');
-    if (validated) return validated;
+    const settled = consider(await validateJdk(envHome, 'env'));
+    if (settled) return settled;
   }
 
   // 3. Platform-specific
   const platform = process.platform;
-  if (platform === 'darwin') return detectMacOs();
-  if (platform === 'linux')  return detectLinux();
-  if (platform === 'win32')  return detectWindows();
-  return undefined;
+  const fromPlatform =
+    platform === 'darwin' ? await detectMacOs()
+    : platform === 'linux' ? await detectLinux()
+    : platform === 'win32' ? await detectWindows()
+    : undefined;
+  return fromPlatform?.srcZip ? fromPlatform : (withoutSources ?? fromPlatform);
 }
 
 /** Validates that `home` is a usable JDK directory and locates `lib/src.zip`. */
@@ -87,12 +100,12 @@ async function validateJdk(
     await fs.access(path.join(binDir, javaExe));
   } catch { return undefined; }
 
-  const srcZipPath = path.join(home, 'lib', 'src.zip');
+  // JDK 9 and later ship `lib/src.zip`; JDK 8 puts it at the root, where
+  // `lib/` only holds tools.jar. Looking in one place found nothing on 8.
   let srcZip: string | undefined;
-  try {
-    await fs.access(srcZipPath);
-    srcZip = srcZipPath;
-  } catch { srcZip = undefined; }
+  for (const candidate of [path.join(home, 'lib', 'src.zip'), path.join(home, 'src.zip')]) {
+    try { await fs.access(candidate); srcZip = candidate; break; } catch { /* keep looking */ }
+  }
 
   const majorVersion = parseJdkVersionFromPath(home);
   return { jdkHome: home, srcZip, majorVersion, source };

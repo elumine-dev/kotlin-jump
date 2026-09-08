@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.35
+
+Kotlin Jump 1.42.35 fixes the Screen Flow map on the commonest way to declare routes, a sealed class of objects. A route holding a path parameter was read as an opening brace, so the screens declared after it lost their qualified name and came back as dynamic routes. The JDK sources are also found on a JDK 8 and indexed four times faster.
+
+### Fixes
+- Reads a sealed route hierarchy correctly. In `object Detail : Screen("detail/[id]")`, the braces of the path parameter looked like a block opening, so that screen became its own owner and every screen declared after it lost its qualified name. On the map they showed as dynamic routes with no arrow, which is exactly the shape most projects use.
+- Keeps such a file in the map at all. The filter added last version to stop the map from freezing only knew the `const val ROUTE = "…"` form, so a file declaring its routes as objects was skipped entirely.
+- Finds the JDK sources on a JDK 8, where `src.zip` sits at the root rather than under `lib`, and stops giving up when `JAVA_HOME` points at a runtime with no sources: that is now a fallback while the machine's real JDK is looked for.
+- Indexes the JDK four times faster. Four fifths of a modern `src.zip` is the compiler, JShell, flight recorder, Swing and the internal `sun` packages, none of which a Kotlin or Android developer opens. The scan keeps `java.base` and the modules actually navigated, and still takes everything on a JDK 8.
+
 ## 1.42.34
 
 Kotlin Jump 1.42.34 undoes seven side effects of its own recent fixes. The dead code detector had gone silent on whole projects, renaming a folder killed the initial index, a `gradlew clean` froze the window, and the Screen Flow map took seconds to open on a large workspace.

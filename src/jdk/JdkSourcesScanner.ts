@@ -13,6 +13,23 @@ import { detectJdkHome, JdkLocation } from './JavaHomeDetector';
 const MAX_ENTRY_BYTES = 2 * 1024 * 1024;
 
 /**
+ * Modules worth indexing. A modern `src.zip` is mostly the compiler, JFR,
+ * JShell, Swing and the `sun` internals: measured on a real JDK, 81 % of the
+ * entries come from modules a Kotlin or Android developer never opens, and
+ * indexing them cost seconds of CPU and hundreds of megabytes on every start.
+ */
+const JDK_MODULES = /^(?:java\.base|java\.logging|java\.net\.http|java\.sql|java\.xml|java\.naming|java\.instrument|java\.compiler)\//;
+
+/** JDK 8 entries have no module prefix (`java/lang/String.java`) and are all kept. */
+export function keepJdkEntry(name: string): boolean {
+  const slash = name.indexOf('/');
+  if (slash < 0) return false;
+  const first = name.slice(0, slash);
+  if (!first.includes('.')) return true;
+  return JDK_MODULES.test(name);
+}
+
+/**
  * Indexes the Java source files inside a JDK's `lib/src.zip`. Mirrors
  * `GradleSourcesScanner` but for a single ZIP rather than a directory
  * walk.
@@ -96,6 +113,7 @@ export class JdkSourcesScanner {
       for (const [name, entry] of Object.entries(entries)) {
         if (this.cancelToken.cancelled) break;
         if (!name.endsWith('.java')) continue;
+        if (!keepJdkEntry(name)) continue;
         // Skip module-info / package-info — they describe modules/packages,
         // not types worth navigating to.
         if (name.endsWith('module-info.java') || name.endsWith('package-info.java')) continue;

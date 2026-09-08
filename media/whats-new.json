@@ -1,34 +1,34 @@
 {
-  "version": "1.42.34",
+  "version": "1.42.35",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Seven fixes that had fixed too much",
-  "summary": "Kotlin Jump 1.42.34 undoes seven side effects of its own recent fixes. The dead code detector had gone silent on whole projects, renaming a folder killed the initial index, a `gradlew clean` froze the window, and the Screen Flow map took seconds to open on a large workspace.",
+  "tagline": "Every screen back on the map",
+  "summary": "Kotlin Jump 1.42.35 fixes the Screen Flow map on the commonest way to declare routes, a sealed class of objects. A route holding a path parameter was read as an opening brace, so the screens declared after it lost their qualified name and came back as dynamic routes. The JDK sources are also found on a JDK 8 and indexed four times faster.",
   "highlights": [
     {
-      "title": "Dead code detection is back",
+      "title": "Sealed route hierarchies read right",
       "kind": "fix",
-      "description": "A root build file declaring `alias(libs.plugins.maven.publish) apply false` made the whole workspace read as published API, so nothing was ever reported."
+      "description": "A route holding a path parameter was taken for an opening brace, so the screens after it lost their qualified name and drew as dynamic routes."
     },
     {
-      "title": "Renaming a folder keeps the index",
+      "title": "Route files no longer skipped",
       "kind": "fix",
-      "description": "Adding or renaming a folder cancelled every scan in flight, the initial index included."
+      "description": "The filter that keeps the map from freezing now knows both shapes it must read, the constant and the object hierarchy."
     },
     {
-      "title": "No more freeze on build or map",
+      "title": "JDK sources found and lighter",
       "kind": "fix",
-      "description": "A `gradlew clean` no longer sweeps the index per deleted file, and the Screen Flow map skips files that hold no navigation."
+      "description": "A JDK 8 keeps `src.zip` at its root, a runtime without sources is only a fallback, and the scan drops the four fifths nobody opens."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "A plugin declared with `apply false` no longer marks its module, or the project root, as published.",
-        "A folder added or renamed is indexed on its own scan instead of cancelling the one in progress.",
-        "The delete watcher honours the exclude patterns, so build output no longer triggers a full index sweep.",
-        "The Screen Flow map skips files without a route or a navigation before scanning their comments.",
-        "The Logcat error banner survives the rows already in flight, `items.all { }` no longer silences the Remote Config detector, and a capped listing blocks permission removal too."
+        "Braces inside a route string no longer open a block, so a sealed hierarchy keeps the qualified name of every screen.",
+        "A file declaring routes as objects is no longer skipped by the map's pre filter.",
+        "`src.zip` is looked for at the root as well as under `lib`, which is where a JDK 8 puts it.",
+        "`JAVA_HOME` pointing at a runtime without sources no longer ends the search for a JDK.",
+        "The JDK scan keeps `java.base` and the modules actually navigated, cutting four fifths of the work."
       ]
     }
   ],

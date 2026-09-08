@@ -383,6 +383,24 @@ export function findOrphans(parsed: ParsedNavigation): string[] {
 
 /** Route constants of a file: `const val X = "…"` inside an object,
  *  exposed as both `Object.X` AND `X`. */
+/** The line with every string literal's content blanked, so a `{` inside a route is not a block. */
+function blankStringContents(line: string): string {
+  let out = '';
+  let inString = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inString) {
+      if (ch === '\\') { out += '  '; i++; continue; }
+      out += ch === '"' ? '"' : ' ';
+      if (ch === '"') inString = false;
+      continue;
+    }
+    out += ch;
+    if (ch === '"') inString = true;
+  }
+  return out;
+}
+
 export function gatherRouteConstants(text: string): Map<string, string> {
   const constants = new Map<string, string>();
   const lines = stripComments(text).split('\n');
@@ -390,8 +408,12 @@ export function gatherRouteConstants(text: string): Map<string, string> {
   let depth = 0;
 
   for (const line of lines) {
+    // Braces inside a string literal are text. `object Detail : Screen("detail/{id}")`
+    // looked like a block opening, so Detail pushed itself as its own owner and
+    // `Screen.Detail.route` was never recorded: the map drew a dynamic route.
+    const blanked = blankStringContents(line);
     const obj = /^\s*(?:\w+\s+)*(?:object|class|interface)\s+(\w+)/.exec(line);
-    if (obj && line.includes('{')) {
+    if (obj && blanked.includes('{')) {
       objectStack.push({ name: obj[1], depth });
     }
     // `sealed class Screen(val route: String) { object Home : Screen("home") }`:
@@ -408,7 +430,7 @@ export function gatherRouteConstants(text: string): Map<string, string> {
       const owner = objectStack[objectStack.length - 1];
       if (owner) constants.set(`${owner.name}.${cv[1]}`, cv[2]);
     }
-    for (const ch of line) {
+    for (const ch of blanked) {
       if (ch === '{') depth++;
       else if (ch === '}') {
         depth--;

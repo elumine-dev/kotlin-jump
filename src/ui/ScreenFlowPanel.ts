@@ -29,6 +29,10 @@ interface MergedNavigation extends Omit<ParsedNavigation, 'nodes'> {
 
 const MAX_KT_FILES = 20_000;
 
+/** The two shapes gatherRouteConstants reads, plus any navigation call. */
+const MAY_DECLARE_ROUTES =
+  /\bconst\s+val\b|\b(?:object|class)\s+\w+[^\n]*:\s*\w+\s*\(|\b(?:NavHost|composable|navigate)\s*\(/;
+
 export async function buildWorkspaceNavigation(): Promise<MergedNavigation> {
   const files = await vscode.workspace.findFiles('**/*.kt', '**/{build,.gradle}/**', MAX_KT_FILES);
   const texts = new Map<string, string>();
@@ -45,8 +49,12 @@ export async function buildWorkspaceNavigation(): Promise<MergedNavigation> {
   for (const t of texts.values()) {
     // gatherRouteConstants goes through stripComments, a character by
     // character scan. Paying it on 20000 files, most of which hold neither a
-    // route nor a navigation, froze the extension host for seconds.
-    if (!/\bconst\s+val\b/.test(t) && !/\b(NavHost|composable|navigate)\s*\(/.test(t)) continue;
+    // route nor a navigation, froze the extension host for seconds. The test
+    // must cover BOTH shapes it reads: `const val ROUTE = "…"` and the
+    // `object Home : Screen("home")` of a sealed route hierarchy. Matching
+    // only the first dropped every Screen.kt, and named screens came back as
+    // dynamic routes on the map.
+    if (!MAY_DECLARE_ROUTES.test(t)) continue;
     for (const [k, v] of gatherRouteConstants(t)) constants.set(k, v);
   }
 

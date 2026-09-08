@@ -257,3 +257,16 @@ describe('Positions des écritures d\'état', () => {
     expect(collectWriteSites('_a', tail).length).toBe(1);
   });
 });
+
+describe('Réglage écrit avec son propre préfixe src', () => {
+  it('src/test/kotlin nomme la même chose que test/kotlin, variantes comprises', () => {
+    const S = ['src/test/kotlin'];
+    expect(isTestPath('/proj/app/src/test/kotlin/FooTest.kt', S)).toBe(true);
+    // La première version lisait le segment comme la paire (src, test) et
+    // ratait toutes les variantes d'un réglage écrit ainsi.
+    expect(isTestPath('/proj/app/src/testDebug/kotlin/FooTest.kt', S)).toBe(true);
+    // Le reste du segment reste exigé à l'identique.
+    expect(isTestPath('/proj/app/src/testDebug/res/values/strings.xml', S)).toBe(false);
+    expect(isTestPath('/proj/app/src/main/kotlin/Foo.kt', S)).toBe(false);
+  });
+});

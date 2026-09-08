@@ -41,10 +41,18 @@ export function organizeImports(
   const lastLine  = bounds.last;
 
   // ── 2. Parse each import line in the block ────────────────────────────────
+  // A comment inside the block (`// ktlint-disable no-wildcard-imports`) is
+  // kept where it is: it splits the block into runs sorted separately, so the
+  // comment keeps standing above the import it was written for.
   const parsed: ParsedImport[] = [];
+  const separators: { afterIndex: number; text: string }[] = [];
   for (let i = firstLine; i <= lastLine; i++) {
     const m = RE_IMPORT_LINE.exec(lines[i]);
-    if (!m) continue; // blank line or comment inside block — dropped
+    if (!m) {
+      const trimmed = lines[i].trim();
+      if (trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*')) separators.push({ afterIndex: parsed.length, text: lines[i] });
+      continue; // blank line — dropped
+    }
     const path       = m[1];
     const alias      = m[2] ?? undefined;
     const isWildcard = path.endsWith('.*');
@@ -94,13 +102,31 @@ export function organizeImports(
     }
   }
 
-  // ── 5. Sort alphabetically by path ───────────────────────────────────────
-  kept.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  // ── 5. Sort alphabetically by path, within each comment-separated run ────
+  const byPath = (a: ParsedImport, b: ParsedImport) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+  const out: string[] = [];
+  if (separators.length === 0) {
+    kept.sort(byPath);
+    out.push(...kept.map(i => i.fullText));
+  } else {
+    const keptSet = new Set(kept);
+    let cursor = 0;
+    const flush = (upTo: number) => {
+      const run = parsed.slice(cursor, upTo).filter(i => keptSet.has(i)).sort(byPath);
+      out.push(...run.map(i => i.fullText));
+      cursor = upTo;
+    };
+    for (const sep of separators) {
+      flush(sep.afterIndex);
+      out.push(sep.text);
+    }
+    flush(parsed.length);
+  }
 
   return {
     firstLine,
     lastLine,
-    replacement: kept.map(i => i.fullText).join('\n'),
+    replacement: out.join('\n'),
     removed,
   };
 }

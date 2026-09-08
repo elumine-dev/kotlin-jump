@@ -1,31 +1,30 @@
 {
-  "version": "1.42.10",
+  "version": "1.42.11",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Java locals, honest caches, a Run button that runs",
-  "summary": "Kotlin Jump 1.42.10 closes the fifth audit: a dead-code corpus that a cancelled scan could poison, Java parameters that Rename treated as workspace symbols, an Android Run button that could pin a non-existent Gradle task forever, and a Logcat banner whose trigger could never fire.",
+  "tagline": "Dead-code fixes that delete only the dead code",
+  "summary": "Kotlin Jump 1.42.11 audits the edits the dead-code family writes. A removal that could climb to the licence header, a catalog fix that broke the next alias, a \"Delete file\" offered on a file a test still needs, offsets computed on the disk copy of a file you were editing, and a manifest removal that stopped at the first child tag.",
   "highlights": [
     {
-      "title": "A cancelled scan cannot poison Remove All",
+      "title": "Removal extents that stay put",
       "kind": "fix",
-      "description": "A dead-code scan cut short by Cancel left no trace of the files it skipped, was cached for a minute, and \"Remove All Unreferenced Symbols\" could delete code those files use. Cancelled scans are never cached, and saving a source invalidates the corpus."
+      "description": "A /* warm */ at the end of the line above made \"Delete unreferenced …\" climb to the licence header. The extent now walks only through comment-only lines, skips annotation lines that declare something of their own, and this feeds the member, island and \"Delete file\" fixes too."
     },
     {
-      "title": "Java parameters are locals",
+      "title": "Catalog and file deletions that keep the build green",
       "kind": "fix",
-      "description": "The scope index only knew Kotlin's fun. In a Java method, Cmd+Click on a parameter jumped to a Kotlin property elsewhere and F2 renamed every same-named symbol the workspace could reach. Parameters, locals and lambda parameters resolve inside the method now."
+      "description": "A shared [versions] entry is freed only by its last referrer, \"Delete X.kt\" is offered only when nothing test-only remains in it, and a Remove All never mixes a file deletion with a text edit on the same file."
     },
     {
-      "title": "Android Run that recovers",
+      "title": "Edits on the text you see",
       "kind": "fix",
-      "description": "A discovery timeout no longer pins a non-existent install task forever, the Run button gets its command back once the project resolves, the launch uses the resolved adb binary, and the Logcat \"adb not found\" banner finally has a trigger that fires."
+      "description": "The corpus reads open editors with unsaved changes, so offsets match the document instead of the disk copy. A manifest component is removed whole, comments inside the import block survive Organize Imports, and Smart Join moves a trailing comment after the chain."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Fetches AndroidX and Google library sources from Google's Maven, counts progress once per coordinate, and reports failures in a message.",
-        "Reads the library sources bar right (missing/total, real stdlib state, live reaction to kotlinJump.indexSourcesJars) and fixes plurals and empty summaries in the dead-code commands."
+        "The Remote Config quick fix title says it edits this file only, and \"Find Everything Unused\" runs the symbol scan once instead of twice."
       ]
     }
   ],

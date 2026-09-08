@@ -326,9 +326,12 @@ function orphanedVersionOf(
   if (!version) return undefined;
   if (live.has(`versions:${version.raw}`)) return undefined;
 
+  // Each alias gets its own quick fix, applied one at a time: a version two
+  // dead aliases share went with the first one and left the second pointing
+  // at nothing, and Gradle refused the catalog. Only the sole referrer frees it.
   const others = catalog.aliases.filter(
     a => a.versionRef === alias.versionRef && a.raw !== alias.raw);
-  if (others.some(o => live.has(`${o.namespace}:${o.raw}`))) return undefined;
+  if (others.length > 0) return undefined;
 
   return { name: version.raw, removeStart: version.removeStart, removeEnd: version.removeEnd };
 }

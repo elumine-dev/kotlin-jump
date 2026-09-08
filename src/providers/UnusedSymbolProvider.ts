@@ -182,12 +182,19 @@ export async function buildSymbolRemovalEdit(
     perFile.set(f.path, list);
   }
 
+  // Decided up front: a stale-import edit aimed at a file this same edit
+  // deletes made VS Code reject the whole WorkspaceEdit, silently.
+  const deleted = new Set<string>();
+  for (const [p, group] of perFile) {
+    if (group.every(f => f.fileBecomesEmpty) && group[0].fileBecomesEmpty) deleted.add(p);
+  }
+
   for (const [p, group] of perFile) {
     const text = await textOf(p);
     if (text === undefined) continue;
 
     // Never a deleteFile AND range edits on the same URI in one WorkspaceEdit.
-    if (group.every(f => f.fileBecomesEmpty) && group[0].fileBecomesEmpty) {
+    if (deleted.has(p)) {
       edit.deleteFile(
         vscode.Uri.file(p),
         { ignoreIfNotExists: true },
@@ -218,6 +225,7 @@ export async function buildSymbolRemovalEdit(
     // goes away.
     for (const f of group) {
       for (const stale of f.staleImports) {
+        if (deleted.has(stale.path)) continue;
         const importText = await textOf(stale.path);
         if (importText === undefined) continue;
         const line = importText.split('\n')[stale.line];

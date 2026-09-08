@@ -74,8 +74,10 @@ export class UnusedRemoteConfigKeyProvider implements vscode.CodeActionProvider,
     const mine = here.key.declarations.find(d => d.path === document.uri.fsPath);
     if (!mine) return [];
     const others = here.key.declarations.length - 1;
+    // deleteTitleFor() says "from all N defaults files" for the workspace
+    // command; this fix edits the open file only.
     const title = others > 0
-      ? `${deleteTitleFor(here.key)} here (${others} other variant${others > 1 ? 's' : ''} left)`
+      ? `Delete unread Remote Config key ${here.key.name} here (${others} other variant${others > 1 ? 's' : ''} left)`
       : deleteTitleFor(here.key);
 
     const action = new vscode.CodeAction(title, vscode.CodeActionKind.QuickFix);

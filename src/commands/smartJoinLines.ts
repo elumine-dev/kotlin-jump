@@ -35,6 +35,12 @@ export function smartJoin(currentLine: string, nextLine: string): JoinResult {
 
   // 3. Call chain: the next line starts with `.` or `?.` → glued on.
   if (next.startsWith('.') || next.startsWith('?.')) {
+    // `val x = listOf(1) // ints` + `.map { … }` glued as is turned the
+    // chain into comment text; the comment moves after the chain.
+    const comment = /\s*\/\/.*$/.exec(currentLine);
+    if (comment && !isInsideCommentOrStringLoose(currentLine, comment.index)) {
+      return { joined: currentLine.slice(0, comment.index).trimEnd() + next + ' ' + comment[0].trim(), special: true };
+    }
     return { joined: currentLine.trimEnd() + next, special: true };
   }
 
@@ -85,4 +91,14 @@ export class SmartJoinLinesProvider implements vscode.CodeActionProvider {
     };
     return [action];
   }
+}
+
+/** True when the `//` at `index` sits inside a string literal (a URL, typically). */
+function isInsideCommentOrStringLoose(line: string, index: number): boolean {
+  let quotes = 0;
+  for (let i = 0; i < index; i++) {
+    if (line[i] === '\\') { i++; continue; }
+    if (line[i] === '"') quotes++;
+  }
+  return quotes % 2 === 1;
 }

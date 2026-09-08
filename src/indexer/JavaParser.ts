@@ -22,21 +22,31 @@ const RE_CLASS = /^\s*(?:(?:public|protected|private|static|abstract|final|stric
 // Lazy `[^(=;\n]*?` covers all return-type shapes (including List<Map<K,V>>) without
 // trying to grammar the type — it just stops at `(` or `=` or `;`.
 // Requires a modifier so bare calls like `foo(` and local-var initializers don't match.
-const RE_METHOD = /^\s*(?:(?:public|protected|private|static|final|abstract|synchronized|native|strictfp|default)\s+)+(?:<[^(]*>\s+)?[^(=;\n]*?(\w+)\s*\(/;
+const RE_METHOD = /^\s*(?:(?:public|protected|private|static|final|abstract|synchronized|native|strictfp|default)\s+)+(?:<[^(]*>\s+)?[^(=;{\n]*?(\w+)\s*\(/;
 // Package-private method: no access modifier required, but an explicit return type
 // (void, a Java primitive, or an uppercase-starting type name) is required to distinguish
 // method declarations from local variable declarations and method calls.
-const RE_PKGPRIVATE_METHOD = /^\s*(?:(?:static|final|abstract|synchronized|native|strictfp)\s+)*(?:(?:void|boolean|byte|char|short|int|long|float|double)(?:\[\])*|[A-Z]\w*(?:<[^(]*>)?(?:\[\])*)\s+[^(=;\n]*?(\w+)\s*\(/;
+const RE_PKGPRIVATE_METHOD = /^\s*(?:(?:static|final|abstract|synchronized|native|strictfp)\s+)*(?:(?:void|boolean|byte|char|short|int|long|float|double)(?:\[\])*|[A-Z]\w*(?:<[^(]*>)?(?:\[\])*)\s+[^(=;{\n]*?(\w+)\s*\(/;
 // Field: at least one explicit modifier + type + name followed by = or ;
 // `[^(=;\n]*?` stops at `(` so method declarations never match here.
 const RE_FIELD  = /^\s*(?:(?:public|protected|private|static|final|volatile|transient)\s+)+[^(=;\n]*?(\w+)\s*[=;]/;
+// Package-private field: no modifier at all. Hilt/Dagger field injection
+// forbids `private` (`@Inject AnalyticsAdapter analytics;`), Mockito's
+// `@Mock UserRepository repository;` and interface constants (`String KEY = "k";`)
+// follow the same shape. Same explicit-type rule as RE_PKGPRIVATE_METHOD so a
+// statement never matches; a local `Foo foo = …` inside a body does, like
+// the Kotlin parser indexes `val` locals.
+const RE_PKGPRIVATE_FIELD = /^\s*(?:(?:static|final|volatile|transient)\s+)*(?:(?:boolean|byte|char|short|int|long|float|double)(?:\[\])*|[A-Z]\w*(?:<[^=;]*>)?(?:\[\])*)\s+(\w+)\s*[=;]/;
 /**
  * Annotations written on the SAME line as the declaration they qualify:
  * `@Deprecated public void oldWay() {}`. Every declaration pattern above
  * expects a modifier first, so such a line matched nothing at all and the
  * member was never indexed. Measured on one project: 2393 occurrences.
  */
-const RE_LEADING_ANNOTATIONS = /^(\s*)((?:@[\w.]+(?:\([^()]*\))?\s+)+)/;
+const RE_LEADING_ANNOTATIONS = /^(\s*)((?:@(?!interface\b)[\w.]+(?:\((?:[^()]|\([^()]*\))*\))?\s+)+)/;
+// Enum constant: the identifier must be complete (`Home` must not index as
+// `H`), optionally preceded by same-line annotations (group 1 = their length).
+const RE_ENUM_CONSTANT = /^(\s*(?:@[\w.]+(?:\((?:[^()]|\([^()]*\))*\))?\s+)*)([A-Z]\w*)\s*(?:[,(;{]|\/\/|$)/;
 
 /**
  * Blanks leading annotations, PRESERVING LENGTH so every `raw.indexOf(name)`
@@ -59,8 +69,10 @@ export function parseJava(uriString: string, text: string): ParsedFile {
   const importSet = new Set<string>();
   let packageName = '';
   let inBlockComment = false;
+  let inTextBlock    = false; // inside a `"""` text block that started on an earlier line
   let braceDepth = 0;
   let enumBraceDepth = -1; // brace depth at which the current enum was declared; -1 = not in enum
+  let enumParenD     = 0;  // open parens carried across the lines of one enum constant's arguments
   // A real JUnit class carries four (@RunWith @Config @LargeTest @Ignore), so
   // three would silently drop the first one.
   const annotationWindow: string[] = []; // last ≤8 annotation lines before a declaration
@@ -68,6 +80,15 @@ export function parseJava(uriString: string, text: string): ParsedFile {
   const len = text.length;
   let pos     = 0;
   let lineNum = 0;
+
+  // Per-line depth bookkeeping shared by every branch below.
+  const advance = (nl: number): void => {
+    const r = countJavaBraces(text, pos, nl, braceDepth);
+    braceDepth = r[0];
+    if (r[1]) inBlockComment = true; // `/*` opened mid-line and not closed
+    if (r[2]) inTextBlock = true;    // `"""` opened and not closed on this line
+    if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+  };
 
   while (pos < len) {
     let nl = text.indexOf('\n', pos);
@@ -85,24 +106,62 @@ export function parseJava(uriString: string, text: string): ParsedFile {
     if (fc === '/' && fc1 === '/') { pos = nl + 1; lineNum++; continue; }
 
     if (fc === '/' && fc1 === '*') {
-      const closePos = text.indexOf('*/', fns + 2);
-      if (closePos === -1 || closePos >= nl) inBlockComment = true;
-      braceDepth = countJavaBraces(text, pos, nl, braceDepth);
-      if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+      // countJavaBraces skips the comment and flags one left open on this line
+      advance(nl);
       pos = nl + 1; lineNum++; continue;
     }
 
     if (inBlockComment) {
       const close = text.indexOf('*/', pos);
-      if (close !== -1 && close < nl) inBlockComment = false;
+      if (close !== -1 && close < nl) {
+        inBlockComment = false;
+        // `*/ }` : the brace after the close still counts.
+        const r = countJavaBraces(text, close + 2, nl, braceDepth);
+        braceDepth = r[0];
+        if (r[1]) inBlockComment = true;
+        if (r[2]) inTextBlock = true;
+        if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+      }
+      pos = nl + 1; lineNum++; continue;
+    }
+
+    // Inside a text block: SQL or JSON lines are neither declarations nor
+    // braces (`CREATE TABLE users (` used to index a method `users`).
+    if (inTextBlock) {
+      const close = text.indexOf('"""', pos);
+      if (close !== -1 && close < nl) {
+        inTextBlock = false;
+        const r = countJavaBraces(text, close + 3, nl, braceDepth);
+        braceDepth = r[0];
+        if (r[1]) inBlockComment = true;
+        if (r[2]) inTextBlock = true;
+      }
       pos = nl + 1; lineNum++; continue;
     }
 
     // Fast skip — only lines starting with letter or @ can be declarations.
     // Still count braces so depth stays accurate (e.g. lines with only `}`).
     if (!JAVA_DECL_START[fc]) {
-      braceDepth = countJavaBraces(text, pos, nl, braceDepth);
-      if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+      // A `)` or `),` line closing a constant's multi-line arguments
+      // (`DETAILS(\n Bar.BAZ\n),`) must keep the paren count in step, or the
+      // next uppercase argument line becomes a constant.
+      if (enumBraceDepth !== -1 && braceDepth === enumBraceDepth + 1 && enumParenD > 0) {
+        const raw = text.slice(pos, nl);
+        const r = parseEnumEntries(raw, 0, raw.length, lineNum, braceDepth, symbols, enumParenD);
+        enumParenD = r.parenD;
+        if (r.terminated) enumBraceDepth = -1;
+      } else if (enumBraceDepth !== -1 && braceDepth === enumBraceDepth + 1 && fc === ';') {
+        // `;` alone on its line ends the constant list.
+        enumBraceDepth = -1;
+      } else if (enumBraceDepth !== -1 && braceDepth === enumBraceDepth + 2 && fc === '}'
+        && /^\s*\}\s*;/.test(text.slice(pos, nl))) {
+        // `};` closing a constant body (`PLUS("+") { … };`): the list ends
+        // here, so the constructor `Screen() {` below is not a constant.
+        advance(nl);
+        enumBraceDepth = -1;
+        pos = nl + 1; lineNum++; continue;
+      }
+      advance(nl);
       if (fc !== '@') annotationWindow.length = 0;
       pos = nl + 1; lineNum++; continue;
     }
@@ -208,12 +267,12 @@ export function parseJava(uriString: string, text: string): ParsedFile {
             else if (raw[i] === '}') { depth--; if (depth === 0) { closeBrace = i; break; } }
           }
           if (closeBrace !== -1) {
-            parseEnumEntries(raw, openBrace + 1, closeBrace, lineNum, braceDepth + 1, symbols);
+            parseEnumEntries(raw, openBrace + 1, closeBrace, lineNum, braceDepth + 1, symbols, 0);
           }
         }
+        enumParenD = 0;
       }
-      braceDepth = countJavaBraces(text, pos, nl, braceDepth);
-      if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+      advance(nl);
       annotationWindow.length = 0;
       pos = nl + 1; lineNum++; continue;
     }
@@ -221,11 +280,14 @@ export function parseJava(uriString: string, text: string): ParsedFile {
     // ── Enum entries ───────────────────────────────────────────────────────
     // Only active while inside the enum constant list (before the `;` terminator).
     if (enumBraceDepth !== -1 && braceDepth === enumBraceDepth + 1) {
-      const em = /^\s*([A-Z][A-Z0-9_]*)/.exec(raw);
-      if (em) {
-        const terminated = parseEnumEntries(raw, 0, raw.length, lineNum, braceDepth, symbols);
-        if (terminated) enumBraceDepth = -1; // `;` seen — methods may follow
-        braceDepth = countJavaBraces(text, pos, nl, braceDepth);
+      // A line continuing a constant's arguments (enumParenD > 0) goes through
+      // the same splitter: it only yields a constant once the parens close.
+      if (enumParenD > 0 || RE_ENUM_CONSTANT.test(raw)) {
+        const r = parseEnumEntries(raw, 0, raw.length, lineNum, braceDepth, symbols, enumParenD);
+        enumParenD = r.parenD;
+        if (r.terminated) enumBraceDepth = -1; // `;` seen — methods may follow
+        advance(nl);
+        annotationWindow.length = 0; // `@Deprecated OLD,` must not mark the next method
         pos = nl + 1; lineNum++; continue;
       }
     }
@@ -255,8 +317,7 @@ export function parseJava(uriString: string, text: string): ParsedFile {
           isOverride:   annotationWindow.some(l => /@Override\b/.test(l)) || undefined,
           isPrivate:    /\bprivate\b/.test(preMod)   || undefined,
         });
-        braceDepth = countJavaBraces(text, pos, nl, braceDepth);
-        if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+        advance(nl);
         annotationWindow.length = 0;
         pos = nl + 1; lineNum++; continue;
       }
@@ -290,15 +351,16 @@ export function parseJava(uriString: string, text: string): ParsedFile {
           isIgnored:    annotationWindow.some(l => RE_IGNORE.test(l))     || undefined,
           isLifecycle:  annotationWindow.some(l => RE_LIFECYCLE.test(l))  || undefined,
         });
-        braceDepth = countJavaBraces(text, pos, nl, braceDepth);
-        if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+        advance(nl);
         annotationWindow.length = 0;
         pos = nl + 1; lineNum++; continue;
       }
     }
 
     // ── Field declarations ─────────────────────────────────────────────────
-    const fm = RE_FIELD.exec(raw);
+    // Without a modifier the shape is also a local `Foo foo = …` inside a
+    // method body, and Java bodies are not indexed: only a class body qualifies.
+    const fm = RE_FIELD.exec(raw) ?? (isJavaClassBodyAt(symbols, braceDepth) ? RE_PKGPRIVATE_FIELD.exec(raw) : null);
     if (fm && !RE_CLASS.test(raw)) {
       const name     = fm[1];
       // `lastIndexOf` up to the first = or ; to avoid picking up the wrong word
@@ -316,24 +378,27 @@ export function parseJava(uriString: string, text: string): ParsedFile {
           depth:        braceDepth,
           isConst:      /\bstatic\b/.test(preMod) && isFinal || undefined,
           isPrivate:    /\bprivate\b/.test(preMod) || undefined,
+          isDeprecated: annotationWindow.some(l => RE_DEPRECATED.test(l)) || undefined,
         });
       }
-      braceDepth = countJavaBraces(text, pos, nl, braceDepth);
-      if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+      advance(nl);
       annotationWindow.length = 0;
       pos = nl + 1; lineNum++; continue;
     }
 
     // ── Annotation window ──────────────────────────────────────────────────
-    if (fc === '@') {
+    if (inlineAnnotations.length > 0 && raw.trim().length > 0) {
+      // `@Ignore @Test int bogus;` matched nothing: its annotations qualified
+      // THIS line, and used to mark the next method "test ignored".
+      annotationWindow.length = 0;
+    } else if (fc === '@') {
       if (annotationWindow.length >= 8) annotationWindow.shift();
       annotationWindow.push(raw.trimStart());
     } else {
       annotationWindow.length = 0;
     }
 
-    braceDepth = countJavaBraces(text, pos, nl, braceDepth);
-    if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
+    advance(nl);
     pos = nl + 1;
     lineNum++;
   }
@@ -343,36 +408,50 @@ export function parseJava(uriString: string, text: string): ParsedFile {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-// Parse enum entries from raw[from..to).
-// Returns true if the `;` terminator was encountered (constant list ended).
+// Parse enum entries from raw[from..to), starting with `parenD` open parens
+// carried from the previous line. Returns whether the `;` terminator was
+// encountered (constant list ended) and the paren count left open.
 function parseEnumEntries(
   raw: string, from: number, to: number, lineNum: number, depth: number, symbols: RawSymbol[],
-): boolean {
-  let parenD = 0;
+  parenD: number,
+): { terminated: boolean; parenD: number } {
   let segStart = from;
+  let openedAt = -1; // `(` that opened this line's pending constant, if still open at the end
   for (let i = from; i <= to; i++) {
     const ch = i < to ? raw[i] : '\0';
-    if      (ch === '(' || ch === '[') { parenD++; continue; }
-    else if (ch === ')' || ch === ']') { parenD--; continue; }
+    if      (ch === '(' || ch === '[') { if (parenD === 0) openedAt = i; parenD++; continue; }
+    else if (ch === ')' || ch === ']') { if (parenD > 0) parenD--; continue; }
     else if (parenD > 0)               { continue; }
     if (ch === ',' || ch === ';' || ch === '{' || i === to) {
       const seg = raw.slice(segStart, i);
-      const sm  = /^\s*([A-Z][A-Z0-9_]*)/.exec(seg);
+      const sm  = RE_ENUM_CONSTANT.exec(seg);
       if (sm) symbols.push({
-        name: sm[1], kind: 'enum', line: lineNum,
-        character: segStart + (sm[0].length - sm[1].length),
+        name: sm[2], kind: 'enum', line: lineNum,
+        character: segStart + sm[1].length,
         isComposable: false, depth,
       });
-      if (ch === ';') return true;
-      if (ch === '{') return false;
+      if (ch === ';') return { terminated: true, parenD: 0 };
+      if (ch === '{') return { terminated: false, parenD: 0 };
       segStart = i + 1;
     }
   }
-  return false;
+  // `DETAILS(` with its arguments on the next lines: the constant is known
+  // now, only its argument list continues.
+  if (parenD > 0 && openedAt !== -1) {
+    const sm = RE_ENUM_CONSTANT.exec(raw.slice(segStart, openedAt + 1));
+    if (sm) symbols.push({
+      name: sm[2], kind: 'enum', line: lineNum,
+      character: segStart + sm[1].length,
+      isComposable: false, depth,
+    });
+  }
+  return { terminated: false, parenD };
 }
 
-// Count `{` and `}` in text[start..end), skipping string literals and `//` comments.
-function countJavaBraces(text: string, start: number, end: number, depth: number): number {
+// Count `{` and `}` in text[start..end), skipping string literals, text
+// blocks, `//` and `/* */` comments. The flags say whether a block comment
+// or a `"""` text block was opened in the range and not closed before `end`.
+function countJavaBraces(text: string, start: number, end: number, depth: number): [number, boolean, boolean] {
   let inStr: string | false = false;
   for (let i = start; i < end; i++) {
     const c = text[i];
@@ -381,12 +460,37 @@ function countJavaBraces(text: string, start: number, end: number, depth: number
       if (c === inStr) inStr = false;
       continue;
     }
+    if (c === '"' && i + 2 < end && text[i + 1] === '"' && text[i + 2] === '"') {
+      const close = text.indexOf('"""', i + 3);
+      if (close === -1 || close >= end) return [depth, false, true];
+      i = close + 2;
+      continue;
+    }
     if (c === '"' || c === '\'') { inStr = c; continue; }
-    if (c === '/' && i + 1 < end && text[i + 1] === '/') break;
+    if (c === '/' && i + 1 < end) {
+      if (text[i + 1] === '/') break;
+      if (text[i + 1] === '*') {
+        const close = text.indexOf('*/', i + 2);
+        if (close === -1 || close >= end) return [depth, true, false];
+        i = close + 1;
+        continue;
+      }
+    }
     if      (c === '{') depth++;
     else if (c === '}') { if (depth > 0) depth--; } // clamp — unmatched } must not produce negative depth
   }
-  return depth;
+  return [depth, false, false];
+}
+
+const JAVA_CLASS_KINDS = new Set<SymbolKind>(['class', 'interface', 'enum', 'annotation']);
+
+// True when `depth` is the body depth of the nearest enclosing class-like
+// declaration (as opposed to a method body).
+function isJavaClassBodyAt(symbols: RawSymbol[], depth: number): boolean {
+  for (let i = symbols.length - 1; i >= 0; i--) {
+    if (symbols[i].depth === depth - 1) return JAVA_CLASS_KINDS.has(symbols[i].kind);
+  }
+  return false;
 }
 
 const JAVA_DECL_START: Record<string, boolean> = Object.fromEntries(

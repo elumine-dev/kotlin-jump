@@ -395,7 +395,10 @@ export function parse(uriString: string, text: string): ParsedFile {
       const isTest        = annotationWindow.some(l => RE_TEST.test(l))       || RE_TEST.test(raw)       || undefined;
       const isIgnored     = annotationWindow.some(l => RE_IGNORE.test(l))     || RE_IGNORE.test(raw)     || undefined;
       const isLifecycle   = annotationWindow.some(l => RE_LIFECYCLE.test(l))  || RE_LIFECYCLE.test(raw)  || undefined;
-      const nameStart     = fm[0].length - rawName.length;
+      // A backtick name is stored without its backticks, so the column
+      // skips the opening one: the Outline selection and the declaration token
+      // must cover `returns user when found`, not start on the backtick.
+      const nameStart     = fm[0].length - rawName.length + (rawName.charCodeAt(0) === 96 ? 1 : 0);
       const preFun        = raw.slice(0, nameStart);
       const isSuspend     = /\bsuspend\b/.test(preFun)  || undefined;
       const isAbstract    = /\babstract\b/.test(preFun)  || undefined;

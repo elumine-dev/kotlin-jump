@@ -120,7 +120,7 @@ export function buildSnapshotFile(
  */
 export function restoreSnapshotFile(uriStr: string, sf: SnapshotFile, index: SymbolIndex): void {
   const uri = vscode.Uri.parse(uriStr);
-  const classStack: { name: string; depth: number }[] = [];
+  const classStack: { name: string; depth: number; kind: SymbolKind }[] = [];
 
   const symbols = sf.n.map((name, i) => {
     const depth = sf.d[i] ?? 0;
@@ -134,7 +134,8 @@ export function restoreSnapshotFile(uriStr: string, sf: SnapshotFile, index: Sym
     const parts = sf.p ? [sf.p, ...qualifiers, name] : [...qualifiers, name];
     const fqn = parts.join('.');
     const isCompanion = sf.cn?.[i] === 1 || undefined;
-    if (RESTORE_CLASS_LIKE.has(kind) && !isCompanion) classStack.push({ name, depth });
+    const isEnumEntry = kind === 'enum' && classStack[classStack.length - 1]?.kind === 'enum' || undefined;
+    if (RESTORE_CLASS_LIKE.has(kind) && !isCompanion) classStack.push({ name, depth, kind });
 
     return {
       name,
@@ -167,6 +168,7 @@ export function restoreSnapshotFile(uriStr: string, sf: SnapshotFile, index: Sym
       isIgnored:       sf.ig?.[i] === 1 || undefined,
       isLifecycle:     sf.lc?.[i] === 1 || undefined,
       isCompanion,
+      isEnumEntry,
       constValue:      sf.cv?.[i],
     };
   });

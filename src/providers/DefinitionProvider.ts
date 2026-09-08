@@ -581,9 +581,28 @@ export function resolveLocalScope(
   const index = scope ?? cachedLocalScopeIndex(document);
   if (position.line >= index.lines.length) return undefined;
 
-  // Step 1 — the enclosing function.
-  const funLine = index.enclosingFun[position.line];
-  if (funLine < 0) return undefined;
+  // Step 1 — the enclosing function, then the functions around it: inside
+  // `new OnClickListener() { public void onClick(View v) { open(url); } }`
+  // the `url` parameter of the outer method is captured, and `onClick`
+  // alone knows nothing about it. Same for a Kotlin `object : Listener`.
+  let funLine = index.enclosingFun[position.line];
+  for (let hop = 0; funLine >= 0 && hop < 8; hop++) {
+    const loc = resolveInFunction(document, index, funLine, position, word);
+    if (loc) return loc;
+    const outer = index.outerFun[funLine];
+    if (outer === funLine) break;
+    funLine = outer;
+  }
+  return undefined;
+}
+
+function resolveInFunction(
+  document: vscode.TextDocument,
+  index: LocalScopeIndex,
+  funLine: number,
+  position: vscode.Position,
+  word: string,
+): vscode.Location | undefined {
   const sigEndLine = Math.min(signatureEnd(index, funLine), position.line);
   const sigText = index.lines.slice(funLine, sigEndLine + 1).join('\n');
 

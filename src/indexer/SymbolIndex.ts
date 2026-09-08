@@ -39,6 +39,7 @@ export interface SymbolEntry {
   isIgnored?:       boolean; // fun annotated with @Ignore / @Disabled
   isLifecycle?:     boolean; // fun annotated with @Before / @After etc.
   isCompanion?:     boolean; // synthetic "Companion" for an unnamed companion object
+  isEnumEntry?:     boolean; // kind 'enum' whose parent is an enum class (an entry, not a nested enum)
 }
 
 export class SymbolIndex {
@@ -99,13 +100,17 @@ export class SymbolIndex {
     const pkg = this.intern(file.packageName);
     const fileEntries: SymbolEntry[] = [];
     // Stack tracks enclosing class names so nested symbols get pkg.Outer.Inner FQN
-    const classStack: { name: string; depth: number }[] = [];
+    const classStack: { name: string; depth: number; kind: SymbolKind }[] = [];
 
     for (const sym of file.symbols) {
       // Pop entries that are no longer enclosing this symbol
       while (classStack.length > 0 && classStack[classStack.length - 1].depth >= sym.depth) {
         classStack.pop();
       }
+      // A nested `enum class State` sits at depth 1 like an entry does; only
+      // the parent's kind tells them apart (semantic tokens painted the class
+      // as an enumMember).
+      const isEnumEntry = sym.kind === 'enum' && classStack[classStack.length - 1]?.kind === 'enum' || undefined;
 
       // Build FQN: pkg.Outer.Inner.symbol  (handles nested classes + companion members)
       const qualifiers = classStack.map(s => s.name);
@@ -116,7 +121,7 @@ export class SymbolIndex {
       // An unnamed companion stays out: its members resolve as `Foo.TAG`, the
       // way they are written and imported, not `Foo.Companion.TAG`.
       if (CLASS_LIKE.has(sym.kind) && !sym.isCompanion) {
-        classStack.push({ name: sym.name, depth: sym.depth });
+        classStack.push({ name: sym.name, depth: sym.depth, kind: sym.kind });
       }
 
       const entry: SymbolEntry = {
@@ -154,6 +159,7 @@ export class SymbolIndex {
         isIgnored:       sym.isIgnored,
         isLifecycle:     sym.isLifecycle,
         isCompanion:     sym.isCompanion,
+        isEnumEntry,
       };
 
       fileEntries.push(entry);

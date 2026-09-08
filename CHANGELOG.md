@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.42.18
+
+Kotlin Jump 1.42.18 gives the Java parser the same treatment 1.42.17 gave the Kotlin one, and fixes Go to Definition on a captured local and three semantic colouring errors. A Java field without a modifier (`@Inject AnalyticsAdapter analytics;`, `@Mock UserRepository repository;`, an interface constant) was never indexed, a Room `@Query("SELECT count(*) …")` hid the method after it, and a local read inside a string or a comment was where Go to Definition sent you.
+
+### Fixes
+- Indexes Java fields declared without a modifier. Hilt and Dagger forbid `private` on an injected field, Mockito's `@Mock` fields and interface constants have none either: they had no Outline entry, no hover and no usages. Worse, their same-line annotations leaked onto the next method: `@Deprecated String legacy;` struck through the method below it in the Outline, and `@Ignore @Test int bogus;` marked it "test ignored". Locals inside method bodies stay out of the index, as before.
+- Accepts a same-line annotation with nested parentheses. `@Query("SELECT count(*) FROM t") int count();`, `@Query("… IN (:ids)") List<T> byIds(…)` and `@Entity(indices = {@Index("a")}) class Nested` were dropped whole. An `@interface Mode` without `public` (the `@IntDef` pattern) was swallowed as an annotation and never indexed.
+- Reads Java enum constants in full. `Home` was indexed as `H` and `Settings` as `S`, so hover and Go to Definition on them found nothing; the arguments of `DETAILS(\n Bar.BAZ,\n OTHER_CONST\n)` became constants of their own; `@Deprecated OLD,` marked the next method deprecated; and the constructor after a constant body (`PLUS("+") { … };`) was listed as a constant.
+- Keeps the Java brace count right across comments and text blocks. A `/*` left open at the end of a line no longer indexes the commented-out method below it, `int x = 1; /* { */` and a Javadoc `{@code` no longer push the next method one level deeper, and the lines of a `"""` text block (Room SQL) no longer produce phantom methods named after table names. `static { System.loadLibrary("…"); }` is not a method.
+- Ignores a local binding that sits inside a string or a comment, in Java and in Kotlin. Cmd+Click on `name` after `"user name = " + name` landed inside the string, `id` in `use(id)` landed in `"WHERE id = ?"`, and a commented `// val repository = Fake()` above `repository.fetch()` captured the click and removed the property's colour.
+- Resolves a local captured by an anonymous class. Inside `new View.OnClickListener() { public void onClick(View v) { open(url, title); } }` the `url` parameter and the `title` local of the enclosing method resolved to nothing, or to a same-named symbol elsewhere in the workspace. Same for a Kotlin `object : Listener { override fun onClick() { use(outerVal) } }`.
+- Stops taking the continuation of a Java ternary (`? format(value)`) for a method header, which made Go to Definition on `value` there jump to the line itself instead of the parameter.
+- Colours a nested `enum class State` as an enum, not as an enum member: its declaration and every `Foo.State` reference took the constant colour, a very common shape in a ViewModel.
+- Stops painting semantic colours inside a multi-line `/* … */` block: code commented out that way kept its class and function colours over the comment grammar unless every line started with `*`.
+- Places the declaration token of a backtick test name on the name itself. `fun \`returns user when found\`()` had its selection start on the backtick and end one letter early in the Outline, and the word `user` inside the name was coloured as a property.
+
 ## 1.42.17
 
 Kotlin Jump 1.42.17 is a parser release. A class, property or enum entry with an annotation on the same line (`@AndroidEntryPoint class`, `@Entity(tableName = "users") data class`, `@Inject lateinit var`, `@SerializedName("a") ACTIVE`) was not indexed at all, so it had no Outline entry, no Go to Definition and no usages. An unnamed `companion object` now appears in the Outline with its members under it. The index snapshot is rebuilt once after the update so the fix reaches files you have not touched.

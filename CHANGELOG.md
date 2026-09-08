@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.40
+
+Kotlin Jump 1.42.40 fixes Back. Pressing it right after a jump used to overwrite the entry you were trying to return to, and switching to a tab you already had open filed it at line 0.
+
+### Fixes
+- Back pressed within half a second of a jump no longer destroys the origin. A late selection event for the destination could still land in the entry the cursor had just moved onto, and rewrite it with the destination. The refinement now checks that the entry it is about to update is still the one it created, and moving through the history closes the pending window.
+- Switching to a tab that is already open records the cursor where it actually is. No selection event fires for a file you have already visited, so the entry kept its placeholder of line 0, and coming back landed at the top of the file.
+- On Windows, a file in a test source set is recognised again. The filter compared a path built with backslashes against segments written with slashes, so no file was ever seen as a test, and the rule that hides test results from a production file did the opposite of what it says.
+- Go to Definition no longer treats a directory that merely starts like a test source set as one. It kept a private copy of the path check, written before the bounded comparison landed, so a repository holding a folder named after a test source set lost every definition in it.
+
 ## 1.42.39
 
 Kotlin Jump 1.42.39 stops the Screen Flow map from drawing arrows it cannot justify. A navigation whose destination was a variable used to land on whichever screen happened to be declared first, and the map read as a fact.

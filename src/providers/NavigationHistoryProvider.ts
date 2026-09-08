@@ -146,10 +146,15 @@ export class NavigationHistoryProvider implements vscode.Disposable {
     this._lastActiveUri = newUri;
     this._pendingToUri  = newUri;
 
-    // Push a L0 placeholder that will be updated to the real position by selection
-    // events in the next 500ms. Keep the window open so both VS Code's restored-state
-    // event AND our explicit editor.selection set can update it — last wins.
-    this._push({ uri: newUri, line: 0, character: 0 });
+    // Seed the entry with the cursor the editor already carries. Switching to
+    // a tab that is already open fires no selection event, so the placeholder
+    // stayed at line 0 and Back landed at the top of the file instead of where
+    // the reader had left it. A selection event in the next 500 ms still
+    // refines it: both VS Code's restored state AND our explicit
+    // editor.selection set can update it, last wins.
+    const at = editor.selection?.active;
+    const seed = at ?? this._lastKnownPositions.get(newUri) ?? { line: 0, character: 0 };
+    this._push({ uri: newUri, line: seed.line, character: seed.character });
     this._updateContext();
 
     if (this._pendingClearTimer) clearTimeout(this._pendingClearTimer);
@@ -175,7 +180,15 @@ export class NavigationHistoryProvider implements vscode.Disposable {
     // Pending placeholder from a recent editor switch — keep refining it on every
     // programmatic-kind event (VS Code's restore + our explicit editor.selection set).
     // Don't clear _pendingToUri here; the 500ms timer from _onEditorChanged does that.
-    if (this._pendingToUri === uri && (kind === undefined || kind === vscode.TextEditorSelectionChangeKind.Command)) {
+    // `_history[_cursor]` must still be the entry this pending refinement
+    // created. A Back pressed inside the 500 ms window moves the cursor onto
+    // the origin entry, and a late event for the destination then overwrote
+    // that origin with the destination: the way back was destroyed.
+    if (
+      this._pendingToUri === uri
+      && this._history[this._cursor]?.uri === uri
+      && (kind === undefined || kind === vscode.TextEditorSelectionChangeKind.Command)
+    ) {
       // Keep the visit time: without it the jump destination sorted last in
       // Recent Locations (timestamp 0), behind positions from long before.
       const timestamp = this._history[this._cursor]?.timestamp ?? Date.now();
@@ -221,8 +234,19 @@ export class NavigationHistoryProvider implements vscode.Disposable {
 
   // ── Navigation commands ──────────────────────────────────────────────────────
 
+  /** Moving the cursor by hand ends any pending refinement: it was opened for
+   *  an entry the cursor no longer points at. */
+  private _endPending(): void {
+    this._pendingToUri = undefined;
+    if (this._pendingClearTimer) {
+      clearTimeout(this._pendingClearTimer);
+      this._pendingClearTimer = undefined;
+    }
+  }
+
   private async _back(): Promise<void> {
     if (this._cursor <= 0) return;
+    this._endPending();
     this._cursor--;
     this._updateContext();
     await this._navigateTo(this._history[this._cursor]);
@@ -230,6 +254,7 @@ export class NavigationHistoryProvider implements vscode.Disposable {
 
   private async _forward(): Promise<void> {
     if (this._cursor >= this._history.length - 1) return;
+    this._endPending();
     this._cursor++;
     this._updateContext();
     await this._navigateTo(this._history[this._cursor]);

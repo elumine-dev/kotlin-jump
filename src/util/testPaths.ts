@@ -18,9 +18,14 @@
  * source sets like `".../src/test/kotlin/..."`.
  */
 export function segmentMatchesPath(uriPath: string, segment: string): boolean {
-  const s = segment.replace(/^\/+|\/+$/g, '');
+  const s = segment.replace(/^[/\\]+|[/\\]+$/g, '').replace(/\\/g, '/');
   if (!s) return false;
-  return uriPath.includes(`/${s}/`) || uriPath.endsWith(`/${s}`);
+  // Callers pass `Uri.fsPath` as often as `Uri.path`, and on Windows fsPath
+  // separates with backslashes. Matching only on `/` meant no file was ever
+  // recognised as a test file there, so the filter that hides test results
+  // from a production file was inverted.
+  const p = uriPath.replace(/\\/g, '/');
+  return p.includes(`/${s}/`) || p.endsWith(`/${s}`);
 }
 
 export function isTestPath(uriPath: string, segments: readonly string[]): boolean {

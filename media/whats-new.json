@@ -1,30 +1,31 @@
 {
-  "version": "1.42.8",
+  "version": "1.42.9",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Test runs you can stop, tests it can find",
-  "summary": "Kotlin Jump 1.42.8 finishes the third display audit's list: a test run you could not stop, test source sets the explorer never looked at, a backtick test name reported as skipped, the wrong module's icon in a multi-module project, and a string extraction that mangled raw strings.",
+  "tagline": "Edits that no longer eat your code",
+  "summary": "Kotlin Jump 1.42.9 fixes edits that destroyed code. Organize Imports could replace a class body, Remove unused function could delete everything up to the file header, Rename rewrote imports of unrelated symbols, and a quick fix that was supposed to add a release() call had never appeared at all.",
   "highlights": [
     {
-      "title": "Stop works from the ▶ Run lens",
+      "title": "Organize Imports keeps the class body",
       "kind": "fix",
-      "description": "A run started from the lens carried a token nobody cancelled, so the Test Explorer's Stop button waited for Gradle to finish. The run's own token now stops it, and a backtick name ending with a parenthesis is no longer reported as skipped."
+      "description": "An import inside a raw string or a KDoc sample used to mark the end of the import block, and everything between the real imports and that line was replaced. The block is bounded to the file header now, for Organize Imports, Add import and the unused-import check alike."
     },
     {
-      "title": "More test source sets discovered",
+      "title": "Remove unused function stays on the function",
       "kind": "fix",
-      "description": "androidUnitTest/, sharedTest/ and the KMP targets (iosTest/, jsTest/, nativeTest/, desktopTest/) join the explorer. Their classes used to get a ▶ lens that answered \"test not found in index\"."
+      "description": "A /* px */ at the end of the line above made the removal climb to the nearest /* in the file. Rename also touches only the import of the renamed symbol, and follows $name into string templates."
     },
     {
-      "title": "Right module, whole raw string",
+      "title": "A quick fix that finally shows up",
       "kind": "fix",
-      "description": "With the same drawable name in two modules the hover and gutter showed the first one indexed; the referencing module wins now. Extracting Text(\"\"\"Hello\"\"\") replaces the whole literal, and \\$ stays a literal dollar."
+      "description": "\"Add release() in onStop()\" looked up its pairing table by the wrong name and never appeared; it does now, inside the class, with the enclosing function's indentation. The outline reads the live document while it is dirty."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Clears only the gutter icons an editor showed and releases unused decoration types, instead of one setDecorations per type ever minted on every flush."
+        "Offers no cross-file \"Remove unused parameter\" edit when the owner's name is declared elsewhere too, and computes edits on open editors' unsaved text.",
+        "Resolves \"Add names to call arguments\" through the file's imports instead of the first homonym indexed."
       ]
     }
   ],

@@ -207,22 +207,36 @@ export class UnusedParameterCodeActionProvider implements vscode.CodeActionProvi
     const files = await vscode.workspace.findFiles(
       '**/*.{kt,java}', '**/{node_modules,build,.git,out,dist}/**', CAP);
     if (files.length >= CAP) return { argCount: 0, fileCount: 0, skipped: 0, truncated: true };
-    const declRe = new RegExp(`\\b(?:class|interface|object)\\s+${param.ownerName}\\b`);
+    const declRe = new RegExp(`\\b(?:class|interface|object|fun)\\s+${param.ownerName}\\b`);
     const decoder = new TextDecoder();
+    const open = new Map(vscode.workspace.textDocuments.map(d => [d.uri.toString(), d]));
+    // Every candidate file is read first: a homonym declared in ANY other
+    // file means no call site anywhere can be attributed to this owner by
+    // its simple name, so no cross-file edit is offered at all. The old loop
+    // skipped only the homonym's own file and edited the callers of the
+    // other declaration.
+    const texts: Array<[vscode.Uri, string]> = [];
+    let homonyms = 0;
     for (const uri of files) {
       if (uri.toString() === document.uri.toString()) continue;
       let other: string;
       try {
-        other = decoder.decode(await vscode.workspace.fs.readFile(uri));
+        // Unsaved edits: ranges are computed on this text, the disk copy put them on the wrong line.
+        other = open.get(uri.toString())?.getText() ?? decoder.decode(await vscode.workspace.fs.readFile(uri));
       } catch {
         continue;
       }
       if (!other.includes(param.ownerName)) continue;
-      if (declRe.test(other)) {
-        // homonym class declared elsewhere: this file's call sites are ambiguous
-        skipped++;
-        continue;
+      if (declRe.test(other)) { homonyms++; continue; }
+      texts.push([uri, other]);
+    }
+    if (homonyms > 0) {
+      for (const [, other] of texts) {
+        if (computeCallSiteEdits(other, param, 'kotlin').edits.length > 0) skipped++;
       }
+      return { argCount: 0, fileCount: 0, skipped: skipped + homonyms };
+    }
+    for (const [uri, other] of texts) {
       const res = computeCallSiteEdits(other, param, uri.fsPath.endsWith('.java') ? 'java' : 'kotlin');
       skipped += res.skipped;
       if (res.edits.length === 0) continue;

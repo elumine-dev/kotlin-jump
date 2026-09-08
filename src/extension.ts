@@ -332,12 +332,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       // KJ-001 — Add names to call arguments (Alt+Enter à la IntelliJ).
       vscode.languages.registerCodeActionsProvider(
         KT_JAVA,
-        new NamedArgumentsActionProvider(async (callee, arity) => {
+        new NamedArgumentsActionProvider(async (callee, arity, document) => {
           const cfg = vscode.workspace.getConfiguration('kotlinJump');
           if (!cfg.get<boolean>('namedArgumentsAction', true)) return null;
-          const candidates = index
+          const all = index
             .lookup(callee)
             .filter(e => ['fun', 'composable', 'class', 'dataClass'].includes(e.kind as string));
+          // The file's imports pick the declaration; the first homonym of the
+          // right arity, whatever its package, used to win and produce names
+          // the compiler refuses.
+          const byImports = document && all.length > 1
+            ? resolveBest(callee, document, fqn => all.filter(e => e.fqn === fqn)).matches.flat()
+            : [];
+          const candidates = byImports.length > 0 ? byImports : all;
           // Passe 1 : arité exacte ; passe 2 : plus de paramètres (défauts).
           for (const exact of [true, false]) {
             for (const entry of candidates) {

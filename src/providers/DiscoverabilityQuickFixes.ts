@@ -77,11 +77,14 @@ export class LifecycleReleaseActionProvider implements vscode.CodeActionProvider
     const { orphans } = analyzeLifecyclePairs(text);
     const orphan = orphans.find(o => o.line === range.start.line);
     if (!orphan) return [];
-    const close = closeFor(orphan.open);
+    // `orphan.open` is the lifecycle method (onStart); the pair table is
+    // keyed by the acquiring call. Looked up by the wrong one, this quick
+    // fix never appeared at all.
+    const close = closeFor(orphan.method);
     if (!close) return [];
 
     const call = buildReleaseCall(
-      document.lineAt(orphan.line).text, orphan.open, close, orphan.resource,
+      document.lineAt(orphan.line).text, orphan.method, close, orphan.resource,
     );
     const action = new vscode.CodeAction(
       `Add ${call} in ${orphan.expectedIn}()`,
@@ -89,29 +92,37 @@ export class LifecycleReleaseActionProvider implements vscode.CodeActionProvider
     );
     action.edit = new vscode.WorkspaceEdit();
 
-    const mirrorRe = new RegExp(`override\\s+fun\\s+${orphan.expectedIn}\\s*\\([^)]*\\)\\s*\\{`);
     const lines = text.split('\n');
+    // The enclosing function's own indentation, tabs included. Deriving it
+    // as "acquire indent minus four spaces" put the new function outside the
+    // class with tabs or two-space indents, and inside onStart's body when
+    // the acquire sat in an if.
+    let funLine = orphan.line;
+    while (funLine > 0 && !/^\s*(?:override\s+)?(?:\w+\s+)*fun\b/.test(lines[funLine])) funLine--;
+    const fnIndent = lines[funLine].match(/^\s*/)?.[0] ?? '';
+    const unit = fnIndent.includes('\t') ? '\t' : '    ';
+    const mirrorRe = new RegExp(`^${fnIndent}(?:\\w+\\s+)*override\\s+fun\\s+${orphan.expectedIn}\\s*\\([^)]*\\)\\s*\\{`);
+    // Same indentation as the acquiring function: the mirror of this class,
+    // not the first onStop in the file.
     const mirrorLine = lines.findIndex(l => mirrorRe.test(l));
     if (mirrorLine >= 0) {
-      // Existing mirror: insert the call as its first statement.
-      const indent = ' '.repeat(
-        (lines[mirrorLine].match(/^\s*/)?.[0].length ?? 0) + 4,
-      );
       action.edit.insert(
         document.uri,
         new vscode.Position(mirrorLine + 1, 0),
-        `${indent}${call}\n`,
+        `${fnIndent}${unit}${call}\n`,
       );
     } else {
-      // No mirror yet: create it right after the acquiring function's block.
-      const acqIndentLen = lines[orphan.line].match(/^\s*/)?.[0].length ?? 8;
-      const fnIndent = ' '.repeat(Math.max(0, acqIndentLen - 4));
-      let closeLine = orphan.line;
-      while (closeLine < lines.length - 1 && !lines[closeLine].startsWith(`${fnIndent}}`)) closeLine++;
+      let depth = 0;
+      let closeLine = funLine;
+      for (let i = funLine; i < lines.length; i++) {
+        for (const ch of lines[i]) { if (ch === '{') depth++; else if (ch === '}') depth--; }
+        if (depth <= 0 && i > funLine) { closeLine = i; break; }
+        closeLine = i;
+      }
       action.edit.insert(
         document.uri,
         new vscode.Position(closeLine + 1, 0),
-        `\n${fnIndent}override fun ${orphan.expectedIn}() {\n${fnIndent}    ${call}\n${fnIndent}}\n`,
+        `\n${fnIndent}override fun ${orphan.expectedIn}() {\n${fnIndent}${unit}${call}\n${fnIndent}}\n`,
       );
     }
     return [action];

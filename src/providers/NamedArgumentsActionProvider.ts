@@ -11,6 +11,7 @@ export interface NamedArgParam {
 export type ParamResolver = (
   callee: string,
   arity: number,
+  document?: vscode.TextDocument,
 ) => { params: NamedArgParam[] } | null | Promise<{ params: NamedArgParam[] } | null>;
 
 /**
@@ -195,7 +196,7 @@ export class NamedArgumentsActionProvider implements vscode.CodeActionProvider {
     const parsed = parseCall(best.text);
     if (!parsed) return [];
     const arity = parsed.args.length + (parsed.hasTrailingLambda ? 1 : 0);
-    const resolved = await Promise.resolve(this.resolve(parsed.callee, arity));
+    const resolved = await Promise.resolve(this.resolve(parsed.callee, arity, document));
     if (!resolved) return [];
     const rewritten = this.buildFrom(parsed, resolved);
     if (!rewritten) return [];

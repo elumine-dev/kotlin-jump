@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { SymbolIndex } from '../indexer/SymbolIndex';
-import { rangeEndLine } from '../util/symbolRanges';
+import { bodyEndLine } from '../util/symbolRanges';
 
 export class KotlinSelectionRangeProvider implements vscode.SelectionRangeProvider {
   constructor(private readonly index: SymbolIndex) {}
@@ -12,12 +12,13 @@ export class KotlinSelectionRangeProvider implements vscode.SelectionRangeProvid
   ): vscode.SelectionRange[] {
     const entries = this.index.getFileSymbols(document.uri.toString());
     const lastLine = document.lineCount - 1;
+    const lines = document.getText().split('\n');
     const fileRange = new vscode.Range(new vscode.Position(0, 0), document.lineAt(lastLine).range.end);
     const fileSelRange = new vscode.SelectionRange(fileRange);
 
     return positions.map(position => {
       const containing = entries
-        .map((e, i) => ({ e, end: rangeEndLine(entries, i, lastLine) }))
+        .map((e, i) => ({ e, end: bodyEndLine(lines, entries, i, lastLine) }))
         .filter(({ e, end }) => e.line <= position.line && position.line <= end)
         .sort((a, b) => a.e.depth - b.e.depth); // shallowest first
 

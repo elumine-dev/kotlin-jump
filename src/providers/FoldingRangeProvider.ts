@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { SymbolIndex } from '../indexer/SymbolIndex';
-import { rangeEndLine } from '../util/symbolRanges';
+import { bodyEndLine } from '../util/symbolRanges';
 import { organizeImports } from './OrganizeImportsProvider';
 
 export class KotlinFoldingRangeProvider implements vscode.FoldingRangeProvider {
@@ -59,10 +59,12 @@ export class KotlinFoldingRangeProvider implements vscode.FoldingRangeProvider {
       }
     }
 
-    // 3. Symbol blocks
+    // 3. Symbol blocks: the real `}` of each body, so a folded member does
+    // not swallow the next member's KDoc or the class's closing brace.
     const entries = this.index.getFileSymbols(key);
+    const lines = document.getText().split('\n');
     for (let i = 0; i < entries.length; i++) {
-      const endLine = rangeEndLine(entries, i, lastLine);
+      const endLine = bodyEndLine(lines, entries, i, lastLine);
       if (endLine > entries[i].line) {
         ranges.push(new vscode.FoldingRange(entries[i].line, endLine, vscode.FoldingRangeKind.Region));
       }

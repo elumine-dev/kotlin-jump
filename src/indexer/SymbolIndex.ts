@@ -40,6 +40,7 @@ export interface SymbolEntry {
   isLifecycle?:     boolean; // fun annotated with @Before / @After etc.
   isCompanion?:     boolean; // synthetic "Companion" for an unnamed companion object
   isEnumEntry?:     boolean; // kind 'enum' whose parent is an enum class (an entry, not a nested enum)
+  isLocal?:         boolean; // val/var declared inside a function body or a property initializer
 }
 
 export class SymbolIndex {
@@ -160,6 +161,7 @@ export class SymbolIndex {
         isLifecycle:     sym.isLifecycle,
         isCompanion:     sym.isCompanion,
         isEnumEntry,
+        isLocal:         sym.isLocal,
       };
 
       fileEntries.push(entry);
@@ -243,12 +245,16 @@ export class SymbolIndex {
 
   // For an interface method, find the corresponding override methods in implementing classes
   lookupMethodImplementations(methodName: string, uriString: string, methodLine: number): SymbolEntry[] {
-    // Find the containing class/interface by scanning the file's symbols backward
+    // The containing class/interface is the last class-like symbol one level
+    // up. Taking the last class-like before the line made a nested
+    // `data class Params` the owner of the methods declared after it.
     const fileSymbols = this.getFileSymbols(uriString);
+    const method = fileSymbols.find(s => s.line === methodLine && s.name === methodName);
     let container: SymbolEntry | undefined;
     for (const s of fileSymbols) {
       if (s.line > methodLine) break;
-      if (CLASS_LIKE.has(s.kind)) container = s;
+      if (!CLASS_LIKE.has(s.kind)) continue;
+      if (method === undefined || s.depth === method.depth - 1) container = s;
     }
     if (!container) return EMPTY;
 
@@ -270,7 +276,7 @@ export class SymbolIndex {
       }
       for (const s of implSymbols) {
         if (s.name === methodName && s.line > impl.line && s.line < implEnd
-            && (s.kind === 'fun' || s.kind === 'composable')) {
+            && (s.kind === 'fun' || s.kind === 'composable' || s.kind === 'val' || s.kind === 'var')) {
           results.push(s);
         }
       }

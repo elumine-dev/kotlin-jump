@@ -4,6 +4,7 @@ import { SymbolKind } from '../indexer/KotlinParser';
 import { scanForUsagesWithTarget, isExcluded, resolveSearchTarget } from './FindUsagesEngine';
 import { isInsideCommentOrString, isInsideStringInterpolation } from '../util/textUtils';
 import { resolveLocalScope } from './DefinitionProvider';
+import { bodyEndLine } from '../util/symbolRanges';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 // Matches: method(, method<T>(, method {, obj.method(
@@ -17,6 +18,7 @@ const KEYWORDS = new Set([
 ]);
 
 const FUN_KINDS = new Set<SymbolKind>(['fun', 'composable']);
+const HOLDER_CLASS_KINDS = new Set<SymbolKind>(['class', 'dataClass', 'sealedClass', 'object', 'interface', 'enum', 'annotation']);
 
 /**
  * Returns the column offset of the expression body start (after `= `) on a single-line
@@ -57,8 +59,11 @@ function fileName(uri: { path?: string; toString(): string }): string {
 
 function entryToItem(entry: SymbolEntry): vscode.CallHierarchyItem {
   const selRange = new vscode.Range(entry.line, entry.character, entry.line, entry.character + entry.name.length);
+  const kind = FUN_KINDS.has(entry.kind)
+    ? (entry.depth > 0 ? vscode.SymbolKind.Method : vscode.SymbolKind.Function)
+    : (entry.kind === 'val' || entry.kind === 'var') ? vscode.SymbolKind.Property : vscode.SymbolKind.Class;
   const item = new vscode.CallHierarchyItem(
-    entry.depth > 0 ? vscode.SymbolKind.Method : vscode.SymbolKind.Function,
+    kind,
     entry.name,
     entry.packageName ? `${fileName(entry.uri)} — ${entry.packageName}` : fileName(entry.uri),
     entry.uri,
@@ -131,6 +136,18 @@ export class KotlinCallHierarchyProvider implements vscode.CallHierarchyProvider
 
     // Group by containing function
     const callers = new Map<string, { entry: SymbolEntry; ranges: vscode.Range[] }>();
+    // The text of each file with a hit, read once: the holder of a call is
+    // found by matching braces, the symbol list alone put the `init` block
+    // inside the property declared above it.
+    const linesByUri = new Map<string, string[] | undefined>();
+    const linesOf = async (uriString: string): Promise<string[] | undefined> => {
+      if (linesByUri.has(uriString)) return linesByUri.get(uriString);
+      let lines: string[] | undefined;
+      try { lines = (await vscode.workspace.openTextDocument(vscode.Uri.parse(uriString))).getText().split('\n'); }
+      catch { lines = undefined; }
+      linesByUri.set(uriString, lines);
+      return lines;
+    };
 
     for (const r of results) {
       // Skip the declaration itself
@@ -139,7 +156,7 @@ export class KotlinCallHierarchyProvider implements vscode.CallHierarchyProvider
 
       // The declaration line of an overload (`fun load(name: String)`) is not a call.
       if (new RegExp(`\\bfun\\s+(?:<[^>]*>\\s*)?(?:[\\w.<>?]+\\.)?${item.name}\\s*\\(`).test(r.lineText)) continue;
-      const container = this.findContainingFunction(r.uriString, r.line);
+      const container = this.findContainingFunction(r.uriString, r.line, await linesOf(r.uriString));
       if (!container) continue;
 
       const key = `${container.uri.toString()}:${container.line}`;
@@ -243,17 +260,33 @@ export class KotlinCallHierarchyProvider implements vscode.CallHierarchyProvider
     );
   }
 
-  private findContainingFunction(uriString: string, callLine: number): SymbolEntry | undefined {
+  private findContainingFunction(uriString: string, callLine: number, lines?: string[]): SymbolEntry | undefined {
     const symbols = this.index.getFileSymbols(uriString);
+    const endOf = (i: number): number => lines
+      ? bodyEndLine(lines, symbols, i, lines.length - 1)
+      : this.getFunctionBodyEnd(uriString, symbols[i]);
     let best: SymbolEntry | undefined;
-    for (const s of symbols) {
+    let bestIdx = -1;
+    for (let i = 0; i < symbols.length; i++) {
+      const s = symbols[i];
       if (s.line > callLine) break;
-      if (FUN_KINDS.has(s.kind)) best = s;
+      if (FUN_KINDS.has(s.kind)) { best = s; bestIdx = i; }
     }
     // A call in a property initializer, an init block or a class declared
     // after a function used to be attributed to that previous function.
-    if (best && callLine > this.getFunctionBodyEnd(uriString, best)) return undefined;
-    return best;
+    if (best && callLine <= endOf(bestIdx)) return best;
+    // Not inside a function: the property whose initializer holds the call
+    // (`val state = flow.map { other() }`, `by lazy { create() }`) or, for an
+    // `init` block, the class. Dropping the call showed "No callers".
+    let holder: SymbolEntry | undefined;
+    for (let i = 0; i < symbols.length; i++) {
+      const s = symbols[i];
+      if (s.line > callLine) break;
+      if (s.kind !== 'val' && s.kind !== 'var' && !HOLDER_CLASS_KINDS.has(s.kind)) continue;
+      if (s.name.startsWith('$')) continue;
+      if (callLine <= endOf(i)) holder = s;
+    }
+    return holder;
   }
 
   private getFunctionBodyEnd(uriString: string, entry: SymbolEntry): number {

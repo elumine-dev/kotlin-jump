@@ -126,10 +126,13 @@ function countOverrides(impl: SymbolEntry, parentMethods: SymbolEntry[], index: 
 }
 
 function entryToItem(entry: SymbolEntry, index: SymbolIndex, parentEntry?: SymbolEntry): vscode.TypeHierarchyItem {
-  const range = new vscode.Range(entry.line, entry.character, entry.line, entry.character + entry.name.length);
+  // `$anon$4` is the parser's synthetic name for `object : Callback { }`:
+  // label it the way Go to Implementation does, with nothing to select.
+  const anon = entry.name.startsWith('$anon$');
+  const range = new vscode.Range(entry.line, entry.character, entry.line, entry.character + (anon ? 0 : entry.name.length));
   return new vscode.TypeHierarchyItem(
     toSymbolKind(entry.kind),
-    entry.name,
+    anon ? `Anonymous object (line ${entry.line + 1})` : entry.name,
     buildDetail(entry, index, parentEntry),
     entry.uri,
     range,

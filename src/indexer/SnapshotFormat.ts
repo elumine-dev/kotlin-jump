@@ -38,6 +38,7 @@ export interface SnapshotFile {
   ig?: Record<number, 1>;  // isIgnored
   lc?: Record<number, 1>;  // isLifecycle
   cn?: Record<number, 1>;  // isCompanion
+  lo?: Record<number, 1>;  // isLocal
   im?: string[];           // raw imports; used to reconstruct word index on restore
   cv?: Record<number, string>; // constValue; raw literal for const val folding
 }
@@ -102,6 +103,7 @@ export function buildSnapshotFile(
     if (e.isIgnored)        { sf.ig = sf.ig ?? {}; sf.ig[idx] = 1; }
     if (e.isLifecycle)      { sf.lc = sf.lc ?? {}; sf.lc[idx] = 1; }
     if (e.isCompanion)      { sf.cn = sf.cn ?? {}; sf.cn[idx] = 1; }
+    if (e.isLocal)          { sf.lo = sf.lo ?? {}; sf.lo[idx] = 1; }
     if (e.constValue)       { sf.cv = sf.cv ?? {}; sf.cv[idx] = e.constValue; }
   });
 
@@ -169,6 +171,7 @@ export function restoreSnapshotFile(uriStr: string, sf: SnapshotFile, index: Sym
       isLifecycle:     sf.lc?.[i] === 1 || undefined,
       isCompanion,
       isEnumEntry,
+      isLocal:         sf.lo?.[i] === 1 || undefined,
       constValue:      sf.cv?.[i],
     };
   });

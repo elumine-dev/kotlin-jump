@@ -61,24 +61,21 @@ describe('named companion object', () => {
   });
 });
 
-// ── Unnamed companion object (NOT indexed by parser) ─────────────────────────
+// ── Unnamed companion object (indexed as "Companion" since 1.42.17) ──────────
 
 describe('unnamed companion object', () => {
   const code = [
     'class Bar {',         // line 0
-    '  companion object {', // line 1 — unnamed, NOT indexed
+    '  companion object {', // line 1
     '    val TAG = "Bar"', // line 2
     '  }',                 // line 3
     '}',                   // line 4
   ].join('\n');
 
-  it('cursor inside unnamed companion body → chain has class + file (companion not indexed)', () => {
+  it('cursor inside unnamed companion body → chain has companion [1,3], class [0,4] and file', () => {
     const c = chain(code, new Position(2, 4));
-    // The unnamed companion is not in the index → its range won't appear
-    // Chain should have Bar (line 0) and file range
-    expect(c.some(([s]) => s === 0)).toBe(true);
-    // Should NOT have a range starting at line 1 (unnamed companion not indexed)
-    expect(c.some(([s, e]) => s === 1 && e < 4)).toBe(false);
+    expect(c.some(([s, e]) => s === 0 && e === 4)).toBe(true);
+    expect(c.some(([s, e]) => s === 1 && e === 3)).toBe(true);
   });
 });
 

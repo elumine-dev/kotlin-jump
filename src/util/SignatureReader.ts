@@ -339,7 +339,9 @@ function stripModifiers(token: string): string {
     // Strip annotations like `@Composable`, `@receiver:`, `@Suppress("msg")`, etc.
     t = t.replace(/^(?:@\w+[\w.]*(?:\([^)]*\))?\s+)+/, '').trim();
     // Strip keyword modifiers (including val/var for primary constructors)
-    t = t.replace(/^(vararg|crossinline|noinline|val|var)\s+/, '').trim();
+    // `private val repo: Repo` in a class header is a parameter too: without
+    // the visibility modifiers here every ViewModel constructor lost its list.
+    t = t.replace(/^(vararg|crossinline|noinline|val|var|private|internal|protected|public|override|open|final|lateinit)\s+/, '').trim();
   } while (t !== prev);
   return t;
 }
@@ -348,9 +350,12 @@ function stripModifiers(token: string): string {
 function parseOneParam(token: string): KtParam | null {
   const stripped = stripModifiers(token);
 
-  // Must contain `:` to be a valid typed parameter
+  // Must contain `:` to be a valid typed parameter; Java writes `Type name`.
   const colonIdx = stripped.indexOf(':');
-  if (colonIdx === -1) return null;
+  if (colonIdx === -1) {
+    const java = /^(.+?)\s+([A-Za-z_$][\w$]*)$/.exec(stripped.replace(/\bfinal\s+/g, '').trim());
+    return java ? { name: java[2], type: java[1] } : null;
+  }
 
   const name = stripped.slice(0, colonIdx).trim();
   const isValidName = /^[A-Za-z_]\w*$/.test(name) || /^`[^`]+`$/.test(name);

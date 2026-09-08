@@ -1,43 +1,43 @@
 {
-  "version": "1.42.19",
+  "version": "1.42.20",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Renames that stay in scope, imports that stay",
-  "summary": "Three renames that broke the build (a local leaking past its function, a Compose named argument, a class imported under an alias), an Organize Imports that removed the import behind `by remember`, soft keywords like `data` and `value` as identifiers, and smaller fixes in auto-import and postfix completion.",
+  "tagline": "Folding and Outline ranges that stop at the brace, honest supertypes, signature help that counts",
+  "summary": "Folding, Expand Selection and the Outline end a member at its own closing brace and skip locals. Generic and constructor arguments are no longer supertypes, and a wrapped supertype list is read in full. Signature help counts arguments across strings and generics, lists overloads and private val parameters. The index snapshot is rebuilt once after the update.",
   "highlights": [
     {
-      "title": "Local rename stays in its function",
-      "description": "Renaming the `val user` of `load()` also rewrote `show(user: User)` and `this.user` further down the class. The scan ends at the closing brace now. A parameter rename updates `title =` at the call sites and no longer touches `TopAppBar(\\n title = …)`.",
+      "title": "Ranges end at the brace",
+      "description": "Folding a member hid the next member's KDoc and annotations, folding the last one hid the class's `}`, and Expand Selection from the last function selected up to it. Ranges now stop at the real closing brace, and locals no longer get a chevron or an Outline entry.",
       "kind": "fix"
     },
     {
-      "title": "Organize Imports keeps getValue",
-      "description": "`import androidx.compose.runtime.getValue` / `setValue` and operator imports (`plus`, `component1`) are resolved by convention and never spelled in the file. The action removed them and every `by remember` stopped compiling.",
+      "title": "Only the type is a supertype",
+      "description": "`class ItemAdapter : ListAdapter<Item, ItemViewHolder>(DiffCb)` was a subtype of Item, ItemViewHolder and DiffCb in the hierarchy and the implementation lenses; `BaseViewModel<UiState>(Dispatchers.IO)` put a ViewModel among the subtypes of UiState. A supertype list wrapped over several lines is read in full.",
       "kind": "fix"
     },
     {
-      "title": "data, value, actual are identifiers",
-      "description": "`val data: T`, `val value: String` and `assertEquals(expected, actual)` were treated as keywords: only `?.data` counted, F2 on `value` did nothing. Declarations and plain uses count now; `data class` and `actual fun` still do not.",
+      "title": "Signature help that counts",
+      "description": "A comma inside `\"Hello, world\"` or `emptyMap<String, Int>()` no longer shifts the highlighted parameter, `private val` constructor parameters and Java parameters are listed, and every overload of `load(` is shown with the right one active.",
       "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Rename and Find Usages",
+      "heading": "Structure",
       "bullets": [
-        "A local rename ends at the function's closing brace and skips `this.x` member accesses.",
-        "A parameter rename updates `name =` labels at call sites (file, and workspace when the function name is unique); a multi-line named argument of another call is not a usage.",
-        "A file importing the renamed class under an alias keeps its own bare `User`.",
-        "A one-line expression body (`fun Int.dp() = this * 2`) no longer claims the class below it as its body.",
-        "F2 on the first letter of a local `val` stays local instead of renaming the workspace."
+        "Folding, Expand Selection and Outline ranges end at the member's closing brace; a one-line `val` has no chevron.",
+        "Locals of a function body are hidden from the Outline, folding and selection.",
+        "Generic arguments, constructor arguments and `by` delegates are not supertypes; a supertype list continued on the next lines is read.",
+        "The `⬇ implementations` lens reaches an interface member declared after a nested class, including `val` members."
       ]
     },
     {
-      "heading": "Imports and completion",
+      "heading": "Signature help and hierarchies",
       "bullets": [
-        "Organize Imports keeps convention-resolved imports (`getValue`, `setValue`, operators).",
-        "No \"Add import\" for a name already imported from a library (`material3.Text`).",
-        "`\"Hello $name\".let` keeps the whole literal as receiver and escapes `$` in the snippet.",
-        "Java import lines with `;` are organized and the auto-import lands inside the block."
+        "Commas in strings and generics, parentheses in strings, comments above the call and `\"${greet(` templates are handled.",
+        "`private val` and `override val` constructor parameters, and Java `Type name` parameters, are listed.",
+        "Every overload is shown; the active signature follows the arguments typed.",
+        "A call in a property initializer or `init` block has a caller in the call hierarchy; anonymous objects are labelled.",
+        "No highlight inside a KDoc or a `\"\"\"` block."
       ]
     }
   ],

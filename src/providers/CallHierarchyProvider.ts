@@ -50,8 +50,9 @@ function findDeclarationLineScanStart(line: string): number {
   return -1;
 }
 
-function fileName(uri: { toString(): string }): string {
-  return uri.toString().split('/').pop() ?? '';
+function fileName(uri: { path?: string; toString(): string }): string {
+  const last = (uri.path ?? uri.toString()).split('/').pop() ?? '';
+  try { return decodeURIComponent(last); } catch { return last; }
 }
 
 function entryToItem(entry: SymbolEntry): vscode.CallHierarchyItem {
@@ -59,7 +60,7 @@ function entryToItem(entry: SymbolEntry): vscode.CallHierarchyItem {
   const item = new vscode.CallHierarchyItem(
     entry.depth > 0 ? vscode.SymbolKind.Method : vscode.SymbolKind.Function,
     entry.name,
-    `${fileName(entry.uri)} — ${entry.packageName || ''}`,
+    entry.packageName ? `${fileName(entry.uri)} — ${entry.packageName}` : fileName(entry.uri),
     entry.uri,
     selRange,
     selRange,
@@ -136,6 +137,8 @@ export class KotlinCallHierarchyProvider implements vscode.CallHierarchyProvider
       const data = (item as any).data;
       if (data && r.uriString === data.uriString && r.line === data.line) continue;
 
+      // The declaration line of an overload (`fun load(name: String)`) is not a call.
+      if (new RegExp(`\\bfun\\s+(?:<[^>]*>\\s*)?(?:[\\w.<>?]+\\.)?${item.name}\\s*\\(`).test(r.lineText)) continue;
       const container = this.findContainingFunction(r.uriString, r.line);
       if (!container) continue;
 
@@ -247,6 +250,9 @@ export class KotlinCallHierarchyProvider implements vscode.CallHierarchyProvider
       if (s.line > callLine) break;
       if (FUN_KINDS.has(s.kind)) best = s;
     }
+    // A call in a property initializer, an init block or a class declared
+    // after a function used to be attributed to that previous function.
+    if (best && callLine > this.getFunctionBodyEnd(uriString, best)) return undefined;
     return best;
   }
 

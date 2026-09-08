@@ -1,31 +1,31 @@
 {
-  "version": "1.42.15",
+  "version": "1.42.16",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Second re-check, holes closed",
-  "summary": "Kotlin Jump 1.42.15 is the second re-check of recent fixes. It closes the holes the first re-check left: a library component still offered for removal under another label, Remove All Unused Resource Keys still reading the disk, an Rx pairing that missed `?.dispose()`, a KDoc escape that broke the deprecation blockquote, and a qualified-R rule that had gone too far and would have hidden a module's own `R`.",
+  "tagline": "Java switches, Javadoc, and a prompt that keeps its word",
+  "summary": "Kotlin Jump 1.42.16 fixes a regression of 1.42.15 in Java switches, stops the rating prompt from re-arming on every window, renders Javadoc HTML in hovers instead of showing the tags, and corrects the call hierarchy, Expand Selection, the chat participant and the Find Usages panel where they told you something false.",
   "highlights": [
     {
-      "title": "Library components left alone",
+      "title": "Lambda parameters on a case line, back",
       "kind": "fix",
-      "description": "The 1.42.14 change stopped calling androidx.startup.InitializationProvider \"class not found\" but then judged it \"never referenced\" and still offered its removal. A class outside the workspace's packages is simply fine now."
+      "description": "The 1.42.15 rule for switch arms stopped at -> but not at :, so `case RED: items.forEach(i -> log(i))` lost the binding of i and Rename treated it as a workspace symbol. Fixed, with the arrow form still handled."
     },
     {
-      "title": "Qualified R, the right way round",
+      "title": "Javadoc rendered, not shown",
       "kind": "fix",
-      "description": "The 1.42.14 rule excluded every qualified R, which would have hidden a module's own com.app.feature.R.string.x from folding, hovers and Go to Definition. Only android.R, androidx R and Material's R are excluded, and on every surface, not just the diagnostics."
+      "description": "Since 1.42.14 the generic escape showed <p>, <code> and <ul> literally on Java methods. The common tags and {@code} / {@link} become Markdown, generics still survive, and the rating prompt persists its count before showing so it stops re-arming on every window."
     },
     {
-      "title": "Rx pairing and KDoc, finished",
+      "title": "Call hierarchy and Expand Selection told the truth",
       "kind": "fix",
-      "description": "disposable?.dispose() and val d: Disposable = …subscribe( pair correctly, and the KDoc escape no longer turns the deprecation blockquote into a literal \">\". Remove All Unused Resource Keys reads open editors like its symbol sibling."
+      "description": "A call in a property initializer was attributed to the function above it and an overload's declaration was listed as a caller; Expand Selection swallowed the next declaration's KDoc and @Composable. Both stop at the right line now, and the chat participant reads \"usages of the Foo class\"."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Shows a disabled \"(offline)\" placeholder in the Logcat device picker while the host's device is away, instead of displaying the wrong device as selected.",
-        "Treats case RED, GREEN -> as a switch arm, keeps '{' and @file:Suppress(\"unused(\") from breaking signature reads and import bounds, and disposes the online-docs listener with the extension."
+        "Anchors the qualified-R rule at the start of the qualifier: a module named com.example.android keeps its R, and Google gms/firebase R classes are excluded like AndroidX.",
+        "Says when the Find Usages panel is stale after an edit, and highlights $name in string templates like Find Usages counts it."
       ]
     }
   ],

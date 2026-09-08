@@ -69,7 +69,7 @@ export function countAllResourceUsages(
     if (counts.has(key)) counts.set(key, counts.get(key)! + 1);
   };
 
-  const KT_RE = /(?<!\bandroid\.)(?<!\bandroidx\.[\w.]*)(?<!\bcom\.google\.android\.material[\w.]*\.)\bR\.(string|color|dimen)\.(\w+)\b/g;
+  const KT_RE = /(?<!(?<![\w.])android\.)(?<!(?<![\w.])androidx\.[\w.]*)(?<!(?<![\w.])com\.google\.(?:android|firebase)[\w.]*\.)\bR\.(string|color|dimen)\.(\w+)\b/g;
   const XML_TEXT_RE = />\s*@(string|color|dimen)\/(\w+)\s*</g;
   const XML_REF = /^@(string|color|dimen)\/(\w+)$/;
   const ATTR_RE = /([A-Za-z_][\w]*)(?::([A-Za-z_][\w.]*))?\s*=\s*"([^"]*)"/g;

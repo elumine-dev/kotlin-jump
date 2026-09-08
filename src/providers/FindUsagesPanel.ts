@@ -47,8 +47,19 @@ export class FindUsagesPanel
   showPreviews = true;
 
   private cancelSource: vscode.CancellationTokenSource | undefined;
+  private readonly staleSub: vscode.Disposable;
 
-  constructor(private readonly index: SymbolIndex) {}
+  constructor(private readonly index: SymbolIndex) {
+    // Rows keep the line numbers of the search; an edit above them makes the
+    // labels, excerpts and clicks land elsewhere. The panel says so.
+    this.staleSub = vscode.workspace.onDidChangeTextDocument(e => {
+      if (this.allFiles.length === 0 || !this.treeView) return;
+      const changed = e.document.uri.toString();
+      if (!this.allFiles.some(f => f.uri.toString() === changed)) return;
+      if (e.contentChanges.length === 0) return;
+      this.treeView.message = 'Files changed since this search: line numbers may be off. Run Find Usages again.';
+    });
+  }
 
   /** Called once from extension.ts after vscode.window.createTreeView() */
   attachTreeView(tv: vscode.TreeView<UsageTreeNode>): void {
@@ -57,6 +68,7 @@ export class FindUsagesPanel
 
   dispose(): void {
     this.cancelSource?.cancel();
+    this.staleSub.dispose();
     this._onChange.dispose();
   }
 

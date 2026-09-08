@@ -15,8 +15,32 @@ const MAX_DISPLAY_LINES = 8;
  * Backslash-escaped outside code spans, the brackets render as text.
  */
 export function escapeAngleBrackets(md: string): string {
-  return md.split(/(```[\s\S]*?```|`[^`\n]*`)/).map((part, i) =>
+  return renderJavadocHtml(md).split(/(```[\s\S]*?```|`[^`\n]*`)/).map((part, i) =>
     i % 2 === 1 ? part : part.replace(/<(?=[A-Za-z_*?])/g, '\\<').replace(/(?<=[\w?*\]])>/g, '\\>')).join('');
+}
+
+/**
+ * Javadoc is HTML: `<p>`, `<code>`, `<ul>`/`<li>`, `{@code x}`, `{@link Foo}`.
+ * The renderer drops the tags when supportHtml is off, and the generic escape
+ * would show them literally; a few Markdown equivalents keep the text readable.
+ */
+export function renderJavadocHtml(md: string): string {
+  return md
+    .replace(/\{@(?:code|literal)\s+([^}]*)\}/g, (_m, c) => `\`${c.trim()}\``)
+    .replace(/\{@link(?:plain)?\s+([^}\s]+)[^}]*\}/g, (_m, c) => `\`${c.replace(/^#/, '')}\``)
+    .replace(/<pre>\s*(?:<code>)?/gi, '\n\`\`\`\n').replace(/(?:<\/code>)?\s*<\/pre>/gi, '\n\`\`\`\n')
+    .replace(/<code>([\s\S]*?)<\/code>/gi, (_m, c) => `\`${c}\``)
+    .replace(/<(?:b|strong)>([\s\S]*?)<\/(?:b|strong)>/gi, '**$1**')
+    .replace(/<(?:i|em)>([\s\S]*?)<\/(?:i|em)>/gi, '*$1*')
+    .replace(/<li>\s*/gi, '\n- ').replace(/<\/li>/gi, '')
+    .replace(/<\/?(?:ul|ol)>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/?p>/gi, '\n\n')
+    .replace(/<a\s+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, '[$2]($1)')
+    .replace(/<\/?(?:tt|dl|dt|dd|div|span|sup|sub|h[1-6]|table|tr|td|th|blockquote)\b[^>]*>/gi, '')
+    .replace(/<(https?:\/\/[^>\s]+)>/g, '$1')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ')
+    .replace(/\n{3,}/g, '\n\n');
 }
 
 export function readSignature(doc: vscode.TextDocument, entry: SymbolEntry): string | null {

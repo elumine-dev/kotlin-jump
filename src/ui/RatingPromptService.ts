@@ -86,14 +86,18 @@ export class RatingPromptService {
 
     if (!force && !shouldPrompt(state, now)) return;
 
+    // Written BEFORE the toast: a toast left in the bell until the window
+    // closes never resolves, and the prompt re-armed on every activation
+    // with neither the cap of three nor the snooze applied.
+    await context.globalState.update(KEY_PROMPT_COUNT, state.promptCount + 1);
+    await context.globalState.update(KEY_NEXT_ELIGIBLE, new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString());
+
     const choice = await vscode.window.showInformationMessage(
       'Kotlin Jump saving you time? A quick rating helps other Kotlin devs find it.',
       RATE_ACTION,
       LATER_ACTION,
       DECLINE_ACTION,
     );
-
-    await context.globalState.update(KEY_PROMPT_COUNT, state.promptCount + 1);
 
     if (choice === RATE_ACTION) {
       await vscode.env.openExternal(vscode.Uri.parse(getReviewUrl()));

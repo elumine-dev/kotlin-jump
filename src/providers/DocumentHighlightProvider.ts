@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { SymbolIndex } from '../indexer/SymbolIndex';
-import { isInsideCommentOrString } from '../util/textUtils';
+import { isInsideCommentOrString, isInsideStringInterpolation } from '../util/textUtils';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 
@@ -43,7 +43,11 @@ export class KotlinDocumentHighlightProvider implements vscode.DocumentHighlight
       wordRe.lastIndex = 0;
       let m: RegExpExecArray | null;
       while ((m = wordRe.exec(line)) !== null) {
-        if (isInsideCommentOrString(line, m.index)) continue;
+        if (isInsideCommentOrString(line, m.index)) {
+          // `"Hello $name"` and `"${name}"` are code, as Find Usages already counts them.
+          const shortInterp = m.index >= 1 && line[m.index - 1] === '$' && !(m.index >= 2 && line[m.index - 2] === '\\');
+          if (!shortInterp && !isInsideStringInterpolation(line, m.index)) continue;
+        }
 
         const kind = declarationLines.has(i)
           ? vscode.DocumentHighlightKind.Write

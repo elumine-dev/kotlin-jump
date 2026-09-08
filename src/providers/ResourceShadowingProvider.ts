@@ -12,7 +12,7 @@ import {
  * through, the locale/config overlays listed separately.
  */
 
-const R_REF_RE = /(?<!\bandroid\.)(?<!\bandroidx\.[\w.]*)(?<!\bcom\.google\.android\.material[\w.]*\.)\bR\.(color|string)\.(\w+)/g;
+const R_REF_RE = /(?<!(?<![\w.])android\.)(?<!(?<![\w.])androidx\.[\w.]*)(?<!(?<![\w.])com\.google\.(?:android|firebase)[\w.]*\.)\bR\.(color|string)\.(\w+)/g;
 
 export function definitionFromPath(
   uriStr: string,

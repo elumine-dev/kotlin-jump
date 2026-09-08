@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { DimenResourceIndex } from '../indexer/DimenResourceIndex';
 
-const R_DIMEN_RE = /(?<!\bandroid\.)(?<!\bandroidx\.[\w.]*)(?<!\bcom\.google\.android\.material[\w.]*\.)\bR\.dimen\.([A-Za-z_]\w*)\b/g;
+const R_DIMEN_RE = /(?<!(?<![\w.])android\.)(?<!(?<![\w.])androidx\.[\w.]*)(?<!(?<![\w.])com\.google\.(?:android|firebase)[\w.]*\.)\bR\.dimen\.([A-Za-z_]\w*)\b/g;
 
 /**
  * Cmd+Click on `R.dimen.spacing_md` (or any other dimen key) → jumps

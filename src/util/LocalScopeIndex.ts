@@ -125,7 +125,9 @@ export function buildLocalScopeIndex(lines: readonly string[], language: 'kotlin
         // `case RED -> paint()` and `default -> …` are switch arms, not lambdas.
         // `case RED, GREEN -> paint()` and `default -> …` are switch arms, not
         // lambdas: nothing between `case` and here may be a `>` (an arrow).
-        if (/\b(?:case|default)\b[^;{}>]*$/.test(text.slice(0, m.index))) continue;
+        // `case X:` (classic switch) ends the label at the colon, so a lambda
+        // on the same line is a lambda again.
+        if (/\b(?:case|default)\b[^;{}>:]*$/.test(text.slice(0, m.index))) continue;
         const names = m[3] ? [m[3]] : m[0].slice(1, m[0].indexOf(')')).split(',').map(s => s.trim()).filter(Boolean);
         for (const name of names) {
           const at = text.indexOf(name, m.index);

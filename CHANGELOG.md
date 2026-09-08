@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.42.16
+
+Kotlin Jump 1.42.16 fixes a regression of 1.42.15 in Java switches, stops the rating prompt from re-arming on every window, renders Javadoc HTML in hovers instead of showing the tags, and corrects the call hierarchy, Expand Selection, the chat participant and the Find Usages panel where they told you something false.
+
+### Fixes
+- Resolves a lambda parameter on a classic `case RED:` line again. The 1.42.15 rule for switch arms stopped at `->` but not at `:`, so `case RED: items.forEach(i -> log(i))` lost the binding of `i`: "No definition found", and Rename treated it as a workspace symbol.
+- Persists the rating prompt's count and snooze before showing it. A toast left in the bell until the window closed never resolved, so neither the cap of three prompts nor the 30-day snooze applied and the prompt came back on every activation.
+- Renders Javadoc HTML in hovers and signature help. Since 1.42.14 the generic escape showed `<p>`, `<code>` and `<ul>` literally on Java methods; the common tags and `{@code}` / `{@link}` now become Markdown, and generics still survive.
+- Attributes a call to the function whose body holds it. The call hierarchy took the last function declared above the call, so a property initializer, an `init` block or a class declared after a function were listed as calls from that function; and the declaration line of an overload (`fun load(name: String)`) was listed as a caller of `fun load(id: Int)`. File names in the detail are decoded and the dash no longer hangs without a package.
+- Stops Expand Selection at the end of a function. Its range ran to the line before the next declaration, which is that declaration's KDoc and annotations; in Compose every function is annotated.
+- Reads "usages of the UserRepository class" and "usages of `Foo`" in the chat participant. The word after "of" was taken as the symbol, and the answer was "Symbol `the` not found".
+- Says when the Find Usages panel is stale. Rows keep the line numbers of the search; after an edit above them the labels, excerpts and clicks landed elsewhere with no warning.
+- Anchors the qualified-`R` rule at the start of the qualifier. `\bandroid\.` also excluded a module named `com.example.android`, whose own `R` lost folding, hovers and Go to Definition; and Google's `gms` and `firebase` libraries were not excluded, so their `R` was flagged. The rule now excludes `android.R`, `androidx.*.R` and `com.google.android.*` / `com.google.firebase.*` `R`, and nothing else.
+- Highlights `$name` and `${name}` in string templates like the declaration they refer to, as Find Usages already did.
+
 ## 1.42.15
 
 Kotlin Jump 1.42.15 is the second re-check of recent fixes. It closes the holes the first re-check left: a library component still offered for removal under another label, Remove All Unused Resource Keys still reading the disk, an Rx pairing that missed `?.dispose()`, a KDoc escape that broke the deprecation blockquote, and a qualified-R rule that had gone too far and would have hidden a module's own `R`.

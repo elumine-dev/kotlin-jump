@@ -232,6 +232,8 @@ export function findWalkedEnums(
  * such an enum without any annotation, so no entry name ever appears in code,
  * and deleting one turns a payload into a null or an exception.
  */
+const ROOM_ANNOTATIONS = new Set(['Entity', 'Embedded', 'ColumnInfo', 'Fts4', 'DatabaseView']);
+
 function findDeserializedEnums(enumNames: ReadonlySet<string>, sources: readonly SymbolSource[]): Set<string> {
   const out = new Set<string>();
   for (const src of sources) {
@@ -256,8 +258,11 @@ function findDeserializedEnums(enumNames: ReadonlySet<string>, sources: readonly
       if (!DTO_CLASS_KINDS.has(cls.kind) || cls.kind === 'enum') continue;
       const lo = lineStarts[cls.line];
       const hi = lo + cls.character;
+      // Room maps an enum column by name (2.3+), no TypeConverter needed:
+      // an `@Entity` reads its enum back from rows already stored.
       const serialized = DTO_NAME_RE.test(cls.name)
-        || annotations.some(a => a.target >= lo && a.target <= hi && SERIALIZATION_ANNOTATIONS.has(a.name));
+        || annotations.some(a => a.target >= lo && a.target <= hi
+          && (SERIALIZATION_ANNOTATIONS.has(a.name) || ROOM_ANNOTATIONS.has(a.name)));
       if (!serialized) continue;
       for (let j = i + 1; j < syms.length && syms[j].depth > cls.depth; j++) {
         const f = syms[j];

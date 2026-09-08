@@ -306,3 +306,56 @@ export function blankValueDeclarationNames(xml: string): string {
   }
   return chars.join('');
 }
+
+/**
+ * `Resources.getIdentifier` and reflection on `R` reach resources by a name
+ * the scan cannot see. Kinds made unprovable by such a lookup; `null` means
+ * all of them (the type argument is computed, or `R` is read reflectively).
+ *
+ * A no-argument `article.getIdentifier()` is an ordinary getter; when the type
+ * argument is a literal only THAT kind is affected: disabling every kind
+ * because one call looks up a string made the whole feature silent.
+ */
+const GET_IDENTIFIER_RE = /\bgetIdentifier\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g;
+const REFLECTION_RE = /\bR(?:\.\w+)?::class\s*\.\s*java|\bR(?:\.\w+)?\.class\b/;
+
+export function dynamicallyLookedUpKinds(code: string): Set<string> | null {
+  if (REFLECTION_RE.test(code)) return null;
+  const affected = new Set<string>();
+  GET_IDENTIFIER_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = GET_IDENTIFIER_RE.exec(code)) !== null) {
+    const args = m[1].trim();
+    if (args === '') continue; // business getter, not Resources.getIdentifier
+    const parts = args.split(',');
+    if (parts.length < 3) continue; // not the (name, type, package) overload
+    const typeLiteral = /^\s*"(\w+)"\s*$/.exec(parts[1]);
+    if (!typeLiteral) return null; // type computed: every kind is at risk
+    affected.add(typeLiteral[1]);
+  }
+  return affected;
+}
+
+/**
+ * `tools:keep="@drawable/ic_dyn_*,@layout/x"`: one matcher per entry, tested
+ * on `kind/name`. A wildcard used to be read as the literal `ic_dyn_`, and
+ * every resource it protected was reported as unused.
+ */
+export function collectKeepGlobs(xml: string): RegExp[] {
+  const out: RegExp[] = [];
+  const re = /\btools:keep\s*=\s*"([^"]*)"/g;
+  const clean = stripXmlComments(xml);
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(clean)) !== null) {
+    for (const item of m[1].split(',')) {
+      const ref = /^\s*@(\w+)\/([\w*]+)\s*$/.exec(item);
+      if (!ref) continue;
+      const name = ref[2].replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+      out.push(new RegExp(`^${ref[1]}/${name}$`));
+    }
+  }
+  return out;
+}
+
+/** A `res/raw` or `res/xml` file carrying shrinker rules: the build reads it, no code names it. */
+export const SHRINKER_RULES_RE = /\btools:(?:keep|discard|shrinkMode)\s*=/;

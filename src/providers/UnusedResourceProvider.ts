@@ -7,6 +7,9 @@ import {
   collectCodeResourceRefs,
   collectStringLiterals,
   collectXmlResourceRefs,
+  dynamicallyLookedUpKinds,
+  collectKeepGlobs,
+  SHRINKER_RULES_RE,
 } from '../util/xmlRefs';
 import { reportDecorations } from '../util/demoProbe';
 
@@ -46,6 +49,8 @@ const MANIFEST_CRITICAL = [
   /^ic_launcher/, /^ic_notification/, /^network_security_config$/, /^file_paths$/,
   /^provider_paths$/, /^backup_rules$/, /^data_extraction_rules$/, /^shortcuts$/,
   /^splash/, /^app_widget/, /^ic_shortcut/,
+  // `res/raw/keep.xml`: the shrinker's keep-list, read by the build only.
+  /^keep$/,
 ];
 
 /** Prefixes owned by AndroidX / Material / Play libraries: an overlay we must not touch. */
@@ -94,26 +99,9 @@ const IGNORE_RE = /kotlin-jump:ignore\s+unused-resource/;
  * disabling every kind because one call looks up a string made the whole
  * feature silent on a 3400-file project.
  */
-const GET_IDENTIFIER_RE = /\bgetIdentifier\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g;
-const REFLECTION_RE = /\bR(?:\.\w+)?::class\s*\.\s*java|\bR(?:\.\w+)?\.class\b/;
-
-/** Kinds made unprovable by dynamic lookup; `null` means all of them. */
-export function dynamicallyLookedUpKinds(code: string): Set<string> | null {
-  if (REFLECTION_RE.test(code)) return null;
-  const affected = new Set<string>();
-  GET_IDENTIFIER_RE.lastIndex = 0;
-  let m: RegExpExecArray | null;
-  while ((m = GET_IDENTIFIER_RE.exec(code)) !== null) {
-    const args = m[1].trim();
-    if (args === '') continue; // business getter, not Resources.getIdentifier
-    const parts = args.split(',');
-    if (parts.length < 3) continue; // not the (name, type, package) overload
-    const typeLiteral = /^\s*"(\w+)"\s*$/.exec(parts[1]);
-    if (!typeLiteral) return null; // type computed: every kind is at risk
-    affected.add(typeLiteral[1]);
-  }
-  return affected;
-}
+// Lives in util/xmlRefs so KJ-031 (vscode-free) shares it; re-exported here
+// for the callers that import it from the provider.
+export { dynamicallyLookedUpKinds };
 
 function isCodePath(path: string): boolean {
   return /\.(kt|kts|java)$/.test(path);
@@ -130,6 +118,8 @@ export function findUnusedResources(input: ScanInput): UnusedResource[] {
   let manifestHasPlaceholder = false;
   /** Kinds reached by dynamic lookup; `null` once any call is unreadable. */
   let dynamicKinds: Set<string> | null = new Set<string>();
+  const keepGlobs: RegExp[] = [];
+  const shrinkerRuleFiles = new Set<string>();
 
   for (const src of input.sources) {
     if (isCodePath(src.path)) {
@@ -152,6 +142,8 @@ export function findUnusedResources(input: ScanInput): UnusedResource[] {
         referenced.add(`${r.kind}/${r.name}`);
       }
       for (const s of collectStringLiterals(src.text)) literals.add(s);
+      keepGlobs.push(...collectKeepGlobs(src.text));
+      if (SHRINKER_RULES_RE.test(src.text)) shrinkerRuleFiles.add(src.path);
       // Guard 3: a manifest placeholder resolves to a name we cannot know.
       if (/AndroidManifest\.xml$/.test(src.path) && /\$\{[^}]+\}/.test(src.text)) {
         manifestHasPlaceholder = true;
@@ -193,6 +185,8 @@ export function findUnusedResources(input: ScanInput): UnusedResource[] {
     if (manifestHasPlaceholder && REVIEW_ONLY_KINDS.has(kind)) continue;
     if (MANIFEST_CRITICAL.some(re => re.test(entry.name))) continue;
     if (LIBRARY_PREFIXES.some(p => entry.name.startsWith(p))) continue;
+    if (keepGlobs.some(g => g.test(`${kind}/${entry.name}`))) continue;
+    if (entry.variants.some(v => shrinkerRuleFiles.has(v.path))) continue;
 
     const key = FileResourceIndex.key(kind, entry.name);
     if ((moduleCountByKey.get(key)?.size ?? 0) > 1) continue;

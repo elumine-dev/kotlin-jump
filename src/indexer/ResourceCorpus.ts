@@ -23,6 +23,9 @@ const SOURCE_GLOB = '**/*.{kt,kts,java,xml,gradle,pro,properties,toml}';
 const SERVICES_GLOB = '**/META-INF/services/*';
 const RES_GLOB = '**/res/*/*.*';
 const CACHE_MS = 60_000;
+export const LIBRARY_PLUGIN_RE = /com\.android\.library|android-library|android\.library\b|androidLibrary/;
+/** A module other projects consume: maven-publish under every spelling, or a KMP export. */
+export const PUBLISHED_MODULE_RE = /maven-publish|mavenPublish|\.publish(?:ing)?\b|\bpublishing\s*\{|cocoapods\s*\{|XCFramework/;
 
 export interface Corpus {
   sources: ResourceSource[];
@@ -49,8 +52,22 @@ export class ResourceCorpus {
     this.cache = undefined;
   }
 
+  /**
+   * An open editor edited since the scan: the cached offsets no longer match
+   * its text, and a quick fix computed on them deleted the wrong lines.
+   */
+  private cacheIsStale(corpus: Corpus): boolean {
+    for (const d of vscode.workspace.textDocuments) {
+      if (!d.isDirty) continue;
+      const src = corpus.sources.find(s => s.path === d.uri.fsPath);
+      if (src && src.text !== d.getText()) return true;
+    }
+    return false;
+  }
+
   /** Serves a stale corpus immediately while refreshing behind it. */
   async get(token?: vscode.CancellationToken): Promise<Corpus> {
+    if (this.cache && this.cacheIsStale(this.cache.corpus)) this.cache = undefined;
     if (this.cache && Date.now() - this.cache.at < CACHE_MS) return this.cache.corpus;
     if (this.cache && !this.refreshing) {
       this.refreshing = true;
@@ -127,7 +144,9 @@ export class ResourceCorpus {
       sources.some(s => s.path.startsWith(`${dir}/`) && /\.(kt|java)$/.test(s.path)),
     );
     const libraryModules = moduleDirs.filter(dir =>
-      sources.some(s => s.path.startsWith(`${dir}/build.gradle`) && /com\.android\.library|android-library/.test(s.text)),
+      // `alias(libs.plugins.android.library)` and convention plugins spell the
+      // plugin without `com.android.library`.
+      sources.some(s => s.path.startsWith(`${dir}/build.gradle`) && LIBRARY_PLUGIN_RE.test(s.text)),
     );
 
     return {

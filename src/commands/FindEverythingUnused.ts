@@ -1,5 +1,8 @@
 import * as vscode from 'vscode';
-import { ResourceCorpus } from '../indexer/ResourceCorpus';
+import {
+  ResourceCorpus,
+  PUBLISHED_MODULE_RE,
+} from '../indexer/ResourceCorpus';
 import {
   collectValueKeyDeclarations,
   parseValuesPath,
@@ -103,7 +106,7 @@ export async function findEverythingUnusedCommand(
         } else {
           const published = data.moduleDirs.filter(dir =>
             data.sources.some(s => s.path.startsWith(`${dir}/build.gradle`)
-              && /maven-publish|com\.vanniktech\.maven\.publish/.test(s.text)));
+              && PUBLISHED_MODULE_RE.test(s.text)));
           const symbols = symbolFindings = findUnusedSymbols({
             sources: data.sources,
             testSourceSets: cfg.get<string[]>('testSourceSets', []),

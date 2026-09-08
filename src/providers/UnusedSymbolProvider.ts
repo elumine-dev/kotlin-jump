@@ -7,6 +7,7 @@ import {
   deleteTitleFor,
   messageFor,
   wholeLineExtent,
+  currentRemovalExtent,
 } from './unusedSymbols';
 
 /**
@@ -213,9 +214,13 @@ export async function buildSymbolRemovalEdit(
       );
     } else {
       const starts = lineStartsOf(text);
+      // Recomputed on the text as it is now: the scan's offsets were applied
+      // to a document edited since, and the deletion landed a line off.
       const ranges = group
         .filter(f => f.removeStart !== -1)
-        .map(f => wholeLineExtent(text, f.removeStart, f.removeEnd))
+        .map(f => currentRemovalExtent(p, text, f.name, f.kind))
+        .filter((e): e is { removeStart: number; removeEnd: number } => e !== undefined && e.removeStart !== -1)
+        .map(e => wholeLineExtent(text, e.removeStart, e.removeEnd))
         .sort((a, b) => a.start - b.start);
 
       let previousEnd = -1;

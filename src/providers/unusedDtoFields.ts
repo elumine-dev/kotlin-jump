@@ -230,7 +230,7 @@ export function findUnusedDtoFields(input: UnusedDtoFieldScanInput): UnusedDtoFi
   // destructuring only calls component1..component2, so in any file that BOTH
   // mentions the class and destructures, only positions up to the largest
   // observed arity are unprovable.
-  const destructuredArity = destructuringGuard(input.sources, classNames);
+  const { byClass: destructuredArity, global: globalArity } = destructuringGuard(input.sources, classNames);
 
   // D5: a positional construction (`Config(a, b)`) breaks if a parameter goes
   // away, so the fix is withdrawn while the verdict stands. Constructed-by-
@@ -251,6 +251,9 @@ export function findUnusedDtoFields(input: UnusedDtoFieldScanInput): UnusedDtoFi
     if (c.rejection) continue;
     const reachableArity = destructuredArity.get(c.className);
     if (reachableArity !== undefined && c.position <= reachableArity) continue; // D1
+    // `val (id, name, url) = repo.profile()` in a file that never spells the
+    // class: the verdict stands, but removing componentN broke the build.
+    const fixWithdrawn = reachableArity === undefined && globalArity >= c.position;
     if (harvest.aliased.has(c.name)) continue;                        // H10
     // D5 keeps the verdict for a hand-built ConfigDO (the fixture's rule);
     // a request body is the one shape the app never deserializes.
@@ -273,8 +276,8 @@ export function findUnusedDtoFields(input: UnusedDtoFieldScanInput): UnusedDtoFi
       path: c.path,
       line: c.line,
       character: c.character,
-      removeStart: constructedClasses.has(c.className) ? -1 : c.removeStart,
-      removeEnd: constructedClasses.has(c.className) ? -1 : c.removeEnd,
+      removeStart: constructedClasses.has(c.className) || fixWithdrawn ? -1 : c.removeStart,
+      removeEnd: constructedClasses.has(c.className) || fixWithdrawn ? -1 : c.removeEnd,
       testMentions,
     });
   }
@@ -289,8 +292,9 @@ export function findUnusedDtoFields(input: UnusedDtoFieldScanInput): UnusedDtoFi
 function destructuringGuard(
   sources: readonly SymbolSource[],
   classNames: ReadonlySet<string>,
-): Map<string, number> {
+): { byClass: Map<string, number>; global: number } {
   const out = new Map<string, number>();
+  let global = 0;
   for (const src of sources) {
     if (!/\.(kt|kts)$/.test(src.path)) continue;
     if (isBuildArtifactPath(src.path)) continue;
@@ -298,13 +302,14 @@ function destructuringGuard(
     const clean = sanitizeForUsageScan(src.text);
     const arity = maxDestructuringArity(clean);
     if (arity === 0) continue;
+    global = Math.max(global, arity);
     for (const name of classNames) {
       if (new RegExp(`(?<![A-Za-z0-9_])${name}(?![A-Za-z0-9_])`).test(clean)) {
         out.set(name, Math.max(out.get(name) ?? 0, arity));
       }
     }
   }
-  return out;
+  return { byClass: out, global };
 }
 
 /**
@@ -379,7 +384,7 @@ export function explainDtoFields(input: UnusedDtoFieldScanInput): DtoFieldExplan
   const wanted = new Set<string>();
   for (const c of candidates) wanted.add(c.name);
   const harvest = harvestMentions(input.sources, wanted, input.testSourceSets);
-  const destructured = destructuringGuard(input.sources, classNames);
+  const destructured = destructuringGuard(input.sources, classNames).byClass;
   const declCount = new Map<string, number>();
   for (const c of candidates) declCount.set(c.name, (declCount.get(c.name) ?? 0) + 1);
 

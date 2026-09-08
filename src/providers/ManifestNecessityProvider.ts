@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import { reportDecorations } from '../util/demoProbe';
 import permissionApis from '../data/permission-apis.json';
 
+const MAX_SOURCES = 4000;
+
 /**
  * KJ-023: necessity badges in the Manifest. Every <uses-permission> tells
  * whether a matching API usage exists in the code; declared components
@@ -148,8 +150,11 @@ export class ManifestNecessityProvider implements vscode.Disposable {
 
     // Project sources for the usage search.
     const uris = await vscode.workspace.findFiles(
-      '**/*.{kt,java}', '**/{build,.gradle}/**', 4000,
+      '**/*.{kt,java}', '**/{build,.gradle}/**', MAX_SOURCES,
     );
+    // Past the cap the class may sit in a file never listed: "class not
+    // found" then invited the user to remove a live activity.
+    const truncated = uris.length >= MAX_SOURCES;
     const sources: { path: string; text: string }[] = [];
     for (const uri of uris) {
       try {
@@ -180,6 +185,7 @@ export class ManifestNecessityProvider implements vscode.Disposable {
     const text = editor.document.getText();
     const lines = text.split('\n');
     const { permissions, components } = analyzeManifest(text, project);
+    if (truncated) for (const c of components) c.status = 'ok';
 
     const badges: vscode.DecorationOptions[] = [];
     const dead: vscode.Range[] = [];

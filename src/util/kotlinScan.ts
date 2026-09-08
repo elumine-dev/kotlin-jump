@@ -491,3 +491,39 @@ export const CONVENTION_FUN_NAMES = new Set([
  * never provably dead from the source alone.
  */
 export const REFLECTIVE_SUPERTYPES = new Set(['Serializable', 'Externalizable', 'Parcelable']);
+
+/** What is left of a trimmed line after its leading annotations (`@A(...) @B val x` → `val x`). */
+export function afterAnnotations(t: string): string {
+  let i = 0;
+  while (t[i] === '@') {
+    i++;
+    while (i < t.length && /[\w.:]/.test(t[i])) i++;
+    if (t[i] === '(') {
+      let depth = 0;
+      for (; i < t.length; i++) {
+        if (t[i] === '(') depth++;
+        else if (t[i] === ')' && --depth === 0) { i++; break; }
+      }
+    }
+    while (t[i] === ' ' || t[i] === '\t') i++;
+  }
+  return t.slice(i);
+}
+
+/**
+ * When line `l` closes an annotation opened on an earlier line
+ * (`@Deprecated(` … `message = "gone",` … `)`), the index of that `@` line;
+ * -1 otherwise. A removal that stopped at the `)` left the annotation
+ * behind, applied to whatever declaration came next.
+ */
+export function multiLineAnnotationStart(lines: readonly string[], l: number): number {
+  let depth = 0;
+  for (let k = l; k >= 0 && k >= l - 40; k--) {
+    const t = (lines[k] ?? '').trim();
+    if (t === '' && k === l) return -1;
+    for (const ch of t) { if (ch === ')') depth++; else if (ch === '(') depth--; }
+    if (t.startsWith('@')) return depth <= 0 && afterAnnotations(t) === '' ? k : -1;
+    if (depth <= 0) return -1;
+  }
+  return -1;
+}

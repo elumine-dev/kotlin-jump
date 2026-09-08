@@ -73,7 +73,7 @@ describe('runCodeLensAction', () => {
     // search() can filter the declaration and navigate directly if 1 result.
     expect((vscode.commands as any).executeCommand).toHaveBeenCalledWith(
       'kotlin-jump.findUsages',
-      { excludeUri: 'file:///Foo.kt', excludeLine: 1 },
+      { excludeUri: 'file:///Foo.kt', excludeLine: 1, excludeCharacter: 6 },
     );
     expect(populateFromResults).not.toHaveBeenCalled();
   });
@@ -105,6 +105,7 @@ describe('runCodeLensAction', () => {
     expect(populateFromResults).toHaveBeenCalledWith('Foo', results, {
       excludeUri: 'file:///Foo.kt',
       excludeLine: 1,
+      excludeCharacter: 6,
     });
     expect((vscode.commands as any).executeCommand).not.toHaveBeenCalledWith('kotlin-jump.findUsages');
   });

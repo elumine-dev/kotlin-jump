@@ -6,7 +6,7 @@ export interface CodeLensActionPanel {
   populateFromResults(
     word: string,
     rawResults: UsageResult[],
-    exclude?: { excludeUri?: string; excludeLine?: number },
+    exclude?: { excludeUri?: string; excludeLine?: number; excludeCharacter?: number },
   ): Promise<void>;
 }
 
@@ -30,7 +30,7 @@ export async function runCodeLensAction(
   editor.selection = new vscode.Selection(pos, pos);
 
   const smartNav = vscode.workspace.getConfiguration('kotlinJump').get<boolean>('smartNavigation', false);
-  const exclude = { excludeUri: uri.toString(), excludeLine: line };
+  const exclude = { excludeUri: uri.toString(), excludeLine: line, excludeCharacter: character };
 
   if (!smartNav) {
     await vscode.commands.executeCommand('kotlin-jump.findUsages', exclude);

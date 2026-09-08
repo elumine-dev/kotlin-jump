@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.26
+
+Kotlin Jump 1.42.26 fixes what the counters and the hints showed: a parameter hint placed inside a string, "0 usages" on every symbol of the default package, a lens count that disagreed with the panel it opened, a Test Explorer that skipped `src/testDebug/` and reported a `@DisplayName` test as skipped, and test names with spaces that Gradle on Windows never found.
+
+### Fixes
+- Places parameter hints on the arguments, not inside them. `send("a, b", 3)` put the `count:` hint after the comma in the string; a `//` comment or a `/* */` block among the arguments, and a `"""` raw string spanning lines, were counted the same way. A call inside a multi-line block comment received hints too.
+- Stops borrowing a workspace function's parameters for an imported one. With `import kotlinx.coroutines.launch`, a `launch(a, b)` call was labelled with the names of the project's own `launch`.
+- Counts usages the panel will show. The lens subtracted one hit for the declaration while the panel dropped the whole declaration line, so a recursive call read "1 usage" in one place and nothing in the other; only the declaration token is left out now. A lens request cancelled by a fast edit cut the shared scan short and the next lens read the partial count. The scan now stops only once every request waiting on it is gone.
+- Finds usages in the default package. Two files without a `package` line could not reference each other, so every symbol in a small project or a scratch file read "0 usages" and Find Usages came back empty.
+- Reads raw strings and open comments like the compiler. Every `id` in a multi-line SQL string counted as a usage of the property, and a `/*` opened after code on a line (`val x = 1 /* note`) hid nothing on the lines that followed. Only `$name` and `${…}` templates count inside a raw string.
+- Discovers tests in every Gradle test source set. `src/testDebug/kotlin/` and `src/screenshotTest/` got a Run lens and then "test not found in index", while a `contest/java/` folder passed for `test/java/`.
+- Matches a `@DisplayName("adds two numbers")` test to its result instead of reporting it skipped, targets a JUnit 5 `@Nested` class under both `Outer.Inner` and `Outer$Inner` so either Gradle version runs it, and quotes the arguments on Windows: `--tests "T.returns 404 (not found)"` reached cmd.exe as three words and Gradle answered "No tests found".
+
 ## 1.42.25
 
 Kotlin Jump 1.42.25 fixes the Android detectors: lifecycle warnings on code that releases itself (and a quick fix that did not compile), Room migration drift on entities it could not even see, a Screen Flow map that painted reachable screens as orphans, implementation counts inflated by homonyms, and a raw resource offered for deletion while a video player named it.

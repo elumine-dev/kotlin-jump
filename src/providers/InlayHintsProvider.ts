@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
 import { SymbolEntry, SymbolIndex } from '../indexer/SymbolIndex';
-import { resolveBest } from '../util/ImportResolver';
+import { resolveBest, resolveExplicit } from '../util/ImportResolver';
 import { readSignature, parseParams, extractReturnType, KtParam } from '../util/SignatureReader';
 import { isInsideCommentOrString } from '../util/textUtils';
 import { Logger, NullLogger } from '../util/logger';
 import { resolveLocalScope, paramLocationInSignature, buildLocalScopeIndex } from './DefinitionProvider';
+import { leavesBlockCommentOpen } from '../util/LocalScopeIndex';
 
 interface CachedParams {
   params:    KtParam[];
@@ -114,6 +115,8 @@ export class KotlinInlayHintsProvider implements vscode.InlayHintsProvider {
 
     // Track raw-string state across lines (""" toggles in/out of raw string)
     let inRawString = false;
+    // Same for a `/*` comment left open: its lines are text, not calls.
+    let inBlockComment = false;
 
     for (let lineNum = range.start.line; lineNum <= range.end.line; lineNum++) {
       if (token.isCancellationRequested) {
@@ -122,7 +125,7 @@ export class KotlinInlayHintsProvider implements vscode.InlayHintsProvider {
       }
 
       const line = document.lineAt(lineNum);
-      const text = line.text;
+      let text = line.text;
 
       // Count """ occurrences on this line to toggle raw-string state
       const tripleCount = countTripleQuotes(text);
@@ -134,6 +137,15 @@ export class KotlinInlayHintsProvider implements vscode.InlayHintsProvider {
         this.log.debug(`[InlayHints] line ${lineNum} — raw string opened, skipping`);
         inRawString = true;
       }
+
+      if (inBlockComment) {
+        const close = text.indexOf('*/');
+        if (close < 0) continue;
+        inBlockComment = false;
+        // Blank the comment tail so `see foo(x) */ bar(1)` only scans `bar(1)`.
+        text = ' '.repeat(close + 2) + text.slice(close + 2);
+      }
+      if (text.includes('/*') && leavesBlockCommentOpen(text, 0)) inBlockComment = true;
 
       // Skip pure comment lines (both passes)
       if (/^\s*(\/\/|\/\*|\*)/.test(text)) continue;
@@ -368,6 +380,10 @@ export class KotlinInlayHintsProvider implements vscode.InlayHintsProvider {
     const resolved = resolveBest(name, document, fqn => this.index.lookupFqn(fqn));
     if (resolved.matches.length === 1) return resolved.matches[0];
     if (resolved.matches.length > 1) return undefined; // ambiguous
+    // An explicit import the index cannot resolve names a library symbol
+    // (`import kotlinx.coroutines.launch`): the workspace `launch` below
+    // would label the arguments with its own parameter names.
+    if (resolveExplicit(name, document).exact.length > 0) return undefined;
 
     const hits = this.index.lookup(name).filter(e => CALL_KINDS.has(e.kind as any));
     return hits.length === 1 ? hits[0] : undefined;
@@ -386,28 +402,62 @@ function findArgPositions(
   const positions: vscode.Position[] = [];
   let depth = 0;
   let argStarted = false;
+  // A `"""` raw string or a `/*` comment can span lines: their commas and
+  // brackets are text, so the state is carried from one line to the next.
+  // Before this, `send("a, b", 3)` put the second hint inside the string.
+  let inRaw = false;
+  let inBlock = false;
 
   // Scan up to 20 lines forward to handle multi-line calls
   const scanEnd = Math.min(startLine + 20, document.lineCount);
 
+  // First character of a new argument at (ln, col); true once `maxArgs` are known.
+  const startArg = (ln: number, col: number): boolean => {
+    if (depth !== 1 || argStarted) return false;
+    argStarted = true;
+    positions.push(new vscode.Position(ln, col));
+    return positions.length >= maxArgs;
+  };
+
   for (let ln = startLine; ln < scanEnd; ln++) {
     const text = document.lineAt(ln).text;
-    const startCol = ln === startLine ? parenOffset : 0;
+    let col = ln === startLine ? parenOffset : 0;
 
-    for (let col = startCol; col < text.length; col++) {
+    while (col < text.length) {
       const ch = text[col];
+
+      if (inRaw) {
+        if (text.startsWith('"""', col)) { inRaw = false; col += 3; } else col++;
+        continue;
+      }
+      if (inBlock) {
+        if (ch === '*' && text[col + 1] === '/') { inBlock = false; col += 2; } else col++;
+        continue;
+      }
+      if (ch === '/' && text[col + 1] === '/') break; // line comment: nothing left on this line
+      if (ch === '/' && text[col + 1] === '*') { inBlock = true; col += 2; continue; }
+      if (text.startsWith('"""', col)) {
+        if (startArg(ln, col)) return positions;
+        inRaw = true;
+        col += 3;
+        continue;
+      }
+      if (ch === '"' || ch === '\'') {
+        if (startArg(ln, col)) return positions;
+        col = skipStringLiteral(text, col);
+        continue;
+      }
 
       if (ch === '(' || ch === '[' || ch === '{') {
         if (depth === 0 && ch === '(') {
           depth = 1;
           argStarted = false;
+          col++;
           continue;
         }
+        if (startArg(ln, col)) return positions;
         depth++;
-        if (!argStarted) {
-          argStarted = true;
-          positions.push(new vscode.Position(ln, col));
-        }
+        col++;
         continue;
       }
 
@@ -416,26 +466,48 @@ function findArgPositions(
           return positions; // done
         }
         depth--;
+        col++;
         continue;
       }
 
-      if (depth !== 1) continue;
-
-      if (ch === ',') {
+      if (depth === 1 && ch === ',') {
         argStarted = false;
+        col++;
         continue;
       }
 
       // First non-whitespace character of a new argument
-      if (!argStarted && ch !== ' ' && ch !== '\t') {
-        argStarted = true;
-        positions.push(new vscode.Position(ln, col));
-        if (positions.length >= maxArgs) return positions;
-      }
+      if (ch !== ' ' && ch !== '\t' && startArg(ln, col)) return positions;
+      col++;
     }
   }
 
   return positions;
+}
+
+// Column just past the string or char literal opening at `col`. A `${…}`
+// template may nest brackets, commas and further strings: skipped as a unit.
+function skipStringLiteral(text: string, col: number): number {
+  const quote = text[col];
+  let i = col + 1;
+  while (i < text.length) {
+    const c = text[i];
+    if (c === '\\') { i += 2; continue; }
+    if (c === quote) return i + 1;
+    if (quote === '"' && c === '$' && text[i + 1] === '{') {
+      let braces = 1;
+      i += 2;
+      while (i < text.length && braces > 0) {
+        if (text[i] === '"') { i = skipStringLiteral(text, i); continue; }
+        if (text[i] === '{') braces++;
+        else if (text[i] === '}') braces--;
+        i++;
+      }
+      continue;
+    }
+    i++;
+  }
+  return text.length; // unterminated: the rest of the line is the literal
 }
 
 // Gets the text of argument `i` from its start position to the next argument start.

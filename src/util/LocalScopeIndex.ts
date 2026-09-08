@@ -257,7 +257,7 @@ function isExpressionBodyHeader(text: string): boolean {
 }
 
 /** True when a `/*` at or after `from` is not closed before the end of the line. */
-function leavesBlockCommentOpen(s: string, from: number): boolean {
+export function leavesBlockCommentOpen(s: string, from: number): boolean {
   let inStr: string | false = false;
   for (let i = from; i < s.length; i++) {
     const c = s[i];

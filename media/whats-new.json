@@ -1,42 +1,34 @@
 {
-  "version": "1.42.25",
+  "version": "1.42.26",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Android detectors that read the code they judge",
-  "summary": "Lifecycle warnings on ViewBinding and lifecycle-aware observers are gone and the quick fix compiles; Room sees entities with indices and reads coverage per table; Screen Flow draws the edges that start inside a screen; implementation counts skip homonyms; a raw resource named in a URI is not dead.",
+  "tagline": "Hints on the right argument, counts the panel agrees with",
+  "summary": "Kotlin Jump 1.42.26 fixes what the counters and the hints showed: a parameter hint placed inside a string, \"0 usages\" on every symbol of the default package, a lens count that disagreed with the panel it opened, a Test Explorer that skipped `src/testDebug/` and reported a `@DisplayName` test as skipped, and test names with spaces that Gradle on Windows never found.",
   "highlights": [
     {
-      "title": "Lifecycle pairing that knows Android",
-      "description": "`Binding.bind(view)`, `lifecycle.addObserver(x)` and `addCallback(viewLifecycleOwner)` release themselves. Resources are read from the right argument or the receiver, mirrors are matched within the class, and the generated `onStop()` calls `super`, uses the receiver and lands inside a one-line mirror.",
-      "kind": "fix"
+      "title": "Hints land on the argument",
+      "kind": "fix",
+      "description": "A comma inside a string, a comment among the arguments or a raw string spanning lines no longer shifts the parameter hints, and an imported library function stops wearing a workspace homonym's parameter names."
     },
     {
-      "title": "Room drift on every entity",
-      "description": "`@Entity(tableName = …, indices = […])` and an annotation between `@Entity` and `class` hid the entity; `AutoMigration(…, spec = …)` looked like a hole. Coverage is read per table, `CREATE TABLE` migrations count, the property is underlined, and the provider stays silent on a truncated corpus.",
-      "kind": "fix"
+      "title": "One count, lens and panel",
+      "kind": "fix",
+      "description": "Only the declaration token is left out of the count, a cancelled lens request no longer leaves a partial count behind, and symbols in the default package finally have usages."
     },
     {
-      "title": "Screen Flow and implementation counts",
-      "description": "A `navigate(\"detail/42\")` inside a screen reaches the declared detail route instead of leaving it an orphan, `object Home : Screen(\"home\")` resolves its route, and `⬇ N implementations` counts direct overrides of the right parent only.",
-      "kind": "fix"
+      "title": "Tests found and matched",
+      "kind": "fix",
+      "description": "Every Gradle test source set is discovered, a @DisplayName test gets its result, @Nested classes run on every Gradle version, and test names with spaces survive cmd.exe."
     }
   ],
   "sections": [
     {
-      "heading": "Lifecycle and Room",
+      "heading": "Fixes",
       "bullets": [
-        "No warning on ViewBinding `bind`, `lifecycle.addObserver` or `addCallback(viewLifecycleOwner)`.",
-        "Resource read from the right argument; any identifier argument or the receiver pairs with the release; mirrors matched within the class.",
-        "Quick fix: `super.onX()` first, receiver kept, one-line mirror handled, expression body skipped.",
-        "Entities with `indices` or an extra annotation are seen; `AutoMigration(spec = …)` parsed; coverage per table; `CREATE TABLE` counts."
-      ]
-    },
-    {
-      "heading": "Navigation, implementations, resources",
-      "bullets": [
-        "Screen Flow draws `navigate()` calls made inside screens and matches literals to route patterns.",
-        "`object Home : Screen(\"home\")` resolves `Screen.Home.route`.",
-        "Implementation counts take direct overrides of the parent resolved through imports.",
-        "A raw resource named in an `android.resource://` URI is referenced."
+        "Parameter hints skip commas and brackets inside strings, raw strings and comments, and a call inside a multi-line block comment gets none.",
+        "A `launch(a, b)` call under `import kotlinx.coroutines.launch` no longer shows the parameters of the project's own `launch`.",
+        "The lens and the panel exclude the same declaration token, a cancelled request never caches a partial scan, and two files without a `package` line reference each other.",
+        "Raw-string text is not a usage (its `$name` templates are), and a `/*` opened mid-line hides the following lines until `*/`.",
+        "The Test Explorer discovers `src/testDebug/` and `src/screenshotTest/`, matches `@DisplayName` tests, targets `@Nested` classes under both spellings, and quotes test names on Windows."
       ]
     }
   ],

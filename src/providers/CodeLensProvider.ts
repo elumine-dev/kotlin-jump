@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { SymbolKind } from '../indexer/KotlinParser';
-import { scanForUsagesWithTarget, isExcluded, UsageResult } from './FindUsagesEngine';
+import { scanForUsagesWithTarget, isExcluded, UsageResult, withoutDeclaration } from './FindUsagesEngine';
 import { isTestFun } from '../testing/TestAnnotations';
 
 const LENS_KINDS = new Set<SymbolKind>([
@@ -19,13 +19,25 @@ interface KotlinCodeLens extends vscode.CodeLens {
   data: { entry: SymbolEntry; enclosingKind?: string; usageOnly?: boolean };
 }
 
+// One background scan per FQN, shared by every lens request that needs it.
+// The scan runs on its own token: it is cancelled only once every request
+// waiting on it has been cancelled, so a lens re-request never inherits the
+// partial count of a scan cut short by the previous request.
+interface UsageCacheEntry {
+  ver: number;
+  p: Promise<UsageResult[]>;
+  results?: UsageResult[];
+  cts: vscode.CancellationTokenSource;
+  waiters: number;
+}
+
 export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
   private readonly _onDidChange = new vscode.EventEmitter<void>();
   readonly onDidChangeCodeLenses = this._onDidChange.event;
   // version increments on every evictFile() call; cached entries store the
   // version at which they were created so stale results self-evict on resolve.
   private _cacheVer = 0;
-  private _cache = new Map<string, { ver: number; p: Promise<UsageResult[]>; results?: UsageResult[] }>();
+  private _cache = new Map<string, UsageCacheEntry>();
   private _fireTimer?: ReturnType<typeof setTimeout>;
 
   constructor(private readonly index: SymbolIndex) {}
@@ -146,24 +158,8 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
     // ── usageOnly lens (interface / abstract class / sealed class) ────────────
     // OverrideGutterProvider handles the ⬇ implementations arrow; we only show usage count.
     if (usageOnly) {
-      let usageCount = 0;
-      try {
-        const cacheKey = entry.fqn;
-        if (!this._cache.has(cacheKey)) {
-          const ver = this._cacheVer;
-          const p = this._scanUsages(entry, token).then(results => {
-            const c = this._cache.get(cacheKey);
-            if (c?.ver !== ver) this._cache.delete(cacheKey);
-            else c.results = results;
-            return results;
-          });
-          this._cache.set(cacheKey, { ver, p });
-        }
-        const results = await this._cache.get(cacheKey)!.p;
-        if (token.isCancellationRequested) { this._cache.delete(cacheKey); }
-        usageCount = Math.max(0, results.length - 1);
-      } catch { usageCount = 0; }
-      if (token.isCancellationRequested) return lens;
+      const usageCount = await this._usageCount(entry, token);
+      if (usageCount === undefined) return lens;
       lens.command = {
         title: `${usageCount} ${usageCount === 1 ? 'usage' : 'usages'}`,
         command: 'kotlin-jump.codeLensAction',
@@ -188,29 +184,8 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
     }
 
     // ── Usage count — async file scan (cached per FQN) ────────────────────────
-    let usageCount = 0;
-    try {
-      const cacheKey = entry.fqn;
-      if (!this._cache.has(cacheKey)) {
-        const ver = this._cacheVer;
-        const p = this._scanUsages(entry, token).then(results => {
-          const c = this._cache.get(cacheKey);
-          if (c?.ver !== ver) this._cache.delete(cacheKey);
-          else c.results = results;
-          return results;
-        });
-        this._cache.set(cacheKey, { ver, p });
-      }
-      const results = await this._cache.get(cacheKey)!.p;
-      if (token.isCancellationRequested) {
-        this._cache.delete(cacheKey);
-      }
-      usageCount = Math.max(0, results.length - 1);
-    } catch {
-      usageCount = 0;
-    }
-
-    if (token.isCancellationRequested) return lens;
+    const usageCount = await this._usageCount(entry, token);
+    if (usageCount === undefined) return lens;
 
     // Build title
     const parts: string[] = [];
@@ -305,6 +280,55 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
    */
   getCachedResults(fqn: string): Promise<UsageResult[]> | undefined {
     return this._cache.get(fqn)?.p;
+  }
+
+  /**
+   * Usage count for `entry`, or undefined once `token` is cancelled: the
+   * caller then leaves the lens unresolved and VS Code asks again later.
+   */
+  private async _usageCount(entry: SymbolEntry, token: vscode.CancellationToken): Promise<number | undefined> {
+    const cacheKey = entry.fqn;
+    let shared = this._cache.get(cacheKey);
+    if (!shared) {
+      const cts = new vscode.CancellationTokenSource();
+      const created: UsageCacheEntry = { ver: this._cacheVer, cts, waiters: 0, p: Promise.resolve([]) };
+      created.p = this._scanUsages(entry, cts.token).then(
+        results => {
+          if (this._cache.get(cacheKey) !== created) return results; // evicted meanwhile
+          // A cancelled scan stopped early: its partial count must never be cached.
+          if (cts.token.isCancellationRequested || created.ver !== this._cacheVer) this._cache.delete(cacheKey);
+          else created.results = results;
+          return results;
+        },
+        err => {
+          if (this._cache.get(cacheKey) === created) this._cache.delete(cacheKey);
+          throw err;
+        },
+      );
+      this._cache.set(cacheKey, created);
+      shared = created;
+    }
+    const entryRef = shared;
+    entryRef.waiters++;
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      entryRef.waiters--;
+      // Last interested request gone while the scan still runs: stop it.
+      if (entryRef.waiters === 0 && entryRef.results === undefined) {
+        entryRef.cts.cancel();
+        if (this._cache.get(cacheKey) === entryRef) this._cache.delete(cacheKey);
+      }
+    };
+    if (token.isCancellationRequested) { release(); return undefined; }
+    const sub = token.onCancellationRequested?.(release);
+    let results: UsageResult[];
+    try { results = await entryRef.p; } catch { results = []; }
+    finally { sub?.dispose(); }
+    release();
+    if (token.isCancellationRequested) return undefined;
+    return withoutDeclaration(results, entry.uri.toString(), entry.line, entry.character).length;
   }
 
   private async _scanUsages(entry: SymbolEntry, token: vscode.CancellationToken): Promise<UsageResult[]> {

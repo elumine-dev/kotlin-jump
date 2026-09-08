@@ -20,7 +20,7 @@ export interface TestSpec {
   entry: SymbolEntry;
 }
 
-interface TestResult {
+export interface TestResult {
   classFqn: string;
   methodName: string;
   state: 'passed' | 'failed' | 'skipped';
@@ -205,10 +205,10 @@ export class GradleTestRunner {
 
     // When Gradle testLogging is not configured, stdout has no individual result lines.
     // Fall back to printing only failures and skips from XML; passed tests are shown in the summary.
+    const sourceLines: SourceLines = new Map();
     if (stdoutResults.size === 0 && results.size > 0) {
       for (const spec of specs) {
-        const key = `${getClassFqn(spec.entry)}.${spec.entry.name}`;
-        const result = results.get(key);
+        const result = resultFor(spec.entry, results, sourceLines);
         if (!result || result.state === 'passed') continue;
         const icon  = result.state === 'failed' ? '✗' : '─';
         const color = result.state === 'failed' ? C.red : C.yellow;
@@ -218,14 +218,16 @@ export class GradleTestRunner {
       }
     }
 
-    applyResults(specs, results, run, log);
+    const matched = applyResults(specs, results, run, log, sourceLines);
 
     // ── Failure details (from XML) ────────────────────────────────────────────
     const failedResults = [...results.values()].filter(r => r.state === 'failed');
     if (failedResults.length > 0) {
       run.appendOutput('\r\n');
       for (const r of failedResults) {
-        const matchingSpec = specs.find(s => s.entry.name === r.methodName);
+        const matchingSpec = matched.get(r)
+          ?? specs.find(s => s.entry.name === r.methodName && getClassFqn(s.entry) === r.classFqn)
+          ?? specs.find(s => s.entry.name === r.methodName);
         run.appendOutput(`  ${C.red}✗  ${r.methodName}${C.reset}\r\n`);
         const detail = formatErrorDetail(r, matchingSpec?.entry.uri.fsPath);
         if (detail) {
@@ -339,23 +341,38 @@ export function findGradleModuleByPath(filePath: string, projectRoot: string): s
   return ''; // root project
 }
 
-function buildTestFilters(specs: TestSpec[]): string[] {
+export function buildTestFilters(specs: TestSpec[]): string[] {
   const filters: string[] = [];
   const seen = new Set<string>();
 
   for (const { entry } of specs) {
-    const classFqn = getClassFqn(entry);
-    const filter = `${classFqn}.${entry.name}`;
-    if (!seen.has(filter)) { seen.add(filter); filters.push('--tests', filter); }
+    const dotted = `${getClassFqn(entry)}.${entry.name}`;
+    const jvm    = `${getJvmClassName(entry)}.${entry.name}`;
+    // Gradle ORs its --tests patterns. A JUnit 5 @Nested class is
+    // `Outer$Inner` to the JVM and which spelling the matcher takes depends
+    // on the Gradle version: send both, the other one matches nothing.
+    for (const filter of dotted === jvm ? [dotted] : [dotted, jvm]) {
+      if (!seen.has(filter)) { seen.add(filter); filters.push('--tests', filter); }
+    }
   }
 
   return filters;
 }
 
-function getClassFqn(entry: SymbolEntry): string {
+export function getClassFqn(entry: SymbolEntry): string {
   // FQN is "pkg.ClassName.methodName" — strip the last segment
   const parts = entry.fqn.split('.');
   return parts.slice(0, -1).join('.');
+}
+
+/** The JVM name of the class declaring `entry`: nested classes joined with `$`. */
+export function getJvmClassName(entry: SymbolEntry): string {
+  const classFqn = getClassFqn(entry);
+  const pkg = entry.packageName ?? '';
+  if (pkg && !classFqn.startsWith(`${pkg}.`)) return classFqn;
+  const local = pkg ? classFqn.slice(pkg.length + 1) : classFqn;
+  const jvmLocal = local.split('.').join('$');
+  return pkg ? `${pkg}.${jvmLocal}` : jvmLocal;
 }
 
 function groupByModule(specs: TestSpec[]): Map<string, TestSpec[]> {
@@ -520,7 +537,11 @@ async function spawnGradle(
   }
 
   return new Promise((resolve) => {
-    const proc = cp.spawn(gradlew, finalArgs, { cwd, shell: process.platform === 'win32' });
+    // gradlew.bat needs cmd.exe, which receives argv as one unquoted string:
+    // a backtick test name with spaces split into several words and Gradle
+    // answered "No tests found".
+    const viaShell = process.platform === 'win32';
+    const proc = cp.spawn(gradlew, viaShell ? finalArgs.map(quoteForCmd) : finalArgs, { cwd, shell: viaShell });
     log.debug(`[test:runner] process spawned (pid ${proc.pid})`);
 
     let lastWasFailed = false;
@@ -764,6 +785,13 @@ export function normalizeJUnitName(raw: string): string {
     .trim();
 }
 
+/** Quotes one argv entry for cmd.exe, which gets the array joined by spaces when `shell: true`. */
+export function quoteForCmd(arg: string): string {
+  if (arg === '') return '""';
+  if (!/[\s"&|<>^()]/.test(arg)) return arg;
+  return `"${arg.replace(/"/g, '\\"')}"`;
+}
+
 function parseJUnitXml(xml: string, results: Map<string, TestResult>): void {
   // Parse <testcase classname="..." name="..." time="..."> elements.
   // Uses alternation: either full open/close form or self-closing form.
@@ -842,22 +870,68 @@ function unescapeXml(s: string): string {
 
 // ── Apply results to TestRun ──────────────────────────────────────────────────
 
+type SourceLines = Map<string, string[] | null>;
+
+const RE_DISPLAY_NAME = /@DisplayName\s*\(\s*(?:value\s*=\s*)?"((?:[^"\\]|\\.)*)"/;
+
+/**
+ * JUnit 5 reports a `@DisplayName("…")` test under that text, not under the
+ * method name, so its result never matched the index entry and the test
+ * showed as skipped. Read on a miss only: the annotation sits on the
+ * declaration line or on the annotation lines right above it.
+ */
+export function displayNameOf(entry: SymbolEntry, sourceLines: SourceLines): string | undefined {
+  const fsPath = entry.uri.fsPath;
+  let lines = sourceLines.get(fsPath);
+  if (lines === undefined) {
+    try { lines = (require('fs') as typeof import('fs')).readFileSync(fsPath, 'utf8').split(/\r?\n/); }
+    catch { lines = null; }
+    sourceLines.set(fsPath, lines);
+  }
+  if (!lines) return undefined;
+  for (let i = entry.line; i >= 0; i--) {
+    const text = lines[i] ?? '';
+    const m = RE_DISPLAY_NAME.exec(text);
+    if (m) return m[1].replace(/\\(.)/g, '$1');
+    if (i === entry.line) continue;
+    const t = text.trim();
+    if (t !== '' && !t.startsWith('@') && !t.startsWith('//') && !t.startsWith('*') && !t.startsWith('/*')) break;
+  }
+  return undefined;
+}
+
+/** The run result for `entry`: by method name first, then by its JUnit 5 display name. */
+export function resultFor(
+  entry: SymbolEntry,
+  results: Map<string, TestResult>,
+  sourceLines: SourceLines,
+): TestResult | undefined {
+  const classFqn = getClassFqn(entry);
+  const byName = results.get(`${classFqn}.${entry.name}`);
+  if (byName) return byName;
+  const display = displayNameOf(entry, sourceLines);
+  return display ? results.get(`${classFqn}.${normalizeJUnitName(display)}`) : undefined;
+}
+
 function applyResults(
   specs: TestSpec[],
   results: Map<string, TestResult>,
   run: vscode.TestRun,
   log: Logger,
-): void {
-  for (const { item, entry } of specs) {
-    const classFqn = getClassFqn(entry);
-    const key = `${classFqn}.${entry.name}`;
-    const result = results.get(key);
+  sourceLines: SourceLines = new Map(),
+): Map<TestResult, TestSpec> {
+  const matched = new Map<TestResult, TestSpec>();
+  for (const spec of specs) {
+    const { item, entry } = spec;
+    const key = `${getClassFqn(entry)}.${entry.name}`;
+    const result = resultFor(entry, results, sourceLines);
 
     if (!result) {
       log.warn(`[test:runner] no result for key "${key}" — marking skipped. Available keys: [${[...results.keys()].join(', ')}]`);
       run.skipped(item);
       continue;
     }
+    matched.set(result, spec);
 
     log.info(`[test:runner] ${key} → ${result.state}${result.durationMs !== undefined ? ` (${result.durationMs}ms)` : ''}`);
 
@@ -881,6 +955,7 @@ function applyResults(
       }
     }
   }
+  return matched;
 }
 
 // ── Coverage (Kover / JaCoCo XML) ────────────────────────────────────────────

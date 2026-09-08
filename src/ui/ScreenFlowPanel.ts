@@ -43,6 +43,10 @@ export async function buildWorkspaceNavigation(): Promise<MergedNavigation> {
 
   const constants = new Map<string, string>();
   for (const t of texts.values()) {
+    // gatherRouteConstants goes through stripComments, a character by
+    // character scan. Paying it on 20000 files, most of which hold neither a
+    // route nor a navigation, froze the extension host for seconds.
+    if (!/\bconst\s+val\b/.test(t) && !/\b(NavHost|composable|navigate)\s*\(/.test(t)) continue;
     for (const [k, v] of gatherRouteConstants(t)) constants.set(k, v);
   }
 

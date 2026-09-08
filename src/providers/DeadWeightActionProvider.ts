@@ -187,7 +187,9 @@ export class DeadWeightActionProvider implements vscode.CodeActionProvider {
       const sources = await this.workspaceSources();
       // "class not found" on a live activity once the listing was capped:
       // the removal would have thrown ActivityNotFoundException at runtime.
-      if (compMatch && this.sourcesTruncated()) return [];
+      // Both branches decide from the same listing: neither can prove an
+      // absence once it was capped.
+      if (this.sourcesTruncated()) return [];
       const project: ProjectSearcher = {
         classExists: fqn => {
           const simple = fqn.split('.').pop() ?? fqn;

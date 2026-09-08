@@ -181,9 +181,10 @@ describe('FileWatcher : dossiers supprimés, renommés, ajoutés', () => {
     addKt(index, 'file:///proj/feature/sub/B.kt', 'package f\nclass B');
     addKt(index, 'file:///proj/featureX/C.kt', 'package f\nclass C');
     const rescan = vi.fn(async () => {});
+    const scanFiles = vi.fn(async () => {});
     const indexed: string[] = [];
-    const watcher = new FileWatcher({ rescan } as any, index, uri => indexed.push(uri.toString()));
-    return { index, watcher, rescan, indexed };
+    const watcher = new FileWatcher({ rescan, scanFiles } as any, index, uri => indexed.push(uri.toString()));
+    return { index, watcher, rescan: scanFiles, indexed };
   }
 
   it('removeTree ne retire que les fichiers sous le dossier, et prévient les écouteurs', () => {

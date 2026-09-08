@@ -27,6 +27,18 @@ export const LIBRARY_PLUGIN_RE = /com\.android\.library|android-library|android\
 /** A module other projects consume: maven-publish under every spelling, or a KMP export. */
 export const PUBLISHED_MODULE_RE = /maven-publish|mavenPublish|\.publish(?:ing)?\b|\bpublishing\s*\{|cocoapods\s*\{|XCFramework/;
 
+/**
+ * The ROOT build file lists every plugin of the project with `apply false`:
+ * it declares them without applying them. Counting those marked the root as a
+ * published module, so the whole workspace read as public API and the dead
+ * symbol detector went silent everywhere.
+ */
+export function withoutUnappliedPlugins(gradleText: string): string {
+  return gradleText.split('\n').filter(l => !/\bapply\s+false\b/.test(l)).join('\n');
+}
+export const declaresLibraryPlugin = (text: string): boolean => LIBRARY_PLUGIN_RE.test(withoutUnappliedPlugins(text));
+export const declaresPublishing   = (text: string): boolean => PUBLISHED_MODULE_RE.test(withoutUnappliedPlugins(text));
+
 export interface Corpus {
   sources: ResourceSource[];
   index: FileResourceIndex;
@@ -146,7 +158,7 @@ export class ResourceCorpus {
     const libraryModules = moduleDirs.filter(dir =>
       // `alias(libs.plugins.android.library)` and convention plugins spell the
       // plugin without `com.android.library`.
-      sources.some(s => s.path.startsWith(`${dir}/build.gradle`) && LIBRARY_PLUGIN_RE.test(s.text)),
+      sources.some(s => s.path.startsWith(`${dir}/build.gradle`) && declaresLibraryPlugin(s.text)),
     );
 
     return {

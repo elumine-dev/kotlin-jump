@@ -1,34 +1,34 @@
 {
-  "version": "1.42.33",
+  "version": "1.42.34",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A comment no longer hides your usages",
-  "summary": "Kotlin Jump 1.42.33 fixes a bug our own previous fix introduced: a `\"\"\"` written inside a comment made Find Usages treat the rest of the file as text, so a symbol read \"0 usages\" and Rename left the old name behind. Large JDK classes such as `Arrays` and `Pattern` are navigable again, and the language server no longer misses a file whose folder name contains a comma or an ampersand.",
+  "tagline": "Seven fixes that had fixed too much",
+  "summary": "Kotlin Jump 1.42.34 undoes seven side effects of its own recent fixes. The dead code detector had gone silent on whole projects, renaming a folder killed the initial index, a `gradlew clean` froze the window, and the Screen Flow map took seconds to open on a large workspace.",
   "highlights": [
     {
-      "title": "Usages survive a comment",
+      "title": "Dead code detection is back",
       "kind": "fix",
-      "description": "A `\"\"\"` written in a comment used to turn the rest of the file into text: no usages, and Rename left the old name behind in code that then failed to compile."
+      "description": "A root build file declaring `alias(libs.plugins.maven.publish) apply false` made the whole workspace read as published API, so nothing was ever reported."
     },
     {
-      "title": "Big JDK classes navigable",
+      "title": "Renaming a folder keeps the index",
       "kind": "fix",
-      "description": "`Arrays`, `Collections`, `Character`, `Pattern` and `BigDecimal` sit above the old 200 KB limit and were never indexed."
+      "description": "Adding or renaming a folder cancelled every scan in flight, the initial index included."
     },
     {
-      "title": "Right result on the right test",
+      "title": "No more freeze on build or map",
       "kind": "fix",
-      "description": "A test with no result of its own inherited the `@DisplayName`, the state and the failure trace of the test above it."
+      "description": "A `gradlew clean` no longer sweeps the index per deleted file, and the Screen Flow map skips files that hold no navigation."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "A `\"\"\"` inside a `//` or `/* */` comment no longer opens a raw string that swallows the rest of the file for Find Usages, Go to References and Rename.",
-        "The `@DisplayName` walk stops at a blank line and at a one line declaration, so a test no longer inherits its neighbour's result.",
-        "JDK sources larger than 200 KB are indexed, which covers `Arrays`, `Collections`, `Pattern` and `BigDecimal`.",
-        "The language server compares files by path, so a folder named with a comma or an ampersand no longer breaks deletion tracking and unsaved buffer reads.",
-        "The MCP `get_file_symbols` tool is bounded like the others."
+        "A plugin declared with `apply false` no longer marks its module, or the project root, as published.",
+        "A folder added or renamed is indexed on its own scan instead of cancelling the one in progress.",
+        "The delete watcher honours the exclude patterns, so build output no longer triggers a full index sweep.",
+        "The Screen Flow map skips files without a route or a navigation before scanning their comments.",
+        "The Logcat error banner survives the rows already in flight, `items.all { }` no longer silences the Remote Config detector, and a capped listing blocks permission removal too."
       ]
     }
   ],

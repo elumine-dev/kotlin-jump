@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.34
+
+Kotlin Jump 1.42.34 undoes seven side effects of its own recent fixes. The dead code detector had gone silent on whole projects, renaming a folder killed the initial index, a `gradlew clean` froze the window, and the Screen Flow map took seconds to open on a large workspace.
+
+### Fixes
+- Reports dead code again. The check for a published module was widened to catch version catalog aliases, and it then matched `alias(libs.plugins.maven.publish) apply false`, the line every root build file carries. The root counted as a published module, so the whole workspace read as public API and nothing was ever reported. A plugin declared with `apply false` is declared, not applied.
+- Keeps indexing while you rename a folder. Adding or renaming one went through the rescan path, which cancels every scan in flight by design: it killed the initial index, and two renames in a row cancelled each other. Those files get their own scan now.
+- Stops sweeping the index on a build. The watcher added to follow deleted folders ignored the exclude patterns, so every `.class` removed by a `gradlew clean` triggered a full pass over the index.
+- Opens the Screen Flow map without freezing. Raising the file cap to 20000 meant a character by character comment scan over every Kotlin file in the workspace, navigation or not. Files that hold neither a route nor a navigation are skipped.
+- Keeps the Logcat error banner visible. Rows already queued when the stream failed arrived a few milliseconds later and cleared the banner that the same release had just added.
+- Stops silencing the Remote Config detector on `items.all { }`. The guard for an app that reads every key matched any `.all` in any file that merely mentions Remote Config, which is the commonest Kotlin idiom there is.
+- Refuses to remove a manifest permission on a capped listing, exactly as it already refused for a component: both decide from the same incomplete evidence.
+
 ## 1.42.33
 
 Kotlin Jump 1.42.33 fixes a bug our own previous fix introduced: a `"""` written inside a comment made Find Usages treat the rest of the file as text, so a symbol read "0 usages" and Rename left the old name behind. Large JDK classes such as `Arrays` and `Pattern` are navigable again, and the language server no longer misses a file whose folder name contains a comma or an ampersand.

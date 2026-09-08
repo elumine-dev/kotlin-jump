@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import {
   ResourceCorpus,
-  PUBLISHED_MODULE_RE,
+  declaresPublishing,
 } from '../indexer/ResourceCorpus';
 import {
   collectValueKeyDeclarations,
@@ -106,7 +106,7 @@ export async function findEverythingUnusedCommand(
         } else {
           const published = data.moduleDirs.filter(dir =>
             data.sources.some(s => s.path.startsWith(`${dir}/build.gradle`)
-              && PUBLISHED_MODULE_RE.test(s.text)));
+              && declaresPublishing(s.text)));
           const symbols = symbolFindings = findUnusedSymbols({
             sources: data.sources,
             testSourceSets: cfg.get<string[]>('testSourceSets', []),

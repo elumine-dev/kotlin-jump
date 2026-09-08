@@ -65,6 +65,9 @@ export interface RemoteConfigKeyExplanation {
 
 const IGNORE_MARKER = 'kotlin-jump:ignore unused-remote-config-key';
 
+/** `remoteConfig.all`, `rc.all.forEach`, `firebaseRemoteConfig.getAll()`: the app reads every key. */
+const READS_EVERY_KEY = /\b(?:\w*[Rr]emote[Cc]onfig\w*|rc|config)\s*(?:\.\s*\w+\s*)?\.\s*(?:all\b|getAll\s*\()/;
+
 /** `<entry>` blocks with a `<key>`, held by a `<defaults>` root. */
 const ENTRY_RE = /<entry\b[^>]*>([\s\S]*?)<\/entry\s*>/g;
 const KEY_RE = /<key\s*>\s*([^<\s][^<]*?)\s*<\/key\s*>/;
@@ -194,8 +197,9 @@ export function findUnusedRemoteConfigKeys(
 
   // `remoteConfig.all` / `getAll()` reads every key without naming one:
   // an admin screen iterating them kept them all alive, invisibly.
-  if (input.sources.some(s => /\.(kt|java)$/.test(s.path) && /RemoteConfig/.test(s.text)
-      && /\.\s*(?:all\b|getAll\s*\()/.test(s.text))) return [];
+  // The receiver must be the remote config instance: `items.all { … }`, the
+  // commonest stdlib idiom, used to silence the whole detector.
+  if (input.sources.some(s => /\.(kt|java)$/.test(s.path) && READS_EVERY_KEY.test(s.text))) return [];
 
   const mentions = mentionsOutsideDefaults(input.sources, new Set(byKey.keys()));
   const ignored = input.ignoreNames ?? [];

@@ -68,6 +68,20 @@ export class FileScanner {
     if (!token.cancelled) this.index.finalize();
   }
 
+  /**
+   * Indexes a list of files WITHOUT cancelling any scan in flight. `rescan`
+   * invalidates the previous scan by design; using it for a folder that was
+   * added or renamed killed the initial scan, and two renames in a row
+   * cancelled each other.
+   */
+  async scanFiles(uris: vscode.Uri[]): Promise<void> {
+    const token = { cancelled: false };
+    const cfg = vscode.workspace.getConfiguration('kotlinJump');
+    const maxFileBytes = (cfg.get<number>('fileSizeLimit', 512)) * 1024;
+    await this.pipeline(uris, cfg.get<number>('concurrency') ?? IO_CONCURRENCY_DEFAULT, token, maxFileBytes);
+    this.index.finalize();
+  }
+
   async scanFile(uri: vscode.Uri): Promise<void> {
     const t0 = Date.now();
     try {

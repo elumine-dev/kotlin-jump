@@ -174,6 +174,7 @@ export class DeadWeightActionProvider implements vscode.CodeActionProvider {
           const simple = fqn.split('.').pop() ?? fqn;
           return sources.some(s => /\.(kt|java)$/.test(s.path) && new RegExp(`\\bclass\\s+${simple}\\b`).test(s.text));
         },
+        packageExists: pkg => sources.some(s => /\.(kt|java)$/.test(s.path) && new RegExp(`^\\s*package\\s+${pkg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'm').test(s.text)),
         searchApiUsage: patterns => {
           const found = new Set<string>();
           for (const p of patterns) {

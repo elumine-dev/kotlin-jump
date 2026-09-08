@@ -105,7 +105,14 @@ function findHalfCalls(
   let m: RegExpExecArray | null;
   while ((m = re.exec(body)) !== null) {
     const args = [m[2], m[3]];
-    const resource = args[argIndex] ?? args[0] ?? m[1];
+    let resource = args[argIndex] ?? args[0] ?? m[1];
+    // `disposable = observable.subscribe(::render)`: what gets released is the
+    // Disposable assigned, not the observable; the receiver made a false orphan.
+    if (method === 'subscribe') {
+      const assigned = /(\w+)\s*=\s*$/.exec(body.slice(Math.max(0, m.index - 80), m.index));
+      if (assigned) resource = assigned[1];
+      else if (/\.(?:add|plusAssign)\s*\(\s*$/.test(body.slice(Math.max(0, m.index - 40), m.index)) || /\+=\s*$/.test(body.slice(Math.max(0, m.index - 20), m.index))) continue; // owned by a CompositeDisposable
+    }
     if (!resource) continue;
     out.push({
       resource,

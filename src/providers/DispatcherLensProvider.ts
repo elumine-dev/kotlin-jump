@@ -29,7 +29,9 @@ export interface DispatcherAnalysis {
   hints: DispatcherHint[];
 }
 
-const VIEW_ACCESS_RE = /\b(binding|view\w*)\s*\.\s*\w/;
+// `viewModelScope.launch(Dispatchers.IO)` and `viewState.value = …` are not
+// View access; the old `view\w*` flagged the launching line itself.
+const VIEW_ACCESS_RE = /\b(binding|view(?!Model|State|model)\w*)\s*\.\s*\w/;
 const BLOCKING_RE = /\b(api\w*|dao\w*|repository|retrofit|client|db)\s*\.\s*\w|\.fetch\w*\s*\(/i;
 
 function matchBalanced(text: string, openIndex: number, open: string, close: string): number {
@@ -194,7 +196,7 @@ export class DispatcherLensProvider implements vscode.Disposable {
         renderOptions: {
           after: {
             contentText:
-              h.kind === 'view-in-io' ? '⚠ View touched off Main' : '⚠ blocking call on Main',
+              h.kind === 'view-in-io' ? '⚠ View touched off Main' : '⚠ possibly blocking call on Main',
           },
         },
       })),

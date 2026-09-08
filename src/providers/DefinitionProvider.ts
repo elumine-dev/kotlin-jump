@@ -549,6 +549,22 @@ export function isAndroidResourceRef(line: string, wordStart: number): boolean {
  * index and may still produce false positives — better than nothing,
  * worse than a real scope analyser.
  */
+const SCOPE_CACHE_MAX = 8;
+const scopeCache = new Map<string, { version: number; text: string; index: LocalScopeIndex }>();
+
+function cachedLocalScopeIndex(document: vscode.TextDocument): LocalScopeIndex {
+  const key = document.uri.toString();
+  const text = document.getText();
+  const hit = scopeCache.get(key);
+  // The text is compared as well as the version: test doubles keep version 1
+  // while their content changes, and a stale scope would resolve wrongly.
+  if (hit && hit.version === document.version && hit.text === text) return hit.index;
+  const index = buildLocalScopeIndex(text.split(/\r?\n/), document.languageId);
+  if (scopeCache.size >= SCOPE_CACHE_MAX) scopeCache.delete(scopeCache.keys().next().value!);
+  scopeCache.set(key, { version: document.version, text, index });
+  return index;
+}
+
 export function resolveLocalScope(
   document: vscode.TextDocument,
   position: vscode.Position,
@@ -559,8 +575,9 @@ export function resolveLocalScope(
   if (word.length < 2) return undefined;
 
   // Hot callers (semantic tokens, inlay hints) build the index once per run
-  // and pass it; a single Go to Definition builds its own, one pass either way.
-  const index = scope ?? buildLocalScopeIndex(document.getText().split(/\r?\n/), document.languageId);
+  // and pass it; the other callers share a small per-document cache, since a
+  // full pass per Go to Definition cost ten times the old backward walk.
+  const index = scope ?? cachedLocalScopeIndex(document);
   if (position.line >= index.lines.length) return undefined;
 
   // Step 1 — the enclosing function.

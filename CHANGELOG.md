@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.42.14
+
+Kotlin Jump 1.42.14 corrects what the editor was telling you: an error on `android.R.string.ok`, a "class not found" on a FileProvider from AndroidX with a removal quick fix behind it, a dispatcher lens accusing `viewModelScope` of touching the View, a signature help highlighting the wrong parameter behind a named argument, and a few more. It also removes a small regression of its own: Go to Definition rebuilt the scope index on every call since 1.42.6.
+
+### Fixes
+- Stops flagging a qualified `R`. `android.R.string.ok` and a library's `com.x.R.color.y` are outside the workspace's resource index, and the check reported them as errors.
+- Stops calling a library component "class not found". `androidx.core.content.FileProvider`, `androidx.startup.InitializationProvider` and Firebase's init provider are not in the workspace sources; the badge said the class was missing, grayed the line and offered to remove it. Only a class in a package the workspace declares can be missing. A `<uses-permission … tools:node="remove">` is no longer badged as an unused declaration either.
+- Keeps the dispatcher lens off `viewModelScope` and `viewState`. The View pattern matched any `view…`, so `viewModelScope.launch(Dispatchers.IO) {` flagged its own line. The Main-thread hint now reads "possibly blocking call", since a main-safe suspend call looks the same to a regex.
+- Highlights the parameter named at the cursor in signature help. `greetX(greeting = "Yo", name = |` highlighted `greeting`, the second position; and a parameter named `x` was located at the tail of `index: Int` rather than at its own `x: Int`.
+- Pairs an Rx `subscribe()` with the `dispose()` of the Disposable it returns. `disposable = observable.subscribe(…)` in `onStart` with `disposable.dispose()` in `onStop` was reported as an orphan on `observable`.
+- Lets an `actual` in `nativeMain`, `appleMain` or `iosMain` cover the targets below it in the KMP badges, instead of `[ios ✗] [iosArm64 ✗]` beside `[native ✓]`.
+- Stops an expression-body composable from "showing" the strings of the class below it in the reverse string map: `fun Spacer8() = Spacer(…)` took the next class's brace for its own body.
+- Keeps `Flow<User>` readable in a hover's KDoc. The angle brackets reached the Markdown renderer as an HTML tag and were dropped, leaving "the Flow stream". A signature such as `val OPEN = "{"` is no longer cut at the brace inside the string, and a `@Composable` already on the fun line is not prefixed a second time.
+- Shares one scope index per document across Go to Definition, References and Rename. Since 1.42.6 those built a full index per call, ten times the cost of the old walk on the benchmark; with the per-document cache they run at or below the previous numbers.
+- Says "every minute" and "every hour" in the cron tooltip for `*/1`, and drops the "⏱ Debug" lens the `testCodeLens` setting described but never had.
+
 ## 1.42.13
 
 Kotlin Jump 1.42.13 re-checks every fix shipped since 1.42.3 against the code and completes the ones that had a hole: a Remove All that still read the disk, a Java import without its semicolon, a header rule that lost the import block behind a multi-line file annotation, a catalog lookup defeated by a space in the path, and a few more.

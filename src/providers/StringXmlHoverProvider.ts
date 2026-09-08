@@ -64,6 +64,13 @@ function extractSpans(text: string, kind: 'fun' | 'class'): Span[] {
       // expression body (no brace before the next fun): skip
       const nextFun = text.indexOf('fun ', m.index + m[0].length);
       if (nextFun >= 0 && nextFun < open) continue;
+      // `fun Spacer8() = Spacer(…)` followed by a class: the class's `{`
+      // was taken for the composable's body, and its strings "shown on" it.
+      const sigClose = matchParen(text, m.index + m[0].length - 1);
+      if (sigClose >= 0) {
+        const between = text.slice(sigClose + 1, open);
+        if (/^\s*(?::[^={]*)?=\s*[^=]/.test(between)) continue;
+      }
     } else {
       name = m[1];
       open = m.index + m[0].length - 1;
@@ -215,4 +222,18 @@ export class StringXmlHoverProvider implements vscode.HoverProvider {
     }
     return new vscode.Hover(md);
   }
+}
+
+/** Index of the `)` closing the `(` at `openIndex`, strings skipped; -1 when unbalanced. */
+function matchParen(text: string, openIndex: number): number {
+  let depth = 0;
+  let quote: string | null = null;
+  for (let i = openIndex; i < text.length; i++) {
+    const ch = text[i];
+    if (quote) { if (ch === '\\') i++; else if (ch === quote) quote = null; continue; }
+    if (ch === '"' || ch === "'") { quote = ch; continue; }
+    if (ch === '(') depth++;
+    else if (ch === ')') { depth--; if (depth === 0) return i; }
+  }
+  return -1;
 }

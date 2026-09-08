@@ -26,9 +26,27 @@ export function collectProjectTargets(uriStrings: Iterable<string>): Set<string>
 }
 
 /** Coverage row for one expect declaration: `[android ✓] [ios ✓] [js ✗]`. */
+/** An actual in an intermediate source set (nativeMain, appleMain, iosMain) covers the targets below it. */
+export function coversTarget(actualSet: string, target: string): boolean {
+  if (actualSet === target) return true;
+  const t = target.toLowerCase();
+  switch (actualSet.toLowerCase()) {
+    case 'native': return /^(ios|macos|tvos|watchos|linux|mingw|androidnative)/.test(t);
+    case 'apple': return /^(ios|macos|tvos|watchos)/.test(t);
+    case 'ios': return t.startsWith('ios');
+    case 'macos': return t.startsWith('macos');
+    case 'tvos': return t.startsWith('tvos');
+    case 'watchos': return t.startsWith('watchos');
+    case 'linux': return t.startsWith('linux');
+    case 'mingw': return t.startsWith('mingw');
+    case 'web': return /^(js|wasmjs)/.test(t);
+    default: return false;
+  }
+}
+
 export function coverageLabel(covered: Set<string>, expected: Set<string>): string {
   return [...expected].sort()
-    .map(t => `[${t} ${covered.has(t) ? '✓' : '✗'}]`)
+    .map(t => `[${t} ${[...covered].some(c => coversTarget(c, t)) ? '✓' : '✗'}]`)
     .join(' ');
 }
 

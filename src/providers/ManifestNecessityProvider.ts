@@ -25,6 +25,8 @@ const COMMONLY_LIB_OWNED = new Set([
 ]);
 
 export interface ProjectSearcher {
+  /** Whether any workspace source declares this package (a library class never does). */
+  packageExists?: (pkg: string) => boolean;
   classExists(fqn: string): boolean;
   /** Files containing at least one of the patterns (regex-compatible). */
   searchApiUsage(patterns: string[]): string[];
@@ -51,10 +53,13 @@ export function analyzeManifest(manifestXml: string, project: ProjectSearcher): 
   const packageName = /package="([^"]+)"/.exec(xml)?.[1] ?? '';
 
   const permissions: PermissionStatus[] = [];
-  const permRe = /<uses-permission\b[^>]*android:name="([^"]+)"/g;
+  const permRe = /<uses-permission\b([^>]*)android:name="([^"]+)"([^>]*)/g;
   let m: RegExpExecArray | null;
   while ((m = permRe.exec(xml)) !== null) {
-    const name = m[1];
+    // `tools:node="remove"` takes a permission away from a merged manifest;
+    // it was badged "no usage found" and grayed like a declaration.
+    if (/tools:node="remove"/.test(m[1] + m[3])) continue;
+    const name = m[2];
     const patterns = PERMISSION_APIS[name];
     const files = patterns ? project.searchApiUsage(patterns) : [];
     let status: PermissionStatus['status'];
@@ -73,6 +78,7 @@ export function analyzeManifest(manifestXml: string, project: ProjectSearcher): 
     const selfClosing = m[3] === '/>';
     const nameM = /android:name="([^"]+)"/.exec(attrs);
     if (!nameM) continue;
+    if (/tools:node="remove"/.test(attrs)) continue;
     const rawName = nameM[1];
     // An alias has no class of its own: its targetActivity is what we resolve.
     const classRef =
@@ -89,7 +95,13 @@ export function analyzeManifest(manifestXml: string, project: ProjectSearcher): 
     }
 
     let status: ComponentStatus['status'];
-    if (!project.classExists(fqn)) status = 'missing-class';
+    // A class from a library (androidx.core.content.FileProvider, Firebase's
+    // init provider) is not in the workspace sources; only a class in a
+    // package the workspace declares can be missing.
+    const pkg = fqn.slice(0, fqn.lastIndexOf('.'));
+    const inWorkspacePackage = pkg === '' || (packageName !== '' && (pkg === packageName || pkg.startsWith(`${packageName}.`)))
+      || (project.packageExists?.(pkg) ?? true);
+    if (inWorkspacePackage && !project.classExists(fqn)) status = 'missing-class';
     else if (hasIntentFilter) status = 'ok';
     else status = project.searchApiUsage([fqn.split('.').pop() ?? fqn]).length > 0 ? 'ok' : 'unreferenced';
 
@@ -153,6 +165,7 @@ export class ManifestNecessityProvider implements vscode.Disposable {
         const simple = fqn.split('.').pop() ?? fqn;
         return sources.some(s => new RegExp(`\\bclass\\s+${simple}\\b`).test(s.text));
       },
+      packageExists: pkg => sources.some(s => new RegExp(`^\\s*package\\s+${pkg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'm').test(s.text)),
       searchApiUsage: patterns => {
         const found = new Set<string>();
         for (const p of patterns) {

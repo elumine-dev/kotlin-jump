@@ -9,6 +9,16 @@ const MAX_DISPLAY_LINES = 8;
 // Stops at `{` (body start) or `=` for functions/composables only.
 // Handles multi-line parameter lists by tracking paren depth.
 
+/**
+ * `Flow<User>` in a KDoc reaches VS Code's Markdown renderer as an HTML
+ * tag and is dropped (supportHtml is off): the hover read "the Flow stream".
+ * Backslash-escaped outside code spans, the brackets render as text.
+ */
+export function escapeAngleBrackets(md: string): string {
+  return md.split(/(```[\s\S]*?```|`[^`\n]*`)/).map((part, i) =>
+    i % 2 === 1 ? part : part.replace(/</g, '\\<').replace(/>/g, '\\>')).join('');
+}
+
 export function readSignature(doc: vscode.TextDocument, entry: SymbolEntry): string | null {
   const cutAtEquals = entry.kind === 'fun' || entry.kind === 'composable';
   const declLine = locateDeclLine(doc, entry);
@@ -24,8 +34,12 @@ export function readSignature(doc: vscode.TextDocument, entry: SymbolEntry): str
     const text = doc.lineAt(i).text;
     let cutAt = -1;
 
+    let inString = false;
     for (let j = 0; j < text.length; j++) {
       const ch = text[j];
+      // `val OPEN = "{"` was cut at the brace inside the string.
+      if (inString) { if (ch === '\\') j++; else if (ch === '"') inString = false; continue; }
+      if (ch === '"') { inString = true; continue; }
       if      (ch === '(') parenDepth++;
       else if (ch === ')') parenDepth--;
       else if (ch === '{' && parenDepth === 0) { cutAt = j; break; }

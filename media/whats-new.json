@@ -1,32 +1,31 @@
 {
-  "version": "1.42.13",
+  "version": "1.42.14",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The fixes, re-checked",
-  "summary": "Kotlin Jump 1.42.13 re-checks every fix shipped since 1.42.3 against the code and completes the ones that had a hole: a Remove All that still read the disk, a Java import without its semicolon, a header rule that lost the import block behind a multi-line file annotation, a catalog lookup defeated by a space in the path, and a few more.",
+  "tagline": "What the editor tells you, corrected",
+  "summary": "Kotlin Jump 1.42.14 corrects what the editor was telling you: an error on `android.R.string.ok`, a \"class not found\" on a FileProvider from AndroidX with a removal quick fix behind it, a dispatcher lens accusing `viewModelScope` of touching the View, a signature help highlighting the wrong parameter behind a named argument, and a few more. It also removes a small regression of its own: Go to Definition rebuilt the scope index on every call since 1.42.6.",
   "highlights": [
     {
-      "title": "Remove All reads what you see",
+      "title": "No error on android.R, no removal of FileProvider",
       "kind": "fix",
-      "description": "Since 1.42.11 the corpus took its offsets from open editors, but Remove All still read the disk copy, so a deletion in a file being edited landed lines off. Both read the document now, and a Java @VisibleForTesting import finally ends with its semicolon."
+      "description": "A qualified R (android.R.string.ok, a library's R) is outside the workspace index and was reported as an error. A component from AndroidX or Firebase was badged \"class not found\", grayed and offered for removal; only a class in a package the workspace declares can be missing now."
     },
     {
-      "title": "Import block behind @file:Suppress(",
+      "title": "Lenses and hints that tell the truth",
       "kind": "fix",
-      "description": "The 1.42.9 header rule stopped at a multi-line file annotation: Organize Imports did nothing, unused imports lost their graying, Add import landed above the block. Version catalogs are also keyed by path, so a space in the project directory no longer defeats the per-project lookup."
+      "description": "The dispatcher lens no longer accuses viewModelScope.launch(Dispatchers.IO) of touching the View, signature help highlights the parameter named at the cursor, an Rx subscribe() pairs with the dispose() of its Disposable, and nativeMain covers the ios targets in the KMP badges."
     },
     {
-      "title": "Web parity completed",
-      "kind": "fix",
-      "description": "Corpus invalidation on save, the live status bar counter, clearing a detector's warnings and the file cap warning reach vscode.dev too. The Java outline stays complete while typing, the hex swatches follow the active editor in a split, and autoOpen: false no longer opens the vector preview."
+      "title": "Go to Definition back at full speed",
+      "kind": "improvement",
+      "description": "Since 1.42.6 Definition, References and Rename rebuilt the scope index on every call, ten times the old cost on the benchmark. One index per document is shared now; the numbers are at or below the previous ones."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Leaves the Logcat device alone while it is briefly offline instead of switching to the first ready one and emptying the buffer.",
-        "Recognises Java method headers behind annotations with arguments, and no longer reads case RED -> as a lambda binding.",
-        "Opens the online documentation page when its tab is shown rather than on the Cmd+hover preview, removes a manifest component from the android:name line, and keeps soft-wrapped Logcat rows across an append."
+        "Keeps Flow<User> readable in a hover's KDoc, does not cut val OPEN = \"{\" at the brace, and attributes a string to the right class when an expression-body composable precedes it.",
+        "Says \"every minute\" for */1 in the cron tooltip, and drops the \"⏱ Debug\" lens the testCodeLens description promised."
       ]
     }
   ],

@@ -38,7 +38,7 @@ export function describeCron(expr: string): string | null {
   if (hour === '*' && dom === '*' && dow === '*') {
     if (min === '*') return 'every minute';
     const step = /^\*\/(\d+)$/.exec(min);
-    if (step) return `every ${step[1]} minutes`;
+    if (step) return step[1] === '1' ? 'every minute' : `every ${step[1]} minutes`;
     if (/^\d+$/.test(min) && Number(min) <= 59) return `every hour at :${min.padStart(2, '0')}`;
     return null;
   }
@@ -47,7 +47,7 @@ export function describeCron(expr: string): string | null {
   const hourStep = /^\*\/(\d+)$/.exec(hour);
   if (hourStep && dom === '*' && dow === '*' && /^\d+$/.test(min)) {
     const at = min === '0' ? '' : ` at :${min.padStart(2, '0')}`;
-    return `every ${hourStep[1]} hours${at}`;
+    return hourStep[1] === '1' ? `every hour${at}` : `every ${hourStep[1]} hours${at}`;
   }
 
   // daily / weekly / monthly at a fixed time

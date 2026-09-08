@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { SymbolIndex } from '../indexer/SymbolIndex';
 import { resolveBest } from '../util/ImportResolver';
-import { readSignature, extractKDoc, parseParams, KtParam } from '../util/SignatureReader';
+import { readSignature, extractKDoc, parseParams, KtParam, escapeAngleBrackets } from '../util/SignatureReader';
 import { isInsideCommentOrString } from '../util/textUtils';
 import { resolveLocalScope } from './DefinitionProvider';
 
@@ -40,7 +40,7 @@ export class KotlinSignatureHelpProvider implements vscode.SignatureHelpProvider
     const callContext = findCallContext(document, position);
     if (!callContext) return null;
 
-    const { functionName, activeParameter } = callContext;
+    const { functionName, activeParameter, activeParameterName } = callContext;
 
     // Skip when the call resolves to a LOCAL binding (e.g. local
     // lambda or function variable shadowing a workspace fn). Showing
@@ -89,16 +89,17 @@ export class KotlinSignatureHelpProvider implements vscode.SignatureHelpProvider
     const sigInfo = new vscode.SignatureInformation(sig);
 
     if (kdoc) {
-      sigInfo.documentation = new vscode.MarkdownString(kdoc);
+      sigInfo.documentation = new vscode.MarkdownString(escapeAngleBrackets(kdoc));
     }
 
     // Build ParameterInformation with [start, end] offsets into the sig string
     sigInfo.parameters = params.map(p => {
-      const needle = `${p.name}:`;
-      const start = sig.indexOf(needle);
-      if (start !== -1) {
+      // Word boundary: `x:` used to match the tail of `index: Int`.
+      const at = new RegExp(`\\b${p.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*:`).exec(sig);
+      if (at) {
+        const start = at.index;
         // Highlight "name: type" in the signature
-        const typeEnd = findTypeEnd(sig, start + needle.length);
+        const typeEnd = findTypeEnd(sig, start + at[0].length);
         return new vscode.ParameterInformation([start, typeEnd]);
       }
       // Fallback to string label if offset not found
@@ -108,7 +109,8 @@ export class KotlinSignatureHelpProvider implements vscode.SignatureHelpProvider
     const help = new vscode.SignatureHelp();
     help.signatures = [sigInfo];
     help.activeSignature = 0;
-    help.activeParameter = Math.min(activeParameter, Math.max(0, params.length - 1));
+    const namedIndex = activeParameterName ? params.findIndex(p => p.name === activeParameterName) : -1;
+    help.activeParameter = namedIndex >= 0 ? namedIndex : Math.min(activeParameter, Math.max(0, params.length - 1));
 
     return help;
   }
@@ -119,7 +121,7 @@ export class KotlinSignatureHelpProvider implements vscode.SignatureHelpProvider
 function findCallContext(
   document: vscode.TextDocument,
   position: vscode.Position,
-): { functionName: string; activeParameter: number } | null {
+): { functionName: string; activeParameter: number; activeParameterName?: string } | null {
   // Collect text from the current line back up to 20 lines
   const startLine = Math.max(0, position.line - 20);
   let text = '';
@@ -164,7 +166,11 @@ function findCallContext(
       // Exclude keywords that look like calls
       if (/^(if|else|when|for|while|do|try|catch|finally|return|throw|in)$/.test(name)) return null;
 
-      return { functionName: name, activeParameter };
+      // `greet(greeting = "Yo", name = |`: the argument being typed is named;
+      // its position is meaningless and the highlight sat on the wrong parameter.
+      const currentArg = lastTopLevelArgument(text.slice(i + 1));
+      const named = /^\s*([A-Za-z_]\w*)\s*=(?!=)/.exec(currentArg)?.[1];
+      return { functionName: name, activeParameter, activeParameterName: named };
     }
 
     if (ch === ',' && depth === 0) {
@@ -199,4 +205,20 @@ function findTypeEnd(sig: string, start: number): number {
     }
   }
   return i;
+}
+
+/** The text after the last top-level comma of an argument list. */
+function lastTopLevelArgument(args: string): string {
+  let depth = 0;
+  let quote: string | null = null;
+  let last = 0;
+  for (let i = 0; i < args.length; i++) {
+    const ch = args[i];
+    if (quote) { if (ch === '\\') i++; else if (ch === quote) quote = null; continue; }
+    if (ch === '"' || ch === "'") { quote = ch; continue; }
+    if (ch === '(' || ch === '[' || ch === '{') depth++;
+    else if (ch === ')' || ch === ']' || ch === '}') depth--;
+    else if (ch === ',' && depth === 0) last = i + 1;
+  }
+  return args.slice(last);
 }

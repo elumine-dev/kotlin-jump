@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { SymbolKind as KtKind } from '../indexer/KotlinParser';
 import { resolveBest } from '../util/ImportResolver';
-import { readSignature, extractKDoc, formatKDoc } from '../util/SignatureReader';
+import { readSignature, extractKDoc, formatKDoc, escapeAngleBrackets } from '../util/SignatureReader';
 import { isInsideCommentOrString, isInsideStringInterpolation } from '../util/textUtils';
 import { resolveLocalScope } from './DefinitionProvider';
 
@@ -113,7 +113,8 @@ export class KotlinHoverProvider implements vscode.HoverProvider {
 
     // ── Signature block ───────────────────────────────────────────────────────
     const sigMd = new vscode.MarkdownString();
-    sigMd.appendCodeblock(entry.isComposable ? `@Composable\n${sig}` : sig, 'kotlin');
+    // The signature already carries the annotation when it sits on the fun line.
+    sigMd.appendCodeblock(entry.isComposable && !/@Composable\b/.test(sig) ? `@Composable\n${sig}` : sig, 'kotlin');
 
     // ── Package + file + module ───────────────────────────────────────────────
     const fileName = entry.uri.path.split('/').pop() ?? '';
@@ -127,7 +128,7 @@ export class KotlinHoverProvider implements vscode.HoverProvider {
     // ── KDoc comment (shown below another divider) ────────────────────────────
     if (resolvedKDoc) {
       const docMd = new vscode.MarkdownString();
-      docMd.appendMarkdown(resolvedKDoc);
+      docMd.appendMarkdown(escapeAngleBrackets(resolvedKDoc));
       sections.push(docMd);
     }
 

@@ -25,7 +25,7 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
   // version increments on every evictFile() call; cached entries store the
   // version at which they were created so stale results self-evict on resolve.
   private _cacheVer = 0;
-  private _cache = new Map<string, { ver: number; p: Promise<UsageResult[]> }>();
+  private _cache = new Map<string, { ver: number; p: Promise<UsageResult[]>; results?: UsageResult[] }>();
   private _fireTimer?: ReturnType<typeof setTimeout>;
 
   constructor(private readonly index: SymbolIndex) {}
@@ -146,7 +146,9 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
         if (!this._cache.has(cacheKey)) {
           const ver = this._cacheVer;
           const p = this._scanUsages(entry, token).then(results => {
-            if (this._cache.get(cacheKey)?.ver !== ver) this._cache.delete(cacheKey);
+            const c = this._cache.get(cacheKey);
+            if (c?.ver !== ver) this._cache.delete(cacheKey);
+            else c.results = results;
             return results;
           });
           this._cache.set(cacheKey, { ver, p });
@@ -186,7 +188,9 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
       if (!this._cache.has(cacheKey)) {
         const ver = this._cacheVer;
         const p = this._scanUsages(entry, token).then(results => {
-          if (this._cache.get(cacheKey)?.ver !== ver) this._cache.delete(cacheKey);
+          const c = this._cache.get(cacheKey);
+          if (c?.ver !== ver) this._cache.delete(cacheKey);
+          else c.results = results;
           return results;
         });
         this._cache.set(cacheKey, { ver, p });
@@ -242,7 +246,41 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
     for (const sym of symbols) {
       this._cache.delete(sym.fqn);
     }
-    // Debounce: coalesce rapid successive file changes into one re-render
+    // A usage count for a symbol declared in A depends on every other file:
+    // add a call to foo() in B, save, and A kept reading "1 usage". Drop the
+    // entries whose results reached into this file (a usage removed) and
+    // those whose name appears in its text (a usage added). The open document
+    // is read synchronously; a file changed on disk (checkout) is read in the
+    // background so the eviction stays surgical, not a wholesale clear.
+    for (const [fqn, c] of this._cache) {
+      if (c.results?.some(r => r.uriString === uriStr)) this._cache.delete(fqn);
+    }
+    if (this._cache.size > 0) {
+      const open = vscode.workspace.textDocuments.find(d => d.uri.toString() === uriStr);
+      if (open) {
+        this._evictNamedIn(open.getText());
+      } else {
+        void vscode.workspace.fs.readFile(vscode.Uri.parse(uriStr)).then(
+          bytes => { if (this._evictNamedIn(new TextDecoder().decode(bytes))) this._scheduleFire(); },
+          () => { /* deleted file: its usages were covered by the results check above */ },
+        );
+      }
+    }
+    this._scheduleFire();
+  }
+
+  /** @returns whether anything was evicted. */
+  private _evictNamedIn(text: string): boolean {
+    let evicted = false;
+    for (const fqn of [...this._cache.keys()]) {
+      const name = fqn.slice(fqn.lastIndexOf('.') + 1);
+      if (text.includes(name) && wordRe(name).test(text)) { this._cache.delete(fqn); evicted = true; }
+    }
+    return evicted;
+  }
+
+  // Debounce: coalesce rapid successive file changes into one re-render
+  private _scheduleFire(): void {
     if (this._fireTimer) clearTimeout(this._fireTimer);
     this._fireTimer = setTimeout(() => {
       this._fireTimer = undefined;
@@ -274,4 +312,9 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
       : this.index.fileUriStrings().filter(u => !isExcluded(u));
     return scanForUsagesWithTarget(entry.name, entry, this.index, uriStrings, token);
   }
+}
+
+function wordRe(name: string): RegExp {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, m => '\\' + m);
+  return new RegExp('\\b' + escaped + '\\b');
 }

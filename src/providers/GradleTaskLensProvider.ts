@@ -55,6 +55,12 @@ function findGradleRoot(buildFileDir: string): string | null {
  * Desktop only: it spawns the Gradle wrapper.
  */
 export class GradleTaskLensProvider implements vscode.CodeLensProvider {
+  private readonly _onDidChange = new vscode.EventEmitter<void>();
+  readonly onDidChangeCodeLenses = this._onDidChange.event;
+
+  /** Toggling kotlinJump.gradleTaskLens used to do nothing until the next edit. */
+  fireChange(): void { this._onDidChange.fire(); }
+
   provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
     const cfg = vscode.workspace.getConfiguration('kotlinJump');
     if (!cfg.get<boolean>('gradleTaskLens', true)) return [];

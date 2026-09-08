@@ -42,6 +42,36 @@ export class KotlinInlayHintsProvider implements vscode.InlayHintsProvider {
   private readonly _onDidChangeInlayHints = new vscode.EventEmitter<void>();
   readonly onDidChangeInlayHints = this._onDidChangeInlayHints.event;
 
+  private _fireTimer?: ReturnType<typeof setTimeout>;
+
+  /**
+   * Wired to the FileWatcher. Both caches are keyed by FQN and used to live
+   * for the whole session: rename a parameter or change a return type, save,
+   * and every call site kept showing the old `name:` and `: OldType` until
+   * a settings toggle or a reload. Drops the symbols declared in the file and
+   * every cached signature whose locations point into it.
+   */
+  evictFile(uriStr: string): void {
+    for (const sym of this.index.getFileSymbols(uriStr)) {
+      this.paramCache.delete(sym.fqn);
+      this.returnTypeCache.delete(sym.fqn);
+    }
+    for (const [fqn, cached] of this.paramCache) {
+      if (cached.locations.some(l => l.uri.toString() === uriStr)) {
+        this.paramCache.delete(fqn);
+        this.returnTypeCache.delete(fqn);
+      }
+    }
+    if (this._fireTimer) clearTimeout(this._fireTimer);
+    this._fireTimer = setTimeout(() => {
+      this._fireTimer = undefined;
+      this._onDidChangeInlayHints.fire();
+    }, 80);
+  }
+
+  /** Test hook. */
+  _cachedFqns(): string[] { return [...new Set([...this.paramCache.keys(), ...this.returnTypeCache.keys()])]; }
+
   fireChange(): void {
     this.log.debug('[InlayHints] fireChange() — invalidating all hints');
     this.paramCache.clear();
@@ -112,10 +142,13 @@ export class KotlinInlayHintsProvider implements vscode.InlayHintsProvider {
 
       // ── Pass 1: parameter name hints ─────────────────────────────────────
       if (showParamNames && !isFunDecl) {
-        CALL_RE.lastIndex = 0;
+        // Own instance per line: the loop awaits openTextDocument, and two
+        // concurrent provideInlayHints calls sharing one global regex clobber
+        // each other's lastIndex (duplicated or missing hints on first paint).
+        const callRe = new RegExp(CALL_RE.source, 'g');
         let match: RegExpExecArray | null;
 
-        while ((match = CALL_RE.exec(text)) !== null) {
+        while ((match = callRe.exec(text)) !== null) {
           if (token.isCancellationRequested) break;
 
           // Skip matches inside string literals or comments

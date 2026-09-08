@@ -11,13 +11,14 @@ const MAX_DISPLAY_LINES = 8;
 
 export function readSignature(doc: vscode.TextDocument, entry: SymbolEntry): string | null {
   const cutAtEquals = entry.kind === 'fun' || entry.kind === 'composable';
+  const declLine = locateDeclLine(doc, entry);
 
   const lines: string[] = [];
   let parenDepth = 0;
 
   for (
-    let i = entry.line;
-    i < Math.min(entry.line + MAX_SIG_LINES, doc.lineCount);
+    let i = declLine;
+    i < Math.min(declLine + MAX_SIG_LINES, doc.lineCount);
     i++
   ) {
     const text = doc.lineAt(i).text;
@@ -61,6 +62,30 @@ export function readSignature(doc: vscode.TextDocument, entry: SymbolEntry): str
   }
 
   return normalized.join('\n') || null;
+}
+
+const RELOCATE_WINDOW = 80;
+
+/**
+ * The index only moves on save, so while the declaring document is dirty
+ * `entry.line` can point above or below the declaration (lines added at the
+ * top of the file), and the hover showed the KDoc or the previous declaration
+ * as the signature. Look for the declaration by name around the indexed line.
+ */
+export function locateDeclLine(doc: vscode.TextDocument, entry: SymbolEntry): number {
+  const name = entry.name;
+  if (!name || name.startsWith('$')) return entry.line;
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Keyword directly followed by the name (generics and an extension receiver
+  // allowed in between): `val x = greet(...)` must not pass for `greet`.
+  const declRe = new RegExp('\\b(?:fun|class|object|interface|val|var|typealias|constructor)\\s+(?:<[^>]*>\\s*)?(?:[\\w.<>?, ]+\\.)?' + escaped + '\\b');
+  const at = (i: number) => i >= 0 && i < doc.lineCount && declRe.test(doc.lineAt(i).text);
+  if (at(entry.line)) return entry.line;
+  for (let d = 1; d <= RELOCATE_WINDOW; d++) {
+    if (at(entry.line + d)) return entry.line + d;
+    if (at(entry.line - d)) return entry.line - d;
+  }
+  return entry.line;
 }
 
 // ── KDoc extraction ───────────────────────────────────────────────────────────

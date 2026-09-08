@@ -185,6 +185,7 @@ let _stats:            Map<string, { mtime: number; size: number }> = new Map();
 let _semanticTokens:   KotlinSemanticTokensProvider | undefined;
 let _sealedWhen:       SealedWhenCoverageProvider | undefined;
 let _signatureHelp:    KotlinSignatureHelpProvider  | undefined;
+let _inlayHints:       KotlinInlayHintsProvider     | undefined;
 let _snapshotEnabled:  boolean = true;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -389,6 +390,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const showInferredTypes = cfg.get<boolean>('inlayHints.inferredTypes', true);
       log.info(`[InlayHints] registered — showParamNames=${showParamNames} showInferredTypes=${showInferredTypes}`);
       const provider = new KotlinInlayHintsProvider(index, log);
+      _inlayHints = provider;
       return vscode.Disposable.from(
         vscode.languages.registerInlayHintsProvider(KT_JAVA, provider),
         vscode.workspace.onDidChangeConfiguration(e => {
@@ -829,6 +831,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     _semanticTokens?.invalidate(uri.toString());
     codeLens.evictFile(uri.toString());     // surgical: only evict symbols in the changed file
     _signatureHelp?.evictFile(uri.toString());
+    _inlayHints?.evictFile(uri.toString());
     invalidateContentCache(uri.toString()); // file changed — next scan re-reads from disk
     _sealedWhen?.bumpEpoch();               // sealed subtype sets may have changed in any file
     testCtrl.notifyFileIndexed(uri);    // index is fresh — safe to refresh test tree now
@@ -840,6 +843,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       _semanticTokens?.invalidate(uri.toString());
       codeLens.evictFile(uri.toString());
       _signatureHelp?.evictFile(uri.toString());
+      _inlayHints?.evictFile(uri.toString());
       invalidateContentCache(uri.toString());
     }
     _sealedWhen?.bumpEpoch();
@@ -1095,12 +1099,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   })();
 
   // ── Gradle task run lens (desktop only — spawns the wrapper) ─────────────
-  context.subscriptions.push(
-    vscode.languages.registerCodeLensProvider(
-      { pattern: '**/*.gradle.kts' }, new GradleTaskLensProvider(),
-    ),
-    vscode.commands.registerCommand('kotlin-jump.runGradleTask', runGradleTask),
-  );
+  (() => {
+    const gradleLens = new GradleTaskLensProvider();
+    context.subscriptions.push(
+      vscode.languages.registerCodeLensProvider({ pattern: '**/*.gradle.kts' }, gradleLens),
+      vscode.commands.registerCommand('kotlin-jump.runGradleTask', runGradleTask),
+      vscode.workspace.onDidChangeConfiguration(e => {
+        if (e.affectsConfiguration('kotlinJump.gradleTaskLens')) gradleLens.fireChange();
+      }),
+    );
+  })();
 
   // ── Data class body-field warnings ────────────────────────────────────────
   (() => {
@@ -1115,11 +1123,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   })();
 
   // ── KMP expect/actual target badges ───────────────────────────────────────
-  context.subscriptions.push(
-    vscode.languages.registerCodeLensProvider({ language: 'kotlin' }, new KmpExpectActualProvider(index)),
-    vscode.commands.registerCommand('kotlin-jump.showActuals',
-      (fqn: string, name: string) => showActuals(index, fqn, name)),
-  );
+  (() => {
+    const kmp = new KmpExpectActualProvider(index);
+    context.subscriptions.push(
+      vscode.languages.registerCodeLensProvider({ language: 'kotlin' }, kmp),
+      vscode.commands.registerCommand('kotlin-jump.showActuals',
+        (fqn: string, name: string) => showActuals(index, fqn, name)),
+      vscode.workspace.onDidChangeConfiguration(e => {
+        if (e.affectsConfiguration('kotlinJump.kmpTargetBadges')) kmp.fireChange();
+      }),
+    );
+  })();
 
   // ── KJ-004 : hardcoded string lint (opt-in) ───────────────────────────────
   context.subscriptions.push(new HardcodedStringProvider());

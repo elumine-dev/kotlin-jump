@@ -50,6 +50,10 @@ export class HexColorFoldingProvider implements vscode.Disposable {
       this._editor = editor;
       this._fullScan(editor);
     }
+    // onDidChangeTextDocument only follows this._editor: left on the last
+    // visible editor, typing in the active one (in a split) no longer moved
+    // the swatch until the next editor switch.
+    this._editor = vscode.window.activeTextEditor;
   }
 
   // ── Layer 1: raw-string oracle ─────────────────────────────────────────────

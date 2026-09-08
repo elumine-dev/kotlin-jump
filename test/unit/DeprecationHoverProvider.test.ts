@@ -184,3 +184,19 @@ describe('DH-8 — arguments nommés', () => {
     expect(text).toContain('newApi()');
   });
 });
+
+describe('DH-9 — two @Deprecated declarations within the context window (was: the hover showed the UPPER annotation\'s message and ReplaceWith)', () => {
+  it('reads the annotation glued to the hovered symbol', async () => {
+    const { provider } = setup([
+      'package com.example',
+      '@Deprecated("Use fetchV2", ReplaceWith("fetchV2(id)"))',
+      'fun fetch(id: Int) {}',
+      '@Deprecated("Use saveV2", ReplaceWith("saveV2(x)"))',
+      'fun save(x: Int) {}',
+    ].join('\n'));
+    const md = await hover(provider, 'import com.example.save\nfun main() { save(1) }', 'save');
+    expect(md).toContain('Use saveV2');
+    expect(md).toContain('saveV2(x)');
+    expect(md).not.toContain('fetchV2');
+  });
+});

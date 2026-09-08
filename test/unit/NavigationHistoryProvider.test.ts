@@ -440,3 +440,16 @@ describe('NavigationHistoryProvider', () => {
     });
   });
 });
+
+describe('Recent Locations — the refined placeholder keeps its timestamp (was: destinations sorted last with timestamp 0)', () => {
+  it('the jump destination carries a timestamp after the selection event refines it', () => {
+    (vscode.window as any).activeTextEditor = makeEditor('file:///A.kt', 50);
+    const p = new NavigationHistoryProvider();
+    editorListener(makeEditor('file:///B.kt', 0));
+    selectionListener(selectionEvent('file:///B.kt', 100, vscode.TextEditorSelectionChangeKind.Command));
+    const dest = p.recentLocations().find(e => e.file === 'file:///B.kt' && e.line === 100);
+    expect(dest).toBeDefined();
+    expect(dest!.timestamp).toBeGreaterThan(0);
+    p.dispose();
+  });
+});

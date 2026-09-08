@@ -57,7 +57,13 @@ export class DeprecationHoverProvider implements vscode.HoverProvider {
     const md = new vscode.MarkdownString();
     md.appendMarkdown(`**Deprecated** \`${entry.name}\``);
 
-    const annotation = await this.readAnnotation(entry.uri, entry.line);
+    const window = await this.readAnnotation(entry.uri, entry.line);
+    // Two @Deprecated declarations within CONTEXT_LINES of each other put both
+    // annotations in the window; the regexes are not global and returned the
+    // upper one, so the hover showed the previous symbol's message and
+    // ReplaceWith. The one glued to the symbol is the last in the window.
+    const start = window ? window.lastIndexOf('@Deprecated') : -1;
+    const annotation = window && start >= 0 ? window.slice(start) : window;
     if (annotation) {
       const message = MESSAGE_RE.exec(annotation)?.[1];
       const replaceWith = REPLACE_WITH_RE.exec(annotation)?.[1];

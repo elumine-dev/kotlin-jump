@@ -552,7 +552,7 @@ export function isAndroidResourceRef(line: string, wordStart: number): boolean {
 const SCOPE_CACHE_MAX = 8;
 const scopeCache = new Map<string, { version: number; text: string; index: LocalScopeIndex }>();
 
-function cachedLocalScopeIndex(document: vscode.TextDocument): LocalScopeIndex {
+export function cachedLocalScopeIndex(document: vscode.TextDocument): LocalScopeIndex {
   const key = `${document.languageId}:${document.uri.toString()}`;
   const text = document.getText();
   const hit = scopeCache.get(key);
@@ -606,8 +606,10 @@ function resolveInFunction(
   const sigEndLine = Math.min(signatureEnd(index, funLine), position.line);
   const sigText = index.lines.slice(funLine, sigEndLine + 1).join('\n');
 
-  // Step 2 — the latest local binding before the cursor.
-  const bestBinding = latestBinding(index, word, sigEndLine, position.line, position.character);
+  // Step 2 — the latest local binding before the cursor. `character + 1`
+  // keeps the binding that starts under the cursor: F2 on the first letter
+  // of `val count` used to miss it and fall through to a workspace rename.
+  const bestBinding = latestBinding(index, word, sigEndLine, position.line, position.character + 1);
   if (bestBinding) {
     return new vscode.Location(
       document.uri,
@@ -911,7 +913,14 @@ export function findLocalUsages(
   const out: vscode.Location[] = [];
   const re = wordRegex(word);
   const declCol = document.getWordRangeAtPosition(position)?.start.character;
-  const lastLine = Math.min(document.lineCount - 1, position.line + 1000);
+  // A local lives until the end of its function: the scan used to run to the
+  // end of the file, so renaming the `user` of load() also rewrote
+  // `show(user: User)` and `this.user` further down the class.
+  const scope   = cachedLocalScopeIndex(document);
+  const funLine = position.line < scope.enclosingFun.length ? scope.enclosingFun[position.line] : -1;
+  const lastLine = funLine >= 0
+    ? Math.min(document.lineCount - 1, functionBodyEndLine(scope, funLine))
+    : Math.min(document.lineCount - 1, position.line + 1000);
   for (let i = position.line; i <= lastLine; i++) {
     const text = document.lineAt(i).text;
     re.lastIndex = 0;
@@ -919,6 +928,8 @@ export function findLocalUsages(
     while ((m = re.exec(text))) {
       // Skip the declaration itself.
       if (i === position.line && m.index === declCol) continue;
+      // `this.user`, `other.user`, `::user`: a member access, never a local.
+      if (m.index > 0 && (text[m.index - 1] === '.' || text[m.index - 1] === ':')) continue;
       // Skip comments and plain string content. Short-form
       // interpolation `$word` and full-form `${word}` are CODE and
       // must NOT be skipped — they are real usages of the binding.
@@ -929,7 +940,7 @@ export function findLocalUsages(
       }
       // Skip named-argument LHS — `Foo(word = …)`. The label refers to
       // the called function's parameter, not to this binding.
-      if (looksLikeNamedArgLhs(text, m.index, word.length)) continue;
+      if (looksLikeNamedArgLhs(document, i, m.index, word.length)) continue;
       out.push(new vscode.Location(
         document.uri,
         new vscode.Range(
@@ -942,20 +953,44 @@ export function findLocalUsages(
   return out;
 }
 
-/** True when `text[wordStart..wordStart+wordLen]` is followed (after
- *  whitespace) by a single `=` AND the IMMEDIATELY enclosing opener
- *  to its left is an unmatched `(` (call args), not an unmatched `{`
- *  (lambda body). Distinguishes:
+/**
+ * Last line of the body of the function declared at `funLine`: the line of
+ * the `}` matching its first `{`. A body without braces (`fun x(a: Int) =\n a + 1`)
+ * ends before the next declaration line.
+ */
+function functionBodyEndLine(scope: LocalScopeIndex, funLine: number): number {
+  const lines = scope.lines;
+  const sigEnd = signatureEnd(scope, funLine);
+  let depth = 0, opened = false;
+  const stop = Math.min(lines.length - 1, funLine + 5000);
+  for (let i = funLine; i <= stop; i++) {
+    const t = lines[i];
+    if (!opened && i > sigEnd && DECL_START_RE.test(t)) return i - 1;
+    for (let c = 0; c < t.length; c++) {
+      const ch = t[c];
+      if (ch !== '{' && ch !== '}') continue;
+      if (isInsideCommentOrString(t, c)) continue;
+      if (ch === '{') { depth++; opened = true; }
+      else if (opened && --depth === 0) return i;
+    }
+  }
+  return stop;
+}
+const DECL_START_RE = /^\s*(?:@[\w.]+(?:\([^)]*\))?\s+)*(?:(?:public|private|internal|protected|override|open|abstract|suspend|inline|infix|operator|tailrec|external|const|lateinit|data|sealed|inner|enum|annotation|final|value|companion|expect|actual)\s+)*(?:fun|val|var|class|object|interface|companion|init|constructor|typealias)\b/;
+
+/** True when the word at (line, wordStart) is followed (after whitespace)
+ *  by a single `=` AND the IMMEDIATELY enclosing opener to its left is an
+ *  unmatched `(` (call args), not an unmatched `{` (lambda body):
  *
  *    Foo(name = x)              ← named-arg LHS, return true
  *    Foo { x -> name = x }      ← assignment in lambda, return false
  *    withContext(IO) { x = 5 }  ← assignment in lambda, return false
  *
- *  Single-line heuristic — multi-line named-args that span lines
- *  fall through to "not a named-arg" silently. Acceptable: smart-nav
- *  may then surface the LHS as an extra usage in the picker, which is
- *  noise, not a wrong jump. */
-function looksLikeNamedArgLhs(text: string, wordStart: number, wordLen: number): boolean {
+ *  The walk continues on the previous lines (up to 50): ktlint puts one
+ *  named argument per line, so `TopAppBar(\n title = { … },` is the
+ *  common Compose shape, and its label was renamed with the parameter. */
+function looksLikeNamedArgLhs(document: vscode.TextDocument, line: number, wordStart: number, wordLen: number): boolean {
+  const text = document.lineAt(line).text;
   let probe = wordStart + wordLen;
   while (probe < text.length && text[probe] === ' ') probe++;
   if (text[probe] !== '=') return false;
@@ -965,16 +1000,20 @@ function looksLikeNamedArgLhs(text: string, wordStart: number, wordLen: number):
   // encounter unmatched first decides the enclosing scope.
   let parenDepth = 0;
   let braceDepth = 0;
-  for (let c = wordStart - 1; c >= 0; c--) {
-    const ch = text[c];
-    if (ch === ')')      parenDepth++;
-    else if (ch === '(') {
-      if (parenDepth === 0) return true; // unmatched ( = call args
-      parenDepth--;
-    } else if (ch === '}') braceDepth++;
-    else if (ch === '{') {
-      if (braceDepth === 0) return false; // unmatched { = lambda body
-      braceDepth--;
+  const stopLine = Math.max(0, line - 50);
+  for (let li = line; li >= stopLine; li--) {
+    const t = li === line ? text : document.lineAt(li).text;
+    for (let c = (li === line ? wordStart : t.length) - 1; c >= 0; c--) {
+      const ch = t[c];
+      if (ch === ')')      parenDepth++;
+      else if (ch === '(') {
+        if (parenDepth === 0) return true; // unmatched ( = call args
+        parenDepth--;
+      } else if (ch === '}') braceDepth++;
+      else if (ch === '{') {
+        if (braceDepth === 0) return false; // unmatched { = lambda body
+        braceDepth--;
+      }
     }
   }
   return false;

@@ -1,42 +1,43 @@
 {
-  "version": "1.42.18",
+  "version": "1.42.19",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Java fields and enum constants indexed, captured locals resolved",
-  "summary": "The Java parser gets the same treatment the Kotlin one got in 1.42.17: fields without a modifier, annotations with nested parentheses, enum constants read in full, comments and text blocks kept out of the brace count. Go to Definition no longer lands inside a string or a comment, and resolves a local captured by an anonymous class.",
+  "tagline": "Renames that stay in scope, imports that stay",
+  "summary": "Three renames that broke the build (a local leaking past its function, a Compose named argument, a class imported under an alias), an Organize Imports that removed the import behind `by remember`, soft keywords like `data` and `value` as identifiers, and smaller fixes in auto-import and postfix completion.",
   "highlights": [
     {
-      "title": "Java fields without a modifier",
-      "description": "`@Inject AnalyticsAdapter analytics;`, `@Mock UserRepository repository;` and interface constants were never indexed, and their annotations leaked onto the next method (`@Deprecated String legacy;` struck through the method below). They have an Outline entry, a hover and usages now.",
+      "title": "Local rename stays in its function",
+      "description": "Renaming the `val user` of `load()` also rewrote `show(user: User)` and `this.user` further down the class. The scan ends at the closing brace now. A parameter rename updates `title =` at the call sites and no longer touches `TopAppBar(\\n title = …)`.",
       "kind": "fix"
     },
     {
-      "title": "Captured locals resolve",
-      "description": "Inside `new View.OnClickListener() { public void onClick(View v) { open(url, title); } }` the parameter and the local of the enclosing method resolved to nothing or to a stranger elsewhere. Same fix for a Kotlin `object : Listener`. A binding sitting inside a string or a comment is no longer a destination.",
+      "title": "Organize Imports keeps getValue",
+      "description": "`import androidx.compose.runtime.getValue` / `setValue` and operator imports (`plus`, `component1`) are resolved by convention and never spelled in the file. The action removed them and every `by remember` stopped compiling.",
       "kind": "fix"
     },
     {
-      "title": "Enum colours and comments",
-      "description": "A nested `enum class State` and every `Foo.State` reference took the enum member colour. Code commented out with a multi-line `/* … */` kept its class and function colours. Both are fixed, and a backtick test name gets one declaration token on the name itself.",
+      "title": "data, value, actual are identifiers",
+      "description": "`val data: T`, `val value: String` and `assertEquals(expected, actual)` were treated as keywords: only `?.data` counted, F2 on `value` did nothing. Declarations and plain uses count now; `data class` and `actual fun` still do not.",
       "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Java parser",
+      "heading": "Rename and Find Usages",
       "bullets": [
-        "Fields without a modifier are indexed at class level; locals inside method bodies stay out.",
-        "Same-line annotations with nested parentheses (`@Query(\"SELECT count(*) …\")`) and a package-private `@interface` no longer hide the declaration.",
-        "Enum constants are read in full (`Home` was `H`), multi-line arguments and a constructor after `};` are not constants, `@Deprecated OLD,` does not mark the next method.",
-        "A `/*` left open, a `/* { */`, a Javadoc `{@code` and the lines of a `\"\"\"` text block no longer shift the Outline or produce phantom methods."
+        "A local rename ends at the function's closing brace and skips `this.x` member accesses.",
+        "A parameter rename updates `name =` labels at call sites (file, and workspace when the function name is unique); a multi-line named argument of another call is not a usage.",
+        "A file importing the renamed class under an alias keeps its own bare `User`.",
+        "A one-line expression body (`fun Int.dp() = this * 2`) no longer claims the class below it as its body.",
+        "F2 on the first letter of a local `val` stays local instead of renaming the workspace."
       ]
     },
     {
-      "heading": "Navigation and colours",
+      "heading": "Imports and completion",
       "bullets": [
-        "Go to Definition ignores a local binding that sits inside a string or a comment (Java and Kotlin).",
-        "A local or parameter captured by an anonymous class or a Kotlin `object :` resolves to the enclosing function.",
-        "The continuation of a Java ternary (`? format(value)`) is not a method header.",
-        "Nested `enum class` painted as enum, no semantic colours inside a multi-line block comment, backtick names get one declaration token."
+        "Organize Imports keeps convention-resolved imports (`getValue`, `setValue`, operators).",
+        "No \"Add import\" for a name already imported from a library (`material3.Text`).",
+        "`\"Hello $name\".let` keeps the whole literal as receiver and escapes `$` in the snippet.",
+        "Java import lines with `;` are organized and the auto-import lands inside the block."
       ]
     }
   ],

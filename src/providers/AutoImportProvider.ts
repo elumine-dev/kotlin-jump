@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
 import { importBlockBounds } from '../util/importBlock';
 import { SymbolIndex } from '../indexer/SymbolIndex';
-import { resolveBest } from '../util/ImportResolver';
+import { resolveBest, resolveExplicit } from '../util/ImportResolver';
 import { buildAllowFilter } from '../util/testFilter';
 
 const WORD_RE = /[A-Za-z_]\w*/;
-const RE_IMPORT_LINE = /^\s*import\s+(?:static\s+)?[\w.*]+(?:\s+as\s+\w+)?\s*(?:\/\/.*)?$/;
+const RE_IMPORT_LINE = /^\s*import\s+(?:static\s+)?[\w.*]+(?:\s+as\s+\w+)?\s*;?\s*(?:\/\/.*)?$/;
 
 // Kotlin / Java keywords and common builtins that will never be importable.
 // Without this list, Ctrl+. on `val`, `if`, `it` etc. would trigger index lookups.
@@ -105,6 +105,10 @@ export class AutoImportProvider implements vscode.CodeActionProvider {
     // resolved as wildcard priority, so we skip it.
     const resolution = resolveBest(word, document, fqn => this.index.lookupFqn(fqn));
     if (resolution.priority !== 'none') return undefined;
+    // An explicit import of a name the index does not know (a library's
+    // `androidx.compose.material3.Text`) still resolves it: offering the
+    // project's own `Text` on top produced a conflicting import.
+    if (resolveExplicit(word, document).exact.length > 0) return undefined;
 
     const allow = buildAllowFilter(document.uri.fsPath);
     const allCandidates = this.index.lookup(word).filter(e => allow(e.uri.path));

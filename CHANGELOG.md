@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.42.19
+
+Kotlin Jump 1.42.19 is about editing: three renames that broke the build, an Organize Imports that removed the import behind `by remember`, and a handful of smaller wrongs in Find Usages, auto-import and postfix completion.
+
+### Fixes
+- Keeps a local rename inside its function. Renaming the `val user` of `load()` scanned to the end of the file, so `show(user: User)`, `Text(user.name)` and even `this.user` (the class property) further down were rewritten and the class stopped compiling. The scan now ends at the function's closing brace and skips `this.x` / `other.x` member accesses.
+- Renames a parameter at its call sites and leaves other functions' labels alone. With one argument per line (the ktlint layout every Compose screen uses), `TopAppBar(\n title = { Text(title) },` had its `title =` label renamed to a parameter TopAppBar does not have, while `Screen(title = "x")` in the Preview kept the old name. The label check now looks across lines, and the calls of the renamed function, in the file and in the workspace when the function name is unique, get their `title =` updated.
+- Stops Organize Imports from removing `getValue`, `setValue`, `provideDelegate` and operator imports (`plus`, `component1` …). They are resolved by convention, never spelled at the use site, and every Compose file with `var x by remember` lost them and failed with "Property delegate must have a getValue method". The unused import diagnostic already knew this; the action did not.
+- Treats `data`, `value`, `field`, `open`, `out`, `expect`, `actual` and the other soft keywords as identifiers in Find Usages and Rename. `val data: T` in a Resource wrapper only matched `?.data`: the declaration and `data == null` stayed behind on rename, F2 on `value` did nothing at all, and `assertEquals(expected, actual)` had no usages. `data class`, `value class`, `actual fun` and `@field:` are still not usages.
+- Leaves the bare name alone in a file that imports the renamed class under an alias. `import com.app.model.User as DomainUser` next to a local `class User` had that class and its extension receiver renamed too; only the import line changes now.
+- Stops a one-line expression body from claiming the block below it. `fun Int.dp() = this * 2` right above `class Repo {` made the members of Repo look like locals of `dp()`, so renaming `cache` never left the file and the other files stopped compiling; same for a `companion object` after such a function.
+- Makes F2 on the first letter of a local `val` behave like F2 in the middle of it. The binding under the cursor was excluded, the rename fell through to the workspace and rewrote a same-named property of another class, or refused with "You cannot rename this element".
+- Stops offering "Add import" for a name that is already imported from a library. `import androidx.compose.material3.Text` is not in the index, so Ctrl+. on `Text("hi")` proposed the project's own `Text` and produced a conflicting import. Same for `Button`, `Card`, `Icon`.
+- Takes a string literal as one receiver in postfix completion, and escapes it for the snippet. `"Hello $name".let` inserted `$name".let { }` and dropped the `$name`; `"Hello world".val` produced `val value = world`.
+- Recognizes Java import lines with their `;`. Organize Imports did nothing on a .java file, and auto-import inserted the new line right under `package`, above the existing block.
+
 ## 1.42.18
 
 Kotlin Jump 1.42.18 gives the Java parser the same treatment 1.42.17 gave the Kotlin one, and fixes Go to Definition on a captured local and three semantic colouring errors. A Java field without a modifier (`@Inject AnalyticsAdapter analytics;`, `@Mock UserRepository repository;`, an interface constant) was never indexed, a Room `@Query("SELECT count(*) …")` hid the method after it, and a local read inside a string or a comment was where Go to Definition sent you.

@@ -30,17 +30,35 @@ const CONCURRENCY = 20;
 // When searching for a word in this set, only accept matches that are dot-qualified
 // (preceded by '.') to avoid matching language keywords like `catch (e: Exception)`.
 const KOTLIN_KEYWORDS = new Set([
-  'abstract', 'actual', 'annotation', 'as', 'break', 'by', 'catch', 'class',
-  'companion', 'const', 'constructor', 'continue', 'crossinline', 'data',
-  'delegate', 'do', 'dynamic', 'else', 'enum', 'expect', 'external', 'false',
-  'field', 'file', 'final', 'finally', 'for', 'fun', 'get', 'if', 'import',
+  'abstract', 'annotation', 'as', 'break', 'by', 'catch', 'class',
+  'companion', 'const', 'constructor', 'continue', 'crossinline',
+  'do', 'dynamic', 'else', 'enum', 'external', 'false',
+  'final', 'finally', 'for', 'fun', 'if', 'import',
   'in', 'infix', 'init', 'inline', 'inner', 'interface', 'internal', 'is',
-  'it', 'lateinit', 'noinline', 'null', 'object', 'open', 'operator', 'out',
-  'override', 'package', 'param', 'private', 'property', 'protected', 'public',
-  'receiver', 'reified', 'return', 'sealed', 'set', 'setparam', 'super',
+  'it', 'lateinit', 'noinline', 'null', 'object', 'operator',
+  'override', 'package', 'private', 'protected', 'public',
+  'reified', 'return', 'sealed', 'setparam', 'super',
   'suspend', 'tailrec', 'this', 'throw', 'true', 'try', 'typealias', 'typeof',
-  'val', 'value', 'var', 'vararg', 'when', 'where', 'while',
+  'val', 'var', 'vararg', 'when', 'where', 'while',
 ]);
+// Soft keywords that are everyday property names: `val data: T` in a
+// Resource wrapper, `value` in a Setting, `actual` in every test. They were
+// in the set above, so only `.data` counted: the declaration and `data == null`
+// stayed behind on rename, and F2 on `value` did nothing. A match is a use
+// unless it sits in a modifier position (`data class`, `value class`,
+// `actual fun`, `out T`) or is an annotation use-site target (`@field:`).
+const SOFT_KEYWORDS = new Set([
+  'data', 'value', 'field', 'file', 'get', 'set', 'open', 'out', 'param',
+  'property', 'receiver', 'delegate', 'expect', 'actual',
+]);
+const SOFT_MODIFIER_POSITION = /^\s+(?:class|fun|val|var|object|interface|inner|abstract|open|data|sealed|enum|annotation|suspend|override|private|protected|internal|public|final|inline|infix|operator|tailrec|companion|constructor|typealias|[A-Z]\w*\b)/;
+function softKeywordIsIdentifier(line: string, at: number, word: string): boolean {
+  if (at > 0 && line[at - 1] === '@') return false;           // @field:, @get:, @param:
+  const after = line.slice(at + word.length);
+  if (SOFT_MODIFIER_POSITION.test(after)) return false;       // data class, actual fun, out T
+  if ((word === 'get' || word === 'set') && /^\s*\(/.test(after) && /^\s*(?:private\s+|protected\s+|internal\s+)?$/.test(line.slice(0, at))) return false; // accessor
+  return true;
+}
 
 // ── File content cache ────────────────────────────────────────────────────────
 // Keyed by URI string. Populated on first read, invalidated on file change.
@@ -253,6 +271,10 @@ export async function scanForUsagesWithTarget(
           skipped.push(uriStr);
           continue;
         }
+        // `import com.app.model.User as DomainUser` makes the file a
+        // referencer, but its bare `User` is another declaration: only the
+        // import line (handled by scanImports) names the target here.
+        if (target && importedOnlyAsAlias(text, target)) continue;
 
         const fileHitsBefore = results.length;
         const lines = text.split('\n');
@@ -292,6 +314,7 @@ export async function scanForUsagesWithTarget(
             // Kotlin keyword used as method name (e.g. .catch()): require a dot qualifier
             // to avoid matching language constructs like `catch (e: Exception)`.
             if (KOTLIN_KEYWORDS.has(word) && (m.index === 0 || lines[i][m.index - 1] !== '.')) continue;
+            if (SOFT_KEYWORDS.has(word) && !softKeywordIsIdentifier(lines[i], m.index, word)) continue;
             results.push({ uri, uriString: uriStr, line: i, character: m.index, lineText: lines[i] });
           }
         }
@@ -441,6 +464,26 @@ export function fileCouldReference(text: string, target: SymbolEntry, index?: Sy
  * True when `text` contains `import <path>` where the path is not a prefix of
  * a longer identifier (e.g. `import pkg.FooBarExtended` must NOT match `pkg.FooBar`).
  */
+/**
+ * True when the target's FQN reaches this file only through an aliased
+ * import: no plain import of it, no same-package visibility, no wildcard of
+ * its package. Members are never aliased themselves (the alias is on their
+ * class), so this only concerns top-level declarations.
+ */
+function importedOnlyAsAlias(text: string, target: SymbolEntry): boolean {
+  if (target.depth !== 0) return false;
+  // Two RegExps per scanned file otherwise: only build them when the text can
+  // hold an aliased import of this FQN at all.
+  if (!text.includes(target.fqn + ' as ')) return false;
+  const fqn = escapeRegex(target.fqn);
+  if (!new RegExp(`^\\s*import\\s+${fqn}\\s+as\\s+\\w+`, 'm').test(text)) return false;
+  if (new RegExp(`^\\s*import\\s+${fqn}\\s*(?:;|//|$)`, 'm').test(text)) return false;
+  const pkg = target.packageName;
+  if (pkg && packageRegex(pkg).test(text)) return false;
+  if (pkg && importedExactly(text, `${pkg}.*`)) return false;
+  return true;
+}
+
 function importedExactly(text: string, importPath: string): boolean {
   if (matchesImportNeedle(text, `import ${importPath}`)) return true;
   // Java's `import static a.b.C.MAX;` never matches the plain needle. Guard

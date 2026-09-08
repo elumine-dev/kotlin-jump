@@ -1,31 +1,31 @@
 {
-  "version": "1.42.14",
+  "version": "1.42.15",
   "title": "What's New in Kotlin Jump",
-  "tagline": "What the editor tells you, corrected",
-  "summary": "Kotlin Jump 1.42.14 corrects what the editor was telling you: an error on `android.R.string.ok`, a \"class not found\" on a FileProvider from AndroidX with a removal quick fix behind it, a dispatcher lens accusing `viewModelScope` of touching the View, a signature help highlighting the wrong parameter behind a named argument, and a few more. It also removes a small regression of its own: Go to Definition rebuilt the scope index on every call since 1.42.6.",
+  "tagline": "Second re-check, holes closed",
+  "summary": "Kotlin Jump 1.42.15 is the second re-check of recent fixes. It closes the holes the first re-check left: a library component still offered for removal under another label, Remove All Unused Resource Keys still reading the disk, an Rx pairing that missed `?.dispose()`, a KDoc escape that broke the deprecation blockquote, and a qualified-R rule that had gone too far and would have hidden a module's own `R`.",
   "highlights": [
     {
-      "title": "No error on android.R, no removal of FileProvider",
+      "title": "Library components left alone",
       "kind": "fix",
-      "description": "A qualified R (android.R.string.ok, a library's R) is outside the workspace index and was reported as an error. A component from AndroidX or Firebase was badged \"class not found\", grayed and offered for removal; only a class in a package the workspace declares can be missing now."
+      "description": "The 1.42.14 change stopped calling androidx.startup.InitializationProvider \"class not found\" but then judged it \"never referenced\" and still offered its removal. A class outside the workspace's packages is simply fine now."
     },
     {
-      "title": "Lenses and hints that tell the truth",
+      "title": "Qualified R, the right way round",
       "kind": "fix",
-      "description": "The dispatcher lens no longer accuses viewModelScope.launch(Dispatchers.IO) of touching the View, signature help highlights the parameter named at the cursor, an Rx subscribe() pairs with the dispose() of its Disposable, and nativeMain covers the ios targets in the KMP badges."
+      "description": "The 1.42.14 rule excluded every qualified R, which would have hidden a module's own com.app.feature.R.string.x from folding, hovers and Go to Definition. Only android.R, androidx R and Material's R are excluded, and on every surface, not just the diagnostics."
     },
     {
-      "title": "Go to Definition back at full speed",
-      "kind": "improvement",
-      "description": "Since 1.42.6 Definition, References and Rename rebuilt the scope index on every call, ten times the old cost on the benchmark. One index per document is shared now; the numbers are at or below the previous ones."
+      "title": "Rx pairing and KDoc, finished",
+      "kind": "fix",
+      "description": "disposable?.dispose() and val d: Disposable = …subscribe( pair correctly, and the KDoc escape no longer turns the deprecation blockquote into a literal \">\". Remove All Unused Resource Keys reads open editors like its symbol sibling."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Keeps Flow<User> readable in a hover's KDoc, does not cut val OPEN = \"{\" at the brace, and attributes a string to the right class when an expression-body composable precedes it.",
-        "Says \"every minute\" for */1 in the cron tooltip, and drops the \"⏱ Debug\" lens the testCodeLens description promised."
+        "Shows a disabled \"(offline)\" placeholder in the Logcat device picker while the host's device is away, instead of displaying the wrong device as selected.",
+        "Treats case RED, GREEN -> as a switch arm, keeps '{' and @file:Suppress(\"unused(\") from breaking signature reads and import bounds, and disposes the online-docs listener with the extension."
       ]
     }
   ],

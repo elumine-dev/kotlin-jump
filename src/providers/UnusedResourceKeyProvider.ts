@@ -145,8 +145,11 @@ export async function buildRemovalEdit(
   const readText = async (p: string): Promise<string | undefined> => {
     if (textByPath.has(p)) return textByPath.get(p);
     let text: string | undefined;
-    if (openDocument && openDocument.uri.fsPath === p) {
-      text = openDocument.getText();
+    const open = openDocument && openDocument.uri.fsPath === p
+      ? openDocument
+      : vscode.workspace.textDocuments.find(d => d.uri.fsPath === p);
+    if (open) {
+      text = open.getText();
     } else {
       try {
         text = decoder.decode(await vscode.workspace.fs.readFile(corpusUri(p)));

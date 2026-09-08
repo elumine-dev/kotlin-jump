@@ -32,6 +32,7 @@ export function coversTarget(actualSet: string, target: string): boolean {
   const t = target.toLowerCase();
   switch (actualSet.toLowerCase()) {
     case 'native': return /^(ios|macos|tvos|watchos|linux|mingw|androidnative)/.test(t);
+    case 'androidnative': return t.startsWith('androidnative');
     case 'apple': return /^(ios|macos|tvos|watchos)/.test(t);
     case 'ios': return t.startsWith('ios');
     case 'macos': return t.startsWith('macos');

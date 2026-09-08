@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { ColorResourceIndex } from '../indexer/ColorResourceIndex';
 
-const R_COLOR_RE = /\bR\.color\.([A-Za-z_]\w*)\b/g;
+const R_COLOR_RE = /(?<!\bandroid\.)(?<!\bandroidx\.[\w.]*)(?<!\bcom\.google\.android\.material[\w.]*\.)\bR\.color\.([A-Za-z_]\w*)\b/g;
 
 /**
  * Cmd+Click on `R.color.xxx` → jumps to the matching `<color name="xxx">`

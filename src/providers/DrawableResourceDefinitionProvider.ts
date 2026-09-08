@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-const R_DRAWABLE_RE = /\bR\.(drawable|mipmap)\.([A-Za-z_]\w*)\b/g;
+const R_DRAWABLE_RE = /(?<!\bandroid\.)(?<!\bandroidx\.[\w.]*)(?<!\bcom\.google\.android\.material[\w.]*\.)\bR\.(drawable|mipmap)\.([A-Za-z_]\w*)\b/g;
 
 /**
  * Cmd+Click on `R.drawable.ic_pokeball` (or `R.mipmap.ic_launcher`) →

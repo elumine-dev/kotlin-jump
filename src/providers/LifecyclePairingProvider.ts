@@ -99,7 +99,8 @@ function findHalfCalls(
   // `this.resource` as an argument means `resource` (otherwise false orphan).
   const ARG = `(?:this\\s*\\.\\s*)?(\\w+)?`;
   const re = new RegExp(
-    `(?:(\\w+)\\.)?${method}\\s*\\(\\s*${ARG}(?:\\s*,\\s*${ARG})?`,
+    // `disposable?.dispose()` and `d!!.dispose()` release the same receiver.
+    `(?:(\\w+)\\s*(?:\\?\\.|!!\\.|\\.)\\s*)?${method}\\s*\\(\\s*${ARG}(?:\\s*,\\s*${ARG})?`,
     'g',
   );
   let m: RegExpExecArray | null;
@@ -109,7 +110,7 @@ function findHalfCalls(
     // `disposable = observable.subscribe(::render)`: what gets released is the
     // Disposable assigned, not the observable; the receiver made a false orphan.
     if (method === 'subscribe') {
-      const assigned = /(\w+)\s*=\s*$/.exec(body.slice(Math.max(0, m.index - 80), m.index));
+      const assigned = /(\w+)(?:\s*:\s*[\w<>?.]+)?\s*=\s*$/.exec(body.slice(Math.max(0, m.index - 80), m.index));
       if (assigned) resource = assigned[1];
       else if (/\.(?:add|plusAssign)\s*\(\s*$/.test(body.slice(Math.max(0, m.index - 40), m.index)) || /\+=\s*$/.test(body.slice(Math.max(0, m.index - 20), m.index))) continue; // owned by a CompositeDisposable
     }

@@ -123,7 +123,9 @@ export function buildLocalScopeIndex(lines: readonly string[], language: 'kotlin
       JAVA_LAMBDA_RE.lastIndex = 0;
       while ((m = JAVA_LAMBDA_RE.exec(text))) {
         // `case RED -> paint()` and `default -> …` are switch arms, not lambdas.
-        if (/\b(?:case|default)\s*$/.test(text.slice(0, m.index)) || /\bcase\s+[\w.]*$/.test(text.slice(0, m.index + (m[3]?.length ?? 0)))) continue;
+        // `case RED, GREEN -> paint()` and `default -> …` are switch arms, not
+        // lambdas: nothing between `case` and here may be a `>` (an arrow).
+        if (/\b(?:case|default)\b[^;{}>]*$/.test(text.slice(0, m.index))) continue;
         const names = m[3] ? [m[3]] : m[0].slice(1, m[0].indexOf(')')).split(',').map(s => s.trim()).filter(Boolean);
         for (const name of names) {
           const at = text.indexOf(name, m.index);

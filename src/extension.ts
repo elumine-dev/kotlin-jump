@@ -1253,6 +1253,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ['unusedRemoteConfigKeys', remoteConfigKeyProvider], ['unusedGradleDependencies', gradleDependencyProvider],
     ['unusedMembers', unusedMemberProvider], ['deadIslands', deadIslandProvider],
     ['unusedDtoFields', unusedDtoFieldProvider], ['writeOnlyKeys', writeOnlyKeyProvider],
+    ['unusedResources', unusedResourceProvider],
   ];
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(e => {
     for (const [key, provider] of deadCodeProviders) {
@@ -1846,7 +1847,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const handleTomlChanged = async (uri: vscode.Uri) => {
       try {
         const bytes = await vscode.workspace.fs.readFile(uri);
-        vcIndex.reindexFile(new TextDecoder().decode(bytes), uri.toString());
+        vcIndex.reindexFile(new TextDecoder().decode(bytes), uri.fsPath);
       } catch { /* skip */ }
     };
 
@@ -1857,7 +1858,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const tomlW = vscode.workspace.createFileSystemWatcher('**/gradle/libs.versions.toml');
     tomlW.onDidCreate(handleTomlChanged);
     tomlW.onDidChange(handleTomlChanged);
-    tomlW.onDidDelete(uri => vcIndex.removeFile(uri.toString()));
+    tomlW.onDidDelete(uri => vcIndex.removeFile(uri.fsPath));
 
     context.subscriptions.push(
       tomlW,
@@ -1963,7 +1964,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
         const { symbols: totalSymbols } = index.stats();
         const jdkLabel = jdk.jdkHome ? ` + JDK${jdk.files > 0 ? '✓' : '⚠'}` : '';
-        statusBar.text    = `$(symbol-class) Kotlin Jump: ${totalSymbols.toLocaleString()} symbols`;
+        statusBar.text    = `$(symbol-class) Kotlin Jump: ${totalSymbols.toLocaleString()} symbols${isCompanion ? ' · companion' : ''}`;
         statusBar.tooltip = `${totalSymbols.toLocaleString()} symbols (incl. ${totalFiles} library files from ${totalJars} JARs${jdkLabel})`;
         _semanticTokens?.invalidate();
 
@@ -1997,7 +1998,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       } catch (err) {
         log.warn(`[jarscan] ${err}`);
         const { symbols: s, files: f } = index.stats();
-        statusBar.text    = `$(symbol-class) Kotlin Jump: ${s.toLocaleString()} symbols`;
+        statusBar.text    = `$(symbol-class) Kotlin Jump: ${s.toLocaleString()} symbols${isCompanion ? ' · companion' : ''}`;
         statusBar.tooltip = `${s.toLocaleString()} symbols in ${f} files`;
         sourcesBar.setState({ scanning: false, networkError: true });
       }
@@ -2164,7 +2165,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       );
       await collectStats(freshUris);
       const { files, symbols } = index.stats();
-      statusBar.text    = `$(symbol-class) Kotlin Jump: ${symbols.toLocaleString()} symbols`;
+      statusBar.text    = `$(symbol-class) Kotlin Jump: ${symbols.toLocaleString()} symbols${isCompanion ? ' · companion' : ''}`;
       statusBar.tooltip = `${symbols.toLocaleString()} symbols in ${files} files`;
       index.removeExternal();
       runJarScan();
@@ -2234,7 +2235,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     const { files, symbols } = index.stats();
     log.info(`[startup] snapshot restored: ${symbols.toLocaleString()} symbols in ${files} files`);
-    statusBar.text    = `$(symbol-class) Kotlin Jump: ${symbols.toLocaleString()} symbols`;
+    statusBar.text    = `$(symbol-class) Kotlin Jump: ${symbols.toLocaleString()} symbols${isCompanion ? ' · companion' : ''}`;
     statusBar.tooltip = `Restored from snapshot: ${symbols.toLocaleString()} symbols in ${files} files`;
 
     const report = await stalenessPromise;
@@ -2269,7 +2270,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   const elapsed = Date.now() - t0;
   const { files, symbols } = index.stats();
-  statusBar.text    = `$(symbol-class) Kotlin Jump: ${symbols.toLocaleString()} symbols`;
+  statusBar.text    = `$(symbol-class) Kotlin Jump: ${symbols.toLocaleString()} symbols${isCompanion ? ' · companion' : ''}`;
   statusBar.tooltip = `${symbols.toLocaleString()} symbols in ${files} files — ${elapsed}ms`;
   log.info(`Index ready: ${symbols} symbols in ${files} files (${elapsed}ms)`);
   _semanticTokens?.invalidate();

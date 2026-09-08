@@ -298,7 +298,9 @@ function wireEvents(): void {
 
 function onAppend(rows: LogEntry[]): void {
   mirror.append(rows, filterState);
-  invalidateAllRows();
+  // In soft wrap mode renderFlow keeps the rows that did not move; recycling
+  // them all here forced the full 2000-row redraw on every batch.
+  if (!softWrap) invalidateAllRows();
   updateVirtualHeight();
   renderVisible();
   if (autoScroll) {
@@ -346,6 +348,9 @@ function onDevices(devices: AdbDevice[]): void {
     // The host already streams from it; selecting it is enough.
     elDevice.value = hostSerial!;
     post({ type: 'requestPackages', serial: hostSerial! });
+  } else if (hostSerial) {
+    // The host's device is momentarily offline/unauthorized: picking option 0
+    // here switched the stream away and emptied the buffer of a running app.
   } else if (elDevice.options.length > 0) {
     elDevice.selectedIndex = 0;
     post({ type: 'pickDevice', serial: elDevice.value });

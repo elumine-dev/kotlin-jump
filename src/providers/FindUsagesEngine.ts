@@ -281,7 +281,11 @@ export async function scanForUsagesWithTarget(
             if (isInsideCommentOrString(lines[i], m.index)) {
               // `"Hello $name"` and `"${name}"` are code: a rename that
               // skipped them left the template pointing at the old name.
-              const shortInterp = m.index >= 1 && lines[i][m.index - 1] === '$';
+              // `"\$amount"` is an escaped dollar, and a `// … $name` comment is a comment.
+              const escapedDollar = m.index >= 2 && lines[i][m.index - 1] === '$' && lines[i][m.index - 2] === '\\';
+              const shortInterp = m.index >= 1 && lines[i][m.index - 1] === '$' && !escapedDollar;
+              const commentAt = lineCommentStart(lines[i]);
+              if (commentAt >= 0 && commentAt < m.index) continue;
               if (!shortInterp && !isInsideStringInterpolation(lines[i], m.index)) continue;
             }
             // Kotlin keyword used as method name (e.g. .catch()): require a dot qualifier
@@ -461,4 +465,20 @@ export { isInsideCommentOrString } from '../util/textUtils';
 
 export function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Index of the first `//` outside string literals, or -1. */
+function lineCommentStart(line: string): number {
+  let quote: string | null = null;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (quote) {
+      if (ch === '\\') { i++; continue; }
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") { quote = ch; continue; }
+    if (ch === '/' && line[i + 1] === '/') return i;
+  }
+  return -1;
 }

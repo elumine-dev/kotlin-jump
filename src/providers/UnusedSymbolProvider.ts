@@ -176,6 +176,10 @@ export async function buildSymbolRemovalEdit(
   const textOf = async (p: string): Promise<string | undefined> => {
     if (openDocument && openDocument.uri.fsPath === p) return openDocument.getText();
     try {
+      // The corpus computed its offsets on open editors' text (1.42.11); the
+      // disk copy of a dirty file would put the deletion lines off again.
+      const open = vscode.workspace.textDocuments.find(d => d.uri.fsPath === p);
+      if (open) return open.getText();
       return decoder.decode(await vscode.workspace.fs.readFile(corpusUri(p)));
     } catch {
       return undefined;

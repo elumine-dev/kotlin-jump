@@ -152,7 +152,20 @@ export class DeadWeightActionProvider implements vscode.CodeActionProvider {
     // ── Manifest: permission with no code, component with no class ───────
     if (/AndroidManifest\.xml$/.test(fsPath)) {
       const permMatch = /<uses-permission\b[^>]*android:name="([^"]+)"/.exec(lineText);
-      const compMatch = /<(activity-alias|activity|service|receiver|provider)\b[^>]*android:name="([^"]+)"/.exec(lineText);
+      let compMatch = /<(activity-alias|activity|service|receiver|provider)\b[^>]*android:name="([^"]+)"/.exec(lineText);
+      // Android Studio writes the tag on one line and android:name on the
+      // next; the badge sits on the name line, the tag is a few lines up.
+      let compLine = line;
+      if (!permMatch && !compMatch) {
+        const nameOnly = /^\s*android:name="([^"]+)"/.exec(lineText);
+        if (nameOnly) {
+          for (let up = line - 1; up >= Math.max(0, line - 6); up--) {
+            const tagM = /<(activity-alias|activity|service|receiver|provider)\b/.exec(document.lineAt(up).text);
+            if (tagM) { compMatch = [lineText, tagM[1], nameOnly[1]] as unknown as RegExpExecArray; compLine = up; break; }
+            if (/>/.test(document.lineAt(up).text)) break;
+          }
+        }
+      }
       if (!permMatch && !compMatch) return [];
 
       const sources = await this.workspaceSources();
@@ -193,11 +206,11 @@ export class DeadWeightActionProvider implements vscode.CodeActionProvider {
       // Only the opening tag's own `/>` closes a self-closing element; a
       // child's `<action … />` used to end the removal, leaving orphan
       // `</intent-filter>` and `</activity>` lines behind.
-      let end = line;
+      let end = compLine;
       {
         let text = '';
         let openTagEnd = -1;
-        for (let i = line; i < document.lineCount; i++) {
+        for (let i = compLine; i < document.lineCount; i++) {
           text += document.lineAt(i).text + '\n';
           openTagEnd = text.indexOf('>');
           if (openTagEnd >= 0) { end = i; break; }
@@ -213,7 +226,7 @@ export class DeadWeightActionProvider implements vscode.CodeActionProvider {
       const title = comp.status === 'missing-class'
         ? `Remove ${comp.name} (class not found)`
         : `Remove ${comp.name} (declared but never referenced)`;
-      return [this.deleteLines(document, title, line, end)];
+      return [this.deleteLines(document, title, compLine, end)];
     }
 
     return [];

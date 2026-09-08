@@ -141,20 +141,35 @@ export function parseDocsUri(uri: { path: string; query: string }): { fqn: strin
   }
 }
 
-export class OnlineDocsContentProvider implements vscode.TextDocumentContentProvider {
-  constructor(private readonly openExternal: (url: string) => Thenable<boolean> = url => vscode.env.openExternal(vscode.Uri.parse(url))) {}
+export class OnlineDocsContentProvider implements vscode.TextDocumentContentProvider, vscode.Disposable {
+  private readonly sub: vscode.Disposable;
+
+  constructor(private readonly openExternal: (url: string) => Thenable<boolean> = url => vscode.env.openExternal(vscode.Uri.parse(url))) {
+    // VS Code also resolves the target document to render the Cmd+hover
+    // definition preview, so opening the browser from
+    // provideTextDocumentContent would pop a tab on every hover. The page
+    // becoming the active editor is the actual navigation.
+    this.sub = vscode.window.onDidChangeActiveTextEditor(editor => this.onActiveEditor(editor));
+  }
+
+  onActiveEditor(editor: vscode.TextEditor | undefined): void {
+    if (!editor || editor.document.uri.scheme !== ONLINE_DOCS_SCHEME) return;
+    const parsed = parseDocsUri(editor.document.uri);
+    if (parsed) void this.openExternal(parsed.url);
+  }
+
+  dispose(): void { this.sub.dispose(); }
 
   provideTextDocumentContent(uri: vscode.Uri): string {
     const parsed = parseDocsUri(uri);
     if (!parsed) return 'Kotlin Jump: malformed online docs link.';
-    void this.openExternal(parsed.url);
     return [
       parsed.fqn,
       '',
       'No local source for this symbol: it is not in the workspace, the bundled Kotlin stdlib,',
       'or any indexed sources JAR (see "Kotlin Jump: Download missing sources").',
       '',
-      `Online reference (opened in your browser): ${parsed.url}`,
+      `Online reference (opens in your browser when this tab is shown): ${parsed.url}`,
       '',
       'This page shows because kotlinJump.fallbackToOnlineDocs is on.',
     ].join('\n');

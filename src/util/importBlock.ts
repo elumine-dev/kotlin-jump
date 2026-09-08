@@ -12,8 +12,15 @@ export function importBlockBounds(
   let first = -1;
   let last = -1;
   let inBlockComment = false;
+  // `@file:Suppress(` / `"DEPRECATION"` / `)` (ktlint style): the argument
+  // lines are header too, not the end of it.
+  let annotationDepth = 0;
   for (let i = 0; i < lines.length; i++) {
     const trimmed = lines[i].trim();
+    if (annotationDepth > 0) {
+      annotationDepth += parenBalance(trimmed);
+      continue;
+    }
     if (inBlockComment) {
       if (trimmed.includes('*/')) inBlockComment = false;
       continue;
@@ -30,10 +37,19 @@ export function importBlockBounds(
     }
     if (first === -1) {
       // Header lines before the first import: package, file annotations.
-      if (trimmed.startsWith('package ') || trimmed.startsWith('package;') || trimmed.startsWith('@file:') || trimmed.startsWith('@file :')) continue;
+      if (trimmed.startsWith('@file:') || trimmed.startsWith('@file :')) { annotationDepth = Math.max(0, parenBalance(trimmed)); continue; }
+      if (trimmed.startsWith('package ') || trimmed.startsWith('package;')) continue;
       return null;
     }
     break;
   }
   return first === -1 ? null : { first, last };
+}
+
+function parenBalance(s: string): number {
+  let n = 0;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '(') n++; else if (s[i] === ')') n--;
+  }
+  return n;
 }

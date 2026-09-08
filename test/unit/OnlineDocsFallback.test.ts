@@ -91,21 +91,29 @@ describe('docsUri / parseDocsUri', () => {
 });
 
 describe('OnlineDocsContentProvider', () => {
-  it('opens the browser once when the virtual document is opened and shows the url', () => {
+  it('renders the page without opening anything (VS Code resolves it for the Cmd+hover preview too), and opens the browser once the tab is shown', () => {
     const opened: string[] = [];
     const provider = new OnlineDocsContentProvider(async url => { opened.push(url); return true; });
     const url = 'https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.collections/-list/';
-    const text = provider.provideTextDocumentContent({ path: '/kotlin.collections.List', query: `url=${encodeURIComponent(url)}` } as any);
-    expect(opened).toEqual([url]);
+    const uri = { scheme: ONLINE_DOCS_SCHEME, path: '/kotlin.collections.List', query: `url=${encodeURIComponent(url)}` } as any;
+    const text = provider.provideTextDocumentContent(uri);
+    expect(opened).toEqual([]);
     expect(text).toContain('kotlin.collections.List');
     expect(text).toContain(url);
+    provider.onActiveEditor({ document: { uri } } as any);
+    expect(opened).toEqual([url]);
+    provider.onActiveEditor({ document: { uri: { scheme: 'file', path: '/a.kt', query: '' } } } as any);
+    expect(opened).toEqual([url]);
+    provider.dispose();
   });
 
   it('does not open anything for a malformed link', () => {
     const opened: string[] = [];
     const provider = new OnlineDocsContentProvider(async url => { opened.push(url); return true; });
     provider.provideTextDocumentContent({ path: '/x', query: '' } as any);
+    provider.onActiveEditor({ document: { uri: { scheme: ONLINE_DOCS_SCHEME, path: '/x', query: '' } } } as any);
     expect(opened).toEqual([]);
+    provider.dispose();
   });
 });
 

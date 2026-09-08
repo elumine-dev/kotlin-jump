@@ -39,7 +39,9 @@ const LAMBDA_RE  = /\{\s*(?:\(\s*(\w+)\s*,\s*(\w+)\s*\)|(\w+)(?:\s*,\s*\w+)*)\s*
 // Java: `[modifiers] Type name(` on a line that is not a statement. Control
 // keywords, assignments, qualified calls and `;`-terminated lines are out.
 export function isJavaMethodHeader(text: string): boolean {
-  const t = text.trim();
+  // `@SuppressWarnings("unchecked") public void foo(Bundle b) {`: the
+  // annotation's own parenthesis is not the parameter list.
+  const t = text.trim().replace(/^(?:@[\w.]+(?:\([^)]*\))?\s+)+/, '');
   const paren = t.indexOf('(');
   if (paren <= 0) return false;
   if (/^(?:if|for|while|switch|catch|return|new|else|do|try|throw|synchronized|case)\b/.test(t)) return false;
@@ -120,6 +122,8 @@ export function buildLocalScopeIndex(lines: readonly string[], language: 'kotlin
       while ((m = JAVA_LOCAL_RE.exec(text))) record(k, m.index + m[0].lastIndexOf(m[1]), m[1]);
       JAVA_LAMBDA_RE.lastIndex = 0;
       while ((m = JAVA_LAMBDA_RE.exec(text))) {
+        // `case RED -> paint()` and `default -> …` are switch arms, not lambdas.
+        if (/\b(?:case|default)\s*$/.test(text.slice(0, m.index)) || /\bcase\s+[\w.]*$/.test(text.slice(0, m.index + (m[3]?.length ?? 0)))) continue;
         const names = m[3] ? [m[3]] : m[0].slice(1, m[0].indexOf(')')).split(',').map(s => s.trim()).filter(Boolean);
         for (const name of names) {
           const at = text.indexOf(name, m.index);

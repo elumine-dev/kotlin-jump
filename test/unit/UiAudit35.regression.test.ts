@@ -1,8 +1,22 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { Position } from './__mocks__/vscode';
 import { SymbolIndex } from '../../src/indexer/SymbolIndex';
 import { parse } from '../../src/indexer/KotlinParser';
 import { symbolsForDocument, forgetLiveSymbols } from '../../src/util/liveSymbols';
+
+// Le double du module adb, pose au niveau du fichier : aucun test d'ici ne
+// peut lancer un processus, quel que soit le chemin de code emprunte. Poser un
+// bouchon sur la methode privee `startStream` marchait aussi, mais liait le
+// test au NOM de cette methode : la renommer relançait adb en silence.
+vi.mock('../../src/android/AdbBinary', () => ({
+  spawnAdb: () => { throw new Error('spawnAdb interdit dans la suite unitaire'); },
+  runAdb: () => Promise.resolve(undefined),
+  runShell: () => Promise.resolve(undefined),
+  resolveAdbPath: () => '/fake/adb',
+  invalidateAdbPathCache: () => {},
+  watchAdbPathSetting: () => ({ dispose: () => {} }),
+  parseDevicesOutput: () => [],
+}));
 
 // Audit 35 : coût du chemin « tampon non sauvegardé ».
 
@@ -191,11 +205,6 @@ describe('Changement d\'appareil Logcat', () => {
     const { LogcatService } = await import('../../src/logcat/LogcatService');
     const noopLog: any = { channel: { appendLine: () => {} }, debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
     const svc: any = new LogcatService({ lookupFqn: () => undefined } as any, noopLog);
-    // startStream lance un vrai `adb logcat`. Le neutraliser garde le test
-    // dans le processus : sans cela la suite unitaire lançait un processus
-    // enfant, dépendait de la présence d'adb sur la machine, et laissait
-    // derrière elle le minuteur de reconnexion de 2 s.
-    svc.startStream = () => {};
     svc.onEntry({ ts: Date.UTC(2026, 3, 29, 22, 0, 0), pid: 1, tid: 1, level: 'I', tag: 'T', message: 'm', seq: 1 });
     expect(svc.resumeSince()).toBeTruthy();
     // L'horodatage vient de l'horloge de l'appareil précédent. Un émulateur en

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.42.48
+
+Kotlin Jump 1.42.48 contains no change to the extension. It finishes the previous release, whose fix would have come undone the day someone renamed a private method.
+
+### Fixes
+- The two Logcat tests no longer depend on the name of a private method. They stopped the stream by replacing `startStream` on the instance, so renaming it during a refactor would have quietly let them launch a real adb process again, and every test would still have passed. They now replace the adb entry point itself, which no rename can route around.
+- Verified across the whole suite: with the adb entry point made to fail on purpose, all 6450 tests still pass, so no test anywhere reaches a real process launch.
+
 ## 1.42.47
 
 Kotlin Jump 1.42.47 contains no change to the extension. Two of our own Logcat tests were launching a real `adb logcat` process while the suite ran.

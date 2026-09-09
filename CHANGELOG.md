@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.66
+
+Nothing changes in the editor. Three behaviours you can see, and that no test was actually guarding, are now guarded: JUnit 5 results finding their test, the usage lens skipping private members, and test names with spaces.
+
+### Under the hood
+- A JUnit 5 result named myTest() is matched back to its test, a nested class written Outer with a dollar sign is read as Outer.Inner, and an escaped quote in a failure message is shown as a quote. All three could be unplugged from the module without a single test noticing.
+- The usage count above a private member, and a Gradle test name written with spaces, are checked against the module now instead of against a copy of an older version of it.
+- A guard compares every expression a test copies from the source with its original, so the next copy that drifts fails the build.
+
 ## 1.42.65
 
 Removing an unused function looked the declaration up by name and kind, and overloads share both. Accepting the fix on the second one deleted the first, annotation included.

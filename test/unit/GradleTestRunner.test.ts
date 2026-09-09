@@ -1,68 +1,65 @@
 import { describe, it, expect } from 'vitest';
+import { parseStdoutLine as parseStdoutLineReal, parseJUnitXml as parseJUnitXmlReal, TestResult } from '../../src/testing/GradleTestRunner';
 
 // ── Test XML parsing logic (extracted for unit testing) ────────────────────
 
-// Inline the XML parsing logic so tests don't need VS Code API
-function parseJUnitXml(xml: string): Map<string, { state: string; durationMs?: number; message?: string; expected?: string; actual?: string }> {
-  const results = new Map<string, { state: string; durationMs?: number; message?: string; expected?: string; actual?: string }>();
-
-  const RE_TESTCASE = /<testcase\s([^>]*?)(?:>([\s\S]*?)<\/testcase>|\/>)/g;
-  const RE_ATTR = /(\w+)="([^"]*)"/g;
-
-  let m: RegExpExecArray | null;
-  while ((m = RE_TESTCASE.exec(xml)) !== null) {
-    const attrs: Record<string, string> = {};
-    const attrStr = m[1] ?? m[3] ?? '';
-    let a: RegExpExecArray | null;
-    RE_ATTR.lastIndex = 0;
-    while ((a = RE_ATTR.exec(attrStr)) !== null) attrs[a[1]] = a[2];
-
-    const classFqn  = attrs['classname'] ?? '';
-    const name      = attrs['name'] ?? '';
-    const timeStr   = attrs['time'] ?? '0';
-    const durationMs = Math.round(parseFloat(timeStr) * 1000);
-    const body = m[2] ?? '';
-
-    let state = 'passed';
-    let message: string | undefined;
-    let expected: string | undefined;
-    let actual: string | undefined;
-
-    if (/<skipped/i.test(body)) {
-      state = 'skipped';
-    } else if (/<(?:failure|error)/i.test(body)) {
-      state = 'failed';
-      const failMatch = /<(?:failure|error)[^>]*message="([^"]*)"[^>]*>([\s\S]*?)<\/(?:failure|error)>/i.exec(body);
-      if (failMatch) {
-        message = failMatch[1].replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
-        const stackTrace = failMatch[2].trim();
-        if (stackTrace) message = `${message}\n${stackTrace}`;
-        const diffMatch = /expected[^<]*<([^>]*)>[^<]*(?:but was|was)[^<]*<([^>]*)>/i.exec(message);
-        if (diffMatch) { expected = diffMatch[1]; actual = diffMatch[2]; }
-        const diffMatch2 = /expected \[([^\]]*)\] but (?:found|was) \[([^\]]*)\]/i.exec(message);
-        if (diffMatch2) { expected = diffMatch2[1]; actual = diffMatch2[2]; }
-      }
-    }
-
-    results.set(`${classFqn}.${name}`, { state, durationMs, message, expected, actual });
-  }
-
+// Le vrai parseur du module, pas une reconstitution. Celle qui vivait ici
+// ignorait la normalisation des noms JUnit 5, celle des classes imbriquees
+// (`Outer$Inner`) et le desechappement XML : les trois pouvaient etre
+// debranchees du module sans qu'un seul test bronche.
+function parseJUnitXml(xml: string) {
+  const results = new Map<string, TestResult>();
+  parseJUnitXmlReal(xml, results);
   return results;
 }
 
-// Inline the Gradle stdout parser
-const RE_GRADLE_RESULT = /^(\S+)\s+>\s+(\S+)\s+(PASSED|FAILED|SKIPPED)\s*$/;
+// Le vrai parseur, pas une copie : la version recopiee ici portait encore
+// `\\S+` pour le nom de methode alors que le module accepte les noms en
+// backticks depuis longtemps, et personne ne l'a vu.
 function parseStdoutLine(line: string): { key: string; state: string } | undefined {
-  const m = RE_GRADLE_RESULT.exec(line.trim());
-  if (!m) return undefined;
-  const [, classFqn, methodName, stateStr] = m;
-  const state = stateStr === 'PASSED' ? 'passed' : stateStr === 'SKIPPED' ? 'skipped' : 'failed';
-  return { key: `${classFqn}.${methodName}`, state };
+  const results = new Map<string, { classFqn: string; methodName: string; state: string }>();
+  parseStdoutLineReal(line, results as never);
+  const premier = [...results.entries()][0];
+  return premier ? { key: premier[0], state: premier[1].state } : undefined;
 }
 
 // ── XML parsing tests ────────────────────────────────────────────────────────
 
 describe('parseJUnitXml', () => {
+  // Les trois normalisations du module pouvaient etre debranchees sans qu'un
+  // seul test bronche : la reconstitution qui vivait dans ce fichier ne les
+  // faisait pas, donc personne ne les exercait.
+
+  it('normalise un nom JUnit 5 pour qu il rejoigne le symbole indexe', () => {
+    const xml = '<testsuite><testcase classname="com.example.FooTest" name="myTest()" time="0.01"/></testsuite>';
+    const results = parseJUnitXml(xml);
+    // Sans la normalisation la cle serait `...myTest()`, que l'index ne porte
+    // pas : le test restait affiche comme jamais execute.
+    expect([...results.keys()]).toEqual(['com.example.FooTest.myTest']);
+  });
+
+  it('normalise un nom de test parametre', () => {
+    const xml = '<testsuite><testcase classname="com.example.FooTest" name="myTest(String)[1] - val" time="0"/></testsuite>';
+    expect([...parseJUnitXml(xml).keys()]).toEqual(['com.example.FooTest.myTest']);
+  });
+
+  it('ramene une classe imbriquee JVM sur la forme Kotlin', () => {
+    const xml = '<testsuite><testcase classname="com.example.Outer$Inner" name="works" time="0"/></testsuite>';
+    expect([...parseJUnitXml(xml).keys()]).toEqual(['com.example.Outer.Inner.works']);
+  });
+
+  it('desechappe les entites XML du message d echec', () => {
+    const xml = '<testsuite><testcase classname="com.example.FooTest" name="t" time="0">'
+      + '<failure message="expected &quot;a&quot; but was &quot;b&quot; and l&apos;objet">trace</failure>'
+      + '</testcase></testsuite>';
+    const r = parseJUnitXml(xml).get('com.example.FooTest.t')!;
+    expect(r.state).toBe('failed');
+    expect(r.message).toContain('expected "a" but was "b"');
+    expect(r.message).toContain("l'objet");
+    expect(r.message).not.toContain('&quot;');
+    expect(r.message).not.toContain('&apos;');
+  });
+
   it('parses a passing test', () => {
     const xml = `
       <testsuite name="com.example.FooTest">
@@ -198,12 +195,15 @@ describe('parseStdoutLine (Gradle output)', () => {
     expect(parseStdoutLine('Starting Gradle Daemon...')).toBeUndefined();
   });
 
-  it('does not match multi-word test names (known limitation — Gradle strips backticks)', () => {
-    // Gradle actually strips backticks and outputs: "FooTest > play starts playback PASSED"
-    // Our regex (\S+) only matches single words — multi-word names are a known gap
-    const r = parseStdoutLine('com.example.news.FooTest > `play starts playback` PASSED');
-    // Not matched — multi-word names fall back to XML parsing
-    expect(r).toBeUndefined();
+  it('matches a multi-word test name, backticks or not', () => {
+    // Gradle strips the backticks and prints the words. The module reads the
+    // method name lazily for that reason; this test asserted the opposite,
+    // because it ran against its own copy of an older regex.
+    expect(parseStdoutLine('com.example.news.FooTest > play starts playback PASSED'))
+      .toEqual({ key: 'com.example.news.FooTest.play starts playback', state: 'passed' });
+    // Backticks kept by an older Gradle: they belong to the name, nothing else changes.
+    expect(parseStdoutLine('com.example.news.FooTest > `play starts playback` PASSED'))
+      .toEqual({ key: 'com.example.news.FooTest.`play starts playback`', state: 'passed' });
   });
 });
 

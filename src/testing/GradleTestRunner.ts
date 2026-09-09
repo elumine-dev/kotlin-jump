@@ -702,7 +702,7 @@ function formatErrorDetail(result: TestResult, filePath?: string): string | unde
   return loc ? `${firstLine}\n${loc}` : firstLine;
 }
 
-function parseStdoutLine(line: string, results: Map<string, TestResult>): void {
+export function parseStdoutLine(line: string, results: Map<string, TestResult>): void {
   const m = RE_GRADLE_RESULT.exec(line.trim());
   if (!m) return;
 
@@ -793,7 +793,7 @@ export function quoteForCmd(arg: string): string {
   return `"${arg.replace(/"/g, '\\"')}"`;
 }
 
-function parseJUnitXml(xml: string, results: Map<string, TestResult>): void {
+export function parseJUnitXml(xml: string, results: Map<string, TestResult>): void {
   // Parse <testcase classname="..." name="..." time="..."> elements.
   // Uses alternation: either full open/close form or self-closing form.
   // NOTE: [^>]*? (lazy) is critical — prevents self-closing attrs from absorbing the next element's body.

@@ -5,6 +5,7 @@ import { resolveBest } from '../util/ImportResolver';
 import { isInsideCommentOrString } from '../util/textUtils';
 import { resolveLocalScope, buildLocalScopeIndex } from './DefinitionProvider';
 import { capMap, OPEN_FILE_CACHE_LIMIT } from '../util/boundedCache';
+import { fingerprint } from '../util/boundedCache';
 
 // ── Legend arrays (order = index) ────────────────────────────────────────────
 
@@ -160,6 +161,8 @@ const WORD_RE = /\b[A-Za-z_]\w{1,}\b/g; // min 2 chars
 
 interface CachedTokens {
   version:  number;
+  /** Version alone is not identity: a reopened document restarts at 1. */
+  fp:       number;
   resultId: string;
   data:     Uint32Array;
 }
@@ -206,7 +209,7 @@ export class KotlinSemanticTokensProvider
     ct: vscode.CancellationToken,
   ): vscode.SemanticTokens {
     const cached = this.cache.get(doc.uri.toString());
-    if (cached?.version === doc.version) {
+    if (cached?.version === doc.version && cached.fp === fingerprint(doc.getText())) {
       return new vscode.SemanticTokens(cached.data, cached.resultId);
     }
     return this.computeAndCache(doc, null, ct);
@@ -279,7 +282,7 @@ export class KotlinSemanticTokensProvider
     if (!KotlinSemanticTokensProvider.enabled()) {
       const resultId = String(this.nextId++);
       const data = new Uint32Array(0);
-      if (!range) this.cache.set(doc.uri.toString(), { version: doc.version, data, resultId });
+      if (!range) this.cache.set(doc.uri.toString(), { version: doc.version, fp: fingerprint(doc.getText()), data, resultId });
       capMap(this.cache, OPEN_FILE_CACHE_LIMIT);
       return new vscode.SemanticTokens(data, resultId);
     }
@@ -400,7 +403,7 @@ export class KotlinSemanticTokensProvider
     // Only cache full-document results
     if (!range) {
       const resultId = String(this.nextId++);
-      this.cache.set(doc.uri.toString(), { version: doc.version, resultId, data: result.data });
+      this.cache.set(doc.uri.toString(), { version: doc.version, fp: fingerprint(doc.getText()), resultId, data: result.data });
       capMap(this.cache, OPEN_FILE_CACHE_LIMIT);
       return new vscode.SemanticTokens(result.data, resultId);
     }

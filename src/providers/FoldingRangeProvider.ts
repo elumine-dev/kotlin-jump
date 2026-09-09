@@ -4,6 +4,7 @@ import { bodyEndLine } from '../util/symbolRanges';
 import { symbolsForDocument } from '../util/liveSymbols';
 import { organizeImports } from './OrganizeImportsProvider';
 import { capMap, OPEN_FILE_CACHE_LIMIT } from '../util/boundedCache';
+import { fingerprint } from '../util/boundedCache';
 
 export class KotlinFoldingRangeProvider implements vscode.FoldingRangeProvider {
   constructor(private readonly index: SymbolIndex) {}
@@ -12,7 +13,7 @@ export class KotlinFoldingRangeProvider implements vscode.FoldingRangeProvider {
   // two branches below do not read the same source. So does the length: a
   // reopened document restarts at version 1, so uri plus version can name two
   // different texts and the folds of the previous session were replayed.
-  private cache = new Map<string, { version: number; dirty: boolean; length: number; ranges: vscode.FoldingRange[] }>();
+  private cache = new Map<string, { version: number; dirty: boolean; fp: number; ranges: vscode.FoldingRange[] }>();
 
 
   provideFoldingRanges(
@@ -22,11 +23,12 @@ export class KotlinFoldingRangeProvider implements vscode.FoldingRangeProvider {
   ): vscode.FoldingRange[] {
     const key = document.uri.toString();
     const text = document.getText();
+    const fp = fingerprint(text);
     const cached = this.cache.get(key);
     if (cached
       && cached.version === document.version
       && cached.dirty === document.isDirty
-      && cached.length === text.length) {
+      && cached.fp === fp) {
       return cached.ranges;
     }
 
@@ -86,7 +88,7 @@ export class KotlinFoldingRangeProvider implements vscode.FoldingRangeProvider {
     }
 
     const result = ranges.length > 5000 ? ranges.slice(0, 5000) : ranges;
-    this.cache.set(key, { version: document.version, dirty: document.isDirty, length: text.length, ranges: result });
+    this.cache.set(key, { version: document.version, dirty: document.isDirty, fp, ranges: result });
     capMap(this.cache, OPEN_FILE_CACHE_LIMIT);
     return result;
   }

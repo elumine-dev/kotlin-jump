@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { parse } from '../indexer/KotlinParser';
 import { parseJava } from '../indexer/JavaParser';
+import { fingerprint } from './boundedCache';
 
 /**
  * Symbols for a document, taken from the live buffer while it is dirty.
@@ -26,21 +27,22 @@ export function symbolsForDocument(index: SymbolIndex, document: vscode.TextDocu
   // same uri and version can name two different texts. The entries were
   // filtered against the OLD document's line count, and serving them to a
   // shorter buffer made lineAt() throw and emptied the outline.
+  const fp = fingerprint(text);
   if (_memo
     && _memo.uri === uriStr
     && _memo.version === document.version
-    && _memo.length === text.length) return _memo.entries;
+    && _memo.fp === fp) return _memo.entries;
 
   const scratch = new SymbolIndex();
   // fileOnly: the caller reads getFileSymbols and nothing else.
   scratch.add(document.languageId === 'java' ? parseJava(uriStr, text) : parse(uriStr, text), undefined, true);
   const entries = scratch.getFileSymbols(uriStr).filter(e => e.line < document.lineCount);
-  _memo = { uri: uriStr, version: document.version, length: text.length, entries };
+  _memo = { uri: uriStr, version: document.version, fp, entries };
   return entries;
 }
 
 /** One entry is enough: the callers run back to back on the same document. */
-let _memo: { uri: string; version: number; length: number; entries: SymbolEntry[] } | undefined;
+let _memo: { uri: string; version: number; fp: number; entries: SymbolEntry[] } | undefined;
 
 /** Drops the memo. Exported for tests. */
 export function forgetLiveSymbols(): void {

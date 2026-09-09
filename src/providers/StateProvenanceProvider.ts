@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { stripKotlinComments } from '../util/xmlRefs';
 import { capMap, OPEN_FILE_CACHE_LIMIT } from '../util/boundedCache';
+import { fingerprint } from '../util/boundedCache';
 
 /**
  * KJ-014: UDF X-Ray, who writes / who reads a ViewModel state.
@@ -247,7 +248,7 @@ export class StateProvenanceProvider implements vscode.CodeLensProvider {
   private readonly _onDidChange = new vscode.EventEmitter<void>();
   readonly onDidChangeCodeLenses = this._onDidChange.event;
   /** VS Code asks for lenses again on every scroll and every keystroke. */
-  private readonly _cache = new Map<string, { version: number; length: number; lenses: vscode.CodeLens[] }>();
+  private readonly _cache = new Map<string, { version: number; fp: number; lenses: vscode.CodeLens[] }>();
 
   provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
     const cfg = vscode.workspace.getConfiguration('kotlinJump');
@@ -259,10 +260,11 @@ export class StateProvenanceProvider implements vscode.CodeLensProvider {
     const hit = this._cache.get(key);
     // Version alone is not identity: a reopened document starts back at 1, so
     // a file changed by git while the tab was closed replayed the old lenses.
-    if (hit && hit.version === document.version && hit.length === text.length) return hit.lenses;
+    const fp = fingerprint(text);
+    if (hit && hit.version === document.version && hit.fp === fp) return hit.lenses;
 
     const lenses = this._compute(text, document.uri);
-    this._cache.set(key, { version: document.version, length: text.length, lenses });
+    this._cache.set(key, { version: document.version, fp, lenses });
     capMap(this._cache, OPEN_FILE_CACHE_LIMIT);
     return lenses;
   }

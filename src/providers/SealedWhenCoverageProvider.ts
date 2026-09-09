@@ -4,6 +4,7 @@ import { resolveBest } from '../util/ImportResolver';
 import { isInsideCommentOrString, countTripleQuotes } from '../util/textUtils';
 import { Logger } from '../util/logger';
 import { capMap, OPEN_FILE_CACHE_LIMIT } from '../util/boundedCache';
+import { fingerprint } from '../util/boundedCache';
 
 /** Step-by-step trace sink — wired to the Kotlin Jump output channel so a
  *  user can answer "why is there no lens on this when?" from the logs. */
@@ -552,7 +553,7 @@ export function lensTitle(a: WhenAnalysis): string {
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
-interface CacheEntry { version: number; epoch: number; lenses: vscode.CodeLens[]; }
+interface CacheEntry { version: number; epoch: number; fp: number; lenses: vscode.CodeLens[]; }
 
 export class SealedWhenCoverageProvider implements vscode.CodeLensProvider, vscode.Disposable {
   private readonly _onDidChange = new vscode.EventEmitter<void>();
@@ -575,7 +576,8 @@ export class SealedWhenCoverageProvider implements vscode.CodeLensProvider, vsco
 
     const key = document.uri.toString();
     const hit = this._cache.get(key);
-    if (hit && hit.version === document.version && hit.epoch === this._epoch) {
+    const fp = fingerprint(document.getText());
+    if (hit && hit.version === document.version && hit.epoch === this._epoch && hit.fp === fp) {
       return hit.lenses;
     }
 
@@ -595,7 +597,7 @@ export class SealedWhenCoverageProvider implements vscode.CodeLensProvider, vsco
       return new vscode.CodeLens(range, command);
     });
 
-    this._cache.set(key, { version: document.version, epoch: this._epoch, lenses });
+    this._cache.set(key, { version: document.version, epoch: this._epoch, fp, lenses });
     capMap(this._cache, OPEN_FILE_CACHE_LIMIT);
     this.log?.debug(`[SealedWhen] ${fileName} — ${lenses.length} lens(es) in ${Date.now() - t0}ms (v${document.version}, epoch ${this._epoch})`);
     return lenses;

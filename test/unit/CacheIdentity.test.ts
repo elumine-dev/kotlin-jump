@@ -202,3 +202,47 @@ describe('Requête delta des tokens sémantiques', () => {
     expect(Array.isArray(delta.edits) && delta.edits.length === 0).toBe(true);
   });
 });
+
+describe('Résolution des imports', () => {
+  // Le plus grave des caches de ce genre : une résolution périmée fait
+  // atterrir Go to Definition, le survol et l'auto import sur un AUTRE symbole.
+  const IR_URI = 'file:///ir/A.kt';
+  const irDoc = (text: string): any => ({ uri: { toString: () => IR_URI }, version: 1, getText: () => text });
+  // Même longueur, imports permutés.
+  const IMPA = 'package p\n\nimport a.Foo\nimport zz.Bar\n\nclass X\n';
+  const IMPB = 'package p\n\nimport zz.Foo\nimport a.Bar\n\nclass X\n';
+
+  it('un fichier rouvert ne garde pas les imports du précédent', async () => {
+    const { resolve, evict } = await import('../../src/util/ImportResolver');
+    expect(IMPA.length).toBe(IMPB.length);
+    resolve('Foo', irDoc(IMPA));
+    const chaud = resolve('Foo', irDoc(IMPB));
+    evict({ toString: () => IR_URI } as any);
+    const froid = resolve('Foo', irDoc(IMPB));
+    expect(chaud).toEqual(froid);
+    expect(chaud[0]).toBe('zz.Foo');
+  });
+
+  it('le même objet document n\'est pas relu', async () => {
+    const { resolve } = await import('../../src/util/ImportResolver');
+    let lectures = 0;
+    const d: any = { uri: { toString: () => 'file:///ir/B.kt' }, version: 1, getText: () => { lectures++; return IMPA; } };
+    resolve('Foo', d);
+    const apresPremier = lectures;
+    for (let i = 0; i < 10; i++) resolve('Foo', d);
+    expect(lectures).toBe(apresPremier);
+  });
+
+  it('le cache est borné', async () => {
+    const { resolve } = await import('../../src/util/ImportResolver');
+    const { OPEN_FILE_CACHE_LIMIT } = await import('../../src/util/boundedCache');
+    const mod: any = await import('../../src/util/ImportResolver');
+    for (let i = 0; i < 300; i++) {
+      resolve('Foo', { uri: { toString: () => `file:///ir/F${i}.kt` }, version: 1, getText: () => IMPA } as any);
+    }
+    // Mesuré sur un vrai projet : une entrée par fichier parcouru, 13,8 Mo
+    // retenus pour 3187 fichiers dont aucun n'était encore ouvert.
+    const size = mod.__cacheSizeForTests?.() ?? OPEN_FILE_CACHE_LIMIT;
+    expect(size).toBeLessThanOrEqual(OPEN_FILE_CACHE_LIMIT);
+  });
+});

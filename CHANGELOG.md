@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.56
+
+Kotlin Jump 1.42.56 fixes the last cache that trusted the version number, and it is the one whose mistakes are the most visible: it decides which symbol a name refers to.
+
+### Fixes
+- Reopening a file that changed outside the editor no longer resolves a name against the previous version's imports. The import resolver keyed its cache on the document version, which restarts at 1 for a reopened document. Reproduced with two files of the same length whose imports were swapped: asking for `Foo` returned `a.Foo` when the file said `zz.Foo`. Go to Definition, hover and auto import all read that answer.
+- The import resolver keeps only the files you have open. It kept one entry per file ever resolved, with no ceiling: 13.8 MB retained after resolving across a real Android project of 3187 Kotlin files, the largest of any cache in the extension.
+- Resolving from the same document twice does not read the text again, so nothing on the hover or Go to Definition path got slower.
+
 ## 1.42.55
 
 Kotlin Jump 1.42.55 applies the previous two fixes to the one entry point that had been missed, and it is the one the editor uses most.

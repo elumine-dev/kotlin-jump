@@ -1,21 +1,26 @@
 {
-  "version": "1.42.55",
+  "version": "1.42.56",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The entry point that was missed",
-  "summary": "Semantic tokens have two entry points. The full request learned to compare the text two releases ago; the delta request, which the editor uses most, still trusted the version number.",
+  "tagline": "The resolver stops trusting the version",
+  "summary": "The import resolver decides which symbol a name refers to, and it keyed its cache on the document version. A reopened file resolved names against the previous version imports.",
   "highlights": [
     {
-      "title": "A reopened file gets its own colours",
+      "title": "A name resolves to the right symbol",
       "kind": "fix",
-      "description": "The delta request answered \"nothing changed\" on the version number alone, and the version restarts at 1 for a reopened document. Reproduced with two texts of exactly 64 characters: the second was told nothing had changed, so the editor kept the previous session colouring."
+      "description": "Reproduced with two files of the same length whose imports were swapped: asking for `Foo` returned `a.Foo` when the file said `zz.Foo`. Go to Definition, hover and auto import all read that answer."
+    },
+    {
+      "title": "The largest cache gets a ceiling",
+      "kind": "improvement",
+      "description": "It kept one entry per file ever resolved: 13.8 MB retained after resolving across a real Android project of 3187 Kotlin files, more than any other cache in the extension."
     }
   ],
   "sections": [
     {
       "heading": "Notes",
       "bullets": [
-        "A document that really has not changed still gets the empty answer, so nothing is recomputed in normal use.",
-        "The test applies the returned edits to the previous tokens and compares the result, rather than trusting the shape of the answer."
+        "Resolving from the same document twice does not read the text again, so the hover and Go to Definition path did not get slower.",
+        "This was found by listing every place that compares a document version, after the same mistake turned up three times in a row."
       ]
     }
   ],

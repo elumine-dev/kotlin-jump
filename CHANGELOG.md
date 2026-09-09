@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.81
+
+Go to Implementation had stopped answering for any type declared outside the workspace, jumping into a version catalog broke on the web, and a constant could be treated as a type.
+
+### Fixes
+- Go to Implementation works on a type that lives in a dependency. Put the cursor on ViewModel, AppCompatActivity or WebViewClient and the classes extending it come back, subclasses of those included. 1.42.79 asked for a local declaration of the parent first, which emptied the list for 250 names and 1145 classes on a real Android project.
+- Jumping to an accessor declaration keeps the scheme of the file it came from, so it works on vscode.dev where a workspace is not on disk.
+- A value is never implemented by anything. A constant sharing its name with a type from a dependency could send Go to Definition into that type's subclasses.
+
 ## 1.42.80
 
 Ctrl+click an accessor in a build file and land on the line that declares it. Plugins, versions and bundles now answer too, not only libraries.

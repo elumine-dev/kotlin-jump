@@ -1468,7 +1468,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const handleTomlChanged = async (uri: vscode.Uri) => {
       try {
         const bytes = await vscode.workspace.fs.readFile(uri);
-        vcIndex.reindexFile(new TextDecoder().decode(bytes), uri.fsPath);
+        vcIndex.reindexFile(new TextDecoder().decode(bytes), uri.fsPath, uri.toString());
       } catch { /* skip */ }
     };
 

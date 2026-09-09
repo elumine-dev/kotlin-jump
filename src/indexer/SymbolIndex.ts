@@ -317,20 +317,33 @@ export class SymbolIndex {
       if (exactEntry && CLASS_LIKE.has(exactEntry.kind)) return this.lookupImplementationsDeep(exactEntry);
     }
     const parents = this.lookup(name).filter(e => CLASS_LIKE.has(e.kind));
-    if (parents.length === 0) return EMPTY;
+    if (parents.length === 0) {
+      // `bySuper` is keyed by supertype NAME, and most of those names belong to
+      // a dependency: androidx `ViewModel`, `Exception`, `WebViewClient`. There
+      // is no entry to walk from, so the direct implementors are the roots and
+      // they belong in the answer. Requiring a local declaration emptied the
+      // list for 250 names on a real project.
+      const direct = this.lookupImplementations(name);
+      return direct.length === 0 ? EMPTY : this.deepUnion(direct, true);
+    }
     const exact = packageName === undefined ? [] : parents.filter(p => p.packageName === packageName);
     const roots = exact.length > 0 ? exact : parents;
     if (roots.length === 1) return this.lookupImplementationsDeep(roots[0]);
+    return this.deepUnion(roots, false);
+  }
+
+  /** Everything below `roots`, deduplicated by position; `withRoots` keeps them. */
+  private deepUnion(roots: readonly SymbolEntry[], withRoots: boolean): SymbolEntry[] {
     const seen = new Set<string>();
     const out: SymbolEntry[] = [];
-    for (const root of roots) {
-      for (const e of this.lookupImplementationsDeep(root)) {
-        const key = `${e.uri.toString()}:${e.line}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        out.push(e);
-      }
-    }
+    const push = (e: SymbolEntry): void => {
+      const key = `${e.uri.toString()}:${e.line}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(e);
+    };
+    if (withRoots) for (const r of roots) push(r);
+    for (const root of roots) for (const e of this.lookupImplementationsDeep(root)) push(e);
     return out;
   }
 

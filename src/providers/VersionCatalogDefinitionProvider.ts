@@ -34,13 +34,16 @@ export class VersionCatalogDefinitionProvider implements vscode.DefinitionProvid
       if (!hit) continue;
       const { alias, file } = hit;
       return new vscode.Location(
-        vscode.Uri.file(file),
+        HAS_SCHEME.test(file) ? vscode.Uri.parse(file) : vscode.Uri.file(file),
         new vscode.Range(alias.line, alias.character, alias.line, alias.character + alias.raw.length),
       );
     }
     return undefined;
   }
 }
+
+// `vscode-vfs://…` on the web, a plain path when the caller only had one.
+const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
 
 function escapeForRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

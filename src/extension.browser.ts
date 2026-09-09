@@ -148,6 +148,7 @@ import { KmpExpectActualProvider, showActuals } from './providers/KmpExpectActua
 import { DataClassFieldProvider } from './providers/DataClassFieldProvider';
 import { ResourceDiagnosticProvider } from './providers/ResourceDiagnosticProvider';
 import { VersionCatalogHoverProvider } from './providers/VersionCatalogHoverProvider';
+import { VersionCatalogDefinitionProvider } from './providers/VersionCatalogDefinitionProvider';
 import { OverrideGutterProvider } from './providers/OverrideGutterProvider';
 import { NavigationHistoryProvider } from './providers/NavigationHistoryProvider';
 import { recentLocationsCommand } from './commands/recentLocations';
@@ -1483,6 +1484,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(
       tomlW,
       vscode.languages.registerHoverProvider(GRADLE_FILES, new VersionCatalogHoverProvider(vcIndex)),
+      vscode.languages.registerDefinitionProvider(GRADLE_FILES, new VersionCatalogDefinitionProvider(vcIndex)),
     );
   })();
 

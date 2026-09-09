@@ -70,6 +70,14 @@ const RE_LIFECYCLE   = /@(?:Before|After|BeforeEach|AfterEach|BeforeAll|AfterAll
 // `@field:SerializedName("a") val`. One level of nested parens covers
 // `@Foo(bar = baz())`; the character classes keep matching linear.
 const ANNOT = String.raw`(?:@(?:\w+:)?[\w.]+(?:\((?:[^()]|\([^()]*\))*\))?\s+)*`;
+// Kotlin allows an annotation on the RECEIVER, after the keyword:
+// `fun @receiver:ColorInt Int.darken(n: Int)`. Without this the whole
+// declaration was missed, so the function existed for no feature at all.
+const RECV_ANNOT = ANNOT;
+// `fun [receiver annotation] [type params] Receiver.` — the receiver marks an
+// extension. Reading it without the annotation left `fun @receiver:ColorInt
+// Int.darken()` looking like a plain function.
+const RE_FUN_RECEIVER = new RegExp(String.raw`fun\s+${RECV_ANNOT}(?:<(?:[^<>]|<[^<>]*>)*>\s+)?(?:\w+(?:<(?:[^<>]|<[^<>]*>)*>)?[?]?\.)`);
 const MODS_CLASS = 'public|private|internal|protected|open|final|abstract|inner|sealed|data|value|inline|annotation|enum|actual|expect|companion|external';
 // The name is the last group and the match ends on it, so its column is
 // `m[0].length - name.length`: an indexOf() would find the name inside a
@@ -83,10 +91,10 @@ const RE_ANON_OBJECT = /\bobject\s*:/;
 // After optional generics, allow an optional `ReceiverType.` prefix so that
 // `fun Modifier.customBackground()` captures "customBackground", not "Modifier".
 // Handles: simple (Modifier.), nullable (Modifier?.), generic (List<T>.), qualified (Modifier.Companion.)
-const RE_FUN        = new RegExp(String.raw`^\s*${ANNOT}(?:(?:public|private|protected|internal|override|final|abstract|open|actual|expect|suspend|inline|noinline|crossinline|infix|operator|tailrec|external)\s+)*fun\s+(?:<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>\s+)?(?:(?:\w+(?:<(?:[^<>]|<[^<>]*>)*>)?[?]?\.)+)?([\p{L}\p{N}_]+|\x60[^\x60]+\x60)(?=\s*[(<])`, 'u'); // \x60 = backtick (String.raw keeps the backslash of \`)
+const RE_FUN        = new RegExp(String.raw`^\s*${ANNOT}(?:(?:public|private|protected|internal|override|final|abstract|open|actual|expect|suspend|inline|noinline|crossinline|infix|operator|tailrec|external)\s+)*fun\s+${RECV_ANNOT}(?:<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>\s+)?(?:(?:\w+(?:<(?:[^<>]|<[^<>]*>)*>)?[?]?\.)+)?([\p{L}\p{N}_]+|\x60[^\x60]+\x60)(?=\s*[(<])`, 'u'); // \x60 = backtick (String.raw keeps the backslash of \`)
 // Group 1 = val/var, group 2 = extension receiver (`List<Int>.`), group 3 = name.
 // The trailer is a lookahead so the match ends on the name (see RE_CLASS).
-const RE_PROP       = new RegExp(String.raw`^\s*${ANNOT}(?:(?:public|private|protected|internal|override|open|final|abstract|actual|expect|lateinit|const|inline|external)\s+)*(val|var)\s+(?:<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>\s+)?((?:\w+(?:<(?:[^<>]|<[^<>]*>)*>)?[?]?\.)+)?([\p{L}\p{N}_]+)(?=\s*(?:[=:(<]|\bby\b))`, 'u');
+const RE_PROP       = new RegExp(String.raw`^\s*${ANNOT}(?:(?:public|private|protected|internal|override|open|final|abstract|actual|expect|lateinit|const|inline|external)\s+)*(val|var)\s+${RECV_ANNOT}(?:<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>\s+)?((?:\w+(?:<(?:[^<>]|<[^<>]*>)*>)?[?]?\.)+)?([\p{L}\p{N}_]+)(?=\s*(?:[=:(<]|\bby\b))`, 'u');
 const RE_TYPEALIAS  = /^\s*(?:(?:public|private|internal|actual)\s+)?typealias\s+([\p{L}\p{N}_]+)(?:<[^>]*>)?\s*=\s*(.+)/u;
 // Enum entries may be SCREAMING_CASE or UpperCamelCase (both are legal and
 // idiomatic Kotlin). The name must exhaust the identifier: requiring a
@@ -437,7 +445,7 @@ export function parse(uriString: string, text: string): ParsedFile {
       const isAbstract    = /\babstract\b/.test(preFun)  || undefined;
       const isInline      = /\binline\b/.test(preFun)    || undefined;
       const isInfix       = /\binfix\b/.test(preFun)     || undefined;
-      const isExtension   = /fun\s+(?:<(?:[^<>]|<[^<>]*>)*>\s+)?(?:\w+(?:<(?:[^<>]|<[^<>]*>)*>)?[?]?\.)/.test(raw) || undefined;
+      const isExtension   = RE_FUN_RECEIVER.test(raw) || undefined;
       const isOperator    = /\boperator\b/.test(preFun)  || undefined;
       const isOverride    = /\boverride\b/.test(preFun)  || undefined;
       const isPrivateFun  = /\bprivate\b/.test(preFun)   || undefined;

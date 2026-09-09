@@ -7,9 +7,15 @@ import { isInsideCommentOrString } from './textUtils';
 // Pick<> so RawSymbol[] (KotlinParser) is accepted as well as SymbolEntry[].
 export function rangeEndLine(entries: readonly Pick<SymbolEntry, 'line' | 'depth'>[], index: number, lastLine: number): number {
   const depth = entries[index].depth;
+  const line = entries[index].line;
   for (let j = index + 1; j < entries.length; j++) {
+    // A symbol declared on the SAME line cannot close this one's body.
+    // `val x = object : L {` yields the object and then the property, both at
+    // the same depth on the same line, and the object was clamped to a single
+    // line: its overrides left it in the Outline and folding it folded nothing.
+    if (entries[j].line === line) continue;
     if (entries[j].depth <= depth) {
-      return Math.max(entries[j].line - 1, entries[index].line);
+      return Math.max(entries[j].line - 1, line);
     }
   }
   return lastLine;

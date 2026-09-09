@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.42.89
+
+A property and the object it holds are declared on one line, and the object was cut to that single line. Its overrides left it in the Outline, folding it folded nothing, and an empty duplicate sat next to the property.
+
+### Fixes
+- A symbol declared on the same line as another cannot close that one's body. The object expression stopped where the property that names it begins, which is the same line, so it was one line tall. 111 of them on a real Android project.
+- The Outline lists the name you wrote rather than both. The property and the object describe one construct and had the same extent, so one of the two was always empty. An object passed straight to a call still shows as `object : Listener`.
+
 ## 1.42.88
 
 Three more shapes of Kotlin header were read as a finished declaration, so the class ended on its first line and its members were listed at the top level of the Outline. What was 211 entries two releases ago is now 3.

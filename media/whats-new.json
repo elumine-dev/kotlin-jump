@@ -1,12 +1,12 @@
 {
-  "version": "1.42.88",
+  "version": "1.42.89",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Every class keeps its members",
-  "summary": "Three more shapes of Kotlin header were read as a finished declaration, so the class ended on its first line and its members were listed at the top level of the Outline. What was 211 entries two releases ago is now 3.",
+  "tagline": "An object expression keeps its members",
+  "summary": "A property and the object it holds are declared on one line, and the object was cut to that single line. Its overrides left it in the Outline, folding it folded nothing, and an empty duplicate sat next to the property.",
   "highlights": [
     {
-      "title": "A default lambda is not a body",
-      "description": "sealed class State(init: Builder.() -> Unit = {}) opened and closed its depth on the header itself, and all 42 members of one class hung outside it.",
+      "title": "One node, with what is inside it",
+      "description": "val observer = object : DefaultLifecycleObserver { now shows the property with onStart and onStop under it, instead of an empty object next to it.",
       "kind": "fix"
     }
   ],
@@ -14,10 +14,8 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "A brace inside a parameter list is never the body. The empty lambda of a default argument was counted as the class body opening and closing at once.",
-        "A header that goes on with constructor, with a supertype list, or with a where clause is read to its end. open class Foo on one line and constructor(...) on the next is what ktlint produces once the header is long.",
-        "An annotation between the class name and its constructor belongs to the header, not to whatever follows. The two readings of an annotation now depend on whether a class header is still open.",
-        "Folding a file costs what it did before: the next line is read only where the answer is about to be returned, not on every line."
+        "A symbol declared on the same line as another cannot close that one's body. The object expression stopped where the property that names it begins, which is the same line, so it was one line tall. 111 of them on a real Android project.",
+        "The Outline lists the name you wrote rather than both. The property and the object describe one construct and had the same extent, so one of the two was always empty. An object passed straight to a call still shows as object : Listener."
       ]
     }
   ],

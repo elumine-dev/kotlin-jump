@@ -27,6 +27,16 @@ export class KotlinDocumentSymbolProvider implements vscode.DocumentSymbolProvid
     for (let i = 0; i < entries.length; i++) {
       const e = entries[i];
 
+      // `val observateur = object : Listener {` produces two entries on one
+      // line with the same extent: the object and the property that names it.
+      // Listing both put an empty `object : Listener` next to the property
+      // holding its overrides. The name the author wrote wins; an object
+      // passed straight to a call has no such neighbour and keeps its label.
+      if (isAnonymousObject(e.name)
+        && ((i > 0 && entries[i - 1].line === e.line) || (i + 1 < entries.length && entries[i + 1].line === e.line))) {
+        continue;
+      }
+
       // Pop before resolving the icon: the stack top must be the parent, not
       // the previous sibling. With the pop after, the enum class that follows
       // another enum's entries got the EnumMember icon of that last entry.

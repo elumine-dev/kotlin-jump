@@ -4,6 +4,7 @@ import { SymbolKind } from '../indexer/KotlinParser';
 import { scanForUsagesWithTarget, isExcluded, UsageResult, withoutDeclarations } from './FindUsagesEngine';
 import { isTestFun } from '../testing/TestAnnotations';
 import { capMap, USAGE_CACHE_LIMIT } from '../util/boundedCache';
+import { buildAllowFilter } from '../util/testFilter';
 
 const LENS_KINDS = new Set<SymbolKind>([
   'class', 'interface', 'object', 'enum',
@@ -173,9 +174,12 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
     // Walks the whole subtree: a class implementing this interface through an
     // intermediate one is an implementation too, and counting only the direct
     // namers put "2 implementations" on an interface 33 classes implement.
+    // The same test-source filter the picker and the gutter lens apply: the
+    // count used to include implementors the list then refused to show.
     let implCount = 0;
     if (CLASS_LIKE.has(entry.kind)) {
-      implCount = this.index.lookupImplementationsDeep(entry).length;
+      const allow = buildAllowFilter(entry.uri.fsPath);
+      implCount = this.index.lookupImplementationsDeep(entry).filter(e => allow(e.uri.path)).length;
     }
 
     // ── Usage count — async file scan (cached per FQN) ────────────────────────

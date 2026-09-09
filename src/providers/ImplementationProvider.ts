@@ -34,7 +34,7 @@ export class KotlinImplementationProvider implements vscode.ImplementationProvid
     const allow = buildAllowFilter(document.uri.fsPath);
 
     // 1. Class/interface implementations (e.g. cursor on "PokemonRepository")
-    const classImpls = this.index.lookupImplementations(word).filter(e => allow(e.uri.path));
+    const classImpls = this.index.implementationsOfName(word).filter(e => allow(e.uri.path));
     if (classImpls.length > 0) {
       return classImpls.map(e => new vscode.Location(e.uri, new vscode.Position(e.line, e.character)));
     }

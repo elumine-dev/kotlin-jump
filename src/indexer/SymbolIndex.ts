@@ -298,6 +298,42 @@ export class SymbolIndex {
     return out;
   }
 
+  /**
+   * Deep implementations for the callers that only hold a name: Go to
+   * Implementation, the picker behind the lens, the gutter lens. The count on
+   * the lens resolves a concrete entry and walks the chain; a list built from
+   * `lookupImplementations` alone announced a number the picker could not
+   * show, in both directions (10 sealed subtypes listed as 2, and an
+   * implementor of a homonym credited to the wrong parent).
+   *
+   * `fqn` names the declaration exactly, `packageName` narrows to a package.
+   * Two nested `Callback` interfaces can share a package, so the package alone
+   * still merged them. Without either, the homonyms are merged and
+   * deduplicated by position.
+   */
+  implementationsOfName(name: string, packageName?: string, fqn?: string): SymbolEntry[] {
+    if (fqn !== undefined) {
+      const exactEntry = this.lookupFqn(fqn);
+      if (exactEntry && CLASS_LIKE.has(exactEntry.kind)) return this.lookupImplementationsDeep(exactEntry);
+    }
+    const parents = this.lookup(name).filter(e => CLASS_LIKE.has(e.kind));
+    if (parents.length === 0) return EMPTY;
+    const exact = packageName === undefined ? [] : parents.filter(p => p.packageName === packageName);
+    const roots = exact.length > 0 ? exact : parents;
+    if (roots.length === 1) return this.lookupImplementationsDeep(roots[0]);
+    const seen = new Set<string>();
+    const out: SymbolEntry[] = [];
+    for (const root of roots) {
+      for (const e of this.lookupImplementationsDeep(root)) {
+        const key = `${e.uri.toString()}:${e.line}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(e);
+      }
+    }
+    return out;
+  }
+
   /** URI strings of the indexed files declaring `package pkg`. */
   filesInPackage(pkg: string): string[] {
     const s = this.byPkg.get(pkg);

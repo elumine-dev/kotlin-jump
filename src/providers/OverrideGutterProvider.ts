@@ -41,15 +41,16 @@ export class OverrideGutterProvider implements vscode.CodeLensProvider {
           const isAbstractType = entry.kind === 'interface' || entry.kind === 'sealedClass'
             || (entry.kind === 'class' && entry.isAbstract);
           if (isAbstractType) {
-            const rawImpls = this.index.lookupImplementations(entry.name).filter((e: any) => allow(e.uri.path));
-            const allParents = this.index.lookup(entry.name).filter((e: any) => CLASS_LIKE.has(e.kind) && allow(e.uri.path));
-            const impls = allParents.length <= 1 ? rawImpls : rawImpls.filter((impl: any) => this.index.implementsExactly(impl, entry));
+            // Same walk as the count on the main lens: both sit on this very
+            // line, and reading the chain on one side only put "⬇ 1
+            // implementation" next to "2 implementations".
+            const impls = this.index.lookupImplementationsDeep(entry).filter((e: any) => allow(e.uri.path));
             if (impls.length > 0) {
               const range = new vscode.Range(entry.line, 0, entry.line, 0);
               lenses.push(new vscode.CodeLens(range, {
                 title: `⬇ ${impls.length} implementation${impls.length !== 1 ? 's' : ''}`,
                 command: 'kotlin-jump.goToClassImpl',
-                arguments: [entry.name, entry.packageName],
+                arguments: [entry.name, entry.packageName, entry.fqn],
                 tooltip: 'Navigate to implementations',
               }));
             }

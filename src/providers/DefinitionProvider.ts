@@ -370,7 +370,7 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
   }
 
   private implLocations(word: string, allow: (path: string) => boolean): vscode.Location[] {
-    return this.index.lookupImplementations(word)
+    return this.index.implementationsOfName(word)
       .filter(e => allow(e.uri.path))
       .map(toLocation);
   }

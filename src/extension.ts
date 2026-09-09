@@ -497,7 +497,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('kotlin-jump._navigateInlay', navigateFromInlay),
 
     vscode.commands.registerCommand('kotlin-jump.goToClassImpl',
-      async (name: string, packageName: string) => {
+      async (name: string, packageName: string, fqn?: string) => {
         const CLASS_LIKE_SET = new Set(['class', 'dataClass', 'sealedClass', 'enum', 'object', 'interface', 'annotation']);
         clearPendingDeclNav();
         const parentCandidates = index.lookup(name).filter((e: { kind: string }) => CLASS_LIKE_SET.has(e.kind));
@@ -506,12 +506,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         const allow = buildAllowFilter(
           parentEntry?.uri.fsPath ?? vscode.window.activeTextEditor?.document.uri.fsPath ?? '',
         );
-        const rawImpls = index.lookupImplementations(name).filter((e: any) => allow(e.uri.path));
-        const allParents = parentCandidates.filter((e: any) => allow(e.uri.path));
-        const impls = allParents.length <= 1 ? rawImpls : rawImpls.filter((impl: { packageName: string }) =>
-          impl.packageName === packageName ||
-          !allParents.some((p: { packageName: string }) => p.packageName === impl.packageName)
-        );
+        // The list must match the number the lens announced on that line.
+        const impls = index.implementationsOfName(name, packageName, fqn).filter((e: any) => allow(e.uri.path));
         if (impls.length === 0) return;
         const isAnon = (m: { name: string }) => m.name.startsWith('$anon$');
         const openImpl = async (m: { name: string; uri: vscode.Uri; line: number; character: number }) => {

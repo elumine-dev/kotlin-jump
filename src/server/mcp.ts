@@ -56,7 +56,7 @@ export function handleFindSymbol(index: SymbolIndex, name: string): SymbolResult
 }
 
 export function handleFindImplementations(index: SymbolIndex, name: string): SymbolResult[] {
-  return index.lookupImplementations(name).slice(0, 50).map(toSymbolResult);
+  return index.implementationsOfName(name).slice(0, 50).map(toSymbolResult);
 }
 
 export function handleSearchSymbols(index: SymbolIndex, query: string, kind?: string): SymbolResult[] {

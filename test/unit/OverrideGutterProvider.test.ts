@@ -16,6 +16,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import * as vscodeMock from './__mocks__/vscode';
 import { OverrideGutterProvider } from '../../src/providers/OverrideGutterProvider';
+import { SymbolIndex } from '../../src/indexer/SymbolIndex';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -42,11 +43,17 @@ function makeIndex(
   classImplsMap: Record<string, any[]> = {},
   lookupMap: Record<string, any[]> = {},
 ) {
+  // La marche transitive et la desambiguisation sont EMPRUNTEES au vrai
+  // SymbolIndex : une copie dans le stub deriverait en silence le jour ou le
+  // produit change (cf. NoStaleTestCopies).
   return {
     getFileSymbols: () => symbols,
     lookupMethodImplementations: (name: string) => methodImplsMap[name] ?? [],
     lookupImplementations: (name: string) => classImplsMap[name] ?? [],
     lookup: (name: string) => lookupMap[name] ?? [],
+    fileImports: new Map<string, string[]>(),
+    implementsExactly: SymbolIndex.prototype.implementsExactly,
+    lookupImplementationsDeep: SymbolIndex.prototype.lookupImplementationsDeep,
   };
 }
 
@@ -362,13 +369,16 @@ describe('SP2-OGP-23 — command class-level = kotlin-jump.goToClassImpl', () =>
 
 // ── SP2-OGP-24 ────────────────────────────────────────────────────────────────
 
-describe('SP2-OGP-24 — arguments class-level = [entry.name, entry.packageName]', () => {
-  it('abstract class → args = [name, packageName]', () => {
-    const sym = { name: 'BaseRepo', kind: 'class', line: 0, character: 0, depth: 0, isAbstract: true, packageName: 'com.example' } as any;
+describe('SP2-OGP-24 — arguments class-level = [entry.name, entry.packageName, entry.fqn]', () => {
+  it('abstract class → args = [name, packageName, fqn]', () => {
+    // Le fqn accompagne le nom : deux `Callback` imbriquees peuvent partager
+    // un package, et la liste ouverte au clic les fusionnait alors que le lens
+    // n'en comptait qu'une.
+    const sym = { name: 'BaseRepo', kind: 'class', line: 0, character: 0, depth: 0, isAbstract: true, packageName: 'com.example', fqn: 'com.example.BaseRepo' } as any;
     const index = makeIndex([sym], {}, { BaseRepo: [makeImpl('file:///Impl.kt')] });
     const provider = new OverrideGutterProvider(index as any);
     const result = provider.provideCodeLenses(makeDoc());
     expect(result).toHaveLength(1);
-    expect(result[0].command!.arguments).toEqual(['BaseRepo', 'com.example']);
+    expect(result[0].command!.arguments).toEqual(['BaseRepo', 'com.example', 'com.example.BaseRepo']);
   });
 });

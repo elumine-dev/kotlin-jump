@@ -30,10 +30,15 @@ const DECL_RE = /^\s*(?:(?:public|private|protected|internal|override|open|abstr
 // still appear on `val x : Type = call(...)` lines.
 const FUN_DECL_RE = /^\s*(?:(?:public|private|protected|internal|override|open|abstract|sealed|inline|suspend|operator|infix|external|actual|expect|companion|data|inner|noinline|crossinline|tailrec|lateinit|const)\s+)*(?:fun|class|data\s+class|object|interface|abstract\s+class|sealed\s+class|enum\s+class|annotation\s+class|typealias)\s/;
 
-// `@CardVMKey(AudioViewModel::class)` calls an annotation's constructor, so
-// `annotation` belongs here too: filtering the call resolution by kind without
-// it silently dropped every annotation argument label.
-const CALL_KINDS = new Set(['fun', 'composable', 'class', 'dataClass', 'annotation'] as const);
+const CALL_KINDS = new Set(['fun', 'composable', 'class', 'dataClass'] as const);
+
+/** What a `name(…)` call can NEVER be. Everything else declares something with
+ *  a parameter list: a function, or a type whose constructor takes arguments.
+ *  Listing what is callable instead was too narrow twice over: annotations
+ *  (`@CardVMKey(value)`) and sealed parents (`) : OpenFullScreen(tag, module)`)
+ *  both lost their labels. A local binding is excluded separately: its line is
+ *  an expression, and reading it as a signature invents parameter names. */
+const NEVER_CALLABLE = new Set(['val', 'var', 'typealias']);
 
 export class KotlinInlayHintsProvider implements vscode.InlayHintsProvider {
   // Cache: fqn → parsed params + per-param Locations (avoids reopening
@@ -386,7 +391,7 @@ export class KotlinInlayHintsProvider implements vscode.InlayHintsProvider {
     // its line was read as a signature and the argument was labelled with a
     // name lifted out of that expression.
     const resolved = resolveBest(name, document, fqn => this.index.lookupFqn(fqn))
-      .matches.filter(e => CALL_KINDS.has(e.kind as never) && !e.isLocal);
+      .matches.filter(e => !NEVER_CALLABLE.has(e.kind) && !e.isLocal);
     if (resolved.length === 1) return resolved[0];
     if (resolved.length > 1) return undefined; // ambiguous
     // An explicit import the index cannot resolve names a library symbol

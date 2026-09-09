@@ -87,6 +87,37 @@ describe('Un appel ne se résout pas vers une variable locale homonyme', () => {
     expect(libelles).toEqual(['destinataire:', 'corps:']);
   });
 
+  it('un constructeur de classe scellée garde ses étiquettes', async () => {
+    // Filtrer par une liste de sortes APPELABLES était trop étroit : `annotation`
+    // manquait, puis `sealedClass`. Un appel au constructeur du parent scellé
+    // (`) : OpenFullScreen(tag, module)`) perdait toutes ses étiquettes.
+    const DECL = 'package p\n\nsealed class Evenement(val type: String, val data: Any?)\n';
+    // Forme réelle : l'appel au parent est sur sa propre ligne, sinon le
+    // provider saute la ligne parce qu'elle déclare quelque chose.
+    const USAGE = [
+      'package p',
+      '',
+      'class Galerie(',
+      '    data: Any?,',
+      ') : Evenement("galleryChanged", data)',
+    ].join('\n');
+    const libelles = await hintsDe('file:///a52/Sealed.kt', {
+      'file:///a52/SealedDecl.kt': DECL,
+      'file:///a52/Sealed.kt': USAGE,
+    });
+    expect(libelles).toEqual(['type:', 'data:']);
+  });
+
+  it('un constructeur d\'enum garde ses étiquettes', async () => {
+    const DECL = 'package p\n\nenum class Accent(val valeur: String) {\n    ROUGE("r"),\n}\n';
+    const USAGE = 'package p\n\nfun creer(): Accent {\n    return Accent("bleu")\n}\n';
+    const libelles = await hintsDe('file:///a52/Enum.kt', {
+      'file:///a52/EnumDecl.kt': DECL,
+      'file:///a52/Enum.kt': USAGE,
+    });
+    expect(libelles).toContain('valeur:');
+  });
+
   it('une annotation garde ses étiquettes', async () => {
     // `annotation` ne faisait pas partie des sortes appelables : filtrer sans
     // l'ajouter aurait supprimé toutes les étiquettes d'annotation.

@@ -1,12 +1,12 @@
 {
-  "version": "1.42.72",
+  "version": "1.42.73",
   "title": "What's New in Kotlin Jump",
-  "tagline": "No more invented parameter names",
-  "summary": "An argument label could be lifted out of a local variable declared in another file. Color.alpha(result) was labelled opacity, a word taken from an unrelated expression.",
+  "tagline": "Sealed and enum constructors get their labels back",
+  "summary": "The previous release listed which kinds of symbol a call may resolve to, and the list was short. Sealed parents and enum constructors fell out of it and lost every argument label.",
   "highlights": [
     {
-      "title": "A call resolves to something callable",
-      "description": "Argument labels come from functions, constructors and annotations only. A local val carrying the same name is no longer read as if it were a signature.",
+      "title": "Labels restored on constructor calls",
+      "description": "A subclass calling its sealed parent, or code building an enum value, shows the parameter names again. 37 labels come back on a real Android project, with none lost.",
       "kind": "fix"
     }
   ],
@@ -14,9 +14,9 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Argument labels are no longer invented. Resolving a call by name accepted any symbol carrying that name, so a local val in another file of the same package answered for it and its line was parsed as a signature: Color.alpha(result) showed opacity, and Success(false) showed false.",
-        "Annotation arguments keep their labels. Annotations were missing from the list of callable kinds, so filtering by kind without adding them would have dropped every one of them.",
-        "Measured on a real Android project: 14 invented labels removed, and not one correct label lost."
+        "Argument labels are back on sealed parents and enum constructors. Naming the callable kinds was too narrow twice over, so the rule is reversed: a call resolves to anything except a val, a var or a typealias, and never to a local binding.",
+        "The fix that this repairs, from the previous release, is kept: a local variable of the same name in another file no longer supplies invented parameter names.",
+        "Measured on the whole of a real Android project rather than a sample of it. The sample said nothing was lost; the full corpus showed 34 labels gone."
       ]
     }
   ],

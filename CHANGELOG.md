@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.73
+
+The previous release listed which kinds of symbol a call may resolve to, and the list was short. Sealed parents and enum constructors fell out of it and lost every argument label.
+
+### Fixes
+- Argument labels are back on sealed parents and enum constructors. Naming the callable kinds was too narrow twice over, so the rule is reversed: a call resolves to anything except a val, a var or a typealias, and never to a local binding.
+- The fix that this repairs, from the previous release, is kept: a local variable of the same name in another file no longer supplies invented parameter names.
+- Measured on the whole of a real Android project rather than a sample of it. The sample said nothing was lost; the full corpus showed 34 labels gone.
+
 ## 1.42.72
 
 An argument label could be lifted out of a local variable declared in another file. Color.alpha(result) was labelled opacity, a word taken from an unrelated expression.

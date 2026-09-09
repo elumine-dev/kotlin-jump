@@ -1,12 +1,12 @@
 {
-  "version": "1.42.75",
+  "version": "1.42.76",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The contradiction check now sees the whole argument",
-  "summary": "The rule added last release read the argument text as the provider hands it over, comma and closing paren included, so it recognised a literal only by luck. It caught one case out of eight.",
+  "tagline": "An implementation is not a usage",
+  "summary": "An interface method with three implementations and one caller read 8 usages. Five of them were the override lines themselves, already counted on the left as implementations.",
   "highlights": [
     {
-      "title": "Seven more wrong labels gone",
-      "description": "Timber.wtf with a message no longer shows throwable, wherever the call sits on the line. Eight labels removed on a real Android project, none lost.",
+      "title": "The usage count stops double counting",
+      "description": "An override declares the method, it does not call it. Those lines are dropped from the count and from the Find Usages list, where they filled most of the panel.",
       "kind": "fix"
     }
   ],
@@ -14,9 +14,9 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "The argument text is trimmed of the trailing comma and closing paren before the check. The helper that produces it stops at the next argument, so a literal almost never arrived in a shape the rule could read.",
-        "A comma inside the string is left alone, and a nested call stays an expression, so nothing new is dropped: eight labels removed, all verified wrong, none correct lost.",
-        "One adversarial test built its fixture on invalid Kotlin, passing 42 to a String parameter. It checks cache isolation, so the type was made consistent and the check it performs is unchanged."
+        "The usage count above an interface method no longer counts its implementations. The filter only removed declarations sharing the same fully qualified name, and an override carries its own class in that name, so it slipped through.",
+        "The Find Usages panel drops the same lines, so the list shows the calls you were looking for instead of the overrides you already see on the implementations side.",
+        "Measured on a real Android project across 40 interface methods: 175 entries removed, every one of them a declaration line, and no call lost."
       ]
     }
   ],

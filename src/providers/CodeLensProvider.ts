@@ -336,10 +336,19 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
     return withoutDeclarations(results, this._declarationsOf(entry)).length;
   }
 
-  /** Every declaration that shares this symbol's FQN, overloads included. */
+  /**
+   * Every declaration of this name, whatever type carries it.
+   *
+   * An `override fun getAudio(…)` in an implementing class is a declaration,
+   * not a call: the lens already counts it under "3 implementations", and
+   * counting it again under "usages" made an interface method with 3 real
+   * callers read "8 usages", five of which were the override lines.
+   * Filtering on the FQN could not see them, since an override carries its
+   * own class in its FQN.
+   */
   private _declarationsOf(entry: SymbolEntry): SymbolEntry[] {
-    const same = this.index.lookup(entry.name).filter(d => d.fqn === entry.fqn);
-    return same.length > 0 ? same : [entry];
+    const all = this.index.lookup(entry.name);
+    return all.length > 0 ? all : [entry];
   }
 
   private async _scanUsages(entry: SymbolEntry, token: vscode.CancellationToken): Promise<UsageResult[]> {

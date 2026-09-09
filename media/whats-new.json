@@ -1,12 +1,12 @@
 {
-  "version": "1.42.67",
+  "version": "1.42.68",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Delete the overload you pointed at",
-  "summary": "With two dead overloads in one file, the quick fix offered on the second one deleted the first. The action found its finding by name, and a name is shared by every overload.",
+  "tagline": "The lightbulb reads the column too",
+  "summary": "Kotlin writes the fields of a data class on one line. The quick fix matched its finding on the line alone, so opening it on the second field offered to delete the first.",
   "highlights": [
     {
-      "title": "The lightbulb acts on the line under the cursor",
-      "description": "The declaration under the cursor was already resolved on the current text, but the finding attached to it was picked by name, so the first overload won every time.",
+      "title": "Delete the field you pointed at",
+      "description": "A data class with two unread fields on one line now offers each field its own fix, with the right name in the title and the right text removed.",
       "kind": "fix"
     }
   ],
@@ -14,9 +14,9 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Deleting an unused declaration removes the one the cursor sits on. With two dead overloads of the same name in a file, the fix offered on the second removed the first instead, along with whatever annotation it carried.",
-        "The title and the verdict shown in the lightbulb came from that same wrong finding, so the second overload could be offered the action meant for the first.",
-        "This path opened in 1.42.63, which started reporting two dead homonyms declared in one file. The removal itself was already fixed in 1.42.65; this is the step just above it."
+        "The unread field fix acts on the field under the cursor. On a data class written as one line, the first field of the line won every time, so the title named it and the deletion removed its text.",
+        "The same rule now serves the enum entry and class member fixes, which matched on the line alone as well. Nothing visible changes there: an enum written on one line offers no deletion at all, because the module declines to compute a safe extent for it.",
+        "Measured on a real Android project: 34 data classes and 4 enums are written with several names on one line."
       ]
     }
   ],

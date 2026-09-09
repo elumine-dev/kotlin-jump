@@ -52,7 +52,10 @@ describe('SymbolIndex.restoreFile est idempotent', () => {
 
 describe('Snapshot v24 : expect / actual / paramètres de constructeur primaire', () => {
   it('conserve les trois indicateurs', () => {
-    expect(SNAPSHOT_VERSION).toBe(24);
+    // Depuis la v24, pas exactement 24 : epingler le nombre exact cassait le
+    // test a chaque champ ajoute, sans rien prouver sur les champs eux memes.
+    // Ce sont les assertions qui suivent qui les gardent.
+    expect(SNAPSHOT_VERSION).toBeGreaterThanOrEqual(24);
     const index = new SymbolIndex();
     const sf = snapshotRoundTrip('file:///proj/User.kt', 'package com.app\ndata class User(val id: Int, val name: String) {\n    val display = name\n}', index);
     expect(Object.keys(sf)).toEqual(expect.arrayContaining(['pc']));

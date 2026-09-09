@@ -113,3 +113,36 @@ describe('Un qualificateur est un espace de noms, pas un parent', () => {
     expect(index.lookupImplementationsDeep(vh)).toEqual([]);
   });
 });
+
+describe('Deux interfaces imbriquees homonymes sont toutes les deux comptees', () => {
+  // `implements A.Callback, B.Callback` : la recherche s'arretait a la
+  // premiere occurrence du nom dans `supertypes`, donc B.Callback n'etait
+  // jamais credite. Deux cas sur LaPresse, dont AdminEnvironmentFragment.
+  const CODES: Record<string, string> = {
+    'file:///a58b/A.kt': 'package p\n\nclass Dialogue {\n    interface Callback {\n        fun ok()\n    }\n}\n',
+    'file:///a58b/B.kt': 'package p\n\nclass Selecteur {\n    interface Callback {\n        fun ok()\n    }\n}\n',
+    'file:///a58b/F.kt': 'package p\n\nclass Ecran : Dialogue.Callback, Selecteur.Callback {\n    override fun ok() {}\n}\n',
+  };
+
+  it('chacune des deux voit Ecran', () => {
+    const index = indexDe(CODES);
+    const un = index.lookup('Callback').find(e => e.fqn === 'p.Dialogue.Callback')!;
+    const deux = index.lookup('Callback').find(e => e.fqn === 'p.Selecteur.Callback')!;
+    expect(un).toBeDefined();
+    expect(deux).toBeDefined();
+    expect(index.lookupImplementationsDeep(un).map(e => e.name)).toEqual(['Ecran']);
+    expect(index.lookupImplementationsDeep(deux).map(e => e.name)).toEqual(['Ecran']);
+  });
+
+  it('une occurrence nue rend sa resolution normale au nom', () => {
+    // `: Callback, Autre.Callback` : le nom est aussi utilise nu, donc une
+    // declaration du meme package reste un parent legitime.
+    const index = indexDe({
+      'file:///a58c/C.kt': 'package p\n\ninterface Callback {\n    fun ok()\n}\n',
+      'file:///a58c/A.kt': 'package p\n\nclass Autre {\n    interface Callback {\n        fun ok()\n    }\n}\n',
+      'file:///a58c/F.kt': 'package p\n\nclass Ecran : Callback, Autre.Callback {\n    override fun ok() {}\n}\n',
+    });
+    const nu = index.lookup('Callback').find(e => e.fqn === 'p.Callback')!;
+    expect(index.lookupImplementationsDeep(nu).map(e => e.name)).toEqual(['Ecran']);
+  });
+});

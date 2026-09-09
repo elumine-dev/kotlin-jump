@@ -1,12 +1,12 @@
 {
-  "version": "1.42.82",
+  "version": "1.42.83",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A qualifier is not a parent",
-  "summary": "A supertype written Outer.Inner was filed under both names, so a type of the workspace sharing a name with a framework one claimed its children. On a real Android project, 165 types were over counted by 2020 implementations in total.",
+  "tagline": "The fix now survives a restart",
+  "summary": "What 1.42.82 corrected was thrown away by the saved index. Every count went back to its old wrong value on the next window reload, until each file happened to be edited.",
   "highlights": [
     {
-      "title": "96 became 3, and 3 was right",
-      "description": "One Java class extending RecyclerView.ViewHolder was filed under its own name, became its own descendant, and dragged 92 classes into three unrelated counts.",
+      "title": "Saved and restored the same",
+      "description": "The field that keeps a qualifier out of the hierarchy is written to the index file, and indexes written before it are rebuilt instead of trusted.",
       "kind": "fix"
     }
   ],
@@ -14,9 +14,9 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "A supertype written Outer.Inner names one parent, Inner. Both segments used to enter the hierarchy, so a nested interface called View claimed the 51 classes that extend android's View, and a nested ViewHolder claimed 92.",
-        "An explicit import decides what a simple name means, which is what Kotlin does. Only types declared in the workspace were consulted, so importing a class from a library contradicted nothing and the local namesake took the credit.",
-        "A type is no longer its own subtype, and the qualifier still counts for spotting a framework ancestor, so nothing new is reported as unused."
+        "The saved index carries the qualifier of a dotted supertype. Without it, reopening the window rebuilt the hierarchy the old way and a nested interface named View claimed 51 classes again.",
+        "A class implementing two nested interfaces of the same name, one from each of two outer types, is now counted by both. Only the first was credited.",
+        "A new test compares a fresh index against a saved and restored one field by field, so the next field added without being written to disk fails the build. This had already slipped through twice."
       ]
     }
   ],

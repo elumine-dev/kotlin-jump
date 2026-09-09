@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.42.71
+
+A when that covers every branch showed a lens with no command at all, which VS Code does not reliably draw. It now opens the sealed type it covers.
+
+### Fixes
+- The lens on an exhaustive when carries a real command. Being the common case for this check, it was also the lens most at risk of not being drawn: an empty command is what made the drawable preview lens vanish once.
+- No lens in the extension relies on an empty command any more, and a test holds that for both branches of this provider.
+
 ## 1.42.70
 
 Splitting the state lens in two, one release ago, gave the readers side an empty command when a state has no reader in the file. A lens with an empty command is not reliably drawn, and that count is the one worth reading.

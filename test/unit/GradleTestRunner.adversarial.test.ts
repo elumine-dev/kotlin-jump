@@ -15,6 +15,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { parseStdoutLine as parseStdoutLineReal } from '../../src/testing/GradleTestRunner';
 
 // ── Inline helpers extracted from GradleTestRunner ───────────────────────────
 
@@ -88,13 +89,14 @@ function buildTestFilters(specs: { fqn: string; name: string }[]): string[] {
   return filters;
 }
 
-const RE_GRADLE_RESULT = /^(\S+)\s+>\s+(\S+)\s+(PASSED|FAILED|SKIPPED)\s*$/;
+// Le vrai parseur, pas une copie : la version recopiee ici portait encore
+// `\\S+` pour le nom de methode alors que le module accepte les noms en
+// backticks depuis longtemps, et personne ne l'a vu.
 function parseStdoutLine(line: string): { key: string; state: string } | undefined {
-  const m = RE_GRADLE_RESULT.exec(line.trim());
-  if (!m) return undefined;
-  const [, classFqn, methodName, stateStr] = m;
-  const state = stateStr === 'PASSED' ? 'passed' : stateStr === 'SKIPPED' ? 'skipped' : 'failed';
-  return { key: `${classFqn}.${methodName}`, state };
+  const results = new Map<string, { classFqn: string; methodName: string; state: string }>();
+  parseStdoutLineReal(line, results as never);
+  const premier = [...results.entries()][0];
+  return premier ? { key: premier[0], state: premier[1].state } : undefined;
 }
 
 // ── GA-1 : Nested class — JVM '$' normalisé ─────────────────────────────────
@@ -407,10 +409,11 @@ describe('GA-9 — parseStdoutLine patterns spéciaux', () => {
     expect(r?.key).toBe('com.example.Foo.testBar');
   });
 
-  it('multi-mot dans nom de test — regex \S+ ne matche pas (limitation)', () => {
-    // Gradle sort "FooTest > play starts playback PASSED" — les espaces cassent \S+
+  it('un nom de test en backticks, avec ses espaces, est bien capturé', () => {
+    // Ce cas était marqué « limitation connue » et attendait undefined, alors
+    // que le module accepte les espaces. Le test validait sa propre copie.
     const r = parseStdoutLine('FooTest > play starts playback PASSED');
-    expect(r).toBeUndefined(); // limitation connue → fallback XML
+    expect(r).toEqual({ key: 'FooTest.play starts playback', state: 'passed' });
   });
 
   it('ligne de tâche Gradle non capturée', () => {

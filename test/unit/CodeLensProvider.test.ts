@@ -1,49 +1,26 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SymbolIndex } from '../../src/indexer/SymbolIndex';
 import { parse } from '../../src/indexer/KotlinParser';
+import { SymbolEntry } from '../../src/indexer/SymbolIndex';
+import { KotlinCodeLensProvider } from '../../src/providers/CodeLensProvider';
+import { mockDocument } from './helpers';
 
 function addKt(index: SymbolIndex, uri: string, code: string) {
   index.add(parse(uri, code));
 }
 
-// ── Helper: simulate what provideCodeLenses will do ─────────────────────────
-// Returns symbols that SHOULD get a Code Lens (class-like + functions, not val/var/enum entries)
-
-const LENS_KINDS = new Set([
-  'class', 'interface', 'object', 'enum',
-  'dataClass', 'sealedClass', 'annotation',
-  'fun', 'composable',
-]);
-
-const CLASS_LIKE = new Set([
-  'class', 'interface', 'object', 'enum',
-  'dataClass', 'sealedClass', 'annotation',
-]);
-
-function getLensSymbols(index: SymbolIndex, uri: string) {
-  const symbols = index.getFileSymbols(uri);
-  const result = [];
-  const classStack: { kind: string; depth: number }[] = [];
-
-  for (const s of symbols) {
-    while (classStack.length > 0 && classStack[classStack.length - 1].depth >= s.depth) {
-      classStack.pop();
-    }
-
-    // Skip enum entries (enum kind inside another enum)
-    if (s.kind === 'enum' && classStack.length > 0 && classStack[classStack.length - 1].kind === 'enum') {
-      continue;
-    }
-
-    if (LENS_KINDS.has(s.kind)) {
-      result.push(s);
-    }
-
-    if (CLASS_LIKE.has(s.kind)) {
-      classStack.push({ kind: s.kind, depth: s.depth });
-    }
-  }
-  return result;
+// ── Helper: les symboles qui recoivent VRAIMENT un lens d'usage ─────────────
+// Le vrai provider, pas une reconstitution : la version precedente ne
+// connaissait que le `kind`, donc elle donnait un lens aux membres prives et
+// aux overrides, que le provider ecarte. Sur un corpus reel elle en comptait
+// 6733 la ou le provider en pose 3163, et un cas de ce fichier affirmait
+// qu'une `private fun` recoit un lens.
+function getLensSymbols(index: SymbolIndex, uri: string, code: string = APP_CODE) {
+  const provider = new KotlinCodeLensProvider(index);
+  const doc = mockDocument(uri, code);
+  return provider.provideCodeLenses(doc)
+    .map(l => (l as unknown as { data?: { entry: SymbolEntry } }).data?.entry)
+    .filter((e): e is SymbolEntry => e !== undefined);
 }
 
 // ── Test data ───────────────────────────────────────────────────────────────
@@ -136,7 +113,9 @@ describe('Code Lens — symbol selection', () => {
     const lenses = getLensSymbols(index, 'file:///App.kt');
     expect(lenses.some(s => s.name === 'getUser')).toBe(true);
     expect(lenses.some(s => s.name === 'saveUser')).toBe(true);
-    expect(lenses.some(s => s.name === 'validate')).toBe(true);
+    // Une fonction privee n'a pas de lens d'usage : le provider l'ecarte
+    // (comme les overrides). L'ancienne reconstitution disait l'inverse.
+    expect(lenses.some(s => s.name === 'validate')).toBe(false);
     expect(lenses.some(s => s.name === 'track')).toBe(true);
   });
 

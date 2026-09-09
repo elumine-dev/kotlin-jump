@@ -86,7 +86,16 @@ function buildIndex(...files: Array<[string, string]>): SymbolIndex {
   return index;
 }
 
-/** Simulates FindUsagesPanel.search() filter step. */
+/**
+ * Simule l'étape de filtrage de FindUsagesPanel.search().
+ *
+ * ATTENTION : c'est une copie, pas le code livré. Depuis la 1.42.61 le panneau
+ * retire TOUTES les déclarations du FQN, pas seulement celle sous le curseur,
+ * et cette copie est restée sur l'ancienne règle. Elle garde sa valeur pour
+ * les cas DECL-1 à DECL-10 ci-dessous, mais le vrai `search()` est exercé par
+ * `UiAudit46.regression.test.ts` : c'est là qu'il faut ajouter un cas qui
+ * touche au filtre lui-même.
+ */
 function applyDeclFilter(
   raw: Awaited<ReturnType<typeof scanForUsages>>,
   target: ReturnType<typeof resolveSearchTarget>,

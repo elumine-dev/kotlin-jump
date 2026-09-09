@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.42.90
+
+An annotation on the receiver of an extension made the whole declaration invisible. Those functions were absent from the Outline, unreachable by name, and had no definition to go to.
+
+### Fixes
+- An extension whose receiver carries an annotation is indexed like any other. `fun @receiver:ColorInt Int.darken(n: Int)` is valid Kotlin and the reader stopped at the annotation; six functions in one file of a real Android project existed for no feature at all, and they count as extensions again.
+- The Call Hierarchy names the enclosing function. The last function before a call can be an override nested in an object expression that already closed, and the panel then fell back on the last local variable: it announced `end` as the caller of `start`. Wrong callers went from 74 to 3 on that project.
+
 ## 1.42.89
 
 A property and the object it holds are declared on one line, and the object was cut to that single line. Its overrides left it in the Outline, folding it folded nothing, and an empty duplicate sat next to the property.

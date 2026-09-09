@@ -280,6 +280,20 @@ export class KotlinCallHierarchyProvider implements vscode.CallHierarchyProvider
       if (s.line > callLine) break;
       if (FUN_KINDS.has(s.kind)) { best = s; bestIdx = i; }
     }
+    // The last function before the line can be a NESTED one that has already
+    // closed: an `override fun` inside an object expression. Walk outward,
+    // shallower each time, and take the first whose body holds the call.
+    // Without this the fallback below picked the last local `val`, and the
+    // panel announced `end` as the caller of `start`.
+    if (best !== undefined && callLine > endOf(bestIdx)) {
+      let depthLimit = best.depth;
+      for (let i = bestIdx - 1; i >= 0; i--) {
+        const s = symbols[i];
+        if (!FUN_KINDS.has(s.kind) || s.depth >= depthLimit) continue;
+        depthLimit = s.depth;
+        if (callLine <= endOf(i)) return s;
+      }
+    }
     // A call in a property initializer, an init block or a class declared
     // after a function used to be attributed to that previous function.
     if (best && callLine <= endOf(bestIdx)) return best;

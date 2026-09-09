@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.61
+
+The count above a function counted the declaration of every sibling overload. A Dagger component with 176 overloads of the same method read 354 usages where 179 were real.
+
+### Fixes
+- The usage count above a function no longer counts the declarations of its own overloads. Measured on a real Android project: a component with 176 overloads of the same method showed 354 usages where 179 were real.
+- A function that nobody calls could read one usage, which was its overload's declaration. It now reads none, so the count can again be trusted to find dead code.
+- The Find Usages panel drops the same declarations, so the list matches the number the lens shows.
+
 ## 1.42.60
 
 A name written in a quoted literal nested inside a template expression was counted as a reference. Find Usages, occurrence highlighting and rename now leave it alone.

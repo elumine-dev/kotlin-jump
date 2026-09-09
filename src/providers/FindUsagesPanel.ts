@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { SymbolIndex } from '../indexer/SymbolIndex';
-import { scanForUsagesWithTarget, resolveSearchTarget, DEFAULT_TEST_SEGMENTS, UsageResult, isExcluded, withoutDeclaration } from './FindUsagesEngine';
+import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
+import { scanForUsagesWithTarget, resolveSearchTarget, DEFAULT_TEST_SEGMENTS, UsageResult, isExcluded, withoutDeclaration, withoutDeclarations } from './FindUsagesEngine';
 import { isTestPath } from '../util/testFilter';
 
 // ── Tree node types ───────────────────────────────────────────────────────────
@@ -48,6 +48,13 @@ export class FindUsagesPanel
 
   private cancelSource: vscode.CancellationTokenSource | undefined;
   private readonly staleSub: vscode.Disposable;
+
+  /** Every declaration that shares this symbol's FQN, so the panel lists
+   *  exactly what the lens counted. */
+  private _declarationsOf(entry: SymbolEntry): SymbolEntry[] {
+    const same = this.index.lookup(entry.name).filter(d => d.fqn === entry.fqn);
+    return same.length > 0 ? same : [entry];
+  }
 
   constructor(private readonly index: SymbolIndex) {
     // Rows keep the line numbers of the search; an edit above them makes the
@@ -121,7 +128,7 @@ export class FindUsagesPanel
     // Only that token: a recursive call on the declaration line is a usage,
     // and the lens counted it.
     if (target) {
-      raw = withoutDeclaration(raw, target.uri.toString(), target.line, target.character);
+      raw = withoutDeclarations(raw, this._declarationsOf(target));
     }
 
     // Exclude an explicit position (code lens click) and short-circuit to direct nav
@@ -183,7 +190,7 @@ export class FindUsagesPanel
         (d.uri.toString() === exclude.excludeUri || d.uri.path === excludePath),
       );
       if (decl) {
-        raw = withoutDeclaration(raw, decl.uri.toString(), decl.line, decl.character);
+        raw = withoutDeclarations(raw, this._declarationsOf(decl));
       } else {
         // Fallback: plain string match
         raw = withoutDeclaration(raw, exclude.excludeUri ?? '', exclude.excludeLine, exclude.excludeCharacter);

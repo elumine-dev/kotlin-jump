@@ -1,12 +1,12 @@
 {
-  "version": "1.42.60",
+  "version": "1.42.61",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A label inside a template stays text",
-  "summary": "A name written in a quoted literal nested inside a template expression was counted as a reference. Find Usages, occurrence highlighting and rename now leave it alone.",
+  "tagline": "Overloads no longer count as usages",
+  "summary": "The count above a function counted the declaration of every sibling overload. A Dagger component with 176 overloads of the same method read 354 usages where 179 were real.",
   "highlights": [
     {
-      "title": "Nested strings stay text",
-      "description": "Inside a template expression you are back in code, so a quoted literal written there is text again, and its words are no longer treated as references.",
+      "title": "Honest usage counts on overloads",
+      "description": "A sibling overload declares itself on its own line; that line is not a call. The lens and the Find Usages panel now drop every declaration of the symbol, not just the one under the cursor.",
       "kind": "fix"
     }
   ],
@@ -14,8 +14,9 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "A name inside a quoted literal nested in a template expression is text, not a reference. The scan used to keep counting code past the opening quote, so Find Usages reported an extra hit, the usage count on the lens was off by one, and a rename would have rewritten the label.",
-        "Found by comparing what occurrence highlighting and Find Usages answer about the same position, across every raw string of a real 3187 file Kotlin project."
+        "The usage count above a function no longer counts the declarations of its own overloads. Measured on a real Android project: a component with 176 overloads of the same method showed 354 usages where 179 were real.",
+        "A function that nobody calls could read one usage, which was its overload's declaration. It now reads none, so the count can again be trusted to find dead code.",
+        "The Find Usages panel drops the same declarations, so the list matches the number the lens shows."
       ]
     }
   ],

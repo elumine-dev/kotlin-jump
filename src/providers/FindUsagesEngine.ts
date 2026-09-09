@@ -517,6 +517,22 @@ export function withoutDeclaration(
   return results.filter((_, i) => i !== idx);
 }
 
+/**
+ * Drops every declaration the symbol has, not just the one under the cursor.
+ * Overloads share a name and an FQN, and a sibling overload's own `fun` line
+ * is not a usage of this one: a function nobody called still read "1 usage".
+ */
+export function withoutDeclarations(
+  results: UsageResult[],
+  declarations: ReadonlyArray<SymbolEntry>,
+): UsageResult[] {
+  let out = results;
+  for (const d of declarations) {
+    out = withoutDeclaration(out, d.uri.toString(), d.line, d.character);
+  }
+  return out;
+}
+
 const RE_ANY_PACKAGE = /^\s*package\s+[\w.]+/m;
 
 /**

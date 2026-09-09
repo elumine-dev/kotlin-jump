@@ -1,12 +1,12 @@
 {
-  "version": "1.42.61",
+  "version": "1.42.62",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Overloads no longer count as usages",
-  "summary": "The count above a function counted the declaration of every sibling overload. A Dagger component with 176 overloads of the same method read 354 usages where 179 were real.",
+  "tagline": "No more phantom callers in Java",
+  "summary": "Call Hierarchy skipped the declaration line of an overload by looking for the word fun, which only Java never writes. A Java overload came back as its own caller.",
   "highlights": [
     {
-      "title": "Honest usage counts on overloads",
-      "description": "A sibling overload declares itself on its own line; that line is not a call. The lens and the Find Usages panel now drop every declaration of the symbol, not just the one under the cursor.",
+      "title": "Java overloads stop calling themselves",
+      "description": "Incoming calls now ask the index where a name is declared instead of guessing from the syntax, so a Java overload's own signature line is no longer listed as a caller.",
       "kind": "fix"
     }
   ],
@@ -14,9 +14,9 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "The usage count above a function no longer counts the declarations of its own overloads. Measured on a real Android project: a component with 176 overloads of the same method showed 354 usages where 179 were real.",
-        "A function that nobody calls could read one usage, which was its overload's declaration. It now reads none, so the count can again be trusted to find dead code.",
-        "The Find Usages panel drops the same declarations, so the list matches the number the lens shows."
+        "Call Hierarchy no longer shows a Java overload as a caller of itself. The guard recognised the Kotlin shape of a declaration and nothing else, so every overloaded Java method opened onto a phantom caller.",
+        "Measured on a real Android project of 1901 Java files: 344 phantom callers across 120 overloaded methods.",
+        "Kotlin overloads were already handled and stay handled; the check now comes from the symbol index, which knows both languages."
       ]
     }
   ],

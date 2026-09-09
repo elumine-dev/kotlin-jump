@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.62
+
+Call Hierarchy skipped the declaration line of an overload by looking for the word fun, which only Java never writes. A Java overload came back as its own caller.
+
+### Fixes
+- Call Hierarchy no longer shows a Java overload as a caller of itself. The guard recognised the Kotlin shape of a declaration and nothing else, so every overloaded Java method opened onto a phantom caller.
+- Measured on a real Android project of 1901 Java files: 344 phantom callers across 120 overloaded methods.
+- Kotlin overloads were already handled and stay handled; the check now comes from the symbol index, which knows both languages.
+
 ## 1.42.61
 
 The count above a function counted the declaration of every sibling overload. A Dagger component with 176 overloads of the same method read 354 usages where 179 were real.

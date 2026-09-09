@@ -18,6 +18,27 @@ describe('Un littéral qui ne peut pas être du type déclaré', () => {
     expect(literalContradicts('"""bloc"""', 'Int')).toBe(true);
   });
 
+  it('reconnaît le littéral tel que le provider le lui donne', () => {
+    // `getArgText` s'arrête au début de l'argument SUIVANT, donc il emporte la
+    // virgule ; et le dernier argument d'un appel emporte la parenthèse
+    // fermante. Sans nettoyer ces deux formes, la règle ne se déclenchait que
+    // lorsqu'un littéral terminait proprement la tranche : 1 cas sur 8.
+    expect(literalContradicts('"texte",', 'Throwable')).toBe(true);
+    expect(literalContradicts('"texte")', 'Throwable')).toBe(true);
+    expect(literalContradicts('"texte", ', 'Throwable')).toBe(true);
+    expect(literalContradicts('42)', 'String')).toBe(true);
+    expect(literalContradicts('true,', 'Int')).toBe(true);
+    // Une virgule DANS la chaîne ne doit pas être confondue avec le séparateur.
+    expect(literalContradicts('"a,b",', 'Throwable')).toBe(true);
+    expect(literalContradicts('"a,b"', 'String')).toBe(false);
+  });
+
+  it('un appel imbriqué reste une expression après nettoyage', () => {
+    expect(literalContradicts('bar(1),', 'String')).toBe(false);
+    expect(literalContradicts('compute()', 'Int')).toBe(false);
+    expect(literalContradicts('42.toString()', 'Int')).toBe(false);
+  });
+
   it('laisse passer ce qui est cohérent', () => {
     expect(literalContradicts('"texte"', 'String')).toBe(false);
     expect(literalContradicts('"texte"', 'CharSequence')).toBe(false);

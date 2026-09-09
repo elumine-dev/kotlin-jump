@@ -365,8 +365,11 @@ describe('BUG F — cache module-level brise l\'isolation des tests', () => {
     expect(hints1.length).toBe(1);
     vi.restoreAllMocks();
 
-    // Deuxième appel : même FQN mais signature différente foo(y: String)
-    const declCode2 = 'fun foo(y: String) {}';
+    // Deuxième appel : même FQN, même type, mais nom de paramètre différent.
+    // Le type reste Int : ce test porte sur la pollution du cache, et une
+    // fixture qui passait `42` à un `String` est du Kotlin invalide, que le
+    // provider écarte maintenant (une étiquette contredite par le littéral).
+    const declCode2 = 'fun foo(y: Int) {}';
     const index2 = new SymbolIndex();
     addFile(index2, SAME_URI, declCode2);
 
@@ -384,7 +387,7 @@ describe('BUG F — cache module-level brise l\'isolation des tests', () => {
     // Le hint devrait afficher "y:" mais affiche "x:" (données stales)
     expect(hints2.length).toBe(1);
     const label = (hints2[0].label as vscodeMock.InlayHintLabelPart[])[0].value;
-    expect(label).toBe('y:'); // stale → affiche encore "x:"
+    expect(label).toBe('y:'); // stale → afficherait encore "x:"
   });
 });
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.75
+
+The rule added last release read the argument text as the provider hands it over, comma and closing paren included, so it recognised a literal only by luck. It caught one case out of eight.
+
+### Fixes
+- The argument text is trimmed of the trailing comma and closing paren before the check. The helper that produces it stops at the next argument, so a literal almost never arrived in a shape the rule could read.
+- A comma inside the string is left alone, and a nested call stays an expression, so nothing new is dropped: eight labels removed, all verified wrong, none correct lost.
+- One adversarial test built its fixture on invalid Kotlin, passing 42 to a String parameter. It checks cache isolation, so the type was made consistent and the check it performs is unchanged.
+
 ## 1.42.74
 
 Argument labels are dropped when the literal you wrote cannot be the type the parameter declares. Timber.wtf with a message showed throwable, because the call had resolved to another declaration of the same name.

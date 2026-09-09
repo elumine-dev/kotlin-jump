@@ -578,7 +578,11 @@ const NUMERIC = new Set(['Int', 'Long', 'Short', 'Byte', 'Float', 'Double', 'Num
  * the point is to drop labels that are provably wrong, not to guess.
  */
 export function literalContradicts(argText: string, paramType: string): boolean {
-  const arg = argText.trim();
+  // `getArgText` stops at the NEXT argument, so it carries the comma along,
+  // and the last argument of a call carries the closing paren: `"abc",` and
+  // `42)` are the shapes that actually arrive here. Without trimming them the
+  // rule fired only when a literal happened to end the slice cleanly.
+  const arg = argText.trim().replace(/[,)]+$/, '').trim();
   // `null` is the one literal a nullable type accepts, so it never decides.
   // Otherwise the question is the base type: a String is no more a `Throwable?`
   // than it is a `Throwable`.

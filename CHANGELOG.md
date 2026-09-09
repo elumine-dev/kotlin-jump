@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.65
+
+Removing an unused function looked the declaration up by name and kind, and overloads share both. Accepting the fix on the second one deleted the first, annotation included.
+
+### Fixes
+- Removing an unused top level declaration lands on the one that was reported. Two overloads share a name and a kind, so the lookup answered with the first one every time, and the neighbour was deleted instead, annotation and all.
+- Two dead overloads accepted together now produce two separate deletions. Both resolved to the same span before, so one of them silently stayed.
+- This path only became reachable in 1.42.63, which started reporting two dead homonyms declared in one file.
+
 ## 1.42.64
 
 The unused member check counted a file once per declaration it held, so a class carrying two overloads of a dead name read as if something used it. The same fix as the previous release, one level down.

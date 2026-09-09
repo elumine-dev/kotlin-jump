@@ -1,12 +1,12 @@
 {
-  "version": "1.42.81",
+  "version": "1.42.82",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Three defects in what shipped this week",
-  "summary": "Go to Implementation had stopped answering for any type declared outside the workspace, jumping into a version catalog broke on the web, and a constant could be treated as a type.",
+  "tagline": "A qualifier is not a parent",
+  "summary": "A supertype written Outer.Inner was filed under both names, so a type of the workspace sharing a name with a framework one claimed its children. On a real Android project, 165 types were over counted by 2020 implementations in total.",
   "highlights": [
     {
-      "title": "ViewModel answers again",
-      "description": "1.42.79 asked for a local declaration of the parent before listing anything. On a real Android project that emptied the list for 250 names and 1145 classes, ViewModel and Exception among them.",
+      "title": "96 became 3, and 3 was right",
+      "description": "One Java class extending RecyclerView.ViewHolder was filed under its own name, became its own descendant, and dragged 92 classes into three unrelated counts.",
       "kind": "fix"
     }
   ],
@@ -14,9 +14,9 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Go to Implementation works on a type that lives in a dependency. Put the cursor on ViewModel, AppCompatActivity or WebViewClient and the classes extending it come back, subclasses of those included.",
-        "Jumping to an accessor declaration keeps the scheme of the file it came from, so it works on vscode.dev where a workspace is not on disk.",
-        "A value is never implemented by anything. A constant sharing its name with a type from a dependency could send Go to Definition into that type's subclasses."
+        "A supertype written Outer.Inner names one parent, Inner. Both segments used to enter the hierarchy, so a nested interface called View claimed the 51 classes that extend android's View, and a nested ViewHolder claimed 92.",
+        "An explicit import decides what a simple name means, which is what Kotlin does. Only types declared in the workspace were consulted, so importing a class from a library contradicted nothing and the local namesake took the credit.",
+        "A type is no longer its own subtype, and the qualifier still counts for spotting a framework ancestor, so nothing new is reported as unused."
       ]
     }
   ],

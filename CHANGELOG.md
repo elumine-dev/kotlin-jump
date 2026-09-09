@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.82
+
+A supertype written Outer.Inner was filed under both names, so a type of the workspace sharing a name with a framework one claimed its children. On a real Android project, 165 types were over counted by 2020 implementations in total.
+
+### Fixes
+- A supertype written Outer.Inner names one parent, Inner. Both segments used to enter the hierarchy, so a nested interface called View claimed the 51 classes that extend android's View, and a nested ViewHolder claimed 92.
+- An explicit import decides what a simple name means, which is what Kotlin does. Only types declared in the workspace were consulted, so importing a class from a library contradicted nothing and the local namesake took the credit.
+- A type is no longer its own subtype. One Java class extending RecyclerView.ViewHolder was filed under its own name, became its own descendant, and dragged 92 classes into three unrelated counts.
+- The qualifier still counts for spotting a framework ancestor, so nothing new is reported as unused: the dead code scan returns the same 152 symbols on that project.
+
 ## 1.42.81
 
 Go to Implementation had stopped answering for any type declared outside the workspace, jumping into a version catalog broke on the web, and a constant could be treated as a type.

@@ -46,8 +46,12 @@ function makeIndex(
   // La marche transitive et la desambiguisation sont EMPRUNTEES au vrai
   // SymbolIndex : une copie dans le stub deriverait en silence le jour ou le
   // produit change (cf. NoStaleTestCopies).
+  // Les symboles du fichier ouvert portent son uri, comme un vrai SymbolEntry :
+  // la marche transitive scelle sa racine par uri:line pour qu'un type ne soit
+  // pas sa propre descendante.
+  const avecUri = symbols.map(s => ({ uri: { toString: () => 'file:///Test.kt' }, ...s }));
   return {
-    getFileSymbols: () => symbols,
+    getFileSymbols: () => avecUri,
     lookupMethodImplementations: (name: string) => methodImplsMap[name] ?? [],
     lookupImplementations: (name: string) => classImplsMap[name] ?? [],
     lookup: (name: string) => lookupMap[name] ?? [],

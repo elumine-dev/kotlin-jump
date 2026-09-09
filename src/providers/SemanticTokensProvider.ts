@@ -163,6 +163,8 @@ interface CachedTokens {
   version:  number;
   /** Version alone is not identity: a reopened document restarts at 1. */
   fp:       number;
+  /** Fast path: the same object at the same version is the same text. */
+  doc:      vscode.TextDocument;
   resultId: string;
   data:     Uint32Array;
 }
@@ -209,7 +211,12 @@ export class KotlinSemanticTokensProvider
     ct: vscode.CancellationToken,
   ): vscode.SemanticTokens {
     const cached = this.cache.get(doc.uri.toString());
-    if (cached?.version === doc.version && cached.fp === fingerprint(doc.getText())) {
+    if (cached?.version === doc.version
+      // Same document OBJECT at the same version is necessarily the same text:
+      // VS Code bumps the version on every change. Comparing the reference
+      // costs nothing, and the fingerprint is only paid when the object
+      // differs, which is exactly the reopened file the fingerprint is for.
+      && (cached.doc === doc || cached.fp === fingerprint(doc.getText()))) {
       return new vscode.SemanticTokens(cached.data, cached.resultId);
     }
     return this.computeAndCache(doc, null, ct);
@@ -282,7 +289,7 @@ export class KotlinSemanticTokensProvider
     if (!KotlinSemanticTokensProvider.enabled()) {
       const resultId = String(this.nextId++);
       const data = new Uint32Array(0);
-      if (!range) this.cache.set(doc.uri.toString(), { version: doc.version, fp: fingerprint(doc.getText()), data, resultId });
+      if (!range) this.cache.set(doc.uri.toString(), { version: doc.version, fp: fingerprint(doc.getText()), doc, data, resultId });
       capMap(this.cache, OPEN_FILE_CACHE_LIMIT);
       return new vscode.SemanticTokens(data, resultId);
     }
@@ -403,7 +410,7 @@ export class KotlinSemanticTokensProvider
     // Only cache full-document results
     if (!range) {
       const resultId = String(this.nextId++);
-      this.cache.set(doc.uri.toString(), { version: doc.version, fp: fingerprint(doc.getText()), resultId, data: result.data });
+      this.cache.set(doc.uri.toString(), { version: doc.version, fp: fingerprint(doc.getText()), doc, resultId, data: result.data });
       capMap(this.cache, OPEN_FILE_CACHE_LIMIT);
       return new vscode.SemanticTokens(result.data, resultId);
     }

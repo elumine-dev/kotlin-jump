@@ -667,11 +667,24 @@ function duplicatesWithNoMention(
       for (const a of accessorNames(name)) mentions += harvest.main.get(a) ?? 0;   // H9
     }
 
+    // Count each FILE once. Two declarations of the name in the same file
+    // each see the other's name token in their own `selfInFile`, so summing
+    // per candidate counted that file twice and the group read as mentioned:
+    // two dead overloads sitting side by side were never reported, while the
+    // same two in separate files were.
+    const byFile = new Map<string, Candidate[]>();
+    for (const c of group) {
+      const inFile = byFile.get(c.path) ?? [];
+      inFile.push(c);
+      byFile.set(c.path, inFile);
+    }
     let self = 0;
     let outsideOwnSpan = 0;
-    for (const c of group) {
-      self += c.selfInFile;
-      outsideOwnSpan += c.selfInFile - c.selfInSpan;
+    for (const inFile of byFile.values()) {
+      const fileMentions = inFile[0].selfInFile;
+      const owned = inFile.reduce((n, c) => n + c.selfInSpan, 0);
+      self += fileMentions;
+      outsideOwnSpan += fileMentions - owned;
     }
     // `outsideOwnSpan` catches a declaration used elsewhere in its own file:
     // that use may belong to any member of the group, so the group stays out.
@@ -802,7 +815,9 @@ export function explainSymbols(input: UnusedSymbolScanInput): SymbolExplanation[
     if (rejected) outcome = rejected;
     else if (harvest.aliased.has(c.name)) outcome = 'H10:aliased-import';
     else if (!ctx.unmentionedDuplicates.has(c.name) && mainMentions - c.selfInFile !== 0) outcome = 'alive:main';
-    else if (c.selfInFile - c.selfInSpan > 0) outcome = 'alive:same-file';
+    // Mirror of the scan: a twin declared in the same file is not a mention.
+    else if (!ctx.unmentionedDuplicates.has(c.name)
+      && c.selfInFile - c.selfInSpan > 0) outcome = 'alive:same-file';
     else outcome = testMentions > 0 ? 'testOnly' : 'unreferenced';
 
     return { name: c.name, kind: c.kind, path: c.path, line: c.sym.line, outcome, mainMentions, testMentions };
@@ -890,7 +905,10 @@ export function findUnusedSymbols(input: UnusedSymbolScanInput): UnusedSymbol[] 
     // Defensive: over-counting self would manufacture a finding, so any
     // negative residue reads as alive.
     if (mainElsewhere !== 0) continue;
-    if (c.selfInFile - c.selfInSpan > 0) continue;   // used elsewhere in its own file
+    // Same reasoning as above for a twin declared in the SAME file: the group
+    // check already proved the only mentions are the declarations themselves.
+    if (!ctx.unmentionedDuplicates.has(c.name)
+      && c.selfInFile - c.selfInSpan > 0) continue;   // used elsewhere in its own file
 
     const testMentions = mentionsOf(harvest.test, c);
     const verdict: UnusedSymbolVerdict = testMentions > 0 ? 'testOnly' : 'unreferenced';

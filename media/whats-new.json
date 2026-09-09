@@ -1,26 +1,21 @@
 {
-  "version": "1.42.54",
+  "version": "1.42.55",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A cache hit is free again",
-  "summary": "Keying the cache on the text itself meant reading and hashing the document on every request. A hit is back to 0.00013 ms from 0.037 ms, and a reopened file is still caught.",
+  "tagline": "The entry point that was missed",
+  "summary": "Semantic tokens have two entry points. The full request learned to compare the text two releases ago; the delta request, which the editor uses most, still trusted the version number.",
   "highlights": [
     {
-      "title": "The document is not read on a hit",
-      "kind": "improvement",
-      "description": "Measured over the 60 largest files of a real Android project, a cache hit went from 0.00013 ms to 0.037 ms in the previous release. It is back where it was."
-    },
-    {
-      "title": "Correctness kept",
-      "kind": "improvement",
-      "description": "The same object at the same version is necessarily the same text, since the version is bumped on every change. The text is hashed only when the object differs, which is exactly the reopened file the fingerprint was added for."
+      "title": "A reopened file gets its own colours",
+      "kind": "fix",
+      "description": "The delta request answered \"nothing changed\" on the version number alone, and the version restarts at 1 for a reopened document. Reproduced with two texts of exactly 64 characters: the second was told nothing had changed, so the editor kept the previous session colouring."
     }
   ],
   "sections": [
     {
       "heading": "Notes",
       "bullets": [
-        "The check that proves it, two texts of exactly 64 characters at the same path and version, still holds.",
-        "The sweep over a real project of 3187 files reports that no cache answers differently warm than cold."
+        "A document that really has not changed still gets the empty answer, so nothing is recomputed in normal use.",
+        "The test applies the returned edits to the previous tokens and compares the result, rather than trusting the shape of the answer."
       ]
     }
   ],

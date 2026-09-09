@@ -231,7 +231,13 @@ export class KotlinSemanticTokensProvider
   ): vscode.SemanticTokens | vscode.SemanticTokensEdits {
     const cached = this.cache.get(doc.uri.toString());
 
-    if (cached?.version === doc.version) {
+    // Same identity test as the full request: version alone would answer
+    // "nothing changed" for a reopened file, whose version restarts at 1, and
+    // the editor would keep the previous session's colours forever. This is
+    // the path VS Code uses most, since it sends a previousResultId as soon
+    // as it has one.
+    if (cached?.version === doc.version
+      && (cached.doc === doc || cached.fp === fingerprint(doc.getText()))) {
       return new vscode.SemanticTokensEdits([], cached.resultId);
     }
 

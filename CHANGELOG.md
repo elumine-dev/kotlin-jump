@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.88
+
+Three more shapes of Kotlin header were read as a finished declaration, so the class ended on its first line and its members were listed at the top level of the Outline. What was 211 entries two releases ago is now 3.
+
+### Fixes
+- A brace inside a parameter list is never the body. The empty lambda of a default argument, as in `sealed class State(init: Builder.() -> Unit = {})`, was counted as the class body opening and closing at once, and all 42 members of one class hung outside it.
+- A header that goes on with `constructor`, with a supertype list, or with a `where` clause is read to its end. `open class Foo` on one line and `constructor(...)` on the next is what ktlint produces once the header is long.
+- An annotation between the class name and its constructor belongs to the header, not to whatever follows. The two readings of an annotation now depend on whether a class header is still open.
+- Folding a file costs what it did before. Reading the next line on every line of every declaration had doubled it.
+
 ## 1.42.87
 
 1.42.86 taught the reader that a comment introduces what follows it. Inside a primary constructor that is false, so an annotated data class ended on its first line and its properties climbed to the top level of the Outline.

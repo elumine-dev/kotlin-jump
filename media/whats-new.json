@@ -1,12 +1,12 @@
 {
-  "version": "1.42.87",
+  "version": "1.42.88",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A data class keeps its properties",
-  "summary": "1.42.86 taught the reader that a comment introduces what follows it. Inside a primary constructor that is false, so an annotated data class ended on its first line and its properties climbed to the top level of the Outline.",
+  "tagline": "Every class keeps its members",
+  "summary": "Three more shapes of Kotlin header were read as a finished declaration, so the class ended on its first line and its members were listed at the top level of the Outline. What was 211 entries two releases ago is now 3.",
   "highlights": [
     {
-      "title": "Level with the class, no longer",
-      "description": "A property annotated with SerializedName made its own class stop one line in. The Outline then listed the properties as siblings of the class that declares them.",
+      "title": "A default lambda is not a body",
+      "description": "sealed class State(init: Builder.() -> Unit = {}) opened and closed its depth on the header itself, and all 42 members of one class hung outside it.",
       "kind": "fix"
     }
   ],
@@ -14,8 +14,10 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "A comment or an annotation introduces the next declaration only outside a parameter list. Inside a primary constructor it introduces the next parameter, which still belongs to the class. On a real Android project 211 entries sat at the top level of the Outline instead of inside their class, and now 57 do, fewer than before 1.42.86 shipped.",
-        "A parameter no longer swallows the annotation of the one after it either, so folding the first stops hiding the second one's SerializedName. 712 declarations reached into their neighbour, now 86."
+        "A brace inside a parameter list is never the body. The empty lambda of a default argument was counted as the class body opening and closing at once.",
+        "A header that goes on with constructor, with a supertype list, or with a where clause is read to its end. open class Foo on one line and constructor(...) on the next is what ktlint produces once the header is long.",
+        "An annotation between the class name and its constructor belongs to the header, not to whatever follows. The two readings of an annotation now depend on whether a class header is still open.",
+        "Folding a file costs what it did before: the next line is read only where the answer is about to be returned, not on every line."
       ]
     }
   ],

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.86
+
+A class written the way ktlint wraps an injected constructor was read as one line long. Folding it folded nothing, and every one of its members hung outside it in the Outline and the breadcrumbs.
+
+### Fixes
+- A declaration whose header wraps after an annotation covers its whole body. `class Foo @Inject` on one line and `constructor(...)` on the next is the shape Dagger imposes; on a real Android project 154 classes ended on their first line.
+- The Outline nests by what actually contains what. An object expression inside an init block was filed under whichever property came last, and the breadcrumb read Holder then disposable then the object. 202 nodes sat outside their parent, now none.
+- One chevron per line. A property declared in a primary constructor sits on its class's own line and produced a second fold that stopped partway through the class, so folding the class folded a fragment. 181 lines carried two.
+- A parameter no longer swallows the documentation of the one after it, which made its fold cross the comment's own.
+
 ## 1.42.85
 
 Hiding object expressions from search was done after the result cap, so on a real project a search for anon spent 199 of its 200 slots on them and showed one match where eleven exist.

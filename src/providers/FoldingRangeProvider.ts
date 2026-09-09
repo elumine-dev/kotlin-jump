@@ -83,10 +83,19 @@ export class KotlinFoldingRangeProvider implements vscode.FoldingRangeProvider {
     // are those of the saved text, and the folds landed on the wrong lines.
     const entries = symbolsForDocument(this.index, document);
     const lines = document.getText().split('\n');
+    // One chevron per line: a primary constructor property sits on its class's
+    // own line, and its range stopped at the first member instead of the
+    // closing brace, so folding the class folded a fragment of it. The
+    // declaration comes first in source order, so the first fold is the right
+    // one to keep.
+    const foldedLines = new Set<number>();
     for (let i = 0; i < entries.length; i++) {
+      const startLine = entries[i].line;
+      if (foldedLines.has(startLine)) continue;
       const endLine = bodyEndLine(lines, entries, i, lastLine);
-      if (endLine > entries[i].line) {
-        ranges.push(new vscode.FoldingRange(entries[i].line, endLine, vscode.FoldingRangeKind.Region));
+      if (endLine > startLine) {
+        foldedLines.add(startLine);
+        ranges.push(new vscode.FoldingRange(startLine, endLine, vscode.FoldingRangeKind.Region));
       }
     }
 

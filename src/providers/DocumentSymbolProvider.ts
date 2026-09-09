@@ -33,6 +33,13 @@ export class KotlinDocumentSymbolProvider implements vscode.DocumentSymbolProvid
       while (stack.length > 0 && stack[stack.length - 1].depth >= e.depth) {
         stack.pop();
       }
+      // Depth alone is not containment. An `object :` inside an `init { }`
+      // block sits one level deeper than the class body, so it landed under
+      // whatever property came last, whose extent had ended lines earlier.
+      // The breadcrumb then read `Holder > disposable > object : Callback`.
+      while (stack.length > 0 && stack[stack.length - 1].sym.range.end.line < e.line) {
+        stack.pop();
+      }
 
       const lineText   = document.lineAt(e.line).text;
       const visibility = extractVisibility(lineText, e.character);

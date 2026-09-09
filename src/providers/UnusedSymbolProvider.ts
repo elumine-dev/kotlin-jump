@@ -96,7 +96,17 @@ export class UnusedSymbolProvider implements vscode.CodeActionProvider, vscode.D
       s.depth === 0 && s.line === range.start.line);
     if (!here) return [];
 
-    const hit = findings.find(f => f.name === here.name);
+    // Two overloads share a name, so the first finding is not necessarily the
+    // one under the cursor: the fix offered on the second `fun load` deleted
+    // the first. The scan's line may lag an edit, hence nearest rather than
+    // exact, the same rule `currentRemovalExtent` follows.
+    const hit = findings
+      .filter(f => f.name === here.name)
+      .reduce<UnusedSymbol | undefined>(
+        (best, f) => (best === undefined
+          || Math.abs(f.line - here.line) < Math.abs(best.line - here.line)) ? f : best,
+        undefined,
+      );
     if (!hit) return [];
 
     const actions: vscode.CodeAction[] = [];

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.77
+
+The count only read direct supertypes. A class implementing an interface through an intermediate class was not counted, so one interface read 2 implementations where 33 classes implement it.
+
+### Fixes
+- The implementation count walks the whole supertype chain. Only classes naming the interface directly were counted, which on a real Android project left 60 interfaces out of 394 under reported, one of them showing 2 instead of 33.
+- Each hop is checked the same way a direct one is, so an interface of the same name in another package never walks into the result, and a cycle in the supertypes stops instead of looping.
+- Walking all 394 interfaces of that project takes 5 ms, and the walk is bounded in case a hierarchy ever goes wild.
+
 ## 1.42.76
 
 An interface method with three implementations and one caller read 8 usages. Five of them were the override lines themselves, already counted on the left as implementations.

@@ -169,19 +169,13 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
       return lens;
     }
 
-    // ── Class/interface: implementation count (O(1)) ───────────────────────────
+    // ── Class/interface: implementation count ─────────────────────────────────
+    // Walks the whole subtree: a class implementing this interface through an
+    // intermediate one is an implementation too, and counting only the direct
+    // namers put "2 implementations" on an interface 33 classes implement.
     let implCount = 0;
     if (CLASS_LIKE.has(entry.kind)) {
-      const allImpls   = this.index.lookupImplementations(entry.name);
-      const allParents = this.index.lookup(entry.name).filter(e => CLASS_LIKE.has(e.kind));
-      if (allParents.length <= 1) {
-        implCount = allImpls.length;
-      } else {
-        implCount = allImpls.filter(impl =>
-          impl.packageName === entry.packageName ||
-          !allParents.some(p => p.packageName === impl.packageName)
-        ).length;
-      }
+      implCount = this.index.lookupImplementationsDeep(entry).length;
     }
 
     // ── Usage count — async file scan (cached per FQN) ────────────────────────

@@ -269,6 +269,35 @@ export class SymbolIndex {
     return !others.some(o => imports.includes(o.fqn) || imports.includes(`${o.packageName}.*`) || o.packageName === impl.packageName);
   }
 
+  /**
+   * Every type that reaches `root` through the supertype chain, not just the
+   * ones naming it directly.
+   *
+   * `bySuper` holds direct parents only, so an interface implemented through
+   * an intermediate class was credited with a fraction of its implementors:
+   * `BindableModule` read 2 where 33 classes implement it, all of them via
+   * `ModuleViewHolderBase`. Each hop is filtered by `implementsExactly`, so a
+   * homonym in another package cannot walk into the result.
+   */
+  lookupImplementationsDeep(root: SymbolEntry, limit = 500): SymbolEntry[] {
+    const seen = new Set<string>();
+    const out: SymbolEntry[] = [];
+    const queue: SymbolEntry[] = [root];
+    while (queue.length > 0) {
+      const parent = queue.shift()!;
+      for (const child of this.lookupImplementations(parent.name)) {
+        if (!this.implementsExactly(child, parent)) continue;
+        const key = `${child.uri.toString()}:${child.line}`;
+        if (seen.has(key)) continue;      // also breaks supertype cycles
+        seen.add(key);
+        out.push(child);
+        if (out.length >= limit) return out;
+        queue.push(child);
+      }
+    }
+    return out;
+  }
+
   /** URI strings of the indexed files declaring `package pkg`. */
   filesInPackage(pkg: string): string[] {
     const s = this.byPkg.get(pkg);
@@ -291,7 +320,7 @@ export class SymbolIndex {
     if (!container) return EMPTY;
 
     // Find all classes that implement the container
-    const impls = this.lookupImplementations(container.name).filter(impl => this.implementsExactly(impl, container));
+    const impls = this.lookupImplementationsDeep(container);
     if (impls.length === 0) return EMPTY;
 
     // Find methods with the same name inside implementing classes (not the interface itself)

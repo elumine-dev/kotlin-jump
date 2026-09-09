@@ -182,11 +182,24 @@ export function isInsideStringInterpolation(line: string, pos: number): boolean 
 export function inRawStringTemplate(line: string, index: number): boolean {
   if (index > 0 && line[index - 1] === '$') return true;
   let braces = 0;
+  let quote: string | false = false;
   for (let i = 0; i < index; i++) {
+    const ch = line[i];
     if (braces === 0) {
-      if (line[i] === '$' && line[i + 1] === '{') { braces = 1; i++; }
-    } else if (line[i] === '{') braces++;
-    else if (line[i] === '}') braces--;
+      if (ch === '$' && line[i + 1] === '{') { braces = 1; i++; }
+      continue;
+    }
+    // Inside the braces we are in Kotlin code, so a nested literal is text
+    // again: the label of `${if (x == null) "" else ", date=$date"}` was
+    // counted as a reference and a rename rewrote it.
+    if (quote !== false) {
+      if (ch === '\\') { i++; continue; }
+      if (ch === quote) quote = false;
+      continue;
+    }
+    if (ch === '"' || ch === "'") { quote = ch; continue; }
+    if (ch === '{') braces++;
+    else if (ch === '}') braces--;
   }
-  return braces > 0;
+  return braces > 0 && quote === false;
 }

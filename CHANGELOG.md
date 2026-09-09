@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.42.60
+
+A name written in a quoted literal nested inside a template expression was counted as a reference. Find Usages, occurrence highlighting and rename now leave it alone.
+
+### Fixes
+- A name inside a quoted literal nested in a template expression is text, not a reference. The scan used to keep counting code past the opening quote, so Find Usages reported an extra hit, the usage count on the lens was off by one, and a rename would have rewritten the label.
+- Found by comparing what occurrence highlighting and Find Usages answer about the same position, across every raw string of a real 3187 file Kotlin project.
+
 ## 1.42.59
 
 Put the cursor on a name inside a raw string and every place it is used as code now lights up, including the brace form of a template.

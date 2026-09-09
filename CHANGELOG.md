@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.42.91
+
+Kotlin Jump 1.42.91 fixes an unnecessary full file scan in Call Hierarchy lookups, removing a 9 percent slowdown on that path.
+
+### Improvements
+- Stops the enclosing-function search as soon as no shallower candidate remains, instead of continuing to the start of the file. This removed a 9 percent overhead on that lookup path.
+- Adds regression tests covering both a call with no enclosing function and one with a real, deeply nested enclosing function, so this fix cannot silently regress.
+
+## 1.42.91
+
+The walk added in 1.42.90 to find the enclosing function scanned every symbol back to the top of the file, even when there was nothing above to find.
+
+### Fixes
+- Opening the Call Hierarchy on a heavily called symbol does less work. A top level function has nothing enclosing it, and once a top level candidate has been weighed there is nothing shallower left; without those two bounds the walk cost 9 percent of that path on a real Android project. The answers are unchanged, caller for caller, across 4014 of them.
+
 ## 1.42.90
 
 An annotation on the receiver of an extension made the whole declaration invisible. Those functions were absent from the Outline, unreachable by name, and had no definition to go to.

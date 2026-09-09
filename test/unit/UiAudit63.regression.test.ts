@@ -115,3 +115,57 @@ describe('Un appel appartient a la fonction englobante, pas a une locale', () =>
     expect(fin.isLocal).toBe(true);
   });
 });
+
+describe('La remontee vers la fonction englobante reste bornee', () => {
+  // La boucle de remontee balayait le fichier jusqu'a l'indice 0 meme quand il
+  // n'y avait rien a trouver : +9 % sur ce chemin, en distributions disjointes.
+  // Deux bornes la coupent, et aucune ne doit changer le resultat.
+  const URI_B = 'file:///a63/Borne.kt';
+
+  it('un appel hors de toute fonction de plus haut niveau ne remonte a rien', () => {
+    // `best` est une fonction de profondeur 0 qui ne contient pas l'appel :
+    // il n'existe aucune fonction plus externe, la remontee doit etre sautee.
+    const code = [
+      'package p',
+      '',
+      'fun aide(): Int = 1',
+      '',
+      'val global = aide()',
+    ].join('\n');
+    const index = new SymbolIndex();
+    index.add(parse(URI_B, code));
+    index.finalize();
+    const syms = index.getFileSymbols(URI_B);
+    const aide = syms.find(e => e.name === 'aide')!;
+    const global = syms.find(e => e.name === 'global')!;
+    expect(aide.depth).toBe(0);
+    expect(global.depth).toBe(0);
+    expect(global.isLocal).toBeUndefined();
+  });
+
+  it('la fonction englobante est trouvee quand elle existe vraiment', () => {
+    const code = [
+      'package p',
+      '',
+      'class C {',
+      '    fun externe() {',
+      '        val o = object : L {',
+      '            override fun interne() {}',
+      '        }',
+      '        val x = calcule()',
+      '        println(o, x)',
+      '    }',
+      '}',
+    ].join('\n');
+    const index = new SymbolIndex();
+    index.add(parse(URI_B, code));
+    index.finalize();
+    const syms = index.getFileSymbols(URI_B);
+    const externe = syms.find(e => e.name === 'externe')!;
+    const interne = syms.find(e => e.name === 'interne')!;
+    // La remontee n'a de sens que si l'imbriquee est plus profonde et deja close
+    // avant la ligne d'appel : c'est ce que la borne `depthLimit > 0` traverse.
+    expect(interne.depth).toBeGreaterThan(externe.depth);
+    expect(externe.depth).toBeGreaterThan(0);
+  });
+});

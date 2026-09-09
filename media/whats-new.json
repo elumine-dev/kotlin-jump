@@ -1,12 +1,12 @@
 {
-  "version": "1.42.90",
+  "version": "1.42.91",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Six functions that existed for nothing",
-  "summary": "An annotation on the receiver of an extension made the whole declaration invisible. Those functions were absent from the Outline, unreachable by name, and had no definition to go to.",
+  "tagline": "The Call Hierarchy stops sweeping the file",
+  "summary": "The walk added in 1.42.90 to find the enclosing function scanned every symbol back to the top of the file, even when there was nothing above to find.",
   "highlights": [
     {
-      "title": "An annotated receiver hid the function",
-      "description": "Kotlin allows an annotation between the keyword and the receiver type. The reader stopped there and skipped the declaration entirely.",
+      "title": "Two bounds, same answers",
+      "description": "A top level function has nothing enclosing it, and once a top level candidate has been weighed there is nothing shallower left. The result is identical, caller for caller.",
       "kind": "fix"
     }
   ],
@@ -14,8 +14,7 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "An extension whose receiver carries an annotation is indexed like any other. Six of them in one file of a real Android project existed for no feature at all, and they count as extensions again.",
-        "The Call Hierarchy names the enclosing function. The last function before a call can be an override nested in an object expression that already closed, and the panel then fell back on the last local variable: it announced end as the caller of start. Wrong callers went from 74 to 3 on that project."
+        "Opening the Call Hierarchy on a heavily called symbol does less work. The walk out to the enclosing function ran to the top of the file on every reference, which cost 9 percent of that path on a real Android project. The answers are unchanged, caller for caller, across 4014 of them."
       ]
     }
   ],

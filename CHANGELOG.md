@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.42.87
+
+1.42.86 taught the reader that a comment introduces what follows it. Inside a primary constructor that is false, so an annotated data class ended on its first line and its properties climbed to the top level of the Outline.
+
+### Fixes
+- A comment or an annotation introduces the next declaration only outside a parameter list. Inside a primary constructor it introduces the next parameter, which still belongs to the class. On a real Android project 211 entries sat at the top level of the Outline instead of inside their class, and now 57 do, fewer than the 151 that predate 1.42.86.
+- A parameter no longer swallows the annotation of the one after it either, so folding the first stops hiding the second one's SerializedName. 712 declarations reached into their neighbour, now 86.
+
 ## 1.42.86
 
 A class written the way ktlint wraps an injected constructor was read as one line long. Folding it folded nothing, and every one of its members hung outside it in the Outline and the breadcrumbs.

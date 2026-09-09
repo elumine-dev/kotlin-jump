@@ -25,6 +25,12 @@ const CONTINUES_RE = /(?:[=,.(:]|->|&&|\|\||[+*/-]|\?:)$/;
 // and folding the class folded nothing.
 const TRAILING_ANNOTATION_RE = /@[\w.:]+(?:\s*\([^)]*\))?$/;
 
+// A line made of nothing but annotations introduces the declaration BELOW it,
+// the same way a KDoc does. A constructor parameter ends with a comma, so the
+// scan ran on into the next parameter's `@SerializedName(...)` and folding the
+// first one hid the second one's annotation.
+const ANNOTATION_ONLY_RE = /^(?:@[\w.:]+(?:\s*\([^)]*\))?\s*)+$/;
+
 /**
  * Last line of the body of entries[index], read from the text: the `}`
  * matching its first `{`, or for a declaration without a block (`val a = 1`,
@@ -57,7 +63,13 @@ export function bodyEndLine(
     // A block comment that opens a line belongs to what comes NEXT. A
     // constructor parameter ends with a comma, so the scan ran on into the
     // next parameter's KDoc and the two folds crossed.
-    if (!opened && i > start && code.trimStart().startsWith('/*')) return i - 1;
+    // Only OUTSIDE a parameter list: inside a primary constructor the KDoc and
+    // the annotation introduce the next parameter, which still belongs to the
+    // class. Stopping there closed the class on its own line and its
+    // properties climbed to the root of the Outline, level with it.
+    const trimmed = code.trim();
+    if (!opened && parens === 0 && i > start
+      && (trimmed.startsWith('/*') || ANNOTATION_ONLY_RE.test(trimmed))) return i - 1;
     if (!opened && parens === 0 && !CONTINUES_RE.test(code) && !TRAILING_ANNOTATION_RE.test(code)) return i;
   }
   return stop;

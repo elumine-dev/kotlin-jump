@@ -276,3 +276,107 @@ describe('La documentation d\'un voisin n\'appartient pas a la declaration en co
     expect(bodyEndLine(lignes, syms, i, lignes.length - 1)).toBe(5);
   });
 });
+
+describe('Une ligne faite d\'annotations introduit ce qui suit', () => {
+  // Contrepartie de la KDoc : `val a: String,` finit par une virgule, donc le
+  // balayage continuait dans la ligne `@SerializedName("b")` du parametre
+  // suivant. Replier le premier cachait l'annotation du second. 669 cas sur
+  // LaPresse apres le correctif KDoc de la v1.42.86.
+  const CODE_ANNO = [
+    'package p',
+    '',
+    'data class Ticket(',
+    '    @SerializedName("content_type")',
+    '    val contentType: String,',
+    '    @SerializedName("ticket_form_id")',
+    '    val ticketFormId: Long,',
+    ')',
+  ].join('\n');
+
+  it('l\'etendue du parametre s\'arrete avant l\'annotation du suivant', () => {
+    const lignes = CODE_ANNO.split('\n');
+    const syms = parse(URI, CODE_ANNO).symbols;
+    const i = syms.findIndex(s => s.name === 'contentType');
+    expect(i).toBeGreaterThanOrEqual(0);
+    expect(bodyEndLine(lignes, syms, i, lignes.length - 1)).toBe(4);
+  });
+
+  it('un en tete replie APRES une annotation continue quand meme', () => {
+    // La regle inverse doit survivre : ici l'annotation termine une ligne qui
+    // a commence une declaration, elle ne l'introduit pas.
+    const code = ['package p', '', 'class F @Inject', 'constructor(val a: Int) {', '    fun m() {}', '}'].join('\n');
+    const lignes = code.split('\n');
+    const syms = parse(URI, code).symbols;
+    const i = syms.findIndex(s => s.name === 'F');
+    expect(bodyEndLine(lignes, syms, i, lignes.length - 1)).toBe(5);
+  });
+
+  it('plusieurs annotations empilees s\'arretent aussi', () => {
+    const code = [
+      'package p',
+      '',
+      'class C {',
+      '    val a = 1',
+      '',
+      '    @Inject',
+      '    @Named("x")',
+      '    lateinit var b: B',
+      '}',
+    ].join('\n');
+    const lignes = code.split('\n');
+    const syms = parse(URI, code).symbols;
+    const i = syms.findIndex(s => s.name === 'a');
+    expect(bodyEndLine(lignes, syms, i, lignes.length - 1)).toBe(3);
+  });
+});
+
+describe('Une regle d\'arret ne s\'applique pas dans une liste de parametres', () => {
+  // La KDoc et l'annotation introduisent la declaration suivante SEULEMENT
+  // hors parentheses. Dans un constructeur primaire elles introduisent le
+  // parametre suivant, qui appartient encore a la classe : arreter la
+  // fermait la classe sur sa premiere ligne et ses proprietes remontaient a la
+  // racine de l'Outline, au meme niveau qu'elle. 151 cas avant la v1.42.86,
+  // 211 apres, et 1000 si la regle annotation n'etait pas bornee.
+  const CODE_DC = [
+    'package p',
+    '',
+    'data class Ticket(',
+    '    @SerializedName("content_type")',
+    '    val contentType: String,',
+    '    /** Le formulaire. */',
+    '    val ticketFormId: Long,',
+    ')',
+  ].join('\n');
+
+  it('la data class couvre toute sa liste de parametres', () => {
+    const lignes = CODE_DC.split('\n');
+    const syms = parse(URI, CODE_DC).symbols;
+    const i = syms.findIndex(s => s.name === 'Ticket');
+    expect(bodyEndLine(lignes, syms, i, lignes.length - 1)).toBe(7);
+  });
+
+  it('ses proprietes restent ses enfants dans l\'Outline', () => {
+    const index = new SymbolIndex();
+    index.add(parse(URI, CODE_DC));
+    index.finalize();
+    const arbre = new KotlinDocumentSymbolProvider(index).provideDocumentSymbols(doc(URI, CODE_DC), {} as any);
+    expect(arbre.map(n => n.name)).toEqual(['Ticket']);
+    expect(arbre[0].children.map(n => n.name)).toEqual(['contentType', 'ticketFormId']);
+  });
+
+  it('hors parentheses, la regle d\'arret tient toujours', () => {
+    const code = [
+      'package p',
+      '',
+      'class C {',
+      '    val a = 1',
+      '',
+      '    @Inject',
+      '    lateinit var b: B',
+      '}',
+    ].join('\n');
+    const lignes = code.split('\n');
+    const syms = parse(URI, code).symbols;
+    expect(bodyEndLine(lignes, syms, syms.findIndex(s => s.name === 'a'), lignes.length - 1)).toBe(3);
+  });
+});

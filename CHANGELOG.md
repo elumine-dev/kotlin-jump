@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.72
+
+An argument label could be lifted out of a local variable declared in another file. Color.alpha(result) was labelled opacity, a word taken from an unrelated expression.
+
+### Fixes
+- Argument labels are no longer invented. Resolving a call by name accepted any symbol carrying that name, so a local val in another file of the same package answered for it and its line was parsed as a signature: Color.alpha(result) showed opacity, and Success(false) showed false.
+- Annotation arguments keep their labels. Annotations were missing from the list of callable kinds, so filtering by kind without adding them would have dropped every one of them.
+- Measured on a real Android project: 14 invented labels removed, and not one correct label lost.
+
 ## 1.42.71
 
 A when that covers every branch showed a lens with no command at all, which VS Code does not reliably draw. It now opens the sealed type it covers.

@@ -1,21 +1,22 @@
 {
-  "version": "1.42.71",
+  "version": "1.42.72",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The exhaustive when lens leads somewhere",
-  "summary": "A when that covers every branch showed a lens with no command at all, which VS Code does not reliably draw. It now opens the sealed type it covers.",
+  "tagline": "No more invented parameter names",
+  "summary": "An argument label could be lifted out of a local variable declared in another file. Color.alpha(result) was labelled opacity, a word taken from an unrelated expression.",
   "highlights": [
     {
-      "title": "Covered branches, and a way to the type",
-      "description": "Clicking the check mark on an exhaustive when opens the sealed class or enum it covers, which is the declaration you want to read next.",
-      "kind": "improvement"
+      "title": "A call resolves to something callable",
+      "description": "Argument labels come from functions, constructors and annotations only. A local val carrying the same name is no longer read as if it were a signature.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "The lens on an exhaustive when carries a real command. Being the common case for this check, it was also the lens most at risk of not being drawn: an empty command is what made the drawable preview lens vanish once.",
-        "No lens in the extension relies on an empty command any more, and a test holds that for both branches of this provider."
+        "Argument labels are no longer invented. Resolving a call by name accepted any symbol carrying that name, so a local val in another file of the same package answered for it and its line was parsed as a signature: Color.alpha(result) showed opacity, and Success(false) showed false.",
+        "Annotation arguments keep their labels. Annotations were missing from the list of callable kinds, so filtering by kind without adding them would have dropped every one of them.",
+        "Measured on a real Android project: 14 invented labels removed, and not one correct label lost."
       ]
     }
   ],

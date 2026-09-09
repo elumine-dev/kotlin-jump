@@ -1,23 +1,22 @@
 {
-  "version": "1.42.80",
+  "version": "1.42.81",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Jump into libs.versions.toml",
-  "summary": "Ctrl+click an accessor in a build file and land on the line that declares it. Plugins, versions and bundles now answer too, not only libraries.",
+  "tagline": "Three defects in what shipped this week",
+  "summary": "Go to Implementation had stopped answering for any type declared outside the workspace, jumping into a version catalog broke on the web, and a constant could be treated as a type.",
   "highlights": [
     {
-      "title": "alias(libs.plugins.android.library) is a link",
-      "description": "The cursor goes straight to the android-library line of the plugins section, in the catalog that build file actually reads.",
-      "kind": "feature"
+      "title": "ViewModel answers again",
+      "description": "1.42.79 asked for a local declaration of the parent before listing anything. On a real Android project that emptied the list for 250 names and 1145 classes, ViewModel and Exception among them.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "New",
+      "heading": "Fixes",
       "bullets": [
-        "Go to Definition works on a version catalog accessor from a build.gradle.kts or a build.gradle. The first segment picks the section the way Gradle does, so a plugin named ksp and a library named ksp.api never lead to each other.",
-        "The longest alias wins: with androidx and androidx.core both declared, libs.androidx.core opens the second one.",
-        "Hover reads the same four sections. A plugin shows its id and resolved version, a version its literal, a bundle its members. Only libraries answered before, so a line of plugin aliases was silent.",
-        "Measured on a real Android project: 1295 accessors across 49 build files, every one of them resolved."
+        "Go to Implementation works on a type that lives in a dependency. Put the cursor on ViewModel, AppCompatActivity or WebViewClient and the classes extending it come back, subclasses of those included.",
+        "Jumping to an accessor declaration keeps the scheme of the file it came from, so it works on vscode.dev where a workspace is not on disk.",
+        "A value is never implemented by anything. A constant sharing its name with a type from a dependency could send Go to Definition into that type's subclasses."
       ]
     }
   ],

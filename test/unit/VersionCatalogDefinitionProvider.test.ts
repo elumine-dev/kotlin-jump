@@ -132,3 +132,28 @@ describe('Le survol lit les quatre sections, pas seulement [libraries]', () => {
     expect(survol('plugins.inexistant')).toBeUndefined();
   });
 });
+
+describe('Le fichier vise garde le schema de son URI', () => {
+  // Sur vscode.dev le document a le schema `vscode-vfs`, et `uri.fsPath` en
+  // rend seulement le chemin. Reconstruire un `file://` a partir de la menait
+  // vers un fichier qui n'existe pas dans l'hote web.
+  const VFS = 'vscode-vfs://github/nuglif/lapresse/gradle/libs.versions.toml';
+
+  it('un catalogue indexe depuis un systeme de fichiers virtuel reste atteignable', () => {
+    const index = new VersionCatalogIndex();
+    index.reindexFile(CATALOGUE, '/nuglif/lapresse/gradle/libs.versions.toml', VFS);
+    const p = new VersionCatalogDefinitionProvider(index);
+    const loc: any = p.provideDefinition(
+      docDe('/nuglif/lapresse/app/build.gradle.kts', '    alias(libs.plugins.ksp)'),
+      new Position(0, 22));
+    expect(loc).toBeDefined();
+    expect(loc.uri.toString()).toBe(VFS);
+  });
+
+  it('un chemin nu reste traite comme un fichier local', () => {
+    const loc: any = provider().provideDefinition(
+      docDe('/p/app/build.gradle.kts', '    alias(libs.plugins.ksp)'), new Position(0, 22));
+    expect(loc.uri.scheme).toBe('file');
+    expect(loc.uri.path).toBe(TOML);
+  });
+});

@@ -3,7 +3,9 @@ import { parse } from '../../src/indexer/KotlinParser';
 import { SymbolIndex } from '../../src/indexer/SymbolIndex';
 import { KotlinCodeLensProvider } from '../../src/providers/CodeLensProvider';
 import { OverrideGutterProvider } from '../../src/providers/OverrideGutterProvider';
-import { Range, workspace } from './__mocks__/vscode';
+import { Range, Position, workspace } from './__mocks__/vscode';
+import { KotlinDefinitionProvider } from '../../src/providers/DefinitionProvider';
+import { mockDocument } from './helpers';
 
 // Audit 57 : la v1.42.77 a fait passer le COMPTE du lens à la marche
 // transitive et a laissé toutes les LISTES sur les supertypes directs. Sur
@@ -136,5 +138,88 @@ describe('Le compte ne compte pas ce que la liste refuse de montrer', () => {
     const resolu = await codeLens.resolveCodeLens(lens, { isCancellationRequested: false } as any);
     expect(resolu!.command!.title).toContain('1 implementation');
     expect(resolu!.command!.title).not.toContain('2 implementations');
+  });
+});
+
+describe('Un supertype venu d\'une dependance garde ses implementeurs', () => {
+  // Regression introduite par le correctif de la v1.42.79 : `bySuper` est
+  // indexe par NOM de supertype, y compris ceux qu'aucun fichier de l'espace
+  // de travail ne declare (androidx `ViewModel`, `Exception`, `WebViewClient`).
+  // Exiger une declaration locale a vide la liste : sur LaPresse, 1145
+  // implementations reparties sur 250 noms ne s'affichaient plus.
+  const CODES: Record<string, string> = {
+    'file:///a57c/Un.kt': 'package p\n\nclass UnViewModel : ViewModel() {\n    fun go() {}\n}\n',
+    'file:///a57c/Deux.kt': 'package p\n\nclass DeuxViewModel : ViewModel() {\n    fun go() {}\n}\n',
+    'file:///a57c/Sous.kt': 'package p\n\nclass SousViewModel : UnViewModel()\n',
+  };
+
+  it('la liste montre les implementeurs meme sans declaration locale du parent', () => {
+    const index = indexDe(CODES);
+    expect(index.lookup('ViewModel')).toEqual([]);
+    expect(index.implementationsOfName('ViewModel').map(e => e.name).sort())
+      .toEqual(['DeuxViewModel', 'SousViewModel', 'UnViewModel']);
+  });
+
+  it('un nom qui n\'est ni declare ni etendu ne renvoie rien', () => {
+    expect(indexDe(CODES).implementationsOfName('Inconnu')).toEqual([]);
+  });
+});
+
+describe('Go to Definition sur la declaration vise le type exact, pas l\'homonyme', () => {
+  // Deux `Callback` imbriquees, dans des packages DIFFERENTS. Le nom seul les
+  // fusionnait ; le fqn epingle celle dont on lit la declaration, donc ce que
+  // le saut montre est exactement ce que le lens de cette ligne annonce.
+  //
+  // Limite connue et mesuree : deux homonymes dans le MEME package ne sont pas
+  // separables, parce que `class Foo : Outer.Callback` est indexe sous le nom
+  // simple `Callback`. Voir reference_qualified_supertype_phantoms.
+  const CODES: Record<string, string> = {
+    'file:///a57d/Un.kt':
+      'package p.un\n\nclass UnInteractor {\n    interface Callback {\n        fun ok()\n    }\n}\n\nclass UnPresenter : UnInteractor.Callback {\n    override fun ok() {}\n}\n',
+    'file:///a57d/Deux.kt':
+      'package p.deux\n\nclass DeuxInteractor {\n    interface Callback {\n        fun ok()\n    }\n}\n\nclass DeuxPresenter : DeuxInteractor.Callback {\n    override fun ok() {}\n}\nclass AutrePresenter : DeuxInteractor.Callback {\n    override fun ok() {}\n}\n',
+  };
+
+  it('le fqn epingle la bonne des deux interfaces', () => {
+    const index = indexDe(CODES);
+    const un = index.lookup('Callback').find(e => e.fqn === 'p.un.UnInteractor.Callback')!;
+    const deux = index.lookup('Callback').find(e => e.fqn === 'p.deux.DeuxInteractor.Callback')!;
+    expect(un).toBeDefined();
+    expect(deux).toBeDefined();
+
+    // Par nom seul, les trois implementeurs sont fusionnes.
+    expect(index.implementationsOfName('Callback').length).toBe(3);
+    // Avec le fqn, chaque declaration ne voit que la sienne, comme son lens.
+    expect(index.implementationsOfName('Callback', un.packageName, un.fqn).map(e => e.name))
+      .toEqual(['UnPresenter']);
+    expect(index.implementationsOfName('Callback', deux.packageName, deux.fqn).map(e => e.name).sort())
+      .toEqual(['AutrePresenter', 'DeuxPresenter']);
+    expect(index.lookupImplementationsDeep(deux).length).toBe(2);
+  });
+});
+
+describe('Une valeur n\'est implementee par rien', () => {
+  // `bySuper` est indexe par NOM de supertype. Retablir les supertypes venus
+  // d'une dependance a rendu possible qu'une `const val Handler` reponde avec
+  // les classes qui etendent le `Handler` d'Android.
+  const CODES: Record<string, string> = {
+    'file:///a57e/A.kt': 'package p\n\nclass MonHandler : Handler()\n',
+    'file:///a57e/B.kt': 'package p\n\nconst val Handler = "clef"\n',
+  };
+
+  it('l\'index repond par nom, c\'est l\'appelant qui doit qualifier', () => {
+    const index = indexDe(CODES);
+    expect(index.implementationsOfName('Handler').map(e => e.name)).toEqual(['MonHandler']);
+  });
+
+  it('Go to Definition sur la constante ne saute pas vers la classe', () => {
+    const index = indexDe(CODES);
+    const provider = new KotlinDefinitionProvider(index);
+    const code = CODES['file:///a57e/B.kt'];
+    const doc = mockDocument('file:///a57e/B.kt', code);
+    // Curseur sur `Handler` de la ligne `const val Handler = "clef"`.
+    const res: any = provider.provideDefinition(doc as any, new Position(2, 12) as any);
+    const cibles = Array.isArray(res) ? res : res ? [res] : [];
+    expect(cibles.map((l: any) => String(l.uri))).not.toContain('file:///a57e/A.kt');
   });
 });

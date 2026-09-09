@@ -239,6 +239,8 @@ interface ParsedCatalog {
   catalog: Catalog;
   projectDir: string;
   key: string;
+  /** Full URI of the catalog file, scheme included. */
+  uri: string;
   /** `[versions]` alias to its literal, so a `version.ref` can be resolved. */
   versions: Map<string, string>;
 }
@@ -259,8 +261,14 @@ export class VersionCatalogIndex {
     this.catalogs.delete(key);
   }
 
-  /** `key` is the toml's uri (or path); omitted, the catalog is the workspace's only one. */
-  reindexFile(content: string, key = ''): void {
+  /**
+   * `key` is the toml's path, used to match a build file to its catalog;
+   * omitted, the catalog is the workspace's only one. `uriString` is how a
+   * caller reaches that file again: on vscode.dev the document scheme is
+   * `vscode-vfs` and `fsPath` keeps only the path, so rebuilding a `file://`
+   * from the key pointed at a file the web host does not have.
+   */
+  reindexFile(content: string, key = '', uriString = key): void {
     const catalog = parseCatalog(content);
     const entries = new Map<string, CatalogEntry>();
 
@@ -287,7 +295,7 @@ export class VersionCatalogIndex {
 
     // `<project>/gradle/libs.versions.toml`: the project dir is two levels up.
     const projectDir = key.replace(/^file:\/\//, '').replace(/[\\/]gradle[\\/][^\\/]+$/, '');
-    this.catalogs.set(key, { entries, catalog, projectDir, key, versions });
+    this.catalogs.set(key, { entries, catalog, projectDir, key, uri: uriString, versions });
   }
 
   /**
@@ -379,6 +387,6 @@ export class VersionCatalogIndex {
       ? resolveAccessor(c.catalog.aliases, namespaced, segments.slice(1))
       : undefined)
       ?? resolveAccessor(c.catalog.aliases, 'libraries', segments);
-    return alias ? { alias, file: c.key } : undefined;
+    return alias ? { alias, file: c.uri } : undefined;
   }
 }

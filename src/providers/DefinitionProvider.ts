@@ -230,7 +230,7 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
           const superLoc = this.superMethodLocation(declEntry, allow);
           if (superLoc) return superLoc;
         }
-        let impls = this.implLocations(word, allow);
+        let impls = this.implLocations(word, allow, declEntry);
         if (impls.length === 0) impls = this.methodImplLocations(declEntry, allow);
         if (impls.length > 0) return impls;
         _pendingDeclNav = { uri: declEntry.uri.toString(), line: declEntry.line, word };
@@ -274,7 +274,7 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
         const superLoc = this.superMethodLocation(declEntry, allow);
         if (superLoc) return superLoc;
       }
-      let impls = this.implLocations(word, allow);
+      let impls = this.implLocations(word, allow, declEntry);
       if (impls.length === 0) impls = this.methodImplLocations(declEntry, allow);
       if (impls.length > 0) return impls;
       _pendingDeclNav = { uri: declEntry.uri.toString(), line: declEntry.line, word };
@@ -369,8 +369,21 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
     return resolved.matches.filter(e => allow(e.uri.path)).map(toLocation);
   }
 
-  private implLocations(word: string, allow: (path: string) => boolean): vscode.Location[] {
-    return this.index.implementationsOfName(word)
+  // `decl` is the declaration the cursor sits on, when there is one. Passing it
+  // pins the answer to that exact type: by name alone, two `Callback`
+  // interfaces sharing a package were merged, and the lens on that very line
+  // announced a different number than this jump produced.
+  //
+  // It also settles what a name means. `bySuper` is keyed by supertype name,
+  // so a `const val Handler` would otherwise answer with the classes that
+  // extend android's `Handler`: a value is never implemented by anything.
+  private implLocations(
+    word: string,
+    allow: (path: string) => boolean,
+    decl?: { kind?: string; packageName?: string; fqn?: string },
+  ): vscode.Location[] {
+    if (decl && !CLASS_LIKE_KINDS.has(decl.kind ?? '')) return [];
+    return this.index.implementationsOfName(word, decl?.packageName, decl?.fqn)
       .filter(e => allow(e.uri.path))
       .map(toLocation);
   }

@@ -1,21 +1,21 @@
 {
-  "version": "1.42.58",
+  "version": "1.42.59",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The compiler guards the caches again",
-  "summary": "The check the caches share accepted any object where a document was expected, and stored it. Nothing did that, but the compiler had stopped being able to say so.",
+  "tagline": "Occurrence highlighting agrees with Find Usages",
+  "summary": "Put the cursor on a name inside a raw string and every place it is used as code now lights up, including the brace form of a template.",
   "highlights": [
     {
-      "title": "A guard the compiler can enforce",
-      "kind": "fix",
-      "description": "The helper introduced last release was written loosely enough that passing something that is not a document compiled cleanly, and the cache entry then held it while still claiming to hold a document. Its signature ties the two together now."
+      "title": "Raw strings light up fully",
+      "description": "A name written with a dollar and braces inside a raw string is code, and it is now highlighted like the short dollar form always was.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Notes",
+      "heading": "Fixes",
       "bullets": [
-        "The behaviour of the check is unchanged, and is now pinned by a test for each of its three outcomes.",
-        "Two hundred thousand randomised runs confirm it answers correctly and only adopts the new document when the text really matches."
+        "Occurrence highlighting inside a raw string now treats a name wrapped in a dollar and braces as code, the way Find Usages always has. Before this, only the short dollar form lit up, so one file answered two different things about the same position.",
+        "The rule now lives in one place, shared by the highlighter and Find Usages, so the two views cannot drift apart again."
       ]
     }
   ],

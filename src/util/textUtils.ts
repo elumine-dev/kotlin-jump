@@ -172,3 +172,21 @@ export function isInsideStringInterpolation(line: string, pos: number): boolean 
   }
   return false;
 }
+
+/**
+ * Inside a raw string, `$name` and `${…name…}` are the only places where
+ * `name` is code. Raw strings have no escapes, so a `$` is always a template.
+ * Shared so occurrence highlighting and Find Usages agree on the same
+ * position: one of them counted `${name}` while the other left it unlit.
+ */
+export function inRawStringTemplate(line: string, index: number): boolean {
+  if (index > 0 && line[index - 1] === '$') return true;
+  let braces = 0;
+  for (let i = 0; i < index; i++) {
+    if (braces === 0) {
+      if (line[i] === '$' && line[i + 1] === '{') { braces = 1; i++; }
+    } else if (line[i] === '{') braces++;
+    else if (line[i] === '}') braces--;
+  }
+  return braces > 0;
+}

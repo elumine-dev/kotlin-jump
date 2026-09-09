@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.42.59
+
+Put the cursor on a name inside a raw string and every place it is used as code now lights up, including the brace form of a template.
+
+### Fixes
+- Occurrence highlighting inside a raw string now treats a name wrapped in a dollar and braces as code, the way Find Usages always has. Before this, only the short dollar form lit up, so one file answered two different things about the same position.
+- The rule now lives in one place, shared by the highlighter and Find Usages, so the two views cannot drift apart again.
+
 ## 1.42.58
 
 Kotlin Jump 1.42.58 closes a hole in the check the caches share, so the compiler guards it again.

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.67
+
+With two dead overloads in one file, the quick fix offered on the second one deleted the first. The action found its finding by name, and a name is shared by every overload.
+
+### Fixes
+- Deleting an unused declaration removes the one the cursor sits on. With two dead overloads of the same name in a file, the fix offered on the second removed the first instead, along with whatever annotation it carried.
+- The title and the verdict shown in the lightbulb came from that same wrong finding, so the second overload could be offered the action meant for the first.
+- This path opened in 1.42.63, which started reporting two dead homonyms declared in one file. The removal itself was already fixed in 1.42.65; this is the step just above it.
+
 ## 1.42.66
 
 Nothing changes in the editor. Three behaviours you can see, and that no test was actually guarding, are now guarded: JUnit 5 results finding their test, the usage lens skipping private members, and test names with spaces.

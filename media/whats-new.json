@@ -1,22 +1,22 @@
 {
-  "version": "1.42.66",
+  "version": "1.42.67",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Three silent regressions can no longer ship",
-  "summary": "Nothing changes in the editor. Three behaviours you can see, and that no test was actually guarding, are now guarded: JUnit 5 results finding their test, the usage lens skipping private members, and test names with spaces.",
+  "tagline": "Delete the overload you pointed at",
+  "summary": "With two dead overloads in one file, the quick fix offered on the second one deleted the first. The action found its finding by name, and a name is shared by every overload.",
   "highlights": [
     {
-      "title": "Tests that check the code, not a copy of it",
-      "description": "Several test files reimplemented the module they were meant to check. Each copy quietly drifted from the real code, so a regression in the real code broke nothing.",
-      "kind": "improvement"
+      "title": "The lightbulb acts on the line under the cursor",
+      "description": "The declaration under the cursor was already resolved on the current text, but the finding attached to it was picked by name, so the first overload won every time.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Under the hood",
+      "heading": "Fixes",
       "bullets": [
-        "A JUnit 5 result named myTest() is matched back to its test, a nested class written Outer with a dollar sign is read as Outer.Inner, and an escaped quote in a failure message is shown as a quote. All three could be unplugged from the module without a single test noticing.",
-        "The usage count above a private member, and a Gradle test name written with spaces, are checked against the module now instead of against a copy of an older version of it.",
-        "A guard compares every expression a test copies from the source with its original, so the next copy that drifts fails the build."
+        "Deleting an unused declaration removes the one the cursor sits on. With two dead overloads of the same name in a file, the fix offered on the second removed the first instead, along with whatever annotation it carried.",
+        "The title and the verdict shown in the lightbulb came from that same wrong finding, so the second overload could be offered the action meant for the first.",
+        "This path opened in 1.42.63, which started reporting two dead homonyms declared in one file. The removal itself was already fixed in 1.42.65; this is the step just above it."
       ]
     }
   ],

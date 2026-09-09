@@ -1,12 +1,12 @@
 {
-  "version": "1.42.64",
+  "version": "1.42.65",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Dead members hiding behind a twin",
-  "summary": "The unused member check counted a file once per declaration it held, so a class carrying two overloads of a dead name read as if something used it. The same fix as the previous release, one level down.",
+  "tagline": "Deleting an overload deletes the right one",
+  "summary": "Removing an unused function looked the declaration up by name and kind, and overloads share both. Accepting the fix on the second one deleted the first, annotation included.",
   "highlights": [
     {
-      "title": "A twin in the same class is not a use",
-      "description": "When three members share a dead name and two of them sit in one file, all three are now reported. Until now the pair hid the whole group.",
+      "title": "The delete lands on the reported line",
+      "description": "The removal now uses the line the finding was made on, so accepting it on one overload never touches its neighbour, even one marked Keep.",
       "kind": "fix"
     }
   ],
@@ -14,9 +14,9 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "The unused member check reports a group of dead homonyms when one file holds two of them. Before, that file was counted twice and the group looked alive, so nothing was reported at all.",
-        "The why explanation follows the same rule, so it no longer says alive in the same file for a member the check reports.",
-        "The safety belts are untouched: one mention anywhere, a layout attribute included, still keeps every bearer of the name alive. Same 271 findings on a 6278 file Android codebase, before and after."
+        "Removing an unused top level declaration lands on the one that was reported. Two overloads share a name and a kind, so the lookup answered with the first one every time, and the neighbour was deleted instead, annotation and all.",
+        "Two dead overloads accepted together now produce two separate deletions. Both resolved to the same span before, so one of them silently stayed.",
+        "This path only became reachable in 1.42.63, which started reporting two dead homonyms declared in one file."
       ]
     }
   ],

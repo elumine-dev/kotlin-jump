@@ -218,7 +218,7 @@ export async function buildSymbolRemovalEdit(
       // to a document edited since, and the deletion landed a line off.
       const ranges = group
         .filter(f => f.removeStart !== -1)
-        .map(f => currentRemovalExtent(p, text, f.name, f.kind))
+        .map(f => currentRemovalExtent(p, text, f.name, f.kind, f.line))
         .filter((e): e is { removeStart: number; removeEnd: number } => e !== undefined && e.removeStart !== -1)
         .map(e => wholeLineExtent(text, e.removeStart, e.removeEnd))
         .sort((a, b) => a.start - b.start);

@@ -353,9 +353,22 @@ export function currentRemovalExtent(
   text: string,
   name: string,
   kind: UnusedSymbolKind,
+  /** Line the finding was made on, to tell two overloads apart. */
+  line?: number,
 ): { removeStart: number; removeEnd: number } | undefined {
   const parsed = path.endsWith('.java') ? parseJava(path, text) : parse(path, text);
-  const sym = parsed.symbols.find(s => s.depth === 0 && s.name === name && s.kind === kind);
+  // Overloads share a name AND a kind, so the first match is not necessarily
+  // the one that was reported: deleting the second `fun load` used to delete
+  // the first, its @Keep annotation included. The file may have been edited
+  // since the scan, so the reported line picks the nearest match rather than
+  // an exact one.
+  const matches = parsed.symbols.filter(s => s.depth === 0 && s.name === name && s.kind === kind);
+  const sym = line === undefined
+    ? matches[0]
+    : matches.reduce<typeof matches[number] | undefined>(
+      (best, s) => (best === undefined || Math.abs(s.line - line) < Math.abs(best.line - line)) ? s : best,
+      undefined,
+    );
   if (!sym) return undefined;
   const clean = sanitizeForUsageScan(text);
   const lineStarts = buildLineStarts(clean);

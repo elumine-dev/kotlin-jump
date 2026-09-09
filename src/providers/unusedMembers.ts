@@ -527,7 +527,9 @@ export function findUnusedMembers(input: UnusedMemberScanInput): UnusedMember[] 
     if (mainElsewhere !== 0) continue;
 
     let verdict: UnusedMemberVerdict;
-    const residual = c.selfInFile - c.selfInSpan;
+    // A twin declared in the same file is not a use: the group check already
+    // proved the corpus names this symbol only where it is declared.
+    const residual = unmentioned.has(c.name) ? 0 : c.selfInFile - c.selfInSpan;
     if (residual > 0) {
       // Used elsewhere in its own file. selfOnly only when every residual code
       // mention sits inside the enclosing class AND none hides in a string
@@ -690,11 +692,24 @@ function unmentionedDuplicateMembers(
     if (group.some(c => c.sym.kind === 'val' || c.sym.kind === 'var')) {
       for (const a of accessorNames(name)) mentions += harvest.main.get(a) ?? 0;
     }
+    // Count each FILE once: two bearers of the name declared in the same file
+    // each see the other's name token in their own `selfInFile`, so summing
+    // per candidate counted that file twice and the group read as mentioned.
+    // Two dead overloads in one class were therefore never reported, while
+    // the same two split across files were. Same fix as the top level rule.
+    const byFile = new Map<string, MemberCandidate[]>();
+    for (const c of group) {
+      const inFile = byFile.get(c.path) ?? [];
+      inFile.push(c);
+      byFile.set(c.path, inFile);
+    }
     let self = 0;
     let outsideOwnSpan = 0;
-    for (const c of group) {
-      self += c.selfInFile;
-      outsideOwnSpan += c.selfInFile - c.selfInSpan;
+    for (const inFile of byFile.values()) {
+      const fileMentions = inFile[0].selfInFile;
+      const owned = inFile.reduce((n, c) => n + c.selfInSpan, 0);
+      self += fileMentions;
+      outsideOwnSpan += fileMentions - owned;
     }
     if (mentions - self === 0 && outsideOwnSpan === 0) out.add(name);
   }
@@ -736,7 +751,7 @@ export function explainMembers(input: UnusedMemberScanInput): MemberExplanation[
     else if (!unmentioned.has(c.name)
              && mentionsOf(harvest.main, c, bareXml, bareKotlin) - c.selfInFile !== 0) {
       outcome = 'alive:main';
-    } else if (c.selfInFile - c.selfInSpan > 0) {
+    } else if (!unmentioned.has(c.name) && c.selfInFile - c.selfInSpan > 0) {
       const selfOnly = c.stringMentions === 0 && c.codeOutsideSpan > 0
         && c.codeOutsideSpan === c.codeInsideClass;
       outcome = selfOnly ? 'selfOnly' : 'alive:same-file';

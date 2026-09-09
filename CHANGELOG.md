@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.64
+
+The unused member check counted a file once per declaration it held, so a class carrying two overloads of a dead name read as if something used it. The same fix as the previous release, one level down.
+
+### Fixes
+- The unused member check reports a group of dead homonyms when one file holds two of them. Before, that file was counted twice and the group looked alive, so nothing was reported at all.
+- The why explanation follows the same rule, so it no longer says alive in the same file for a member the check reports.
+- The safety belts are untouched: one mention anywhere, a layout attribute included, still keeps every bearer of the name alive. Same 271 findings on a 6278 file Android codebase, before and after.
+
 ## 1.42.63
 
 Two dead functions of the same name in one file hid each other from the unused symbol check, while the same two in separate files were reported. Both are now reported.

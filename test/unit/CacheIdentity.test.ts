@@ -295,3 +295,44 @@ describe('Rafraîchissement de la référence après réouverture', () => {
     expect(chaud).toBe(froid);
   });
 });
+
+describe('sameDocument, le contrat du helper partagé', () => {
+  it('répond oui sur le même objet, sans même lire le texte', async () => {
+    const { sameDocument, fingerprint } = await import('../../src/util/boundedCache');
+    const objet = {} as any;
+    const entry = { doc: objet, fp: fingerprint('quelconque') };
+    let lu = 0;
+    expect(sameDocument(entry, objet, () => { lu++; return 'autre'; })).toBe(true);
+    expect(lu).toBe(0);
+  });
+
+  it('adopte le nouvel objet quand le texte correspond', async () => {
+    const { sameDocument, fingerprint } = await import('../../src/util/boundedCache');
+    const a = {} as any, b = {} as any;
+    const entry = { doc: a, fp: fingerprint('meme texte') };
+    expect(sameDocument(entry, b, () => 'meme texte')).toBe(true);
+    // C'est cette adoption qui évite de rehacher à chaque appel suivant.
+    expect(entry.doc).toBe(b);
+  });
+
+  it('n\'adopte rien quand le texte diffère', async () => {
+    const { sameDocument, fingerprint } = await import('../../src/util/boundedCache');
+    const a = {} as any, b = {} as any;
+    const entry = { doc: a, fp: fingerprint('un texte') };
+    expect(sameDocument(entry, b, () => 'un AUTRE texte')).toBe(false);
+    expect(entry.doc).toBe(a);
+  });
+
+  it('le type du document passé doit correspondre à celui de l\'entrée', async () => {
+    // Le premier jet acceptait n'importe quel objet et le rangeait dans un
+    // champ typé TextDocument : le compilateur ne gardait plus rien. La
+    // signature lie maintenant les deux, ce que ce test documente ; la preuve
+    // est faite par la compilation du projet, pas à l'exécution.
+    const { sameDocument, fingerprint } = await import('../../src/util/boundedCache');
+    interface Faux { id: number }
+    const a: Faux = { id: 1 }, b: Faux = { id: 2 };
+    const entry = { doc: a, fp: fingerprint('t') };
+    expect(sameDocument(entry, b, () => 't')).toBe(true);
+    expect(entry.doc.id).toBe(2);
+  });
+});

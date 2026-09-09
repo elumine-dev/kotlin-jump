@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.42.58
+
+Kotlin Jump 1.42.58 closes a hole in the check the caches share, so the compiler guards it again.
+
+### Fixes
+- The shared cache check accepted any object where a document was expected, and stored it. The helper introduced last release was written loosely enough that passing something that is not a document compiled cleanly, and the cache entry then held it while still claiming to hold a document. Nothing in the extension does that today, but the compiler had stopped being able to say so. Its signature now ties the two together, and the loose call is rejected.
+
 ## 1.42.57
 
 Kotlin Jump 1.42.57 fixes what the last three releases left behind: after reopening a file, the caches kept paying full price on every single request, for the rest of the session.

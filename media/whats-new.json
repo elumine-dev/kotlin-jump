@@ -1,27 +1,21 @@
 {
-  "version": "1.42.69",
+  "version": "1.42.70",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Click the readers, land on the reader",
-  "summary": "The state lens showed writes and readers in one clickable label, so both halves opened the same reference list. They are two labels now, and a single reader opens straight at its line.",
+  "tagline": "The reader count stays on screen",
+  "summary": "Splitting the state lens in two, one release ago, gave the readers side an empty command when a state has no reader in the file. A lens with an empty command is not reliably drawn, and that count is the one worth reading.",
   "highlights": [
     {
-      "title": "Two labels, two clicks",
-      "description": "The writes count and the readers count are separate lenses side by side. Clicking the readers side shows readers, not the merged list of everything.",
+      "title": "No lens depends on an empty command",
+      "description": "A state with no reader in its file keeps a single lens carrying both counts, so the reading never disappears. Two lenses appear only when the second one has somewhere to go.",
       "kind": "fix"
-    },
-    {
-      "title": "One target opens directly",
-      "description": "When a state has a single reader in the file, the click jumps to that line instead of opening a peek list with one entry to choose from.",
-      "kind": "improvement"
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "The state lens is two lenses. A code lens carries one command, so the single label meant one action for both halves: clicking readers opened writes and readers together, and the panel stole the view.",
-        "A lone write or a lone reader opens at its line. The peek list stays for two or more.",
-        "With no reader in the file the right side stays inert instead of offering a click that shows nothing."
+        "A state read nowhere in its own file shows one lens with both counts instead of a second lens that might not be drawn at all. The drawable preview lens vanished the same way once, and the note left in that code is what caught this.",
+        "Every lens this provider emits now carries a real command, checked by a test."
       ]
     }
   ],

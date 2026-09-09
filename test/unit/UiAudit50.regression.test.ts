@@ -73,10 +73,23 @@ describe('Le lens de provenance est cliquable des deux côtés', () => {
     expect(lecteur.command?.command).toBe('editor.action.showReferences');
   });
 
-  it('sans lecteur, le côté droit reste inerte et le dit', () => {
+  it('sans lecteur, le compte reste affiché sur un seul lens', () => {
     const AUCUN = UN_LECTEUR.replace('    fun render() = playerState.collectAsState()\n', '');
-    const lecteur = lensesDe(AUCUN)[1];
-    expect(lecteur.command?.title).toBe('👁 0 readers in this file');
-    expect(lecteur.command?.command).toBe('');
+    const lenses = lensesDe(AUCUN);
+    // Un second lens sans commande utile n'est pas rendu de façon fiable (le
+    // lens de prévisualisation drawable avait disparu ainsi), et « 0 readers »
+    // est justement l'information à lire : elle reste sur le lens des écritures.
+    expect(lenses.length).toBe(1);
+    expect(lenses[0].command?.title).toBe('✎ 2 writes · 👁 0 readers in this file');
+    expect(lenses[0].command?.command).toBe('editor.action.showReferences');
+  });
+
+  it('aucun lens ne porte une commande vide', () => {
+    const AUCUN = UN_LECTEUR.replace('    fun render() = playerState.collectAsState()\n', '');
+    for (const texte of [UN_LECTEUR, AUCUN]) {
+      for (const l of lensesDe(texte)) {
+        expect(l.command?.command, l.command?.title).toBeTruthy();
+      }
+    }
   });
 });

@@ -285,9 +285,13 @@ export class KotlinCallHierarchyProvider implements vscode.CallHierarchyProvider
     // shallower each time, and take the first whose body holds the call.
     // Without this the fallback below picked the last local `val`, and the
     // panel announced `end` as the caller of `start`.
-    if (best !== undefined && callLine > endOf(bestIdx)) {
+    // `best.depth > 0` and the `depthLimit > 0` bound keep this from sweeping
+    // the whole file for nothing: a top level function has no enclosing one,
+    // and once a depth 0 candidate has been weighed there is nothing shallower
+    // left to find. Without them the walk cost 9 % on this path.
+    if (best !== undefined && best.depth > 0 && callLine > endOf(bestIdx)) {
       let depthLimit = best.depth;
-      for (let i = bestIdx - 1; i >= 0; i--) {
+      for (let i = bestIdx - 1; i >= 0 && depthLimit > 0; i--) {
         const s = symbols[i];
         if (!FUN_KINDS.has(s.kind) || s.depth >= depthLimit) continue;
         depthLimit = s.depth;

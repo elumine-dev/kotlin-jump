@@ -1,21 +1,21 @@
 {
-  "version": "1.42.70",
+  "version": "1.42.71",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The reader count stays on screen",
-  "summary": "Splitting the state lens in two, one release ago, gave the readers side an empty command when a state has no reader in the file. A lens with an empty command is not reliably drawn, and that count is the one worth reading.",
+  "tagline": "The exhaustive when lens leads somewhere",
+  "summary": "A when that covers every branch showed a lens with no command at all, which VS Code does not reliably draw. It now opens the sealed type it covers.",
   "highlights": [
     {
-      "title": "No lens depends on an empty command",
-      "description": "A state with no reader in its file keeps a single lens carrying both counts, so the reading never disappears. Two lenses appear only when the second one has somewhere to go.",
-      "kind": "fix"
+      "title": "Covered branches, and a way to the type",
+      "description": "Clicking the check mark on an exhaustive when opens the sealed class or enum it covers, which is the declaration you want to read next.",
+      "kind": "improvement"
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "A state read nowhere in its own file shows one lens with both counts instead of a second lens that might not be drawn at all. The drawable preview lens vanished the same way once, and the note left in that code is what caught this.",
-        "Every lens this provider emits now carries a real command, checked by a test."
+        "The lens on an exhaustive when carries a real command. Being the common case for this check, it was also the lens most at risk of not being drawn: an empty command is what made the drawable preview lens vanish once.",
+        "No lens in the extension relies on an empty command any more, and a test holds that for both branches of this provider."
       ]
     }
   ],

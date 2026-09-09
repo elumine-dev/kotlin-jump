@@ -586,8 +586,18 @@ export class SealedWhenCoverageProvider implements vscode.CodeLensProvider, vsco
     const t0 = Date.now();
     const lenses = analyzeDocument(document, this.index, trace).map(a => {
       const range = new vscode.Range(a.whenLine, 0, a.whenLine, 0);
+      // An exhaustive `when` is the common case, and a lens whose command is
+      // the empty string is not reliably drawn: the drawable preview lens
+      // disappeared that way (see b0b065b). Point it at the sealed parent,
+      // which is the declaration a reader wants next anyway.
+      const at = new vscode.Position(a.parent.line, a.parent.character);
       const command: vscode.Command = a.missing.length === 0
-        ? { title: lensTitle(a), command: '' }
+        ? {
+            title: lensTitle(a),
+            command: 'vscode.open',
+            arguments: [a.parent.uri, { selection: new vscode.Range(at, at) }],
+            tooltip: `All branches covered. Go to ${a.parent.name}`,
+          }
         : {
             title: lensTitle(a),
             command: 'kotlin-jump.addMissingWhenBranches',

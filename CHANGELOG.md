@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.63
+
+Two dead functions of the same name in one file hid each other from the unused symbol check, while the same two in separate files were reported. Both are now reported.
+
+### Fixes
+- The unused symbol check now reports two dead overloads declared in the same file. Until now it reported them only when they lived in separate files, which is the same code with a different layout.
+- The why explanation agrees with the verdict again: it said alive in the same file for symbols the check was about to report.
+- Nothing else changes on a real project: the same 152 findings on a 5088 file Android codebase, before and after.
+
 ## 1.42.62
 
 Call Hierarchy skipped the declaration line of an overload by looking for the word fun, which only Java never writes. A Java overload came back as its own caller.

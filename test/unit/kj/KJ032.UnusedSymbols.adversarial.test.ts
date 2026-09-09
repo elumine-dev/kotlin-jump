@@ -78,12 +78,24 @@ describe.skipIf(!mod)('F1 à F4 — visibilité, tests, homonymes, KMP', () => {
     expect(find(sources).map(f => f.name)).not.toContain('Dup');
   });
 
-  it('F3 : et ça couvre les surcharges de fonctions top-level', () => {
-    // Les deux surcharges partagent leur fichier, donc chacune compte les
-    // mentions de l'autre comme siennes et le résidu part en négatif. KJ-036
-    // ne peut pas relâcher : le compte ne retombe jamais à zéro.
+  it('F3 : deux surcharges mortes dans un même fichier sont signalées', () => {
+    // Le calcul sommait `selfInFile` par candidat, donc le fichier partagé
+    // était compté deux fois et le résidu partait en négatif : KJ-036 ne
+    // relâchait jamais. Compté par fichier, la seule mention du nom est la
+    // déclaration elle-même, exactement comme pour deux copies dans deux
+    // fichiers, qui étaient déjà signalées (audit 43).
     const sources = [kt(`${MAIN}/Ov.kt`, 'package com.x\n\nfun render(a: Int) = a\n\nfun render(a: String) = a\n')];
-    expect(find(sources)).toEqual([]);
+    expect(find(sources).map(f => f.name)).toEqual(['render', 'render']);
+  });
+
+  it('F3 : une surcharge mentionnée quelque part protège tout le groupe', () => {
+    // Ce que F3 défend vraiment : la mention n'est attribuable à aucune des
+    // deux, donc aucune n'est prouvable.
+    const sources = [
+      kt(`${MAIN}/Ov.kt`, 'package com.x\n\nfun render(a: Int) = a\n\nfun render(a: String) = a\n'),
+      kt(`${MAIN}/Use.kt`, 'package com.x\n\nfun show() = render(1)\n'),
+    ];
+    expect(find(sources).map(f => f.name)).not.toContain('render');
   });
 
   it('F4 : une paire expect/actual n’est jamais signalée', () => {

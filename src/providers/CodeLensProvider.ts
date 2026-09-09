@@ -3,6 +3,7 @@ import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { SymbolKind } from '../indexer/KotlinParser';
 import { scanForUsagesWithTarget, isExcluded, UsageResult, withoutDeclaration } from './FindUsagesEngine';
 import { isTestFun } from '../testing/TestAnnotations';
+import { capMap, USAGE_CACHE_LIMIT } from '../util/boundedCache';
 
 const LENS_KINDS = new Set<SymbolKind>([
   'class', 'interface', 'object', 'enum',
@@ -306,6 +307,10 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
         },
       );
       this._cache.set(cacheKey, created);
+      // Keyed by symbol and never trimmed, this grew with every lens the user
+      // ever scrolled past: 23 628 of them on the reference project, each
+      // holding a usage list. A scan still running is never dropped.
+      capMap(this._cache, USAGE_CACHE_LIMIT, e => e.results !== undefined && e.waiters === 0);
       shared = created;
     }
     const entryRef = shared;

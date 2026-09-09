@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.42.52
+
+Kotlin Jump 1.42.52 gives the last unbounded cache a ceiling. This one is keyed by symbol rather than by file, and it held every usage count the editor ever showed you.
+
+### Improvements
+- The usage count cache stops growing with the session. Every lens you scroll past resolves a usage scan whose result was kept for good; the reference project would produce 23 628 of them, each holding a list of usage sites. It now keeps 512, sized on the measurement that a single dense file produces 202 lenses on its own, so several files can be on screen without any rescan.
+- A scan still running is never dropped. The ceiling skips entries whose result has not arrived or that a request is still waiting on, so capping cannot cancel work in flight or make the same symbol scan twice.
+
 ## 1.42.51
 
 Kotlin Jump 1.42.51 finishes what the previous release started. One of the four per file caches was left behind, and three of the tests written to guard the change could not tell the two behaviours apart.

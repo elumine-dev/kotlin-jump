@@ -24,9 +24,10 @@ export class VersionCatalogHoverProvider implements vscode.HoverProvider {
       const start = m.index;
       const end   = m.index + m[0].length;
       if (position.character < start || position.character > end) continue;
-      const entry = this.index.getByAccessor(m[1], document.uri?.fsPath ?? fname);
-      if (!entry) continue;
-      const coords = `${entry.group}:${entry.name}:${entry.version}`;
+      // Plugins, versions and bundles resolve too: only libraries were read,
+      // so `alias(libs.plugins.android.library)` showed nothing.
+      const coords = this.index.describeAccessor(m[1], document.uri?.fsPath ?? fname);
+      if (!coords) continue;
       return new vscode.Hover(
         new vscode.MarkdownString(`\`${coords}\``),
         new vscode.Range(position.line, start, position.line, end),

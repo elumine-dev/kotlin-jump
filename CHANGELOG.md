@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.80
+
+Ctrl+click an accessor in a build file and land on the line that declares it. Plugins, versions and bundles now answer too, not only libraries.
+
+### New
+- Go to Definition works on a version catalog accessor from a build.gradle.kts or a build.gradle. The first segment picks the section the way Gradle does, so a plugin named ksp and a library named ksp.api never lead to each other.
+- The longest alias wins: with androidx and androidx.core both declared, libs.androidx.core opens the second one.
+- Hover reads the same four sections. A plugin shows its id and resolved version, a version its literal, a bundle its members. Only libraries answered before, so a line of plugin aliases was silent.
+- Measured on a real Android project: 1295 accessors across 49 build files, every one of them resolved.
+
 ## 1.42.79
 
 The count started reading the whole supertype chain in 1.42.77 while every list stayed on direct supertypes. On a real Android project, 133 types announced a number the click could not show, in both directions.

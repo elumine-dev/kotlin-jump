@@ -234,7 +234,14 @@ export function resolveAccessor(
   return best;
 }
 
-interface ParsedCatalog { entries: Map<string, CatalogEntry>; catalog: Catalog; projectDir: string }
+interface ParsedCatalog {
+  entries: Map<string, CatalogEntry>;
+  catalog: Catalog;
+  projectDir: string;
+  key: string;
+  /** `[versions]` alias to its literal, so a `version.ref` can be resolved. */
+  versions: Map<string, string>;
+}
 
 const EMPTY_CATALOG: Catalog = { root: 'libs', aliases: [], unparsed: false };
 
@@ -280,7 +287,7 @@ export class VersionCatalogIndex {
 
     // `<project>/gradle/libs.versions.toml`: the project dir is two levels up.
     const projectDir = key.replace(/^file:\/\//, '').replace(/[\\/]gradle[\\/][^\\/]+$/, '');
-    this.catalogs.set(key, { entries, catalog, projectDir });
+    this.catalogs.set(key, { entries, catalog, projectDir, key, versions });
   }
 
   /**
@@ -317,5 +324,61 @@ export class VersionCatalogIndex {
     if (!c) return undefined;
     const alias = resolveAccessor(c.catalog.aliases, 'libraries', aliasSegments(accessor));
     return alias ? c.entries.get(alias.raw) : undefined;
+  }
+
+  /** Accessor root of the catalog a build file reads, `libs` unless renamed. */
+  rootFor(contextPath?: string): string {
+    return this.catalogFor(contextPath)?.catalog.root ?? 'libs';
+  }
+
+  /**
+   * One line describing what an accessor resolves to, for the hover.
+   *
+   * A library keeps the exact `group:name:version` it has always shown. The
+   * other three namespaces showed nothing at all, which read as "this accessor
+   * is unknown" on a line that Gradle resolves perfectly well.
+   */
+  describeAccessor(accessor: string, contextPath?: string): string | undefined {
+    const c = this.catalogFor(contextPath);
+    const hit = this.locate(accessor, contextPath);
+    if (!c || !hit) return undefined;
+    const { alias } = hit;
+    const version = alias.versionRef ? c.versions.get(alias.versionRef) : undefined;
+    switch (alias.namespace) {
+      case 'libraries': {
+        const e = c.entries.get(alias.raw);
+        return e ? `${e.group}:${e.name}:${e.version}` : undefined;
+      }
+      case 'plugins':
+        return alias.coordinate ? `${alias.coordinate}:${version ?? alias.versionRef ?? '?'}` : undefined;
+      case 'versions':
+        return c.versions.get(alias.raw);
+      case 'bundles':
+        return alias.bundleMembers?.length ? alias.bundleMembers.join(', ') : undefined;
+    }
+  }
+
+  /**
+   * Where an accessor is declared: the alias and the catalog file holding it.
+   *
+   * The first segment picks the namespace the way Gradle does, so
+   * `plugins.android.library` looks under `[plugins]` for `android-library`
+   * and never under `[libraries]`. A name that resolves nowhere as a
+   * namespaced accessor is retried as a plain library, which is what an alias
+   * literally called `versions-something` needs.
+   */
+  locate(accessor: string, contextPath?: string): { alias: CatalogAlias; file: string } | undefined {
+    const c = this.catalogFor(contextPath);
+    if (!c) return undefined;
+    const segments = aliasSegments(accessor);
+    if (segments.length === 0) return undefined;
+    const head = segments[0];
+    const namespaced: CatalogNamespace | undefined =
+      head === 'plugins' ? 'plugins' : head === 'bundles' ? 'bundles' : head === 'versions' ? 'versions' : undefined;
+    const alias = (namespaced && segments.length > 1
+      ? resolveAccessor(c.catalog.aliases, namespaced, segments.slice(1))
+      : undefined)
+      ?? resolveAccessor(c.catalog.aliases, 'libraries', segments);
+    return alias ? { alias, file: c.key } : undefined;
   }
 }

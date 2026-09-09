@@ -16,6 +16,13 @@ export interface RawSymbol {
   depth: number;          // braceDepth at declaration — used for outline hierarchy
   aliasTarget?: string;   // raw rhs of typealias, e.g. "List<UserProfile>"
   supertypes?: string[];  // simple names of superclasses/interfaces, e.g. ["Bar", "Baz"]
+  /**
+   * Names in `supertypes` that were only the QUALIFIER of a dotted supertype:
+   * `: RecyclerView.Adapter` yields both, but only `Adapter` is a parent.
+   * They stay in `supertypes` because the dead code scan reads that list to
+   * spot a framework ancestor; the hierarchy must skip them.
+   */
+  superQualifiers?: string[];
   constValue?:      string;  // raw literal value for const val, e.g. `5000` or `"v2"`
   isSuspend?:       boolean;
   isAbstract?:      boolean;
@@ -230,14 +237,17 @@ export function parse(uriString: string, text: string): ParsedFile {
       const nameStart = cm[0].length - name.length;
       const nameEnd   = cm[0].length;
 
-      let supertypes = extractSupertypes(raw, nameEnd);
+      const superQuals: string[] = [];
+      let supertypes = extractSupertypes(raw, nameEnd, superQuals);
       // Only look ahead for `) : Types` if the line has an unclosed paren (multi-line constructor)
       if (supertypes.length === 0 && hasUnclosedParen(raw, nameEnd)) {
-        supertypes = lookAheadSupertypes(text, nl + 1);
+        superQuals.length = 0;
+        supertypes = lookAheadSupertypes(text, nl + 1, superQuals);
       } else if (headerContinues(raw, nameEnd)) {
         // `class LongActivity :\n    AppCompatActivity(),\n    Callback {` is how
         // ktlint wraps a long header: the list goes on below.
-        supertypes = extractSupertypes(raw + ' ' + collectHeaderContinuation(text, nl + 1), nameEnd);
+        superQuals.length = 0;
+        supertypes = extractSupertypes(raw + ' ' + collectHeaderContinuation(text, nl + 1), nameEnd, superQuals);
       }
 
       // Slice up to the class NAME (not cm.index which is always 0) so modifiers
@@ -251,7 +261,7 @@ export function parse(uriString: string, text: string): ParsedFile {
       const isExpect        = /\bexpect\b/.test(preClass)   || undefined;
       const isActual        = /\bactual\b/.test(preClass)   || undefined;
 
-      symbols.push({ name, kind, line: lineNum, character: nameStart, isComposable: false, depth: braceDepth, supertypes: supertypes.length > 0 ? supertypes : undefined, isAbstract, isPrivate, isHiltViewModel, isDeprecated, isTestClass, isExpect, isActual });
+      symbols.push({ name, kind, line: lineNum, character: nameStart, isComposable: false, depth: braceDepth, supertypes: supertypes.length > 0 ? supertypes : undefined, superQualifiers: superQuals.length > 0 ? superQuals : undefined, isAbstract, isPrivate, isHiltViewModel, isDeprecated, isTestClass, isExpect, isActual });
 
       if (kind === 'enum') enumBraceDepth = braceDepth;
 
@@ -347,11 +357,13 @@ export function parse(uriString: string, text: string): ParsedFile {
     if (km) {
       const character  = km[1].length;
       const objectEnd  = raw.indexOf('object', character) + 'object'.length;
-      const supertypes = extractSupertypes(raw, objectEnd);
+      const compQuals: string[] = [];
+      const supertypes = extractSupertypes(raw, objectEnd, compQuals);
       symbols.push({
         name: 'Companion', kind: 'object', line: lineNum, character,
         isComposable: false, depth: braceDepth,
         supertypes: supertypes.length > 0 ? supertypes : undefined,
+        superQualifiers: compQuals.length > 0 ? compQuals : undefined,
         isPrivate: /\bprivate\b/.test(km[1]) || undefined,
         isCompanion: true,
       });
@@ -612,7 +624,7 @@ function hasUnclosedParen(line: string, from: number): boolean {
 
 // Scan the line after the class name for `: SuperType, Interface`
 // Skips balanced <> and () blocks so constructor params and generics are ignored
-function extractSupertypes(line: string, nameEnd: number): string[] {
+function extractSupertypes(line: string, nameEnd: number, quals?: string[]): string[] {
   let depth = 0;
   for (let i = nameEnd; i < line.length; i++) {
     const ch = line.charAt(i);
@@ -620,7 +632,7 @@ function extractSupertypes(line: string, nameEnd: number): string[] {
     else if (ch === '>' || ch === ')') { depth--; }
     else if (depth === 0 && ch === '{') return [];
     else if (depth === 0 && ch === ':') {
-      return parseTypeNames(line.substring(i + 1));
+      return parseTypeNames(line.substring(i + 1), quals);
     }
   }
   return [];
@@ -645,7 +657,8 @@ function emitAnonObjectIfPresent(raw: string, lineNum: number, braceDepth: numbe
   if (/\bcompanion\s+$/.test(code.slice(0, m.index))) return;
   if (isInsideStringLiteral(code, m.index)) return;
   // extractSupertypes scans from position after 'object' looking for ':'
-  const supertypes = extractSupertypes(code, m.index + 'object'.length);
+  const anonQuals: string[] = [];
+  const supertypes = extractSupertypes(code, m.index + 'object'.length, anonQuals);
   if (supertypes.length === 0) return;
   symbols.push({
     name: `$anon$${lineNum}`,
@@ -655,11 +668,12 @@ function emitAnonObjectIfPresent(raw: string, lineNum: number, braceDepth: numbe
     isComposable: false,
     depth: braceDepth,
     supertypes,
+    superQualifiers: anonQuals.length > 0 ? anonQuals : undefined,
   });
 }
 
 // For multi-line constructors: scan forward for `) : Types` on subsequent lines
-function lookAheadSupertypes(text: string, start: number): string[] {
+function lookAheadSupertypes(text: string, start: number, quals?: string[]): string[] {
   let p = start;
   for (let i = 0; i < 20 && p < text.length; i++) {
     let nl = text.indexOf('\n', p);
@@ -669,7 +683,7 @@ function lookAheadSupertypes(text: string, start: number): string[] {
     if (m) {
       let rest = stripTrailingLineComment(m[1]).trimEnd();
       if (!rest.includes('{') && (rest.endsWith(',') || rest.endsWith(':'))) rest += ' ' + collectHeaderContinuation(text, nl + 1);
-      return parseTypeNames(rest);
+      return parseTypeNames(rest, quals);
     }
     if (line.startsWith('{')) return [];
     p = nl + 1;
@@ -711,15 +725,23 @@ function collectHeaderContinuation(text: string, start: number): string {
 // of Item, and `BaseViewModel<UiState>(Dispatchers.IO)` a subtype of UiState,
 // which the type hierarchy, the implementation lenses and the sealed `when`
 // coverage all believed.
-function parseTypeNames(s: string): string[] {
+function parseTypeNames(s: string, quals?: string[]): string[] {
   const clean = s.split(/\bwhere\b/)[0].split('{')[0];
   const types: string[] = [];
+  const finals = new Set<string>();
   let depth = 0, seg = '';
   const flush = () => {
     const m = /^\s*([\w.]+)/.exec(seg);
     // `RecyclerView.Adapter`: both segments, the hierarchy is looked up by
     // simple name and the outer one is what a nested type is filed under.
-    if (m) for (const part of m[1].split('.')) if (/^[A-Z]/.test(part)) types.push(part);
+    if (m) {
+      const parts = m[1].split('.').filter(p => /^[A-Z]/.test(p));
+      for (let i = 0; i < parts.length; i++) {
+        types.push(parts[i]);
+        if (i === parts.length - 1) finals.add(parts[i]);
+        else if (quals) quals.push(parts[i]);
+      }
+    }
     seg = '';
   };
   for (let i = 0; i < clean.length; i++) {
@@ -731,6 +753,13 @@ function parseTypeNames(s: string): string[] {
     seg += ch;
   }
   flush();
+  // `class Foo : Bar, Bar.Baz` names Bar for real as well: it is not a
+  // qualifier in that list, so it must stay in the hierarchy.
+  if (quals) {
+    const kept = quals.filter(q => !finals.has(q));
+    quals.length = 0;
+    quals.push(...kept);
+  }
   return types;
 }
 
@@ -796,12 +825,14 @@ function emitInlineBodySymbols(
       const n  = cm[2];
       const ni = cm[0].length - n.length;
       const pre = seg.slice(0, ni);
-      const st  = extractSupertypes(seg, ni + n.length);
+      const inlineQuals: string[] = [];
+      const st  = extractSupertypes(seg, ni + n.length, inlineQuals);
       symbols.push({
         name: n, kind: toClassKind(kw), line: lineNum,
         character: offset + ni,
         isComposable: false, depth: memberDepth,
         supertypes: st.length > 0 ? st : undefined,
+        superQualifiers: inlineQuals.length > 0 ? inlineQuals : undefined,
         isAbstract: /\babstract\b/.test(pre) || undefined,
         isPrivate:  /\bprivate\b/.test(pre)  || undefined,
       });

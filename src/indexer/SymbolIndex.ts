@@ -17,6 +17,8 @@ export interface SymbolEntry {
   moduleName?: string;
   aliasTarget?: string;   // raw rhs of typealias — used for follow-through navigation
   supertypes?: string[];  // simple names of superclasses/interfaces
+  /** Entries of `supertypes` that were only a dotted name's qualifier. */
+  superQualifiers?: string[];
   constValue?:      string;  // raw literal for const val, e.g. `5000` or `"v2"`
   isSuspend?:       boolean;
   isAbstract?:      boolean;
@@ -146,6 +148,7 @@ export class SymbolIndex {
         moduleName,
         aliasTarget: sym.aliasTarget,
         supertypes: sym.supertypes ? sym.supertypes.map(s => this.internSuper(s)) : undefined,
+        superQualifiers: sym.superQualifiers ? sym.superQualifiers.map(s => this.internSuper(s)) : undefined,
         constValue:      sym.constValue,
         isSuspend:       sym.isSuspend,
         isAbstract:      sym.isAbstract,
@@ -192,7 +195,12 @@ export class SymbolIndex {
       }
 
       if (sym.supertypes) {
+        // A qualifier is a namespace, not a parent: `: RecyclerView.Adapter`
+        // must not file the class under `RecyclerView`. Java made this loud,
+        // where `class ViewHolder extends RecyclerView.ViewHolder` filed
+        // itself under its OWN name and the chain walk then returned 92.
         for (const st of sym.supertypes) {
+          if (sym.superQualifiers?.includes(st)) continue;
           let sset = this.bySuper.get(st);
           if (!sset) { sset = new Set(); this.bySuper.set(st, sset); }
           sset.add(entry);
@@ -260,13 +268,32 @@ export class SymbolIndex {
    * the implementor of one used to count for both.
    */
   implementsExactly(impl: SymbolEntry, parent: SymbolEntry): boolean {
-    if (impl.packageName === parent.packageName) return true;
+    // Written `Outer.Inner`? Then the parent has to BE nested in an `Outer`.
+    // The qualifier sits right before its final in `supertypes`, which is how
+    // the two were parsed. Without this, a top level `ViewHolder` in the same
+    // package claimed every class extending `RecyclerView.ViewHolder`.
+    const sts = impl.supertypes;
+    const quals = impl.superQualifiers;
+    if (sts && quals && quals.length > 0) {
+      const i = sts.indexOf(parent.name);
+      if (i > 0 && quals.includes(sts[i - 1])) {
+        return parent.fqn.endsWith(`.${sts[i - 1]}.${parent.name}`);
+      }
+    }
     const imports = this.fileImports.get(impl.uri.toString()) ?? [];
-    if (imports.includes(parent.fqn) || imports.includes(`${parent.packageName}.*`)) return true;
+    // Kotlin resolves a simple name through the explicit imports first, ahead
+    // of the file's own package. Reading the workspace declarations first meant
+    // `import android.view.View` contradicted nothing, because android's View
+    // is not indexed, and a nested `NavigatorContract.View` claimed all 80
+    // classes extending the framework one.
+    const explicit = imports.find(i => i.endsWith(`.${parent.name}`));
+    if (explicit !== undefined) return explicit === parent.fqn;
+    if (impl.packageName === parent.packageName) return true;
+    if (imports.includes(`${parent.packageName}.*`)) return true;
     // No import at all naming this parent's package: only ambiguous when
     // another parent of that name exists in a package the file does import.
     const others = this.lookup(parent.name).filter(e => e !== parent && CLASS_LIKE.has(e.kind));
-    return !others.some(o => imports.includes(o.fqn) || imports.includes(`${o.packageName}.*`) || o.packageName === impl.packageName);
+    return !others.some(o => imports.includes(`${o.packageName}.*`) || o.packageName === impl.packageName);
   }
 
   /**
@@ -280,7 +307,10 @@ export class SymbolIndex {
    * homonym in another package cannot walk into the result.
    */
   lookupImplementationsDeep(root: SymbolEntry, limit = 500): SymbolEntry[] {
-    const seen = new Set<string>();
+    // A type is not its own subtype. `class ViewHolder : RecyclerView.ViewHolder`
+    // shares the parent's simple name, so the root came back as its own child
+    // and dragged in every class filed under that name.
+    const seen = new Set<string>([`${root.uri.toString()}:${root.line}`]);
     const out: SymbolEntry[] = [];
     const queue: SymbolEntry[] = [root];
     while (queue.length > 0) {
@@ -662,6 +692,7 @@ export class SymbolIndex {
       if (!existing || SymbolIndex.fqnRank(e) >= SymbolIndex.fqnRank(existing)) this.byFqn.set(e.fqn, e);
       if (e.supertypes) {
         for (const st of e.supertypes) {
+          if (e.superQualifiers?.includes(st)) continue;
           let sset = this.bySuper.get(st);
           if (!sset) { sset = new Set(); this.bySuper.set(st, sset); }
           sset.add(e);

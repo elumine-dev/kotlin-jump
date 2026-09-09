@@ -233,7 +233,8 @@ export function parseJava(uriString: string, text: string): ParsedFile {
     if (cm) {
       const name      = cm[2];
       const kind      = toJavaKind(cm[1]);
-      const supertypes = extractJavaSupertypes(raw);
+      const superQuals: string[] = [];
+  const supertypes = extractJavaSupertypes(raw, superQuals);
       const preClass   = raw.slice(0, raw.indexOf(name, cm.index));
       symbols.push({
         name,
@@ -243,6 +244,7 @@ export function parseJava(uriString: string, text: string): ParsedFile {
         isComposable: false,
         depth:       braceDepth,
         supertypes:  supertypes.length > 0 ? supertypes : undefined,
+      superQualifiers: superQuals.length > 0 ? superQuals : undefined,
         isAbstract:  /\babstract\b/.test(preClass) || undefined,
         isPrivate:   /\bprivate\b/.test(preClass)  || undefined,
         // Class-level annotations used to be collected and then dropped, so a
@@ -498,6 +500,8 @@ const JAVA_DECL_START: Record<string, boolean> = Object.fromEntries(
 );
 
 const RE_JAVA_TYPE_NAME = /\b([A-Z]\w+)\b/g;
+// A dotted type expression: `Outer.Inner`, `pkg.Outer.Inner`, or a bare name.
+const RE_JAVA_DOTTED_TYPE = /\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\b/g;
 
 // Strip generic params: "ArrayList<String>" → "ArrayList", "Map<K, V>" → "Map"
 function stripGenerics(s: string): string {
@@ -510,21 +514,32 @@ function stripGenerics(s: string): string {
   return result;
 }
 
-function extractJavaSupertypes(line: string): string[] {
+function extractJavaSupertypes(line: string, quals?: string[]): string[] {
   const types: string[] = [];
+  const finals = new Set<string>();
+  // Whole dotted names, so `RecyclerView.ViewHolder` is read as one type whose
+  // parent is `ViewHolder`. Scanning capitalised tokens alone filed the class
+  // under `RecyclerView` too, and a nested type of that name then claimed it.
+  const collect = (clean: string): void => {
+    RE_JAVA_DOTTED_TYPE.lastIndex = 0;
+    let m;
+    while ((m = RE_JAVA_DOTTED_TYPE.exec(clean))) {
+      const parts = m[1].split('.').filter(p => /^[A-Z]/.test(p));
+      for (let i = 0; i < parts.length; i++) {
+        types.push(parts[i]);
+        if (i === parts.length - 1) finals.add(parts[i]);
+        else if (quals) quals.push(parts[i]);
+      }
+    }
+  };
   const extendsMatch = /\bextends\s+(.+?)(?:\bimplements\b|\{|$)/.exec(line);
-  if (extendsMatch) {
-    const clean = stripGenerics(extendsMatch[1]);
-    RE_JAVA_TYPE_NAME.lastIndex = 0;
-    let m;
-    while ((m = RE_JAVA_TYPE_NAME.exec(clean))) types.push(m[1]);
-  }
+  if (extendsMatch) collect(stripGenerics(extendsMatch[1]));
   const implMatch = /\bimplements\s+(.+?)(?:\{|$)/.exec(line);
-  if (implMatch) {
-    const clean = stripGenerics(implMatch[1]);
-    RE_JAVA_TYPE_NAME.lastIndex = 0;
-    let m;
-    while ((m = RE_JAVA_TYPE_NAME.exec(clean))) types.push(m[1]);
+  if (implMatch) collect(stripGenerics(implMatch[1]));
+  if (quals) {
+    const kept = quals.filter(q => !finals.has(q));
+    quals.length = 0;
+    quals.push(...kept);
   }
   return types;
 }

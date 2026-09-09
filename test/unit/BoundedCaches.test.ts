@@ -154,3 +154,78 @@ describe('Les quatre caches par fichier suivent la même règle', () => {
     expect(hits).toBeGreaterThan(180);
   });
 });
+
+describe('capMap avec une condition d\'éviction', () => {
+  it('garde les entrées que la condition protège, même les plus anciennes', () => {
+    const m = new Map<number, { busy: boolean }>();
+    for (let i = 0; i < 10; i++) m.set(i, { busy: i % 5 === 0 });
+    capMap(m, 4, v => !v.busy);
+    // 0 et 5 sont occupés : ils survivent quel que soit leur âge.
+    expect(m.has(0)).toBe(true);
+    expect(m.has(5)).toBe(true);
+    expect(m.size).toBe(4);
+  });
+
+  it('n\'entre pas en boucle quand tout est protégé', () => {
+    const m = new Map<number, { busy: boolean }>();
+    for (let i = 0; i < 10; i++) m.set(i, { busy: true });
+    capMap(m, 2, v => !v.busy);
+    // Rien ne peut partir : la taille reste au dessus du plafond plutôt que
+    // de tourner sans fin ou de jeter un travail en cours.
+    expect(m.size).toBe(10);
+  });
+
+  it('sans condition, se comporte comme avant', () => {
+    const m = new Map<number, string>();
+    for (let i = 0; i < 10; i++) m.set(i, `v${i}`);
+    capMap(m, 3);
+    expect([...m.keys()]).toEqual([7, 8, 9]);
+  });
+});
+
+describe('Cache d\'usages du CodeLens', () => {
+  it('est borné, et ne jette jamais un scan en cours', async () => {
+    const { KotlinCodeLensProvider } = await import('../../src/providers/CodeLensProvider');
+    const { USAGE_CACHE_LIMIT } = await import('../../src/util/boundedCache');
+    const p: any = new KotlinCodeLensProvider(new SymbolIndex());
+    const cache: Map<string, any> = p._cache;
+
+    // Une entrée dont le scan tourne encore, insérée en premier donc la plus
+    // ancienne : c'est elle que l'éviction par âge prendrait.
+    const running = { ver: 0, cts: { cancel() {} }, waiters: 1, p: Promise.resolve([]) };
+    cache.set('com.app.EnCours', running);
+    for (let i = 0; i < USAGE_CACHE_LIMIT + 50; i++) {
+      cache.set(`com.app.S${i}`, { ver: 0, cts: { cancel() {} }, waiters: 0, p: Promise.resolve([]), results: [] });
+      capMap(cache, USAGE_CACHE_LIMIT, (e: any) => e.results !== undefined && e.waiters === 0);
+    }
+    expect(cache.size).toBeLessThanOrEqual(USAGE_CACHE_LIMIT);
+    // Le projet de référence produit 23 628 lens ; sans plafond le cache les
+    // accumulait tous, chacun portant une liste d'usages.
+    expect(cache.has('com.app.EnCours')).toBe(true);
+    expect(cache.has(`com.app.S${USAGE_CACHE_LIMIT + 49}`)).toBe(true);
+    expect(cache.has('com.app.S0')).toBe(false);
+  });
+
+  it('le vrai chemin du fournisseur applique bien ce plafond', async () => {
+    const { KotlinCodeLensProvider } = await import('../../src/providers/CodeLensProvider');
+    const { USAGE_CACHE_LIMIT } = await import('../../src/util/boundedCache');
+    const p: any = new KotlinCodeLensProvider(new SymbolIndex());
+    // Le scan d'usages est remplacé : ce qu'on mesure est la gestion du cache,
+    // pas la recherche. Sans ce test, retirer l'appel au plafond DANS le
+    // fournisseur passait inaperçu, puisque le test précédent appelle le
+    // helper lui même.
+    p._scanUsages = async () => [];
+    const token = { isCancellationRequested: false, onCancellationRequested: () => ({ dispose() {} }) };
+    for (let i = 0; i < USAGE_CACHE_LIMIT + 100; i++) {
+      await p._usageCount({ fqn: `com.app.T${i}`, name: `T${i}`, uri: { toString: () => 'file:///x.kt' }, line: 0 }, token);
+    }
+    expect((p._cache as Map<string, unknown>).size).toBeLessThanOrEqual(USAGE_CACHE_LIMIT);
+  });
+
+  it('le plafond laisse de la place à plusieurs fichiers à l\'écran', async () => {
+    const { USAGE_CACHE_LIMIT } = await import('../../src/util/boundedCache');
+    // Le fichier le plus dense du projet de référence produit 202 lens à lui
+    // seul : un plafond trop bas ferait rescanner en boucle.
+    expect(USAGE_CACHE_LIMIT).toBeGreaterThanOrEqual(404);
+  });
+});

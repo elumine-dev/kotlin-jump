@@ -1,26 +1,26 @@
 {
-  "version": "1.42.51",
+  "version": "1.42.52",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The one cache left behind",
-  "summary": "The fourth per file cache still emptied itself completely, and three of the tests guarding the change could not tell the two behaviours apart.",
+  "tagline": "The last cache without a ceiling",
+  "summary": "The usage count cache kept every scan the editor ever showed. The reference project would produce 23 628 of them, each holding a list of usage sites.",
   "highlights": [
     {
-      "title": "All four caches, one rule",
+      "title": "Usage counts stop piling up",
       "kind": "improvement",
-      "description": "The state provenance cache still emptied itself once full, which makes every open editor recompute at once. It was the one not migrated, in the very release that added the shared helper to stop them drifting apart."
+      "description": "Every lens you scroll past resolves a usage scan whose result was kept for good. It now keeps 512, sized on the measurement that a single dense file produces 202 lenses on its own."
+    },
+    {
+      "title": "Work in flight is never dropped",
+      "kind": "improvement",
+      "description": "The ceiling skips entries whose result has not arrived, or that a request is still waiting on, so capping cannot cancel a scan or make the same symbol scan twice."
     }
   ],
   "sections": [
     {
-      "heading": "Fixes",
-      "bullets": [
-        "Three of the new cache tests asserted the cache stays under its ceiling, which is true of both behaviours, so reverting the change left them green. They now assert it stays full, which only one behaviour produces."
-      ]
-    },
-    {
       "heading": "Notes",
       "bullets": [
-        "A file you keep coming back to is served from cache on 196 of 199 returns while browsing 200 other files, because a miss puts it back at the end of the queue."
+        "This was the last per session cache without a ceiling. The four keyed by file were capped in the previous three releases.",
+        "Checked on the repository benchmark: no measurable change."
       ]
     }
   ],

@@ -127,6 +127,11 @@ export function parse(uriString: string, text: string): ParsedFile {
     if (parenDepth === 0) ctorParamsActive = false;
   };
 
+  // Monotone cursor over the next `object` keyword. Lets the DECL_START
+  // pre-filter still notice `.setListener(object : X {` without slicing every
+  // line: pos only moves forward, so the total cost stays one pass over text.
+  let nextObjectAt = text.indexOf('object');
+
   while (pos < len) {
     // ── Find line boundaries without allocating an array ───────────────────
     let nl = text.indexOf('\n', pos);
@@ -181,7 +186,12 @@ export function parse(uriString: string, text: string): ParsedFile {
     // Exception: when we are exactly at enum-entry depth, uppercase lines must
     // pass through so RE_ENUM_ENTRY can match CONNECTED, OFFLINE, RED, etc.
     const atEnumEntryDepth = enumBraceDepth !== -1 && braceDepth === enumBraceDepth + 1;
+    if (nextObjectAt !== -1 && nextObjectAt < pos) nextObjectAt = text.indexOf('object', pos);
+    const lineHasObject = nextObjectAt !== -1 && nextObjectAt < nl;
     if (!DECL_START[fc] && !atEnumEntryDepth) {
+      // `return object : Sink {`, `.setListener(object : Adapter() {` — no
+      // declaration keyword starts the line, but an implementation lives on it.
+      if (lineHasObject) emitAnonObjectIfPresent(text.slice(pos, nl), lineNum, braceDepth, symbols);
       const prevParenDepth = parenDepth;
       advance(nl);
       // Only clear annotation window when not inside a multi-line annotation's paren args
@@ -192,6 +202,12 @@ export function parse(uriString: string, text: string): ParsedFile {
     // ── Lazy slice — only allocate when we need regex ─────────────────────
     const raw = text.slice(pos, nl);
     const lineTripleQuotes = countTripleQuoteToggles(raw);
+
+    // ── Anonymous object: `object : Interface` ─────────────────────────────
+    // Done before the branch dispatch because every branch below ends in
+    // `continue`: `fun provideX(): X = object : X {`, the Dagger form, used to
+    // slip through the function branch and never be counted.
+    if (lineHasObject) emitAnonObjectIfPresent(raw, lineNum, braceDepth, symbols);
 
     // ── Package ────────────────────────────────────────────────────────────
     if (!packageName && fc === 'p') {
@@ -485,8 +501,6 @@ export function parse(uriString: string, text: string): ParsedFile {
         isActual,
         isPrimaryCtorParam: isPrimaryCtorParam || undefined,
       });
-      // val x = object : Interface — anonymous object on same line as property
-      emitAnonObjectIfPresent(raw, lineNum, braceDepth, symbols);
       advance(nl);
       annotationWindow.length = 0;
       if (lineTripleQuotes % 2 !== 0) inRawString = true;
@@ -512,10 +526,6 @@ export function parse(uriString: string, text: string): ParsedFile {
       // Only clear when not inside a multi-line annotation's paren args
       annotationWindow.length = 0;
     }
-
-    // ── Anonymous object: `object : Interface` or `companion object : Interface`
-    // (not caught by RE_CLASS which requires a name after the keyword)
-    emitAnonObjectIfPresent(raw, lineNum, braceDepth, symbols);
 
     advance(nl);
     if (lineTripleQuotes % 2 !== 0) inRawString = true;
@@ -618,12 +628,24 @@ function extractSupertypes(line: string, nameEnd: number): string[] {
 
 // Detect `object : Interface` (anonymous object) — emits a synthetic $anon$N symbol
 // so lookupImplementations() can count anonymous implementors.
-// Called on lines that passed DECL_START but did not match RE_CLASS (no name after object).
+// Called once per line, before the branch dispatch, so a declaration keyword on
+// the same line does not hide the object expression that follows it.
 function emitAnonObjectIfPresent(raw: string, lineNum: number, braceDepth: number, symbols: RawSymbol[]): void {
-  const m = RE_ANON_OBJECT.exec(raw);
+  // Cheap reject first: most lines carrying the substring `object` are
+  // `objectMapper`, `companion object {`, `object Foo {` — no `:` follows.
+  let m = RE_ANON_OBJECT.exec(raw);
   if (!m) return;
+  const code = stripTrailingLineComment(raw);
+  if (code.length !== raw.length) {
+    m = RE_ANON_OBJECT.exec(code);
+    if (!m) return;
+  }
+  // `companion object : Factory` is emitted as the named `Companion` symbol by
+  // its own branch; counting it here too would double every companion.
+  if (/\bcompanion\s+$/.test(code.slice(0, m.index))) return;
+  if (isInsideStringLiteral(code, m.index)) return;
   // extractSupertypes scans from position after 'object' looking for ':'
-  const supertypes = extractSupertypes(raw, m.index + 'object'.length);
+  const supertypes = extractSupertypes(code, m.index + 'object'.length);
   if (supertypes.length === 0) return;
   symbols.push({
     name: `$anon$${lineNum}`,
@@ -866,6 +888,21 @@ function emitInlineBodySymbols(
 
 // Strips a trailing // line comment while respecting string literals.
 // e.g. `"https://x.com" // comment` → `"https://x.com"`
+// True when `index` falls inside a single or double quoted literal on this line.
+// Keeps `val doc = "object : Listener"` from being counted as an implementation.
+function isInsideStringLiteral(s: string, index: number): boolean {
+  let inStr: string | false = false;
+  for (let i = 0; i < index && i < s.length; i++) {
+    if (inStr) {
+      if (s[i] === '\\') { i++; continue; }
+      if (s[i] === inStr) inStr = false;
+    } else if (s[i] === '"' || s[i] === "'") {
+      inStr = s[i];
+    }
+  }
+  return inStr !== false;
+}
+
 function stripTrailingLineComment(s: string): string {
   let inStr: string | false = false;
   for (let i = 0; i < s.length; i++) {

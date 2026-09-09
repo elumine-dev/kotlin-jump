@@ -65,9 +65,9 @@ export function fingerprint(text: string): number {
  * REFRESHED: without that refresh a caller that hands over a new object each
  * time paid the hash forever, measured at 39 times the cost.
  */
-export function sameDocument<T extends { doc: object; fp: number }>(
-  entry: T,
-  doc: object,
+export function sameDocument<D extends object>(
+  entry: { doc: D; fp: number },
+  doc: D,
   text: () => string,
 ): boolean {
   if (entry.doc === doc) return true;

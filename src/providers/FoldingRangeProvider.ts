@@ -13,7 +13,7 @@ export class KotlinFoldingRangeProvider implements vscode.FoldingRangeProvider {
   // two branches below do not read the same source. So does the length: a
   // reopened document restarts at version 1, so uri plus version can name two
   // different texts and the folds of the previous session were replayed.
-  private cache = new Map<string, { version: number; dirty: boolean; fp: number; ranges: vscode.FoldingRange[] }>();
+  private cache = new Map<string, { version: number; dirty: boolean; fp: number; doc: vscode.TextDocument; ranges: vscode.FoldingRange[] }>();
 
 
   provideFoldingRanges(
@@ -22,15 +22,19 @@ export class KotlinFoldingRangeProvider implements vscode.FoldingRangeProvider {
     _token: vscode.CancellationToken,
   ): vscode.FoldingRange[] {
     const key = document.uri.toString();
-    const text = document.getText();
-    const fp = fingerprint(text);
     const cached = this.cache.get(key);
     if (cached
       && cached.version === document.version
       && cached.dirty === document.isDirty
-      && cached.fp === fp) {
+      // Same document OBJECT at the same version is necessarily the same text:
+      // VS Code bumps the version on every change. Comparing the reference
+      // costs nothing, and the fingerprint is only paid when the object
+      // differs, which is exactly the reopened file the fingerprint is for.
+      && (cached.doc === document || cached.fp === fingerprint(document.getText()))) {
       return cached.ranges;
     }
+    const text = document.getText();
+    const fp = fingerprint(text);
 
     const ranges: vscode.FoldingRange[] = [];
     const lastLine = document.lineCount - 1;
@@ -88,7 +92,7 @@ export class KotlinFoldingRangeProvider implements vscode.FoldingRangeProvider {
     }
 
     const result = ranges.length > 5000 ? ranges.slice(0, 5000) : ranges;
-    this.cache.set(key, { version: document.version, dirty: document.isDirty, fp, ranges: result });
+    this.cache.set(key, { version: document.version, dirty: document.isDirty, fp, doc: document, ranges: result });
     capMap(this.cache, OPEN_FILE_CACHE_LIMIT);
     return result;
   }

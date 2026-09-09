@@ -1,26 +1,26 @@
 {
-  "version": "1.42.53",
+  "version": "1.42.54",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The cache now knows the text",
-  "summary": "Reopening a file after it changed outside the editor could show the previous version folds, colours and lenses. The five caches are keyed on the content itself now.",
+  "tagline": "A cache hit is free again",
+  "summary": "Keying the cache on the text itself meant reading and hashing the document on every request. A hit is back to 0.00013 ms from 0.037 ms, and a reopened file is still caught.",
   "highlights": [
     {
-      "title": "A reopened file shows itself",
-      "kind": "fix",
-      "description": "Closing a document destroys it, and reopening builds a new one whose version restarts at 1. Two different texts of the same size at the same path answered as one. Reproduced with two files of exactly 64 characters: the second was given the first one fold ranges."
+      "title": "The document is not read on a hit",
+      "kind": "improvement",
+      "description": "Measured over the 60 largest files of a real Android project, a cache hit went from 0.00013 ms to 0.037 ms in the previous release. It is back where it was."
     },
     {
-      "title": "Identity is the text, not its size",
-      "kind": "fix",
-      "description": "Folding, semantic tokens, the sealed when lens, the state provenance lens and the shared symbol analysis all key on a content fingerprint now."
+      "title": "Correctness kept",
+      "kind": "improvement",
+      "description": "The same object at the same version is necessarily the same text, since the version is bumped on every change. The text is hashed only when the object differs, which is exactly the reopened file the fingerprint was added for."
     }
   ],
   "sections": [
     {
       "heading": "Notes",
       "bullets": [
-        "The fingerprint takes 4.7 microseconds on the average file of a real project of 3187 Kotlin files, and 0.095 ms on the largest, against 1.7 ms to recompute one file folds.",
-        "The repository benchmark shows no measurable change."
+        "The check that proves it, two texts of exactly 64 characters at the same path and version, still holds.",
+        "The sweep over a real project of 3187 files reports that no cache answers differently warm than cold."
       ]
     }
   ],

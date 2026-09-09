@@ -275,10 +275,19 @@ export class SymbolIndex {
     const sts = impl.supertypes;
     const quals = impl.superQualifiers;
     if (sts && quals && quals.length > 0) {
-      const i = sts.indexOf(parent.name);
-      if (i > 0 && quals.includes(sts[i - 1])) {
-        return parent.fqn.endsWith(`.${sts[i - 1]}.${parent.name}`);
+      // Every occurrence, not the first: `: Dialog.Callback, Picker.Callback`
+      // names two different parents, and stopping at the first left the second
+      // uncredited. A bare occurrence anywhere means the simple name is used
+      // directly, so normal resolution applies again.
+      let onlyQualified = false;
+      for (let i = 0; i < sts.length; i++) {
+        if (sts[i] !== parent.name) continue;
+        const owner = i > 0 && quals.includes(sts[i - 1]) ? sts[i - 1] : undefined;
+        if (owner === undefined) { onlyQualified = false; break; }
+        onlyQualified = true;
+        if (parent.fqn.endsWith(`.${owner}.${parent.name}`)) return true;
       }
+      if (onlyQualified) return false;
     }
     const imports = this.fileImports.get(impl.uri.toString()) ?? [];
     // Kotlin resolves a simple name through the explicit imports first, ahead

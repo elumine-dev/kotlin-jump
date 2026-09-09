@@ -234,7 +234,7 @@ export function parseJava(uriString: string, text: string): ParsedFile {
       const name      = cm[2];
       const kind      = toJavaKind(cm[1]);
       const superQuals: string[] = [];
-  const supertypes = extractJavaSupertypes(raw, superQuals);
+      const supertypes = extractJavaSupertypes(raw, superQuals);
       const preClass   = raw.slice(0, raw.indexOf(name, cm.index));
       symbols.push({
         name,

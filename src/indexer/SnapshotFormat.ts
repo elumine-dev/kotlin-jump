@@ -19,6 +19,7 @@ export interface SnapshotFile {
   d: number[];  // depth (brace nesting level)
   at?: Record<number, string>;   // alias targets: sparse map, index → rhs string (typealias only)
   st?: Record<number, string[]>; // supertypes: sparse map, index → supertype names
+  sq?: Record<number, string[]>; // superQualifiers: the entries of `st` that were only a dotted name's qualifier
   // Sparse boolean flags (only entries where true are stored)
   su?: Record<number, 1>;  // isSuspend
   ab?: Record<number, 1>;  // isAbstract
@@ -88,6 +89,7 @@ export function buildSnapshotFile(
     sf.d.push(e.depth);
     if (e.aliasTarget)      { sf.at = sf.at ?? {}; sf.at[idx] = e.aliasTarget; }
     if (e.supertypes)       { sf.st = sf.st ?? {}; sf.st[idx] = e.supertypes; }
+  if (e.superQualifiers)  { sf.sq = sf.sq ?? {}; sf.sq[idx] = e.superQualifiers; }
     if (e.isSuspend)        { sf.su = sf.su ?? {}; sf.su[idx] = 1; }
     if (e.isAbstract)       { sf.ab = sf.ab ?? {}; sf.ab[idx] = 1; }
     if (e.isConst)          { sf.co = sf.co ?? {}; sf.co[idx] = 1; }
@@ -158,6 +160,7 @@ export function restoreSnapshotFile(uriStr: string, sf: SnapshotFile, index: Sym
       moduleName:      sf.m,
       aliasTarget:     sf.at?.[i],
       supertypes:      sf.st?.[i],
+      superQualifiers: sf.sq?.[i],
       isSuspend:       sf.su?.[i] === 1 || undefined,
       isAbstract:      sf.ab?.[i] === 1 || undefined,
       isConst:         sf.co?.[i] === 1 || undefined,

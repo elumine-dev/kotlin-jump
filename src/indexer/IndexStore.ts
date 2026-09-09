@@ -13,7 +13,11 @@ export type { Snapshot, SnapshotFile };
 // bumped to 24: isExpect / isActual / isPrimaryCtorParam were never persisted,
 // so after every restart each data class property got a "not in equals/copy"
 // hint and the KMP badges vanished until the file was edited.
-export const SNAPSHOT_VERSION = 24;
+// bumped to 25: superQualifiers keeps a dotted supertype's qualifier out of the
+// hierarchy. A snapshot written before it restores entries without the field,
+// so `bySuper` was rebuilt with the qualifiers back in and every count returned
+// to what it was, silently, until each file happened to be edited.
+export const SNAPSHOT_VERSION = 25;
 const SNAPSHOT_FILENAME = 'kotlin-jump-index.json'; // historical name; content is gzip from v19+
 
 const gzip   = promisify(zlib.gzip);

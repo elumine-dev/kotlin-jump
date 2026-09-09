@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.83
+
+What 1.42.82 corrected was thrown away by the saved index. Every count went back to its old wrong value on the next window reload, until each file happened to be edited.
+
+### Fixes
+- The saved index carries the qualifier of a dotted supertype. Without it, reopening the window rebuilt the hierarchy the old way and a nested interface named View claimed 51 classes again. Indexes written before this are rebuilt instead of trusted.
+- A class implementing two nested interfaces of the same name, one from each of two outer types, is now counted by both. Only the first was credited.
+- A new test compares a fresh index against a saved and restored one field by field, so the next field added without being written to disk fails the build. This had already slipped through twice.
+
 ## 1.42.82
 
 A supertype written Outer.Inner was filed under both names, so a type of the workspace sharing a name with a framework one claimed its children. On a real Android project, 165 types were over counted by 2020 implementations in total.

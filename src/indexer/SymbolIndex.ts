@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { isAnonymousObject } from '../util/anonymousObjects';
 import { ParsedFile, SymbolKind } from './KotlinParser';
 
 // Kinds that contribute to the FQN chain (nested classes get pkg.Outer.Inner)
@@ -467,6 +468,10 @@ export class SymbolIndex {
         for (const e of set) {
           if (kindFilter && e.kind !== kindFilter) continue;
           if (skipLocals && e.isLocal) continue;
+          // Same reason as locals: `$anon$<line>` is not a destination anyone
+          // searches for, and 199 of them filled the cap before the class that
+          // merely carries "anon" in the middle of its name.
+          if (isAnonymousObject(e.name)) continue;
           results.push(e);
           if (results.length >= 200) return results;
         }
@@ -486,7 +491,7 @@ export class SymbolIndex {
           if (score > 0) {
             const set = this.byName.get(name);
             if (set) {
-              const entries = [...set].filter(e => (!kindFilter || e.kind === kindFilter) && !(skipLocals && e.isLocal));
+              const entries = [...set].filter(e => (!kindFilter || e.kind === kindFilter) && !(skipLocals && e.isLocal) && !isAnonymousObject(e.name));
               if (entries.length > 0) scored.push({ entries, score });
             }
           }
@@ -500,7 +505,7 @@ export class SymbolIndex {
         if (score > 0) {
           const set = this.byName.get(name);
           if (set) {
-            const entries = [...set].filter(e => (!kindFilter || e.kind === kindFilter) && !(skipLocals && e.isLocal));
+            const entries = [...set].filter(e => (!kindFilter || e.kind === kindFilter) && !(skipLocals && e.isLocal) && !isAnonymousObject(e.name));
             if (entries.length > 0) scored.push({ entries, score });
           }
         }
@@ -617,7 +622,7 @@ export class SymbolIndex {
     const results: SymbolEntry[] = [];
     for (const entries of this.byFile.values()) {
       for (const e of entries) {
-        if (kinds.has(e.kind) && !(skipLocals && e.isLocal)) {
+        if (kinds.has(e.kind) && !(skipLocals && e.isLocal) && !isAnonymousObject(e.name)) {
           results.push(e);
           if (results.length >= limit) return results;
         }

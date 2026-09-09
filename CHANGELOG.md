@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.42.85
+
+Hiding object expressions from search was done after the result cap, so on a real project a search for anon spent 199 of its 200 slots on them and showed one match where eleven exist.
+
+### Fixes
+- Object expressions are left out inside the search itself, ahead of the cap, the way local variables already were. A search for anon on a real Android project returned one result and now returns the eleven that match, MyAnonHelper among them.
+- Filtering by kind gained the same treatment: object: listed 85 singletons and now lists 98.
+
 ## 1.42.84
 
 The internal name given to an object expression was reaching the screen. One real Android project showed 275 of them in the Outline, and searching anon in Go to Symbol returned nothing else.

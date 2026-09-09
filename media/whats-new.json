@@ -1,21 +1,31 @@
 {
-  "version": "1.42.49",
+  "version": "1.42.50",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A cache that never emptied",
-  "summary": "The folding cache kept one entry for every file visited since the window opened. It now keeps the ones you can actually see.",
+  "tagline": "The last two caches get a ceiling",
+  "summary": "Semantic tokens kept the colouring of every file visited, 892 635 words of it on a real project. All three per file caches now drop the oldest file instead of emptying themselves.",
   "highlights": [
     {
-      "title": "The folding cache has a ceiling",
+      "title": "Semantic tokens stop hoarding",
       "kind": "improvement",
-      "description": "Measured over a real Android project of 5088 files: 5088 entries and 44 058 fold ranges retained, none of them on screen. It now keeps at most 64 files, far more than anyone has open, so nothing is recomputed in normal use."
+      "description": "Measured over a real Android project of 5088 files: 5088 entries holding 892 635 words of token data, for files that had long since left the screen. It now keeps 64."
+    },
+    {
+      "title": "Oldest file out, not the whole map",
+      "kind": "improvement",
+      "description": "Emptying the map would have made every open editor recompute at once, which for semantic tokens means a visible repaint. The oldest entry goes instead, so what you are looking at keeps its answer."
+    },
+    {
+      "title": "One rule for the three caches",
+      "kind": "improvement",
+      "description": "A single shared helper caps all of them, so they cannot drift apart again. That drift is exactly how the folding cache had been missed while its sibling was capped."
     }
   ],
   "sections": [
     {
       "heading": "Notes",
       "bullets": [
-        "The same ceiling has been on the state provenance cache since it was added; this one was simply missed.",
-        "Checked on the repository benchmark: the ceiling costs nothing measurable on fold range timing."
+        "The sealed when coverage lens held 3187 entries to show 207 lenses; it gets the same ceiling.",
+        "Checked on the repository benchmark: no measurable change to folding or semantic token timing."
       ]
     }
   ],

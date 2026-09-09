@@ -3,6 +3,7 @@ import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { resolveBest } from '../util/ImportResolver';
 import { isInsideCommentOrString, countTripleQuotes } from '../util/textUtils';
 import { Logger } from '../util/logger';
+import { capMap, OPEN_FILE_CACHE_LIMIT } from '../util/boundedCache';
 
 /** Step-by-step trace sink — wired to the Kotlin Jump output channel so a
  *  user can answer "why is there no lens on this when?" from the logs. */
@@ -595,6 +596,7 @@ export class SealedWhenCoverageProvider implements vscode.CodeLensProvider, vsco
     });
 
     this._cache.set(key, { version: document.version, epoch: this._epoch, lenses });
+    capMap(this._cache, OPEN_FILE_CACHE_LIMIT);
     this.log?.debug(`[SealedWhen] ${fileName} — ${lenses.length} lens(es) in ${Date.now() - t0}ms (v${document.version}, epoch ${this._epoch})`);
     return lenses;
   }

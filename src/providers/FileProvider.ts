@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import { isAnonymousObject } from '../util/anonymousObjects';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { SymbolKind as KtKind } from '../indexer/KotlinParser';
 import { Logger } from '../util/logger';
@@ -80,10 +79,10 @@ export class KotlinFileProvider implements vscode.WorkspaceSymbolProvider {
     }
 
     // Every unnamed companion answers to "Companion"; none of them is a
-    // destination anyone searches for by that name. `$anon$<line>` is not a
-    // name either: searching "anon" returned 200 of them and buried the class
-    // actually called AnonymousUser.
-    entries = entries.filter(e => !e.isCompanion && !isAnonymousObject(e.name));
+    // destination anyone searches for by that name. `$anon$<line>` is dropped
+    // by the index itself, before the result cap: filtering here left the cap
+    // already spent on 199 of them.
+    entries = entries.filter(e => !e.isCompanion);
     const allowedKinds = vscode.workspace.getConfiguration('kotlinJump').get<string[]>('workspaceSymbolKinds', []);
     if (allowedKinds.length > 0) {
       const allowed = new Set(allowedKinds);

@@ -98,3 +98,47 @@ describe('Aucun nom synthetique n\'atteint l\'ecran', () => {
     expect(index.lookupImplementationsDeep(listener)).toHaveLength(1);
   });
 });
+
+describe('Les objets anonymes ne consomment pas le plafond de resultats', () => {
+  // Le filtre de la v1.42.84 s'appliquait APRES le plafond de 200 de
+  // `index.search`. Sur LaPresse, « anon » remplissait le plafond de 199
+  // symboles synthetiques, et la classe reelle dont le nom les contient au
+  // milieu ne passait pas. Le depot ecarte deja les locaux DANS `search`,
+  // pour cette raison exacte.
+  function indexSature(): SymbolIndex {
+    const index = new SymbolIndex();
+    // 250 objets anonymes : au dela du plafond de 200.
+    const lignes = ['package p', '', 'class Sature {'];
+    for (let i = 0; i < 250; i++) {
+      lignes.push(`    val h${i} = object : Listener${i} {}`);
+    }
+    lignes.push('}');
+    index.add(parse('file:///a60b/Sature.kt', lignes.join('\n')));
+    // Une vraie classe dont le nom contient « anon » AU MILIEU : elle ne
+    // correspond que par sous chaine, donc elle passe apres les prefixes.
+    index.add(parse('file:///a60b/Aide.kt', 'package p\n\nclass MyAnonHelper\n'));
+    index.finalize();
+    return index;
+  }
+
+  it('l\'index en produit bien plus de 200, sinon le test ne prouve rien', () => {
+    const index = indexSature();
+    const brut = index.getFileSymbols('file:///a60b/Sature.kt').filter(e => e.name.startsWith('$anon$'));
+    expect(brut.length).toBe(250);
+  });
+
+  it('une classe dont le nom contient anon au milieu reste atteignable', () => {
+    const index = indexSature();
+    const r = (new KotlinFileProvider(index).provideWorkspaceSymbols('anon') as any[]) ?? [];
+    expect(r.map(s => s.name)).toContain('MyAnonHelper');
+  });
+
+  it('@object: ne gaspille pas sa limite non plus', () => {
+    const index = indexSature();
+    index.add(parse('file:///a60b/Reel.kt', 'package p\n\nobject VraiSingleton\n'));
+    index.finalize();
+    const r = (new KotlinFileProvider(index).provideWorkspaceSymbols('@object:') as any[]) ?? [];
+    expect(r.map(s => s.name)).toContain('VraiSingleton');
+    expect(r.some(s => s.name.startsWith('$anon$'))).toBe(false);
+  });
+});

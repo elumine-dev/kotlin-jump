@@ -1,4 +1,4 @@
-import { SymbolEntry } from '../indexer/SymbolIndex';
+import type { SymbolEntry } from '../indexer/SymbolIndex';
 
 /**
  * `$anon$<line>` is the parser's synthetic name for `object : Interface { }`.

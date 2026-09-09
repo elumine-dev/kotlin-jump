@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.69
+
+The state lens showed writes and readers in one clickable label, so both halves opened the same reference list. They are two labels now, and a single reader opens straight at its line.
+
+### Fixes
+- The state lens is two lenses. A code lens carries one command, so the single label meant one action for both halves: clicking readers opened writes and readers together, and the panel stole the view.
+- A lone write or a lone reader opens at its line. The peek list stays for two or more.
+- With no reader in the file the right side stays inert instead of offering a click that shows nothing.
+
 ## 1.42.68
 
 Kotlin writes the fields of a data class on one line. The quick fix matched its finding on the line alone, so opening it on the second field offered to delete the first.

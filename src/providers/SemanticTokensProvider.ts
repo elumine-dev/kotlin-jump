@@ -4,6 +4,7 @@ import { SymbolKind } from '../indexer/KotlinParser';
 import { resolveBest } from '../util/ImportResolver';
 import { isInsideCommentOrString } from '../util/textUtils';
 import { resolveLocalScope, buildLocalScopeIndex } from './DefinitionProvider';
+import { capMap, OPEN_FILE_CACHE_LIMIT } from '../util/boundedCache';
 
 // ── Legend arrays (order = index) ────────────────────────────────────────────
 
@@ -279,6 +280,7 @@ export class KotlinSemanticTokensProvider
       const resultId = String(this.nextId++);
       const data = new Uint32Array(0);
       if (!range) this.cache.set(doc.uri.toString(), { version: doc.version, data, resultId });
+      capMap(this.cache, OPEN_FILE_CACHE_LIMIT);
       return new vscode.SemanticTokens(data, resultId);
     }
     const docLines = doc.getText().split('\n');
@@ -399,6 +401,7 @@ export class KotlinSemanticTokensProvider
     if (!range) {
       const resultId = String(this.nextId++);
       this.cache.set(doc.uri.toString(), { version: doc.version, resultId, data: result.data });
+      capMap(this.cache, OPEN_FILE_CACHE_LIMIT);
       return new vscode.SemanticTokens(result.data, resultId);
     }
     return result;

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.50
+
+Kotlin Jump 1.42.50 gives the two remaining per file caches the ceiling the folding cache got last release, and makes all three drop the oldest file instead of emptying themselves.
+
+### Improvements
+- Semantic tokens no longer keep the colouring of every file visited. Measured over a real Android project of 5088 files: 5088 entries holding 892 635 words of token data, for files that had long since left the screen. It now keeps 64.
+- The sealed when coverage lens gets the same ceiling: it held 3187 entries to show 207 lenses.
+- All three caches now drop the oldest file rather than clearing themselves. Emptying the whole map would have made every open editor recompute at once, which for semantic tokens means a visible repaint. One shared helper does it, so the three cannot drift apart again, which is how the folding one had been missed.
+
 ## 1.42.49
 
 Kotlin Jump 1.42.49 puts a ceiling on the folding cache. It kept one entry for every file visited since the window opened, including the thousands you closed hours ago.

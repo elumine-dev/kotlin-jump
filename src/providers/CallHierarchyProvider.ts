@@ -149,12 +149,20 @@ export class KotlinCallHierarchyProvider implements vscode.CallHierarchyProvider
       return lines;
     };
 
+    // Every line that DECLARES this name, whatever the language writes on it.
+    // The `fun …` shape below only ever matched Kotlin, so a Java overload
+    // (`protected void initDagger(Context c)`) came back as its own caller.
+    const declaredAt = new Set(
+      this.index.lookup(item.name).map(d => `${d.uri.toString()}:${d.line}`),
+    );
+
     for (const r of results) {
       // Skip the declaration itself
       const data = (item as any).data;
       if (data && r.uriString === data.uriString && r.line === data.line) continue;
 
       // The declaration line of an overload (`fun load(name: String)`) is not a call.
+      if (declaredAt.has(`${r.uriString}:${r.line}`)) continue;
       if (new RegExp(`\\bfun\\s+(?:<[^>]*>\\s*)?(?:[\\w.<>?]+\\.)?${item.name}\\s*\\(`).test(r.lineText)) continue;
       const container = this.findContainingFunction(r.uriString, r.line, await linesOf(r.uriString));
       if (!container) continue;

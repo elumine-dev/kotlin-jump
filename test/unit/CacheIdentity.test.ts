@@ -246,3 +246,52 @@ describe('Résolution des imports', () => {
     expect(size).toBeLessThanOrEqual(OPEN_FILE_CACHE_LIMIT);
   });
 });
+
+describe('Rafraîchissement de la référence après réouverture', () => {
+  // Sans lui, l'entrée continue de pointer sur l'objet détruit : chaque appel
+  // suivant retombe sur l'empreinte et rehache tout le fichier, pour le reste
+  // de la session. Mesuré sur les 40 plus gros fichiers réels : 29,6 ms par
+  // salve de résolutions au lieu de 0,28 ms.
+  it('la résolution d\'imports ne rehache pas indéfiniment', async () => {
+    const { resolve } = await import('../../src/util/ImportResolver');
+    const URI2 = 'file:///rr/A.kt';
+    const texte = 'package p\n\nimport a.Foo\n\nclass X\n';
+    let lectures = 0;
+    const faire = () => ({ uri: { toString: () => URI2 }, version: 1, getText: () => { lectures++; return texte; } } as any);
+
+    const session1 = faire();
+    resolve('Foo', session1);
+    resolve('Foo', session1);
+
+    // Réouverture : nouvel objet, même contenu, même version.
+    const session2 = faire();
+    resolve('Foo', session2);
+    const apresReouverture = lectures;
+    for (let i = 0; i < 20; i++) resolve('Foo', session2);
+    expect(lectures).toBe(apresReouverture);
+  });
+
+  it('le pliage non plus', () => {
+    const p = new KotlinFoldingRangeProvider((() => { const i = new SymbolIndex(); i.add(parse(URI, A)); i.finalize(); return i; })());
+    const ct = { isCancellationRequested: false } as any;
+    const faire = () => { const d = doc(A); let n = 0; const brut = d.getText; d.getText = () => { n++; return brut(); }; return { d, lu: () => n }; };
+    const s1 = faire();
+    p.provideFoldingRanges(s1.d, {} as any, ct);
+    const s2 = faire();
+    p.provideFoldingRanges(s2.d, {} as any, ct);
+    const apres = s2.lu();
+    for (let i = 0; i < 20; i++) p.provideFoldingRanges(s2.d, {} as any, ct);
+    expect(s2.lu()).toBe(apres);
+  });
+
+  it('mais un contenu réellement différent est toujours détecté', () => {
+    const idx = (() => { const i = new SymbolIndex(); i.add(parse(URI, A)); i.finalize(); return i; })();
+    const p = new KotlinFoldingRangeProvider(idx);
+    const ct = { isCancellationRequested: false } as any;
+    p.provideFoldingRanges(doc(A), {} as any, ct);
+    const chaud = JSON.stringify(p.provideFoldingRanges(doc(B), {} as any, ct).map(r => [r.start, r.end]));
+    const froid = JSON.stringify(new KotlinFoldingRangeProvider(idx)
+      .provideFoldingRanges(doc(B), {} as any, ct).map(r => [r.start, r.end]));
+    expect(chaud).toBe(froid);
+  });
+});

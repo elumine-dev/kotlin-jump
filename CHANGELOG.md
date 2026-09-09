@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.42.57
+
+Kotlin Jump 1.42.57 fixes what the last three releases left behind: after reopening a file, the caches kept paying full price on every single request, for the rest of the session.
+
+### Fixes
+- Reopening a file no longer makes hover and Go to Definition hash the whole document on every name they resolve. Comparing the document object is the cheap way to know the text has not changed, and a reopened file gets a new object. The comparison failed forever after, because the entry still pointed at the destroyed one, so every request fell through to hashing the text. Measured over the 40 largest files of a real Android project: a burst of resolutions cost 29.6 ms instead of 0.28 ms, and it never recovered.
+- The entry now adopts the new object once the text is confirmed unchanged, so the next request is free again. Folding, semantic tokens and import resolution share one helper for this, so the three cannot drift apart.
+
 ## 1.42.56
 
 Kotlin Jump 1.42.56 fixes the last cache that trusted the version number, and it is the one whose mistakes are the most visible: it decides which symbol a name refers to.

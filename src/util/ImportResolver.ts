@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { capMap, fingerprint, OPEN_FILE_CACHE_LIMIT } from './boundedCache';
+import { capMap, fingerprint, sameDocument, OPEN_FILE_CACHE_LIMIT } from './boundedCache';
 
 interface DocCache {
   version: number;
@@ -134,7 +134,7 @@ function getCache(document: vscode.TextDocument): DocCache {
   // reopened file, is the text hashed. Getting this wrong resolved a name to
   // the previous session's import: Go to Definition landed on another symbol.
   if (hit && hit.version === document.version
-    && (hit.doc === document || hit.fp === fingerprint(document.getText()))) return hit;
+    && sameDocument(hit, document, () => document.getText())) return hit;
 
   const text = document.getText();
   const pkgMatch = RE_PACKAGE.exec(text);

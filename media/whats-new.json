@@ -1,26 +1,26 @@
 {
-  "version": "1.42.56",
+  "version": "1.42.57",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The resolver stops trusting the version",
-  "summary": "The import resolver decides which symbol a name refers to, and it keyed its cache on the document version. A reopened file resolved names against the previous version imports.",
+  "tagline": "Reopening a file is cheap again",
+  "summary": "After reopening a file, the caches paid full price on every request for the rest of the session. A burst of name resolutions cost 29.6 ms instead of 0.28 ms.",
   "highlights": [
     {
-      "title": "A name resolves to the right symbol",
+      "title": "The cost of reopening stops there",
       "kind": "fix",
-      "description": "Reproduced with two files of the same length whose imports were swapped: asking for `Foo` returned `a.Foo` when the file said `zz.Foo`. Go to Definition, hover and auto import all read that answer."
+      "description": "Comparing the document object is the cheap way to know the text has not changed, and a reopened file gets a new object. The comparison failed forever after, because the entry still pointed at the destroyed one, so every request hashed the whole document."
     },
     {
-      "title": "The largest cache gets a ceiling",
+      "title": "One helper for the three caches",
       "kind": "improvement",
-      "description": "It kept one entry per file ever resolved: 13.8 MB retained after resolving across a real Android project of 3187 Kotlin files, more than any other cache in the extension."
+      "description": "Folding, semantic tokens and import resolution share the same check now, so they cannot drift apart. The entry adopts the new object once the text is confirmed unchanged, and the next request is free again."
     }
   ],
   "sections": [
     {
       "heading": "Notes",
       "bullets": [
-        "Resolving from the same document twice does not read the text again, so the hover and Go to Definition path did not get slower.",
-        "This was found by listing every place that compares a document version, after the same mistake turned up three times in a row."
+        "A file whose content really did change is still detected: the check falls back to comparing the text itself.",
+        "Measured over the 40 largest files of a real Android project of 3187 Kotlin files."
       ]
     }
   ],

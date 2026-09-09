@@ -242,6 +242,15 @@ export class KotlinInlayHintsProvider implements vscode.InlayHintsProvider {
             }
 
             const param = params[i];
+            // A literal argument whose shape cannot be that parameter's type
+            // means the call was resolved to the wrong declaration: without a
+            // compiler this is the one mismatch that is provable from the text
+            // alone. `Timber.wtf("onAdErrorEvent: …")` was labelled
+            // `throwable:`, a string handed to a Throwable.
+            if (literalContradicts(argText, param.type)) {
+              this.log.debug(`[InlayHints] pass1 line ${lineNum} — ${name}() arg[${i}] literal ${argText.trim().slice(0, 20)} cannot be ${param.type}, skip`);
+              continue;
+            }
             const labelPart = new vscode.InlayHintLabelPart(`${param.name}:`);
             const targetLoc = cached.locations[i] ?? new vscode.Location(
               entry.uri,
@@ -555,4 +564,33 @@ function countTripleQuotes(s: string): number {
     else i++;
   }
   return count;
+}
+
+/** Types a string literal can legitimately land on. */
+const STRINGY = new Set(['String', 'CharSequence', 'Any', 'Comparable<String>']);
+/** Types a number literal can legitimately land on. */
+const NUMERIC = new Set(['Int', 'Long', 'Short', 'Byte', 'Float', 'Double', 'Number', 'Any']);
+
+/**
+ * True when the argument is a literal whose shape rules out the declared
+ * parameter type. Only decides on literals and on plain, known types: a
+ * generic, a nullable, an unknown or a type alias all answer false, because
+ * the point is to drop labels that are provably wrong, not to guess.
+ */
+export function literalContradicts(argText: string, paramType: string): boolean {
+  const arg = argText.trim();
+  // `null` is the one literal a nullable type accepts, so it never decides.
+  // Otherwise the question is the base type: a String is no more a `Throwable?`
+  // than it is a `Throwable`.
+  if (arg === 'null') return false;
+  const type = paramType.trim().replace(/\s+/g, '').replace(/\?$/, '');
+  if (!type || type.length <= 1) return false;   // generic or unknown
+  const known = STRINGY.has(type) || NUMERIC.has(type) || type === 'Boolean' || type === 'Char';
+  if (!known && !/^(Throwable|Exception|Error)$/.test(type)) return false;
+
+  if (/^"""[\s\S]*"""$/.test(arg) || /^"(?:[^"\\]|\\.)*"$/.test(arg)) return !STRINGY.has(type);
+  if (/^(true|false)$/.test(arg)) return type !== 'Boolean' && type !== 'Any';
+  if (/^-?\d+[lLuU]?$/.test(arg) || /^-?\d*\.\d+[fF]?$/.test(arg)) return !NUMERIC.has(type);
+  if (/^'(?:[^'\\]|\\.)'$/.test(arg)) return type !== 'Char' && type !== 'Any';
+  return false;
 }

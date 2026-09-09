@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.74
+
+Argument labels are dropped when the literal you wrote cannot be the type the parameter declares. Timber.wtf with a message showed throwable, because the call had resolved to another declaration of the same name.
+
+### Fixes
+- An argument label is hidden when the literal written at that position cannot be the declared type. Resolving a call by name is what this extension does without a compiler, and this is the one mismatch the text alone can prove.
+- The check only decides on literals and on plain types. A generic, an unknown type, Any, an expression or null leave the label untouched, so nothing is dropped on a guess.
+- One label removed on a real Android project of 17170, and none lost. The rule guards the whole class, not that one line.
+
 ## 1.42.73
 
 The previous release listed which kinds of symbol a call may resolve to, and the list was short. Sealed parents and enum constructors fell out of it and lost every argument label.

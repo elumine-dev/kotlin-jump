@@ -1,12 +1,12 @@
 {
-  "version": "1.42.86",
+  "version": "1.42.87",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The Outline finally matches the code",
-  "summary": "A class written the way ktlint wraps an injected constructor was read as one line long. Folding it folded nothing, and every one of its members hung outside it in the Outline and the breadcrumbs.",
+  "tagline": "A data class keeps its properties",
+  "summary": "1.42.86 taught the reader that a comment introduces what follows it. Inside a primary constructor that is false, so an annotated data class ended on its first line and its properties climbed to the top level of the Outline.",
   "highlights": [
     {
-      "title": "202 misplaced nodes, now none",
-      "description": "class Foo @Inject on one line and constructor(...) on the next is the shape Dagger imposes. The header was read as finished, so the class ended where it began.",
+      "title": "Level with the class, no longer",
+      "description": "A property annotated with SerializedName made its own class stop one line in. The Outline then listed the properties as siblings of the class that declares them.",
       "kind": "fix"
     }
   ],
@@ -14,10 +14,8 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "A declaration whose header wraps after an annotation covers its whole body. On a real Android project 154 classes ended on their first line, so folding one folded nothing and its members were listed outside it.",
-        "The Outline nests by what actually contains what. An object expression inside an init block was filed under whichever property came last, and the breadcrumb read Holder then disposable then the object.",
-        "One chevron per line. A property declared in a primary constructor sits on its class's own line and produced a second fold that stopped partway through the class, so folding the class folded a fragment. 181 lines carried two.",
-        "A parameter no longer swallows the documentation of the one after it."
+        "A comment or an annotation introduces the next declaration only outside a parameter list. Inside a primary constructor it introduces the next parameter, which still belongs to the class. On a real Android project 211 entries sat at the top level of the Outline instead of inside their class, and now 57 do, fewer than before 1.42.86 shipped.",
+        "A parameter no longer swallows the annotation of the one after it either, so folding the first stops hiding the second one's SerializedName. 712 declarations reached into their neighbour, now 86."
       ]
     }
   ],

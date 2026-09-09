@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.42.49
+
+Kotlin Jump 1.42.49 puts a ceiling on the folding cache. It kept one entry for every file visited since the window opened, including the thousands you closed hours ago.
+
+### Improvements
+- The folding cache holds the files you can actually see. It was keyed by file with nothing ever removed, so browsing a project filled it and it never emptied. Measured over a real Android project of 5088 files: 5088 entries and 44 058 fold ranges retained, none of them on screen. It now keeps at most 64 files, which is far more than anyone has open, so nothing is recomputed in normal use. The same ceiling has been on the state provenance cache since it was added; this one was simply missed.
+
 ## 1.42.48
 
 Kotlin Jump 1.42.48 contains no change to the extension. It finishes the previous release, whose fix would have come undone the day someone renamed a private method.

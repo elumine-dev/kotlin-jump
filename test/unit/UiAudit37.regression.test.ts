@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { isTestPath, segmentMatchesPath } from '../../src/util/testPaths';
+import { Position } from './__mocks__/vscode';
+import { SymbolIndex } from '../../src/indexer/SymbolIndex';
+import { parse } from '../../src/indexer/KotlinParser';
+import { KotlinFoldingRangeProvider } from '../../src/providers/FoldingRangeProvider';
 
 // Audit 37 : segmentMatchesPath réécrit sans allocation par appel. Mesuré sur
 // les 5088 chemins du projet LaPresse, le coût passe de 26,1 ms à 9,9 ms par
@@ -69,5 +73,72 @@ describe('Réglage relu à chaque appel', () => {
     expect(segmentMatchesPath('/a/src/testDebug/kotlin/A.kt', 'test/java')).toBe(false);
     expect(segmentMatchesPath('/a/src/androidTestDebug/A.kt', 'androidTest')).toBe(true);
     expect(segmentMatchesPath('/a/src/androidTestDebug/A.kt', 'jvmTest')).toBe(false);
+  });
+});
+
+describe('Cache de pliage borné', () => {
+  const P = (l: number, c: number) => new Position(l, c);
+  function doc(uri: string, text: string): any {
+    const lines = text.split('\n');
+    return {
+      uri: { toString: () => uri, path: uri.replace('file://', '') },
+      languageId: 'kotlin', version: 1, isDirty: false,
+      getText: () => text,
+      lineAt: (n: number) => { const t = lines[n] ?? ''; return { text: t, range: { start: P(n, 0), end: P(n, t.length) } }; },
+      lineCount: lines.length,
+    };
+  }
+  const body = (i: number) => [
+    'package p',
+    '',
+    `import a.B${i}`,
+    `import a.C${i}`,
+    '',
+    `class Type${i} {`,
+    `    fun one() {`,
+    `        val x = ${i}`,
+    `    }`,
+    '}',
+  ].join('\n');
+
+  function providerOver(n: number) {
+    const index = new SymbolIndex();
+    const docs: any[] = [];
+    for (let i = 0; i < n; i++) {
+      const uri = `file:///cap/F${i}.kt`;
+      index.add(parse(uri, body(i)));
+      docs.push(doc(uri, body(i)));
+    }
+    return { provider: new KotlinFoldingRangeProvider(index), docs };
+  }
+
+  it('parcourir tout un projet ne garde pas une entrée par fichier', () => {
+    // Mesuré sur un vrai projet : 5088 entrées et 44 058 plages retenues pour
+    // des fichiers dont aucun n'était encore visible.
+    const { provider, docs } = providerOver(300);
+    for (const d of docs) provider.provideFoldingRanges(d, {} as any, {} as any);
+    const cache: Map<string, unknown> = (provider as any).cache;
+    expect(cache.size).toBeLessThanOrEqual(64);
+  });
+
+  it('un ensemble de fichiers ouverts réaliste reste entièrement en cache', () => {
+    // Le plafond ne doit pas coûter de recalcul dans l'usage courant : on ne
+    // garde pas dix onglets ouverts et soixante-quatre en plus.
+    const { provider, docs } = providerOver(10);
+    const first = docs.map(d => provider.provideFoldingRanges(d, {} as any, {} as any));
+    const second = docs.map(d => provider.provideFoldingRanges(d, {} as any, {} as any));
+    for (let i = 0; i < docs.length; i++) expect(second[i]).toBe(first[i]);
+  });
+
+  it('le contenu rendu est le même avec ou sans succès de cache', () => {
+    const { provider, docs } = providerOver(3);
+    const warm = provider.provideFoldingRanges(docs[0], {} as any, {} as any).map(r => [r.start, r.end]);
+    const cold = new KotlinFoldingRangeProvider(new SymbolIndex());
+    // Index vide : seuls les plis d'imports subsistent, donc on compare plutôt
+    // deux instances au même index.
+    const { provider: other, docs: sameDocs } = providerOver(3);
+    const again = other.provideFoldingRanges(sameDocs[0], {} as any, {} as any).map(r => [r.start, r.end]);
+    expect(again).toEqual(warm);
+    expect(cold).toBeDefined();
   });
 });

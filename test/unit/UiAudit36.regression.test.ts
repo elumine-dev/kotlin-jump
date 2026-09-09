@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { Position } from './__mocks__/vscode';
 import { SymbolIndex } from '../../src/indexer/SymbolIndex';
 import { parse } from '../../src/indexer/KotlinParser';
@@ -8,6 +8,20 @@ import { KotlinFoldingRangeProvider } from '../../src/providers/FoldingRangeProv
 import { forgetLiveSymbols } from '../../src/util/liveSymbols';
 import { isTestPath } from '../../src/util/testPaths';
 import { LogcatService } from '../../src/logcat/LogcatService';
+
+// Le double du module adb, pose au niveau du fichier : aucun test d'ici ne
+// peut lancer un processus, quel que soit le chemin de code emprunte. Poser un
+// bouchon sur la methode privee `startStream` marchait aussi, mais liait le
+// test au NOM de cette methode : la renommer relançait adb en silence.
+vi.mock('../../src/android/AdbBinary', () => ({
+  spawnAdb: () => { throw new Error('spawnAdb interdit dans la suite unitaire'); },
+  runAdb: () => Promise.resolve(undefined),
+  runShell: () => Promise.resolve(undefined),
+  resolveAdbPath: () => '/fake/adb',
+  invalidateAdbPathCache: () => {},
+  watchAdbPathSetting: () => ({ dispose: () => {} }),
+  parseDevicesOutput: () => [],
+}));
 
 // Audit 36 : trouvé en passant l'extension sur un vrai projet Android,
 // 3187 fichiers Kotlin et 1901 Java (LaPresse).
@@ -217,11 +231,6 @@ describe('Reconnexion au même appareil Logcat', () => {
     const s: any = new LogcatService({ lookupFqn: () => undefined } as any, {
       channel: { appendLine: () => {} }, debug: () => {}, info: () => {}, warn: () => {}, error: () => {},
     } as any);
-    // startStream lance un vrai `adb logcat`. Le neutraliser garde le test
-    // dans le processus : sans cela la suite unitaire lançait un processus
-    // enfant, dépendait de la présence d'adb sur la machine, et laissait
-    // derrière elle le minuteur de reconnexion de 2 s.
-    s.startStream = () => {};
     s.currentSerial = 'PIXEL7';
     s.onEntry({ ts: Date.UTC(2026, 3, 29, 22, 0, 0), pid: 1, tid: 1, level: 'I', tag: 'T', message: 'm', seq: 1 });
     const anchor = s.resumeSince();

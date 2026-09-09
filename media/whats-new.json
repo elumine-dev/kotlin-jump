@@ -1,25 +1,20 @@
 {
-  "version": "1.42.47",
+  "version": "1.42.48",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A test that launched adb",
-  "summary": "No change to the extension. Two of our own Logcat tests were launching a real adb process while the suite ran, and passed either way.",
+  "tagline": "A fix that would have come undone",
+  "summary": "No change to the extension. The previous release stopped two tests from launching adb by name, which a rename would have silently undone.",
   "highlights": [
     {
-      "title": "The suite stops launching adb",
+      "title": "No coupling to a private name",
       "kind": "fix",
-      "description": "Two tests called the device switch directly, which starts the stream, which spawns adb. The result depended on whether adb was installed on the machine, and each run left the two second reconnection timer behind."
-    },
-    {
-      "title": "A guard against the next one",
-      "kind": "improvement",
-      "description": "A new test replaces the adb entry point with one that refuses to run, and asserts that switching device, clearing, following a process and disposing all reach it zero times."
+      "description": "The two Logcat tests stopped the stream by replacing a private method on the instance. Renaming it during a refactor would have quietly let them launch a real adb process again, with every test still passing. They now replace the adb entry point itself."
     }
   ],
   "sections": [
     {
       "heading": "Notes",
       "bullets": [
-        "Nothing shipped in the extension itself. Every release from 1.42.38 onward was checked against a real Android project of 5088 files, with no difference in what the analyses answer."
+        "Checked across the whole suite: with the adb entry point made to fail on purpose, all 6450 tests still pass, so no test anywhere reaches a real process launch."
       ]
     }
   ],

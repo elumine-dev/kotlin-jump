@@ -1,12 +1,12 @@
 {
-  "version": "1.42.63",
+  "version": "1.42.64",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Dead overloads side by side are found",
-  "summary": "Two dead functions of the same name in one file hid each other from the unused symbol check, while the same two in separate files were reported. Both are now reported.",
+  "tagline": "Dead members hiding behind a twin",
+  "summary": "The unused member check counted a file once per declaration it held, so a class carrying two overloads of a dead name read as if something used it. The same fix as the previous release, one level down.",
   "highlights": [
     {
-      "title": "A twin in the same file is not a mention",
-      "description": "The unused symbol check counted each file once per declaration, so two overloads sitting side by side each read the other's name as a use of itself and the pair stayed silent.",
+      "title": "A twin in the same class is not a use",
+      "description": "When three members share a dead name and two of them sit in one file, all three are now reported. Until now the pair hid the whole group.",
       "kind": "fix"
     }
   ],
@@ -14,9 +14,9 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "The unused symbol check now reports two dead overloads declared in the same file. Until now it reported them only when they lived in separate files, which is the same code with a different layout.",
-        "The why explanation agrees with the verdict again: it said alive in the same file for symbols the check was about to report.",
-        "Nothing else changes on a real project: the same 152 findings on a 5088 file Android codebase, before and after."
+        "The unused member check reports a group of dead homonyms when one file holds two of them. Before, that file was counted twice and the group looked alive, so nothing was reported at all.",
+        "The why explanation follows the same rule, so it no longer says alive in the same file for a member the check reports.",
+        "The safety belts are untouched: one mention anywhere, a layout attribute included, still keeps every bearer of the name alive. Same 271 findings on a 6278 file Android codebase, before and after."
       ]
     }
   ],

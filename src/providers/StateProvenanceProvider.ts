@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { stripKotlinComments } from '../util/xmlRefs';
+import { capMap, OPEN_FILE_CACHE_LIMIT } from '../util/boundedCache';
 
 /**
  * KJ-014: UDF X-Ray, who writes / who reads a ViewModel state.
@@ -261,8 +262,8 @@ export class StateProvenanceProvider implements vscode.CodeLensProvider {
     if (hit && hit.version === document.version && hit.length === text.length) return hit.lenses;
 
     const lenses = this._compute(text, document.uri);
-    if (this._cache.size > 64) this._cache.clear();
     this._cache.set(key, { version: document.version, length: text.length, lenses });
+    capMap(this._cache, OPEN_FILE_CACHE_LIMIT);
     return lenses;
   }
 

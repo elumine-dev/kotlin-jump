@@ -1,12 +1,12 @@
 {
-  "version": "1.42.85",
+  "version": "1.42.86",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Go to Symbol has its 200 slots back",
-  "summary": "Hiding object expressions from search was done after the result cap, so on a real project a search for anon spent 199 of its 200 slots on them and showed one match where eleven exist.",
+  "tagline": "The Outline finally matches the code",
+  "summary": "A class written the way ktlint wraps an injected constructor was read as one line long. Folding it folded nothing, and every one of its members hung outside it in the Outline and the breadcrumbs.",
   "highlights": [
     {
-      "title": "Eleven matches, not one",
-      "description": "A class whose name merely contains the letters you typed was cut by a cap already spent on entries that were then thrown away.",
+      "title": "202 misplaced nodes, now none",
+      "description": "class Foo @Inject on one line and constructor(...) on the next is the shape Dagger imposes. The header was read as finished, so the class ended where it began.",
       "kind": "fix"
     }
   ],
@@ -14,8 +14,10 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Object expressions are left out inside the search itself, ahead of the cap, the way local variables already were. A search for anon on a real Android project returned one result and now returns the eleven that match, MyAnonHelper among them.",
-        "Filtering by kind gained the same treatment: object: listed 85 singletons and now lists 98."
+        "A declaration whose header wraps after an annotation covers its whole body. On a real Android project 154 classes ended on their first line, so folding one folded nothing and its members were listed outside it.",
+        "The Outline nests by what actually contains what. An object expression inside an init block was filed under whichever property came last, and the breadcrumb read Holder then disposable then the object.",
+        "One chevron per line. A property declared in a primary constructor sits on its class's own line and produced a second fold that stopped partway through the class, so folding the class folded a fragment. 181 lines carried two.",
+        "A parameter no longer swallows the documentation of the one after it."
       ]
     }
   ],

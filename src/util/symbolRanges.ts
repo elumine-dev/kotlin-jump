@@ -18,6 +18,13 @@ export function rangeEndLine(entries: readonly Pick<SymbolEntry, 'line' | 'depth
 // A line ending with one of these continues its statement on the next line.
 const CONTINUES_RE = /(?:[=,.(:]|->|&&|\|\||[+*/-]|\?:)$/;
 
+// An annotation never ends a declaration: something always follows it.
+// ktlint wraps an injected constructor as `class Foo @Inject` then
+// `constructor(...)`, and reading the header as finished gave the class a
+// one line extent, so every member of it overflowed its parent in the Outline
+// and folding the class folded nothing.
+const TRAILING_ANNOTATION_RE = /@[\w.:]+(?:\s*\([^)]*\))?$/;
+
 /**
  * Last line of the body of entries[index], read from the text: the `}`
  * matching its first `{`, or for a declaration without a block (`val a = 1`,
@@ -46,7 +53,12 @@ export function bodyEndLine(
       else if (ch === '(') parens++;
       else if (parens > 0) parens--;
     }
-    if (!opened && parens === 0 && !CONTINUES_RE.test(codeOnly(t).trimEnd())) return i;
+    const code = codeOnly(t).trimEnd();
+    // A block comment that opens a line belongs to what comes NEXT. A
+    // constructor parameter ends with a comma, so the scan ran on into the
+    // next parameter's KDoc and the two folds crossed.
+    if (!opened && i > start && code.trimStart().startsWith('/*')) return i - 1;
+    if (!opened && parens === 0 && !CONTINUES_RE.test(code) && !TRAILING_ANNOTATION_RE.test(code)) return i;
   }
   return stop;
 }

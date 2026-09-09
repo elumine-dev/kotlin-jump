@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.42.55
+
+Kotlin Jump 1.42.55 applies the previous two fixes to the one entry point that had been missed, and it is the one the editor uses most.
+
+### Fixes
+- Reopening a file that changed outside the editor no longer keeps the previous colouring. Semantic tokens have two entry points: a full request and a delta request. The full one learned to compare the text in 1.42.53, the delta one still answered "nothing changed" on the version number alone. Since the version restarts at 1 for a reopened document, and since the editor sends a delta request as soon as it has a result to update, this was the path most likely to be taken. Reproduced with two texts of exactly 64 characters: the second was told nothing had changed.
+
 ## 1.42.54
 
 Kotlin Jump 1.42.54 gives back the speed the previous release paid for correctness. Folding and semantic tokens answer from cache without reading the document at all when nothing has changed.

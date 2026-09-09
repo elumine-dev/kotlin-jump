@@ -159,3 +159,46 @@ describe('Voie rapide par identité d\'objet', () => {
     expect(chaud).toBe(froid);
   });
 });
+
+describe('Requête delta des tokens sémantiques', () => {
+  const ct = { isCancellationRequested: false } as any;
+  const index = () => { const i = new SymbolIndex(); i.add(parse(URI, A)); i.finalize(); return i; };
+  const legend = { tokenTypes: [], tokenModifiers: [] } as any;
+
+  it('ne répond pas « rien n\'a changé » à un fichier rouvert', () => {
+    const p = new KotlinSemanticTokensProvider(index(), legend);
+    const complet = p.provideDocumentSemanticTokens(doc(A), ct);
+
+    // VS Code envoie une requête delta dès qu'il a un identifiant de résultat,
+    // c'est donc le chemin le plus emprunté. Il ne testait que la version, qui
+    // repart à 1 pour un fichier rouvert : l'éditeur gardait indéfiniment les
+    // couleurs de la session précédente.
+    const delta: any = p.provideDocumentSemanticTokensEdits(doc(B), complet.resultId, ct);
+    const vide = Array.isArray(delta.edits) && delta.edits.length === 0;
+    expect(vide, 'a répondu « aucune modification » pour un contenu différent').toBe(false);
+
+    const attendu = Array.from(
+      new KotlinSemanticTokensProvider(index(), legend).provideDocumentSemanticTokens(doc(B), ct).data ?? [],
+    );
+    // La réponse est soit un jeu complet, soit des éditions à appliquer sur
+    // l'ancien. On applique pour vérifier ce que l'éditeur affichera vraiment.
+    let final: number[];
+    if (delta.data) {
+      final = Array.from(delta.data as Uint32Array);
+    } else {
+      final = Array.from(complet.data);
+      for (const e of [...delta.edits].sort((x: any, y: any) => y.start - x.start)) {
+        final.splice(e.start, e.deleteCount, ...Array.from((e.data ?? []) as Uint32Array));
+      }
+    }
+    expect(final).toEqual(Array.from(attendu));
+  });
+
+  it('répond toujours « rien n\'a changé » quand rien n\'a changé', () => {
+    const p = new KotlinSemanticTokensProvider(index(), legend);
+    const meme = doc(A);
+    const complet = p.provideDocumentSemanticTokens(meme, ct);
+    const delta: any = p.provideDocumentSemanticTokensEdits(meme, complet.resultId, ct);
+    expect(Array.isArray(delta.edits) && delta.edits.length === 0).toBe(true);
+  });
+});

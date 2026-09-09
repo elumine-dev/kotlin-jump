@@ -1,12 +1,12 @@
 {
-  "version": "1.42.73",
+  "version": "1.42.74",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Sealed and enum constructors get their labels back",
-  "summary": "The previous release listed which kinds of symbol a call may resolve to, and the list was short. Sealed parents and enum constructors fell out of it and lost every argument label.",
+  "tagline": "A string is never labelled throwable",
+  "summary": "Argument labels are dropped when the literal you wrote cannot be the type the parameter declares. Timber.wtf with a message showed throwable, because the call had resolved to another declaration of the same name.",
   "highlights": [
     {
-      "title": "Labels restored on constructor calls",
-      "description": "A subclass calling its sealed parent, or code building an enum value, shows the parameter names again. 37 labels come back on a real Android project, with none lost.",
+      "title": "Labels that contradict the code are hidden",
+      "description": "A quoted string passed where a Throwable is declared, a number where a String is declared: the label is dropped rather than shown, since it can only come from the wrong declaration.",
       "kind": "fix"
     }
   ],
@@ -14,9 +14,9 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Argument labels are back on sealed parents and enum constructors. Naming the callable kinds was too narrow twice over, so the rule is reversed: a call resolves to anything except a val, a var or a typealias, and never to a local binding.",
-        "The fix that this repairs, from the previous release, is kept: a local variable of the same name in another file no longer supplies invented parameter names.",
-        "Measured on the whole of a real Android project rather than a sample of it. The sample said nothing was lost; the full corpus showed 34 labels gone."
+        "An argument label is hidden when the literal written at that position cannot be the declared type. Resolving a call by name is what this extension does without a compiler, and this is the one mismatch the text alone can prove.",
+        "The check only decides on literals and on plain types. A generic, an unknown type, Any, an expression or null leave the label untouched, so nothing is dropped on a guess.",
+        "One label removed on a real Android project of 17170, and none lost. The rule guards the whole class, not that one line."
       ]
     }
   ],

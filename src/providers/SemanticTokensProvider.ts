@@ -4,8 +4,7 @@ import { SymbolKind } from '../indexer/KotlinParser';
 import { resolveBest } from '../util/ImportResolver';
 import { isInsideCommentOrString } from '../util/textUtils';
 import { resolveLocalScope, buildLocalScopeIndex } from './DefinitionProvider';
-import { capMap, OPEN_FILE_CACHE_LIMIT } from '../util/boundedCache';
-import { fingerprint } from '../util/boundedCache';
+import { capMap, fingerprint, sameDocument, OPEN_FILE_CACHE_LIMIT } from '../util/boundedCache';
 
 // ── Legend arrays (order = index) ────────────────────────────────────────────
 
@@ -216,7 +215,7 @@ export class KotlinSemanticTokensProvider
       // VS Code bumps the version on every change. Comparing the reference
       // costs nothing, and the fingerprint is only paid when the object
       // differs, which is exactly the reopened file the fingerprint is for.
-      && (cached.doc === doc || cached.fp === fingerprint(doc.getText()))) {
+      && sameDocument(cached, doc, () => doc.getText())) {
       return new vscode.SemanticTokens(cached.data, cached.resultId);
     }
     return this.computeAndCache(doc, null, ct);
@@ -237,7 +236,7 @@ export class KotlinSemanticTokensProvider
     // the path VS Code uses most, since it sends a previousResultId as soon
     // as it has one.
     if (cached?.version === doc.version
-      && (cached.doc === doc || cached.fp === fingerprint(doc.getText()))) {
+      && sameDocument(cached, doc, () => doc.getText())) {
       return new vscode.SemanticTokensEdits([], cached.resultId);
     }
 

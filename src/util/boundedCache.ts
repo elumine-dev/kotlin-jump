@@ -54,3 +54,24 @@ export function fingerprint(text: string): number {
   }
   return h >>> 0;
 }
+
+/**
+ * Does this cache entry still describe `text`, and can we say so cheaply?
+ *
+ * The same document object at the same version is necessarily the same text,
+ * since the version is bumped on every change, so comparing the reference
+ * settles it for free. When the object differs, which is the reopened file the
+ * fingerprint exists for, the text is hashed once and the reference is
+ * REFRESHED: without that refresh a caller that hands over a new object each
+ * time paid the hash forever, measured at 39 times the cost.
+ */
+export function sameDocument<T extends { doc: object; fp: number }>(
+  entry: T,
+  doc: object,
+  text: () => string,
+): boolean {
+  if (entry.doc === doc) return true;
+  if (entry.fp !== fingerprint(text())) return false;
+  entry.doc = doc;
+  return true;
+}

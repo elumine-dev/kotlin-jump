@@ -3,8 +3,7 @@ import { SymbolIndex } from '../indexer/SymbolIndex';
 import { bodyEndLine } from '../util/symbolRanges';
 import { symbolsForDocument } from '../util/liveSymbols';
 import { organizeImports } from './OrganizeImportsProvider';
-import { capMap, OPEN_FILE_CACHE_LIMIT } from '../util/boundedCache';
-import { fingerprint } from '../util/boundedCache';
+import { capMap, fingerprint, sameDocument, OPEN_FILE_CACHE_LIMIT } from '../util/boundedCache';
 
 export class KotlinFoldingRangeProvider implements vscode.FoldingRangeProvider {
   constructor(private readonly index: SymbolIndex) {}
@@ -30,7 +29,7 @@ export class KotlinFoldingRangeProvider implements vscode.FoldingRangeProvider {
       // VS Code bumps the version on every change. Comparing the reference
       // costs nothing, and the fingerprint is only paid when the object
       // differs, which is exactly the reopened file the fingerprint is for.
-      && (cached.doc === document || cached.fp === fingerprint(document.getText()))) {
+      && sameDocument(cached, document, () => document.getText())) {
       return cached.ranges;
     }
     const text = document.getText();

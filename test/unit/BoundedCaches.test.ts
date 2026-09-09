@@ -73,21 +73,24 @@ describe('Caches par fichier bornés', () => {
     const { index, docs } = corpus(200);
     const p = new KotlinFoldingRangeProvider(index);
     for (const d of docs) p.provideFoldingRanges(d, {} as any, ct);
-    expect(((p as any).cache as Map<string, unknown>).size).toBeLessThanOrEqual(OPEN_FILE_CACHE_LIMIT);
+    // Plein, pas vide : evincer la plus ancienne garde le cache a son plafond,
+    // alors qu'un vidage total le ramenerait a une poignee d'entrees et ferait
+    // recalculer tous les onglets ouverts en meme temps.
+    expect(((p as any).cache as Map<string, unknown>).size).toBe(OPEN_FILE_CACHE_LIMIT);
   });
 
   it('les tokens sémantiques non plus', () => {
     const { index, docs } = corpus(200);
     const p = new KotlinSemanticTokensProvider(index, { tokenTypes: [], tokenModifiers: [] } as any);
     for (const d of docs) p.provideDocumentSemanticTokens(d, ct);
-    expect(((p as any).cache as Map<string, unknown>).size).toBeLessThanOrEqual(OPEN_FILE_CACHE_LIMIT);
+    expect(((p as any).cache as Map<string, unknown>).size).toBe(OPEN_FILE_CACHE_LIMIT);
   });
 
   it('la couverture des when scellés non plus', () => {
     const { index, docs } = corpus(200);
     const p = new SealedWhenCoverageProvider(index);
     for (const d of docs) p.provideCodeLenses(d, ct);
-    expect(((p as any)._cache as Map<string, unknown>).size).toBeLessThanOrEqual(OPEN_FILE_CACHE_LIMIT);
+    expect(((p as any)._cache as Map<string, unknown>).size).toBe(OPEN_FILE_CACHE_LIMIT);
   });
 
   it('un ensemble d\'onglets réaliste reste entièrement en cache', () => {
@@ -108,5 +111,46 @@ describe('Caches par fichier bornés', () => {
     // docs[0] a forcément été évincé : le recalcul doit donner le même résultat.
     const after = p.provideFoldingRanges(docs[0], {} as any, ct).map(r => [r.start, r.end]);
     expect(after).toEqual(before);
+  });
+});
+
+describe('Les quatre caches par fichier suivent la même règle', () => {
+  const ct = { isCancellationRequested: false } as any;
+
+  it('la provenance d\'état évince la plus ancienne, sans vider', async () => {
+    const { StateProvenanceProvider } = await import('../../src/providers/StateProvenanceProvider');
+    const p: any = new StateProvenanceProvider();
+    const vm = (i: number) => `class VM${i} {\n    private val _s = MutableStateFlow(${i})\n    fun set(v: Int) { _s.value = v }\n}`;
+    const mk = (i: number) => ({
+      uri: { toString: () => `file:///sp/F${i}.kt` },
+      languageId: 'kotlin', version: 1, getText: () => vm(i),
+    });
+    for (let i = 0; i < 200; i++) p.provideCodeLenses(mk(i), ct);
+    const cache: Map<string, unknown> = p._cache;
+    expect(cache.size).toBeLessThanOrEqual(OPEN_FILE_CACHE_LIMIT);
+    expect(cache.has('file:///sp/F199.kt')).toBe(true);
+    expect(cache.has('file:///sp/F0.kt')).toBe(false);
+    // Ce qui distingue vraiment les deux stratégies : en évinçant la plus
+    // ancienne, le cache reste PLEIN. En se vidant d'un coup, il oscille
+    // entre un et soixante-cinq, et tous les onglets ouverts recalculent
+    // ensemble. Après deux cents fichiers, un vidage total laisserait cinq
+    // entrées.
+    expect(cache.size).toBe(OPEN_FILE_CACHE_LIMIT);
+  });
+
+  it('le fichier activement relu reste servi par le cache', () => {
+    // L'éviction se fait par ordre d'insertion, pas par récence d'usage. Un
+    // défaut réinsère en fin de file, donc le fichier édité se soigne tout
+    // seul : mesuré à 196 succès sur 199 retours en parcourant 200 fichiers.
+    const { index, docs } = corpus(200);
+    const fold = new KotlinFoldingRangeProvider(index);
+    fold.provideFoldingRanges(docs[0], {} as any, ct);
+    let hits = 0;
+    for (let i = 1; i < 200; i++) {
+      fold.provideFoldingRanges(docs[i], {} as any, ct);
+      if (((fold as any).cache as Map<string, unknown>).has(docs[0].uri.toString())) hits++;
+      fold.provideFoldingRanges(docs[0], {} as any, ct);
+    }
+    expect(hits).toBeGreaterThan(180);
   });
 });

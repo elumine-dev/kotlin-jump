@@ -1,31 +1,26 @@
 {
-  "version": "1.42.50",
+  "version": "1.42.51",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The last two caches get a ceiling",
-  "summary": "Semantic tokens kept the colouring of every file visited, 892 635 words of it on a real project. All three per file caches now drop the oldest file instead of emptying themselves.",
+  "tagline": "The one cache left behind",
+  "summary": "The fourth per file cache still emptied itself completely, and three of the tests guarding the change could not tell the two behaviours apart.",
   "highlights": [
     {
-      "title": "Semantic tokens stop hoarding",
+      "title": "All four caches, one rule",
       "kind": "improvement",
-      "description": "Measured over a real Android project of 5088 files: 5088 entries holding 892 635 words of token data, for files that had long since left the screen. It now keeps 64."
-    },
-    {
-      "title": "Oldest file out, not the whole map",
-      "kind": "improvement",
-      "description": "Emptying the map would have made every open editor recompute at once, which for semantic tokens means a visible repaint. The oldest entry goes instead, so what you are looking at keeps its answer."
-    },
-    {
-      "title": "One rule for the three caches",
-      "kind": "improvement",
-      "description": "A single shared helper caps all of them, so they cannot drift apart again. That drift is exactly how the folding cache had been missed while its sibling was capped."
+      "description": "The state provenance cache still emptied itself once full, which makes every open editor recompute at once. It was the one not migrated, in the very release that added the shared helper to stop them drifting apart."
     }
   ],
   "sections": [
     {
+      "heading": "Fixes",
+      "bullets": [
+        "Three of the new cache tests asserted the cache stays under its ceiling, which is true of both behaviours, so reverting the change left them green. They now assert it stays full, which only one behaviour produces."
+      ]
+    },
+    {
       "heading": "Notes",
       "bullets": [
-        "The sealed when coverage lens held 3187 entries to show 207 lenses; it gets the same ceiling.",
-        "Checked on the repository benchmark: no measurable change to folding or semantic token timing."
+        "A file you keep coming back to is served from cache on 196 of 199 returns while browsing 200 other files, because a miss puts it back at the end of the queue."
       ]
     }
   ],

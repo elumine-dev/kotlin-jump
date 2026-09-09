@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.51
+
+Kotlin Jump 1.42.51 finishes what the previous release started. One of the four per file caches was left behind, and three of the tests written to guard the change could not tell the two behaviours apart.
+
+### Improvements
+- The state provenance cache drops the oldest file like the other three. It still emptied itself completely once full, which was the behaviour the shared helper was introduced to replace, since emptying makes every open editor recompute at once. It was the one cache not migrated, in the very release that added the helper to stop them drifting apart.
+
+### Fixes
+- Three of the new cache tests were not testing what they claimed. They asserted the cache stays under its ceiling, which is true whether it drops the oldest file or empties itself, so reverting to the old behaviour left them green. They now assert the cache stays full, which only holds for one of the two.
+
 ## 1.42.50
 
 Kotlin Jump 1.42.50 gives the two remaining per file caches the ceiling the folding cache got last release, and makes all three drop the oldest file instead of emptying themselves.

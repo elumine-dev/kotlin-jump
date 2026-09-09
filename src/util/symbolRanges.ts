@@ -31,6 +31,20 @@ const TRAILING_ANNOTATION_RE = /@[\w.:]+(?:\s*\([^)]*\))?$/;
 // first one hid the second one's annotation.
 const ANNOTATION_ONLY_RE = /^(?:@[\w.:]+(?:\s*\([^)]*\))?\s*)+$/;
 
+// The three ways a class header goes on below: a secondary `constructor`, the
+// supertype list, and a `where` clause. `open class Foo` then `constructor(`
+// is what ktlint produces once the header is too long, and reading the first
+// line as the whole declaration left the class one line tall.
+const HEADER_GOES_ON_RE = /^(?:(?:public|private|internal|protected|actual)\s+)?(?:constructor\b|where\b)|^:/;
+
+// A start line that declares a class-like symbol without opening its body: the
+// header is unfinished, so an annotation on the next line belongs to IT rather
+// than presenting the declaration below. `class PageExternalUid` then
+// `@VisibleForTesting(...)` then `constructor(...) {` is the shape.
+const CH_SLASH = 47, CH_STAR = 42, CH_AT = 64;
+
+const CLASS_HEAD_RE = /^(?:@[\w.:]+(?:\s*\([^)]*\))?\s+)*(?:(?:public|private|internal|protected|abstract|open|sealed|data|inner|value|enum|annotation|expect|actual|final|companion)\s+)*(?:class|interface|object)\b/;
+
 /**
  * Last line of the body of entries[index], read from the text: the `}`
  * matching its first `{`, or for a declaration without a block (`val a = 1`,
@@ -47,6 +61,8 @@ export function bodyEndLine(
 ): number {
   const start = entries[index].line;
   const stop = Math.min(rangeEndLine(entries, index, lastLine), lines.length - 1);
+  const startCode = codeOnly(lines[start] ?? '').trim();
+  const unfinishedHeader = CLASS_HEAD_RE.test(startCode) && !startCode.includes('{');
   let depth = 0, opened = false, parens = 0;
   for (let i = start; i <= stop; i++) {
     const t = lines[i];
@@ -54,23 +70,38 @@ export function bodyEndLine(
       const ch = t[c];
       if (ch !== '{' && ch !== '}' && ch !== '(' && ch !== ')') continue;
       if (isInsideCommentOrString(t, c)) continue;
+      // A brace inside a parameter list is never the body: the `{}` default of
+      // `(initialValues: Builder.() -> Unit = {})` opened and closed the depth
+      // at once, so the class was declared finished on its own first line.
+      if (ch === '(') { parens++; continue; }
+      if (ch === ')') { if (parens > 0) parens--; continue; }
+      if (parens > 0) continue;
       if (ch === '{') { depth++; opened = true; }
       else if (ch === '}') { if (opened && --depth === 0) return i; }
-      else if (ch === '(') parens++;
-      else if (parens > 0) parens--;
     }
+    if (opened || parens > 0) continue;
     const code = codeOnly(t).trimEnd();
-    // A block comment that opens a line belongs to what comes NEXT. A
+    // First non blank character, without allocating a trimmed copy: this runs
+    // on every line of every declaration and folding a file paid for it.
+    let k = 0;
+    while (k < code.length && (code.charCodeAt(k) === 32 || code.charCodeAt(k) === 9)) k++;
+    const first = code.charCodeAt(k);
+    // A block comment or a line of annotations belongs to what comes NEXT. A
     // constructor parameter ends with a comma, so the scan ran on into the
-    // next parameter's KDoc and the two folds crossed.
-    // Only OUTSIDE a parameter list: inside a primary constructor the KDoc and
-    // the annotation introduce the next parameter, which still belongs to the
-    // class. Stopping there closed the class on its own line and its
-    // properties climbed to the root of the Outline, level with it.
-    const trimmed = code.trim();
-    if (!opened && parens === 0 && i > start
-      && (trimmed.startsWith('/*') || ANNOTATION_ONLY_RE.test(trimmed))) return i - 1;
-    if (!opened && parens === 0 && !CONTINUES_RE.test(code) && !TRAILING_ANNOTATION_RE.test(code)) return i;
+    // next parameter's KDoc and the two folds crossed. Only outside a
+    // parameter list, and not while a class header is still open: there the
+    // annotation is part of the header being read.
+    if (i > start && (
+      (first === CH_SLASH && code.charCodeAt(k + 1) === CH_STAR)
+      || (!unfinishedHeader && first === CH_AT && ANNOTATION_ONLY_RE.test(code.slice(k)))
+    )) return i - 1;
+    if (CONTINUES_RE.test(code)) continue;
+    if (code.indexOf('@') >= 0 && TRAILING_ANNOTATION_RE.test(code)) continue;
+    // The next line is read only here, where the answer is about to be
+    // returned: reading it on every line doubled the cost of folding a file.
+    const next = codeOnly(lines[i + 1] ?? '').trimStart();
+    if (HEADER_GOES_ON_RE.test(next) || (unfinishedHeader && ANNOTATION_ONLY_RE.test(next))) continue;
+    return i;
   }
   return stop;
 }

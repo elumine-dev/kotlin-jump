@@ -380,3 +380,182 @@ describe('Une regle d\'arret ne s\'applique pas dans une liste de parametres', (
     expect(bodyEndLine(lignes, syms, syms.findIndex(s => s.name === 'a'), lignes.length - 1)).toBe(3);
   });
 });
+
+describe('Un en tete de classe replie sans annotation continue aussi', () => {
+  // La v1.42.86 ne traitait que la forme `class Foo @Inject` / `constructor(`.
+  // Sans annotation, `open class Foo` puis `constructor(` retombait dans le
+  // meme trou : la classe s'arretait sur sa premiere ligne et son companion
+  // remontait a la racine de l'Outline.
+  const CODE_CTOR2 = [
+    'package p',
+    '',
+    'open class CustomTargetingModel',
+    'constructor(',
+    '    @param:NonNull',
+    '    var cible: Map<String, String>',
+    ') {',
+    '    companion object {',
+    '        val VIDE = CustomTargetingModel(emptyMap())',
+    '    }',
+    '',
+    '    override fun equals(other: Any?): Boolean = true',
+    '}',
+  ].join('\n');
+
+  it('la classe couvre son corps', () => {
+    const lignes = CODE_CTOR2.split('\n');
+    const syms = parse(URI, CODE_CTOR2).symbols;
+    const i = syms.findIndex(s => s.name === 'CustomTargetingModel');
+    expect(bodyEndLine(lignes, syms, i, lignes.length - 1)).toBe(12);
+  });
+
+  it('le companion et les methodes restent dans la classe', () => {
+    const index = new SymbolIndex();
+    index.add(parse(URI, CODE_CTOR2));
+    index.finalize();
+    const arbre = new KotlinDocumentSymbolProvider(index).provideDocumentSymbols(doc(URI, CODE_CTOR2), {} as any);
+    expect(arbre.map(n => n.name)).toEqual(['CustomTargetingModel']);
+    expect(arbre[0].children.map(n => n.name)).toContain('Companion');
+    expect(arbre[0].children.map(n => n.name)).toContain('equals');
+  });
+
+  it('une liste de supertypes repliee sur la ligne suivante continue', () => {
+    const code = [
+      'package p',
+      '',
+      'class Longue',
+      '    : Base(),',
+      '      Autre {',
+      '    fun m() {}',
+      '}',
+    ].join('\n');
+    const lignes = code.split('\n');
+    const syms = parse(URI, code).symbols;
+    const i = syms.findIndex(s => s.name === 'Longue');
+    expect(bodyEndLine(lignes, syms, i, lignes.length - 1)).toBe(6);
+  });
+
+  it('une classe sans corps garde son etendue d\'une ligne', () => {
+    const code = ['package p', '', 'class Vide', '', 'class Autre'].join('\n');
+    const lignes = code.split('\n');
+    const syms = parse(URI, code).symbols;
+    expect(bodyEndLine(lignes, syms, syms.findIndex(s => s.name === 'Vide'), lignes.length - 1)).toBe(2);
+  });
+});
+
+describe('Une annotation entre le nom de la classe et son constructeur continue l\'en tete', () => {
+  // `class PageExternalUid` / `@VisibleForTesting(...)` / `constructor(...) {`
+  // Ici l'annotation ne presente pas la declaration suivante : elle est DANS
+  // l'en tete en cours. La distinction tient a la ligne de depart, qui declare
+  // une classe sans ouvrir son corps.
+  const CODE_ENTRE = [
+    'package p',
+    '',
+    '@JsonDeserialize(using = D::class)',
+    'class PageExternalUid',
+    '@VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)',
+    'constructor(id: String?) : Parcelable {',
+    '    val uid = id',
+    '',
+    '    fun lire(): String = uid.orEmpty()',
+    '}',
+  ].join('\n');
+
+  it('la classe couvre son corps', () => {
+    const lignes = CODE_ENTRE.split('\n');
+    const syms = parse(URI, CODE_ENTRE).symbols;
+    const i = syms.findIndex(s => s.name === 'PageExternalUid');
+    expect(bodyEndLine(lignes, syms, i, lignes.length - 1)).toBe(9);
+  });
+
+  it('ses membres restent ses enfants', () => {
+    const index = new SymbolIndex();
+    index.add(parse(URI, CODE_ENTRE));
+    index.finalize();
+    const arbre = new KotlinDocumentSymbolProvider(index).provideDocumentSymbols(doc(URI, CODE_ENTRE), {} as any);
+    expect(arbre.map(n => n.name)).toEqual(['PageExternalUid']);
+    expect(arbre[0].children.map(n => n.name)).toContain('lire');
+  });
+
+  it('hors en tete de classe, une annotation seule introduit toujours la suite', () => {
+    const code = [
+      'package p',
+      '',
+      'class C {',
+      '    val a = 1',
+      '',
+      '    @Inject',
+      '    lateinit var b: B',
+      '}',
+    ].join('\n');
+    const lignes = code.split('\n');
+    const syms = parse(URI, code).symbols;
+    expect(bodyEndLine(lignes, syms, syms.findIndex(s => s.name === 'a'), lignes.length - 1)).toBe(3);
+  });
+
+  it('une classe sans corps suivie d\'une declaration annotee garde une ligne', () => {
+    const code = ['package p', '', 'class Vide', '', '@Inject', 'lateinit var b: B'].join('\n');
+    const lignes = code.split('\n');
+    const syms = parse(URI, code).symbols;
+    expect(bodyEndLine(lignes, syms, syms.findIndex(s => s.name === 'Vide'), lignes.length - 1)).toBe(2);
+  });
+});
+
+describe('Une accolade dans une liste de parametres n\'est pas le corps', () => {
+  // `sealed class ApplicationState(initialValues: Builder.() -> Unit = {}) {`
+  // Le `{}` de la valeur par defaut ouvrait et refermait la profondeur, donc la
+  // classe etait declaree close sur sa premiere ligne. 42 de ses membres se
+  // retrouvaient a la racine de l'Outline.
+  const CODE_LAMBDA = [
+    'package p',
+    '',
+    'sealed class ApplicationState(initialValues: Builder.() -> Unit = {}) {',
+    '',
+    '    val user: User',
+    '',
+    '    init {',
+    '        user = Builder().apply(initialValues).user',
+    '    }',
+    '}',
+  ].join('\n');
+
+  it('la classe couvre son corps', () => {
+    const lignes = CODE_LAMBDA.split('\n');
+    const syms = parse(URI, CODE_LAMBDA).symbols;
+    const i = syms.findIndex(s => s.name === 'ApplicationState');
+    expect(bodyEndLine(lignes, syms, i, lignes.length - 1)).toBe(9);
+  });
+
+  it('ses membres restent ses enfants', () => {
+    const index = new SymbolIndex();
+    index.add(parse(URI, CODE_LAMBDA));
+    index.finalize();
+    const arbre = new KotlinDocumentSymbolProvider(index).provideDocumentSymbols(doc(URI, CODE_LAMBDA), {} as any);
+    expect(arbre.map(n => n.name)).toEqual(['ApplicationState']);
+    expect(arbre[0].children.map(n => n.name)).toContain('user');
+  });
+
+  it('une lambda passee en argument sur plusieurs lignes se termine bien', () => {
+    const code = [
+      'package p',
+      '',
+      'class C {',
+      '    val x = foo({',
+      '        bar()',
+      '    })',
+      '',
+      '    val y = 1',
+      '}',
+    ].join('\n');
+    const lignes = code.split('\n');
+    const syms = parse(URI, code).symbols;
+    expect(bodyEndLine(lignes, syms, syms.findIndex(s => s.name === 'x'), lignes.length - 1)).toBe(5);
+  });
+
+  it('un corps de fonction normal est toujours reconnu', () => {
+    const code = ['package p', '', 'fun f(a: Int = 1) {', '    println(a)', '}'].join('\n');
+    const lignes = code.split('\n');
+    const syms = parse(URI, code).symbols;
+    expect(bodyEndLine(lignes, syms, syms.findIndex(s => s.name === 'f'), lignes.length - 1)).toBe(4);
+  });
+});

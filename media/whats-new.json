@@ -1,26 +1,26 @@
 {
-  "version": "1.42.52",
+  "version": "1.42.53",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The last cache without a ceiling",
-  "summary": "The usage count cache kept every scan the editor ever showed. The reference project would produce 23 628 of them, each holding a list of usage sites.",
+  "tagline": "The cache now knows the text",
+  "summary": "Reopening a file after it changed outside the editor could show the previous version folds, colours and lenses. The five caches are keyed on the content itself now.",
   "highlights": [
     {
-      "title": "Usage counts stop piling up",
-      "kind": "improvement",
-      "description": "Every lens you scroll past resolves a usage scan whose result was kept for good. It now keeps 512, sized on the measurement that a single dense file produces 202 lenses on its own."
+      "title": "A reopened file shows itself",
+      "kind": "fix",
+      "description": "Closing a document destroys it, and reopening builds a new one whose version restarts at 1. Two different texts of the same size at the same path answered as one. Reproduced with two files of exactly 64 characters: the second was given the first one fold ranges."
     },
     {
-      "title": "Work in flight is never dropped",
-      "kind": "improvement",
-      "description": "The ceiling skips entries whose result has not arrived, or that a request is still waiting on, so capping cannot cancel a scan or make the same symbol scan twice."
+      "title": "Identity is the text, not its size",
+      "kind": "fix",
+      "description": "Folding, semantic tokens, the sealed when lens, the state provenance lens and the shared symbol analysis all key on a content fingerprint now."
     }
   ],
   "sections": [
     {
       "heading": "Notes",
       "bullets": [
-        "This was the last per session cache without a ceiling. The four keyed by file were capped in the previous three releases.",
-        "Checked on the repository benchmark: no measurable change."
+        "The fingerprint takes 4.7 microseconds on the average file of a real project of 3187 Kotlin files, and 0.095 ms on the largest, against 1.7 ms to recompute one file folds.",
+        "The repository benchmark shows no measurable change."
       ]
     }
   ],

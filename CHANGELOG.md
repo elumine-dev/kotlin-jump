@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.42.53
+
+Kotlin Jump 1.42.53 closes a hole the caches had kept since they were first written. Reopening a file after it changed outside the editor could show you the previous version's folds, colours and lenses.
+
+### Fixes
+- Closing a document destroys it, and reopening the file builds a new one whose version restarts at 1. The five caches keyed on that version, some also on the text length, so two different texts of the same size at the same URI answered as one. Reproduced with two files of exactly 64 characters: the second was given the first one's fold ranges. Folding, semantic tokens, the sealed when lens, the state provenance lens and the shared symbol analysis all keyed on a content fingerprint now, so the identity is the text itself.
+- The fingerprint costs a few percent of what the cache saves. Measured over a real Android project of 3187 Kotlin files, it takes 4.7 microseconds on the average file and 0.095 ms on the largest, against 1.7 ms to recompute one file's folds. The repository benchmark shows no measurable change.
+
 ## 1.42.52
 
 Kotlin Jump 1.42.52 gives the last unbounded cache a ceiling. This one is keyed by symbol rather than by file, and it held every usage count the editor ever showed you.

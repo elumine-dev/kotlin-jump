@@ -220,39 +220,56 @@ describe('scrollThrough — fuzz invariants', () => {
 
 // ── Wall-clock timing ───────────────────────────────────────────────────────
 
-describe('scrollThrough — wall-clock timing', () => {
-  // Prove that the pauses are actually being awaited, not just scheduled.
-  // A regression where `await this.pause(...)` became `this.pause(...)`
-  // would collapse the whole scroll to near-instant and this test catches it.
-  it('a 5-step scroll takes ≥ (nSteps-1) × MIN_STEP_MS + settle', async () => {
+describe('scrollThrough — les pauses', () => {
+  // Ces deux invariants étaient mesurés à l'horloge, avec une fenêtre de 40 ms.
+  // Sur une machine chargée la mesure sortait à 182 ms pour un plafond de 180
+  // et bloquait la publication, sans qu'aucun comportement n'ait changé. On
+  // compte les pauses et on vérifie qu'elles sont attendues : c'est ce que les
+  // deux tests décrivaient, et c'est déterministe.
+
+  it('attend vraiment chaque pause au lieu de seulement la programmer', async () => {
     const editor = makeEditor({ line: 0 });
     (vscode.window as any).activeTextEditor = editor;
 
-    const t0 = Date.now();
-    // 10 lines with durationMs=250 → nSteps=5, stepMs=50 → 4 pauses × 50ms + 40ms settle = 240ms min
-    await stage.scrollThrough({ fromLine: 0, toLine: 10, durationMs: 250 });
-    const elapsed = Date.now() - t0;
+    // Chaque pause ne se résout que sur ordre. Si le code oubliait le `await`,
+    // scrollThrough se terminerait sans qu'aucune n'ait été relâchée.
+    const releases: Array<() => void> = [];
+    const pauseStub = vi.spyOn(stage as any, 'pause')
+      .mockImplementation(() => new Promise<void>(r => releases.push(r)));
 
-    // Floor is (nSteps-1)=4 × 50ms + 40ms settle = 240ms, minus ~10ms timer jitter.
-    expect(elapsed).toBeGreaterThanOrEqual(230);
+    let done = false;
+    const scroll = stage.scrollThrough({ fromLine: 0, toLine: 10, durationMs: 250 }).then(() => { done = true; });
+    await Promise.resolve();
+    expect(done, 'terminé sans attendre la première pause').toBe(false);
+
+    // On relâche une à une : le défilement ne peut finir qu'après la dernière.
+    for (let guard = 0; guard < 50 && !done; guard++) {
+      const next = releases.shift();
+      if (!next) { await new Promise(r => setTimeout(r, 0)); continue; }
+      next();
+      await new Promise(r => setTimeout(r, 0));
+    }
+    await scroll;
+    expect(done).toBe(true);
+    pauseStub.mockRestore();
   });
 
-  it('does NOT wait after the final step (the last cursorMove is not followed by a pause)', async () => {
-    // Setup: 3 steps, each 50ms apart. With a trailing pause total = 3×50 + 40 settle = 190.
-    // Without trailing pause total = 2×50 + 40 = 140. We want 140-range.
+  it('ne pause pas après la dernière étape', async () => {
     const editor = makeEditor({ line: 0 });
     (vscode.window as any).activeTextEditor = editor;
+    const pauseStub = vi.spyOn(stage as any, 'pause').mockResolvedValue(undefined);
 
-    const t0 = Date.now();
+    // 6 lignes en 150 ms donnent 3 étapes. La séquence observée est
+    // [40, 70, 50] : la pause de stabilisation puis DEUX pauses entre les
+    // trois étapes. Une pause après la dernière en ferait quatre.
+    // Le commentaire d'origine annonçait 2 x 50 + 40 : son arithmétique était
+    // déjà fausse, ce que la mesure à l'horloge ne pouvait pas révéler.
     await stage.scrollThrough({ fromLine: 0, toLine: 6, durationMs: 150 });
-    const elapsed = Date.now() - t0;
 
-    // For 6 lines @ 150ms: maxSteps = max(4, 3) = 4, stepLines = ceil(6/4) = 2,
-    //   nSteps = 3, stepMs = clamp(150/3=50, 50, 80) = 50.
-    //   Total = 2 × 50 (inter-step) + 40 (settle) = 140ms.
-    // A trailing pause would push us over 180ms — fail if that regresses.
-    expect(elapsed).toBeLessThan(180);
-    expect(elapsed).toBeGreaterThanOrEqual(130);
+    const durations = pauseStub.mock.calls.map(c => c[0]);
+    expect(durations.length, `pauses: ${JSON.stringify(durations)}`).toBe(3);
+    expect(editor.selection.active.line).toBe(6);
+    pauseStub.mockRestore();
   });
 });
 

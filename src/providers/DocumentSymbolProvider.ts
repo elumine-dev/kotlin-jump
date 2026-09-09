@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { bodyEndLine } from '../util/symbolRanges';
 import { symbolsForDocument } from '../util/liveSymbols';
+import { ANON_KEYWORD_LENGTH, displayName, isAnonymousObject } from '../util/anonymousObjects';
 
 export class KotlinDocumentSymbolProvider implements vscode.DocumentSymbolProvider {
   constructor(private readonly index: SymbolIndex) {}
@@ -39,13 +40,17 @@ export class KotlinDocumentSymbolProvider implements vscode.DocumentSymbolProvid
       const kind       = resolveKind(e, visibility, stack[stack.length - 1]?.entry);
       const tags: vscode.SymbolTag[] | undefined = e.isDeprecated ? [vscode.SymbolTag.Deprecated] : undefined;
 
+      // A synthetic `$anon$<line>` reads as what the source says, and its
+      // selection covers the `object` keyword: the name has no text to point at.
+      const label     = displayName(e);
+      const nameWidth = isAnonymousObject(e.name) ? ANON_KEYWORD_LENGTH : e.name.length;
       const nameStart = new vscode.Position(e.line, e.character);
-      const nameEnd   = new vscode.Position(e.line, e.character + e.name.length);
+      const nameEnd   = new vscode.Position(e.line, e.character + nameWidth);
       const endLine   = bodyEndLine(docLines, entries, i, lastLine);
       const bodyEnd   = document.lineAt(endLine).range.end;
 
       const sym = new vscode.DocumentSymbol(
-        e.name,
+        label,
         detail,
         kind,
         new vscode.Range(nameStart, bodyEnd),

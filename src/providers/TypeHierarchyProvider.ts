@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { displayName, isAnonymousObject } from '../util/anonymousObjects';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { SymbolKind } from '../indexer/KotlinParser';
 import { buildAllowFilter } from '../util/testFilter';
@@ -126,13 +127,14 @@ function countOverrides(impl: SymbolEntry, parentMethods: SymbolEntry[], index: 
 }
 
 function entryToItem(entry: SymbolEntry, index: SymbolIndex, parentEntry?: SymbolEntry): vscode.TypeHierarchyItem {
-  // `$anon$4` is the parser's synthetic name for `object : Callback { }`:
-  // label it the way Go to Implementation does, with nothing to select.
-  const anon = entry.name.startsWith('$anon$');
+  // `$anon$4` is the parser's synthetic name for `object : Callback { }`.
+  // Same label as the Outline: two panels naming the same declaration two
+  // different ways is a difference the reader has to resolve for nothing.
+  const anon = isAnonymousObject(entry.name);
   const range = new vscode.Range(entry.line, entry.character, entry.line, entry.character + (anon ? 0 : entry.name.length));
   return new vscode.TypeHierarchyItem(
     toSymbolKind(entry.kind),
-    anon ? `Anonymous object (line ${entry.line + 1})` : entry.name,
+    displayName(entry),
     buildDetail(entry, index, parentEntry),
     entry.uri,
     range,

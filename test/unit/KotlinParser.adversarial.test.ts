@@ -435,12 +435,12 @@ describe('KotlinParser — autres cas limites', () => {
 // Bugs couverts :
 //
 //   ANON-1  `val x = object : Interface {}` — symbole $anon$N émis avec supertypes
-//   ANON-2  `object : Interface {}` seul sur une ligne (fc='o') — détecté
+//   ANON-2  `return object : Interface {}` (fc='r', hors préfiltre) — détecté
 //   ANON-3  `companion object : Interface` (pas de nom) — émis comme Companion (isCompanion) avec supertypes
 //   ANON-4  `object Named : Interface` — RE_CLASS le gère, PAS de $anon dupliqué
 //   ANON-5  Deux objets anonymes dans le même fichier → noms distincts ($anon$N / $anon$M)
 //   ANON-6  Objet anonyme dans une raw string → NOT indexé
-//   ANON-7  `object :` dans un commentaire // → NOT indexé (filtre DECL_START l'écarte)
+//   ANON-7  `object :` dans un commentaire // → NOT indexé (saut rapide des commentaires)
 //   ANON-8  Objet anonyme avec plusieurs supertypes → tous capturés
 //   ANON-9  Named companion object (companion object Companion : Interface) — 1 seul symbole
 
@@ -476,9 +476,12 @@ describe('Fix B — objets anonymes (object : Interface)', () => {
     ].join('\n');
 
     const syms = symbols(code);
+    // `return object :` commence par 'r' : le préfiltre O(1) écarte la ligne
+    // pour les regex de déclaration, mais l'objet anonyme y est quand même
+    // détecté depuis l'audit 56.
     const anon = syms.find(s => s.name.startsWith('$anon$'));
-    // NOTE: `return object :` commence par 'r' → DECL_START l'écarte (limitation connue)
-    // On vérifie seulement que les symboles réels sont présents et qu'il n'y a pas de crash
+    expect(anon).toBeDefined();
+    expect(anon!.supertypes).toContain('Sink');
     const sink = syms.find(s => s.name === 'Sink');
     expect(sink).toBeDefined();
   });

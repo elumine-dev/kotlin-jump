@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.78
+
+An implementation written as `object : Interface` was counted only when the line started with a declaration keyword. On a real Android project, 79 of 276 anonymous implementations were invisible, and the Dagger form was one of them.
+
+### Fixes
+- An anonymous implementation is read wherever it sits on the line. It used to be found in two places only, so `return object : Sink {`, `.setListener(object : AnimatorListenerAdapter() {` and the Dagger `= object : X {` were all skipped. 79 of 276 sites on a real project, 23 interfaces whose count was too low.
+- AudioRepository went from 3 to 5, AdProvider from 1 to 3, AdCallbacks from 3 to 5.
+- A trailing comment or a string literal that happens to spell `object :` no longer counts as an implementation.
+
 ## 1.42.77
 
 The count only read direct supertypes. A class implementing an interface through an intermediate class was not counted, so one interface read 2 implementations where 33 classes implement it.

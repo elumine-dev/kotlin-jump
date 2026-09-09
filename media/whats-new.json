@@ -1,12 +1,12 @@
 {
-  "version": "1.42.77",
+  "version": "1.42.78",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Implementations found through the whole chain",
-  "summary": "The count only read direct supertypes. A class implementing an interface through an intermediate class was not counted, so one interface read 2 implementations where 33 classes implement it.",
+  "tagline": "Anonymous implementations counted too",
+  "summary": "An implementation written as `object : Interface` was counted only when the line started with a declaration keyword. On a real Android project, 79 of 276 anonymous implementations were invisible, and the Dagger form was one of them.",
   "highlights": [
     {
-      "title": "The subtree, not just the first level",
-      "description": "An interface implemented by an abstract class now counts every concrete class below it, at any depth, and the arrow lists them.",
+      "title": "The Dagger form finally counts",
+      "description": "`fun provideAdProvider(): AdProvider = object : AdProvider {` left the function branch of the parser before the object on the same line was ever looked at. AdProvider said 1 implementation and had 3.",
       "kind": "fix"
     }
   ],
@@ -14,9 +14,9 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "The implementation count walks the whole supertype chain. Only classes naming the interface directly were counted, which on a real Android project left 60 interfaces out of 394 under reported, one of them showing 2 instead of 33.",
-        "Each hop is checked the same way a direct one is, so an interface of the same name in another package never walks into the result, and a cycle in the supertypes stops instead of looping.",
-        "Walking all 394 interfaces of that project takes 5 ms, and the walk is bounded in case a hierarchy ever goes wild."
+        "An anonymous implementation is read wherever it sits on the line. It used to be found in two places only, so `return object : Sink {`, `.setListener(object : AnimatorListenerAdapter() {` and the Dagger `= object : X {` were all skipped. 79 of 276 sites on a real project, 23 interfaces whose count was too low.",
+        "AudioRepository went from 3 to 5, AdProvider from 1 to 3, AdCallbacks from 3 to 5.",
+        "A trailing comment or a string literal that happens to spell `object :` no longer counts as an implementation."
       ]
     }
   ],

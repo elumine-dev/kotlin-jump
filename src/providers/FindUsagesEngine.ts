@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { resolveBest } from '../util/ImportResolver';
-import { isInsideCommentOrString, isInsideStringInterpolation, countTripleQuotes } from '../util/textUtils';
+import { isInsideCommentOrString, isInsideStringInterpolation, countTripleQuotes, inRawStringTemplate } from '../util/textUtils';
 import { decodeUtf8 } from '../util/encoding';
 import { leavesBlockCommentOpen } from '../util/LocalScopeIndex';
 import { Logger } from '../util/logger';
@@ -329,7 +329,7 @@ export async function scanForUsagesWithTarget(
             if (results.length >= maxReferences) break;
             if (m.index < codeStart) {
               // Comment text is never a reference; raw-string text only through a template.
-              if (!(m.index < rawEnd && inRawTemplate(line, m.index))) continue;
+              if (!(m.index < rawEnd && inRawStringTemplate(line, m.index))) continue;
             } else if (isInsideCommentOrString(scan, m.index)) {
               // `"Hello $name"` and `"${name}"` are code: a rename that
               // skipped them left the template pointing at the old name.
@@ -494,22 +494,6 @@ export function advanceLineState(
     i++;
   }
   return { raw, block };
-}
-
-/**
- * Inside a raw string, `$name` and `${…name…}` are the only places where
- * `name` is code. Raw strings have no escapes, so a `$` is always a template.
- */
-function inRawTemplate(line: string, index: number): boolean {
-  if (index > 0 && line[index - 1] === '$') return true;
-  let braces = 0;
-  for (let i = 0; i < index; i++) {
-    if (braces === 0) {
-      if (line[i] === '$' && line[i + 1] === '{') { braces = 1; i++; }
-    } else if (line[i] === '{') braces++;
-    else if (line[i] === '}') braces--;
-  }
-  return braces > 0;
 }
 
 /**

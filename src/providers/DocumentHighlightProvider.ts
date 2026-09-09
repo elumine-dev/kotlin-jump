@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { SymbolIndex } from '../indexer/SymbolIndex';
-import { isInsideCommentOrString, isInsideStringInterpolation } from '../util/textUtils';
+import { isInsideCommentOrString, isInsideStringInterpolation, inRawStringTemplate } from '../util/textUtils';
 import { computeTripleStringMask, computeBlockCommentMask, inTripleStringMask } from './SemanticTokensProvider';
 
 const WORD_RE = /[A-Za-z_]\w*/;
@@ -49,7 +49,10 @@ export class KotlinDocumentHighlightProvider implements vscode.DocumentHighlight
       let m: RegExpExecArray | null;
       while ((m = wordRe.exec(line)) !== null) {
         if (inTripleStringMask(commentMask, i, m.index)) continue;
-        if (inTripleStringMask(tripleMask, i, m.index) && !(m.index >= 1 && line[m.index - 1] === '$')) continue;
+        // `${name}` in a raw string is code, exactly as `$name` is: Find Usages
+        // counted it while the highlighter left it unlit, so the same file
+        // answered two different things about the same position.
+        if (inTripleStringMask(tripleMask, i, m.index) && !inRawStringTemplate(line, m.index)) continue;
         if (isInsideCommentOrString(line, m.index)) {
           // `"Hello $name"` and `"${name}"` are code, as Find Usages already counts them.
           const shortInterp = m.index >= 1 && line[m.index - 1] === '$' && !(m.index >= 2 && line[m.index - 2] === '\\');

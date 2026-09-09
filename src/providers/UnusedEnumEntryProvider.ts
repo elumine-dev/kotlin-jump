@@ -5,6 +5,7 @@ import {
   deleteTitleFor,
   messageFor,
 } from './unusedEnumEntries';
+import { findingAt } from '../util/findingAt';
 
 /**
  * KJ-039 VS Code shell: diagnostics and the removal quick fix.
@@ -82,7 +83,7 @@ export class UnusedEnumEntryProvider implements vscode.CodeActionProvider, vscod
     const findings = this.byPath.get(document.uri.fsPath);
     if (!findings?.length) return [];
 
-    const hit = findings.find(f => f.line === range.start.line);
+    const hit = findingAt(findings, range.start);
     if (!hit) return [];
     // Re-verify against the CURRENT text: an offset from the last scan must
     // never aim a deletion at a line that has since moved.

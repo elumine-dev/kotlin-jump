@@ -7,6 +7,7 @@ import {
   makePrivateTitleFor,
   messageFor,
 } from './unusedMembers';
+import { findingAt } from '../util/findingAt';
 
 /**
  * KJ-042 VS Code shell.
@@ -83,7 +84,7 @@ export class UnusedMemberProvider implements vscode.CodeActionProvider, vscode.D
     range: vscode.Range | vscode.Selection,
   ): vscode.CodeAction[] {
     if (!UnusedMemberProvider.isEnabled()) return [];
-    const hit = this.byPath.get(document.uri.fsPath)?.find(m => m.line === range.start.line);
+    const hit = findingAt(this.byPath.get(document.uri.fsPath), range.start);
     if (!hit) return [];
     // Re-verify against the CURRENT text before offering any edit.
     const lineText = document.lineAt(hit.line).text;

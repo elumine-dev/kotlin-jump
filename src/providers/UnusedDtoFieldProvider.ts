@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { corpusUri } from '../util/corpusUri';
 import { UnusedDtoField, deleteTitleFor, messageFor } from './unusedDtoFields';
+import { findingAt } from '../util/findingAt';
 
 /** KJ-044 VS Code shell. */
 
@@ -60,7 +61,7 @@ export class UnusedDtoFieldProvider implements vscode.CodeActionProvider, vscode
     range: vscode.Range | vscode.Selection,
   ): vscode.CodeAction[] {
     if (!UnusedDtoFieldProvider.isEnabled()) return [];
-    const hit = this.byPath.get(document.uri.fsPath)?.find(f => f.line === range.start.line);
+    const hit = findingAt(this.byPath.get(document.uri.fsPath), range.start);
     if (!hit) return [];
     if (!document.lineAt(hit.line).text.includes(hit.name)) return [];
 

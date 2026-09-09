@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.68
+
+Kotlin writes the fields of a data class on one line. The quick fix matched its finding on the line alone, so opening it on the second field offered to delete the first.
+
+### Fixes
+- The unread field fix acts on the field under the cursor. On a data class written as one line, the first field of the line won every time, so the title named it and the deletion removed its text.
+- The same rule now serves the enum entry and class member fixes, which matched on the line alone as well. Nothing visible changes there: an enum written on one line offers no deletion at all, because the module declines to compute a safe extent for it.
+- Measured on a real Android project: 34 data classes and 4 enums are written with several names on one line.
+
 ## 1.42.67
 
 With two dead overloads in one file, the quick fix offered on the second one deleted the first. The action found its finding by name, and a name is shared by every overload.

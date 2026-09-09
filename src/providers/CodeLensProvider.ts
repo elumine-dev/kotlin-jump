@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { SymbolKind } from '../indexer/KotlinParser';
-import { scanForUsagesWithTarget, isExcluded, UsageResult, withoutDeclaration } from './FindUsagesEngine';
+import { scanForUsagesWithTarget, isExcluded, UsageResult, withoutDeclarations } from './FindUsagesEngine';
 import { isTestFun } from '../testing/TestAnnotations';
 import { capMap, USAGE_CACHE_LIMIT } from '../util/boundedCache';
 
@@ -333,7 +333,13 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
     finally { sub?.dispose(); }
     release();
     if (token.isCancellationRequested) return undefined;
-    return withoutDeclaration(results, entry.uri.toString(), entry.line, entry.character).length;
+    return withoutDeclarations(results, this._declarationsOf(entry)).length;
+  }
+
+  /** Every declaration that shares this symbol's FQN, overloads included. */
+  private _declarationsOf(entry: SymbolEntry): SymbolEntry[] {
+    const same = this.index.lookup(entry.name).filter(d => d.fqn === entry.fqn);
+    return same.length > 0 ? same : [entry];
   }
 
   private async _scanUsages(entry: SymbolEntry, token: vscode.CancellationToken): Promise<UsageResult[]> {

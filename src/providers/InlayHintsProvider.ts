@@ -30,7 +30,10 @@ const DECL_RE = /^\s*(?:(?:public|private|protected|internal|override|open|abstr
 // still appear on `val x : Type = call(...)` lines.
 const FUN_DECL_RE = /^\s*(?:(?:public|private|protected|internal|override|open|abstract|sealed|inline|suspend|operator|infix|external|actual|expect|companion|data|inner|noinline|crossinline|tailrec|lateinit|const)\s+)*(?:fun|class|data\s+class|object|interface|abstract\s+class|sealed\s+class|enum\s+class|annotation\s+class|typealias)\s/;
 
-const CALL_KINDS = new Set(['fun', 'composable', 'class', 'dataClass'] as const);
+// `@CardVMKey(AudioViewModel::class)` calls an annotation's constructor, so
+// `annotation` belongs here too: filtering the call resolution by kind without
+// it silently dropped every annotation argument label.
+const CALL_KINDS = new Set(['fun', 'composable', 'class', 'dataClass', 'annotation'] as const);
 
 export class KotlinInlayHintsProvider implements vscode.InlayHintsProvider {
   // Cache: fqn → parsed params + per-param Locations (avoids reopening
@@ -377,15 +380,21 @@ export class KotlinInlayHintsProvider implements vscode.InlayHintsProvider {
   // Resolves a call name to a single unambiguous SymbolEntry (fun/composable/class/dataClass).
   // Returns undefined when the name is ambiguous or unknown.
   private resolveCallEntry(name: string, document: vscode.TextDocument): SymbolEntry | undefined {
-    const resolved = resolveBest(name, document, fqn => this.index.lookupFqn(fqn));
-    if (resolved.matches.length === 1) return resolved.matches[0];
-    if (resolved.matches.length > 1) return undefined; // ambiguous
+    // `foo(…)` calls something callable. Import and package resolution alone
+    // returned whatever carried the name, and a LOCAL `val alpha = …` in
+    // another file of the same package answered for `Color.alpha(result)`:
+    // its line was read as a signature and the argument was labelled with a
+    // name lifted out of that expression.
+    const resolved = resolveBest(name, document, fqn => this.index.lookupFqn(fqn))
+      .matches.filter(e => CALL_KINDS.has(e.kind as never) && !e.isLocal);
+    if (resolved.length === 1) return resolved[0];
+    if (resolved.length > 1) return undefined; // ambiguous
     // An explicit import the index cannot resolve names a library symbol
     // (`import kotlinx.coroutines.launch`): the workspace `launch` below
     // would label the arguments with its own parameter names.
     if (resolveExplicit(name, document).exact.length > 0) return undefined;
 
-    const hits = this.index.lookup(name).filter(e => CALL_KINDS.has(e.kind as any));
+    const hits = this.index.lookup(name).filter(e => CALL_KINDS.has(e.kind as any) && !e.isLocal);
     return hits.length === 1 ? hits[0] : undefined;
   }
 }

@@ -281,30 +281,51 @@ export class StateProvenanceProvider implements vscode.CodeLensProvider {
 
     return analyzeStateProvenance(text, code)
       .filter(s => s.line !== undefined)
-      .map(s => {
+      .flatMap(s => {
         const readerName = s.exposedAs ?? s.property;
         const writeSites = writesByName.get(s.property) ?? [];
         const readerSites = readersByName.get(readerName) ?? [];
         const indirect = s.indirectWriteFns.length > 0 ? ` (+${s.indirectWriteFns.length} indirect)` : '';
+        const range = new vscode.Range(s.line!, 0, s.line!, 0);
+        const tooltip = s.exposedAs
+          ? `${s.property} exposed via ${s.exposedAs}`
+          : `${s.property}: no public exposure detected`;
+
+        // One lens carries one command, so writes and readers used to share a
+        // single click that always opened the peek list. They are two lenses
+        // now, side by side, and a lone site opens straight at it instead of
+        // asking to pick from a list of one.
+        const lensFor = (title: string, sites: { line: number; character: number }[]): vscode.CodeLens => {
+          if (sites.length === 0) {
+            return new vscode.CodeLens(range, { title, command: '', tooltip });
+          }
+          if (sites.length === 1) {
+            const at = new vscode.Position(sites[0].line, sites[0].character);
+            return new vscode.CodeLens(range, {
+              title,
+              command: 'vscode.open',
+              arguments: [uri, { selection: new vscode.Range(at, at) }],
+              tooltip: `${tooltip} · go to it`,
+            });
+          }
+          return new vscode.CodeLens(range, {
+            title,
+            command: 'editor.action.showReferences',
+            arguments: [
+              uri,
+              new vscode.Position(s.line!, 0),
+              sites.map(p => new vscode.Location(uri, new vscode.Position(p.line, p.character))),
+            ],
+            tooltip,
+          });
+        };
+
         // Readers are counted in this file only (Compose collectors live in
         // other files): say so rather than show "0 readers" as a fact.
-        const title = `✎ ${s.directWrites} write${s.directWrites !== 1 ? 's' : ''}${indirect} · 👁 ${readerSites.length} reader${readerSites.length !== 1 ? 's' : ''} in this file`;
-
-        // Click = native reference peek: writes first, then reads.
-        const locations = [...writeSites, ...readerSites].map(
-          p => new vscode.Location(uri, new vscode.Position(p.line, p.character)),
-        );
-        return new vscode.CodeLens(new vscode.Range(s.line!, 0, s.line!, 0), {
-          title,
-          command: locations.length > 0 ? 'editor.action.showReferences' : '',
-          arguments:
-            locations.length > 0
-              ? [uri, new vscode.Position(s.line!, 0), locations]
-              : undefined,
-          tooltip: s.exposedAs
-            ? `${s.property} exposed via ${s.exposedAs}. Click to see writes and readers.`
-            : `${s.property}: no public exposure detected`,
-        });
+        return [
+          lensFor(`✎ ${s.directWrites} write${s.directWrites !== 1 ? 's' : ''}${indirect}`, writeSites),
+          lensFor(`👁 ${readerSites.length} reader${readerSites.length !== 1 ? 's' : ''} in this file`, readerSites),
+        ];
       });
   }
 }

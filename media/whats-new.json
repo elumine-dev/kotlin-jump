@@ -1,22 +1,27 @@
 {
-  "version": "1.42.68",
+  "version": "1.42.69",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The lightbulb reads the column too",
-  "summary": "Kotlin writes the fields of a data class on one line. The quick fix matched its finding on the line alone, so opening it on the second field offered to delete the first.",
+  "tagline": "Click the readers, land on the reader",
+  "summary": "The state lens showed writes and readers in one clickable label, so both halves opened the same reference list. They are two labels now, and a single reader opens straight at its line.",
   "highlights": [
     {
-      "title": "Delete the field you pointed at",
-      "description": "A data class with two unread fields on one line now offers each field its own fix, with the right name in the title and the right text removed.",
+      "title": "Two labels, two clicks",
+      "description": "The writes count and the readers count are separate lenses side by side. Clicking the readers side shows readers, not the merged list of everything.",
       "kind": "fix"
+    },
+    {
+      "title": "One target opens directly",
+      "description": "When a state has a single reader in the file, the click jumps to that line instead of opening a peek list with one entry to choose from.",
+      "kind": "improvement"
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "The unread field fix acts on the field under the cursor. On a data class written as one line, the first field of the line won every time, so the title named it and the deletion removed its text.",
-        "The same rule now serves the enum entry and class member fixes, which matched on the line alone as well. Nothing visible changes there: an enum written on one line offers no deletion at all, because the module declines to compute a safe extent for it.",
-        "Measured on a real Android project: 34 data classes and 4 enums are written with several names on one line."
+        "The state lens is two lenses. A code lens carries one command, so the single label meant one action for both halves: clicking readers opened writes and readers together, and the panel stole the view.",
+        "A lone write or a lone reader opens at its line. The peek list stays for two or more.",
+        "With no reader in the file the right side stays inert instead of offering a click that shows nothing."
       ]
     }
   ],

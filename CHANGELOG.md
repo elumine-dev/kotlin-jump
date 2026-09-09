@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.42.70
+
+Splitting the state lens in two, one release ago, gave the readers side an empty command when a state has no reader in the file. A lens with an empty command is not reliably drawn, and that count is the one worth reading.
+
+### Fixes
+- A state read nowhere in its own file shows one lens with both counts instead of a second lens that might not be drawn at all. The drawable preview lens vanished the same way once, and the note left in that code is what caught this.
+- Every lens this provider emits now carries a real command, checked by a test.
+
 ## 1.42.69
 
 The state lens showed writes and readers in one clickable label, so both halves opened the same reference list. They are two labels now, and a single reader opens straight at its line.

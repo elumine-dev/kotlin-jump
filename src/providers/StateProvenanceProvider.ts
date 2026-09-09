@@ -297,7 +297,11 @@ export class StateProvenanceProvider implements vscode.CodeLensProvider {
         // asking to pick from a list of one.
         const lensFor = (title: string, sites: { line: number; character: number }[]): vscode.CodeLens => {
           if (sites.length === 0) {
-            return new vscode.CodeLens(range, { title, command: '', tooltip });
+            // No write at all: nothing to open, and the title still shows.
+            return new vscode.CodeLens(range, {
+              title, command: 'editor.action.showReferences',
+              arguments: [uri, new vscode.Position(s.line!, 0), [] as vscode.Location[]], tooltip,
+            });
           }
           if (sites.length === 1) {
             const at = new vscode.Position(sites[0].line, sites[0].character);
@@ -322,10 +326,16 @@ export class StateProvenanceProvider implements vscode.CodeLensProvider {
 
         // Readers are counted in this file only (Compose collectors live in
         // other files): say so rather than show "0 readers" as a fact.
-        return [
-          lensFor(`✎ ${s.directWrites} write${s.directWrites !== 1 ? 's' : ''}${indirect}`, writeSites),
-          lensFor(`👁 ${readerSites.length} reader${readerSites.length !== 1 ? 's' : ''} in this file`, readerSites),
-        ];
+        const ecrits = `✎ ${s.directWrites} write${s.directWrites !== 1 ? 's' : ''}${indirect}`;
+        const lus = `👁 ${readerSites.length} reader${readerSites.length !== 1 ? 's' : ''} in this file`;
+        // A second lens only when it has somewhere to go. A lens whose command
+        // is the empty string is not reliably rendered (the drawable preview
+        // lens vanished that way), and "0 readers in this file" is the very
+        // thing worth reading, so it rides along with the writes instead.
+        if (readerSites.length === 0) {
+          return [lensFor(`${ecrits} · ${lus}`, writeSites)];
+        }
+        return [lensFor(ecrits, writeSites), lensFor(lus, readerSites)];
       });
   }
 }

@@ -288,7 +288,8 @@ describe('Implémentations, hiérarchies et surlignage', () => {
     const provider = new KotlinTypeHierarchyProvider(index);
     const items = provider.prepareTypeHierarchy(doc, new Position(1, 12), token) as any[];
     const subs = provider.provideTypeHierarchySubtypes(items[0], token) as any[];
-    expect(subs.map(s => s.name)).toEqual(['Anonymous object (line 3)']);
+    // Meme libelle que l'Outline depuis l'audit 60 : `object : Callback`.
+    expect(subs.map(s => s.name)).toEqual(['object : Callback']);
     expect(subs[0].range.start.character).toBe(subs[0].range.end.character);
   });
 

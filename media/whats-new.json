@@ -1,12 +1,12 @@
 {
-  "version": "1.42.83",
+  "version": "1.42.84",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The fix now survives a restart",
-  "summary": "What 1.42.82 corrected was thrown away by the saved index. Every count went back to its old wrong value on the next window reload, until each file happened to be edited.",
+  "tagline": "No more $anon$25 in your Outline",
+  "summary": "The internal name given to an object expression was reaching the screen. One real Android project showed 275 of them in the Outline, and searching anon in Go to Symbol returned nothing else.",
   "highlights": [
     {
-      "title": "Saved and restored the same",
-      "description": "The field that keeps a qualifier out of the hierarchy is written to the index file, and indexes written before it are rebuilt instead of trusted.",
+      "title": "It reads the way you wrote it",
+      "description": "An object expression appears as object : ViewTreeObserver.OnPreDrawListener, in the Outline, the breadcrumbs and the type hierarchy alike.",
       "kind": "fix"
     }
   ],
@@ -14,9 +14,10 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "The saved index carries the qualifier of a dotted supertype. Without it, reopening the window rebuilt the hierarchy the old way and a nested interface named View claimed 51 classes again.",
-        "A class implementing two nested interfaces of the same name, one from each of two outer types, is now counted by both. Only the first was credited.",
-        "A new test compares a fresh index against a saved and restored one field by field, so the next field added without being written to disk fails the build. This had already slipped through twice."
+        "The Outline and the breadcrumbs name an object expression after what it implements. 275 nodes across 172 files read $anon$25 before, and clicking one selected whatever text happened to follow the keyword.",
+        "Go to Symbol in Workspace leaves them out. Typing anon returned 200 of them and nothing else, so a class actually called AnonymousUser was unreachable by name.",
+        "The type hierarchy uses the same wording as the Outline instead of its own.",
+        "The count of implementations still sees them: nothing was hidden from the index, only from the panels."
       ]
     }
   ],

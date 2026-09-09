@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.84
+
+The internal name given to an object expression was reaching the screen. One real Android project showed 275 of them in the Outline, and searching anon in Go to Symbol returned nothing else.
+
+### Fixes
+- The Outline and the breadcrumbs name an object expression after what it implements, as in object : ViewTreeObserver.OnPreDrawListener. 275 nodes across 172 files read $anon$25 before, and clicking one selected whatever text happened to follow the keyword.
+- Go to Symbol in Workspace leaves them out. Typing anon returned 200 of them and nothing else, so a class actually called AnonymousUser was unreachable by name.
+- The type hierarchy uses the same wording as the Outline instead of its own.
+- The count of implementations still sees them: nothing was hidden from the index, only from the panels.
+
 ## 1.42.83
 
 What 1.42.82 corrected was thrown away by the saved index. Every count went back to its old wrong value on the next window reload, until each file happened to be edited.

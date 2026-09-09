@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.79
+
+The count started reading the whole supertype chain in 1.42.77 while every list stayed on direct supertypes. On a real Android project, 133 types announced a number the click could not show, in both directions.
+
+### Fixes
+- Go to Implementation, the picker behind the lens and the arrow lens follow the whole chain. Two lenses could sit on the same line with different numbers, one saying 2 implementations and the other saying 1.
+- An implementor of a class that only shares its simple name no longer counts for the wrong parent. One module read 1 implementation that belonged to a namesake in another package, and two nested interfaces sharing a package were merged into one list.
+- The count leaves out test doubles when you are reading production code, which is what the list already did. 35 types on that project counted an implementor the picker then refused to show.
+
 ## 1.42.78
 
 An implementation written as `object : Interface` was counted only when the line started with a declaration keyword. On a real Android project, 79 of 276 anonymous implementations were invisible, and the Dagger form was one of them.

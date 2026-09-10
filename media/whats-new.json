@@ -1,12 +1,17 @@
 {
-  "version": "1.42.100",
+  "version": "1.42.101",
   "title": "What's New in Kotlin Jump",
-  "tagline": "An upgrade rebuilds the index instead of trusting a stale one",
-  "summary": "Three parser fixes shipped without moving the index version, so an upgrade restored the old reading of every file left untouched. On a project of 5088 files, 43 of them came back wrong.",
+  "tagline": "The bundled standard library index catches up with the parser",
+  "summary": "The Kotlin standard library index shipped inside the extension had stayed on the reading the parser had 120 releases ago. 238 of its 326 files disagreed with it.",
   "highlights": [
     {
-      "title": "The stored index no longer survives a parser fix",
-      "description": "An upgrade rebuilds it once. The 43 affected files carried 45 wrong parent types, one class listed as its own parent, and 6 declarations missing from the Outline, from Go to Definition and from Find Usages.",
+      "title": "210 standard library declarations come back",
+      "description": "Enum.name, Enum.ordinal, Enum.compareTo and the companion objects of Boolean, Char and the primitive types were absent from the shipped index, so Go to Definition and the Outline could not reach them.",
+      "kind": "fix"
+    },
+    {
+      "title": "A type argument is no longer read as a parent",
+      "description": "206 parent lists were wrong in that index: List had E for a parent next to Collection, and Boolean was its own parent. Type Hierarchy showed both.",
       "kind": "fix"
     }
   ],
@@ -14,8 +19,8 @@
     {
       "heading": "Fixed",
       "bullets": [
-        "Upgrading rebuilds the index instead of restoring a reading the current parser no longer agrees with.",
-        "A recorded reference pins what the parser writes to disk, so the next parser change cannot ship without the index version that discards the stale copies."
+        "Rebuilds the bundled standard library index, frozen since version 1.22.0.",
+        "A test reparses every source the index carries and compares it to what the index stores, so the artifact can no longer drift behind the parser in silence."
       ]
     }
   ],

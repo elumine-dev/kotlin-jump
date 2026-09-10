@@ -14,14 +14,30 @@ import { expect } from 'vitest';
  * nothing: running every one of these workloads three times cost the suite
  * 13 percent. A real regression is slow in every run and still fails.
  */
-export function expectFasterThan(budget: number, travail: () => void, message?: string): void {
+export interface BudgetOptions {
+  /**
+   * Run before each pass and left out of the measurement. Needed when the
+   * workload feeds a counter that a later assertion checks: without it, three
+   * passes would treble the count and break the very test being protected.
+   */
+  avant?: () => void;
+  message?: string;
+}
+
+export function expectFasterThan(
+  budget: number,
+  travail: () => void,
+  options?: string | BudgetOptions,
+): void {
+  const opts: BudgetOptions = typeof options === 'string' ? { message: options } : options ?? {};
   let meilleur = Infinity;
   for (let passe = 0; passe < 3; passe++) {
+    opts.avant?.();
     const debut = performance.now();
     travail();
     const ecoule = performance.now() - debut;
     if (ecoule < meilleur) meilleur = ecoule;
     if (meilleur < budget) break;
   }
-  expect(meilleur, message).toBeLessThan(budget);
+  expect(meilleur, opts.message).toBeLessThan(budget);
 }

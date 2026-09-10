@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { expectFasterThan } from '../perfBudget';
 import {
   countResourceUsages,
   countAllResourceUsages,
@@ -56,12 +57,10 @@ describe('KJ-021 adversarial', () => {
       path: `F${f}.kt`,
       text: Array.from({ length: 30 }, (_, l) => `val v${l} = R.string.res_${(f + l) % 200}`).join('\n'),
     }));
-    const start = performance.now();
-    const counts = countAllResourceUsages(names, sources);
-    const elapsed = performance.now() - start;
+    let counts!: ReturnType<typeof countAllResourceUsages>;
+    expectFasterThan(400, () => { counts = countAllResourceUsages(names, sources); });
     expect(counts.get('string/res_0')! > 0).toBe(true);
     expect([...counts.values()].reduce((a, b) => a + b, 0)).toBe(300 * 30);
-    expect(elapsed).toBeLessThan(400);
   });
 
   it('BUG-HUNT-16b : la passe unique donne les mêmes comptes que la version unitaire', () => {

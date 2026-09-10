@@ -14,6 +14,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import * as vscodeMock from './__mocks__/vscode';
 import { NullAssertionProvider } from '../../src/providers/NullAssertionProvider';
+import { expectFasterThan } from './perfBudget';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -247,11 +248,9 @@ describe('ADVER-NULL-5 — boundary and degenerate inputs', () => {
 describe('ADVER-NULL-6 — stress: large document performance', () => {
   it('500-line document, one !! per line, returns 500 decorations in < 100ms', () => {
     const lines = Array.from({ length: 500 }, (_, i) => `val x${i} = foo${i}!!`);
-    const start = performance.now();
-    const result = decs(lines);
-    const elapsed = performance.now() - start;
+    let result!: ReturnType<typeof decs>;
+    expectFasterThan(100, () => { result = decs(lines); });
     expect(result).toHaveLength(500);
-    expect(elapsed).toBeLessThan(100);
   });
 
   it('500-line document, all !! inside strings, returns 0 decorations', () => {

@@ -14,6 +14,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import * as vscodeMock from './__mocks__/vscode';
 import { HexColorFoldingProvider } from '../../src/providers/HexColorFoldingProvider';
+import { expectFasterThan } from './perfBudget';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -291,11 +292,9 @@ describe('ADVER-HEX-6 — stress: large document performance', () => {
     const lines = Array.from({ length: 500 }, (_, i) =>
       `val c${i} = 0x${(0xFF000000 + i).toString(16).padStart(8, '0').toUpperCase()}`,
     );
-    const start = performance.now();
-    const result = decs(lines);
-    const elapsed = performance.now() - start;
+    let result!: ReturnType<typeof decs>;
+    expectFasterThan(100, () => { result = decs(lines); });
     expect(result).toHaveLength(500);
-    expect(elapsed).toBeLessThan(100);
   });
 
   it('500-line document, one "#RRGGBB" per line, returns 500 decorations in < 100ms', () => {
@@ -305,21 +304,17 @@ describe('ADVER-HEX-6 — stress: large document performance', () => {
       const b = ((i * 13) % 256).toString(16).padStart(2, '0');
       return `val c${i} = "#${r}${g}${b}"`;
     });
-    const start = performance.now();
-    const result = decs(lines);
-    const elapsed = performance.now() - start;
+    let result!: ReturnType<typeof decs>;
+    expectFasterThan(100, () => { result = decs(lines); });
     expect(result).toHaveLength(500);
-    expect(elapsed).toBeLessThan(100);
   });
 
   it('500-line document with colors inside comments — 0 decorations, < 100ms', () => {
     const lines = Array.from({ length: 500 }, (_, i) =>
       `val x${i} = 1 // 0xFF7F52FF "#FF0000"`,
     );
-    const start = performance.now();
-    const result = decs(lines);
-    const elapsed = performance.now() - start;
+    let result!: ReturnType<typeof decs>;
+    expectFasterThan(100, () => { result = decs(lines); });
     expect(result).toHaveLength(0);
-    expect(elapsed).toBeLessThan(100);
   });
 });

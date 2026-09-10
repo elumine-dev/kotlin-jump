@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { importOrNull } from './harness';
+import { expectFasterThan } from '../perfBudget';
 
 /**
  * KJ-032 adversarial — les 17 gardes de candidat et les 14 sources de
@@ -533,11 +534,9 @@ describe.skipIf(!mod)('performance', () => {
   it('3 000 fichiers et 3 000 symboles restent sous 4 secondes', () => {
     const sources = Array.from({ length: 3000 }, (_, i) =>
       kt(`${MAIN}/F${i}.kt`, `package com.x\n\nclass Type${i} {\n  fun run() = Type${(i + 1) % 2000}()\n}\n`));
-    const start = performance.now();
-    const found = find(sources);
-    const elapsed = performance.now() - start;
+    let found!: ReturnType<typeof find>;
+    expectFasterThan(4000, () => { found = find(sources); });
     // 2000 types sont référencés par leur voisin, 1000 ne le sont pas
     expect(found.length).toBeGreaterThan(500);
-    expect(elapsed).toBeLessThan(4000);
   });
 });

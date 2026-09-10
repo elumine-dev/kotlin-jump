@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { expectFasterThan } from '../perfBudget';
 import { findWriteOnlyVariables } from '../../../src/providers/WriteOnlyProvider';
 import { findUnusedLocals } from '../../../src/providers/UnusedLocalProvider';
 
@@ -155,8 +156,7 @@ describe('KJ-028 adversarial — classification', () => {
     const text = Array.from({ length: 300 }, (_, i) =>
       `class C${i} {\n  private var flag${i} = false\n  fun a() { flag${i} = true }\n  fun b() { flag${i} = false }\n}`,
     ).join('\n');
-    const start = performance.now();
     expect(findWriteOnlyVariables(text)).toHaveLength(300);
-    expect(performance.now() - start).toBeLessThan(300);
+    expectFasterThan(300, () => { findWriteOnlyVariables(text); });
   });
 });

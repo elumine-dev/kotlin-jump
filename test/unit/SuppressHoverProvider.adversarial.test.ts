@@ -15,6 +15,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { expectFasterThan } from './perfBudget';
 import './__mocks__/vscode';
 import { SuppressHoverProvider } from '../../src/providers/SuppressHoverProvider';
 
@@ -273,11 +274,8 @@ describe('ADV-7 — pathological inputs do not blow up', () => {
     const annotation = '@Suppress("UNCHECKED_CAST")';
     const line = padding + annotation;
     const col  = line.indexOf('UNCHECKED_CAST') + 2;
-    const start = Date.now();
-    const h = hover([line], 0, col);
-    const elapsed = Date.now() - start;
-    expect(h).not.toBeNull();
-    expect(elapsed, 'must complete under 50 ms even on 10 KB lines').toBeLessThan(50);
+    expect(hover([line], 0, col)).not.toBeNull();
+    expectFasterThan(50, () => { hover([line], 0, col); }, 'must complete under 50 ms even on 10 KB lines');
   });
 
   it('line with 50 nested @Suppress calls — first cursor still resolves', () => {
@@ -285,10 +283,8 @@ describe('ADV-7 — pathological inputs do not blow up', () => {
     const tail = '"UNCHECKED_CAST"';
     const line = '@Suppress(' + Array(50).fill(tail).join(', ') + ')';
     const col  = line.indexOf('UNCHECKED_CAST') + 2;
-    const start = Date.now();
-    const h = hover([line], 0, col);
-    expect(h).not.toBeNull();
-    expect(Date.now() - start).toBeLessThan(50);
+    expect(hover([line], 0, col)).not.toBeNull();
+    expectFasterThan(50, () => { hover([line], 0, col); });
   });
 
   it('huge ID inside Suppress (200 chars) — graceful no-hover', () => {

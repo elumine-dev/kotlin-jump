@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { expectFasterThan } from '../perfBudget';
 import { findUnusedParameters } from '../../../src/providers/UnusedParameterProvider';
 
 /** KJ-025 — tentatives de casse de la DÉTECTION au-delà du contrat. */
@@ -219,8 +220,7 @@ describe('KJ-025 adversarial — détection', () => {
     const text = Array.from({ length: 400 }, (_, i) =>
       `class C${i}(a${i}: Int, dead${i}: Int) {\n  val v${i} = a${i}\n}`,
     ).join('\n');
-    const start = performance.now();
     expect(findUnusedParameters(text)).toHaveLength(400);
-    expect(performance.now() - start).toBeLessThan(300);
+    expectFasterThan(300, () => { findUnusedParameters(text); });
   });
 });

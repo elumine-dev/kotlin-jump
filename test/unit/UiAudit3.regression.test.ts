@@ -2,6 +2,7 @@
 // backward scope walk, caches not evicted on delete, diagnostics frozen
 // between saves, ⚡ on homonyms, and non-locale qualifiers in the hover grid.
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { expectFasterThan } from './perfBudget';
 import * as vscodeMock from './__mocks__/vscode';
 import * as vscode from 'vscode';
 import { resolveLocalScope, buildLocalScopeIndex } from '../../src/providers/DefinitionProvider';
@@ -23,10 +24,10 @@ describe('resolveLocalScope — one index per document (was: a backward walk per
     for (let i = 0; i < 5000; i++) lines.push(`    val color${i} = Color(0xFF000000) + alpha(color${i})`);
     lines.push('}');
     const doc = mockDocument('file:///Bench.kt', lines.join('\n'));
-    const t0 = performance.now();
-    const scope = buildLocalScopeIndex(lines);
-    for (let l = 1; l <= 5000; l++) resolveLocalScope(doc, new vscodeMock.Position(l, 50), 'alpha', scope);
-    expect(performance.now() - t0).toBeLessThan(500); // was 13.9 s
+    expectFasterThan(500, () => {
+      const scope = buildLocalScopeIndex(lines);
+      for (let l = 1; l <= 5000; l++) resolveLocalScope(doc, new vscodeMock.Position(l, 50), 'alpha', scope);
+    }); // was 13.9 s
   });
 
   it('gives the same answers as the walk: params, locals, lambdas, shadowing, outside any function', () => {

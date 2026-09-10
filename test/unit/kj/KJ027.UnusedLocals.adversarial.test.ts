@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { expectFasterThan } from '../perfBudget';
 import { findUnusedLocals, isPureInitializer } from '../../../src/providers/UnusedLocalProvider';
 
 /** KJ-027 — tentatives de casse de la DÉTECTION au-delà du contrat. */
@@ -247,8 +248,7 @@ describe('KJ-027 adversarial — détection', () => {
     const text = Array.from({ length: 300 }, (_, i) =>
       `fun f${i}(rows: List<Int>) {\n  val dead${i} = ${i}\n  rows.forEachIndexed { idx${i}, row -> println(row) }\n  try { s() } catch (e${i}: Exception) { g() }\n}`,
     ).join('\n');
-    const start = performance.now();
     expect(findUnusedLocals(text)).toHaveLength(900);
-    expect(performance.now() - start).toBeLessThan(300);
+    expectFasterThan(300, () => { findUnusedLocals(text); });
   });
 });

@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.42.99
+
+This release contains no functional changes: only an internal test suite update and the version bump to 1.42.99.
+
+### Notes
+- Ships no changes to editor commands, settings, or detection behavior in this release.
+- Updates the internal test suite, supporting release quality without altering any user facing feature.
+- Bumps the version number to 1.42.99 with no other packaging changes.
+
+## 1.42.99
+
+Thirteen tests asserted a wall clock budget, some as low as 50 milliseconds. The publish script runs the suite, so a busy machine stopped a release that had nothing wrong with it.
+
+### Internal
+- The timing budgets in the test suite are judged by the fastest of up to three runs. A first call carries the warm up of everything it touches: 28 milliseconds cold against 7 warm on a calm machine, 108 against 17 on a busy one. One publish had already stopped on 422 milliseconds against a 300 millisecond budget while the steady state cost of that workload is 5 milliseconds.
+- The retry only happens when the first run misses, so a calm machine pays nothing: measured over interleaved pairs the suite takes the same time it did.
+
 ## 1.42.98
 
 Fixes the get_file_symbols MCP tool returning empty results for file paths that connected AI agents commonly produce.

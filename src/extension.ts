@@ -181,6 +181,10 @@ import {
   VersionCatalogSemanticTokensProvider,
   VersionCatalogFoldingProvider,
 } from './providers/VersionCatalogSyntaxProvider';
+import {
+  CatalogTomlDefinitionProvider,
+  CatalogTomlReferenceProvider,
+} from './providers/VersionCatalogNavigation';
 import { OverrideGutterProvider } from './providers/OverrideGutterProvider';
 import { NavigationHistoryProvider } from './providers/NavigationHistoryProvider';
 
@@ -1912,6 +1916,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         VERSION_CATALOG_SELECTOR, new VersionCatalogSemanticTokensProvider(), CATALOG_LEGEND),
       vscode.languages.registerFoldingRangeProvider(
         VERSION_CATALOG_SELECTOR, new VersionCatalogFoldingProvider()),
+      // Navigation inside the catalog: a version.ref lands on its [versions]
+      // line, an alias lands on the build files that use it.
+      vscode.languages.registerDefinitionProvider(
+        VERSION_CATALOG_SELECTOR, new CatalogTomlDefinitionProvider(p => vcIndex.rootFor(p))),
+      vscode.languages.registerReferenceProvider(
+        VERSION_CATALOG_SELECTOR, new CatalogTomlReferenceProvider(p => vcIndex.rootFor(p))),
     );
   })();
 

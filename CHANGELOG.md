@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.105
+
+Ctrl+click worked from a build file into gradle/libs.versions.toml, and once you were there every name was a dead end. The catalog was a destination and never a departure.
+
+### Added
+- Ctrl+click on a version.ref target lands on the line of the versions table that declares it, one hop inside the same file.
+- Ctrl+click on an alias lands on the build files that use it. On a project of 5088 files, navigation-safeArgs resolves to the three modules that declare the plugin. Several usages open the list VS Code shows for a multi target jump, and Shift+F12 gives the same list.
+- Ctrl+click on a key of the versions table lands on the entries that pin their version on it, which is the question worth asking before changing a number.
+- Accessors are matched segment by segment the way Gradle resolves them, so the dash, the underscore and the dot are one separator, and an accessor carrying an extra segment is a different entry. Measured on the same project: 171 of the 176 aliases resolve to at least one usage, and the five that do not are absent from every build file.
+
 ## 1.42.104
 
 The build script called the benchmark and maintenance bundles dev only, excluded from the package. They were not excluded, and neither were the compiled end to end suites, the web test harness, or the TypeScript sources of the logcat panel.

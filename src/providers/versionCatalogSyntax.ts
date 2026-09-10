@@ -85,6 +85,48 @@ function valueType(key: string, content: string): CatalogTokenType {
   return RE_VERSION.test(content) ? 'number' : 'string';
 }
 
+/** A token under the cursor, with the table it belongs to. */
+export interface CatalogHit {
+  type:  CatalogTokenType;
+  /** The token text as written, quotes included for a string. */
+  brut:  string;
+  /** The token text without its surrounding quotes. */
+  texte: string;
+  line:  number;
+  start: number;
+  length: number;
+  /** `versions`, `libraries`, `plugins`, `bundles`, or undefined above the first header. */
+  table?: string;
+}
+
+/**
+ * What sits under a position, read with the same scanner that colours the
+ * file. Navigation and colour therefore cannot disagree about what a token is.
+ */
+export function tokenAt(text: string, line: number, character: number): CatalogHit | undefined {
+  const lignes = text.split('\n');
+  if (line < 0 || line >= lignes.length) return undefined;
+  const { tokens } = scanVersionCatalog(text);
+  const ligne = lignes[line].replace(/\r$/, '');
+
+  let table: string | undefined;
+  let trouve: CatalogToken | undefined;
+  for (const t of tokens) {
+    if (t.line > line) break;
+    if (t.type === 'namespace' && t.line <= line) {
+      table = lignes[t.line].slice(t.start, t.start + t.length).replace(/^\[+|\]+$/g, '');
+    }
+    // `<=` on the right edge: clicking just after the last character of a word
+    // is how VS Code reports a click on the word itself.
+    if (t.line === line && character >= t.start && character <= t.start + t.length) trouve = t;
+  }
+  if (trouve === undefined) return undefined;
+
+  const brut = ligne.slice(trouve.start, trouve.start + trouve.length);
+  const texte = /^["'].*["']$/.test(brut) ? brut.slice(1, -1) : brut;
+  return { type: trouve.type, brut, texte, line: trouve.line, start: trouve.start, length: trouve.length, table };
+}
+
 export function scanVersionCatalog(text: string): CatalogScan {
   const lines   = text.split('\n');
   const tokens: CatalogToken[]  = [];

@@ -250,7 +250,7 @@ export function parse(uriString: string, text: string): ParsedFile {
       // Only look ahead for `) : Types` if the line has an unclosed paren (multi-line constructor)
       if (supertypes.length === 0 && hasUnclosedParen(raw, nameEnd)) {
         superQuals.length = 0;
-        supertypes = lookAheadSupertypes(text, nl + 1, superQuals);
+        supertypes = lookAheadSupertypes(text, nl + 1, superQuals, unclosedParenDepth(raw, nameEnd));
       } else if (headerContinues(raw, nameEnd)) {
         // `class LongActivity :\n    AppCompatActivity(),\n    Callback {` is how
         // ktlint wraps a long header: the list goes on below.
@@ -622,12 +622,18 @@ const DECL_START: Record<string, boolean> = Object.fromEntries(
 
 // True if line has more '(' than ')' after the given position (multi-line constructor)
 function hasUnclosedParen(line: string, from: number): boolean {
+  return unclosedParenDepth(line, from) > 0;
+}
+
+/** How many parentheses the line leaves open after `from`. */
+function unclosedParenDepth(line: string, from: number): number {
+  const code = stripTrailingLineComment(line);
   let depth = 0;
-  for (let i = from; i < line.length; i++) {
-    if (line.charAt(i) === '(') depth++;
-    else if (line.charAt(i) === ')') depth--;
+  for (let i = from; i < code.length; i++) {
+    if (code.charAt(i) === '(') depth++;
+    else if (code.charAt(i) === ')') depth--;
   }
-  return depth > 0;
+  return depth;
 }
 
 // Scan the line after the class name for `: SuperType, Interface`
@@ -681,43 +687,51 @@ function emitAnonObjectIfPresent(raw: string, lineNum: number, braceDepth: numbe
 }
 
 // For multi-line constructors: scan forward for `) : Types` on subsequent lines
-function lookAheadSupertypes(text: string, start: number, quals?: string[]): string[] {
+function lookAheadSupertypes(text: string, start: number, quals?: string[], depart = 1): string[] {
+  // Only the parenthesis that closes the CONSTRUCTOR ends the header, and it
+  // has to be found INSIDE the line: `) : Base(` closes one and opens another,
+  // so the depth at end of line is unchanged and says nothing. A parameter
+  // whose type is a function written over several lines closes with `)` too.
+  let profondeur = depart;
   let p = start;
+  const lire = (brut: string, suite: number): string[] => {
+    let rest = stripTrailingLineComment(brut).trimEnd();
+    if (!rest.includes('{') && (rest.endsWith(',') || rest.endsWith(':'))) rest += ' ' + collectHeaderContinuation(text, suite);
+    return parseTypeNames(rest, quals);
+  };
   for (let i = 0; i < 20 && p < text.length; i++) {
     let nl = text.indexOf('\n', p);
     if (nl === -1) nl = text.length;
-    const line = text.slice(p, nl).trimStart();
-    const m = /^\)\s*:\s*(.+)/.exec(line);
-    if (m) {
-      let rest = stripTrailingLineComment(m[1]).trimEnd();
-      if (!rest.includes('{') && (rest.endsWith(',') || rest.endsWith(':'))) rest += ' ' + collectHeaderContinuation(text, nl + 1);
-      return parseTypeNames(rest, quals);
+    const code = stripTrailingLineComment(text.slice(p, nl));
+    let d = profondeur, fermeture = -1;
+    for (let c = 0; c < code.length; c++) {
+      const ch = code[c];
+      if (ch === '(') d++;
+      else if (ch === ')') { d--; if (d === 0) { fermeture = c; break; } }
     }
-    // The constructor closed on something other than a supertype list: the
-    // header is over. Reading on found the `) : LoginUiModel(` of a nested
-    // variant twelve lines below and gave the sealed class ITSELF as its own
-    // supertype. 50 supertypes on a real project were a method's return type.
-    // A bare `)` is not the end though: Kotlin lets the supertype list lead the
-    // next line. Only the very next non blank line may carry it, otherwise the
-    // scan reaches a `: Type` that belongs to something else below.
-    if (line.startsWith(')')) {
-      if (line.slice(1).trim() !== '') return [];
-      let q = nl + 1;
-      for (let j = 0; j < 5 && q < text.length; j++) {
-        let qn = text.indexOf('\n', q);
-        if (qn === -1) qn = text.length;
-        const suivante = text.slice(q, qn).trim();
-        if (suivante === '') { q = qn + 1; continue; }
-        const mc = /^:\s*(.+)/.exec(suivante);
-        if (!mc) return [];
-        let rest = stripTrailingLineComment(mc[1]).trimEnd();
-        if (!rest.includes('{') && (rest.endsWith(',') || rest.endsWith(':'))) rest += ' ' + collectHeaderContinuation(text, qn + 1);
-        return parseTypeNames(rest, quals);
-      }
-      return [];
+    if (fermeture === -1) {
+      profondeur = d;
+      if (code.trimStart().startsWith('{')) return [];
+      p = nl + 1;
+      continue;
     }
-    if (line.startsWith('{')) return [];
-    p = nl + 1;
+    const reste = code.slice(fermeture + 1).trim();
+    if (reste.startsWith(':')) return lire(reste.slice(1), nl + 1);
+    // Anything else after the closing parenthesis ends the header: `{`, or a
+    // body opening below. A bare close is not the end though, Kotlin lets the
+    // supertype list lead the next line; only the very next non blank line may
+    // carry it, otherwise the scan reaches a `: Type` belonging to something
+    // further down and the class inherits a method's return type.
+    if (reste !== '') return [];
+    let q = nl + 1;
+    for (let j = 0; j < 5 && q < text.length; j++) {
+      let qn = text.indexOf('\n', q);
+      if (qn === -1) qn = text.length;
+      const suivante = stripTrailingLineComment(text.slice(q, qn)).trim();
+      if (suivante === '') { q = qn + 1; continue; }
+      return suivante.startsWith(':') ? lire(suivante.slice(1), qn + 1) : [];
+    }
+    return [];
   }
   return [];
 }

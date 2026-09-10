@@ -183,3 +183,66 @@ describe('Une parenthese fermante seule ne clot pas l\'en tete', () => {
     expect(parse(URI2, code).symbols.find(s => s.name === 'Api')!.supertypes).toBeUndefined();
   });
 });
+
+describe('Seule la parenthese qui ferme le CONSTRUCTEUR termine l\'en tete', () => {
+  // Un parametre dont le type est une fonction ecrite sur plusieurs lignes se
+  // ferme lui aussi par `)`. La regle des v1.42.92 et 93 le prenait pour la fin
+  // du constructeur et jetait la liste de supertypes. Idem quand un commentaire
+  // suit la parenthese fermante. Sept lignes de cette forme sur LaPresse, aucune
+  // dans un constructeur, mais les deux formes sont du Kotlin valide.
+  const URI3 = 'file:///a64d/Foo.kt';
+
+  it('un parametre de type fonction multi ligne ne ferme pas l\'en tete', () => {
+    const code = [
+      'package p',
+      '',
+      'class Foo(',
+      '    val cb: (',
+      '        Int',
+      '    ) -> Unit,',
+      '    val a: Int',
+      ') : Bar(), Baz {',
+      '    fun m() {}',
+      '}',
+    ].join('\n');
+    expect(parse(URI3, code).symbols.find(s => s.name === 'Foo')!.supertypes).toEqual(['Bar', 'Baz']);
+  });
+
+  it('un commentaire apres la fermeture ne bloque pas la ligne suivante', () => {
+    const code = [
+      'package p',
+      '',
+      'class Foo(',
+      '    val a: Int',
+      ') // le constructeur',
+      '    : Bar() {',
+      '    fun m() {}',
+      '}',
+    ].join('\n');
+    expect(parse(URI3, code).symbols.find(s => s.name === 'Foo')!.supertypes).toEqual(['Bar']);
+  });
+
+  it('le vol du type de retour reste refuse malgre le suivi de profondeur', () => {
+    const code = [
+      'package p',
+      '',
+      'class Api(',
+      '    val cb: (',
+      '        Int',
+      '    ) -> Unit,',
+      ') {',
+      '    suspend fun lire(',
+      '        url: String',
+      '    ): PayloadDO = client.get(url)',
+      '}',
+    ].join('\n');
+    expect(parse(URI3, code).symbols.find(s => s.name === 'Api')!.supertypes).toBeUndefined();
+  });
+
+  it('les formes deja couvertes ne bougent pas', () => {
+    const base = (fin: string[]) => ['package p', '', 'class Foo(', '    val a: Int', ...fin, '    fun m() {}', '}'].join('\n');
+    expect(parse(URI3, base([') : Bar() {'])).symbols.find(s => s.name === 'Foo')!.supertypes).toEqual(['Bar']);
+    expect(parse(URI3, base([')', '    : Bar() {'])).symbols.find(s => s.name === 'Foo')!.supertypes).toEqual(['Bar']);
+    expect(parse(URI3, base([') {'])).symbols.find(s => s.name === 'Foo')!.supertypes).toBeUndefined();
+  });
+});

@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.42.94
+
+Fixes two more cases where the Type Hierarchy view dropped a class's real supertypes.
+
+### Fixes
+- Fixes the Type Hierarchy view dropping a class's supertypes when a constructor parameter's function type is written across several lines: the parser mistook that type's closing parenthesis for the end of the constructor.
+- Fixes the same view missing a class's supertypes when a comment follows the constructor's closing parenthesis, a valid Kotlin style the parser previously read as an unclosed header.
+- Adds regression tests covering both shapes, alongside the supertype fixes from previous releases, keeping the Type Hierarchy view aligned with what the code actually declares.
+
+## 1.42.94
+
+The header was cut at the first line beginning with a parenthesis. A parameter whose type is a function written over several lines closes with one too, and a trailing comment blocked the reading, so the supertype list was dropped.
+
+### Fixes
+- A supertype list survives a parameter whose type is a multi line function, and a comment after the closing parenthesis. Both are valid Kotlin and both silently emptied the list.
+- The line that closes the constructor is found by counting parentheses inside it. Writing the parent's own arguments on that same line, as in `) : Base(`, leaves the depth unchanged at the end of the line and says nothing about where the header stops.
+
 ## 1.42.93
 
 Kotlin Jump 1.42.93 fixes a case where the Type Hierarchy view could miss a class's supertypes when the constructor and the supertype list were on separate lines.

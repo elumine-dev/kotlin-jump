@@ -1,26 +1,21 @@
 {
-  "version": "1.42.102",
+  "version": "1.42.103",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Your version catalog gets colours and fold arrows",
-  "summary": "VS Code ships no TOML grammar, so gradle/libs.versions.toml opens in one colour with nothing to collapse. Kotlin Jump now colours it and folds it.",
+  "tagline": "A wrapped class header no longer hides its constructor properties",
+  "summary": "When ktlint wraps a long class header the primary constructor lands on the line below, and the parser did not read it. 37 properties were invisible on a project of 5088 files.",
   "highlights": [
     {
-      "title": "Colours for the version catalog",
-      "description": "Table headers, aliases, version literals, coordinates and comments each get their own colour, and a version.ref target is coloured as a reference so an entry and the version it points at read as a pair.",
-      "kind": "feature"
-    },
-    {
-      "title": "Fold arrows on each table",
-      "description": "Every table collapses to its header, and a bundle written over several lines collapses on its own.",
-      "kind": "feature"
+      "title": "Constructor properties under a wrapped header",
+      "description": "A bare constructor on its own line, one carrying modifiers, or the Dagger shape with the annotation on a line of its own: the properties are indexed again, so the Outline, Go to Definition and Find Usages reach them.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Added",
+      "heading": "Fixed",
       "bullets": [
-        "Colour and folding for any file named like a version catalog, so a TOML extension installed alongside keeps every other .toml file to itself.",
-        "The theme mapping for semantic tokens was declared for every language while all of it named Kotlin scopes. It is now declared for Kotlin only."
+        "42 sites on a real project, 37 properties recovered, no symbol lost and none added anywhere else.",
+        "Both stored indexes are rebuilt, so the properties appear on upgrade rather than when each affected file happens to be edited."
       ]
     }
   ],

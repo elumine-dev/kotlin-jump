@@ -47,6 +47,12 @@ sealed class Node(
 
 data class Leaf(val id: Int) : Node()
 
+class Wrapped2
+@Inject
+constructor(
+    private val dep: Dep,
+) : Node()
+
 class Wrapped(
     private val cb: (Int) -> Unit,
 ) : Node() {
@@ -124,8 +130,8 @@ function persiste(): string {
 // Recorded together on purpose: the pair only moves when a parser change that
 // reaches the disk is paired with the bump that invalidates the old snapshots.
 const EMPREINTE = {
-  version: 26,
-  persiste: String.raw`[{"t":0,"p":"com.example.guard","m":"guard","n":["Handler","SEP","Node","label","sep","Companion","TAG","load","toString","Leaf","id","Wrapped","cb","late","$anon$31","listener","onDone","outer","temp","inner","Api","fetch","darken","tapped","plus2","Platform","Desktop","HomeViewModel","Screen","Mode","FAST","SLOW","Registry","NodeTest","setUp","works","skipped"],"k":["typealias","val","sealedClass","val","val","object","val","fun","fun","dataClass","val","class","val","var","object","val","fun","fun","val","fun","interface","fun","fun","fun","fun","class","class","class","composable","enum","enum","enum","object","class","fun","fun","fun"],"l":[5,7,10,11,12,16,17,20,22,25,25,27,28,30,31,31,32,35,36,37,41,42,45,47,49,51,53,56,60,62,62,62,64,67,68,71,75],"c":[10,10,13,8,16,4,18,25,17,11,20,6,16,25,19,8,21,8,12,12,10,16,27,17,23,13,13,6,4,11,18,24,7,6,16,8,8],"i":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0],"d":[0,0,0,1,1,1,2,1,1,0,1,0,1,1,1,1,2,1,2,2,0,1,0,0,0,0,0,0,0,0,1,1,0,0,1,1,1],"at":{"0":"(Int) -> Unit"},"co":{"1":1,"6":1},"cv":{"1":"\")\"","6":"\"Node\""},"st":{"2":["Base","Callback","Handler"],"9":["Node"],"11":["Node"],"14":["Base","Callback"]},"sq":{"2":["Base"],"14":["Base"]},"de":{"2":1},"pc":{"3":1,"4":1,"10":1,"12":1},"pv":{"4":1,"12":1,"13":1},"cn":{"5":1},"su":{"7":1,"21":1},"ab":{"7":1},"or":{"8":1,"16":1},"li":{"13":1},"lo":{"18":1},"ex":{"22":1,"23":1,"24":1},"il":{"23":1},"ix":{"24":1},"io":{"24":1},"ep":{"25":1},"ac":{"26":1},"hv":{"27":1},"pr":{"28":1},"tc":{"33":1},"lc":{"34":1},"te":{"35":1,"36":1},"ig":{"36":1},"im":["com.example.other.Base","com.example.other.*"]},{"t":0,"p":"com.example.guard","m":"guard","n":["JavaNode","TAG","run"],"k":["class","val","fun"],"l":[5,6,9],"c":[13,32,16],"i":[0,0,0],"d":[0,1,1],"st":{"0":["Base","Runnable"]},"co":{"1":1},"pv":{"1":1},"or":{"2":1},"im":["com.example.other.Base","java.util.List"]}]`,
+  version: 27,
+  persiste: String.raw`[{"t":0,"p":"com.example.guard","m":"guard","n":["Handler","SEP","Node","label","sep","Companion","TAG","load","toString","Leaf","id","Wrapped2","dep","Wrapped","cb","late","$anon$37","listener","onDone","outer","temp","inner","Api","fetch","darken","tapped","plus2","Platform","Desktop","HomeViewModel","Screen","Mode","FAST","SLOW","Registry","NodeTest","setUp","works","skipped"],"k":["typealias","val","sealedClass","val","val","object","val","fun","fun","dataClass","val","class","val","class","val","var","object","val","fun","fun","val","fun","interface","fun","fun","fun","fun","class","class","class","composable","enum","enum","enum","object","class","fun","fun","fun"],"l":[5,7,10,11,12,16,17,20,22,25,25,27,30,33,34,36,37,37,38,41,42,43,47,48,51,53,55,57,59,62,66,68,68,68,70,73,74,77,81],"c":[10,10,13,8,16,4,18,25,17,11,20,6,16,6,16,25,19,8,21,8,12,12,10,16,27,17,23,13,13,6,4,11,18,24,7,6,16,8,8],"i":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0],"d":[0,0,0,1,1,1,2,1,1,0,1,0,1,0,1,1,1,1,2,1,2,2,0,1,0,0,0,0,0,0,0,0,1,1,0,0,1,1,1],"at":{"0":"(Int) -> Unit"},"co":{"1":1,"6":1},"cv":{"1":"\")\"","6":"\"Node\""},"st":{"2":["Base","Callback","Handler"],"9":["Node"],"13":["Node"],"16":["Base","Callback"]},"sq":{"2":["Base"],"16":["Base"]},"de":{"2":1},"pc":{"3":1,"4":1,"10":1,"12":1,"14":1},"pv":{"4":1,"12":1,"14":1,"15":1},"cn":{"5":1},"su":{"7":1,"23":1},"ab":{"7":1},"or":{"8":1,"18":1},"li":{"15":1},"lo":{"20":1},"ex":{"24":1,"25":1,"26":1},"il":{"25":1},"ix":{"26":1},"io":{"26":1},"ep":{"27":1},"ac":{"28":1},"hv":{"29":1},"pr":{"30":1},"tc":{"35":1},"lc":{"36":1},"te":{"37":1,"38":1},"ig":{"38":1},"im":["com.example.other.Base","com.example.other.*"]},{"t":0,"p":"com.example.guard","m":"guard","n":["JavaNode","TAG","run"],"k":["class","val","fun"],"l":[5,6,9],"c":[13,32,16],"i":[0,0,0],"d":[0,1,1],"st":{"0":["Base","Runnable"]},"co":{"1":1},"pv":{"1":1},"or":{"2":1},"im":["com.example.other.Base","java.util.List"]}]`,
 };
 
 describe('SNAPSHOT_VERSION covers what the parser persists', () => {

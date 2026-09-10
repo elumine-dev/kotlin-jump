@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.42.97
+
+Kotlin Jump 1.42.97 fixes a regression from 1.42.96 where the get_kdoc MCP tool wrongly marked companion objects and anonymous object implementations as stale, hiding their documentation from connected AI agents."
+
+### Fixes
+- Fixes the get_kdoc MCP tool marking a companion object's or an anonymous object implementation's documentation as stale even when nothing moved: their names never appear literally on the declaration line, and the freshness check added in 1.42.96 required an exact match, so their KDoc came back empty instead of reaching the connected AI agent.
+- Adds regression tests covering both symbol shapes, keeping get_kdoc reliable for AI agents that read documentation through the MCP server.
+
+### Notes
+- No changes to editor commands or settings in this release.
+
+## 1.42.97
+
+The freshness check added in 1.42.96 asks for the symbol's name on its line. A companion object is recorded under `Companion` and an object expression under a made up name, so both were declared out of date where they actually sit.
+
+### Fixes
+- The freshness check knows the two names the parser invents and looks for the keyword instead. On a real Android project, asking every one of 47982 symbols for its documentation against an unchanged file now reports none as out of date, and shifting every file by one line still catches 96 percent of them.
+
 ## 1.42.96
 
 Fixes an MCP tool returning stale documentation after edits and a workspace scan limit that wasn't enforced.

@@ -118,3 +118,65 @@ describe('Le plafond de fichiers scannes est exact', () => {
     } finally { fsSync.rmSync(racine, { recursive: true, force: true }); }
   });
 });
+
+describe('La garde de fraicheur ne se trompe pas sur un nom synthetique', () => {
+  // La verification ajoutee en v1.42.96 exige le nom du symbole sur sa ligne.
+  // Deux noms sont inventes par le parseur et n'y figurent donc jamais :
+  // `Companion` pour un `companion object` sans nom, et `$anon$N` pour un
+  // `object : Interface`. get_kdoc les declarait perimes alors qu'ils sont a
+  // leur place, et perdait leur documentation.
+  const URI_S = 'file:///a65b/Widget.kt';
+  const CODE_S = [
+    'package p',
+    '',
+    'class Widget {',
+    '    /** Le compagnon. */',
+    '    companion object {',
+    '        const val CLE = "v"',
+    '    }',
+    '}',
+    '',
+    'class Hote {',
+    '    /** Un observateur. */',
+    '    val obs = object : Listener {}',
+    '}',
+  ].join('\n');
+
+  function indexS(): SymbolIndex {
+    const index = new SymbolIndex();
+    index.add(parse(URI_S, CODE_S));
+    index.finalize();
+    return index;
+  }
+
+  it('la fixture porte bien des noms absents de leur ligne', () => {
+    const syms = parse(URI_S, CODE_S).symbols;
+    const comp = syms.find(s => s.name === 'Companion')!;
+    const anon = syms.find(s => s.name.startsWith('$anon$'))!;
+    expect(CODE_S.split('\n')[comp.line]).not.toContain('Companion');
+    expect(CODE_S.split('\n')[anon.line]).not.toContain(anon.name);
+  });
+
+  it('le companion garde sa documentation', async () => {
+    const index = indexS();
+    const comp = index.lookup('Companion')[0];
+    const r = await handleGetKdoc(index, comp.fqn, async () => CODE_S);
+    expect((r as { stale?: boolean }).stale).toBeUndefined();
+    expect(r.kdoc).toContain('Le compagnon');
+  });
+
+  it('l\'objet anonyme aussi', async () => {
+    const index = indexS();
+    const anon = index.allEntries().find(e => e.name.startsWith('$anon$'))!;
+    const r = await handleGetKdoc(index, anon.fqn, async () => CODE_S);
+    expect((r as { stale?: boolean }).stale).toBeUndefined();
+  });
+
+  it('un companion reellement deplace est toujours signale perime', async () => {
+    const index = indexS();
+    const comp = index.lookup('Companion')[0];
+    const autre = 'package p\n\nclass Widget {\n    fun rien() {}\n}\n';
+    const r = await handleGetKdoc(index, comp.fqn, async () => autre);
+    expect((r as { stale?: boolean }).stale).toBe(true);
+  });
+});

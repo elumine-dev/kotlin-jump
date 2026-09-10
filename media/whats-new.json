@@ -1,12 +1,12 @@
 {
-  "version": "1.42.96",
+  "version": "1.42.97",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The MCP server stops answering with the wrong doc",
-  "summary": "Asking for a symbol's documentation read the file from disk but looked at the line the index remembered from startup. Deleting a function above made the next one slide onto that line, and its documentation came back as the answer.",
+  "tagline": "Two names the source never spells",
+  "summary": "The freshness check added in 1.42.96 asks for the symbol's name on its line. A companion object is recorded under Companion and an object expression under a made up name, so both were declared out of date where they actually sit.",
   "highlights": [
     {
-      "title": "No answer beats a confident wrong one",
-      "description": "The line has to still declare the symbol. When it does not, the tool says so instead of handing back a neighbour's comment.",
+      "title": "A companion keeps its documentation",
+      "description": "The line reads companion object, with no capital C anywhere, so asking for the recorded name always failed.",
       "kind": "fix"
     }
   ],
@@ -14,8 +14,7 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "get_kdoc checks that the recorded line still declares the symbol before reading its comment, and reports a stale position instead of a neighbour's documentation. An agent that edits then asks was getting a confident wrong answer.",
-        "The limit on how many files a scan walks is now respected to the file. It was tested before the file was stat ed, inside a burst that started every entry of a directory at once: asking for one file collected 360 of them, and on a real Android project a limit of 1000 let 1803 through."
+        "The freshness check knows the two names the parser invents and looks for the keyword instead. On a real Android project, asking every one of 47982 symbols for its documentation against an unchanged file now reports none as out of date, and shifting every file by one line still catches 96 percent of them."
       ]
     }
   ],

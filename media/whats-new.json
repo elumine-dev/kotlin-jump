@@ -1,26 +1,26 @@
 {
-  "version": "1.42.101",
+  "version": "1.42.102",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The bundled standard library index catches up with the parser",
-  "summary": "The Kotlin standard library index shipped inside the extension had stayed on the reading the parser had 120 releases ago. 238 of its 326 files disagreed with it.",
+  "tagline": "Your version catalog gets colours and fold arrows",
+  "summary": "VS Code ships no TOML grammar, so gradle/libs.versions.toml opens in one colour with nothing to collapse. Kotlin Jump now colours it and folds it.",
   "highlights": [
     {
-      "title": "210 standard library declarations come back",
-      "description": "Enum.name, Enum.ordinal, Enum.compareTo and the companion objects of Boolean, Char and the primitive types were absent from the shipped index, so Go to Definition and the Outline could not reach them.",
-      "kind": "fix"
+      "title": "Colours for the version catalog",
+      "description": "Table headers, aliases, version literals, coordinates and comments each get their own colour, and a version.ref target is coloured as a reference so an entry and the version it points at read as a pair.",
+      "kind": "feature"
     },
     {
-      "title": "A type argument is no longer read as a parent",
-      "description": "206 parent lists were wrong in that index: List had E for a parent next to Collection, and Boolean was its own parent. Type Hierarchy showed both.",
-      "kind": "fix"
+      "title": "Fold arrows on each table",
+      "description": "Every table collapses to its header, and a bundle written over several lines collapses on its own.",
+      "kind": "feature"
     }
   ],
   "sections": [
     {
-      "heading": "Fixed",
+      "heading": "Added",
       "bullets": [
-        "Rebuilds the bundled standard library index, frozen since version 1.22.0.",
-        "A test reparses every source the index carries and compares it to what the index stores, so the artifact can no longer drift behind the parser in silence."
+        "Colour and folding for any file named like a version catalog, so a TOML extension installed alongside keeps every other .toml file to itself.",
+        "The theme mapping for semantic tokens was declared for every language while all of it named Kotlin scopes. It is now declared for Kotlin only."
       ]
     }
   ],

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.102
+
+VS Code ships no TOML grammar, so gradle/libs.versions.toml opens in a single colour, and the fold arrows never appear because the fallback folding needs indentation that TOML does not have.
+
+### Added
+- Colours the version catalog. The table headers, the alias on the left of each entry, the version literals, the coordinates and the trailing comments each get their own colour. A string that follows version.ref is coloured as a reference rather than as one more string, so an entry and the version it points at read as a pair.
+- Folds the version catalog. Each table collapses to its header, and a bundle written over several lines collapses on its own. Checked on a real catalog of 293 lines: three tables, no token crossing a line boundary or another token.
+- Both apply to any file named like a catalog, so a TOML extension installed alongside keeps every other .toml file to itself.
+
+### Fixed
+- The mapping from semantic tokens to theme colours was declared for every language while all of it named Kotlin scopes. It is now declared for Kotlin, which is where it belongs, so tokens coming from any other file reach the colour the theme gives them.
+
 ## 1.42.101
 
 The Kotlin standard library index shipped inside the extension is built once by hand and committed. Nothing ever invalidates it, so it stayed on the reading the parser had at version 1.22.0, 120 releases ago.

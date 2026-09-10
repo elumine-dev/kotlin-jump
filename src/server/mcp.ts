@@ -5,7 +5,8 @@ import * as fs                 from 'fs/promises';
 
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { scanWorkspace }            from './scanner';
-import { uriToPath }                from './utils';
+import * as path                    from 'path';
+import { uriToPath, pathToUri }     from './utils';
 import { extractKDocFromLines, formatKDoc } from '../util/SignatureReader';
 
 // ── Result shapes ─────────────────────────────────────────────────────────────
@@ -131,21 +132,30 @@ export function handleListTestFunctions(index: SymbolIndex): TestResult[] {
     }));
 }
 
-function normalizeUri(uri: string): string {
-  if (uri.startsWith('file:///')) return uri;
-  if (uri.startsWith('file://')) return 'file:///' + uri.slice('file://'.length);
-  if (uri.startsWith('/')) {
-    const encoded = uri.split('/').map(seg => encodeURIComponent(seg)).join('/');
-    return `file://${encoded}`;
-  }
-  return `file://${uri}`;
+/**
+ * The URI the index files a document under, from whatever an agent passes.
+ *
+ * An agent works in paths relative to the project, because that is how it
+ * reads and writes files, and it joins them, so `.`, `..` and doubled slashes
+ * turn up. Handling only the two literal shapes made four forms out of seven
+ * return an empty array, which reads exactly like a file with no symbols.
+ */
+function normalizeUri(uri: string, root?: string): string {
+  // Normalise the slash count first, then let `uriToPath` decode: stripping the
+  // scheme by hand left `%20` in place and `pathToUri` encoded it a second time,
+  // so a path with a space stopped matching its own entry.
+  const brut = uri.startsWith('file:') ? uriToPath('file://' + uri.replace(/^file:\/+/, '/')) : uri;
+  const absolu = path.isAbsolute(brut)
+    ? path.normalize(brut)
+    : root ? path.resolve(root, brut) : '';
+  return absolu === '' ? `file://${uri}` : pathToUri(absolu);
 }
 
 /** Same bound as the other handlers: an unbounded answer once reached 1.79 MB, which no agent can read. */
 export const FILE_SYMBOLS_LIMIT = 500;
 
-export function handleGetFileSymbols(index: SymbolIndex, uri: string): SymbolResult[] {
-  return index.getFileSymbols(normalizeUri(uri)).slice(0, FILE_SYMBOLS_LIMIT).map(toSymbolResult);
+export function handleGetFileSymbols(index: SymbolIndex, uri: string, root?: string): SymbolResult[] {
+  return index.getFileSymbols(normalizeUri(uri, root)).slice(0, FILE_SYMBOLS_LIMIT).map(toSymbolResult);
 }
 
 // ── MCP server entry point ────────────────────────────────────────────────────
@@ -203,7 +213,7 @@ export async function runMcpServer(root: string): Promise<void> {
     'get_file_symbols',
     'Get all symbols declared in a specific file by its URI.',
     { uri: z.string().describe('File URI (file:///absolute/path/to/File.kt) or absolute path') },
-    async ({ uri }) => ({ content: [{ type: 'text' as const, text: toText(handleGetFileSymbols(index, uri)) }] }),
+    async ({ uri }) => ({ content: [{ type: 'text' as const, text: toText(handleGetFileSymbols(index, uri, root)) }] }),
   );
 
   const transport = new StdioServerTransport();

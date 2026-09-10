@@ -1,12 +1,12 @@
 {
-  "version": "1.42.97",
+  "version": "1.42.98",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Two names the source never spells",
-  "summary": "The freshness check added in 1.42.96 asks for the symbol's name on its line. A companion object is recorded under Companion and an object expression under a made up name, so both were declared out of date where they actually sit.",
+  "tagline": "The MCP server takes the paths an agent writes",
+  "summary": "Asking for a file's symbols only worked with the exact absolute URI. A path relative to the project, one holding a dot segment, or one with a doubled slash returned an empty array, which reads like a file with nothing in it.",
   "highlights": [
     {
-      "title": "A companion keeps its documentation",
-      "description": "The line reads companion object, with no capital C anywhere, so asking for the recorded name always failed.",
+      "title": "Four shapes out of seven answered nothing",
+      "description": "An agent works in project relative paths, because that is how it reads and writes files, and joining them produces dot segments and doubled slashes.",
       "kind": "fix"
     }
   ],
@@ -14,7 +14,7 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "The freshness check knows the two names the parser invents and looks for the keyword instead. On a real Android project, asking every one of 47982 symbols for its documentation against an unchanged file now reports none as out of date, and shifting every file by one line still catches 96 percent of them."
+        "get_file_symbols resolves the path it is given against the project root and normalises it, so a relative path, a dot segment, a parent segment and a doubled slash all reach the same file. Only the exact absolute URI worked before."
       ]
     }
   ],

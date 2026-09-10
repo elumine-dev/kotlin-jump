@@ -1,12 +1,12 @@
 {
-  "version": "1.42.91",
+  "version": "1.42.92",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The Call Hierarchy stops sweeping the file",
-  "summary": "The walk added in 1.42.90 to find the enclosing function scanned every symbol back to the top of the file, even when there was nothing above to find.",
+  "tagline": "A class is not its own parent",
+  "summary": "A class with a multi line constructor and no supertype list borrowed one from the first declaration below it, usually a method's return type. A sealed class ended up extending itself and the type hierarchy listed it as its own subtype.",
   "highlights": [
     {
-      "title": "Two bounds, same answers",
-      "description": "A top level function has nothing enclosing it, and once a top level candidate has been weighed there is nothing shallower left. The result is identical, caller for caller.",
+      "title": "The header stops where the constructor closes",
+      "description": "Reading on past the closing parenthesis found a method's return type twelve lines below and made it a supertype of the class.",
       "kind": "fix"
     }
   ],
@@ -14,7 +14,8 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Opening the Call Hierarchy on a heavily called symbol does less work. The walk out to the enclosing function ran to the top of the file on every reference, which cost 9 percent of that path on a real Android project. The answers are unchanged, caller for caller, across 4014 of them."
+        "A supertype list is read only until the constructor closes. On a real Android project 50 supertypes were taken from a declaration further down, every one of them a method return type; the sealed classes among them ended up extending themselves.",
+        "The type hierarchy asks the same question as the lens and Go to Implementation. It still used a package heuristic and never excluded the type itself, so 21 types were listed as their own subtype and expanding one looped."
       ]
     }
   ],

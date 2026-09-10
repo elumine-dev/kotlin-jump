@@ -62,14 +62,14 @@ function fileName(uri: { toString(): string }): string {
  * namespaces remain a known limitation — full fix requires FQN supertype storage.
  */
 function disambiguateSubtypes(impls: SymbolEntry[], parent: SymbolEntry, index: SymbolIndex): SymbolEntry[] {
-  const allParents = index.lookup(parent.name).filter(e => CLASS_LIKE.has(e.kind));
-  if (allParents.length <= 1) return impls; // no collision — all results are unambiguous
-  return impls.filter(impl => {
-    if (impl.packageName === parent.packageName) return true; // same package — unambiguous
-    // Cross-package: include only when the impl's package has no class with this name,
-    // meaning it must extend from outside (possibly this specific parent).
-    return !allParents.some(p => p.packageName === impl.packageName);
-  });
+  // Same rule as the lens, Go to Implementation and the picker: an explicit
+  // import decides, then the package, then a qualified supertype must name an
+  // enclosing type. The package heuristic this replaces also let a type be its
+  // own subtype, so `interface Factory : AndroidInjector.Factory<X>` listed
+  // itself and expanding it looped.
+  const soi = `${parent.uri.toString()}:${parent.line}`;
+  return impls.filter(impl =>
+    `${impl.uri.toString()}:${impl.line}` !== soi && index.implementsExactly(impl, parent));
 }
 
 function buildDetail(entry: SymbolEntry, index: SymbolIndex, parentEntry?: SymbolEntry): string {

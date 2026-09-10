@@ -693,6 +693,11 @@ function lookAheadSupertypes(text: string, start: number, quals?: string[]): str
       if (!rest.includes('{') && (rest.endsWith(',') || rest.endsWith(':'))) rest += ' ' + collectHeaderContinuation(text, nl + 1);
       return parseTypeNames(rest, quals);
     }
+    // The constructor closed without a supertype list: the header is over.
+    // Reading on found the `) : LoginUiModel(` of a nested variant twelve lines
+    // below and gave the sealed class ITSELF as its own supertype, which put it
+    // under its own name in the hierarchy. 32 types on a real project.
+    if (line.startsWith(')')) return [];
     if (line.startsWith('{')) return [];
     p = nl + 1;
   }

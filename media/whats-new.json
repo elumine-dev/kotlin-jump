@@ -1,12 +1,12 @@
 {
-  "version": "1.42.103",
+  "version": "1.42.104",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A wrapped class header no longer hides its constructor properties",
-  "summary": "When ktlint wraps a long class header the primary constructor lands on the line below, and the parser did not read it. 37 properties were invisible on a project of 5088 files.",
+  "tagline": "The package stops carrying its own test suites",
+  "summary": "The build script called its benchmark and maintenance bundles dev only, excluded from the package. They were not, and neither were the end to end suites, the web test harness, or the sources of the logcat panel.",
   "highlights": [
     {
-      "title": "Constructor properties under a wrapped header",
-      "description": "A bare constructor on its own line, one carrying modifiers, or the Dagger shape with the annotation on a line of its own: the properties are indexed again, so the Outline, Go to Definition and Find Usages reach them.",
+      "title": "14 development files leave the package",
+      "description": "The extension you install no longer carries its own test suites, its benchmark, or the TypeScript sources of a panel whose bundle is what loads.",
       "kind": "fix"
     }
   ],
@@ -14,8 +14,8 @@
     {
       "heading": "Fixed",
       "bullets": [
-        "42 sites on a real project, 37 properties recovered, no symbol lost and none added anywhere else.",
-        "Both stored indexes are rebuilt, so the properties appear on upgrade rather than when each affected file happens to be edited."
+        "A test replays the packaging rules and fails if a development file comes back, or if an over broad rule drops the bundled standard library, a walkthrough video or a runtime bundle.",
+        "The layer that hands the version catalog its colours and fold ranges is now tested by decoding what it sends the editor and comparing it with the text it came from."
       ]
     }
   ],

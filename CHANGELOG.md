@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.104
+
+The build script called the benchmark and maintenance bundles dev only, excluded from the package. They were not excluded, and neither were the compiled end to end suites, the web test harness, or the TypeScript sources of the logcat panel.
+
+### Fixed
+- Stops shipping 14 files that exist only for development. The extension you install no longer carries its own test suites, its benchmark, or the sources of a panel whose bundle is what actually loads.
+- A test replays the packaging rules and fails if any of them come back. It checks the other direction too, so an over broad rule that dropped the bundled standard library, a walkthrough video or a runtime bundle fails just as loudly.
+
+### Added
+- Tests for the layer that hands the version catalog colours and fold ranges to the editor. Those leave as a delta encoded array of integers, where a swapped argument or a shifted legend index still produces a well formed array that colours the wrong thing. The array is now decoded back and compared with the text it came from.
+
 ## 1.42.103
 
 When ktlint wraps a long class header, the primary constructor lands on the line below. The parser only ever recognised a constructor sharing the header line, so the properties of a wrapped one were not misfiled, they were absent.

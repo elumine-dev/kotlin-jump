@@ -12,6 +12,17 @@ doc/**
 tsconfig.json
 vitest.config.ts
 esbuild.js
+
+# Build outputs that exist only for development. esbuild.js calls the perf and
+# maintenance bundles "DEV ONLY, excluded from VSIX", which was not true: they
+# shipped, along with the compiled e2e suites, the web test harness, and the
+# TypeScript sources of the logcat webview (only its bundle is loaded, through
+# the {{scriptUri}} placeholder in index.html).
+dist/test/**
+dist/test-web/**
+dist/perf/**
+dist/scripts/**
+media/logcat/*.ts
 publish.sh
 .husky/**
 .kotlin-jump-dev-mode

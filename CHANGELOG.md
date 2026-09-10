@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.109
+
+Deleting a file while the extension was still reading it left the file in the index. Cmd+T went on listing it and Cmd+click opened a file that no longer existed.
+
+### Fixed
+- A file deleted while its scan is in flight is no longer brought back. The scan reads the file, then hands the text to a worker thread to parse, so the window between the two is tens of milliseconds wide, not a hair. A delete landing in that window removed an entry the scan had not yet written, and the scan wrote it afterwards.
+- The same held during a checkout, when hundreds of files are scanned in a row, and when a whole folder is deleted: a folder removal looked for its files in the index, and a file being scanned right then is not there yet, so it survived the removal of its own folder.
+- Every event on a file now stamps it, and a scan whose stamp moved while it was running is discarded. An edit made during a scan still wins: the stale read is dropped and the newer one is kept, so no keystroke is lost.
+
 ## 1.42.108
 
 The accessor root of a version catalog is not always libs. Gradle takes it from the catalog file name, so deps.versions.toml is reached as deps, and a create block in settings renames it again. The navigation assumed libs every time.

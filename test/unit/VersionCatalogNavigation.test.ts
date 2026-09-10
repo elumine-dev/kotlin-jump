@@ -124,7 +124,7 @@ describe('finding the usages of an alias in build files', () => {
 });
 
 describe('Ctrl+click inside the catalog', () => {
-  const provider = new CatalogTomlDefinitionProvider(() => 'libs');
+  const provider = new CatalogTomlDefinitionProvider();
 
   it('sends a version.ref to the line that declares it', async () => {
     const cibles = await provider.provideDefinition(docFake(CATALOGUE) as any, { line: L_PLUGIN, character: COL_REF } as any);
@@ -259,8 +259,8 @@ describe('a key of the versions table', () => {
     (vscodeMock.workspace.fs as any).readFile = origRead;
   });
 
-  const defProvider = new CatalogTomlDefinitionProvider(() => 'libs');
-  const refProvider = new CatalogTomlReferenceProvider(() => 'libs');
+  const defProvider = new CatalogTomlDefinitionProvider();
+  const refProvider = new CatalogTomlReferenceProvider();
   const doc = () => docFake(TOML);
 
   it('Ctrl+click reaches the build file, not only the catalog', async () => {
@@ -300,5 +300,83 @@ describe('a key of the versions table', () => {
     const refs = await refProvider.provideReferences(doc() as any, { line: 5, character: 0 } as any);
     // `x` is not used by the build file above, so nothing, and no crash.
     expect(refs).toEqual([]);
+  });
+});
+
+/**
+ * The accessor root is not always `libs`. Gradle takes it from the catalog's
+ * file name, so `deps.versions.toml` is reached as `deps.x`, and a
+ * `versionCatalogs { create("acme") }` block renames it again.
+ * VersionCatalogIndex.rootFor answered `libs` in every case, so an alias of a
+ * renamed catalog opened onto nothing: two scenarios out of three returned no
+ * usage where there was one. The root now comes from catalogRootOf, the
+ * resolution the unused dependency scan already used.
+ */
+describe('the accessor root is read from the catalog, not assumed', () => {
+  const TOML = ['[libraries]', 'foo-bar = { module = "a:b" }'].join(NL);
+
+  function monde(cheminToml: string, fichiers: Array<[string, string]>) {
+    const uris = fichiers.map(([p]) => ({ fsPath: p, toString: () => 'file://' + p }));
+    const parChemin = new Map(fichiers);
+    return {
+      doc: { getText: () => TOML, uri: { fsPath: cheminToml, toString: () => 'file://' + cheminToml } },
+      poser: () => {
+        (vscodeMock.workspace as any).findFiles = async () => uris;
+        (vscodeMock.workspace.fs as any).readFile = async (u: any) =>
+          new TextEncoder().encode(parChemin.get(u.fsPath) ?? '');
+      },
+    };
+  }
+
+  let origFind: any, origRead: any;
+  beforeEach(() => {
+    origFind = (vscodeMock.workspace as any).findFiles;
+    origRead = (vscodeMock.workspace.fs as any).readFile;
+  });
+  afterEach(() => {
+    (vscodeMock.workspace as any).findFiles = origFind;
+    (vscodeMock.workspace.fs as any).readFile = origRead;
+  });
+
+  const provider = new CatalogTomlDefinitionProvider();
+
+  it('follows the file name: deps.versions.toml is reached as deps', async () => {
+    const m = monde('/w/gradle/deps.versions.toml', [
+      ['/w/app/build.gradle.kts', 'dependencies { implementation(deps.foo.bar) }'],
+    ]);
+    m.poser();
+    const cibles = await provider.provideDefinition(m.doc as any, { line: 1, character: 1 } as any);
+    expect(cibles!.map(c => c.uri.toString())).toEqual(['file:///w/app/build.gradle.kts']);
+  });
+
+  it('follows a create("acme") block in settings', async () => {
+    const m = monde('/w/gradle/libs.versions.toml', [
+      ['/w/settings.gradle.kts',
+       'dependencyResolutionManagement { versionCatalogs { create("acme") { from(files("gradle/libs.versions.toml")) } } }'],
+      ['/w/app/build.gradle.kts', 'dependencies { implementation(acme.foo.bar) }'],
+    ]);
+    m.poser();
+    const cibles = await provider.provideDefinition(m.doc as any, { line: 1, character: 1 } as any);
+    expect(cibles!.map(c => c.uri.toString())).toEqual(['file:///w/app/build.gradle.kts']);
+  });
+
+  it('still reads the ordinary catalog as libs', async () => {
+    const m = monde('/w/gradle/libs.versions.toml', [
+      ['/w/app/build.gradle.kts', 'dependencies { implementation(libs.foo.bar) }'],
+    ]);
+    m.poser();
+    const cibles = await provider.provideDefinition(m.doc as any, { line: 1, character: 1 } as any);
+    expect(cibles!.map(c => c.uri.toString())).toEqual(['file:///w/app/build.gradle.kts']);
+  });
+
+  it('stays silent on a catalog declared in Kotlin, whose aliases are unknowable', async () => {
+    const m = monde('/w/gradle/libs.versions.toml', [
+      ['/w/settings.gradle.kts',
+       'dependencyResolutionManagement { versionCatalogs { create("x") { library("a", "g", "n").version("1") } } }'],
+      ['/w/app/build.gradle.kts', 'dependencies { implementation(libs.foo.bar) }'],
+    ]);
+    m.poser();
+    const cibles = await provider.provideDefinition(m.doc as any, { line: 1, character: 1 } as any);
+    expect(cibles).toEqual([]);
   });
 });

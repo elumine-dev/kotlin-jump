@@ -1,12 +1,12 @@
 {
-  "version": "1.42.107",
+  "version": "1.42.108",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The versions table catches up with the other three",
-  "summary": "The previous release claimed the catalog navigation and the unused dependency scan could no longer drift apart. That held for three tables out of four.",
+  "tagline": "A catalog named something other than libs is navigable again",
+  "summary": "Gradle takes the accessor root from the catalog file name, and a create block in settings renames it again. The navigation assumed libs every time, so an alias of such a catalog opened onto nothing.",
   "highlights": [
     {
-      "title": "A version reaches the build files that read it",
-      "description": "Ctrl+click on a key of the versions table now finds libs.versions.key and findVersion, on top of the catalog entries that pin their version on it.",
+      "title": "The accessor root is read, not assumed",
+      "description": "Two of the three shapes a project can have returned no usage where there was one. The root now comes from the catalog file name and from the create block in settings.",
       "kind": "fix"
     }
   ],
@@ -14,9 +14,8 @@
     {
       "heading": "Fixed",
       "bullets": [
-        "Shift+F12 on a key, or on any reference to it, lists the declaration first and then every use.",
-        "Shift+F12 had no test of its own until now, on any table.",
-        "Thirteen more timing budgets in the test suite are judged on the fastest of three runs, so a busy machine no longer stops a release."
+        "A catalog declared in Kotlin rather than in TOML yields nothing instead of a wrong answer, the same silence the unused dependency scan keeps.",
+        "The settings files come out of the sweep that already reads the build files, so this costs no extra read."
       ]
     }
   ],

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { aliasSegments, parseCatalog, type CatalogAlias } from '../indexer/VersionCatalogIndex';
 import { stripKotlinComments } from '../util/xmlRefs';
+import { catalogRootOf } from './unusedGradleDependencies';
 import { tokenAt } from './versionCatalogSyntax';
 
 /**
@@ -110,18 +111,42 @@ function positionOf(debuts: number[], offset: number): { line: number; character
   return { line: bas, character: offset - debuts[bas] };
 }
 
-async function usagesInWorkspace(alias: CatalogAlias, root: string): Promise<vscode.Location[]> {
+const RE_SETTINGS = /(?:^|[\\/])settings\.gradle(?:\.kts)?$/;
+
+/**
+ * The accessor root is NOT always `libs`. Gradle takes it from the catalog's
+ * file name, so `deps.versions.toml` is reached as `deps.x`, and
+ * `versionCatalogs { create("acme") { … } }` in settings renames it again.
+ * VersionCatalogIndex.rootFor answers `libs` in every case, because
+ * reindexFile calls parseCatalog without a root, so an alias of a renamed
+ * catalog opened onto nothing. The unused dependency scan already resolves
+ * this properly; catalogRootOf is its implementation, reused here rather than
+ * written a second time. It returns undefined for a catalog declared in Kotlin
+ * instead of TOML, whose aliases cannot be known: staying silent then is the
+ * same choice that scan makes.
+ *
+ * The settings files come out of the same sweep as the build files, so this
+ * costs no extra read.
+ */
+async function usagesInWorkspace(alias: CatalogAlias, cheminCatalogue: string): Promise<vscode.Location[]> {
   const uris = await vscode.workspace.findFiles(BUILD_FILES, EXCLUDE, MAX_FILES);
-  const out: vscode.Location[] = [];
-  await Promise.all(uris.map(async uri => {
-    let texte: string;
+  const lus = await Promise.all(uris.map(async uri => {
     try {
-      texte = new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
-    } catch { return; }
+      return { uri, texte: new TextDecoder().decode(await vscode.workspace.fs.readFile(uri)) };
+    } catch { return undefined; }
+  }));
+  const presents = lus.filter((x): x is { uri: vscode.Uri; texte: string } => x !== undefined);
+  const settings = presents.filter(x => RE_SETTINGS.test(x.uri.fsPath)).map(x => x.texte);
+
+  const root = catalogRootOf(cheminCatalogue, settings);
+  if (root === undefined) return [];
+
+  const out: vscode.Location[] = [];
+  for (const { uri, texte } of presents) {
     for (const h of findAccessorUsages(texte, alias, root)) {
       out.push(new vscode.Location(uri, new vscode.Range(h.line, h.start, h.line, h.start + h.length)));
     }
-  }));
+  }
   out.sort((a, b) => a.uri.toString().localeCompare(b.uri.toString()) || a.range.start.line - b.range.start.line);
   return out;
 }
@@ -155,7 +180,6 @@ function versionKeySites(texte: string, cle: string): { declaration?: vscode.Ran
 async function versionSites(
   document: vscode.TextDocument,
   cle: string,
-  root: string,
   avecDeclaration: boolean,
 ): Promise<vscode.Location[]> {
   const texte = document.getText();
@@ -165,13 +189,11 @@ async function versionSites(
   out.push(...refs.map(r => new vscode.Location(document.uri, r)));
 
   const alias = parseCatalog(texte).aliases.find(a => a.namespace === 'versions' && a.raw === cle);
-  if (alias) out.push(...await usagesInWorkspace(alias, root));
+  if (alias) out.push(...await usagesInWorkspace(alias, document.uri.fsPath));
   return out;
 }
 
 export class CatalogTomlDefinitionProvider implements vscode.DefinitionProvider {
-  constructor(private readonly root: (chemin: string) => string) {}
-
   async provideDefinition(
     document: vscode.TextDocument,
     position: vscode.Position,
@@ -191,17 +213,15 @@ export class CatalogTomlDefinitionProvider implements vscode.DefinitionProvider 
       // A `[versions]` key has no accessor of its own worth jumping to: what a
       // reader wants is the entries that pin their version on it.
       if (alias.namespace === 'versions') {
-        return versionSites(document, alias.raw, this.root(document.uri.fsPath), false);
+        return versionSites(document, alias.raw, false);
       }
-      return usagesInWorkspace(alias, this.root(document.uri.fsPath));
+      return usagesInWorkspace(alias, document.uri.fsPath);
     }
     return undefined;
   }
 }
 
 export class CatalogTomlReferenceProvider implements vscode.ReferenceProvider {
-  constructor(private readonly root: (chemin: string) => string) {}
-
   async provideReferences(
     document: vscode.TextDocument,
     position: vscode.Position,
@@ -218,8 +238,8 @@ export class CatalogTomlReferenceProvider implements vscode.ReferenceProvider {
 
     const alias = hit.type === 'property' ? aliasOnLine(texte, hit.line) : undefined;
     if (alias && alias.namespace !== 'versions') {
-      return usagesInWorkspace(alias, this.root(document.uri.fsPath));
+      return usagesInWorkspace(alias, document.uri.fsPath);
     }
-    return versionSites(document, cle, this.root(document.uri.fsPath), true);
+    return versionSites(document, cle, true);
   }
 }

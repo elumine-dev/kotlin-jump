@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.108
+
+The accessor root of a version catalog is not always libs. Gradle takes it from the catalog file name, so deps.versions.toml is reached as deps, and a create block in settings renames it again. The navigation assumed libs every time.
+
+### Fixed
+- Ctrl+click on an alias of a catalog whose root is not libs now finds its usages. It found none at all: two of the three shapes a project can have returned nothing where there was one usage. The root is now read the way the unused dependency scan already read it, from the catalog file name and from the create block in settings, rather than assumed.
+- A catalog declared in Kotlin rather than in TOML now yields nothing instead of a wrong answer. Its aliases cannot be known from the file, and that is the same silence the unused dependency scan keeps.
+- The settings files come out of the sweep that already reads the build files, so none of this costs an extra read.
+
+### Internal
+- The documentation of the timing budget helper had been left attached to an interface added above it, so hovering the helper itself showed nothing.
+
 ## 1.42.107
 
 The previous release lined the catalog navigation up with the unused dependency scan and claimed the two could not drift apart again. That was true of three of the four tables: the versions table was left behind.

@@ -24,6 +24,13 @@ export interface SymbolResult {
 export interface KdocResult {
   fqn:  string;
   kdoc: string | null;
+  /**
+   * The file no longer holds this declaration where the index says it does.
+   * The index is built once at startup, so an edit that moves lines makes the
+   * recorded position point at a neighbour: reading it returned that
+   * neighbour's KDoc with no sign that anything was wrong.
+   */
+  stale?: boolean;
 }
 
 export interface TestResult {
@@ -75,11 +82,26 @@ export async function handleGetKdoc(
   try {
     const text  = await readFile(uriToPath(entry.uri.toString()));
     const lines = text.split('\n');
+    // The line has to still declare this symbol. Without the check, deleting a
+    // function above made the next one slide onto the recorded line and its
+    // KDoc came back as the answer for the one that moved.
+    if (!declaresName(lines[entry.line] ?? '', entry.name)) return { fqn, kdoc: null, stale: true };
     const raw   = extractKDocFromLines(lines, entry.line);
     return { fqn, kdoc: raw };
   } catch {
     return { fqn, kdoc: null };
   }
+}
+
+/** True when `nom` appears on the line as a whole word. */
+function declaresName(ligne: string, nom: string): boolean {
+  const motif = /[\w$]/;
+  for (let i = ligne.indexOf(nom); i >= 0; i = ligne.indexOf(nom, i + 1)) {
+    const avant = i > 0 ? ligne[i - 1] : ' ';
+    const apres = i + nom.length < ligne.length ? ligne[i + nom.length] : ' ';
+    if (!motif.test(avant) && !motif.test(apres)) return true;
+  }
+  return false;
 }
 
 export function handleListTestFunctions(index: SymbolIndex): TestResult[] {

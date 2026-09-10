@@ -44,7 +44,11 @@ export async function indexFile(
 
 // ── Recursive workspace scan ──────────────────────────────────────────────────
 
-export async function scanWorkspace(root: string, index: SymbolIndex): Promise<void> {
+export async function scanWorkspace(
+  root: string,
+  index: SymbolIndex,
+  max: number = MAX_SCANNED_FILES,
+): Promise<void> {
   const entries: string[] = [];
 
   const visited = new Set<string>();
@@ -59,7 +63,7 @@ export async function scanWorkspace(root: string, index: SymbolIndex): Promise<v
     await Promise.all(children.map(async name => {
       if (SKIP_DIRS.has(name)) return;
       if (name.startsWith('.')) return;           // .venv, .cache, dotfiles
-      if (entries.length >= MAX_SCANNED_FILES) return;
+      if (entries.length >= max) return;   // cheap skip, saves a pointless lstat
       const full = path.join(dir, name);
       let stat;
       try { stat = await fs.lstat(full); } catch { return; }
@@ -69,6 +73,11 @@ export async function scanWorkspace(root: string, index: SymbolIndex): Promise<v
       if (stat.isDirectory()) {
         await walk(full);
       } else if (INDEXABLE_RE.test(name)) {
+        // Checked again here, with nothing awaited between the test and the
+        // push. The check above runs before `lstat`, so every child of every
+        // directory had already passed it before the first one pushed: asking
+        // for one file indexed 360 of them.
+        if (entries.length >= max) return;
         entries.push(full);
       }
     }));

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.106
+
+Two features answer the same question about a build file: Ctrl+click on a catalog alias shows where it is used, and the unused dependency scan decides whether it is used anywhere. Shipped a day apart, they disagreed four ways out of five.
+
+### Fixed
+- A commented out accessor is no longer a usage. An alias the scan reported as dead would open onto a line someone had commented out, which is the very line the scan is meant to flag.
+- A lookup by name is now a usage. An alias reached only through findLibrary or findPlugin said no definition found, while the scan considered it perfectly alive.
+- Both now go through the same comment blanking and the same name matching as the scan, so the two cannot drift apart again. The blanking keeps every character offset, so the positions the jump lands on stay exact: measured on 1295 usages of a real project, not one is off.
+
 ## 1.42.105
 
 Ctrl+click worked from a build file into gradle/libs.versions.toml, and once you were there every name was a dead end. The catalog was a destination and never a departure.

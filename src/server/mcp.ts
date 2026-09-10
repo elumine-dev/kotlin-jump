@@ -85,12 +85,26 @@ export async function handleGetKdoc(
     // The line has to still declare this symbol. Without the check, deleting a
     // function above made the next one slide onto the recorded line and its
     // KDoc came back as the answer for the one that moved.
-    if (!declaresName(lines[entry.line] ?? '', entry.name)) return { fqn, kdoc: null, stale: true };
+    if (!stillDeclaredAt(lines[entry.line] ?? '', entry)) return { fqn, kdoc: null, stale: true };
     const raw   = extractKDocFromLines(lines, entry.line);
     return { fqn, kdoc: raw };
   } catch {
     return { fqn, kdoc: null };
   }
+}
+
+/**
+ * Does this line still carry the declaration the index recorded here?
+ *
+ * Two names never appear in the source: `Companion` for an unnamed
+ * `companion object`, and `$anon$<line>` for an `object : Interface`. Asking
+ * for the name itself declared both stale wherever they really are, and their
+ * documentation was lost.
+ */
+function stillDeclaredAt(ligne: string, entry: SymbolEntry): boolean {
+  if (entry.name.startsWith('$anon$')) return declaresName(ligne, 'object');
+  if (entry.isCompanion) return declaresName(ligne, 'companion');
+  return declaresName(ligne, entry.name);
 }
 
 /** True when `nom` appears on the line as a whole word. */

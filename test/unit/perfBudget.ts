@@ -1,5 +1,15 @@
 import { expect } from 'vitest';
 
+export interface BudgetOptions {
+  /**
+   * Run before each pass and left out of the measurement. Needed when the
+   * workload feeds a counter that a later assertion checks: without it, three
+   * passes would treble the count and break the very test being protected.
+   */
+  avant?: () => void;
+  message?: string;
+}
+
 /**
  * Asserts a workload fits a budget, judging it by its FASTEST run.
  *
@@ -14,16 +24,6 @@ import { expect } from 'vitest';
  * nothing: running every one of these workloads three times cost the suite
  * 13 percent. A real regression is slow in every run and still fails.
  */
-export interface BudgetOptions {
-  /**
-   * Run before each pass and left out of the measurement. Needed when the
-   * workload feeds a counter that a later assertion checks: without it, three
-   * passes would treble the count and break the very test being protected.
-   */
-  avant?: () => void;
-  message?: string;
-}
-
 export function expectFasterThan(
   budget: number,
   travail: () => void,

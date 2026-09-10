@@ -1919,9 +1919,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       // Navigation inside the catalog: a version.ref lands on its [versions]
       // line, an alias lands on the build files that use it.
       vscode.languages.registerDefinitionProvider(
-        VERSION_CATALOG_SELECTOR, new CatalogTomlDefinitionProvider(p => vcIndex.rootFor(p))),
+        VERSION_CATALOG_SELECTOR, new CatalogTomlDefinitionProvider()),
       vscode.languages.registerReferenceProvider(
-        VERSION_CATALOG_SELECTOR, new CatalogTomlReferenceProvider(p => vcIndex.rootFor(p))),
+        VERSION_CATALOG_SELECTOR, new CatalogTomlReferenceProvider()),
     );
   })();
 

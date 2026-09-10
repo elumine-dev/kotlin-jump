@@ -1,21 +1,26 @@
 {
-  "version": "1.42.104",
+  "version": "1.42.105",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The package stops carrying its own test suites",
-  "summary": "The build script called its benchmark and maintenance bundles dev only, excluded from the package. They were not, and neither were the end to end suites, the web test harness, or the sources of the logcat panel.",
+  "tagline": "The version catalog stops being a dead end",
+  "summary": "Ctrl+click worked into gradle/libs.versions.toml and never out of it. Now a version.ref lands on its declaration, and an alias lands on the build files that use it.",
   "highlights": [
     {
-      "title": "14 development files leave the package",
-      "description": "The extension you install no longer carries its own test suites, its benchmark, or the TypeScript sources of a panel whose bundle is what loads.",
-      "kind": "fix"
+      "title": "A version.ref jumps to its declaration",
+      "description": "Ctrl+click on the target of a version.ref lands on the line of the versions table that declares it, inside the same file.",
+      "kind": "feature"
+    },
+    {
+      "title": "An alias jumps to the build files that use it",
+      "description": "Ctrl+click on an alias opens its usages, and Shift+F12 lists them. Accessors are matched the way Gradle resolves them, segment by segment.",
+      "kind": "feature"
     }
   ],
   "sections": [
     {
-      "heading": "Fixed",
+      "heading": "Added",
       "bullets": [
-        "A test replays the packaging rules and fails if a development file comes back, or if an over broad rule drops the bundled standard library, a walkthrough video or a runtime bundle.",
-        "The layer that hands the version catalog its colours and fold ranges is now tested by decoding what it sends the editor and comparing it with the text it came from."
+        "A key of the versions table jumps to the entries that pin their version on it, the question worth asking before changing a number.",
+        "Measured on a project of 5088 files: 171 of the 176 aliases resolve to at least one usage, and the five that do not are absent from every build file."
       ]
     }
   ],

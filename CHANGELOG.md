@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.42.93
+
+Kotlin Jump 1.42.93 fixes a case where the Type Hierarchy view could miss a class's supertypes when the constructor and the supertype list were on separate lines.
+
+### Fixes
+- Reads the supertype list correctly when Kotlin puts it on the line after the constructor's closing parenthesis, a valid style the parser previously mistook for a header with no supertypes.
+- Adds regression tests covering wrapped and same-line supertype lists, so a class's superclass and interfaces keep showing up correctly in the Type Hierarchy view.
+
+## 1.42.93
+
+The stop added in 1.42.92 ended the header at any line beginning with a parenthesis. Kotlin also lets the supertype list lead the line after it, and those supertypes were dropped without a sound.
+
+### Fixes
+- A constructor closing on a bare parenthesis no longer ends the header. Only the very next non blank line may carry the supertype list, which keeps the fix from reaching a colon that belongs to something further down: the 50 supertypes wrongly taken from a method return type on a real Android project are still refused.
+
 ## 1.42.92
 
 Fixes two Type Hierarchy bugs: a sealed class listing itself as its own supertype, and a type listing itself as its own implementation (which could loop when expanded).

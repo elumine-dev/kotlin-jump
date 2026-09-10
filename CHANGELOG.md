@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.110
+
+The guard added yesterday, so that a file deleted mid scan does not come back, sorted its survivors with a lookup inside a loop over the same list. That is quadratic, and nothing moves in the ordinary case, so the ordinary case was the worst case.
+
+### Fixed
+- Adding a folder, which is what a rename or an added workspace folder does, is linear again. At the default ceiling of 10000 files it went from 12.2 ms of blocked extension host to 2.6 ms, and a project that raises that ceiling to 24000 went from 66 ms to 8 ms.
+- A test pins the shape rather than the number: 30000 files under a bound that one pass clears with room to spare and that the quadratic sort blew past six times over.
+
+### Internal
+- Timing budgets can now wrap an asynchronous workload. Until now a budget on an await had to stay a bare wall clock assertion, the kind that stopped two releases this week.
+
 ## 1.42.109
 
 Deleting a file while the extension was still reading it left the file in the index. Cmd+T went on listing it and Cmd+click opened a file that no longer existed.

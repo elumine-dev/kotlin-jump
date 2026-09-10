@@ -1,12 +1,12 @@
 {
-  "version": "1.42.109",
+  "version": "1.42.110",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A deleted file no longer comes back from the dead",
-  "summary": "Deleting a file while the extension was still reading it left the file in the index, so Cmd+T listed it and Cmd+click opened a file that no longer existed.",
+  "tagline": "Adding a folder is linear again",
+  "summary": "Yesterday's guard against a deleted file coming back sorted its survivors with a lookup inside a loop over the same list. Nothing moves in the ordinary case, so the ordinary case was the worst case.",
   "highlights": [
     {
-      "title": "A delete during a scan is no longer undone by that scan",
-      "description": "The window between reading a file and parsing it on a worker thread is tens of milliseconds. A delete landing there removed an entry the scan had not written yet, and the scan wrote it afterwards.",
+      "title": "A folder rename no longer blocks on a quadratic pass",
+      "description": "At the default ceiling of 10000 files, 12.2 ms of blocked extension host became 2.6 ms; a project raising that ceiling to 24000 went from 66 ms to 8 ms.",
       "kind": "fix"
     }
   ],
@@ -14,8 +14,8 @@
     {
       "heading": "Fixed",
       "bullets": [
-        "The same held during a checkout and when a whole folder was deleted while one of its files was being scanned.",
-        "An edit made during a scan still wins: the stale read is dropped and the newer one kept, so no keystroke is lost."
+        "A test pins the shape rather than the number: 30000 files under a bound the single pass clears with room to spare and the quadratic sort blew past six times over.",
+        "Timing budgets can now wrap an asynchronous workload, which used to require a bare wall clock assertion."
       ]
     }
   ],

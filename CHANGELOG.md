@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.42.95
+
+Fixes a parsing bug where a parenthesis inside a string or character literal caused the Type Hierarchy view to drop a class's real supertypes.
+
+### Fixes
+- Fixes the Type Hierarchy view dropping a class's supertypes when a constructor parameter holds a string or character literal containing a parenthesis, for example `val sep: String = ")"`. The parser read that character as the constructor's closing parenthesis and stopped before reaching the actual supertype list.
+- Adds regression tests covering string literals, character literals, and escaped characters inside constructor parameters, so the Type Hierarchy view keeps matching the class as written.
+
+## 1.42.95
+
+The depth counting added in 1.42.94 read every parenthesis, including the ones inside a string or a character literal. A default value holding a closing parenthesis ended the constructor in the middle of its own parameter list.
+
+### Fixes
+- Parentheses inside a string or a character literal are skipped when the header is measured, escapes included. Four shapes of valid Kotlin emptied the supertype list before, `val sep: String = ")"` among them.
+
 ## 1.42.94
 
 Fixes two more cases where the Type Hierarchy view dropped a class's real supertypes.

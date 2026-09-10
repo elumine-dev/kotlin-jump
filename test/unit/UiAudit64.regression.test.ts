@@ -246,3 +246,44 @@ describe('Seule la parenthese qui ferme le CONSTRUCTEUR termine l\'en tete', () 
     expect(parse(URI3, base([') {'])).symbols.find(s => s.name === 'Foo')!.supertypes).toBeUndefined();
   });
 });
+
+describe('Une parenthese dans un litteral ne compte pas', () => {
+  // Le comptage de profondeur de la v1.42.94 lisait les parentheses sans savoir
+  // ce qui est du texte. Une valeur par defaut contenant `")"` fermait donc le
+  // constructeur au milieu de la liste et la classe perdait ses supertypes.
+  // 44 lignes de ce genre sur LaPresse, aucune dans un en tete aujourd'hui,
+  // mais les trois formes sont du Kotlin valide.
+  const URI4 = 'file:///a64e/Foo.kt';
+  const avec = (param: string) => [
+    'package p', '', 'class Foo(', `    ${param}`, '    val a: Int',
+    ') : Bar(), Baz {', '    fun m() {}', '}',
+  ].join('\n');
+
+  it('parenthese fermante dans une chaine', () => {
+    expect(parse(URI4, avec('val sep: String = ")",')).symbols.find(s => s.name === 'Foo')!.supertypes)
+      .toEqual(['Bar', 'Baz']);
+  });
+
+  it('parenthese ouvrante dans une chaine', () => {
+    expect(parse(URI4, avec('val sep: String = "(",')).symbols.find(s => s.name === 'Foo')!.supertypes)
+      .toEqual(['Bar', 'Baz']);
+  });
+
+  it('parenthese dans un litteral de caractere', () => {
+    expect(parse(URI4, avec("val c: Char = ')',")).symbols.find(s => s.name === 'Foo')!.supertypes)
+      .toEqual(['Bar', 'Baz']);
+  });
+
+  it('une parenthese echappee dans une chaine ne trompe pas non plus', () => {
+    expect(parse(URI4, avec('val sep: String = "a\\")\\"b",')).symbols.find(s => s.name === 'Foo')!.supertypes)
+      .toEqual(['Bar', 'Baz']);
+  });
+
+  it('les vraies parentheses comptent toujours', () => {
+    const code = [
+      'package p', '', 'class Foo(', '    val f: (Int) -> Unit = {},', '    val a: Int = g(1),',
+      ') : Bar() {', '    fun m() {}', '}',
+    ].join('\n');
+    expect(parse(URI4, code).symbols.find(s => s.name === 'Foo')!.supertypes).toEqual(['Bar']);
+  });
+});

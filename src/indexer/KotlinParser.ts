@@ -625,15 +625,35 @@ function hasUnclosedParen(line: string, from: number): boolean {
   return unclosedParenDepth(line, from) > 0;
 }
 
+/**
+ * Walks the parentheses of one line, ignoring those inside a string or a char
+ * literal: `val sep: String = ")"` closed the constructor in the middle of its
+ * parameter list and the class lost its supertypes.
+ *
+ * Returns the depth left after the line, and the index where the depth first
+ * reached zero, or -1 when it never did.
+ */
+function scanParens(line: string, from: number, depart: number): { depth: number; ferme: number } {
+  const code = stripTrailingLineComment(line);
+  let depth = depart, ferme = -1;
+  let inStr: string | false = false;
+  for (let i = from; i < code.length; i++) {
+    const c = code[i];
+    if (inStr) {
+      if (c === '\\') { i++; continue; }
+      if (c === inStr) inStr = false;
+      continue;
+    }
+    if (c === '"' || c === "'") { inStr = c; continue; }
+    if (c === '(') depth++;
+    else if (c === ')') { depth--; if (depth === 0 && ferme === -1) ferme = i; }
+  }
+  return { depth, ferme };
+}
+
 /** How many parentheses the line leaves open after `from`. */
 function unclosedParenDepth(line: string, from: number): number {
-  const code = stripTrailingLineComment(line);
-  let depth = 0;
-  for (let i = from; i < code.length; i++) {
-    if (code.charAt(i) === '(') depth++;
-    else if (code.charAt(i) === ')') depth--;
-  }
-  return depth;
+  return scanParens(line, from, 0).depth;
 }
 
 // Scan the line after the class name for `: SuperType, Interface`
@@ -703,12 +723,7 @@ function lookAheadSupertypes(text: string, start: number, quals?: string[], depa
     let nl = text.indexOf('\n', p);
     if (nl === -1) nl = text.length;
     const code = stripTrailingLineComment(text.slice(p, nl));
-    let d = profondeur, fermeture = -1;
-    for (let c = 0; c < code.length; c++) {
-      const ch = code[c];
-      if (ch === '(') d++;
-      else if (ch === ')') { d--; if (d === 0) { fermeture = c; break; } }
-    }
+    const { depth: d, ferme: fermeture } = scanParens(code, 0, profondeur);
     if (fermeture === -1) {
       profondeur = d;
       if (code.trimStart().startsWith('{')) return [];

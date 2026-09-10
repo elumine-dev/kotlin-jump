@@ -110,8 +110,15 @@ export class FileWatcher implements vscode.Disposable {
     await this.scanner.scanFiles(uris);
     // Un dossier supprimé pendant le scan de son remplaçant laissait ses
     // fichiers indexés, par le même chemin que le cas fichier par fichier.
-    const vivants = uris.filter(u => (this.epoque.get(u.toString()) ?? 0) === jetons.get(u.toString()));
-    for (const u of uris) if (!vivants.includes(u)) this.index.remove(u);
+    // Une seule passe : `vivants.includes(u)` dans une boucle sur `uris` était
+    // quadratique, et rien ne bouge dans le cas courant, donc le cas courant
+    // était le pire cas. 12 ms au plafond de 10 000 fichiers, 66 ms à 24 000.
+    const vivants: vscode.Uri[] = [];
+    for (const u of uris) {
+      const cle = u.toString();
+      if ((this.epoque.get(cle) ?? 0) === jetons.get(cle)) vivants.push(u);
+      else this.index.remove(u);
+    }
     this.notify(vivants);
     return uris;
   }

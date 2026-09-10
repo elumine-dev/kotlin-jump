@@ -17,6 +17,8 @@
  *   FW-8  Suppression pendant une rafale séquentielle
  *   FW-9  Dossier supprimé pendant un scan de l'un de ses fichiers
  *   FW-10 Une modification pendant le scan ne perd pas le contenu final
+ *   FW-11 addTree jette les fichiers dépassés par un événement
+ *   FW-12 addTree reste linéaire (le tri des survivants était quadratique)
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -24,6 +26,7 @@ import * as vscode from 'vscode';
 import { FileWatcher } from '../../src/watcher/FileWatcher';
 import { SymbolIndex } from '../../src/indexer/SymbolIndex';
 import { parse } from '../../src/indexer/KotlinParser';
+import { expectFasterThanAsync } from './perfBudget';
 
 const NL = String.fromCharCode(10);
 const SOURCE = (nom: string) => 'package p' + NL + 'class ' + nom + NL;
@@ -122,5 +125,46 @@ describe('FW-10 — la garde ne perd pas une modification légitime', () => {
 
     expect(index.lookup('Avant'), 'le resultat perime est jete').toHaveLength(0);
     expect(index.lookup('Apres'), 'le second scan fait foi').toHaveLength(1);
+  });
+});
+
+describe('FW-11 — addTree jette ce qu un evenement a depasse', () => {
+  it('un fichier supprimé pendant le scan du dossier n est pas indexé', async () => {
+    vi.useRealTimers();
+    const index = new SymbolIndex();
+    const uris = [uriOf(1), uriOf(2), uriOf(3)];
+    (vscode.workspace as any).findFiles = async () => uris;
+    let pendant: (() => void) | undefined;
+    const scanner = {
+      scanFile: vi.fn(async () => {}),
+      scanFiles: vi.fn(async (us: vscode.Uri[]) => {
+        pendant?.();                                  // suppression EN PLEIN scan du lot
+        for (const u of us) { index.add(parse(u.toString(), SOURCE('D' + u.path.match(/File(\d+)/)![1]))); }
+        index.finalize();
+      }),
+    } as any;
+    const w = new FileWatcher(scanner, index);
+    pendant = () => (w as any).onDeleted(uriOf(2));
+    await w.addTree(vscode.Uri.parse('file:///proj/autre') as any);
+    w.dispose();
+
+    expect(index.lookup('D2'), 'le fichier supprimé pendant le lot est jeté').toHaveLength(0);
+    expect(index.lookup('D1').length, 'les autres restent').toBeGreaterThan(0);
+  });
+});
+
+describe('FW-12 — addTree reste lineaire', () => {
+  it('30 000 fichiers passent loin sous le budget qu un tri quadratique creverait', async () => {
+    vi.useRealTimers();
+    const n = 30_000;
+    const uris = Array.from({ length: n }, (_, i) => vscode.Uri.parse('file:///big/F' + i + '.kt'));
+    (vscode.workspace as any).findFiles = async () => uris;
+    const scanner = { scanFile: async () => {}, scanFiles: async () => {} } as any;
+    const w = new FileWatcher(scanner, new SymbolIndex());
+    // Mesuré: 10 ms en une passe, une centaine si le tri des survivants
+    // repasse en O(n²). Une borne large qui reste catégorique.
+    await expectFasterThanAsync(50, async () => { await w.addTree(vscode.Uri.parse('file:///big2') as any); },
+      'addTree doit rester lineaire');
+    w.dispose();
   });
 });

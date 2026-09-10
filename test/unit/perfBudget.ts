@@ -41,3 +41,26 @@ export function expectFasterThan(
   }
   expect(meilleur, opts.message).toBeLessThan(budget);
 }
+
+/**
+ * La même chose pour une charge asynchrone. Sans elle, un budget sur un
+ * `await` devait rester une assertion d'horloge murale brute, celles là mêmes
+ * qui ont arrêté deux publications.
+ */
+export async function expectFasterThanAsync(
+  budget: number,
+  travail: () => Promise<void>,
+  options?: string | BudgetOptions,
+): Promise<void> {
+  const opts: BudgetOptions = typeof options === 'string' ? { message: options } : options ?? {};
+  let meilleur = Infinity;
+  for (let passe = 0; passe < 3; passe++) {
+    opts.avant?.();
+    const debut = performance.now();
+    await travail();
+    const ecoule = performance.now() - debut;
+    if (ecoule < meilleur) meilleur = ecoule;
+    if (meilleur < budget) break;
+  }
+  expect(meilleur, opts.message).toBeLessThan(budget);
+}

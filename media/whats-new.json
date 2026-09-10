@@ -1,26 +1,26 @@
 {
-  "version": "1.42.105",
+  "version": "1.42.106",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The version catalog stops being a dead end",
-  "summary": "Ctrl+click worked into gradle/libs.versions.toml and never out of it. Now a version.ref lands on its declaration, and an alias lands on the build files that use it.",
+  "tagline": "Catalog usages and the unused scan stop contradicting each other",
+  "summary": "Ctrl+click on an alias shows its usages, the unused dependency scan decides whether it has any. The two disagreed four ways out of five.",
   "highlights": [
     {
-      "title": "A version.ref jumps to its declaration",
-      "description": "Ctrl+click on the target of a version.ref lands on the line of the versions table that declares it, inside the same file.",
-      "kind": "feature"
+      "title": "A commented out accessor is no longer a usage",
+      "description": "An alias reported as dead would open onto a line someone had commented out, which is the very line the scan is meant to flag.",
+      "kind": "fix"
     },
     {
-      "title": "An alias jumps to the build files that use it",
-      "description": "Ctrl+click on an alias opens its usages, and Shift+F12 lists them. Accessors are matched the way Gradle resolves them, segment by segment.",
-      "kind": "feature"
+      "title": "A lookup by name is one",
+      "description": "An alias reached only through findLibrary or findPlugin said no definition found while the scan considered it alive.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Added",
+      "heading": "Fixed",
       "bullets": [
-        "A key of the versions table jumps to the entries that pin their version on it, the question worth asking before changing a number.",
-        "Measured on a project of 5088 files: 171 of the 176 aliases resolve to at least one usage, and the five that do not are absent from every build file."
+        "Both features now share the same comment blanking and the same name matching, so they cannot drift apart again.",
+        "The blanking keeps every character offset: measured on 1295 usages of a real project, not one jump lands on the wrong spot."
       ]
     }
   ],

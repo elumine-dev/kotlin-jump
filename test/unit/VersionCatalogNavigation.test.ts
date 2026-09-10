@@ -13,6 +13,7 @@ import { tokenAt } from '../../src/providers/versionCatalogSyntax';
 import { accessorOf, aliasOnLine, findAccessorUsages } from '../../src/providers/VersionCatalogNavigation';
 import { CatalogTomlDefinitionProvider } from '../../src/providers/VersionCatalogNavigation';
 import { parseCatalog } from '../../src/indexer/VersionCatalogIndex';
+import { collectAliasReferences } from '../../src/providers/unusedGradleDependencies';
 
 const NL = String.fromCharCode(10);
 
@@ -154,5 +155,70 @@ describe('Ctrl+click inside the catalog', () => {
   it('finds the alias declared on a line, and none on a blank one', () => {
     expect(aliasOnLine(CATALOGUE, L_PLUGIN)?.raw).toBe('navigation-safeArgs');
     expect(aliasOnLine(CATALOGUE, 3)).toBeUndefined();
+  });
+});
+
+/**
+ * Two shipped features answer the same question about the same build file:
+ * "is this alias used?". Ctrl+click shows the usages, the unused dependency
+ * scan decides whether there are any. They disagreed four ways out of five.
+ *
+ * The navigation counted a commented out accessor as a usage, so an alias the
+ * scan reported as dead opened onto a commented line; and it missed a lookup
+ * by name, so an alias the scan considered alive said no definition found.
+ * Both now go through the same comment blanking and the same name matching.
+ */
+describe('the navigation and the unused dependency scan agree', () => {
+  const TOML = [
+    '[libraries]',
+    'foo-bar = { module = "com.x:foo-bar", version = "1.0" }',
+    '[plugins]',
+    'navigation-safeArgs = { id = "androidx.navigation.safeargs.kotlin", version = "1.0" }',
+  ].join(NL);
+  const cat = parseCatalog(TOML);
+  const alias = (raw: string) => cat.aliases.find(a => a.raw === raw)!;
+
+  /** What the shipped unused dependency scan counts for this alias. */
+  function vueScan(source: string, raw: string): number {
+    const a = alias(raw);
+    const { refs, byName } = collectAliasReferences(
+      [{ path: '/w/build.gradle.kts', text: source }] as any, new Set(['libs']));
+    const parAccesseur = refs.filter(r => r.namespace === a.namespace
+      && r.segments.length === a.segments.length
+      && r.segments.every((s, i) => s === a.segments[i])).length;
+    return parAccesseur + (byName.has(raw) ? 1 : 0);
+  }
+
+  const CAS: Array<[string, string, string, boolean]> = [
+    ['un accesseur vivant',        'foo-bar',             'dependencies { implementation(libs.foo.bar) }', true],
+    ['un accesseur en // ',        'foo-bar',             'dependencies {' + NL + '  // implementation(libs.foo.bar)' + NL + '}', false],
+    ['un accesseur en bloc',       'foo-bar',             'dependencies {' + NL + '  /* implementation(libs.foo.bar) */' + NL + '}', false],
+    ['une recherche par nom',      'foo-bar',             'val l = libs.findLibrary("foo-bar").get()', true],
+    ['un plugin commente',         'navigation-safeArgs', '// alias(libs.plugins.navigation.safeArgs)', false],
+  ];
+
+  for (const [nom, raw, source, attendu] of CAS) {
+    it(`${nom} : les deux vues disent ${attendu ? 'utilise' : 'inutilise'}`, () => {
+      const nav = findAccessorUsages(source, alias(raw), 'libs').length > 0;
+      const scan = vueScan(source, raw) > 0;
+      expect(nav, 'la navigation').toBe(attendu);
+      expect(scan, 'le scan de dependances mortes').toBe(attendu);
+    });
+  }
+
+  it('points a lookup by name at the name itself, not at the call', () => {
+    const source = 'val l = libs.findLibrary("foo-bar").get()';
+    const [h] = findAccessorUsages(source, alias('foo-bar'), 'libs');
+    expect(source.slice(h.start, h.start + h.length)).toBe('foo-bar');
+  });
+
+  it('keeps a live accessor next to a commented one, in reading order', () => {
+    const source = [
+      '// implementation(libs.foo.bar)',
+      'implementation(libs.foo.bar)',
+      'val l = libs.findLibrary("foo-bar")',
+    ].join(NL);
+    const hits = findAccessorUsages(source, alias('foo-bar'), 'libs');
+    expect(hits.map(h => h.line)).toEqual([1, 2]);
   });
 });

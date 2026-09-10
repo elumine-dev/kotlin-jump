@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { parseCatalog, type CatalogAlias } from '../indexer/VersionCatalogIndex';
+import { aliasSegments, parseCatalog, type CatalogAlias } from '../indexer/VersionCatalogIndex';
+import { stripKotlinComments } from '../util/xmlRefs';
 import { tokenAt } from './versionCatalogSyntax';
 
 /**
@@ -38,6 +39,9 @@ export function aliasOnLine(texte: string, line: number): CatalogAlias | undefin
   return parseCatalog(texte).aliases.find(a => a.line === line);
 }
 
+/** A lookup by name, `libs.findLibrary("foo-bar")`. */
+const RE_LOOKUP = /\bfind(?:Library|Plugin|Version|Bundle)\s*\(\s*"([^"]+)"/g;
+
 /**
  * Every place a build file reaches this alias.
  *
@@ -45,19 +49,38 @@ export function aliasOnLine(texte: string, line: number): CatalogAlias | undefin
  * `-`, `_` and `.` as the same separator, so `navigation-safeArgs` and
  * `navigation.safeArgs` are one alias, and an accessor with an extra segment
  * is a different one.
+ *
+ * Comments are blanked out with the very function the unused dependency scan
+ * uses, and a lookup by name counts the way that scan counts it, kind ignored.
+ * The two features answer the same question and used to disagree four ways out
+ * of five: a commented out accessor was a usage here and a dead alias there,
+ * and a `findLibrary("foo-bar")` was the reverse. Blanking keeps every offset,
+ * so the positions below stay exact.
  */
 export function findAccessorUsages(
   texte: string,
   alias: CatalogAlias,
   root: string,
 ): Array<{ line: number; start: number; length: number }> {
+  const code = stripKotlinComments(texte);
   const echappe = root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const re = new RegExp(`\\b${echappe}((?:\\.[A-Za-z0-9_]+)+)`, 'g');
-  const debuts = lineStarts(texte);
+  const debuts = lineStarts(code);
   const trouves: Array<{ line: number; start: number; length: number }> = [];
 
+  RE_LOOKUP.lastIndex = 0;
+  let l: RegExpExecArray | null;
+  while ((l = RE_LOOKUP.exec(code)) !== null) {
+    const segments = aliasSegments(l[1]);
+    if (segments.length !== alias.segments.length) continue;
+    if (segments.some((s, i) => s !== alias.segments[i])) continue;
+    const debut = l.index + l[0].length - 1 - l[1].length;
+    const { line, character } = positionOf(debuts, debut);
+    trouves.push({ line, start: character, length: l[1].length });
+  }
+
   let m: RegExpExecArray | null;
-  while ((m = re.exec(texte)) !== null) {
+  while ((m = re.exec(code)) !== null) {
     const segments = m[1].split('.').filter(Boolean);
     const tete = segments[0];
     const namespace = tete === 'versions' || tete === 'plugins' || tete === 'bundles' ? tete : 'libraries';
@@ -68,6 +91,7 @@ export function findAccessorUsages(
     const { line, character } = positionOf(debuts, m.index);
     trouves.push({ line, start: character, length: m[0].length });
   }
+  trouves.sort((a, b) => a.line - b.line || a.start - b.start);
   return trouves;
 }
 

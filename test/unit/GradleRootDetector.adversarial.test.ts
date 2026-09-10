@@ -13,6 +13,7 @@ import * as os from 'os';
 import * as path from 'path';
 
 import { detectGradleRoot, type DetectorContext } from '../../src/testing/GradleRootDetector';
+import { expectFasterThan } from './perfBudget';
 
 // ── Fixture builder ──────────────────────────────────────────────────────────
 
@@ -58,11 +59,9 @@ describe('detectGradleRoot — adversarial / regression', () => {
     for (let i = 0; i < 50; i++) rel = path.join(rel, `lvl${i}`);
     rel = path.join(rel, 'Foo.kt');
     const editor = touch(rel);
-    const start = Date.now();
-    const r = detectGradleRoot(ctx({ activeEditorPath: editor }));
-    const elapsed = Date.now() - start;
+    let r!: ReturnType<typeof detectGradleRoot>;
+    expectFasterThan(500, () => { r = detectGradleRoot(ctx({ activeEditorPath: editor })); });
     expect(r.kind).toBe('resolved');
-    expect(elapsed).toBeLessThan(500);                  // upper bound — should be ms
   });
 
   it('A2. activeEditorPath = filesystem root → terminates without crash', () => {

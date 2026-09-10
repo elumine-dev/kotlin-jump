@@ -13,6 +13,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import * as vscodeMock from './__mocks__/vscode';
 import { ConstValFoldingProvider } from '../../src/providers/ConstValFoldingProvider';
+import { expectFasterThan } from './perfBudget';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -240,14 +241,16 @@ describe('SP2-ADVER-CVF-PERF — large constant-heavy file', () => {
     } as any;
     vi.spyOn(vscodeMock.window, 'visibleTextEditors', 'get').mockReturnValue([editor]);
 
-    const start = performance.now();
-    new ConstValFoldingProvider(fakeIndex as any);
-    const elapsed = performance.now() - start;
-
-    // Generous wall-time bound: in practice this lands around 30-80 ms
-    // on a laptop — 250 ms is a safety margin big enough to absorb CI
-    // jitter but small enough to fail loudly on an O(N²) regression.
-    expect(elapsed).toBeLessThan(250);
+    // Generous wall-time bound: in practice this lands around 30-80 ms on a
+    // laptop, and 250 ms is a safety margin big enough to absorb CI jitter but
+    // small enough to fail loudly on an O(N²) regression. Judged on the fastest
+    // of up to three runs, because a busy machine paying the warm up once
+    // stopped a release on this very line. The counters are reset before each
+    // run: three passes would otherwise treble them and break the two
+    // assertions below, which are the point of the test.
+    expectFasterThan(250, () => { new ConstValFoldingProvider(fakeIndex as any); }, {
+      avant: () => { lookupCalls = 0; seen.clear(); },
+    });
     // The memo must collapse 10 000 ref matches down to one lookup per
     // unique name. Anything over ~50 means the memo is broken.
     expect(seen.size).toBe(NAMES.length);

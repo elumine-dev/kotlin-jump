@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { importOrNull } from './harness';
+import { expectFasterThan } from '../perfBudget';
 
 /**
  * KJ-031 adversarial — les six gardes, chacune issue d'un faux positif réel
@@ -355,13 +356,11 @@ describe.skipIf(!mod || !scanner)('performance', () => {
       text: `class F${i} {\n  val s = R.string.kj_${i % 1200}\n}\n`,
     }));
 
-    const start = performance.now();
-    const found = mod.findUnusedResourceKeys({
-      declarations, sources, modulesWithCode: [APP],
+    let found!: ReturnType<typeof mod.findUnusedResourceKeys>;
+    // borne : l'algo ne doit pas être en O(clés × fichiers)
+    expectFasterThan(1000, () => {
+      found = mod.findUnusedResourceKeys({ declarations, sources, modulesWithCode: [APP] });
     });
-    const elapsed = performance.now() - start;
-
     expect(found).toHaveLength(1300);   // 2500 déclarées, 1200 référencées
-    expect(elapsed).toBeLessThan(1000); // borne : l'algo ne doit pas être en O(clés × fichiers)
   });
 });

@@ -144,6 +144,31 @@ function versionKeySites(texte: string, cle: string): { declaration?: vscode.Ran
   };
 }
 
+/**
+ * A key of the versions table is reached two ways, and both count: the entries
+ * of the catalog that pin their version on it, and the build files that read
+ * it as `libs.versions.<key>` or through `findVersion`. v1.42.106 lined the
+ * navigation up with the unused dependency scan for libraries, plugins and
+ * bundles and left this one namespace behind, so a version used only from a
+ * build file opened onto nothing while the scan considered it alive.
+ */
+async function versionSites(
+  document: vscode.TextDocument,
+  cle: string,
+  root: string,
+  avecDeclaration: boolean,
+): Promise<vscode.Location[]> {
+  const texte = document.getText();
+  const { declaration, refs } = versionKeySites(texte, cle);
+  const out: vscode.Location[] = [];
+  if (avecDeclaration && declaration) out.push(new vscode.Location(document.uri, declaration));
+  out.push(...refs.map(r => new vscode.Location(document.uri, r)));
+
+  const alias = parseCatalog(texte).aliases.find(a => a.namespace === 'versions' && a.raw === cle);
+  if (alias) out.push(...await usagesInWorkspace(alias, root));
+  return out;
+}
+
 export class CatalogTomlDefinitionProvider implements vscode.DefinitionProvider {
   constructor(private readonly root: (chemin: string) => string) {}
 
@@ -166,8 +191,7 @@ export class CatalogTomlDefinitionProvider implements vscode.DefinitionProvider 
       // A `[versions]` key has no accessor of its own worth jumping to: what a
       // reader wants is the entries that pin their version on it.
       if (alias.namespace === 'versions') {
-        const { refs } = versionKeySites(texte, alias.raw);
-        return refs.map(r => new vscode.Location(document.uri, r));
+        return versionSites(document, alias.raw, this.root(document.uri.fsPath), false);
       }
       return usagesInWorkspace(alias, this.root(document.uri.fsPath));
     }
@@ -196,9 +220,6 @@ export class CatalogTomlReferenceProvider implements vscode.ReferenceProvider {
     if (alias && alias.namespace !== 'versions') {
       return usagesInWorkspace(alias, this.root(document.uri.fsPath));
     }
-    const { declaration, refs } = versionKeySites(texte, cle);
-    const out = refs.map(r => new vscode.Location(document.uri, r));
-    if (declaration) out.unshift(new vscode.Location(document.uri, declaration));
-    return out;
+    return versionSites(document, cle, this.root(document.uri.fsPath), true);
   }
 }

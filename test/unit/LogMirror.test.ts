@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { LogMirror, ALL_LEVELS, type MirrorFilterState } from '../../media/logcat/logMirror';
 import type { LogEntry, LogLevel } from '../../src/logcat/messages';
+import { expectFasterThan } from './perfBudget';
 
 // Adversarial + perf coverage for the webview mirror. This module replaces a
 // plain `Array` evicted with `.shift()` (O(n) per push once full) — the exact
@@ -190,14 +191,16 @@ describe('LogMirror — perf (was Array.shift() + full O(n) rescan per append)',
     mirror.append(makeRows(0, cap, 7), noFilter()); // fill to cap, no filter yet
     mirror.rebuild(filter); // one real rescan, as a filter edit would trigger
 
-    const start = performance.now();
-    for (let tick = 0; tick < 500; tick++) {
-      mirror.append(makeRows(cap + tick * 100, 100, 7), filter); // ~60Hz-style batch
-    }
-    const elapsed = performance.now() - start;
     // A naive full-buffer rescan per tick would be ~500 * 100_000 comparisons;
-    // the incremental design only scans the 100-row batch each tick.
-    expect(elapsed).toBeLessThan(1_000);
+    // the incremental design only scans the 100-row batch each tick. Each retry
+    // appends 500 more batches, which is another valid steady state run.
+    let base = cap;
+    expectFasterThan(1_000, () => {
+      for (let tick = 0; tick < 500; tick++) {
+        mirror.append(makeRows(base + tick * 100, 100, 7), filter); // ~60Hz-style batch
+      }
+      base += 50_000;
+    });
   });
 
   it('bounds the cost of a SINGLE tick even after a massive prior history', () => {
@@ -214,10 +217,14 @@ describe('LogMirror — perf (was Array.shift() + full O(n) rescan per append)',
       mirror.append(makeRows(base, 5_000, 7), filter);
     }
 
-    const t0 = performance.now();
-    mirror.append(makeRows(999_999_000, 100, 7), filter); // one steady-state tick
-    const elapsed = performance.now() - t0;
-    expect(elapsed).toBeLessThan(16); // one 60Hz frame budget — generous but categorical
+    // One 60Hz frame budget, generous but categorical. A retry appends another
+    // 100 rows onto an even longer history, so it measures the same thing under
+    // conditions at least as hard.
+    let tick = 999_999_000;
+    expectFasterThan(16, () => {
+      mirror.append(makeRows(tick, 100, 7), filter); // one steady-state tick
+      tick += 100;
+    });
   });
 
   it('bounds memory growth of the filtered index under long-running, high-match-rate churn', () => {

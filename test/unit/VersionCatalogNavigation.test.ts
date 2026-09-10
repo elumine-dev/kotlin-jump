@@ -8,10 +8,11 @@
  * absent from every build file even by fuzzy name search, so they are the
  * template entries nobody wired up.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import * as vscodeMock from './__mocks__/vscode';
 import { tokenAt } from '../../src/providers/versionCatalogSyntax';
 import { accessorOf, aliasOnLine, findAccessorUsages } from '../../src/providers/VersionCatalogNavigation';
-import { CatalogTomlDefinitionProvider } from '../../src/providers/VersionCatalogNavigation';
+import { CatalogTomlDefinitionProvider, CatalogTomlReferenceProvider } from '../../src/providers/VersionCatalogNavigation';
 import { parseCatalog } from '../../src/indexer/VersionCatalogIndex';
 import { collectAliasReferences } from '../../src/providers/unusedGradleDependencies';
 
@@ -220,5 +221,84 @@ describe('the navigation and the unused dependency scan agree', () => {
     ].join(NL);
     const hits = findAccessorUsages(source, alias('foo-bar'), 'libs');
     expect(hits.map(h => h.line)).toEqual([1, 2]);
+  });
+});
+
+/**
+ * A key of the versions table is reached two ways: from the catalog, by the
+ * entries that pin their version on it, and from a build file, as
+ * `libs.versions.<key>` or through findVersion. v1.42.106 lined the navigation
+ * up with the unused dependency scan for libraries, plugins and bundles and
+ * left this namespace behind, so a version used only from a build file opened
+ * onto nothing while the scan considered it alive.
+ *
+ * Shift+F12 had no test at all until here.
+ */
+describe('a key of the versions table', () => {
+  const TOML = [
+    '[versions]',
+    'agp = "8.13.2"',
+    'kotlin = "2.3.20"',
+    '',
+    '[libraries]',
+    'x = { module = "a:b", version.ref = "kotlin" }',
+  ].join(NL);
+
+  const BUILD = 'val v = libs.findVersion("agp").get()' + NL + 'val w = libs.versions.kotlin';
+  const uriBuild = { fsPath: '/w/build.gradle.kts', toString: () => 'file:///w/build.gradle.kts' };
+
+  let origFind: any, origRead: any;
+  beforeEach(() => {
+    origFind = (vscodeMock.workspace as any).findFiles;
+    origRead = (vscodeMock.workspace.fs as any).readFile;
+    (vscodeMock.workspace as any).findFiles = async () => [uriBuild];
+    (vscodeMock.workspace.fs as any).readFile = async () => new TextEncoder().encode(BUILD);
+  });
+  afterEach(() => {
+    (vscodeMock.workspace as any).findFiles = origFind;
+    (vscodeMock.workspace.fs as any).readFile = origRead;
+  });
+
+  const defProvider = new CatalogTomlDefinitionProvider(() => 'libs');
+  const refProvider = new CatalogTomlReferenceProvider(() => 'libs');
+  const doc = () => docFake(TOML);
+
+  it('Ctrl+click reaches the build file, not only the catalog', async () => {
+    // `agp` is pinned by no entry of the catalog: before the fix this was empty.
+    const cibles = await defProvider.provideDefinition(doc() as any, { line: 1, character: 1 } as any);
+    expect(cibles!.map(c => c.uri.toString())).toEqual(['file:///w/build.gradle.kts']);
+    expect(BUILD.split(NL)[0].slice(cibles![0].range.start.character, cibles![0].range.end.character))
+      .toBe('agp');
+  });
+
+  it('Ctrl+click keeps the catalog entries and adds the build ones', async () => {
+    const cibles = await defProvider.provideDefinition(doc() as any, { line: 2, character: 1 } as any);
+    // The library that pins `kotlin`, then the build file that reads it.
+    expect(cibles!.map(c => c.uri.toString()))
+      .toEqual(['file:///w/gradle/libs.versions.toml', 'file:///w/build.gradle.kts']);
+    expect(cibles![0].range.start.line).toBe(5);
+  });
+
+  it('Shift+F12 opens with the declaration, then the uses', async () => {
+    const refs = await refProvider.provideReferences(doc() as any, { line: 2, character: 1 } as any);
+    expect(refs!.map(r => [r.uri.toString(), r.range.start.line]))
+      .toEqual([
+        ['file:///w/gradle/libs.versions.toml', 2],
+        ['file:///w/gradle/libs.versions.toml', 5],
+        ['file:///w/build.gradle.kts', 1],
+      ]);
+  });
+
+  it('Shift+F12 on a version.ref answers about the key it points at', async () => {
+    const ligne = TOML.split(NL)[5];
+    const refs = await refProvider.provideReferences(
+      doc() as any, { line: 5, character: ligne.indexOf('"kotlin"') + 2 } as any);
+    expect(refs!.map(r => r.range.start.line)).toEqual([2, 5, 1]);
+  });
+
+  it('Shift+F12 on an alias of another table stays on its usages', async () => {
+    const refs = await refProvider.provideReferences(doc() as any, { line: 5, character: 0 } as any);
+    // `x` is not used by the build file above, so nothing, and no crash.
+    expect(refs).toEqual([]);
   });
 });

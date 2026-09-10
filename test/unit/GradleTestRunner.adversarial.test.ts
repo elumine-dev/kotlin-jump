@@ -16,6 +16,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { parseStdoutLine as parseStdoutLineReal } from '../../src/testing/GradleTestRunner';
+import { expectFasterThan } from './perfBudget';
 
 // ── Inline helpers extracted from GradleTestRunner ───────────────────────────
 
@@ -319,11 +320,8 @@ describe('GA-6 — Stress test (newsapp scale: 335 testcases)', () => {
 
   it('aucune régression de performance sur 335 testcases', () => {
     const xml = buildLargeXml(335);
-    const start = Date.now();
-    parseJUnitXml(xml);
-    const elapsed = Date.now() - start;
     // Le regex ne doit pas exploser exponentiellement — 50ms max
-    expect(elapsed).toBeLessThan(50);
+    expectFasterThan(50, () => { parseJUnitXml(xml); });
   });
 });
 

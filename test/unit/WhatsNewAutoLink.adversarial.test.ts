@@ -37,6 +37,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { expectFasterThan } from './perfBudget';
 import {
   tokenize,
   jaccard,
@@ -126,11 +127,9 @@ describe('ADV-autolink — tokenize', () => {
 
   it('handles very long input without pathological slowdown', () => {
     const long = 'word '.repeat(10_000);
-    const start = Date.now();
-    const t = tokenize(long);
-    const ms = Date.now() - start;
+    let t!: ReturnType<typeof tokenize>;
+    expectFasterThan(500, () => { t = tokenize(long); });
     expect(t.size).toBe(1); // only "word"
-    expect(ms).toBeLessThan(500);
   });
 
   it('tokens with only punctuation produce empty set', () => {

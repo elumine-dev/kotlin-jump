@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.42.107
+
+The previous release lined the catalog navigation up with the unused dependency scan and claimed the two could not drift apart again. That was true of three of the four tables: the versions table was left behind.
+
+### Fixed
+- Ctrl+click on a key of the versions table now reaches the build files that read it, through libs.versions.key or through findVersion, on top of the catalog entries that pin their version on it. A key used only from a build file opened onto nothing, while the scan considered it perfectly alive.
+- Shift+F12 on a key, or on any reference to it, lists the declaration first and then every use, inside the catalog and outside it.
+- Shift+F12 had no test of its own until now, on any table.
+
+### Internal
+- Thirteen more timing budgets are judged on the fastest of up to three runs. Version 1.42.99 converted the first thirteen for exactly this reason and missed these, and one of them stopped a release tonight on a machine whose load average had climbed to 24. The whole suite now passes under a load of 38.
+- The budget helper gained a reset hook, run before each attempt and left out of the measurement, for the tests that feed a counter a later assertion checks. Without it three attempts would treble the count and break the very assertion the budget protects.
+- Six timing budgets were deliberately left alone: replaying their work would measure a no operation, a warm cache, or would break an assertion that runs before the measurement. A budget that passes for the wrong reason is worse than one that occasionally needs a retry.
+
 ## 1.42.106
 
 Two features answer the same question about a build file: Ctrl+click on a catalog alias shows where it is used, and the unused dependency scan decides whether it is used anywhere. Shipped a day apart, they disagreed four ways out of five.

@@ -1,17 +1,12 @@
 {
-  "version": "1.42.106",
+  "version": "1.42.107",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Catalog usages and the unused scan stop contradicting each other",
-  "summary": "Ctrl+click on an alias shows its usages, the unused dependency scan decides whether it has any. The two disagreed four ways out of five.",
+  "tagline": "The versions table catches up with the other three",
+  "summary": "The previous release claimed the catalog navigation and the unused dependency scan could no longer drift apart. That held for three tables out of four.",
   "highlights": [
     {
-      "title": "A commented out accessor is no longer a usage",
-      "description": "An alias reported as dead would open onto a line someone had commented out, which is the very line the scan is meant to flag.",
-      "kind": "fix"
-    },
-    {
-      "title": "A lookup by name is one",
-      "description": "An alias reached only through findLibrary or findPlugin said no definition found while the scan considered it alive.",
+      "title": "A version reaches the build files that read it",
+      "description": "Ctrl+click on a key of the versions table now finds libs.versions.key and findVersion, on top of the catalog entries that pin their version on it.",
       "kind": "fix"
     }
   ],
@@ -19,8 +14,9 @@
     {
       "heading": "Fixed",
       "bullets": [
-        "Both features now share the same comment blanking and the same name matching, so they cannot drift apart again.",
-        "The blanking keeps every character offset: measured on 1295 usages of a real project, not one jump lands on the wrong spot."
+        "Shift+F12 on a key, or on any reference to it, lists the declaration first and then every use.",
+        "Shift+F12 had no test of its own until now, on any table.",
+        "Thirteen more timing budgets in the test suite are judged on the fastest of three runs, so a busy machine no longer stops a release."
       ]
     }
   ],

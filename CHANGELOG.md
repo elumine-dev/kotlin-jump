@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.101
+
+The Kotlin standard library index shipped inside the extension is built once by hand and committed. Nothing ever invalidates it, so it stayed on the reading the parser had at version 1.22.0, 120 releases ago.
+
+### Fixed
+- Rebuilds the bundled standard library index. 238 of its 326 files disagreed with the current parser: 210 declarations were missing, among them Enum.name, Enum.ordinal, Enum.compareTo and the companion objects of Boolean, Char and the primitive types, so none of them could be reached by Go to Definition or listed in the Outline of a standard library source.
+- Fixes 206 wrong parent types in that same index. The type argument was being read as a parent, so List had E for a parent alongside Collection, and Boolean was its own parent. Type Hierarchy on a standard library type showed both.
+- A test now reparses every source the index carries and compares it to what the index stores, so this artifact can no longer drift behind the parser without the suite saying so.
+
 ## 1.42.100
 
 The index kept on disk is only reread when a file's date or size moves. Three parser fixes changed how declarations are read without invalidating that index, so an upgrade kept the old reading of every file left untouched.

@@ -1,12 +1,12 @@
 {
-  "version": "1.42.95",
+  "version": "1.42.96",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A parenthesis inside quotes is text",
-  "summary": "The depth counting added in 1.42.94 read every parenthesis, including the ones inside a string or a character literal. A default value holding a closing parenthesis ended the constructor in the middle of its own parameter list.",
+  "tagline": "The MCP server stops answering with the wrong doc",
+  "summary": "Asking for a symbol's documentation read the file from disk but looked at the line the index remembered from startup. Deleting a function above made the next one slide onto that line, and its documentation came back as the answer.",
   "highlights": [
     {
-      "title": "val sep: String = \")\"",
-      "description": "That single parameter made the class lose every supertype it declares, because the quoted parenthesis was counted as the end of the header.",
+      "title": "No answer beats a confident wrong one",
+      "description": "The line has to still declare the symbol. When it does not, the tool says so instead of handing back a neighbour's comment.",
       "kind": "fix"
     }
   ],
@@ -14,7 +14,8 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Parentheses inside a string or a character literal are skipped when the header is measured, escapes included. Four shapes of valid Kotlin emptied the supertype list before."
+        "get_kdoc checks that the recorded line still declares the symbol before reading its comment, and reports a stale position instead of a neighbour's documentation. An agent that edits then asks was getting a confident wrong answer.",
+        "The limit on how many files a scan walks is now respected to the file. It was tested before the file was stat ed, inside a burst that started every entry of a directory at once: asking for one file collected 360 of them, and on a real Android project a limit of 1000 let 1803 through."
       ]
     }
   ],

@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.42.96
+
+Fixes an MCP tool returning stale documentation after edits and a workspace scan limit that wasn't enforced.
+
+### Fixes
+- Fixes the get_kdoc MCP tool returning another symbol's documentation after a file is edited: once lines shift, the tool now checks that the recorded line still declares the requested symbol and returns null (flagged as stale) instead of a confidently wrong answer to the connected AI agent.
+- Fixes workspace scanning exceeding the configured maxIndexedFiles limit: a check ran before an asynchronous file read completed, letting many files past the cap before it took effect. The limit is now enforced consistently, keeping indexing time and memory predictable on large projects.
+
+### Notes
+- No changes to editor commands or settings in this release.
+
+## 1.42.96
+
+Asking the MCP server for a symbol's documentation read the file from disk but looked at the line the index remembered from startup. Deleting a function above made the next one slide onto that line, and its documentation came back as the answer.
+
+### Fixes
+- `get_kdoc` checks that the recorded line still declares the symbol before reading its comment, and reports a stale position instead of a neighbour's documentation. An agent that edits then asks was getting a confident wrong answer.
+- The limit on how many files a scan walks is now respected to the file. It was tested before the file was stat ed, inside a burst that started every entry of a directory at once: asking for one file collected 360 of them, and on a real Android project a limit of 1000 let 1803 through.
+
 ## 1.42.95
 
 Fixes a parsing bug where a parenthesis inside a string or character literal caused the Type Hierarchy view to drop a class's real supertypes.

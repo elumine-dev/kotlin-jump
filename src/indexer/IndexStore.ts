@@ -17,7 +17,15 @@ export type { Snapshot, SnapshotFile };
 // hierarchy. A snapshot written before it restores entries without the field,
 // so `bySuper` was rebuilt with the qualifiers back in and every count returned
 // to what it was, silently, until each file happened to be edited.
-export const SNAPSHOT_VERSION = 25;
+// bumped to 26: three parser fixes shipped without one, and they all reach the
+// disk. Reading the annotated receiver of `fun @receiver:ColorInt Int.darken()`
+// made whole declarations appear, and the class header rewrite stopped stealing
+// a return type twelve lines below as a supertype. On a 5088 file project, 43
+// files restore a different payload than the one the current parser produces:
+// 45 wrong supertypes, one of them making a type its own parent, and 6
+// declarations missing outright. Any parser change that lands in a snapshot
+// field needs this number to move, which is what SnapshotVersionGuard checks.
+export const SNAPSHOT_VERSION = 26;
 const SNAPSHOT_FILENAME = 'kotlin-jump-index.json'; // historical name; content is gzip from v19+
 
 const gzip   = promisify(zlib.gzip);

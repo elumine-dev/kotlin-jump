@@ -1,21 +1,21 @@
 {
-  "version": "1.42.99",
+  "version": "1.42.100",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A release no longer depends on how busy the laptop is",
-  "summary": "Thirteen tests asserted a wall clock budget, some as low as 50 milliseconds. The publish script runs the suite, so a busy machine stopped a release that had nothing wrong with it.",
+  "tagline": "An upgrade rebuilds the index instead of trusting a stale one",
+  "summary": "Three parser fixes shipped without moving the index version, so an upgrade restored the old reading of every file left untouched. On a project of 5088 files, 43 of them came back wrong.",
   "highlights": [
     {
-      "title": "Judged by the fastest run, not the first",
-      "description": "A first call carries the warm up of everything it touches: 28 milliseconds cold against 7 warm on a calm machine, 108 against 17 on a busy one.",
+      "title": "The stored index no longer survives a parser fix",
+      "description": "An upgrade rebuilds it once. The 43 affected files carried 45 wrong parent types, one class listed as its own parent, and 6 declarations missing from the Outline, from Go to Definition and from Find Usages.",
       "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Internal",
+      "heading": "Fixed",
       "bullets": [
-        "The timing budgets in the test suite are judged by the fastest of up to three runs, and the retry only happens when the first run misses, so a calm machine pays nothing. Measured over interleaved pairs, the suite takes the same time it did.",
-        "One publish had already stopped on 422 milliseconds against a 300 millisecond budget while the steady state cost of that workload is 5 milliseconds."
+        "Upgrading rebuilds the index instead of restoring a reading the current parser no longer agrees with.",
+        "A recorded reference pins what the parser writes to disk, so the next parser change cannot ship without the index version that discards the stale copies."
       ]
     }
   ],

@@ -1,13 +1,12 @@
 # Changelog
 
-## 1.42.99
+## 1.42.100
 
-This release contains no functional changes: only an internal test suite update and the version bump to 1.42.99.
+The index kept on disk is only reread when a file's date or size moves. Three parser fixes changed how declarations are read without invalidating that index, so an upgrade kept the old reading of every file left untouched.
 
-### Notes
-- Ships no changes to editor commands, settings, or detection behavior in this release.
-- Updates the internal test suite, supporting release quality without altering any user facing feature.
-- Bumps the version number to 1.42.99 with no other packaging changes.
+### Fixed
+- Upgrading now rebuilds the index once instead of restoring a reading the current parser no longer agrees with. Measured on a project of 5088 files: 43 files came back with 45 wrong parent types, one class listed as its own parent, and 6 declarations missing from the Outline, from Go to Definition and from Find Usages.
+- A recorded reference now pins what the parser writes to disk, so the next parser change cannot ship without the index version that discards the stale copies.
 
 ## 1.42.99
 

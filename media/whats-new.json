@@ -1,12 +1,12 @@
 {
-  "version": "1.42.93",
+  "version": "1.42.94",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A closing parenthesis on its own line",
-  "summary": "The stop added in 1.42.92 ended the header at any line beginning with a parenthesis. Kotlin also lets the supertype list lead the line after it, and those supertypes were dropped without a sound.",
+  "tagline": "Which parenthesis closes the constructor",
+  "summary": "The header was cut at the first line beginning with a parenthesis. A parameter whose type is a function written over several lines closes with one too, and a trailing comment blocked the reading, so the supertype list was dropped.",
   "highlights": [
     {
-      "title": "The list may start the next line",
-      "description": "class Foo(...) then a line beginning with a colon and the supertypes is valid Kotlin, and the class was read as having none.",
+      "title": "Counted, not guessed",
+      "description": "The closing parenthesis is found inside the line by counting depth, because a line can close the constructor and open the parent's arguments at once.",
       "kind": "fix"
     }
   ],
@@ -14,7 +14,8 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "A constructor closing on a bare parenthesis no longer ends the header. Only the very next non blank line may carry the supertype list, which keeps the fix from reaching a colon that belongs to something further down: the 50 supertypes wrongly taken from a method return type on a real Android project are still refused."
+        "A supertype list survives a parameter whose type is a multi line function, and a comment after the closing parenthesis. Both are valid Kotlin and both silently emptied the list.",
+        "The line that closes the constructor is found by counting parentheses inside it. Writing the parent's own arguments on that same line leaves the depth unchanged at the end of it, which says nothing about where the header stops."
       ]
     }
   ],

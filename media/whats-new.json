@@ -1,12 +1,12 @@
 {
-  "version": "1.42.92",
+  "version": "1.42.93",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A class is not its own parent",
-  "summary": "A class with a multi line constructor and no supertype list borrowed one from the first declaration below it, usually a method's return type. A sealed class ended up extending itself and the type hierarchy listed it as its own subtype.",
+  "tagline": "A closing parenthesis on its own line",
+  "summary": "The stop added in 1.42.92 ended the header at any line beginning with a parenthesis. Kotlin also lets the supertype list lead the line after it, and those supertypes were dropped without a sound.",
   "highlights": [
     {
-      "title": "The header stops where the constructor closes",
-      "description": "Reading on past the closing parenthesis found a method's return type twelve lines below and made it a supertype of the class.",
+      "title": "The list may start the next line",
+      "description": "class Foo(...) then a line beginning with a colon and the supertypes is valid Kotlin, and the class was read as having none.",
       "kind": "fix"
     }
   ],
@@ -14,8 +14,7 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "A supertype list is read only until the constructor closes. On a real Android project 50 supertypes were taken from a declaration further down, every one of them a method return type; the sealed classes among them ended up extending themselves.",
-        "The type hierarchy asks the same question as the lens and Go to Implementation. It still used a package heuristic and never excluded the type itself, so 21 types were listed as their own subtype and expanding one looped."
+        "A constructor closing on a bare parenthesis no longer ends the header. Only the very next non blank line may carry the supertype list, which keeps the fix from reaching a colon that belongs to something further down: the 50 supertypes wrongly taken from a method return type on a real Android project are still refused."
       ]
     }
   ],

@@ -693,11 +693,29 @@ function lookAheadSupertypes(text: string, start: number, quals?: string[]): str
       if (!rest.includes('{') && (rest.endsWith(',') || rest.endsWith(':'))) rest += ' ' + collectHeaderContinuation(text, nl + 1);
       return parseTypeNames(rest, quals);
     }
-    // The constructor closed without a supertype list: the header is over.
-    // Reading on found the `) : LoginUiModel(` of a nested variant twelve lines
-    // below and gave the sealed class ITSELF as its own supertype, which put it
-    // under its own name in the hierarchy. 32 types on a real project.
-    if (line.startsWith(')')) return [];
+    // The constructor closed on something other than a supertype list: the
+    // header is over. Reading on found the `) : LoginUiModel(` of a nested
+    // variant twelve lines below and gave the sealed class ITSELF as its own
+    // supertype. 50 supertypes on a real project were a method's return type.
+    // A bare `)` is not the end though: Kotlin lets the supertype list lead the
+    // next line. Only the very next non blank line may carry it, otherwise the
+    // scan reaches a `: Type` that belongs to something else below.
+    if (line.startsWith(')')) {
+      if (line.slice(1).trim() !== '') return [];
+      let q = nl + 1;
+      for (let j = 0; j < 5 && q < text.length; j++) {
+        let qn = text.indexOf('\n', q);
+        if (qn === -1) qn = text.length;
+        const suivante = text.slice(q, qn).trim();
+        if (suivante === '') { q = qn + 1; continue; }
+        const mc = /^:\s*(.+)/.exec(suivante);
+        if (!mc) return [];
+        let rest = stripTrailingLineComment(mc[1]).trimEnd();
+        if (!rest.includes('{') && (rest.endsWith(',') || rest.endsWith(':'))) rest += ' ' + collectHeaderContinuation(text, qn + 1);
+        return parseTypeNames(rest, quals);
+      }
+      return [];
+    }
     if (line.startsWith('{')) return [];
     p = nl + 1;
   }

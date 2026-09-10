@@ -118,3 +118,68 @@ describe('La hierarchie de types applique la meme regle que le reste', () => {
     expect(index.lookupImplementationsDeep(dagger).map(e => e.fqn)).toEqual(['p.Subcomponent.Factory']);
   });
 });
+
+describe('Une parenthese fermante seule ne clot pas l\'en tete', () => {
+  // Le correctif de la v1.42.92 s'arrete des qu'une ligne commence par `)`.
+  // C'est juste pour `) {`, faux quand la liste de supertypes est renvoyee a la
+  // ligne suivante, ce que Kotlin autorise. Aucun cas sur LaPresse, mais le
+  // correctif perdait alors les supertypes en silence.
+  const URI2 = 'file:///a64c/Foo.kt';
+
+  it('les supertypes sur la ligne qui suit la fermeture sont lus', () => {
+    const code = [
+      'package p',
+      '',
+      'class Foo(',
+      '    val a: Int',
+      ')',
+      '    : Bar(), Baz {',
+      '    fun m() {}',
+      '}',
+    ].join('\n');
+    expect(parse(URI2, code).symbols.find(s => s.name === 'Foo')!.supertypes).toEqual(['Bar', 'Baz']);
+  });
+
+  it('une fermeture nue suivie d\'une accolade n\'invente rien', () => {
+    const code = [
+      'package p',
+      '',
+      'class Foo(',
+      '    val a: Int',
+      ')',
+      '{',
+      '    fun m(): Resultat = TODO()',
+      '}',
+    ].join('\n');
+    expect(parse(URI2, code).symbols.find(s => s.name === 'Foo')!.supertypes).toBeUndefined();
+  });
+
+  it('la forme courante reste inchangee', () => {
+    const code = [
+      'package p',
+      '',
+      'class Foo(',
+      '    val a: Int',
+      ') : Bar(), Baz {',
+      '    fun m() {}',
+      '}',
+    ].join('\n');
+    expect(parse(URI2, code).symbols.find(s => s.name === 'Foo')!.supertypes).toEqual(['Bar', 'Baz']);
+  });
+
+  it('une fermeture nue ne vole toujours pas le type de retour d\'une methode', () => {
+    const code = [
+      'package p',
+      '',
+      'class Api(',
+      '    val client: Client',
+      ')',
+      '{',
+      '    suspend fun lire(',
+      '        url: String',
+      '    ): PayloadDO = client.get(url)',
+      '}',
+    ].join('\n');
+    expect(parse(URI2, code).symbols.find(s => s.name === 'Api')!.supertypes).toBeUndefined();
+  });
+});

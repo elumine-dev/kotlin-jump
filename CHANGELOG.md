@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.42.98
+
+Fixes the get_file_symbols MCP tool returning empty results for file paths that connected AI agents commonly produce.
+
+### Fixes
+- Fixes the get_file_symbols MCP tool returning an empty array, instead of the file's real symbols, for relative paths, paths with . or .. segments, or doubled slashes, all of which an AI agent produces routinely when it joins paths itself.
+- Fixes a double encoding bug where a file path containing a space (as %20) stopped matching its own indexed entry, hiding that file's symbols from connected AI agents.
+- Adds regression tests covering these path forms, keeping get_file_symbols reliable for AI agents that query documentation and symbols through the MCP server.
+
+### Notes
+- No changes to editor commands or settings in this release.
+
+## 1.42.98
+
+Asking the MCP server for a file's symbols only worked with the exact absolute URI. A path relative to the project, one holding a dot segment, or one with a doubled slash returned an empty array, which reads like a file with nothing in it.
+
+### Fixes
+- `get_file_symbols` resolves the path it is given against the project root and normalises it, so a relative path, a dot segment, a parent segment and a doubled slash all reach the same file. An agent works in project relative paths, because that is how it reads and writes files.
+
 ## 1.42.97
 
 Kotlin Jump 1.42.97 fixes a regression from 1.42.96 where the get_kdoc MCP tool wrongly marked companion objects and anonymous object implementations as stale, hiding their documentation from connected AI agents."

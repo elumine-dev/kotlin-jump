@@ -149,6 +149,12 @@ import { DataClassFieldProvider } from './providers/DataClassFieldProvider';
 import { ResourceDiagnosticProvider } from './providers/ResourceDiagnosticProvider';
 import { VersionCatalogHoverProvider } from './providers/VersionCatalogHoverProvider';
 import { VersionCatalogDefinitionProvider } from './providers/VersionCatalogDefinitionProvider';
+import {
+  VERSION_CATALOG_SELECTOR,
+  CATALOG_LEGEND,
+  VersionCatalogSemanticTokensProvider,
+  VersionCatalogFoldingProvider,
+} from './providers/VersionCatalogSyntaxProvider';
 import { OverrideGutterProvider } from './providers/OverrideGutterProvider';
 import { NavigationHistoryProvider } from './providers/NavigationHistoryProvider';
 import { recentLocationsCommand } from './commands/recentLocations';
@@ -1485,6 +1491,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       tomlW,
       vscode.languages.registerHoverProvider(GRADLE_FILES, new VersionCatalogHoverProvider(vcIndex)),
       vscode.languages.registerDefinitionProvider(GRADLE_FILES, new VersionCatalogDefinitionProvider(vcIndex)),
+      // The catalog itself: VS Code has no TOML grammar, so it opens with one
+      // colour and folds on an indentation it does not have.
+      vscode.languages.registerDocumentSemanticTokensProvider(
+        VERSION_CATALOG_SELECTOR, new VersionCatalogSemanticTokensProvider(), CATALOG_LEGEND),
+      vscode.languages.registerFoldingRangeProvider(
+        VERSION_CATALOG_SELECTOR, new VersionCatalogFoldingProvider()),
     );
   })();
 

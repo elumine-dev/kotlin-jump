@@ -2,7 +2,7 @@
   "name": "kotlin-jump",
   "displayName": "Kotlin Jump: Fast Kotlin & Android Studio Navigation",
   "description": "Fast Kotlin & Android Studio navigation. Find Usages, Go to Definition, Compose, R.string, Android Run. No JVM, no language server. The Android Studio experience inside VS Code.",
-  "version": "1.42.101",
+  "version": "1.42.102",
   "publisher": "elumine",
   "license": "MIT",
   "icon": "media/logo.png",
@@ -884,6 +884,7 @@
     ],
     "semanticTokenScopes": [
       {
+        "language": "kotlin",
         "scopes": {
           "class": [
             "entity.name.type.class.kotlin"

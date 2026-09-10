@@ -78,6 +78,11 @@ const RECV_ANNOT = ANNOT;
 // extension. Reading it without the annotation left `fun @receiver:ColorInt
 // Int.darken()` looking like a plain function.
 const RE_FUN_RECEIVER = new RegExp(String.raw`fun\s+${RECV_ANNOT}(?:<(?:[^<>]|<[^<>]*>)*>\s+)?(?:\w+(?:<(?:[^<>]|<[^<>]*>)*>)?[?]?\.)`);
+// `class Foo<T>` on one line and its primary constructor on the next, either
+// `@Inject constructor(` or the bare ktlint wrap `constructor(`. Kotlin puts
+// the constructor before the supertype list, so it is always within a couple
+// of lines of the header.
+const RE_CTOR_HEAD = new RegExp(String.raw`^\s*${ANNOT}(?:(?:public|private|protected|internal|actual|expect|inline)\s+)*constructor\s*\(`);
 const MODS_CLASS = 'public|private|internal|protected|open|final|abstract|inner|sealed|data|value|inline|annotation|enum|actual|expect|companion|external';
 // The name is the last group and the match ends on it, so its column is
 // `m[0].length - name.length`: an indexOf() would find the name inside a
@@ -125,6 +130,11 @@ export function parse(uriString: string, text: string): ParsedFile {
   // constructor properties.
   let ctorParamsActive = false;
   let ctorBraceDepth   = -1;
+  // A class header that ended without its constructor paren. Counted in lines
+  // rather than left sticky, so the state cannot reach a secondary constructor
+  // further down: three lines cover an annotation or a comment in between.
+  let ctorAttenteDepth  = -1;
+  let ctorAttenteLignes = 0;
 
   // 3-line sliding window for @Composable detection before fun
   const annotationWindow: string[] = [];
@@ -140,6 +150,7 @@ export function parse(uriString: string, text: string): ParsedFile {
     if (r[2]) inBlockComment = true; // `/*` opened mid-line and not closed
     if (enumBraceDepth !== -1 && braceDepth <= enumBraceDepth) enumBraceDepth = -1;
     if (parenDepth === 0) ctorParamsActive = false;
+    if (ctorAttenteLignes > 0 && --ctorAttenteLignes === 0) ctorAttenteDepth = -1;
   };
 
   // Monotone cursor over the next `object` keyword. Lets the DECL_START
@@ -321,36 +332,35 @@ export function parse(uriString: string, text: string): ParsedFile {
         }
       }
 
-      // ── Inline primary-constructor val/var (single-line: class Foo(val x: Int)) ──
-      // When class + constructor are on one line, RE_PROP never runs on those params.
-      // Find the balanced () of the primary constructor and extract val/var inside it.
       const ctorOpen = raw.indexOf('(', nameStart);
-      if (ctorOpen !== -1) {
-        let pd = 0, ctorClose = -1;
-        for (let ci = ctorOpen; ci < raw.length; ci++) {
-          if (raw[ci] === '(') pd++;
-          else if (raw[ci] === ')') { pd--; if (pd === 0) { ctorClose = ci; break; } }
-        }
-        if (ctorClose !== -1) {
-          const ctorSlice = raw.slice(ctorOpen + 1, ctorClose);
-          const INLINE_PROP_RE = /\b(val|var)\s+(\w+)/g;
-          let ip: RegExpExecArray | null;
-          while ((ip = INLINE_PROP_RE.exec(ctorSlice)) !== null) {
-            symbols.push({
-              name: ip[2],
-              kind: ip[1] === 'val' ? 'val' : 'var',
-              line: lineNum,
-              character: ctorOpen + 1 + ip.index + (ip[0].length - ip[2].length),
-              isComposable: false,
-              depth: braceDepth + 1,
-              isPrimaryCtorParam: true,
-            });
-          }
-        }
-      }
+      emitCtorParams(raw, ctorOpen, lineNum, braceDepth + 1, symbols);
 
       advance(nl);
+      // Every path assigns: a header left pending by a previous class must not
+      // survive into this one.
+      ctorAttenteDepth = -1; ctorAttenteLignes = 0;
       if (parenDepth > 0) { ctorParamsActive = true; ctorBraceDepth = braceDepth; }
+      // Neither a paren nor a body on the header line: the constructor is on
+      // one of the next lines, and only the branch below can arm the tracking.
+      else if (ctorOpen === -1 && raw.indexOf('{', nameStart) === -1) { ctorAttenteDepth = braceDepth; ctorAttenteLignes = 3; }
+      annotationWindow.length = 0;
+      if (lineTripleQuotes % 2 !== 0) inRawString = true;
+      pos = nl + 1; lineNum++; continue;
+    }
+
+    // ── Primary constructor on its own line ────────────────────────────────
+    // `class Foo<T>` then `constructor(` or `@Inject constructor(` below.
+    // ctorParamsActive was only ever armed at the end of the class branch, so
+    // with the paren one line lower nothing armed it and the property branch
+    // dropped every `private val` of that constructor: 34 of them over 13
+    // files of a real project, invisible to Outline, Go to Definition and
+    // Find Usages.
+    if (ctorAttenteDepth !== -1 && RE_CTOR_HEAD.test(raw)) {
+      const depart = ctorAttenteDepth;
+      emitCtorParams(raw, raw.indexOf('('), lineNum, depart + 1, symbols);
+      ctorAttenteDepth = -1; ctorAttenteLignes = 0;
+      advance(nl);
+      if (parenDepth > 0) { ctorParamsActive = true; ctorBraceDepth = depart; }
       annotationWindow.length = 0;
       if (lineTripleQuotes % 2 !== 0) inRawString = true;
       pos = nl + 1; lineNum++; continue;
@@ -676,6 +686,36 @@ function extractSupertypes(line: string, nameEnd: number, quals?: string[]): str
 // so lookupImplementations() can count anonymous implementors.
 // Called once per line, before the branch dispatch, so a declaration keyword on
 // the same line does not hide the object expression that follows it.
+/**
+ * val/var of a primary constructor whose `(` is on this line. When the class
+ * and its constructor share a line, RE_PROP never runs on those params.
+ * Nothing is emitted when the paren does not close here: the property branch
+ * takes over line by line, armed by ctorParamsActive.
+ */
+function emitCtorParams(raw: string, ctorOpen: number, lineNum: number, depth: number, symbols: RawSymbol[]): void {
+  if (ctorOpen === -1) return;
+  let pd = 0, ctorClose = -1;
+  for (let ci = ctorOpen; ci < raw.length; ci++) {
+    if (raw[ci] === '(') pd++;
+    else if (raw[ci] === ')') { pd--; if (pd === 0) { ctorClose = ci; break; } }
+  }
+  if (ctorClose === -1) return;
+  const ctorSlice = raw.slice(ctorOpen + 1, ctorClose);
+  const INLINE_PROP_RE = /\b(val|var)\s+(\w+)/g;
+  let ip: RegExpExecArray | null;
+  while ((ip = INLINE_PROP_RE.exec(ctorSlice)) !== null) {
+    symbols.push({
+      name: ip[2],
+      kind: ip[1] === 'val' ? 'val' : 'var',
+      line: lineNum,
+      character: ctorOpen + 1 + ip.index + (ip[0].length - ip[2].length),
+      isComposable: false,
+      depth,
+      isPrimaryCtorParam: true,
+    });
+  }
+}
+
 function emitAnonObjectIfPresent(raw: string, lineNum: number, braceDepth: number, symbols: RawSymbol[]): void {
   // Cheap reject first: most lines carrying the substring `object` are
   // `objectMapper`, `companion object {`, `object Foo {` — no `:` follows.

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.103
+
+When ktlint wraps a long class header, the primary constructor lands on the line below. The parser only ever recognised a constructor sharing the header line, so the properties of a wrapped one were not misfiled, they were absent.
+
+### Fixed
+- Reads a primary constructor written under its class header, whether it is a bare constructor on its own line, one carrying modifiers, or the Dagger shape with the annotation on a line of its own. On a project of 5088 files: 42 such sites, 37 properties that no feature could see, now indexed. Measured on the same project after the fix: 37 recovered, 0 symbol lost, 0 added anywhere else.
+- The stored index and the bundled standard library index are both rebuilt, so the properties appear on upgrade instead of waiting for each of the 13 affected files to be edited.
+- The guard that pins what the parser writes to disk did not cover this shape, so it stayed silent on a change that reaches the disk. Its fixture now carries the wrapped form, and neutralising the fix makes it fail.
+
 ## 1.42.102
 
 VS Code ships no TOML grammar, so gradle/libs.versions.toml opens in a single colour, and the fold arrows never appear because the fallback folding needs indentation that TOML does not have.

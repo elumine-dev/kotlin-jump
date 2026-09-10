@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.42.92
+
+Fixes two Type Hierarchy bugs: a sealed class listing itself as its own supertype, and a type listing itself as its own implementation (which could loop when expanded).
+
+### Fixes
+- Fixes a sealed class appearing as its own supertype in the Type Hierarchy view. The parser kept reading past a constructor with no supertype list and picked up a nested variant's supertype instead, which put the sealed class under its own name. This affected 32 types on a real Android project.
+- Fixes the Type Hierarchy view listing a type as its own implementation, for example an interface that extends a generic type qualified by an enclosing class. Expanding that entry used to loop indefinitely; it now resolves correctly.
+- Adds regression tests for both issues so they cannot come back unnoticed.
+
+## 1.42.92
+
+A class with a multi line constructor and no supertype list borrowed one from the first declaration below it, usually a method's return type. A sealed class ended up extending itself and the type hierarchy listed it as its own subtype.
+
+### Fixes
+- A supertype list is read only until the constructor closes. On a real Android project 50 supertypes were taken from a declaration further down, every one of them a method return type; the sealed classes among them ended up extending themselves, which put them under their own name in the hierarchy.
+- The type hierarchy asks the same question as the lens and Go to Implementation. It still used a package heuristic and never excluded the type itself, so 21 types were listed as their own subtype and expanding one looped.
+
 ## 1.42.91
 
 Kotlin Jump 1.42.91 fixes an unnecessary full file scan in Call Hierarchy lookups, removing a 9 percent slowdown on that path.

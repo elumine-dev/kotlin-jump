@@ -1,12 +1,12 @@
 {
-  "version": "1.42.108",
+  "version": "1.42.109",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A catalog named something other than libs is navigable again",
-  "summary": "Gradle takes the accessor root from the catalog file name, and a create block in settings renames it again. The navigation assumed libs every time, so an alias of such a catalog opened onto nothing.",
+  "tagline": "A deleted file no longer comes back from the dead",
+  "summary": "Deleting a file while the extension was still reading it left the file in the index, so Cmd+T listed it and Cmd+click opened a file that no longer existed.",
   "highlights": [
     {
-      "title": "The accessor root is read, not assumed",
-      "description": "Two of the three shapes a project can have returned no usage where there was one. The root now comes from the catalog file name and from the create block in settings.",
+      "title": "A delete during a scan is no longer undone by that scan",
+      "description": "The window between reading a file and parsing it on a worker thread is tens of milliseconds. A delete landing there removed an entry the scan had not written yet, and the scan wrote it afterwards.",
       "kind": "fix"
     }
   ],
@@ -14,8 +14,8 @@
     {
       "heading": "Fixed",
       "bullets": [
-        "A catalog declared in Kotlin rather than in TOML yields nothing instead of a wrong answer, the same silence the unused dependency scan keeps.",
-        "The settings files come out of the sweep that already reads the build files, so this costs no extra read."
+        "The same held during a checkout and when a whole folder was deleted while one of its files was being scanned.",
+        "An edit made during a scan still wins: the stale read is dropped and the newer one kept, so no keystroke is lost."
       ]
     }
   ],

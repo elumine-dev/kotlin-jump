@@ -20,6 +20,15 @@ export class FileWatcher implements vscode.Disposable {
   private readonly javaWatcher: vscode.FileSystemWatcher;
   private readonly treeWatcher: vscode.FileSystemWatcher;
   private readonly pendingScan = new Set<string>();
+  /**
+   * Compteur d'événements par URI. `flush` retire l'entrée de l'index PUIS
+   * lance un scan qu'il n'attend pas, et ce scan fait deux await, dont un
+   * aller retour par le pool de workers. Une suppression qui tombe dans cette
+   * fenêtre voyait son `remove` passer avant l'`add` du scan, et le fichier
+   * effacé revenait : Cmd+T le listait, Cmd+click ouvrait « file not found ».
+   * Un scan dont le compteur a bougé pendant son vol est donc jeté.
+   */
+  private readonly epoque = new Map<string, number>();
   private flushTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
@@ -63,11 +72,19 @@ export class FileWatcher implements vscode.Disposable {
   removeTree(folder: vscode.Uri): vscode.Uri[] {
     if (SOURCE_EXT_RE.test(folder.path)) return [];
     const prefix = folder.toString().replace(/\/$/, '') + '/';
-    const gone = this.index.fileUriStrings().filter(k => k.startsWith(prefix)).map(k => vscode.Uri.parse(k));
+    const dansIndex = this.index.fileUriStrings().filter(k => k.startsWith(prefix));
+    // Un fichier de ce dossier dont le scan est EN VOL n'est pas encore dans
+    // l'index : `flush` l'en retire avant de lancer le scan. Sans le marquer
+    // ici, son ajout tardif ressuscite un fichier d'un dossier effacé.
+    const connus = [...this.epoque.keys()].filter(k => k.startsWith(prefix));
+    for (const cle of new Set([...dansIndex, ...connus])) {
+      this.marquer(vscode.Uri.parse(cle));
+      this.pendingScan.delete(cle);
+    }
+    const gone = dansIndex.map(k => vscode.Uri.parse(k));
     if (gone.length === 0) return gone;
     this.log?.info(`[watcher] folder gone: ${fileName(folder)} — ${gone.length} file(s) dropped`);
     for (const uri of gone) {
-      this.pendingScan.delete(uri.toString());
       evict(uri);
       this.index.remove(uri);
     }
@@ -88,9 +105,14 @@ export class FileWatcher implements vscode.Disposable {
     const uris = found.filter(u => !this.isExcluded(u.path));
     if (uris.length === 0) return uris;
     this.log?.info(`[watcher] folder added: ${fileName(folder)} — ${uris.length} file(s)`);
+    const jetons = new Map(uris.map(u => [u.toString(), this.epoque.get(u.toString()) ?? 0]));
     for (const uri of uris) { evict(uri); this.index.remove(uri); }
     await this.scanner.scanFiles(uris);
-    this.notify(uris);
+    // Un dossier supprimé pendant le scan de son remplaçant laissait ses
+    // fichiers indexés, par le même chemin que le cas fichier par fichier.
+    const vivants = uris.filter(u => (this.epoque.get(u.toString()) ?? 0) === jetons.get(u.toString()));
+    for (const u of uris) if (!vivants.includes(u)) this.index.remove(u);
+    this.notify(vivants);
     return uris;
   }
 
@@ -106,9 +128,25 @@ export class FileWatcher implements vscode.Disposable {
    * old per-file debounce turned a 500-file checkout into 500 timers
    * expiring simultaneously.
    */
+  /** Tout événement sur un fichier périme les scans déjà en vol pour lui. */
+  private marquer(uri: vscode.Uri): void {
+    const cle = uri.toString();
+    this.epoque.set(cle, (this.epoque.get(cle) ?? 0) + 1);
+  }
+
+  /** Scanne, puis jette le résultat si un événement l'a dépassé entre temps. */
+  private async scanEncoreValide(uri: vscode.Uri): Promise<boolean> {
+    const cle = uri.toString();
+    const jeton = this.epoque.get(cle) ?? 0;
+    try { await this.scanner.scanFile(uri); } catch { /* illisible en plein checkout */ }
+    if ((this.epoque.get(cle) ?? 0) !== jeton) { this.index.remove(uri); return false; }
+    return true;
+  }
+
   private queue(uri: vscode.Uri): void {
     // Drop build/ and .gradle/ churn before it ever enters the batch.
     if (this.isExcluded(uri.path)) return;
+    this.marquer(uri);
     this.pendingScan.add(uri.toString());
     if (this.flushTimer) clearTimeout(this.flushTimer);
     const debounceMs = vscode.workspace.getConfiguration('kotlinJump').get<number>('watcherDebounceMs', 150);
@@ -129,7 +167,7 @@ export class FileWatcher implements vscode.Disposable {
         this.log?.debug(`[watcher] changed: ${fileName(uri)} — re-indexing`);
         evict(uri);
         this.index.remove(uri);
-        void this.scanner.scanFile(uri).then(() => this.onFileIndexed?.(uri));
+        void this.scanEncoreValide(uri).then(valide => { if (valide) this.onFileIndexed?.(uri); });
       }
       return;
     }
@@ -140,7 +178,7 @@ export class FileWatcher implements vscode.Disposable {
     for (const uri of uris) {
       evict(uri);
       this.index.remove(uri);
-      try { await this.scanner.scanFile(uri); } catch { /* unreadable mid-checkout — skip */ }
+      await this.scanEncoreValide(uri);
       await new Promise<void>(r => setTimeout(r, 0));
     }
     if (this.onBurstIndexed) this.onBurstIndexed(uris);
@@ -149,6 +187,7 @@ export class FileWatcher implements vscode.Disposable {
 
   private onDeleted(uri: vscode.Uri): void {
     this.log?.info(`[watcher] deleted: ${fileName(uri)}`);
+    this.marquer(uri);
     this.pendingScan.delete(uri.toString());
     evict(uri);
     this.index.remove(uri);

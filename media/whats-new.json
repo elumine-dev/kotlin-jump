@@ -1,12 +1,12 @@
 {
-  "version": "1.42.94",
+  "version": "1.42.95",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Which parenthesis closes the constructor",
-  "summary": "The header was cut at the first line beginning with a parenthesis. A parameter whose type is a function written over several lines closes with one too, and a trailing comment blocked the reading, so the supertype list was dropped.",
+  "tagline": "A parenthesis inside quotes is text",
+  "summary": "The depth counting added in 1.42.94 read every parenthesis, including the ones inside a string or a character literal. A default value holding a closing parenthesis ended the constructor in the middle of its own parameter list.",
   "highlights": [
     {
-      "title": "Counted, not guessed",
-      "description": "The closing parenthesis is found inside the line by counting depth, because a line can close the constructor and open the parent's arguments at once.",
+      "title": "val sep: String = \")\"",
+      "description": "That single parameter made the class lose every supertype it declares, because the quoted parenthesis was counted as the end of the header.",
       "kind": "fix"
     }
   ],
@@ -14,8 +14,7 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "A supertype list survives a parameter whose type is a multi line function, and a comment after the closing parenthesis. Both are valid Kotlin and both silently emptied the list.",
-        "The line that closes the constructor is found by counting parentheses inside it. Writing the parent's own arguments on that same line leaves the depth unchanged at the end of it, which says nothing about where the header stops."
+        "Parentheses inside a string or a character literal are skipped when the header is measured, escapes included. Four shapes of valid Kotlin emptied the supertype list before."
       ]
     }
   ],

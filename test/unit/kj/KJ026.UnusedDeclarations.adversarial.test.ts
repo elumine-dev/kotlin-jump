@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { expectFasterThan } from '../perfBudget';
 import { findUnusedDeclarations } from '../../../src/providers/UnusedDeclarationProvider';
 
 /** KJ-026 — tentatives de casse de la DÉTECTION au-delà du contrat. */
@@ -156,8 +157,7 @@ describe('KJ-026 adversarial — détection', () => {
     const text = Array.from({ length: 300 }, (_, i) =>
       `class C${i} {\n  private val dead${i} = 1\n  private val used${i} = 2\n  fun f${i}() = used${i}\n}`,
     ).join('\n');
-    const start = performance.now();
     expect(findUnusedDeclarations(text)).toHaveLength(300);
-    expect(performance.now() - start).toBeLessThan(300);
+    expectFasterThan(300, () => { findUnusedDeclarations(text); });
   });
 });

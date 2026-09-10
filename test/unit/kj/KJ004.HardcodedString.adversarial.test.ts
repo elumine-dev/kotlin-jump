@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { expectFasterThan } from '../perfBudget';
 import { findHardcodedStrings } from '../../../src/providers/HardcodedStringProvider';
 
 /** KJ-004 — tentatives de casse au-delà du contrat. */
@@ -50,8 +51,7 @@ describe('KJ-004 adversarial', () => {
 
   it('gros fichier : 2000 lignes sans UI ne remontent rien et vite', () => {
     const big = Array.from({ length: 2000 }, (_, i) => `val v${i} = compute(${i})`).join('\n');
-    const start = performance.now();
     expect(findHardcodedStrings(big)).toHaveLength(0);
-    expect(performance.now() - start).toBeLessThan(200);
+    expectFasterThan(200, () => { findHardcodedStrings(big); });
   });
 });

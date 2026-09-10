@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { expectFasterThan } from '../perfBudget';
 import { findUnusedResources, ScanInput } from '../../../src/providers/UnusedResourceProvider';
 import { FileResourceIndex } from '../../../src/indexer/FileResourceIndex';
 
@@ -224,9 +225,8 @@ describe('KJ-029 adversarial — détection', () => {
   it('perf : 400 ressources sur 3000 sources < 1500 ms', () => {
     const files = Array.from({ length: 400 }, (_, i) => `${MODULE}/src/main/res/layout/l${i}.xml`);
     const sources = Array.from({ length: 3000 }, (_, i) => kt(`fun f${i}() { setContentView(R.layout.l${i % 200}) }`));
-    const start = performance.now();
     const found = scan(files, sources);
     expect(found).toHaveLength(200);
-    expect(performance.now() - start).toBeLessThan(1500);
+    expectFasterThan(1500, () => { scan(files, sources); });
   });
 });

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { expectFasterThan } from '../perfBudget';
 import {
   findUnusedImports,
   sanitizeForUsageScan,
@@ -138,9 +139,8 @@ describe('KJ-009 adversarial', () => {
   it('gros fichier : 3000 lignes avec 50 imports < 300 ms', () => {
     const imports = Array.from({ length: 50 }, (_, i) => `import com.pkg.Class${i}`).join('\n');
     const body = Array.from({ length: 3000 }, (_, i) => `val v${i} = Class${i % 50}()`).join('\n');
-    const start = performance.now();
     expect(findUnusedImports(`${imports}\n${body}`)).toHaveLength(0);
-    expect(performance.now() - start).toBeLessThan(300);
+    expectFasterThan(300, () => { findUnusedImports(`${imports}\n${body}`); });
   });
 });
 

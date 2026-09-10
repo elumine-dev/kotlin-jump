@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { expectFasterThan } from '../perfBudget';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DEMO_ROOT, importOrNull } from './harness';
@@ -122,8 +123,6 @@ describe.skipIf(!mod || !scanner)('KJ-031 sur le projet de démo', () => {
   });
 
   it('reste rapide sur le projet de démo', () => {
-    const start = performance.now();
-    scanDemo();
-    expect(performance.now() - start).toBeLessThan(2000);
+    expectFasterThan(2000, () => { scanDemo(); });
   });
 });

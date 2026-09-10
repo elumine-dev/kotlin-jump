@@ -12,6 +12,7 @@
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { expectFasterThan } from './perfBudget';
 import * as vscodeMock from './__mocks__/vscode';
 import { ColorFoldingProvider } from '../../src/providers/ColorFoldingProvider';
 import { ColorResourceIndex } from '../../src/indexer/ColorResourceIndex';
@@ -129,8 +130,6 @@ describe('SP2-ADVER-CFP-7 — toCSS("#FFFFFFFF") fully opaque white', () => {
 describe('SP2-ADVER-CFP-8 — stress 200 refs R.color sur 200 lignes', () => {
   it('complète en < 50ms', () => {
     const lines = Array.from({ length: 200 }, () => 'R.color.primary');
-    const t0 = performance.now();
-    decs(IDX, lines);
-    expect(performance.now() - t0).toBeLessThan(50);
+    expectFasterThan(50, () => { decs(IDX, lines); });
   });
 });

@@ -12,7 +12,7 @@ import { importBlockBounds } from '../util/importBlock';
  * make the whole module unloadable outside an extension host.
  */
 
-import { CONVENTION_FUN_NAMES, sanitizeForUsageScan } from '../util/kotlinScan';
+import { CONVENTION_FUN_NAMES, kdocReferences, sanitizeForUsageScan } from '../util/kotlinScan';
 
 export interface UnusedImport {
   /** 0-based line of the import. */
@@ -77,10 +77,15 @@ export function findUnusedImports(text: string): UnusedImport[] {
     .map((l, idx) => (importLines.has(idx) ? '' : l))
     .join('\n');
 
+  // Un lien KDoc `[Nom]` se resout par les imports : le retirer casserait la
+  // documentation, donc ce n'est pas un import mort.
+  const refsDoc = kdocReferences(text);
+
   const unused: UnusedImport[] = [];
   for (const im of imports) {
     if (im.wildcard) continue; // conservative
     if (isResolvedByConvention(im.effectiveName)) continue;
+    if (refsDoc.has(im.effectiveName)) continue;
     const usageRe = new RegExp(`\\b${escapeRegExp(im.effectiveName)}\\b`);
     if (!usageRe.test(body)) {
       unused.push({ line: im.line, statement: im.statement });

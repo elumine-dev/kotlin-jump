@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.203
+
+No behaviour changes. The guard added last release named a folder that does not exist, and left the release tooling unguarded.
+
+### Fixes
+- `NoRawControlBytes` listed `media/whatsnew` among the folders it scans. There is no such folder, so that entry protected nothing. In its place it now reads `.github/scripts`, which holds the four scripts that run on every publish. A hidden byte there would have been exactly as invisible as one in a provider, and it is the tooling that decides whether a release goes out at all. A check confirms the guard fails when a byte is put in one of those scripts.
+- The guard sees 817 files now instead of 812. Its floor is there to catch a renamed folder making the scan return nothing, not to track the size of the repository, and it is set well below the real count.
+
+### Notes
+- The glob fix from last release was measured against the real project rather than trusted: of 5 093 sources it excludes exactly one more file, the one under `buildSrc` it was written for, and loses none. A pattern that widens is worth checking in that direction too.
+- Three audits found nothing to fix, which is worth recording so the next pass does not repeat them. All 126 declared settings are read by something, two of them through a menu condition rather than through code. All 85 declared commands resolve in both the desktop and the web build, twelve of them through a table that builds the identifier, which a first pass had wrongly reported as missing. The five guards in the path exclusion helper were each broken in turn and a test caught every one.
+
 ## 1.42.202
 
 The setting that keeps Gradle build logic out of the unreferenced symbol report never worked. Its own description says why it has to: a convention plugin is named by its file, so every declaration inside it looks unreferenced and gets offered for deletion, and deleting it breaks the build.

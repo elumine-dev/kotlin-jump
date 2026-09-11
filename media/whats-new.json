@@ -1,27 +1,28 @@
 {
-  "version": "1.42.137",
+  "version": "1.42.138",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A check that could not fail, made to fail",
-  "summary": "The check added last release for the catalog colouring could not have caught a broken scanner.",
+  "tagline": "Documentation links keep their imports alive",
+  "summary": "An import named only by a documentation link is no longer reported as dead. On a real project that was two findings out of five.",
   "highlights": [
     {
-      "title": "Checks That Ask For The Right Thing",
-      "kind": "improvement",
-      "description": "The catalog colouring checks only asked that nothing be wrong, which a scanner producing nothing also satisfies. Each case now states what it must produce, so a silent scanner fails thirteen checks instead of one."
+      "title": "Imports Named Only By Documentation",
+      "kind": "fix",
+      "description": "A bracketed type name in Kotlin documentation resolves through the imports, so removing the import breaks the docs. The sweep read the file with comments stripped and called 15 of 37 such imports dead on a real project."
     }
   ],
   "sections": [
     {
-      "heading": "Internal",
+      "heading": "Fixes",
       "bullets": [
-        "Those checks only asked that nothing be wrong: no token past the end of its line, no overlap, no impossible fold. A scanner that produced nothing at all breaks none of those, so twelve of the thirteen checks still passed when it was made silent. The thirteenth, the one that reads a real catalog, is the one skipped wherever that project is absent, which is every machine but the author's.",
-        "Each case now states what it must produce, the tokens and their kinds and the number of folds, so the same silent scanner fails thirteen of fourteen instead of one. Four further deliberate breakages were tried: losing the difference between a key and an inline field, dropping comments, folding an empty table, and losing the difference between a version number and a plain string. Each is now caught by the cases that care about it."
+        "In Kotlin a documentation link such as a bracketed type name resolves through the file's imports, so removing the import breaks the generated documentation and the quick doc popup. IntelliJ, ktlint and detekt all count such a reference as a use. The sweep read the file with comments stripped, so these references were invisible: on a real project of 3187 Kotlin files, 15 of the 37 imports it called dead were named only by documentation, which is 41 percent. None of them was used in code, so nothing would have failed to compile, but following the advice would have broken 15 documentation links.",
+        "The see, throws, exception and sample tags count too, since they name a type directly. A name merely mentioned in prose does not, and neither does one inside a string, since nothing resolves there."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "No user visible change in this release."
+        "The same check was run on the declarations detector and it has no such finding on that project, so it is unchanged.",
+        "No new commands or settings in this release."
       ]
     }
   ],

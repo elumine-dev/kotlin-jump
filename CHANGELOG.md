@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.138
+
+An import named only by a documentation link is no longer reported as dead. On a real project that was two findings out of five.
+
+### Fixes
+- In Kotlin a documentation link such as a bracketed type name resolves through the file's imports, so removing the import breaks the generated documentation and the quick doc popup. IntelliJ, ktlint and detekt all count such a reference as a use. The sweep read the file with comments stripped, so these references were invisible: on a real project of 3187 Kotlin files, 15 of the 37 imports it called dead were named only by documentation, which is 41 percent. None of them was used in code, so nothing would have failed to compile, but following the advice would have broken 15 documentation links.
+- The see, throws, exception and sample tags count too, since they name a type directly. A name merely mentioned in prose does not, and neither does one inside a string, since nothing resolves there.
+
+### Notes
+- The same check was run on the declarations detector and it has no such finding on that project, so it is unchanged.
+- No new commands or settings in this release.
+
 ## 1.42.137
 
 The check added last release for the catalog colouring could not have caught a broken scanner.

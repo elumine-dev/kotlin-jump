@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.163
+
+Jumping from a key in values to where it is used highlighted one character too many on every usage that comes from a layout, because the length of the highlight was guessed from the code form of the reference.
+
+### Fixes
+- A reference written the code way and the same one written the XML way do not have the same length. The three places that jump from values to a usage rebuilt the code form to size their highlight, so it swallowed the closing quote of every XML reference.
+- Measured on a real project: of 1873 usages reached this way, 762 were highlighted one character too far, which is every single one that comes from a layout or a manifest. None are now.
+- The length of the text actually recognised is recorded when the file is read, so nothing has to be rebuilt later. That also means a new way of writing a reference cannot silently break the highlight again.
+- This only became visible when layout references started counting two releases ago. Until then every usage came from code and the guess happened to be right.
+
 ## 1.42.162
 
 The pattern that recognises a resource reference written the XML way was being run over every line of every Kotlin and Java file, where it can never match, and the app manifest was left out of the scan.

@@ -35,13 +35,12 @@ export class DrawableXmlDefinitionProvider implements vscode.DefinitionProvider 
     const lineText = document.lineAt(position.line).text;
     if (!ROOT_TAG_RE.test(lineText)) return [];
 
-    const matchLen = `R.${kind}.${key}`.length;
     return this.rIndex.getUsages(kind, key).map(e =>
       new vscode.Location(
         vscode.Uri.parse(e.uri),
         new vscode.Range(
           new vscode.Position(e.line, e.character),
-          new vscode.Position(e.line, e.character + matchLen),
+          new vscode.Position(e.line, e.character + e.length),
         ),
       ),
     );

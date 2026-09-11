@@ -1,23 +1,22 @@
 {
-  "version": "1.42.162",
+  "version": "1.42.163",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Two refinements to yesterday's layout indexing",
-  "summary": "The pattern that recognises a resource reference written the XML way was being run over every line of every Kotlin and Java file, where it can never match, and the app manifest was left out of the scan.",
+  "tagline": "The highlight on a resource usage fits it exactly",
+  "summary": "Jumping from a key in values to where it is used highlighted one character too many on every usage that comes from a layout, because the length of the highlight was guessed from the code form of the reference.",
   "highlights": [
     {
-      "title": "The XML pattern stays where it belongs",
+      "title": "The length is read, not guessed",
       "kind": "fix",
-      "description": "Code writes R.string.key, never the XML form, so searching for the XML form in every source line found nothing and cost time. Building the usage index went from 44 ms to 31 ms on a real project."
+      "description": "A reference written the code way and the same one written the XML way do not have the same length. The three places that jump from values to a usage rebuilt the code form to size their highlight, so it swallowed the closing quote of every XML reference."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Alternating runs of the previous release and this one over the 6219 files of that project: 44, 44 and 46 ms against 31, 31 and 31, with the two sets of timings nowhere near each other. That is 30 percent off, for nothing lost, since a resource reference in XML syntax is only a reference inside XML.",
-        "The app manifest sits outside the res folder and was therefore never read, although it is where the launcher icon, the application name and several configuration keys are referenced. On that project it holds 24 references, 9 of which no other file carries.",
-        "With it read, declarations that lead somewhere went from 1268 to 1275 and their targets from 1788 to 1873, each one still landing on a line that really names the key.",
-        "Its watcher is released with the others, which the check added yesterday required before the code would pass."
+        "Measured on a real project: of 1873 usages reached this way, 762 were highlighted one character too far, which is every single one that comes from a layout or a manifest. None are now.",
+        "The length of the text actually recognised is recorded when the file is read, so nothing has to be rebuilt later. That also means a new way of writing a reference cannot silently break the highlight again.",
+        "This only became visible when layout references started counting two releases ago. Until then every usage came from code and the guess happened to be right."
       ]
     }
   ],

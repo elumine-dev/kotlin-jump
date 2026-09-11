@@ -1,34 +1,27 @@
 {
-  "version": "1.42.128",
+  "version": "1.42.129",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Hover catches up, and two catalogs both answer",
-  "summary": "Corrects the previous release, which claimed more than it delivered, and repairs what widening the catalog sweep broke.",
+  "tagline": "Catalog hover back under budget",
+  "summary": "Hover and Ctrl+click on a catalog accessor got slower two releases ago. They are now faster than before either change.",
   "highlights": [
     {
-      "title": "Hover Follows The Catalog Name",
+      "title": "Catalog Hover And Ctrl Click Speed",
       "kind": "fix",
-      "description": "Hover still only recognised libs, despite the previous release saying otherwise. It carried its own hardcoded pattern, and now follows the file name like Ctrl+click does."
-    },
-    {
-      "title": "Two Catalogs Side By Side",
-      "kind": "fix",
-      "description": "A project declaring both libs and testLibs only ever answered for whichever file was read first, so libs itself could stop working. Every catalog a build file can reach is now tried."
+      "description": "Trying every catalog root rebuilt the search pattern on every call, on a path that runs at every mouse move. Alternating measurements: 34.9 ms before, 59.7 ms as shipped, 23.9 ms now, with no overlap between the three."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Hover over a catalog accessor still only recognised the name libs. The previous release said hover followed the file name; that was true of Ctrl+click and not of hover, which carried its own hardcoded pattern. It now follows the file name too, so deps.retrofit shows its coordinates.",
-        "A project with two catalogs side by side, for instance libs and testLibs, which Gradle supports and recommends for separating test dependencies, only ever answered for one of them. Widening the sweep in the previous release is what brought the second one into the index, and whichever file was read first won, so libs itself could be the one that stopped working. Hover and Ctrl+click now try every catalog a build file can reach.",
-        "When the same alias name exists in two catalogs, the answer now comes from the one actually written on the line rather than from whichever catalog was read first."
+        "Trying every catalog root, added in the previous release, rebuilt the search pattern on every call, and these run on every mouse move over a build file. Measured by alternating passes against the two earlier builds so machine drift cancels out: 34.9 ms before, 59.7 ms as shipped, 23.9 ms now, with the three sets of readings not overlapping at all. The pattern is now built once per catalog name and shared, which also removes a rebuild that Ctrl+click was already paying before any of this.",
+        "The list of catalogs and their names is now computed when a catalog file changes rather than on every lookup."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "A project with a single gradle/libs.versions.toml sees no change.",
-        "No new commands or settings in this release."
+        "No visible change other than speed. No new commands or settings."
       ]
     }
   ],

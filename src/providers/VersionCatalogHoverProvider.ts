@@ -1,11 +1,10 @@
 import * as vscode from 'vscode';
-import { VersionCatalogIndex } from '../indexer/VersionCatalogIndex';
+import { VersionCatalogIndex, accessorRegExp } from '../indexer/VersionCatalogIndex';
 
 // Le motif etait ecrit en dur sur `libs`, donc un catalogue renomme
 // (`deps.versions.toml`, lu `deps.x`) n'avait aucun survol, et un projet a
-// deux catalogues n'en avait que pour le premier.
-const echapper = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const motifRacine = (root: string) => new RegExp(`\\b${echapper(root)}\\.([A-Za-z0-9_.]+)\\b`, 'g');
+// deux catalogues n'en avait que pour le premier. Il vient desormais du cache
+// partage avec le Ctrl+clic.
 
 export class VersionCatalogHoverProvider implements vscode.HoverProvider {
   constructor(private readonly index: VersionCatalogIndex) {}
@@ -24,7 +23,7 @@ export class VersionCatalogHoverProvider implements vscode.HoverProvider {
     const line = document.lineAt(position.line).text;
     const contextPath = document.uri?.fsPath ?? fname;
     for (const root of this.index.rootsFor(contextPath)) {
-      const re = motifRacine(root);
+      const re = accessorRegExp(root);
       let m: RegExpExecArray | null;
       while ((m = re.exec(line)) !== null) {
         const start = m.index;

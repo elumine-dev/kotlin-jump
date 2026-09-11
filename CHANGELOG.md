@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.129
+
+Hover and Ctrl+click on a catalog accessor got slower two releases ago. They are now faster than before either change.
+
+### Fixes
+- Trying every catalog root, added in the previous release, rebuilt the search pattern on every call, and these run on every mouse move over a build file. Measured by alternating passes against the two earlier builds so machine drift cancels out: 34.9 ms before, 59.7 ms as shipped, 23.9 ms now, with the three sets of readings not overlapping at all. The pattern is now built once per catalog name and shared, which also removes a rebuild that Ctrl+click was already paying before any of this.
+- The list of catalogs and their names is now computed when a catalog file changes rather than on every lookup.
+
+### Notes
+- No visible change other than speed. No new commands or settings.
+
 ## 1.42.128
 
 Corrects the previous release, which claimed more than it delivered, and repairs what widening the catalog sweep broke.

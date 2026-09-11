@@ -23,6 +23,8 @@
  *   FW-14 Dossier supprimé avant que la file d'attente ait été vidée
  *   FW-15 Dossier supprimé pendant le balayage initial, qui ignore le veilleur
  *   FW-16 Une vague de suppressions pendant un balayage ne fait qu'une reprise
+ *   FW-17 Deux scans du même fichier qui se chevauchent ne s'effacent pas
+ *   FW-18 Invariant global : après une tempête d'événements, index == disque
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -362,6 +364,86 @@ describe('FW-16 — une vague de suppressions ne fait qu une reprise', () => {
 
     expect((w as any).aRejouer.size, 'la file est videe par la reprise').toBe(0);
     expect(index.stats().files, 'tous les fichiers des dossiers morts sont partis').toBe(0);
+    w.dispose();
+  });
+});
+
+describe('FW-17 — deux scans du meme fichier qui se chevauchent', () => {
+  it('une sauvegarde pendant un scan ne fait pas disparaitre le fichier', async () => {
+    const index = new SymbolIndex();
+    const { scanner, liberer } = scannerRetarde(index, () => 'Sauvegarde');
+    watcher = new FileWatcher(scanner, index);
+
+    (watcher as any).queue(uriOf(9));
+    await vi.advanceTimersByTimeAsync(200);   // scan 1 en vol
+    (watcher as any).queue(uriOf(9));
+    await vi.advanceTimersByTimeAsync(200);   // scan 2 en vol, scan 1 toujours dedans
+    expect(scanner.scanFile, 'les deux scans se chevauchent bien').toHaveBeenCalledTimes(2);
+
+    liberer();
+    await tourner();
+    liberer();
+    await tourner();
+
+    // Le scan 1 etait perime, mais rien n'a ete supprime : le retirer aurait
+    // efface l'ajout du scan 2.
+    expect(index.lookup('Sauvegarde'), 'le fichier reste indexe').toHaveLength(1);
+  });
+});
+
+describe('FW-18 — invariant global apres une tempete', () => {
+  it('l index vaut exactement le disque, creations suppressions et dossiers meles', async () => {
+    vi.useRealTimers();
+    const disque = new Map<string, string>();
+    const index = new SymbolIndex();
+    const chemin = (d: number, f: number) => 'file:///t/d' + d + '/sub/F' + d + '_' + f + '.kt';
+
+    const scanner = {
+      scanFile: async (u: any) => {
+        const cle = u.toString();
+        await Promise.resolve();
+        const t = disque.get(cle);
+        if (t === undefined) { index.remove(u); return; }
+        await Promise.resolve();
+        index.add(parse(cle, t));
+        index.finalize();
+      },
+      scanFiles: async (us: any[]) => { for (const u of us) await (scanner as any).scanFile(u); },
+    } as any;
+    const w = new FileWatcher(scanner, index);
+
+    for (let d = 0; d < 12; d++) for (let f = 0; f < 4; f++) disque.set(chemin(d, f), SOURCE('C' + d + '_' + f));
+    for (const [c, t] of disque) index.add(parse(c, t));
+    index.finalize();
+
+    let graine = 20260910;
+    const alea = (n: number) => { graine = (graine * 1103515245 + 12345) & 0x7fffffff; return graine % n; };
+    const enCours: Promise<void>[] = [];
+    for (let etape = 0; etape < 600; etape++) {
+      const d = alea(12), f = alea(4), c = chemin(d, f);
+      switch (alea(6)) {
+        case 0: disque.set(c, SOURCE('C' + d + '_' + f)); (w as any).queue(vscode.Uri.parse(c)); break;
+        case 1: case 4: disque.delete(c); (w as any).onDeleted(vscode.Uri.parse(c)); break;
+        case 2: {
+          const p = 'file:///t/d' + d + '/';
+          for (const k of [...disque.keys()]) if (k.startsWith(p)) disque.delete(k);
+          w.removeTree(vscode.Uri.parse('file:///t/d' + d) as any);
+          break;
+        }
+        default: enCours.push((async () => { await (w as any).flush(); })());
+      }
+    }
+    await (w as any).flush();
+    await Promise.all(enCours);
+    for (let i = 0; i < 40; i++) await new Promise<void>(r => setTimeout(r, 0));
+    index.finalize();
+
+    const indexes = new Set(index.fileUriStrings());
+    const surDisque = new Set(disque.keys());
+    expect(surDisque.size, 'la tempete a bien supprime des fichiers').toBeLessThan(48);
+    expect(surDisque.size, 'et pas tout').toBeGreaterThan(0);
+    expect([...indexes].filter(k => !surDisque.has(k)), 'aucun fantome').toEqual([]);
+    expect([...surDisque].filter(k => !indexes.has(k)), 'aucun manquant').toEqual([]);
     w.dispose();
   });
 });

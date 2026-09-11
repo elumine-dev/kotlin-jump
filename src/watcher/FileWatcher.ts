@@ -21,12 +21,19 @@ export class FileWatcher implements vscode.Disposable {
   private readonly treeWatcher: vscode.FileSystemWatcher;
   private readonly pendingScan = new Set<string>();
   /**
-   * Compteur d'événements par URI. `flush` retire l'entrée de l'index PUIS
+   * Compteur de SUPPRESSIONS par URI. `flush` retire l'entrée de l'index PUIS
    * lance un scan qu'il n'attend pas, et ce scan fait deux await, dont un
    * aller retour par le pool de workers. Une suppression qui tombe dans cette
    * fenêtre voyait son `remove` passer avant l'`add` du scan, et le fichier
    * effacé revenait : Cmd+T le listait, Cmd+click ouvrait « file not found ».
-   * Un scan dont le compteur a bougé pendant son vol est donc jeté.
+   *
+   * Ce compteur ne bouge QUE sur une suppression. Il comptait aussi les
+   * modifications, et deux scans du même fichier qui se chevauchent, ce que
+   * des sauvegardes rapprochées produisent, se piétinaient : chacun ajoutait
+   * le fichier, puis chaque scan déclaré périmé le retirait, y compris celui
+   * qu'un scan valide venait d'écrire. Le fichier disparaissait de l'index
+   * alors qu'il était bien là. Une modification n'a pas besoin de ce filet :
+   * le scan suivant réécrit l'entrée.
    */
   private readonly epoque = new Map<string, number>();
 
@@ -37,6 +44,18 @@ export class FileWatcher implements vscode.Disposable {
    * cet ensemble tient dans la poignée de scans concurrents.
    */
   private readonly enVol = new Set<string>();
+
+  /**
+   * URIs actuellement supprimees. Le compteur d'epoques disait seulement
+   * « quelque chose est arrive », et un scan declare perime retirait l'entree
+   * de l'index sans savoir quoi. Quand deux scans du meme fichier se
+   * chevauchent, ce que des sauvegardes rapprochees produisent, chacun ajoute
+   * le fichier puis les perimes le retirent, y compris l'ajout qu'un scan
+   * valide venait d'ecrire : le fichier disparaissait alors qu'il etait la.
+   * Ici la question est exacte, « ce fichier est il supprime en ce moment »,
+   * et une recreation efface la marque.
+   */
+  private readonly supprimes = new Set<string>();
 
   /** Dossiers supprimes pendant un balayage, repris en une passe a la fin. */
   private aRejouer = new Set<string>();
@@ -180,7 +199,6 @@ export class FileWatcher implements vscode.Disposable {
     const uris = found.filter(u => !this.isExcluded(u.path));
     if (uris.length === 0) return uris;
     this.log?.info(`[watcher] folder added: ${fileName(folder)} — ${uris.length} file(s)`);
-    const jetons = new Map(uris.map(u => [u.toString(), this.epoque.get(u.toString()) ?? 0]));
     for (const uri of uris) { evict(uri); this.index.remove(uri); this.enVol.add(uri.toString()); }
     try { await this.scanner.scanFiles(uris); }
     finally { for (const uri of uris) this.enVol.delete(uri.toString()); }
@@ -192,7 +210,7 @@ export class FileWatcher implements vscode.Disposable {
     const vivants: vscode.Uri[] = [];
     for (const u of uris) {
       const cle = u.toString();
-      if ((this.epoque.get(cle) ?? 0) === jetons.get(cle)) vivants.push(u);
+      if (!this.supprimes.has(cle)) vivants.push(u);
       else this.index.remove(u);
     }
     this.notify(vivants);
@@ -211,27 +229,31 @@ export class FileWatcher implements vscode.Disposable {
    * old per-file debounce turned a 500-file checkout into 500 timers
    * expiring simultaneously.
    */
-  /** Tout événement sur un fichier périme les scans déjà en vol pour lui. */
+  /** Une SUPPRESSION périme les scans déjà en vol pour ce fichier. */
   private marquer(uri: vscode.Uri): void {
     const cle = uri.toString();
     this.epoque.set(cle, (this.epoque.get(cle) ?? 0) + 1);
+    this.supprimes.add(cle);
   }
 
   /** Scanne, puis jette le résultat si un événement l'a dépassé entre temps. */
   private async scanEncoreValide(uri: vscode.Uri): Promise<boolean> {
     const cle = uri.toString();
-    const jeton = this.epoque.get(cle) ?? 0;
     this.enVol.add(cle);
     try { await this.scanner.scanFile(uri); } catch { /* illisible en plein checkout */ }
     finally { this.enVol.delete(cle); }
-    if ((this.epoque.get(cle) ?? 0) !== jeton) { this.index.remove(uri); return false; }
+    // Le fichier est il supprime MAINTENANT ? Une modification survenue
+    // pendant le scan n'a pas besoin de ce filet : le scan suivant reecrit
+    // l'entree, et la retirer ici effacerait son travail.
+    if (this.supprimes.has(cle)) { this.index.remove(uri); return false; }
+    if (this.enVol.size === 0) this.supprimes.clear();   // borne l'ensemble
     return true;
   }
 
   private queue(uri: vscode.Uri): void {
     // Drop build/ and .gradle/ churn before it ever enters the batch.
     if (this.isExcluded(uri.path)) return;
-    this.marquer(uri);
+    this.supprimes.delete(uri.toString());
     this.pendingScan.add(uri.toString());
     if (this.flushTimer) clearTimeout(this.flushTimer);
     const debounceMs = vscode.workspace.getConfiguration('kotlinJump').get<number>('watcherDebounceMs', 150);
@@ -289,6 +311,7 @@ export class FileWatcher implements vscode.Disposable {
     if (this.flushTimer) clearTimeout(this.flushTimer);
     this.pendingScan.clear();
     this.enVol.clear();
+    this.supprimes.clear();
   }
 }
 

@@ -1,21 +1,21 @@
 {
-  "version": "1.42.116",
+  "version": "1.42.117",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A wave of folder deletions is taken up in one pass",
-  "summary": "Yesterday's replay ran once per deleted folder, and each run re reads the whole index. A wave of deletions therefore read it a second time from end to end.",
+  "tagline": "Saving twice in a row no longer loses the file",
+  "summary": "Two scans of one file can overlap when a second save arrives mid parse. Each wrote its result, then every scan the watcher thought outdated erased the entry, including the one just written.",
   "highlights": [
     {
-      "title": "Half the freeze on a wave of deletions",
-      "description": "Two hundred deletions on a fifty thousand file index cost 853 ms and now cost 464 ms. Membership is decided by walking a path up to its parents.",
+      "title": "A file could vanish from the index while still on disk",
+      "description": "The watcher now asks whether the file is deleted right now, rather than whether anything at all has happened to it. A save needs no safety net: the next scan rewrites the entry.",
       "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Corrected",
+      "heading": "Fixed",
       "bullets": [
-        "The note published with version 1.42.113 claimed folder deletion had gone from 406 ms to 0.1 ms. That measurement used an empty index and left out the pass that dominates.",
-        "The honest figure: reading the whole index remains, at 0.2 ms per deletion on a five thousand file project. What 1.42.113 removed was a pass whose cost had no ceiling."
+        "Driving the watcher through three thousand interleaved creations, deletions and folder removals left files on disk that the index had lost. They now match exactly.",
+        "That storm is now a test, and restoring the previous guard fails it."
       ]
     }
   ],

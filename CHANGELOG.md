@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.146
+
+Test sources that Gradle recognises but the settings list does not are no longer treated as production code.
+
+### Fixes
+- The extension holds two ways of deciding whether a file belongs to a test source set: the list in the settings, and Gradle's own convention that a source set under src whose name contains test is one. The dead code detectors have always used both. The filter behind the implementation count on a lens, auto import and the type hierarchy used only the list. On a real project of 3187 Kotlin files, 29 test files, 26 under savedAndroidTest and 3 under sharedTest, were therefore taken for production code.
+- Auto import was the worst of the three: it could offer to import a class declared in a test source set, which does not compile. Both ways are now used everywhere, so what one feature hides the others hide too.
+- Seen from a test file nothing changes: everything stays visible, since a test may legitimately reach both sides.
+
+### Notes
+- A project whose source sets are all named in the settings sees no change.
+- No new commands or settings in this release.
+
 ## 1.42.145
 
 Stops the test suite printing a spurious error, and the author's local path, into every public build log.

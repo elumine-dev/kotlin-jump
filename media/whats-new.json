@@ -1,12 +1,12 @@
 {
-  "version": "1.42.113",
+  "version": "1.42.114",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Deleting folders no longer slows down as the session goes on",
-  "summary": "To catch a file being scanned as its folder is deleted, the watcher re read every file it had ever seen an event for. That list only grows.",
+  "tagline": "Deleting a folder also cancels the scans queued for it",
+  "summary": "Yesterday's fix narrowed what a folder deletion looks at, and went one notch too far: files still waiting in the queue were left out, so they were indexed after their folder was gone.",
   "highlights": [
     {
-      "title": "406 ms of frozen editor became 0.1 ms",
-      "description": "Two hundred folder deletions, what a branch switch produces, cost 406 ms once fifty thousand files had been seen. The cost no longer depends on what came before.",
+      "title": "A file created just before its folder is deleted stays out",
+      "description": "It is not in the index yet and its scan has not started, so neither list checked yesterday held it. The queue fired afterwards and indexed it.",
       "kind": "fix"
     }
   ],
@@ -14,8 +14,8 @@
     {
       "heading": "Fixed",
       "bullets": [
-        "The watcher tracks the scans actually running rather than the whole history.",
-        "Detecting a scan in flight never needed more than the handful running at that instant."
+        "Deleting a folder in the Explorer while the editor is still settling was enough to hit it.",
+        "Folder deletion stays flat at 0.1 ms whatever the session has seen."
       ]
     }
   ],

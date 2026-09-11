@@ -225,21 +225,18 @@ describe('ADVER-NULL-5 — boundary and degenerate inputs', () => {
     expect(decs(['   \t  '])).toHaveLength(0);
   });
 
-  it('KDoc block /** ... */: opening and closing lines skipped, but middle lines are processed', () => {
-    // The provider does NOT track multi-line /* */ comment state between lines.
-    // Lines starting with ' *' are not on the fast-path skip list in NullAssertionProvider.
-    // isInsideCommentOrString operates per-line — it only sees the content of the current line.
-    // A middle line like ' * Use x!!' has no '/*' on it → !! is NOT considered inside a comment.
-    // This documents known provider behaviour: KDoc-interior lines are treated as code for !! scanning.
+  it('KDoc block: interior lines are comment, not code', () => {
+    // Ce cas epinglait la limite d alors : « the provider does NOT track
+    // multi-line comment state », donc la prose d un KDoc recevait la
+    // decoration. Mesure sur un vrai projet : 2 occurrences, dont
+    // « NB: this implementation is temporary!! ». Le fournisseur porte
+    // desormais un oracle de bloc a cote de celui des chaines brutes.
     const result = decs([
       '/**',
       ' * Use x!! to force non-null',
       ' */',
     ]);
-    // The line '/**' has tripleCount=0 and no !!, the line ' */' similarly.
-    // Only ' * Use x!!' has '!!' and it is NOT suppressed (per-line comment tracking).
-    expect(result).toHaveLength(1);
-    expect(result[0].range.start.line).toBe(1);
+    expect(result).toHaveLength(0);
   });
 });
 

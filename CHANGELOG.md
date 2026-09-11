@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.192
+
+Same blind spot as last release, in the neighbour. The highlight on a forced unwrap already carried a multi line oracle for raw strings, because a per line check cannot see a quote opened above. Comment blocks never got one, so an exclamation in the prose of a KDoc was marked as code.
+
+### Fixes
+- Measured on a real project: 2 cases, `NB: this implementation is temporary!!` and a `|!!|` warning marker, both plain documentation.
+- Code that follows the end of a block on the same line is still scanned, and its columns are unchanged. A block opener quoted inside a string opens nothing.
+- A test used to pin the old behaviour, with a comment saying it documented a known limitation. It asserts the corrected behaviour now.
+
+### Notes
+- The same shape exists with no occurrence at all on that project: resource folding, colour folding and the resource diagnostics read one line at a time too, and no reference to a resource sits inside a comment block there.
+
 ## 1.42.191
 
 Inline folding replaces a constant name with its value in the editor. The guard that keeps it out of comments reads one line at a time, so it sees a comment that opens on that line and knows nothing of one opened above. Inside a KDoc block, the prose was treated as code and its words were rewritten under the reader.

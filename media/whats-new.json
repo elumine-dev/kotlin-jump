@@ -1,27 +1,26 @@
 {
-  "version": "1.42.191",
+  "version": "1.42.192",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Documentation rewritten under the reader",
-  "summary": "Inline folding replaces a constant name with its value. The guard that keeps it out of comments reads one line at a time, so it knew nothing of a comment block opened above. Inside a KDoc, the prose was treated as code.",
+  "tagline": "An exclamation is not an unwrap",
+  "summary": "The highlight on a forced unwrap already carried a multi line oracle for raw strings. Comment blocks never got one, so an exclamation in the prose of a KDoc was marked as code.",
   "highlights": [
     {
-      "title": "KDoc left alone",
+      "title": "KDoc prose left alone",
       "kind": "fix",
-      "description": "Measured on a real project: 120 constants qualify for folding and 3 sit inside a comment block, all three in KDoc."
+      "description": "Measured on a real project: 2 cases, NB: this implementation is temporary!! and a |!!| warning marker, both plain documentation."
     },
     {
-      "title": "Columns and strings intact",
+      "title": "Nothing else lost",
       "kind": "improvement",
-      "description": "The scan runs on a comment free view that keeps offsets, so decorations land on the same columns and a value used from a string template still folds."
+      "description": "Code that follows the end of a block on the same line is still scanned with its columns unchanged, and a block opener quoted inside a string opens nothing."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "A constant named inside a KDoc block is no longer replaced by its value.",
-        "A triple quoted example quoted inside a comment no longer breaks the raw string tracking for the rest of the file.",
-        "The extra pass costs 2.2 ms on an 85 KB file and runs once per document version."
+        "A test used to pin the old behaviour with a comment saying it documented a known limitation. It asserts the corrected behaviour now.",
+        "The same shape exists with no occurrence on that project in resource folding, colour folding and the resource diagnostics."
       ]
     }
   ],

@@ -296,7 +296,10 @@ describe.skipIf(!mod)('F11 à F17 — opt-outs et périmètre', () => {
   });
 
   it('F13 : buildSrc est exclu par défaut, ses ids de plugin sont des noms de fichier', () => {
-    const sources = [kt('/w/buildSrc/src/main/kotlin/Conv.kt', 'class Ghost\n')];
+    // Chemin RELATIF a la racine, comme en production. Avec `/w/buildSrc/...`
+    // le `/w/` fournissait le repertoire que le motif reclamait a tort, et le
+    // test passait sur un reglage qui ne mettait rien de cote.
+    const sources = [kt('buildSrc/src/main/kotlin/Conv.kt', 'class Ghost\n')];
     expect(find(sources, { ignorePaths: ['**/buildSrc/**'] })).toEqual([]);
   });
 

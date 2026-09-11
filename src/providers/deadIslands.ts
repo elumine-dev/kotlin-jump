@@ -191,7 +191,11 @@ function analyze(input: DeadIslandScanInput): Analysis {
     ...explainSymbols(base).map(r => ({ ...r, container: null as string | null })),
     ...explainMembers(base).map(r => ({ ...r, container: r.container as string | null })),
   ];
-  const rowKey = (p: string, line: number, name: string) => `${p} ${line} ${name}`;
+  // U+0000 as the separator: it cannot occur in a path or an identifier, so
+  // two distinct rows can never collide on one key. Written as an escape and
+  // never as a raw byte, or git reads the file as binary and stops showing
+  // its diffs at all.
+  const rowKey = (p: string, line: number, name: string) => `${p}\u0000${line}\u0000${name}`;
   const rowByKey = new Map<string, { outcome: string; container: string | null }>();
   for (const r of rows) rowByKey.set(rowKey(r.path, r.line, r.name), r);
 

@@ -140,9 +140,13 @@ export function analyzeStateProvenance(vmText: string, stripped?: string): State
     // Exposure: `val hp… = _hp.asStateFlow()` / `= _hp` (bare LiveData).
     let exposedAs: string | undefined;
     if (property.startsWith('_')) {
-      // A trailing line comment must not break detection.
+      // A trailing line comment must not break detection, and Kotlin writes
+      // the same pairing two ways: `val x = _x.asStateFlow()` and
+      // `val x: StateFlow<T> get() = _x`. Missing the second one made the
+      // reader lens count collectors of the PRIVATE backing, so it read
+      // 0 readers on a state the screen collects.
       const expoRe = new RegExp(
-        `va[lr]\\s+(\\w+)(?:\\s*:\\s*[^=]+?)?\\s*=\\s*${property}(?:\\.as\\w+\\(\\))?\\s*(?:\\/\\/.*)?$`,
+        `va[lr]\\s+(\\w+)(?:\\s*:\\s*[^=]+?)?\\s*(?:get\\(\\)\\s*)?=\\s*${property}(?:\\.as\\w+\\(\\))?\\s*(?:\\/\\/.*)?$`,
         'm',
       );
       const expo = expoRe.exec(code);

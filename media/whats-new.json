@@ -1,26 +1,32 @@
 {
-  "version": "1.42.189",
+  "version": "1.42.190",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Zero writes, four files away",
-  "summary": "The write count next to a state only looks at the file it is in. For a private backing field that is the whole truth. For a property anyone can reach, it is not, and the lens still read 0 writes flatly.",
+  "tagline": "An exposure written the other way",
+  "summary": "Kotlin writes the same pairing two ways. val x = _x.asStateFlow() was recognised; val state get() = _state.asStateFlow() was not, so the backing field looked unexposed.",
   "highlights": [
     {
-      "title": "The count says its scope",
+      "title": "Readers found again",
       "kind": "fix",
-      "description": "A state that is not private now reads 0 writes in this file, the same reservation the reader count has carried all along."
+      "description": "The count looked for collectors of the private backing, which nothing collects, and read 0 readers on a state the screen collects every time it draws."
     },
     {
-      "title": "Three real cases",
+      "title": "141 exposures, now 143",
       "kind": "improvement",
-      "description": "Of 21 non private states with no write in their own file, 3 are written elsewhere, one of them in four other files."
+      "description": "Measured on a real project of 166 states with a backing field. Of the 23 that still show none, all 23 genuinely have none."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "A private state keeps the plain wording: nothing outside the file can write it, so the count is complete.",
-        "The reservation sits next to the number, ahead of the indirect writer note, so both stay readable."
+        "An exposure written with an accessor is recognised, with or without a declared type.",
+        "An accessor pointing at a different state is still not an exposure: the end of line guard holds."
+      ]
+    },
+    {
+      "heading": "Notes",
+      "bullets": [
+        "The changelog entry for 1.42.188 said this lens had no tests. It had two files of them; what had none was the modifier list. The line is corrected."
       ]
     }
   ],

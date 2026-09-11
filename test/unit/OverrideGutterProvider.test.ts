@@ -33,7 +33,7 @@ type Symbol = {
 function makeDoc(lang = 'kotlin') {
   return {
     languageId: lang,
-    uri: { toString: () => 'file:///Test.kt' },
+    uri: { toString: () => 'file:///Test.kt', path: '/Test.kt', fsPath: '/Test.kt' },
   } as any;
 }
 
@@ -49,7 +49,7 @@ function makeIndex(
   // Les symboles du fichier ouvert portent son uri, comme un vrai SymbolEntry :
   // la marche transitive scelle sa racine par uri:line pour qu'un type ne soit
   // pas sa propre descendante.
-  const avecUri = symbols.map(s => ({ uri: { toString: () => 'file:///Test.kt' }, ...s }));
+  const avecUri = symbols.map(s => ({ uri: { toString: () => 'file:///Test.kt', path: '/Test.kt', fsPath: '/Test.kt' }, ...s }));
   return {
     getFileSymbols: () => avecUri,
     lookupMethodImplementations: (name: string) => methodImplsMap[name] ?? [],
@@ -74,7 +74,7 @@ function lenses(
 }
 
 function makeImpl(uri: string) {
-  return { uri: { toString: () => uri } };
+  return { uri: { toString: () => uri, path: uri.replace('file://', ''), fsPath: uri.replace('file://', '') } };
 }
 
 // ── SP2-OGP-1 ─────────────────────────────────────────────────────────────────

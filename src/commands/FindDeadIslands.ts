@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { DEFAULT_TEST_SEGMENTS } from '../util/testPaths';
 import { ResourceCorpus } from '../indexer/ResourceCorpus';
 import { DeadIslandProvider, findDeadIslands } from '../providers/DeadIslandProvider';
 
@@ -12,7 +13,7 @@ import { DeadIslandProvider, findDeadIslands } from '../providers/DeadIslandProv
 export function islandSettings() {
   const cfg = vscode.workspace.getConfiguration('kotlinJump');
   return {
-    testSourceSets: cfg.get<string[]>('testSourceSets', ['test/java', 'test/kotlin', 'androidTest', 'jvmTest', 'commonTest']),
+    testSourceSets: cfg.get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS),
     ignoreNames: cfg.get<string[]>('deadIslandsIgnoreNames', []),
     includeTestOnly: cfg.get<boolean>('unusedSymbolsIncludeTestOnly', true),
     maxIslandSize: cfg.get<number>('deadIslandsMaxSize', 8),

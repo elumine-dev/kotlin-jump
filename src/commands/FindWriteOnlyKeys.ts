@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { DEFAULT_TEST_SEGMENTS } from '../util/testPaths';
 import { ResourceCorpus } from '../indexer/ResourceCorpus';
 import { UnusedDtoFieldProvider, findUnusedDtoFields } from '../providers/UnusedDtoFieldProvider';
 import { WriteOnlyKeyProvider, findWriteOnlyKeys } from '../providers/WriteOnlyKeyProvider';
@@ -25,7 +26,7 @@ export async function findUnusedDtoFieldsCommand(
       const cfg = vscode.workspace.getConfiguration('kotlinJump');
       const found = findUnusedDtoFields({
         sources: data.sources,
-        testSourceSets: cfg.get<string[]>('testSourceSets', ['test/java', 'test/kotlin', 'androidTest', 'jvmTest', 'commonTest']),
+        testSourceSets: cfg.get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS),
         ignoreNames: cfg.get<string[]>('unusedDtoFieldsIgnoreNames', []),
       });
       provider.setFindings(found);
@@ -57,7 +58,7 @@ export async function findWriteOnlyKeysCommand(
       const cfg = vscode.workspace.getConfiguration('kotlinJump');
       const scan = findWriteOnlyKeys({
         sources: data.sources,
-        testSourceSets: cfg.get<string[]>('testSourceSets', ['test/java', 'test/kotlin', 'androidTest', 'jvmTest', 'commonTest']),
+        testSourceSets: cfg.get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS),
         ignoreNames: cfg.get<string[]>('writeOnlyKeysIgnoreNames', []),
       });
       provider.setScan(scan);

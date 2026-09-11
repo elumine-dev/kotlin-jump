@@ -45,16 +45,51 @@ function fichiersTs(dossier: string): string[] {
   return out;
 }
 
-const RE_APPEL_GET = /\.get<[^>]+>\(\s*'([\w.]+)'\s*,\s*([^),]+?)\s*\)/g;
+const RE_APPEL_GET = /\.get<[^>]+>\(\s*'([\w.]+)'\s*,\s*((?:\[[^\]]*\]|[^),]+?))\s*\)/g;
 const RE_PORTEE_CONFIG = /getConfiguration\(\s*'([\w.]+)'\s*\)/g;
 
-/** Valeur JavaScript d'un litteral simple, ou undefined si c'est une expression. */
-function litteral(brut: string): unknown {
+/** `const NOM = ['a', 'b'];` declare dans src/, pour resoudre un repli nomme. */
+function constantesTableau(fichiers: string[]): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  const re = /\bconst\s+([A-Z][A-Z0-9_]*)\s*(?::[^=]+)?=\s*(\[[^\]]*\])/g;
+  for (const f of fichiers) {
+    const src = fs.readFileSync(f, 'utf8');
+    let m: RegExpExecArray | null;
+    re.lastIndex = 0;
+    while ((m = re.exec(src)) !== null) {
+      const elements = [...m[2].matchAll(/'([^']*)'/g)].map(x => x[1]);
+      const vide = /^\[\s*\]$/.test(m[2]);
+      if (vide || elements.length > 0) out.set(m[1], elements);
+    }
+  }
+  return out;
+}
+
+/**
+ * Valeur JavaScript d'un repli, ou undefined si elle n'est pas decidable.
+ *
+ * Les tableaux comptent autant que les scalaires : `testSourceSets` declare
+ * cinq segments et six appels passaient `[]`, dont un derriere une constante
+ * nommee DEFAULT_TEST_SEGMENTS qui valait elle meme `[]`. Sous bouchon, le
+ * filtre des sources de test ne filtrait donc rien, et 29 cas de
+ * OverrideGutterProvider passaient sans jamais l'exercer.
+ */
+function litteral(brut: string, constantes: Map<string, string[]>): unknown {
   if (brut === 'true') return true;
   if (brut === 'false') return false;
-  if (/^-?\d+$/.test(brut)) return Number(brut);
+  if (/^-?[\d_]+$/.test(brut)) return Number(brut.replace(/_/g, ''));
   if (/^'[^']*'$/.test(brut)) return brut.slice(1, -1);
-  return undefined;
+  if (/^\[[^\]]*\]$/.test(brut)) return [...brut.matchAll(/'([^']*)'/g)].map(x => x[1]);
+  const nomme = constantes.get(brut);
+  return nomme ? [...nomme] : undefined;
+}
+
+/** Egalite structurelle suffisante pour des scalaires et des tableaux de chaines. */
+function memeValeur(a: unknown, b: unknown): boolean {
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return a.length === b.length && a.every((x, i) => x === b[i]);
+  }
+  return a === b;
 }
 
 describe('Les replis de configuration suivent package.json', () => {
@@ -67,8 +102,10 @@ describe('Les replis de configuration suivent package.json', () => {
   it('aucun repli ne contredit le defaut declare', () => {
     const desaccords: string[] = [];
     let verifies = 0;
+    const tous = fichiersTs(SRC);
+    const constantes = constantesTableau(tous);
 
-    for (const fichier of fichiersTs(SRC)) {
+    for (const fichier of tous) {
       const source = fs.readFileSync(fichier, 'utf8');
       // Positions des `getConfiguration('X')` pour retrouver la section en
       // portee : la forme chainee et la forme `const cfg = …` sont locales.
@@ -80,17 +117,17 @@ describe('Les replis de configuration suivent package.json', () => {
       RE_APPEL_GET.lastIndex = 0;
       let m: RegExpExecArray | null;
       while ((m = RE_APPEL_GET.exec(source)) !== null) {
-        const valeur = litteral(m[2]);
+        const valeur = litteral(m[2], constantes);
         if (valeur === undefined) continue;      // expression, hors sujet
         const precedente = [...sections].reverse().find(x => x.at < m!.index);
         if (!precedente) continue;
         const pleine = `${precedente.nom}.${m[1]}`;
         if (!defauts.has(pleine)) continue;      // cle interne, non contribuee
         verifies++;
-        if (defauts.get(pleine) !== valeur) {
+        if (!memeValeur(defauts.get(pleine), valeur)) {
           const ligne = source.slice(0, m.index).split(String.fromCharCode(10)).length;
           desaccords.push(
-            `${path.relative(RACINE, fichier)}:${ligne}  ${pleine}  code=${m[2]}  package.json=${String(defauts.get(pleine))}`,
+            `${path.relative(RACINE, fichier)}:${ligne}  ${pleine}  code=${m[2]}  package.json=${JSON.stringify(defauts.get(pleine))}`,
           );
         }
       }

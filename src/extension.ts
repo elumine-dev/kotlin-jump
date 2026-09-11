@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { DEFAULT_EXCLUDE_PATTERNS } from './util/pathExclusion';
 import { SymbolIndex } from './indexer/SymbolIndex';
 import { FileScanner } from './indexer/FileScanner';
 import { FileWatcher } from './watcher/FileWatcher';
@@ -856,7 +857,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   // ── Resolve Gradle modules and find all .kt files ─────────────────────────
   const cfg         = vscode.workspace.getConfiguration('kotlinJump');
-  const excludeList = cfg.get<string[]>('excludePatterns') ?? ['**/build/**', '**/.gradle/**'];
+  const excludeList = cfg.get<string[]>('excludePatterns') ?? DEFAULT_EXCLUDE_PATTERNS;
   // Rebuilt on change: the matcher was captured once, so a folder added to
   // excludePatterns kept feeding the watchers until a reload.
   const workspaceRoots = () => (vscode.workspace.workspaceFolders ?? []).map(f => f.uri.path);

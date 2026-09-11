@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
-import { scanForUsagesWithTarget, resolveSearchTarget, DEFAULT_TEST_SEGMENTS, UsageResult, isExcluded, withoutDeclaration, withoutDeclarations } from './FindUsagesEngine';
-import { isTestSourceSet } from '../util/testPaths';
+import { scanForUsagesWithTarget, resolveSearchTarget, UsageResult, isExcluded, withoutDeclaration, withoutDeclarations } from './FindUsagesEngine';
+import { isTestSourceSet, DEFAULT_TEST_SEGMENTS } from '../util/testPaths';
 
 // ── Tree node types ───────────────────────────────────────────────────────────
 

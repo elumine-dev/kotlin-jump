@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.186
+
+Last release added a guard that every setting read with a literal fallback must match the default declared in `package.json`. It skipped lists. Lists turned out to be where the real divergence was.
+
+### Fixes
+- The list of test source sets had three spellings across eleven call sites: the five declared names, an empty list, and a constant called `DEFAULT_TEST_SEGMENTS` that was itself empty. The exclusion list had four, one of them two entries short.
+- None of that reaches a released build, where the declared default always wins, but it is what the test suite ran on. With the real list in place, 29 tests of the override arrows stopped passing: their fixtures had no file path, so the filter that hides test sources had never done anything in any of them. Fixtures fixed, and those cases now exercise it.
+- One constant per setting now, and the guard covers lists and named constants as well as plain values.
+
 ## 1.42.185
 
 A setting read as `get(key, fallback)` never returns that fallback once the key is declared in `package.json`. The test stub does return it, so a fallback that disagrees with the declared default is a value only the tests ever see.

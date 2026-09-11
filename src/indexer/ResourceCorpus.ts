@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { DEFAULT_EXCLUDE_PATTERNS } from '../util/pathExclusion';
 import { mapBatched } from '../util/batched';
 import { rememberCorpusUri } from '../util/corpusUri';
 import { makeExclusionMatcher } from '../util/pathExclusion';
@@ -100,7 +101,7 @@ export class ResourceCorpus {
   private async scan(token?: vscode.CancellationToken): Promise<Corpus> {
     const cfg = vscode.workspace.getConfiguration('kotlinJump');
     const maxFiles = cfg.get<number>('maxIndexedFiles', 10000);
-    const patterns = cfg.get<string[]>('excludePatterns', ['**/build/**', '**/.gradle/**', '**/generated/**']);
+    const patterns = cfg.get<string[]>('excludePatterns', DEFAULT_EXCLUDE_PATTERNS);
     // Belt for what the glob cannot express (picomatch is stricter than the
     // VS Code glob), applied on the already-narrowed result.
     const isExcluded = makeExclusionMatcher(patterns, (vscode.workspace.workspaceFolders ?? []).map(f => f.uri.path));

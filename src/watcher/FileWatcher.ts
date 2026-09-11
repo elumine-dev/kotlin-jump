@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { DEFAULT_EXCLUDE_PATTERNS } from '../util/pathExclusion';
 import { FileScanner } from '../indexer/FileScanner';
 import { SymbolIndex } from '../indexer/SymbolIndex';
 import { evict } from '../util/ImportResolver';
@@ -186,7 +187,7 @@ export class FileWatcher implements vscode.Disposable {
   async addTree(folder: vscode.Uri): Promise<vscode.Uri[]> {
     if (SOURCE_EXT_RE.test(folder.path)) return [];
     const cfg = vscode.workspace.getConfiguration('kotlinJump');
-    const excludeList = cfg.get<string[]>('excludePatterns') ?? ['**/build/**', '**/.gradle/**'];
+    const excludeList = cfg.get<string[]>('excludePatterns') ?? DEFAULT_EXCLUDE_PATTERNS;
     const found = await vscode.workspace.findFiles(
       new vscode.RelativePattern(folder, '**/*.{kt,kts,java}'),
       excludeGlob(excludeList),

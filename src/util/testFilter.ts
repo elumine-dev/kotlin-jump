@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { DEFAULT_TEST_SEGMENTS } from './testPaths';
 import { isTestPath, isTestSourceSet } from './testPaths';
 
 // Moved to ./testPaths.ts so a plain Node script can classify a path.
@@ -14,7 +15,7 @@ export { isTestPath, segmentMatchesPath } from './testPaths';
  */
 export function buildAllowFilter(currentFilePath: string): (path: string) => boolean {
   const cfg = vscode.workspace.getConfiguration('kotlinJump');
-  const segments = cfg.get<string[]>('testSourceSets', []);
+  const segments = cfg.get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS);
   // `isTestSourceSet` et non `isTestPath` : la liste configuree ne peut pas
   // suivre les source sets qu'un vrai projet invente, et la convention Gradle
   // les rattrape. Les detecteurs de code mort l'utilisent depuis toujours ;

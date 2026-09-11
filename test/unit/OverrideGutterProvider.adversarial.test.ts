@@ -21,7 +21,9 @@ function addKt(index: SymbolIndex, uri: string, code: string) {
 
 function makeDoc(uri: string, lang = 'kotlin') {
   return {
-    uri: { toString: () => uri, path: uri.replace('file://', '') },
+    // `fsPath` compte : `buildAllowFilter` le lit, et sans lui le filtre des
+    // sources de test ne s'exerce dans aucun de ces cas.
+    uri: { toString: () => uri, path: uri.replace('file://', ''), fsPath: uri.replace('file://', '') },
     languageId: lang,
   } as any;
 }

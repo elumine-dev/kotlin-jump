@@ -106,6 +106,17 @@ export function segmentMatchesPath(uriPath: string, segment: string): boolean {
   return false;
 }
 
+/**
+ * The declared default of `kotlinJump.testSourceSets`, kept in one place.
+ *
+ * `get(key, fallback)` never returns that fallback for a contributed setting,
+ * so the six call sites that passed `[]` were reading an empty list only under
+ * a test stub. Three spellings coexisted for one key: `[]`, a constant named
+ * DEFAULT_TEST_SEGMENTS that was itself `[]`, and this array written out.
+ */
+export const DEFAULT_TEST_SEGMENTS: string[] =
+  ['test/java', 'test/kotlin', 'androidTest', 'jvmTest', 'commonTest'];
+
 export function isTestPath(uriPath: string, segments: readonly string[]): boolean {
   return segments.some(s => segmentMatchesPath(uriPath, s));
 }

@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { DEFAULT_TEST_SEGMENTS } from '../util/testPaths';
 import { ResourceCorpus } from '../indexer/ResourceCorpus';
 import { findUnusedSymbols } from '../providers/unusedSymbols';
 import {
@@ -16,7 +17,7 @@ import {
 export function memberSettings() {
   const cfg = vscode.workspace.getConfiguration('kotlinJump');
   return {
-    testSourceSets: cfg.get<string[]>('testSourceSets', ['test/java', 'test/kotlin', 'androidTest', 'jvmTest', 'commonTest']),
+    testSourceSets: cfg.get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS),
     ignoreNames: cfg.get<string[]>('unusedMembersIgnoreNames', []),
     ignorePaths: cfg.get<string[]>('unusedSymbolsIgnorePaths', ['**/buildSrc/**', '**/build-logic/**']),
     includeTestOnly: cfg.get<boolean>('unusedSymbolsIncludeTestOnly', true),

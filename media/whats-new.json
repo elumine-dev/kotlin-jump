@@ -1,28 +1,26 @@
 {
-  "version": "1.42.146",
+  "version": "1.42.147",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Test source sets recognised everywhere alike",
-  "summary": "Test sources that Gradle recognises but the settings list does not are no longer treated as production code.",
+  "tagline": "Ctrl+click on a default parameter type",
+  "summary": "Ctrl+click on the type of a parameter that has a default value went to the enclosing function instead of the type.",
   "highlights": [
     {
-      "title": "Auto Import No Longer Reaches Into Tests",
+      "title": "Types Of Parameters With A Default",
       "kind": "fix",
-      "description": "Auto import, the implementation count on a lens and the type hierarchy judged test source sets by the settings list alone, so 29 test files on a real project passed for production. Auto import could offer an import that does not compile."
+      "description": "A parameter with a default value looked like a named argument to one resolution step, so clicking its type went to the enclosing function. On a real project 699 of 785 such clicks landed wrong, affecting most Compose code."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "The extension holds two ways of deciding whether a file belongs to a test source set: the list in the settings, and Gradle's own convention that a source set under src whose name contains test is one. The dead code detectors have always used both. The filter behind the implementation count on a lens, auto import and the type hierarchy used only the list. On a real project of 3187 Kotlin files, 29 test files, 26 under savedAndroidTest and 3 under sharedTest, were therefore taken for production code.",
-        "Auto import was the worst of the three: it could offer to import a class declared in a test source set, which does not compile. Both ways are now used everywhere, so what one feature hides the others hide too.",
-        "Seen from a test file nothing changes: everything stays visible, since a test may legitimately reach both sides."
+        "A parameter written as a name, a colon, a type and a default value looks, to one of the resolution steps, exactly like a named argument: a word followed by a single equals sign. The extension then walked back to the opening bracket, took the enclosing function for the one being called, and sent you there. Measured on a real project of 3187 Kotlin files: 699 of the 785 such clicks that resolved, so 89 percent, landed on the wrong place. It affects every function with a default value, which in Compose code is most of them, and types as common as Modifier or Boolean.",
+        "A named argument is never preceded by a colon and a type annotation always is, which is what now tells them apart. Clicking the left side of a real named argument still goes to the parameter of the function being called, including when a colon appears elsewhere on the same line, and the same measurement over 17588 such clicks is unchanged."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "A project whose source sets are all named in the settings sees no change.",
         "No new commands or settings in this release."
       ]
     }

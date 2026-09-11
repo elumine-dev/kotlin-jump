@@ -1,28 +1,29 @@
 {
-  "version": "1.42.148",
+  "version": "1.42.149",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Named arguments land on the right parameter",
-  "summary": "Ctrl+click on the name of a named argument no longer opens a function that has no such parameter.",
+  "tagline": "A guard that changed job, now held in place",
+  "summary": "Protects a guard that had quietly become a speed guard, and puts the check that found the last two navigation bugs into the suite.",
   "highlights": [
     {
-      "title": "Clicking A Named Argument",
-      "kind": "fix",
-      "description": "Across files, every same named function was offered without checking it has that parameter: 41 percent of those clicks opened the wrong function. The candidate is now checked, and the click lands on the parameter itself."
+      "title": "A Rule That Became A Speed Guard",
+      "kind": "improvement",
+      "description": "A rule added to fix wrong navigation is now redundant for that, but keeps parameter type clicks off the slower path: 42 percent faster on a real project. A check now holds it there, since no correctness test would miss it."
     }
   ],
   "sections": [
     {
-      "heading": "Fixes",
+      "heading": "Internal",
       "bullets": [
-        "When the called function is declared in another file, the extension returned the declaration line of every same named function it knew of, without ever checking that the function actually has that parameter. The code said as much, calling itself a strict improvement over returning nothing. Measured on a real project of 3187 Kotlin files, it was not: 266 of the 651 clicks concerned, so 41 percent, opened a function without that parameter. Clicking margin took you to a photo model taking a url and a width, in another module.",
-        "The candidate is now opened and the parameter located in its signature, so the click lands on the parameter itself rather than on the function line: 715 clicks that used to stop at the signature now reach the exact word. When no candidate has the parameter, nothing happens, which beats being sent somewhere unrelated.",
-        "Only this one step became asynchronous, and only when a click really is on the left of a named argument, so every other resolution path keeps its previous timing."
+        "The rule that tells a type annotation from a named argument was added two releases ago to stop Ctrl+click going to the wrong place. The release after it made that wrong place unreachable by another route, so every correctness check now passes without the rule.",
+        "It is not dead though: it keeps a click on a parameter type out of the slower path. On a real project, 928 clicks of that shape open no file and take 75.8 ms with it, against 1388 file reads and 130.3 ms without. A check now holds it there, with a companion proving a real named argument still takes the slower path, so neither can pass by doing nothing.",
+        "The sweep that found both navigation bugs is now part of the suite: every identifier of a sample of a real project is clicked and the line reached must contain the word. It reports 14224 correct landings and none wrong, against 616 suspicious before the two fixes.",
+        "Clicks on a declaration, import aliases and companion objects are counted apart, being right for reasons that rule cannot see."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "No new commands or settings in this release."
+        "No behaviour change in this release."
       ]
     }
   ],

@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.149
+
+Protects a guard that had quietly become a speed guard, and puts the check that found the last two navigation bugs into the suite.
+
+### Internal
+- The rule that tells a type annotation from a named argument was added two releases ago to stop Ctrl+click going to the wrong place. The release after it made that wrong place unreachable by another route, so every correctness check now passes without the rule.
+- It is not dead though: it keeps a click on a parameter type out of the slower path. On a real project, 928 clicks of that shape open no file and take 75.8 ms with it, against 1388 file reads and 130.3 ms without. A check now holds it there, with a companion proving a real named argument still takes the slower path, so neither can pass by doing nothing.
+- The sweep that found both navigation bugs is now part of the suite: every identifier of a sample of a real project is clicked and the line reached must contain the word. It reports 14224 correct landings and none wrong, against 616 suspicious before the two fixes.
+- Clicks on a declaration, import aliases and companion objects are counted apart, being right for reasons that rule cannot see.
+
+### Notes
+- No behaviour change in this release.
+
 ## 1.42.148
 
 Ctrl+click on the name of a named argument no longer opens a function that has no such parameter.

@@ -732,6 +732,14 @@ function estCandidatArgNomme(
   // precede de `:`, une annotation de type l'est toujours : c'est ce qui les
   // separe. Mesure sur un projet reel : 699 des 785 clics concernes, soit
   // 89 %, atterrissaient au mauvais endroit.
+  // ATTENTION avant de retirer ceci : les tests de correction passent sans,
+  // car la verification ajoutee en v1.42.148 ecarte desormais les candidates
+  // qui n'ont pas le parametre, ce qui rattrape le symptome. Cette garde a
+  // donc change de role : elle est devenue le chemin RAPIDE. Sans elle, tout
+  // type de parametre par defaut entre dans la resolution asynchrone et fait
+  // ouvrir des fichiers pour rien. Mesure sur un projet reel, 928 clics de
+  // cette forme : 0 ouverture et 75,8 ms avec, 1388 ouvertures et 130,3 ms
+  // sans, soit 42 % plus lent. `DefinitionDefaultParam` le verifie.
   if (/:\s*$/.test(beforeWord)) return false;
 
   return true;

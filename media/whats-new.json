@@ -1,12 +1,12 @@
 {
-  "version": "1.42.114",
+  "version": "1.42.115",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Deleting a folder also cancels the scans queued for it",
-  "summary": "Yesterday's fix narrowed what a folder deletion looks at, and went one notch too far: files still waiting in the queue were left out, so they were indexed after their folder was gone.",
+  "tagline": "Deleting a folder during the first scan no longer leaves files behind",
+  "summary": "Listing every state a file can be in turned up one the watcher cannot see: the files of the very first scan, which runs without going through it.",
   "highlights": [
     {
-      "title": "A file created just before its folder is deleted stays out",
-      "description": "It is not in the index yet and its scan has not started, so neither list checked yesterday held it. The queue fired afterwards and indexed it.",
+      "title": "Switching branch just after opening a project",
+      "description": "A file whose bytes had been read was added to the index moments after its folder was gone, and nothing removed it. Cmd+T then listed a file that no longer existed.",
       "kind": "fix"
     }
   ],
@@ -14,8 +14,8 @@
     {
       "heading": "Fixed",
       "bullets": [
-        "Deleting a folder in the Explorer while the editor is still settling was enough to hit it.",
-        "Folder deletion stays flat at 0.1 ms whatever the session has seen."
+        "Only the files caught mid parse were affected: one not yet read fails its read, one already added is found and removed.",
+        "The removal is replayed once the scan finishes rather than filtered file by file, so the indexing path is untouched."
       ]
     }
   ],

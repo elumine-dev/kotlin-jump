@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.115
+
+Six releases went into stopping a deleted file from coming back. Listing every state a file can be in turned up one the watcher cannot see at all: the files of the very first scan, which runs without going through it.
+
+### Fixed
+- Deleting a folder while the extension is still indexing the project no longer leaves its files behind. Switching branch just after opening a workspace was enough: a file whose bytes had been read was added to the index moments after its folder was gone, and nothing removed it afterwards. Cmd+T then listed a file that no longer existed.
+- Only the files caught mid parse were affected. One not yet read fails its read and is dropped; one already added is found and removed. The hole was the handful in between.
+- The removal is replayed once the scan finishes rather than filtered file by file, so nothing is checked on the indexing path and the cost stays where it was.
+
 ## 1.42.114
 
 Yesterday's fix narrowed what a folder deletion looks at, from every file ever seen down to the scans actually running. It narrowed it one notch too far and dropped the files still waiting in the queue.

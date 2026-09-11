@@ -94,6 +94,10 @@ export class FileWatcher implements vscode.Disposable {
       this.marquer(vscode.Uri.parse(cle));
       this.pendingScan.delete(cle);
     }
+    // Programme AVANT le retour anticipe : au moment ou le dossier disparait,
+    // un fichier que le balayage initial est en train de parser n'est pas
+    // encore dans l'index, donc `gone` est vide et ce retour sautait le rejeu.
+    this.rejouerApresBalayage(folder);
     const gone = dansIndex.map(k => vscode.Uri.parse(k));
     if (gone.length === 0) return gone;
     this.log?.info(`[watcher] folder gone: ${fileName(folder)} — ${gone.length} file(s) dropped`);
@@ -103,6 +107,20 @@ export class FileWatcher implements vscode.Disposable {
     }
     this.notify(gone);
     return gone;
+  }
+
+  /**
+   * Le balayage initial ne passe pas par le veilleur : ses fichiers ne sont ni
+   * indexes, ni en file, ni dans `enVol`. Ceux dont les octets sont deja lus
+   * quand le dossier disparait sont ajoutes juste apres. On rejoue donc la
+   * suppression une fois le balayage fini, ce qui ne coute rien tant qu'aucun
+   * balayage ne tourne. Un seul rappel : au second passage le scanner est au
+   * repos, donc rien ne se reprogramme.
+   */
+  private rejouerApresBalayage(folder: vscode.Uri): void {
+    const s = this.scanner as { busy?: () => boolean; whenIdle?: () => Promise<void> };
+    if (s.busy?.() !== true || s.whenIdle === undefined) return;
+    void s.whenIdle().then(() => { this.removeTree(folder); });
   }
 
   /** Indexes every source file under a folder that appeared (rename target, added workspace folder). */

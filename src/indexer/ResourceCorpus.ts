@@ -103,7 +103,7 @@ export class ResourceCorpus {
     const patterns = cfg.get<string[]>('excludePatterns', ['**/build/**', '**/.gradle/**', '**/generated/**']);
     // Belt for what the glob cannot express (picomatch is stricter than the
     // VS Code glob), applied on the already-narrowed result.
-    const isExcluded = makeExclusionMatcher(patterns);
+    const isExcluded = makeExclusionMatcher(patterns, (vscode.workspace.workspaceFolders ?? []).map(f => f.uri.path));
 
     // The cap MUST be applied after exclusion, not before. Passing no exclude
     // here let VS Code fill the 10000 slots with `build/` output on a project

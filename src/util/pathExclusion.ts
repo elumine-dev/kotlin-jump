@@ -28,9 +28,10 @@ import picomatch from 'picomatch';
  * exclu que l'utilisateur n'ait pas demande.
  */
 export function excludeGlob(patterns: readonly string[]): string | undefined {
-  if (patterns.length === 0) return undefined; // pas `{}`, qui n'exclut rien
+  const valides = patterns.filter(p => typeof p === 'string' && p.trim() !== '');
+  if (valides.length === 0) return undefined; // pas `{}`, qui n'exclut rien
   const branches: string[] = [];
-  for (const motif of patterns) {
+  for (const motif of valides) {
     branches.push(motif);
     if (motif.startsWith('**/')) branches.push(motif.slice(3));
   }
@@ -46,16 +47,25 @@ export function makeExclusionMatcher(
   // Gradle build indexed `app/build/generated/**` behind the scan's back.
   roots: readonly string[] = [],
 ): (path: string) => boolean {
-  if (patterns.length === 0) return () => false;
-  const matchers = patterns.map(p => picomatch(p, { dot: true }));
+  // picomatch leve sur une chaine vide, et ce matcheur se construit en plein
+  // `activate()` : une entree vide dans le reglage, chose qu'un editeur de
+  // tableau produit d'un clic, tuait l'extension entiere.
+  const valides = patterns.filter(p => typeof p === 'string' && p.trim() !== '');
+  if (valides.length === 0) return () => false;
+  const matchers = valides.map(p => picomatch(p, { dot: true }));
   const prefixes = roots.map(r => r.replace(/\/+$/, '') + '/');
   return (path: string) => {
-    if (matchers.some(m => m(path))) return true;
+    // Un motif de `findFiles` est relatif a la racine du workspace, donc le
+    // chemin doit l'etre aussi. Le tester d'abord en absolu excluait tout un
+    // projet range sous un dossier nomme `build` ou `generated`, ce qui
+    // faisait taire l'extension sans un message.
+    let sousUneRacine = false;
     for (const prefix of prefixes) {
       if (!path.startsWith(prefix)) continue;
-      const rel = path.slice(prefix.length);
-      if (matchers.some(m => m(rel))) return true;
+      sousUneRacine = true;
+      if (matchers.some(m => m(path.slice(prefix.length)))) return true;
     }
-    return false;
+    if (sousUneRacine) return false;
+    return matchers.some(m => m(path));
   };
 }

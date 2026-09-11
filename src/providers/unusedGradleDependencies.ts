@@ -3,11 +3,16 @@ import {
   CatalogAlias,
   CatalogNamespace,
   aliasSegments,
+  catalogRootOf,
   parseCatalog,
   resolveAccessor,
 } from '../indexer/VersionCatalogIndex';
 import { isBuildArtifactPath, isGeneratedSource } from '../util/resourceAllowlists';
 import { stripKotlinComments } from '../util/xmlRefs';
+
+// Vit desormais dans l'index : `reindexFile` en a besoin, et l'importer
+// depuis ici aurait ferme un cycle. Reexporte pour les appelants existants.
+export { catalogRootOf };
 
 /**
  * KJ-041: version catalog aliases no build file ever references.
@@ -120,44 +125,6 @@ function canReferenceAlias(path: string, extraDirs: readonly string[] = []): boo
     || (isConventionPluginPath(path, extraDirs) && /\.(kt|java)$/.test(path));
 }
 
-/**
- * Reads the accessor root a catalog is exposed under.
- *
- * `gradle/libs.versions.toml` gives `libs`, but `settings.gradle.kts` can
- * rename it with `versionCatalogs { create("deps") }`. A scan hardcoded on
- * `libs.` would then find no reference at all and report every alias as dead,
- * which is the loudest possible false positive.
- */
-export function catalogRootOf(path: string, settingsTexts: readonly string[]): string | undefined {
-  const fileName = path.split(/[\\/]/).pop() ?? '';
-  const fromName = /^(.+)\.versions\.toml$/.exec(fileName)?.[1];
-  if (!fromName) return undefined;
-
-  for (const settings of settingsTexts) {
-    if (!settings.includes('versionCatalogs')) continue;
-    // A catalog built in Kotlin rather than declared in TOML: we cannot know
-    // its aliases, so the caller must stay silent.
-    if (/versionCatalogs\s*\{[\s\S]{0,400}?\blibrary\s*\(/.test(settings)) return undefined;
-    const created = [...settings.matchAll(/create\s*\(\s*"([^"]+)"\s*\)/g)].map(m => m[1]);
-    const froms = [...settings.matchAll(/from\s*\(\s*files\s*\(\s*"([^"]+)"/g)].map(m => m[1]);
-    // `create("deps") { from(files("gradle/libs.versions.toml")) }`: the root
-    // is the created name, not the file name. Each block is read on its own:
-    // with two catalogs, every file used to map to the first `create`.
-    for (const block of settings.matchAll(/create\s*\(\s*"([^"]+)"\s*\)\s*\{([^}]*)\}/g)) {
-      const from = /from\s*\(\s*files\s*\(\s*"([^"]+)"/.exec(block[2])?.[1];
-      if (from && (from === fileName || from.endsWith('/' + fileName))) return block[1];
-    }
-    if (froms.some(f => f === fileName || f.endsWith('/' + fileName))) {
-      // A `from` naming this file outside a readable block: unknown root.
-      return created.length === 1 ? created[0] : undefined;
-    }
-    if (created.length > 0 && froms.length === 0 && created[0] !== fromName) {
-      // Renamed without an explicit `from`: Gradle still maps the default file.
-      if (fromName === 'libs') return created[0];
-    }
-  }
-  return fromName;
-}
 
 function matchesGlob(name: string, pattern: string): boolean {
   const re = new RegExp('^' + pattern

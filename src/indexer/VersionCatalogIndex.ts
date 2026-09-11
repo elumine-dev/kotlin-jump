@@ -269,7 +269,12 @@ export class VersionCatalogIndex {
    * from the key pointed at a file the web host does not have.
    */
   reindexFile(content: string, key = '', uriString = key): void {
-    const catalog = parseCatalog(content);
+    // La racine vient du NOM du fichier : `deps.versions.toml` se lit
+    // `deps.x`. On passait ici sans racine, donc tout catalogue renomme
+    // repondait `libs`, et le Ctrl+clic depuis un build file ne trouvait
+    // jamais son accesseur. Un nom que Gradle ne reconnait pas rend
+    // `undefined`, et le `root = 'libs'` de parseCatalog le rattrape.
+    const catalog = parseCatalog(content, catalogRootOf(key || uriString, []));
     const entries = new Map<string, CatalogEntry>();
 
     const versions = new Map<string, string>();
@@ -389,4 +394,43 @@ export class VersionCatalogIndex {
       ?? resolveAccessor(c.catalog.aliases, 'libraries', segments);
     return alias ? { alias, file: c.uri } : undefined;
   }
+}
+
+/**
+ * Reads the accessor root a catalog is exposed under.
+ *
+ * `gradle/libs.versions.toml` gives `libs`, but `settings.gradle.kts` can
+ * rename it with `versionCatalogs { create("deps") }`. A scan hardcoded on
+ * `libs.` would then find no reference at all and report every alias as dead,
+ * which is the loudest possible false positive.
+ */
+export function catalogRootOf(path: string, settingsTexts: readonly string[]): string | undefined {
+  const fileName = path.split(/[\\/]/).pop() ?? '';
+  const fromName = /^(.+)\.versions\.toml$/.exec(fileName)?.[1];
+  if (!fromName) return undefined;
+
+  for (const settings of settingsTexts) {
+    if (!settings.includes('versionCatalogs')) continue;
+    // A catalog built in Kotlin rather than declared in TOML: we cannot know
+    // its aliases, so the caller must stay silent.
+    if (/versionCatalogs\s*\{[\s\S]{0,400}?\blibrary\s*\(/.test(settings)) return undefined;
+    const created = [...settings.matchAll(/create\s*\(\s*"([^"]+)"\s*\)/g)].map(m => m[1]);
+    const froms = [...settings.matchAll(/from\s*\(\s*files\s*\(\s*"([^"]+)"/g)].map(m => m[1]);
+    // `create("deps") { from(files("gradle/libs.versions.toml")) }`: the root
+    // is the created name, not the file name. Each block is read on its own:
+    // with two catalogs, every file used to map to the first `create`.
+    for (const block of settings.matchAll(/create\s*\(\s*"([^"]+)"\s*\)\s*\{([^}]*)\}/g)) {
+      const from = /from\s*\(\s*files\s*\(\s*"([^"]+)"/.exec(block[2])?.[1];
+      if (from && (from === fileName || from.endsWith('/' + fileName))) return block[1];
+    }
+    if (froms.some(f => f === fileName || f.endsWith('/' + fileName))) {
+      // A `from` naming this file outside a readable block: unknown root.
+      return created.length === 1 ? created[0] : undefined;
+    }
+    if (created.length > 0 && froms.length === 0 && created[0] !== fromName) {
+      // Renamed without an explicit `from`: Gradle still maps the default file.
+      if (fromName === 'libs') return created[0];
+    }
+  }
+  return fromName;
 }

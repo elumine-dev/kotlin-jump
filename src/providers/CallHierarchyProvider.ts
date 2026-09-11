@@ -66,7 +66,7 @@ function entryToItem(entry: SymbolEntry): vscode.CallHierarchyItem {
   const item = new vscode.CallHierarchyItem(
     kind,
     entry.name,
-    entry.packageName ? `${fileName(entry.uri)} — ${entry.packageName}` : fileName(entry.uri),
+    entry.packageName ? `${fileName(entry.uri)}, ${entry.packageName}` : fileName(entry.uri),
     entry.uri,
     selRange,
     selRange,

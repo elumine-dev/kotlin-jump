@@ -77,7 +77,7 @@ export class SuppressHoverProvider implements vscode.HoverProvider {
 
     const md = new vscode.MarkdownString(undefined, true);
     md.supportHtml = false;
-    md.appendMarkdown(`**${id}** — ${desc.kind}\n\n${desc.text}`);
+    md.appendMarkdown(`**${id}**: ${desc.kind}\n\n${desc.text}`);
     if (desc.docUrl) {
       md.appendMarkdown(`\n\n[Reference](${desc.docUrl})`);
     }

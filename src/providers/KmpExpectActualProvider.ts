@@ -133,7 +133,7 @@ export async function showActuals(index: SymbolIndex, fqn: string, name: string)
       description: a.uri.toString().split('/').pop(),
       entry: a,
     })),
-    { placeHolder: `actual ${name} — pick a target` },
+    { placeHolder: `actual ${name}, pick a target` },
   );
   if (picked) await open(picked.entry);
 }

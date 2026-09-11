@@ -86,7 +86,7 @@ export function registerAddMissingWhenBranches(
         if (!best) {
           log?.warn(`[SealedWhen] insert no-op — when@${whenLine + 1} not found or already complete (document changed?)`);
           void vscode.window.showInformationMessage(
-            'Kotlin Jump: this when expression changed — no missing branches found at this location.',
+            'Kotlin Jump: this when expression changed, no missing branches found at this location.',
           );
           return;
         }

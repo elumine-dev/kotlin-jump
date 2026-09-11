@@ -156,10 +156,10 @@ export class LogcatStatusBar implements vscode.Disposable {
     const s = this.state;
     const md = new vscode.MarkdownString(undefined, false);
     md.isTrusted = false;
-    md.appendMarkdown('**Kotlin Jump — Logcat**\n\n');
+    md.appendMarkdown('**Kotlin Jump: Logcat**\n\n');
 
-    const deviceLabel = s.device?.model ?? s.device?.serial ?? '—';
-    const pkgLabel    = s.pkg ?? '—';
+    const deviceLabel = s.device?.model ?? s.device?.serial ?? 'none';
+    const pkgLabel    = s.pkg ?? 'none';
     const usagePct    = s.bufferCap > 0 ? Math.round((s.bufferUsed / s.bufferCap) * 100) : 0;
 
     md.appendMarkdown(`Device:&nbsp;&nbsp;&nbsp;&nbsp;${deviceLabel}\n\n`);

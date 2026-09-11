@@ -162,7 +162,7 @@ export class HardcodedStringProvider implements vscode.Disposable {
       );
       const d = new vscode.Diagnostic(
         range,
-        `Hardcoded string in ${hit.callee}() — extract to strings.xml (R.string)`,
+        `Hardcoded string in ${hit.callee}(), extract it to strings.xml (R.string)`,
         vscode.DiagnosticSeverity.Warning,
       );
       d.source = 'kotlin-jump';

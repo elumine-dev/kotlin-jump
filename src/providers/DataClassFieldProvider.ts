@@ -3,7 +3,7 @@ import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 
 const TOOLTIP = new vscode.MarkdownString(
   'Body properties of a `data class` are **not** part of `equals()`, '
-  + '`hashCode()`, `toString()`, or `copy()` — only primary constructor '
+  + '`hashCode()`, `toString()`, or `copy()`, only primary constructor '
   + 'parameters are. Two instances differing only in this field compare '
   + 'equal, and `copy()` resets it to its initializer. Move it to the '
   + 'constructor if it belongs to the value.',

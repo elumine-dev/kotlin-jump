@@ -219,7 +219,7 @@ export function findUnusedResources(input: ScanInput): UnusedResource[] {
 /** Message shown in the Problems panel. */
 export function messageFor(finding: UnusedResource, bytes?: number): string {
   const noun = finding.kind[0].toUpperCase() + finding.kind.slice(1);
-  const size = bytes !== undefined && bytes > 0 ? ` — ${(bytes / 1024).toFixed(1)} KB` : '';
+  const size = bytes !== undefined && bytes > 0 ? `, ${(bytes / 1024).toFixed(1)} KB` : '';
   if (finding.isLibraryModule) {
     return `${noun} '${finding.name}' is not referenced anywhere in this workspace (library module, an external consumer may use it)`;
   }

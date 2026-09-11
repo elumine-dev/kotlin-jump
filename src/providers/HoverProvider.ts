@@ -129,7 +129,7 @@ export class KotlinHoverProvider implements vscode.HoverProvider {
     const metaMd = new vscode.MarkdownString();
     metaMd.appendMarkdown(`*${entry.packageName || '(default package)'}*`);
     metaMd.appendMarkdown(`\n\n\`${fileName}\``);
-    if (entry.moduleName) metaMd.appendMarkdown(` — \`${entry.moduleName}\``);
+    if (entry.moduleName) metaMd.appendMarkdown(`, \`${entry.moduleName}\``);
 
     const sections: vscode.MarkdownString[] = [sigMd, metaMd];
 

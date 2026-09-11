@@ -150,7 +150,7 @@ function appendHeader(
   const uriStr  = pick.uri.toString();
   const resIdx  = uriStr.lastIndexOf('/res/');
   const display = resIdx >= 0 ? uriStr.slice(resIdx + 1) : uriStr.split('/').slice(-2).join('/');
-  md.appendMarkdown(`**R.${kind}.${key}** — \`${display}\`\n`);
+  md.appendMarkdown(`**R.${kind}.${key}**: \`${display}\`\n`);
 }
 
 function appendVariantList(

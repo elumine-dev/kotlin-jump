@@ -65,7 +65,7 @@ export async function findUnusedResourcesCommand(
       const review = findings.filter(f => !f.deletable).length;
       const reviewNote = review > 0 ? `, ${review} drawable${review > 1 ? 's' : ''} to review` : '';
       void vscode.window.showInformationMessage(
-        `${findings.length} unused resource file${findings.length > 1 ? 's' : ''} — ${(bytes / 1024).toFixed(0)} KB${reviewNote}.`,
+        `${findings.length} unused resource file${findings.length > 1 ? 's' : ''}, ${(bytes / 1024).toFixed(0)} KB${reviewNote}.`,
       );
     },
   );

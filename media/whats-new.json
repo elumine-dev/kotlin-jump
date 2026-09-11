@@ -1,22 +1,21 @@
 {
-  "version": "1.42.142",
+  "version": "1.42.143",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Hand checks become permanent ones",
-  "summary": "Locks in the checks that found the last few defects, so the next regression on those surfaces cannot pass unnoticed.",
+  "tagline": "Checks that cannot fail a release by accident",
+  "summary": "Removes a way the checks added last release could have blocked an unrelated publish.",
   "highlights": [
     {
-      "title": "Checks Against A Real Project",
+      "title": "Floors That Say Only What They Mean",
       "kind": "improvement",
-      "description": "Coloured tokens, inlay hints and the two readers of comments are now checked against 3187 real Kotlin files on every run, and each check states what it must find so a provider gone silent cannot slip through."
+      "description": "The checks added last release asserted floors set just under what the reference project measures today. That project changes daily and the release script runs the whole suite, so the floors now state only that the result is not empty."
     }
   ],
   "sections": [
     {
       "heading": "Internal",
       "bullets": [
-        "Three checks that had only ever been run by hand are now part of the suite: every coloured token decoded from its compact form and held to its line, every inlay hint held to its line and forbidden from splitting a word, and the two readers of comments held to the same answer. They run against a real project of 3187 Kotlin files rather than fixtures, covering more than 50000 tokens, 10000 hints and 300 documentation references.",
-        "Each one also states what it must find, not only what must not be wrong. A provider gone silent breaks no rule, which is how a set of checks published two releases ago turned out to be unable to fail. Three deliberate breakages were tried, one per check, and each is caught.",
-        "The checks are skipped wherever that project is absent, which is every machine but the author's, so continuous integration is unaffected."
+        "Those checks each assert a floor, so that a provider gone silent is caught. The floors were set just under what the reference project measures today, within a factor of about one and a half for one of them. That project is a live repository where branches change and files come and go, and the release script runs the whole suite, so a day of ordinary work there could have failed a release of this extension for no reason. The floors now state only that the result is not empty, which is what they are for, and the same three deliberate breakages are still caught.",
+        "The check that reads inlay hints replaces a shared function for the duration of its run and now puts it back. Nothing depends on that today because the test runner isolates each file, but that isolation is one configuration line away from being switched off."
       ]
     },
     {

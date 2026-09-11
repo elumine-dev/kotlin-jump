@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.143
+
+Removes a way the checks added last release could have blocked an unrelated publish.
+
+### Internal
+- Those checks each assert a floor, so that a provider gone silent is caught. The floors were set just under what the reference project measures today, within a factor of about one and a half for one of them. That project is a live repository where branches change and files come and go, and the release script runs the whole suite, so a day of ordinary work there could have failed a release of this extension for no reason. The floors now state only that the result is not empty, which is what they are for, and the same three deliberate breakages are still caught.
+- The check that reads inlay hints replaces a shared function for the duration of its run and now puts it back. Nothing depends on that today because the test runner isolates each file, but that isolation is one configuration line away from being switched off.
+
+### Notes
+- No behaviour change in this release.
+
 ## 1.42.142
 
 Locks in the checks that found the last few defects, so the next regression on those surfaces cannot pass unnoticed.

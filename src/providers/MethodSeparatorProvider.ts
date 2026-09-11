@@ -11,6 +11,9 @@ import { reportDecorations } from '../util/demoProbe';
 const MEMBER_RE =
   /^\s*(?:@\w+(?:\([^)]*\))?\s+)*(?:(?:public|private|protected|internal|override|open|abstract|final|inline|suspend|operator|infix|tailrec|external|actual|expect|data|inner|sealed|enum|annotation)\s+)*(fun|class|object|interface|companion\s+object|constructor|init)\b/;
 
+const CLASS_DECL_RE =
+  /^\s*(?:@\w+(?:\([^)]*\))?\s+)*(?:(?:public|private|internal|abstract|open|final|sealed|data|enum|annotation)\s+)*(?:class|object|interface)\b/;
+
 /** 0-based lines above which a rule is drawn. */
 export function computeSeparatorLines(text: string): number[] {
   const lines = text.split('\n');
@@ -37,10 +40,21 @@ export function computeSeparatorLines(text: string): number[] {
     // Detect entering the body of a file-level class. A Hilt header spans
     // lines (`class Vm @Inject constructor(\n …\n) : ViewModel() {`): the
     // class is pending until its first `{`.
+    // Clearing `pendingClass` here matters. A body-less `data class Foo(…)`
+    // left it set for the rest of the file, so the class BELOW it opened the
+    // body on its own `{` and the pending flag then fired again on the `{` of
+    // its first member: the class body was believed to start one level too
+    // deep, and the matching `}` closed it for good. Every separator of that
+    // class was lost, and one appeared instead above the first member of a
+    // companion object.
     const code = codeOnly(trimmed);
-    if (classDepth < 0 && /^\s*(?:@\w+(?:\([^)]*\))?\s+)*(?:(?:public|private|internal|abstract|open|final|sealed|data|enum|annotation)\s+)*(?:class|object|interface)\b/.test(line)) {
-      if (code.includes('{')) classDepth = depth;
-      else pendingClass = true;
+    if (classDepth < 0 && CLASS_DECL_RE.test(line)) {
+      if (code.includes('{')) {
+        classDepth = depth;
+        pendingClass = false;
+      } else {
+        pendingClass = true;
+      }
     } else if (pendingClass && code.includes('{')) {
       classDepth = depth;
       pendingClass = false;

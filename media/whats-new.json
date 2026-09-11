@@ -1,32 +1,27 @@
 {
-  "version": "1.42.174",
+  "version": "1.42.175",
   "title": "What's New in Kotlin Jump",
-  "tagline": "No winner invented when resources tie",
-  "summary": "Hovering a resource defined in several modules named a winner and struck the others through. When two definitions carry the same priority, that winner was only whichever file the index had scanned first.",
+  "tagline": "Separator lines that stopped showing",
+  "summary": "The method separator lines went silent on a whole class when a class without a body sat above it in the same file. A data class written as a header only is exactly that.",
   "highlights": [
     {
-      "title": "Tied definitions are shown as tied",
-      "kind": "fix",
-      "description": "Two libraries both in main, or two exclusive build variants of one module, carry the same priority. The hover now lists them side by side and says that the Gradle dependency order settles it."
+      "title": "Separators come back",
+      "description": "A class without a body no longer captures the brace of the class below it, so that class keeps its separator lines.",
+      "kind": "fix"
     },
     {
-      "title": "Nothing struck out by mistake",
-      "kind": "improvement",
-      "description": "Measured on a real project: of 122 shadowing hovers, 20 named an arbitrary winner. The remaining 102 keep their winner, and no hover was lost along the way."
+      "title": "One false line removed",
+      "description": "A line drawn above the first member of a companion object is gone. Android Studio draws none there.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "The priority score knows two things: app against library, and main against another source set. Definitions that land on the same number are no longer ranked against each other.",
-        "A duplicate sitting in the very same folder keeps its Android merge error label. It shares the top score, so it would otherwise have dropped out of the list entirely."
-      ]
-    },
-    {
-      "heading": "Notes",
-      "bullets": [
-        "No command or setting changes in this release. The work sits entirely in the resource shadowing hover."
+        "Restores the separator lines of a class that follows a class written without a body, such as a data class header.",
+        "Removes a line that used to appear above the first member of a companion object.",
+        "Measured on a real project of 3187 Kotlin files: 15 files change and 37 lines come back, including 5 files where the feature drew nothing at all."
       ]
     }
   ],

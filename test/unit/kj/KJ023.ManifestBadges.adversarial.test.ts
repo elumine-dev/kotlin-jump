@@ -15,6 +15,26 @@ describe('KJ-023 adversarial', () => {
     expect(r.permissions[0].status).toBe('maybe-lib');
   });
 
+  it('VIBRATE reste vivante quand un canal de notification la demande', () => {
+    // Mesure sur /Users/kevin/Desktop/work/lapresse : sur 56 permissions,
+    // VIBRATE etait la SEULE classee « unused », donc grisee et proposee a la
+    // suppression. Or le projet appelle `enableVibration(true)` sur ses canaux
+    // de notification, a cinq endroits. La table ne connaissait que
+    // `Vibrator|VibratorManager`, l API de vibration directe, et ignorait
+    // celle des canaux. Retirer la permission fait taire la vibration des
+    // notifications sans rien casser de visible.
+    const xml = '<manifest package="com.x"><uses-permission android:name="android.permission.VIBRATE"/></manifest>';
+    const motif = 'Vibrator|VibratorManager|enableVibration|setVibrate|DEFAULT_VIBRATE|vibrationPattern';
+    const r = analyzeManifest(xml, stub([], { [motif]: ['NotificationHelper.kt'] }));
+    expect(r.permissions[0].status).toBe('used');
+    expect(r.permissions[0].files).toEqual(['NotificationHelper.kt']);
+  });
+
+  it('VIBRATE sans aucun usage reste signalee', () => {
+    const xml = '<manifest package="com.x"><uses-permission android:name="android.permission.VIBRATE"/></manifest>';
+    expect(analyzeManifest(xml, stub()).permissions[0].status).toBe('unused');
+  });
+
   it('permission inconnue de la table : maybe-lib, jamais un faux unused', () => {
     const xml = '<manifest package="com.x"><uses-permission android:name="com.vendor.CUSTOM_PERM"/></manifest>';
     expect(analyzeManifest(xml, stub()).permissions[0].status).toBe('maybe-lib');

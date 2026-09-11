@@ -1,26 +1,26 @@
 {
-  "version": "1.42.194",
+  "version": "1.42.195",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A permission no code can exercise",
-  "summary": "RECEIVE_BOOT_COMPLETED was reported as a permission nothing exercises. Nothing in an app code ever can: it is exercised by a receiver declared in a manifest, usually a library one. WorkManager declares such a receiver and requires this permission.",
+  "tagline": "A permission the notifications needed",
+  "summary": "The manifest badge called VIBRATE unused, greyed the line and offered to remove it. A notification channel that asks for vibration needs that permission, and it never mentions the vibrator.",
   "highlights": [
     {
-      "title": "A finding that broke background work",
+      "title": "Channels ask for it too",
       "kind": "fix",
-      "description": "Acting on it stops periodic work from resuming after a restart. On the project measured, the permission comment reads: need to do cleanup during the night and background download."
+      "description": "The table knew only the direct vibrator API. It now counts enableVibration, setVibrate, DEFAULT_VIBRATE and vibrationPattern."
     },
     {
-      "title": "A test that pinned the wrong answer",
-      "kind": "fix",
-      "description": "The suite used this very permission as its example of one that nothing exercises. It now uses CAMERA, which really does need a runtime request in code."
+      "title": "The only wrong badge, gone",
+      "kind": "improvement",
+      "description": "Of 56 permissions across 51 manifests on the project measured, VIBRATE was the only one marked unused. Nothing is greyed any more."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "The permission joins those complete with their declaration alone, next to WAKE_LOCK and FOREGROUND_SERVICE, exempt for the same reason.",
-        "One finding remains on the project measured, an intent extra written and never read anywhere. That one is real."
+        "The project calls enableVibration(true) on its notification channels in five places; removing the permission would silence them.",
+        "A second test pins the other direction: a project that never asks for vibration still gets the finding."
       ]
     }
   ],

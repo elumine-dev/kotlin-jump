@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.135
+
+A shared catalog reached through the rootDir property is found again, which the previous release only handled for plain relative paths.
+
+### Fixes
+- An included build can point at the parent catalog with a from files clause whose path goes through the rootDir property. The brace in that expression ended the reading of the block early, so the clause became invisible and the second name of the catalog was lost, leaving that build without hover or Ctrl+click. In a settings file rootDir is the directory holding that file, and rootProject.projectDir means the same, so both are now resolved exactly, with or without braces around them.
+- Any other variable in such a path is left alone rather than guessed. Guessing would mean matching on file name, which is what made one project rename its neighbours two releases ago.
+
+### Notes
+- A project that does not share a catalog this way sees no change, verified against a real one.
+- No new commands or settings in this release.
+
 ## 1.42.134
 
 Version catalogs declared in a Groovy settings.gradle are read too, not just the Kotlin ones.

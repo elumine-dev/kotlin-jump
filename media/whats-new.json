@@ -1,27 +1,27 @@
 {
-  "version": "1.42.134",
+  "version": "1.42.135",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Groovy settings files are read too",
-  "summary": "Version catalogs declared in a Groovy settings.gradle are read too, not just the Kotlin ones.",
+  "tagline": "Shared catalogs found through rootDir",
+  "summary": "A shared catalog reached through the rootDir property is found again, which the previous release only handled for plain relative paths.",
   "highlights": [
     {
-      "title": "Groovy Settings Files",
+      "title": "Catalog Path Through rootDir",
       "kind": "fix",
-      "description": "A settings.gradle written in Groovy quotes with apostrophes, and only double quotes were accepted, so a Groovy project renaming its catalog got no hover and no Ctrl+click on any accessor. Both dialects are now read."
+      "description": "A from files clause whose path goes through the rootDir property was cut short by the brace in the expression, so the second name of a shared catalog was lost and the included build had no hover or Ctrl+click. It is now resolved exactly."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "A settings.gradle written in Groovy quotes with apostrophes, create('deps'), and the rule that reads catalog names only accepted double quotes. A Groovy project that renames its catalog therefore kept the name of the file, and hover and Ctrl+click stayed silent on every catalog accessor in every build file. The previous releases said settings renames were understood, which was only true of the Kotlin dialect. Both are now read, including the shared catalog of an included build.",
-        "Mismatched quotes are still rejected, since they are not valid Gradle and accepting them would turn noise into a declaration."
+        "An included build can point at the parent catalog with a from files clause whose path goes through the rootDir property. The brace in that expression ended the reading of the block early, so the clause became invisible and the second name of the catalog was lost, leaving that build without hover or Ctrl+click. In a settings file rootDir is the directory holding that file, and rootProject.projectDir means the same, so both are now resolved exactly, with or without braces around them.",
+        "Any other variable in such a path is left alone rather than guessed. Guessing would mean matching on file name, which is what made one project rename its neighbours two releases ago."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "A project using the Kotlin dialect sees no change.",
+        "A project that does not share a catalog this way sees no change, verified against a real one.",
         "No new commands or settings in this release."
       ]
     }

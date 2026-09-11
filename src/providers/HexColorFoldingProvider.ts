@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { isInsideCommentOrString, isInsideComment, countTripleQuotes } from '../util/textUtils';
+import { moveDecorationsToLine, shiftLineState } from '../util/decorationShift';
 
 // Matches 0xAARRGGBB hex literals (8 hex digits, Android ARGB format).
 const HEX_0X_RE  = /\b0x([0-9A-Fa-f]{8})\b/g;
@@ -12,6 +13,10 @@ export class HexColorFoldingProvider implements vscode.Disposable {
   private _editor:     vscode.TextEditor | undefined;
   private _lineDecos = new Map<number, vscode.DecorationOptions[]>();
   private _rawState:  boolean[] = [];
+  /** Per line, whether it carried a `"""` BEFORE the keystroke. A deleted
+   *  boundary is readable nowhere afterwards: the event does not carry the
+   *  text that was removed. */
+  private _boundary:  boolean[] = [];
   private _flushTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly _subs: vscode.Disposable[];
 
@@ -23,7 +28,7 @@ export class HexColorFoldingProvider implements vscode.Disposable {
       vscode.window.onDidChangeActiveTextEditor(e => {
         this._editor = e;
         if (e) this._fullScan(e);
-        else { this._lineDecos.clear(); this._rawState = []; }
+        else { this._lineDecos.clear(); this._rawState = []; this._boundary = []; }
       }),
       vscode.workspace.onDidChangeTextDocument(e => {
         if (!this._editor || e.document !== this._editor.document) return;
@@ -63,10 +68,13 @@ export class HexColorFoldingProvider implements vscode.Disposable {
   // ── Layer 1: raw-string oracle ─────────────────────────────────────────────
   private _buildRawState(doc: vscode.TextDocument): void {
     this._rawState = new Array(doc.lineCount).fill(false);
+    this._boundary = new Array(doc.lineCount).fill(false);
     let inRaw = false;
     for (let i = 0; i < doc.lineCount; i++) {
+      const text = doc.lineAt(i).text;
       this._rawState[i] = inRaw;
-      if (countTripleQuotes(doc.lineAt(i).text) % 2 !== 0) inRaw = !inRaw;
+      this._boundary[i] = text.includes('"""');
+      if (countTripleQuotes(text) % 2 !== 0) inRaw = !inRaw;
     }
   }
 
@@ -101,6 +109,9 @@ export class HexColorFoldingProvider implements vscode.Disposable {
       else if (line + delta >= fromLine) next.set(line + delta, decos);
     }
     this._lineDecos = next;
+    // The per-line oracles are indexed by line too, so they move with them.
+    this._rawState = shiftLineState(this._rawState, fromLine, delta);
+    this._boundary = shiftLineState(this._boundary, fromLine, delta);
   }
 
   // ── Layer 3: 16ms render throttle ─────────────────────────────────────────
@@ -114,8 +125,13 @@ export class HexColorFoldingProvider implements vscode.Disposable {
 
   private _flush(editor: vscode.TextEditor): void {
     const all: vscode.DecorationOptions[] = [];
-    for (const k of [...this._lineDecos.keys()].sort((a, b) => a - b))
-      all.push(...this._lineDecos.get(k)!);
+    for (const k of [...this._lineDecos.keys()].sort((a, b) => a - b)) {
+      // The key is bookkeeping; the swatch is painted at the Range inside each
+      // option. Re-keying alone drew every swatch below the caret one line off.
+      const decos = moveDecorationsToLine(this._lineDecos.get(k)!, k);
+      this._lineDecos.set(k, decos);
+      all.push(...decos);
+    }
     editor.setDecorations(this._decorType, all);
   }
 
@@ -132,7 +148,11 @@ export class HexColorFoldingProvider implements vscode.Disposable {
       if (change.text.includes('"""')) { needsRawRebuild = true; break; }
       for (let i = change.range.start.line;
            i <= Math.min(change.range.end.line, doc.lineCount - 1); i++) {
-        if (doc.lineAt(i).text.includes('"""')) { needsRawRebuild = true; break; }
+        // `_boundary` is what makes a DELETED `"""` visible: neither the event
+        // nor the new line still carries it, so without the memory of the line
+        // before the keystroke nothing triggers, and the swatches below stay
+        // painted inside a raw string that has just been opened.
+        if (doc.lineAt(i).text.includes('"""') || this._boundary[i]) { needsRawRebuild = true; break; }
       }
       if (needsRawRebuild) break;
     }

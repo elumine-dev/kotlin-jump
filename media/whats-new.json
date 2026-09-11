@@ -1,26 +1,32 @@
 {
-  "version": "1.42.195",
+  "version": "1.42.196",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A permission the notifications needed",
-  "summary": "The manifest badge called VIBRATE unused, greyed the line and offered to remove it. A notification channel that asks for vibration needs that permission, and it never mentions the vibrator.",
+  "tagline": "Decorations that stay on their line",
+  "summary": "Press Enter above an inline color swatch or a highlighted forced unwrap, and every decoration below the caret was repainted one line too high. Both providers now move the paint, not just the cache key.",
   "highlights": [
     {
-      "title": "Channels ask for it too",
-      "kind": "fix",
-      "description": "The table knew only the direct vibrator API. It now counts enableVibration, setVibrate, DEFAULT_VIBRATE and vibrationPattern."
+      "title": "Swatches Stay On Their Line",
+      "description": "Adding or removing a line above a hex color swatch no longer repaints it one line off. Measured on a real project: 882 swatches across 138 files, every one of them reachable by a single keystroke.",
+      "kind": "fix"
     },
     {
-      "title": "The only wrong badge, gone",
-      "kind": "improvement",
-      "description": "Of 56 permissions across 51 manifests on the project measured, VIBRATE was the only one marked unused. Nothing is greyed any more."
+      "title": "Unwrap Highlight Follows Its Line",
+      "description": "The forced unwrap highlight moves with its line, and so do the raw string and comment block oracles behind it, so a block opened or closed right after an edit is seen again.",
+      "kind": "fix"
+    },
+    {
+      "title": "A Deleted Triple Quote Is Seen",
+      "description": "Color swatches now notice when the triple quote that opened a raw string is deleted, instead of staying painted inside it. The forced unwrap highlight got that memory in 1.42.193.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "The project calls enableVibration(true) on its notification channels in five places; removing the permission would silence them.",
-        "A second test pins the other direction: a project that never asks for vibration still gets the finding."
+        "A hex color swatch and a forced unwrap highlight now repaint on the line they belong to after a keystroke adds or removes a line above them.",
+        "The per line oracles that read raw strings and comment blocks move with the lines, so a boundary deleted after an edit still triggers a rebuild.",
+        "Deleting the triple quote that opened a raw string now clears the swatches it was hiding."
       ]
     }
   ],

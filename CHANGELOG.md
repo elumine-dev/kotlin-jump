@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.196
+
+Press Enter above a colour swatch or above a highlighted forced unwrap, and every decoration below the caret was repainted one line too high, on code that has nothing to do with it.
+
+### Fixes
+- Both providers rescan only the lines a keystroke touched, and renumber their cache when a line appears or disappears. The cache key moved. The range inside each decoration, which is what the editor actually paints, did not. Measured on a real project: 882 swatches across 138 files and 283 unwrap highlights across 108 files, and in every one of those files the last decoration sits below the first line, so one keystroke reaches it.
+- The test that covered this read the cache key and nothing else, so it passed while the paint was wrong. It now reads the ranges handed to the editor.
+- The per line oracles that decide what a line means, inside a raw string or inside a comment block, did not move with the lines either. One Enter above a closed comment block was enough to desynchronise them: deleting the closing marker then triggered no rebuild, and the highlight survived inside text that had just become documentation. A paste of several lines shifts them far enough that a forced unwrap or a colour literal living inside a raw string gets decorated.
+- Deleting a triple quote is now visible to the colour swatches too. Each line remembers whether it held one, the memory the forced unwrap highlight received in 1.42.193 and its neighbour never got.
+
+### Notes
+- Painting the right line costs something. On a 1500 line file carrying 800 decorations, a keystroke that shifts lines goes from 12 to 14 microseconds, and a repaint from 24 to 37. The rebuild of the ranges was moved to the repaint, which is throttled to 16 ms, so a burst of typing pays it once instead of once per character.
+
 ## 1.42.195
 
 The manifest badge called `VIBRATE` unused, greyed the line and offered to remove it. A notification channel that asks for vibration needs that permission, and it never mentions the vibrator.

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.141
+
+Corrects yesterday's change, which could hide a hint that was still worth showing.
+
+### Fixes
+- Yesterday the extension stopped labelling an argument whose name already matches the parameter. The text it reads for an argument stops at the end of the line, so a name sitting alone on its line looked like the whole argument even when the expression carried on below, as in a name on one line followed by a chained call on the next. The label was then dropped although the value passed was no longer that variable. A label is now dropped only when the argument really ends there, which the closing bracket or the comma on the next line tells us.
+- A missing label is invisible, unlike a wrong one, which is why this is worth a release of its own even though the reference project, 3187 Kotlin files, does not format arguments that way and loses none.
+
+### Notes
+- The counts on that project are unchanged by this release: 11483 parameter labels, 1246 type labels, no redundant label left.
+- No new commands or settings in this release.
+
 ## 1.42.140
 
 Parameter name hints no longer repeat a name the code already says. On a real project that removed 28 percent of them.

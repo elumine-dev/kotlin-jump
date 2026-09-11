@@ -258,7 +258,13 @@ export class KotlinInlayHintsProvider implements vscode.InlayHintsProvider {
             // parenthese ouvrante n'etant pas un separateur, et `x.name` non
             // plus.
             const seul = /^([A-Za-z_][A-Za-z0-9_]*)\s*(?:[,)]|$)/.exec(argText.trim());
-            if (seul && seul[1] === param.name) {
+            // `getArgText` s'arrete en fin de ligne. Quand le nom n'est suivi
+            // d'AUCUN separateur, l'argument peut continuer plus bas
+            // (`actionListener` puis `.withTimeout(5)`) : la valeur passee
+            // n'est alors plus la variable, et l'etiquette garde son sens.
+            const termine = seul !== null
+              && (/[,)]/.test(seul[0]) || argSeFermePlusBas(document, argPos.line));
+            if (seul && termine && seul[1] === param.name) {
               this.log.debug(`[InlayHints] pass1 line ${lineNum} — ${name}() arg[${i}] porte deja le nom ${param.name}, skip`);
               continue;
             }
@@ -554,6 +560,22 @@ function skipStringLiteral(text: string, col: number): number {
 }
 
 // Gets the text of argument `i` from its start position to the next argument start.
+/**
+ * La premiere ligne non vide sous `line` ferme-t-elle l'argument ?
+ *
+ * Un `)` ou un `,` ferme ; tout le reste, un `.` de chainage en tete par
+ * exemple, dit que l'expression continue. Trois lignes suffisent : au dela,
+ * on prefere garder l'etiquette plutot que de la supprimer a tort.
+ */
+function argSeFermePlusBas(document: vscode.TextDocument, line: number): boolean {
+  for (let l = line + 1; l < document.lineCount && l <= line + 3; l++) {
+    const t = document.lineAt(l).text.trim();
+    if (t === '') continue;
+    return t.startsWith(')') || t.startsWith(',');
+  }
+  return false;
+}
+
 function getArgText(
   document: vscode.TextDocument,
   argPos: vscode.Position,

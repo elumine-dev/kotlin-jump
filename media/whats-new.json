@@ -1,28 +1,27 @@
 {
-  "version": "1.42.140",
+  "version": "1.42.141",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Fewer hints, more signal",
-  "summary": "Parameter name hints no longer repeat a name the code already says. On a real project that removed 28 percent of them.",
+  "tagline": "A label hidden by mistake comes back",
+  "summary": "Corrects yesterday's change, which could hide a hint that was still worth showing.",
   "highlights": [
     {
-      "title": "Hints That Repeat The Argument",
+      "title": "Arguments That Carry On To The Next Line",
       "kind": "fix",
-      "description": "Passing a variable whose name matches the parameter showed the name twice on the line. More than one hint in four was this on a real project. The match is exact, so a different capitalisation or a property read keeps its hint."
+      "description": "Yesterday's change read only to the end of the line, so a name alone on its line looked like the whole argument even when the expression continued below, and its label was dropped. A label is now dropped only when the argument really ends there."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Passing a variable whose name already matches the parameter produced a hint that added nothing: provide(actionListener) showed actionListener followed by actionListener. IntelliJ and the TypeScript hints in VS Code both drop this case by default. Measured on a real project of 3187 Kotlin files, 4460 of the 15943 parameter hints were this, so more than one in four, and they drowned the hints that do carry information, the ones naming a bare true, a zero or an it.",
-        "The match is exact, so a name differing only in capitalisation keeps its hint, and so does an argument that merely starts with the name, such as a property read or a call.",
-        "Type hints are untouched: the same count before and after, 1246."
+        "Yesterday the extension stopped labelling an argument whose name already matches the parameter. The text it reads for an argument stops at the end of the line, so a name sitting alone on its line looked like the whole argument even when the expression carried on below, as in a name on one line followed by a chained call on the next. The label was then dropped although the value passed was no longer that variable. A label is now dropped only when the argument really ends there, which the closing bracket or the comma on the next line tells us.",
+        "A missing label is invisible, unlike a wrong one, which is why this is worth a release of its own even though the reference project, 3187 Kotlin files, does not format arguments that way and loses none."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "Hints on arguments that are already named in the source were already suppressed, and positions were checked across 17189 hints in 1574 files with none out of bounds.",
+        "The counts on that project are unchanged by this release: 11483 parameter labels, 1246 type labels, no redundant label left.",
         "No new commands or settings in this release."
       ]
     }

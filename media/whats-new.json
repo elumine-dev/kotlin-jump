@@ -1,28 +1,28 @@
 {
-  "version": "1.42.141",
+  "version": "1.42.142",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A label hidden by mistake comes back",
-  "summary": "Corrects yesterday's change, which could hide a hint that was still worth showing.",
+  "tagline": "Hand checks become permanent ones",
+  "summary": "Locks in the checks that found the last few defects, so the next regression on those surfaces cannot pass unnoticed.",
   "highlights": [
     {
-      "title": "Arguments That Carry On To The Next Line",
-      "kind": "fix",
-      "description": "Yesterday's change read only to the end of the line, so a name alone on its line looked like the whole argument even when the expression continued below, and its label was dropped. A label is now dropped only when the argument really ends there."
+      "title": "Checks Against A Real Project",
+      "kind": "improvement",
+      "description": "Coloured tokens, inlay hints and the two readers of comments are now checked against 3187 real Kotlin files on every run, and each check states what it must find so a provider gone silent cannot slip through."
     }
   ],
   "sections": [
     {
-      "heading": "Fixes",
+      "heading": "Internal",
       "bullets": [
-        "Yesterday the extension stopped labelling an argument whose name already matches the parameter. The text it reads for an argument stops at the end of the line, so a name sitting alone on its line looked like the whole argument even when the expression carried on below, as in a name on one line followed by a chained call on the next. The label was then dropped although the value passed was no longer that variable. A label is now dropped only when the argument really ends there, which the closing bracket or the comma on the next line tells us.",
-        "A missing label is invisible, unlike a wrong one, which is why this is worth a release of its own even though the reference project, 3187 Kotlin files, does not format arguments that way and loses none."
+        "Three checks that had only ever been run by hand are now part of the suite: every coloured token decoded from its compact form and held to its line, every inlay hint held to its line and forbidden from splitting a word, and the two readers of comments held to the same answer. They run against a real project of 3187 Kotlin files rather than fixtures, covering more than 50000 tokens, 10000 hints and 300 documentation references.",
+        "Each one also states what it must find, not only what must not be wrong. A provider gone silent breaks no rule, which is how a set of checks published two releases ago turned out to be unable to fail. Three deliberate breakages were tried, one per check, and each is caught.",
+        "The checks are skipped wherever that project is absent, which is every machine but the author's, so continuous integration is unaffected."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "The counts on that project are unchanged by this release: 11483 parameter labels, 1246 type labels, no redundant label left.",
-        "No new commands or settings in this release."
+        "No behaviour change in this release."
       ]
     }
   ],

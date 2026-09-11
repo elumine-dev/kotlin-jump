@@ -1,26 +1,31 @@
 {
-  "version": "1.42.184",
+  "version": "1.42.185",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Memory that came back after shutdown",
-  "summary": "Releasing a cache achieves nothing if the scan already running hands its megabytes straight back. That is what happened to all three of the features that hold the project listing, a second or two after the extension shut down.",
+  "tagline": "A default only the tests could see",
+  "summary": "A setting read as get(key, fallback) never returns that fallback once the key is declared in package.json. The test stub does return it, so a fallback that disagrees with the declared default is a value only the tests ever see.",
   "highlights": [
     {
-      "title": "Shutdown is now a stop sign",
+      "title": "One reading, one default",
       "kind": "fix",
-      "description": "Each of the three refuses to write its listing once shut down: 40.8 MB for the quick fixes, 40.8 MB for the resource badge, about 17 MB for the reverse string map."
+      "description": "The Room migration check read the indexed file ceiling with a fallback of 3000 where the declared default is 10000."
     },
     {
-      "title": "The window you actually hit",
-      "kind": "fix",
-      "description": "The scan takes seconds, one round trip per file, so closing the window while it runs is the ordinary case rather than a corner case."
+      "title": "A guard over all 135 calls",
+      "kind": "improvement",
+      "description": "Every setting read with a literal fallback is now checked against package.json, so the two cannot drift apart again."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "A scan in flight could repopulate the cache of a provider that had already been disposed, so the memory outlived the extension.",
-        "The same guard already covered the settings being switched off; shutdown was covered nowhere."
+        "The Room migration check now reads the indexed file ceiling the same way as every other consumer."
+      ]
+    },
+    {
+      "heading": "Notes",
+      "bullets": [
+        "Nothing changes for anyone running a released build: the declared default was already the value in force."
       ]
     }
   ],

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.42.114
+
+Yesterday's fix narrowed what a folder deletion looks at, from every file ever seen down to the scans actually running. It narrowed it one notch too far and dropped the files still waiting in the queue.
+
+### Fixed
+- Deleting a folder now also cancels the scans queued for its files. A file created moments earlier is not in the index yet and its scan has not started either, so neither of the two lists checked yesterday contained it: the queue fired afterwards and indexed a file whose folder was gone. Deleting a folder in the Explorer while the editor is still settling is enough to hit it.
+- The queue holds only what one debounce window collected, so consulting it costs nothing. Folder deletion stays flat at 0.1 ms whatever the session has seen.
+
 ## 1.42.113
 
 To catch a file being scanned at the moment its folder is deleted, the watcher was re reading every file it had ever seen an event for. That list only grows.

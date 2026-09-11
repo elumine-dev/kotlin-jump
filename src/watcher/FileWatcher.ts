@@ -81,11 +81,16 @@ export class FileWatcher implements vscode.Disposable {
     if (SOURCE_EXT_RE.test(folder.path)) return [];
     const prefix = folder.toString().replace(/\/$/, '') + '/';
     const dansIndex = this.index.fileUriStrings().filter(k => k.startsWith(prefix));
-    // Un fichier de ce dossier dont le scan est EN VOL n'est pas encore dans
-    // l'index : `flush` l'en retire avant de lancer le scan. Sans le marquer
-    // ici, son ajout tardif ressuscite un fichier d'un dossier effacé.
+    // Deux familles échappent à l'index. Un fichier dont le scan est EN VOL en
+    // a été retiré par `flush` juste avant le lancement du scan, et son ajout
+    // tardif ressusciterait un fichier d'un dossier effacé. Un fichier ENCORE
+    // EN FILE n'y est jamais entré : tout neuf, sa fenêtre d'anti rebond court
+    // toujours, et sans le sortir de la file le flush le scanne après coup.
+    // Les deux ensembles sont petits, contrairement à l'historique complet des
+    // fichiers vus, dont la relecture coûtait 406 ms par vague de suppressions.
     const connus = [...this.enVol].filter(k => k.startsWith(prefix));
-    for (const cle of new Set([...dansIndex, ...connus])) {
+    const enAttente = [...this.pendingScan].filter(k => k.startsWith(prefix));
+    for (const cle of new Set([...dansIndex, ...connus, ...enAttente])) {
       this.marquer(vscode.Uri.parse(cle));
       this.pendingScan.delete(cle);
     }

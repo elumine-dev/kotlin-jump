@@ -20,6 +20,7 @@
  *   FW-11 addTree jette les fichiers dépassés par un événement
  *   FW-12 addTree ne balaie pas une grande liste par fichier (le tri était quadratique)
  *   FW-13 removeTree ne parcourt pas tout l'historique des fichiers vus
+ *   FW-14 Dossier supprimé avant que la file d'attente ait été vidée
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -237,5 +238,27 @@ describe('FW-13 — removeTree ne relit pas tout l historique', () => {
     // Sans cette ligne, un ensemble qui ne se vide jamais redevient tout
     // l'historique et ramène le parcours par une autre porte.
     expect((watcher as any).enVol.size, 'aucun scan ne doit rester marqué en vol').toBe(0);
+  });
+});
+
+describe('FW-14 — dossier supprime avant le flush', () => {
+  it('un fichier encore en file d attente n est pas scanne apres coup', async () => {
+    const index = new SymbolIndex();
+    const { scanner, liberer } = scannerRetarde(index, () => 'JamaisNe');
+    watcher = new FileWatcher(scanner, index);
+
+    // Un fichier tout neuf : jamais indexé, et son scan n'a pas encore démarré
+    // puisque la fenêtre d'anti rebond court toujours.
+    (watcher as any).queue(uriOf(42));
+    expect((watcher as any).pendingScan.size, 'le fichier attend bien son flush').toBe(1);
+
+    watcher.removeTree(vscode.Uri.parse('file:///proj/src') as any);
+
+    await vi.advanceTimersByTimeAsync(300);   // le flush aurait lieu ici
+    liberer();
+    await tourner();
+
+    expect(scanner.scanFile, 'un dossier effacé ne doit plus rien faire scanner').not.toHaveBeenCalled();
+    expect(index.lookup('JamaisNe')).toHaveLength(0);
   });
 });

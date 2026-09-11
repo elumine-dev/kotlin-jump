@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.119
+
+A folder deleted while the project is being indexed gets a second sweep once the indexing settles. That sweep worked from the folder list captured earlier, so a file put back in the meantime was swept away with the rest.
+
+### Fixed
+- A file recreated after its folder was deleted, and before the indexing finished, is no longer removed. It stayed on disk while navigation lost track of it until the next edit. Checking out a branch that deletes a directory and restores one of its files is enough, and so is a build tool that clears a folder and repopulates it.
+- Each deletion and each recreation now carries its rank, so the sweep can tell which came last instead of assuming the deletion did.
+
+### Internal
+- The storm test that was meant to cover exactly this could not: its stand in scanner reported that it was never busy, so the second sweep never ran in any test. It now reports its activity, and removing the fix fails the storm as well as the new case.
+
 ## 1.42.118
 
 Yesterday's fix replaced a counter of events with a plain question, is this file deleted right now. The counter was left behind: still written on every deletion, read by nobody.

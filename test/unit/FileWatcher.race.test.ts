@@ -25,6 +25,7 @@
  *   FW-16 Une vague de suppressions pendant un balayage ne fait qu'une reprise
  *   FW-17 Deux scans du même fichier qui se chevauchent ne s'effacent pas
  *   FW-18 Invariant global : après une tempête d'événements, index == disque
+ *   FW-19 Un fichier recréé survit à la reprise du dossier supprimé
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -404,17 +405,30 @@ describe('FW-18 — invariant global apres une tempete', () => {
     const index = new SymbolIndex();
     const chemin = (d: number, f: number) => 'file:///t/d' + d + '/sub/F' + d + '_' + f + '.kt';
 
+    // Le bouchon DOIT se declarer occupe : sans cela `busy()` rend faux, la
+    // reprise apres balayage n'est jamais jouee, et toute une moitie du
+    // veilleur echappe a la tempete. C'est ce qui a laisse passer une reprise
+    // qui effacait les fichiers recrees.
+    let actifs = 0;
+    let attentes: Array<() => void> = [];
     const scanner = {
       scanFile: async (u: any) => {
-        const cle = u.toString();
-        await Promise.resolve();
-        const t = disque.get(cle);
-        if (t === undefined) { index.remove(u); return; }
-        await Promise.resolve();
-        index.add(parse(cle, t));
-        index.finalize();
+        actifs++;
+        try {
+          const cle = u.toString();
+          await Promise.resolve();
+          const t = disque.get(cle);
+          if (t === undefined) { index.remove(u); return; }
+          await Promise.resolve();
+          index.add(parse(cle, t));
+          index.finalize();
+        } finally {
+          if (--actifs === 0) { const a = attentes; attentes = []; a.forEach(r => r()); }
+        }
       },
       scanFiles: async (us: any[]) => { for (const u of us) await (scanner as any).scanFile(u); },
+      busy: () => actifs > 0,
+      whenIdle: () => actifs === 0 ? Promise.resolve() : new Promise<void>(r => attentes.push(r)),
     } as any;
     const w = new FileWatcher(scanner, index);
 
@@ -450,6 +464,39 @@ describe('FW-18 — invariant global apres une tempete', () => {
     expect(surDisque.size, 'et pas tout').toBeGreaterThan(0);
     expect([...indexes].filter(k => !surDisque.has(k)), 'aucun fantome').toEqual([]);
     expect([...surDisque].filter(k => !indexes.has(k)), 'aucun manquant').toEqual([]);
+    w.dispose();
+  });
+});
+
+describe('FW-19 — un fichier recree survit a la reprise', () => {
+  it('le dossier revient pendant le balayage : la reprise ne l efface pas', async () => {
+    vi.useRealTimers();
+    const index = new SymbolIndex();
+    let actifs = 1;
+    let liberer!: () => void;
+    const fini = new Promise<void>(r => { liberer = r; });
+    const scanner = {
+      scanFile: async () => {}, scanFiles: async () => {},
+      busy: () => actifs > 0,
+      whenIdle: () => fini,
+    } as any;
+    const w = new FileWatcher(scanner, index);
+    const cible = vscode.Uri.parse('file:///r/dossier/sub/Revenu.kt');
+
+    // Le dossier est supprimé pendant le balayage : une reprise est armée.
+    w.removeTree(vscode.Uri.parse('file:///r/dossier') as any);
+    expect((w as any).aRejouer.size, 'une reprise est en attente').toBe(1);
+
+    // Puis le fichier revient et est indexé avant la fin du balayage.
+    (w as any).queue(cible);
+    index.add(parse(cible.toString(), SOURCE('Revenu')));
+    index.finalize();
+
+    actifs = 0; liberer();
+    await new Promise<void>(r => setTimeout(r, 0));
+
+    expect(index.lookup('Revenu'), 'le fichier revenu doit survivre a la reprise').toHaveLength(1);
+    expect((w as any).recrees.size, 'la table des recreations est videe').toBe(0);
     w.dispose();
   });
 });

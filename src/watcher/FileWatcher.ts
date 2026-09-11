@@ -40,9 +40,17 @@ export class FileWatcher implements vscode.Disposable {
    */
   private readonly supprimes = new Set<string>();
 
-  /** Dossiers supprimes pendant un balayage, repris en une passe a la fin. */
-  private aRejouer = new Set<string>();
+  /**
+   * Dossiers supprimes pendant un balayage, repris en une passe a la fin,
+   * chacun avec le rang de sa suppression. Sans ce rang la reprise effacait un
+   * fichier RECREE depuis : elle travaille sur des prefixes captures plus tot
+   * et ne pouvait pas savoir qu'il etait revenu entre temps.
+   */
+  private aRejouer = new Map<string, number>();
   private rejeuArme = false;
+  /** Rang de la derniere remise en file, tenu seulement pendant une reprise. */
+  private recrees = new Map<string, number>();
+  private rang = 0;
   private flushTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
@@ -126,13 +134,13 @@ export class FileWatcher implements vscode.Disposable {
   private rejouerApresBalayage(folder: vscode.Uri): void {
     const s = this.scanner as { busy?: () => boolean; whenIdle?: () => Promise<void> };
     if (s.busy?.() !== true || s.whenIdle === undefined) return;
-    this.aRejouer.add(folder.toString().replace(/\/$/, '') + '/');
+    this.aRejouer.set(folder.toString().replace(/\/$/, '') + '/', ++this.rang);
     if (this.rejeuArme) return;   // une seule reprise pour toute la vague
     this.rejeuArme = true;
     void s.whenIdle().then(() => {
       this.rejeuArme = false;
       const prefixes = this.aRejouer;
-      this.aRejouer = new Set();
+      this.aRejouer = new Map();
       this.purger(prefixes);
     });
   }
@@ -145,17 +153,20 @@ export class FileWatcher implements vscode.Disposable {
    * chemin, une poignee de lectures dans un ensemble, au lieu d'un
    * `startsWith` par dossier supprime.
    */
-  private purger(prefixes: ReadonlySet<string>): void {
-    if (prefixes.size === 0) return;
+  private purger(prefixes: ReadonlyMap<string, number>): void {
+    if (prefixes.size === 0) { this.recrees.clear(); return; }
     const gone: vscode.Uri[] = [];
     for (const cle of this.index.fileUriStrings()) {
       let i = cle.lastIndexOf('/');
-      let sousUnDossierMort = false;
+      let rangSuppression: number | undefined;
       while (i > 0) {
-        if (prefixes.has(cle.slice(0, i + 1))) { sousUnDossierMort = true; break; }
+        const r = prefixes.get(cle.slice(0, i + 1));
+        if (r !== undefined) { rangSuppression = r; break; }
         i = cle.lastIndexOf('/', i - 1);
       }
-      if (!sousUnDossierMort) continue;
+      if (rangSuppression === undefined) continue;
+      // Remis en file APRES la suppression : il est revenu, on n'y touche pas.
+      if ((this.recrees.get(cle) ?? -1) > rangSuppression) continue;
       const uri = vscode.Uri.parse(cle);
       this.noterSuppression(uri);
       this.pendingScan.delete(cle);
@@ -163,6 +174,7 @@ export class FileWatcher implements vscode.Disposable {
       this.index.remove(uri);
       gone.push(uri);
     }
+    this.recrees.clear();
     if (gone.length > 0) {
       this.log?.info(`[watcher] ${gone.length} file(s) dropped after the scan settled`);
       this.notify(gone);
@@ -237,6 +249,9 @@ export class FileWatcher implements vscode.Disposable {
   private queue(uri: vscode.Uri): void {
     // Drop build/ and .gradle/ churn before it ever enters the batch.
     if (this.isExcluded(uri.path)) return;
+    // Une recreation pendant qu'une reprise est en attente doit survivre a
+    // cette reprise : on note son rang pour la departager de la suppression.
+    if (this.aRejouer.size > 0) this.recrees.set(uri.toString(), ++this.rang);
     this.supprimes.delete(uri.toString());
     this.pendingScan.add(uri.toString());
     if (this.flushTimer) clearTimeout(this.flushTimer);
@@ -296,6 +311,8 @@ export class FileWatcher implements vscode.Disposable {
     this.pendingScan.clear();
     this.enVol.clear();
     this.supprimes.clear();
+    this.aRejouer.clear();
+    this.recrees.clear();
   }
 }
 

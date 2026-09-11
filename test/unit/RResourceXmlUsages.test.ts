@@ -158,6 +158,38 @@ describe('une reference commentee n est pas un usage', () => {
     expect(i.getUsages('color', 'blanc')).toHaveLength(1);
   });
 
+  /**
+   * Le piege de la regle bon marche : une URL dans une chaine contient `//`.
+   * Le corpus de reference n'en porte aucun exemple sur la meme ligne qu'une
+   * reference, mais la forme est on ne peut plus ordinaire.
+   */
+  it('une URL dans une chaine ne fait pas passer la suite pour un commentaire', () => {
+    const i = new RResourceIndex();
+    i.reindexFile(KT, ['package com.x', '',
+      'val m = "voir https://x/y " + getString(R.string.titre)'].join(NL));
+    expect(i.getUsages('string', 'titre'), 'le // est dans une chaine').toHaveLength(1);
+  });
+
+  /**
+   * Un guillemet ECHAPPE ne ferme pas la chaine. Avec un nombre impair d'entre
+   * eux avant l'URL, ignorer l'echappement fait croire qu'on est sorti de la
+   * chaine, et le `//` de l'URL passe alors pour un commentaire.
+   */
+  it('un guillemet echappe ne fait pas sortir de la chaine', () => {
+    const i = new RResourceIndex();
+    const guillemet = String.fromCharCode(92) + String.fromCharCode(34);
+    i.reindexFile(KT, ['package com.x', '',
+      'val m = "il dit ' + guillemet + ' voir https://x " + getString(R.string.titre)'].join(NL));
+    expect(i.getUsages('string', 'titre'), 'toujours dans la chaine au moment du //').toHaveLength(1);
+  });
+
+  it('mais un vrai commentaire APRES une chaine masque toujours', () => {
+    const i = new RResourceIndex();
+    i.reindexFile(KT, ['package com.x', '',
+      'val m = "https://x" // val a = R.string.titre'].join(NL));
+    expect(i.getUsages('string', 'titre')).toEqual([]);
+  });
+
   it('et cote CODE non plus, un commentaire de fin de ligne ne masque rien', () => {
     const i = new RResourceIndex();
     i.reindexFile(KT, ['package com.x', '', 'val a = R.string.titre // a revoir'].join(NL));

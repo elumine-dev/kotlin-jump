@@ -31,22 +31,35 @@ const XML_REF_RE = /@(string|plurals|array|color|drawable|mipmap|dimen)\/([A-Za-
 
 export type RType = 'string' | 'plurals' | 'array' | 'color' | 'drawable' | 'mipmap' | 'dimen';
 
-const CH_ETOILE = 42;
-const CH_BARRE  = 47;
+const CH_ETOILE   = 42;   //  *
+const CH_BARRE    = 47;   //  /
+const CH_GUILLEMET = 34;  //  "
+const CH_ANTISLASH = 92;  //  \\
 
 /**
  * Cette colonne est elle derriere un commentaire de ligne, ou sur une ligne de
  * commentaire de bloc ?
  *
- * Volontairement grossier et en temps constant : la seule chose a eviter est
- * d'offrir une ligne commentee comme cible de navigation.
+ * Le balayage s'arrete a la colonne visee, donc il coute la longueur d'un
+ * debut de ligne et non celle du fichier : desamorcer entierement chaque
+ * source multipliait par treize le cout de l'index.
+ *
+ * Les guillemets comptent : une URL dans une chaine porte un `//` qui n'ouvre
+ * aucun commentaire, et ignorer ce detail faisait disparaitre la reference qui
+ * la suit sur la meme ligne.
  */
 function estCommente(ligne: string, col: number): boolean {
-  if (ligne.lastIndexOf('//', col) >= 0) return true;
+  let dansChaine = false;
+  for (let i = 0; i < col; i++) {
+    const c = ligne.charCodeAt(i);
+    if (c === CH_ANTISLASH) { i++; continue; }
+    if (c === CH_GUILLEMET) { dansChaine = !dansChaine; continue; }
+    if (!dansChaine && c === CH_BARRE && ligne.charCodeAt(i + 1) === CH_BARRE) return true;
+  }
   let k = 0;
   while (k < ligne.length && (ligne.charCodeAt(k) === 32 || ligne.charCodeAt(k) === 9)) k++;
-  const c = ligne.charCodeAt(k);
-  return c === CH_ETOILE || (c === CH_BARRE && ligne.charCodeAt(k + 1) === CH_ETOILE);
+  const p = ligne.charCodeAt(k);
+  return p === CH_ETOILE || (p === CH_BARRE && ligne.charCodeAt(k + 1) === CH_ETOILE);
 }
 
 export class RResourceIndex {

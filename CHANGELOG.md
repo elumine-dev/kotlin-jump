@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.161
+
+The file watcher that keeps layout references up to date, added in the previous release, was created inside the block that builds the list of things to release but was left out of that list.
+
+### Fixes
+- It kept a native watch on every res folder after the extension was turned off, and its callbacks kept feeding an index nobody reads any more.
+- Nothing warned about it: the compiler is happy, and no behaviour test can see it either, because the watcher works perfectly. It simply never stops.
+- A check in the suite now reads both entry points, finds every watcher they create and fails if one of them is never released. It knows the four shapes used here: a name in a release list, a push, a direct release, and the return of an inline function that is itself pushed.
+- That check was calibrated against the real files before being trusted: of the 28 watchers the two entry points create, it flags exactly the two added yesterday and nothing else. It also fails if it stops finding any watcher at all, so it cannot pass by finding nothing.
+
 ## 1.42.160
 
 The index of where a resource key is used read only Kotlin, Kotlin script and Java. In Android most strings are referenced from a layout, a menu or a navigation graph, and those references were nowhere.

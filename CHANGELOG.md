@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.42.181
+
+Turning the `Remove unused …` quick fixes off releases the project scan they hold. The scan running at that moment finished a few seconds later and put all of it straight back.
+
+### Fixes
+- The scan takes seconds on a real project, one round trip per file, so switching the setting off while it runs is an ordinary thing to do rather than a corner case. It now checks the setting before writing, and so does the import list built from it. The 40.8 MB really goes.
+- A quick fix computed across that same moment is no longer offered. Without a listing behind it there is nothing to vouch for an absence, and these actions delete code.
+
 ## 1.42.180
 
 Last release taught the `Remove unused …` quick fixes to skip their startup scan when the setting is off. It read the setting once and never looked again, so the switch only worked in one direction and at one moment.

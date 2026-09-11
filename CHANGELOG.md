@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.188
+
+The lens that shows who writes and who reads a ViewModel state accepted only `private`, `internal` and `protected` in front of the property. A state declared with `override`, the shape of a ViewModel implementing a contract, had no lens at all.
+
+### Fixes
+- Measured on a real project of 3558 Kotlin files: 306 state declarations were seen, and 13 more appear with the full modifier list. Those are ordinary `MutableStateFlow` properties written through `.value =` and `.update`, so the counts are right as soon as they are visible.
+- The provider had no tests. It has nine now, including two that pin the limits: a declaration quoted inside a string is still not a state, and a constructor call that is not a declaration is not one either.
+
+### Notes
+- Still out of scope, and measured: 24 properties on that project use `var model by mutableStateOf(...)`. Their writes are plain assignments rather than `.value =`, so recognising them without changing how writes are found would show `0 writes` on states that are written all the time.
+
 ## 1.42.187
 
 The guard that keeps every setting fallback in step with `package.json` only read one of the two ways the code writes them. Fifteen readings use the other, including the exclusion list that decides which files the whole extension looks at.

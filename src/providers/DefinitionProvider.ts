@@ -3,7 +3,7 @@ import { SymbolIndex } from '../indexer/SymbolIndex';
 import { resolveBest } from '../util/ImportResolver';
 import { onlineDocsLocation } from './OnlineDocsFallback';
 import { isInsideCommentOrString, isInsideStringInterpolation } from '../util/textUtils';
-import { isTestPath } from '../util/testPaths';
+import { buildAllowFilter } from '../util/testFilter';
 import { buildLocalScopeIndex, latestBinding, signatureEnd, type LocalScopeIndex } from '../util/LocalScopeIndex';
 export { buildLocalScopeIndex, type LocalScopeIndex } from '../util/LocalScopeIndex';
 import { Logger } from '../util/logger';
@@ -40,7 +40,6 @@ function wordRegex(word: string): RegExp {
   }
   return re;
 }
-const DEFAULT_TEST_SEGMENTS: string[] = [];
 
 const CLASS_LIKE_KINDS = new Set([
   'class', 'interface', 'object', 'enum', 'dataClass', 'sealedClass', 'annotation',
@@ -145,11 +144,11 @@ export class KotlinDefinitionProvider implements vscode.DefinitionProvider {
     const log = (msg: string) => this.log?.info(`defn(${word}): ${msg}`);
     log(`file=${document.uri.path} line=${position.line} col=${position.character}`);
 
-    const cfg = vscode.workspace.getConfiguration('kotlinJump');
-    const testSegments = cfg.get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS);
-
-    const currentIsTest = isTestPath(document.uri.path, testSegments);
-    const allow = (path: string) => currentIsTest || !isTestPath(path, testSegments);
+    // Une seule implementation de la regle, celle de `buildAllowFilter`. Cette
+    // copie a la main n'avait que la liste configuree : elle a donc rate le
+    // correctif qui lui a ajoute la convention Gradle, et un clic depuis la
+    // production pouvait encore ouvrir un fichier de `savedAndroidTest`.
+    const allow = buildAllowFilter(document.uri.path);
 
     // ── -2. Named-argument LHS resolution ────────────────────────────────────
     // `Foo(arg = value)` — the LHS `arg` is a Kotlin named argument and refers

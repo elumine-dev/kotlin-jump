@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.177
+
+The usage badge next to a Gradle dependency read the project imports with a ceiling of 4000 files. A project of 5088 sources walked straight past it, and the badge still printed a number.
+
+### Fixes
+- Measured on a real project: of the 29 dependencies that got a figure, 22 were undercounted and up to 3 fell to `0 imports`, which also greys the line out as dead. One of them was `junit-jupiter-api`, with 33 real imports.
+- The ceiling moves to 20000, and reaching it now means the badge shows `? imports` instead of a figure it cannot know. A line is never greyed out on an incomplete sweep.
+- The sweep costs 118 ms instead of 81 ms on that project, once per 20 second window and only while a Gradle file is the active editor.
+
 ## 1.42.176
 
 The lifecycle pairing warning fired four times out of five for nothing on a real project. It is a warning in the Problems panel, on by default, so every false one costs attention.

@@ -17,6 +17,8 @@
  * trouve donc réellement un fichier worker manquant, sans simulation.
  */
 import { describe, it, expect } from 'vitest';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import * as vscodeMock from './__mocks__/vscode';
 import { WorkerPool } from '../../src/indexer/WorkerPool';
 import { FileScanner } from '../../src/indexer/FileScanner';
@@ -122,5 +124,50 @@ describe('FileScanner — le worker meurt pendant la course', () => {
 
     expect(appels, 'le pool a bien ete tente').toBe(1);
     expect(index.lookup('Course'), 'et le parse en ligne a pris le relais').toHaveLength(1);
+  });
+});
+
+/**
+ * Le pool VIVANT, c'est a dire le chemin qu'emprunte tout parse Kotlin en
+ * production. Il n'avait aucune couverture : les cas ci dessus portent tous
+ * sur un pool mort, et si le pool cessait de fonctionner le parse retomberait
+ * en ligne, plus lent mais correct, donc sans qu'un seul test bronche.
+ *
+ * La CI construit `dist/` avant de lancer les tests. En local sans build, on
+ * saute plutot que d'echouer sur une absence qui n'est pas un defaut.
+ */
+const WORKER = path.resolve(__dirname, '..', '..', 'dist', 'parser-worker.js');
+const construit = fs.existsSync(WORKER);
+
+describe.skipIf(!construit)('WorkerPool — le pool vivant', () => {
+  it('parse par un worker, en file, et se ferme proprement', async () => {
+    const pool = new WorkerPool(3, WORKER);
+    try {
+      await laisserMourir();
+      expect(pool.available, 'les workers doivent survivre').toBe(true);
+
+      const parse1 = await pool.run('file:///w/A.kt', 'package p' + NL + 'class Alpha' + NL + 'fun beta() {}' + NL);
+      expect(parse1.symbols.map(s => s.kind + ' ' + s.name)).toEqual(['class Alpha', 'fun beta']);
+
+      // Plus de travaux que de workers : la file et le recyclage doivent tourner.
+      const lot = await Promise.all(Array.from({ length: 12 }, (_, i) =>
+        pool.run('file:///w/F' + i + '.kt', 'package p' + NL + 'class C' + i)));
+      expect(lot).toHaveLength(12);
+      expect(new Set(lot.map(p => p.symbols[0]?.name)).size, 'chaque travail recoit SON resultat').toBe(12);
+      expect(pool.available, 'le pool survit a la charge').toBe(true);
+
+      // Une fois la file vidée, les workers doivent RETOURNER au vivier.
+      // Sans cela le lot passe quand même, en se repassant le même worker de
+      // proche en proche, et c'est la requête suivante qui attend pour
+      // toujours : personne n'est libre et plus rien ne recycle.
+      const apresVidange = await Promise.race([
+        pool.run('file:///w/Apres.kt', 'package p' + NL + 'class Apres').then(p2 => p2.symbols[0]?.name),
+        new Promise<string>(r => setTimeout(() => r('EN SUSPENS'), 2000)),
+      ]);
+      expect(apresVidange, 'un worker doit etre reutilisable apres la file').toBe('Apres');
+    } finally {
+      await pool.destroy();
+    }
+    expect(pool.available, 'ferme, il ne se dit plus disponible').toBe(false);
   });
 });

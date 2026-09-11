@@ -17,7 +17,13 @@ export class WorkerPool {
   /** Vrai tant qu'au moins un worker repond. */
   get available(): boolean { return this.vivants > 0; }
 
-  constructor(size: number) {
+  /**
+   * `cheminWorker` n'est passe que par les tests : sous vitest `__dirname` est
+   * le dossier des sources, ou le worker compile n'existe pas, et le chemin
+   * par defaut ne peut donc jamais donner un pool VIVANT. Sans cette ouverture
+   * le seul chemin emprunte par tout parse Kotlin restait sans couverture.
+   */
+  constructor(size: number, cheminWorker?: string) {
     try {
       // `__dirname` does not exist in the web extension host. Checked
       // explicitly (rather than left to throw as an implicit
@@ -27,10 +33,10 @@ export class WorkerPool {
       // activate(). Doubly protected either way: even if this check were
       // removed, `new Worker(...)` below would still throw via the browser
       // build's worker_threads stub (src/browser/worker-threads-stub.ts).
-      if (typeof __dirname === 'undefined') {
+      if (cheminWorker === undefined && typeof __dirname === 'undefined') {
         throw new Error('worker_threads unavailable (web extension host)');
       }
-      const workerPath = path.join(__dirname, 'parser-worker.js');
+      const workerPath = cheminWorker ?? path.join(__dirname, 'parser-worker.js');
       for (let i = 0; i < size; i++) {
         const w = new Worker(workerPath);
         w.on('message', (result: ParsedFile) => this.onMessage(w, result));

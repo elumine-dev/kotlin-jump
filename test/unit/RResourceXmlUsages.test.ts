@@ -115,3 +115,58 @@ describe('le motif XML ne sert que pour les fichiers XML', () => {
     expect(i.getUsages('string', 'titre')).toHaveLength(1);
   });
 });
+
+/**
+ * Une reference dans un commentaire n'est pas une reference.
+ *
+ * Le badge d'usages excluait deja les commentaires ; l'index de navigation,
+ * lui, lisait les lignes brutes, donc Ctrl+clic depuis une cle proposait
+ * d'aller sur une ligne commentee. Mesure sur un projet reel : 5 cibles de ce
+ * genre sur 4396, dont deux assertions Kotlin mises en commentaire et trois
+ * commentaires XML.
+ *
+ * Le desamorcage COMPLET d'un fichier Kotlin coutait treize fois le prix de
+ * l'index entier, 411 ms contre 32 : la regle cote code est donc un controle
+ * par correspondance, en temps constant, et non un balayage du fichier. Elle
+ * n'a fait perdre aucun usage reel sur les 4391 restants.
+ */
+describe('une reference commentee n est pas un usage', () => {
+  const KT = 'file:///p/app/src/main/java/com/x/A.kt';
+  const XML = 'file:///p/app/src/main/res/values/styles.xml';
+
+  it('une ligne de code mise en commentaire', () => {
+    const i = new RResourceIndex();
+    i.reindexFile(KT, ['package com.x', '', '//  assertEquals(R.drawable.logo, x)'].join(NL));
+    expect(i.getUsages('drawable', 'logo')).toEqual([]);
+  });
+
+  it('une ligne de KDoc', () => {
+    const i = new RResourceIndex();
+    i.reindexFile(KT, ['package com.x', '', '/**', ' * voir R.string.titre', ' */', 'fun f() {}'].join(NL));
+    expect(i.getUsages('string', 'titre')).toEqual([]);
+  });
+
+  it('un commentaire XML', () => {
+    const i = new RResourceIndex();
+    i.reindexFile(XML, ['<resources>', '  <!-- textSize: @dimen/marge -->', '</resources>'].join(NL));
+    expect(i.getUsages('dimen', 'marge')).toEqual([]);
+  });
+
+  it('mais un commentaire EN FIN de ligne ne masque pas ce qui precede', () => {
+    const i = new RResourceIndex();
+    i.reindexFile(XML, ['<resources>', '  <item name="c">@color/blanc</item> <!-- a changer -->', '</resources>'].join(NL));
+    expect(i.getUsages('color', 'blanc')).toHaveLength(1);
+  });
+
+  it('et cote CODE non plus, un commentaire de fin de ligne ne masque rien', () => {
+    const i = new RResourceIndex();
+    i.reindexFile(KT, ['package com.x', '', 'val a = R.string.titre // a revoir'].join(NL));
+    expect(i.getUsages('string', 'titre'), 'la reference precede le //').toHaveLength(1);
+  });
+
+  it('et un usage reel du code reste un usage', () => {
+    const i = new RResourceIndex();
+    i.reindexFile(KT, ['package com.x', '', 'val a = R.string.titre'].join(NL));
+    expect(i.getUsages('string', 'titre')).toHaveLength(1);
+  });
+});

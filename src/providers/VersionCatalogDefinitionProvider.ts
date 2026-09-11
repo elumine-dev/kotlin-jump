@@ -19,24 +19,27 @@ export class VersionCatalogDefinitionProvider implements vscode.DefinitionProvid
     if (!fname.endsWith('.kts') && !fname.endsWith('.gradle')) return undefined;
 
     const contextPath = document.uri?.fsPath ?? fname;
-    const root = this.index.rootFor(contextPath);
     const line = document.lineAt(position.line).text;
 
-    // The accessor as written, e.g. `libs.plugins.android.library`. Anchored on
-    // the root so a plain `plugins { }` block is never mistaken for one.
-    const re = new RegExp(`\\b${escapeForRegExp(root)}\\.([A-Za-z0-9_.]+)`, 'g');
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(line)) !== null) {
-      const start = m.index;
-      const end = start + m[0].length;
-      if (position.character < start || position.character > end) continue;
-      const hit = this.index.locate(m[1], contextPath);
-      if (!hit) continue;
-      const { alias, file } = hit;
-      return new vscode.Location(
-        HAS_SCHEME.test(file) ? vscode.Uri.parse(file) : vscode.Uri.file(file),
-        new vscode.Range(alias.line, alias.character, alias.line, alias.character + alias.raw.length),
-      );
+    // Un projet peut exposer plusieurs racines, `libs` et `testLibs` par
+    // exemple. N'en essayer qu'une laissait l'autre sans reponse.
+    for (const root of this.index.rootsFor(contextPath)) {
+      // The accessor as written, e.g. `libs.plugins.android.library`. Anchored
+      // on the root so a plain `plugins { }` block is never mistaken for one.
+      const re = new RegExp(`\\b${escapeForRegExp(root)}\\.([A-Za-z0-9_.]+)`, 'g');
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(line)) !== null) {
+        const start = m.index;
+        const end = start + m[0].length;
+        if (position.character < start || position.character > end) continue;
+        const hit = this.index.locate(m[1], contextPath, root);
+        if (!hit) continue;
+        const { alias, file } = hit;
+        return new vscode.Location(
+          HAS_SCHEME.test(file) ? vscode.Uri.parse(file) : vscode.Uri.file(file),
+          new vscode.Range(alias.line, alias.character, alias.line, alias.character + alias.raw.length),
+        );
+      }
     }
     return undefined;
   }

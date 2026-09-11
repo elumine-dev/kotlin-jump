@@ -21,6 +21,7 @@
  *   FW-12 addTree ne balaie pas une grande liste par fichier (le tri était quadratique)
  *   FW-13 removeTree ne parcourt pas tout l'historique des fichiers vus
  *   FW-14 Dossier supprimé avant que la file d'attente ait été vidée
+ *   FW-15 Dossier supprimé pendant le balayage initial, qui ignore le veilleur
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -28,6 +29,7 @@ import * as vscode from 'vscode';
 import { FileWatcher } from '../../src/watcher/FileWatcher';
 import { SymbolIndex } from '../../src/indexer/SymbolIndex';
 import { parse } from '../../src/indexer/KotlinParser';
+import { FileScanner } from '../../src/indexer/FileScanner';
 
 const NL = String.fromCharCode(10);
 const SOURCE = (nom: string) => 'package p' + NL + 'class ' + nom + NL;
@@ -260,5 +262,60 @@ describe('FW-14 — dossier supprime avant le flush', () => {
 
     expect(scanner.scanFile, 'un dossier effacé ne doit plus rien faire scanner').not.toHaveBeenCalled();
     expect(index.lookup('JamaisNe')).toHaveLength(0);
+  });
+});
+
+describe('FW-15 — dossier supprime pendant le balayage initial', () => {
+  it('le fichier ajoute apres coup par le balayage est repris', async () => {
+    vi.useRealTimers();
+    const index = new SymbolIndex();
+    const journal = { info() {}, debug() {}, warn() {}, error() {} } as any;
+    // Le vrai scanner : c'est lui qui ajoute a l'index sans passer par le
+    // veilleur. Un .java pour rester en parse inline, hors pool de workers.
+    const scanner = new FileScanner(index, journal, new Map());
+    const w = new FileWatcher(scanner as any, index);
+    const cible = vscode.Uri.parse('file:///proj/src/Perdu.java');
+
+    let suppressions = 0;
+    const vraiRemove = w.removeTree.bind(w);
+    (w as any).removeTree = (f: vscode.Uri) => { suppressions++; return vraiRemove(f); };
+
+    const origRead = (vscode.workspace.fs as any).readFile;
+    (vscode.workspace.fs as any).readFile = async (u: any) => {
+      if (String(u.toString()) !== cible.toString()) throw new Error('absent');
+      // Le dossier disparait pendant que ce fichier est lu : il n'est ni dans
+      // l'index, ni dans la file, ni dans les scans en vol du veilleur.
+      (w as any).removeTree(vscode.Uri.parse('file:///proj/src'));
+      return new TextEncoder().encode('package p;' + NL + 'public class Ressuscite {}' + NL);
+    };
+    try {
+      await scanner.scanFiles([cible as any]);
+      index.finalize();
+      expect((w as any).enVol.size, 'le veilleur ne voit rien de ce balayage').toBe(0);
+      await new Promise<void>(r => setTimeout(r, 0));   // le rejeu est une micro tache
+    } finally {
+      (vscode.workspace.fs as any).readFile = origRead;
+      w.dispose();
+    }
+
+    expect(index.lookup('Ressuscite'), 'le rejeu reprend le fichier').toHaveLength(0);
+    expect(suppressions, 'un seul rejeu, pas de recursion').toBe(2);
+    expect((scanner as any).actifs, 'le compteur d activite revient a zero').toBe(0);
+
+    // Temoin : le meme balayage, sans suppression de dossier, indexe bien le
+    // fichier. Sans lui, un zero pourrait venir d'un harnais casse plutot que
+    // du rejeu, ce qui est exactement le piege des deux ticks precedents.
+    const temoinIndex = new SymbolIndex();
+    const temoin = new FileScanner(temoinIndex, journal, new Map());
+    const origRead2 = (vscode.workspace.fs as any).readFile;
+    (vscode.workspace.fs as any).readFile = async () =>
+      new TextEncoder().encode('package p;' + NL + 'public class Ressuscite {}' + NL);
+    try {
+      await temoin.scanFiles([cible as any]);
+      temoinIndex.finalize();
+    } finally {
+      (vscode.workspace.fs as any).readFile = origRead2;
+    }
+    expect(temoinIndex.lookup('Ressuscite'), 'le balayage indexe bien ce fichier').toHaveLength(1);
   });
 });

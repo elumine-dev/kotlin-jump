@@ -84,6 +84,7 @@ export class FileScanner {
 
   async scanFile(uri: vscode.Uri): Promise<void> {
     const t0 = Date.now();
+    this.entrer();
     try {
       const maxFileBytes = vscode.workspace.getConfiguration('kotlinJump').get<number>('fileSizeLimit', 512) * 1024;
       if (uri.fsPath.includes('.kapt_metadata')) return;
@@ -96,6 +97,7 @@ export class FileScanner {
       const name = uri.path.split('/').pop() ?? uri.path;
       this.log.debug(`[scan] ${name} → ${parsed.symbols.length} symbols (${Date.now() - t0}ms)`);
     } catch { /* deleted between event and read */ }
+    finally { this.sortir(); }
   }
 
   async destroy(): Promise<void> {
@@ -132,7 +134,37 @@ export class FileScanner {
 
     // `concurrency` async workers share cursor — each grabs the next URI
     // As soon as a file is read it's immediately sent to a parser worker
-    await Promise.all(Array.from({ length: concurrency }, ioWorker));
+    this.entrer();
+    try { await Promise.all(Array.from({ length: concurrency }, ioWorker)); }
+    finally { this.sortir(); }
+  }
+
+  // ── Suivi d'activite ──────────────────────────────────────────────────────
+  // Un dossier supprime PENDANT un balayage echappe au veilleur : ses fichiers
+  // ne sont ni dans l'index, ni dans sa file, ni dans ses scans en vol, parce
+  // que le balayage initial ne passe pas par lui. Ceux dont les octets sont
+  // deja lus sont ajoutes apres la suppression. Plutot que de filtrer chaque
+  // fichier, ce qui couterait sur le chemin chaud, le veilleur rejoue sa
+  // suppression une fois le balayage fini.
+  private actifs = 0;
+  private attentes: Array<() => void> = [];
+
+  /** Un balayage tourne en ce moment. */
+  busy(): boolean { return this.actifs > 0; }
+
+  /** Resolue des qu'aucun balayage ne tourne plus. */
+  whenIdle(): Promise<void> {
+    if (this.actifs === 0) return Promise.resolve();
+    return new Promise<void>(r => this.attentes.push(r));
+  }
+
+  private entrer(): void { this.actifs++; }
+
+  private sortir(): void {
+    if (--this.actifs > 0) return;
+    const a = this.attentes;
+    this.attentes = [];
+    for (const r of a) r();
   }
 
   private freshToken(): { cancelled: boolean } {

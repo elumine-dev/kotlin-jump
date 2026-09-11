@@ -1300,6 +1300,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const kmpToggle = vscode.workspace.onDidChangeConfiguration(e => {
       if (e.affectsConfiguration('kotlinJump.kmpTargetBadges')) kmpProvider?.fireChange();
     });
+    // Named, not inlined: it listens to its own setting, so it has to be
+    // disposed alongside its registration.
+    const deadWeight = new DeadWeightActionProvider();
     context.subscriptions.push(
       kmpToggle,
       ...(!isCompanion ? [
@@ -1315,7 +1318,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       new ResourceUsageBadgeProvider(),
       new DependencyUsageBadgeProvider(),
       new ManifestNecessityProvider(),
-      vscode.languages.registerCodeActionsProvider([{ language: 'xml' }, { pattern: '**/build.gradle{,.kts}' }], new DeadWeightActionProvider(), { providedCodeActionKinds: DeadWeightActionProvider.providedCodeActionKinds }),
+      deadWeight,
+      vscode.languages.registerCodeActionsProvider([{ language: 'xml' }, { pattern: '**/build.gradle{,.kts}' }], deadWeight, { providedCodeActionKinds: DeadWeightActionProvider.providedCodeActionKinds }),
       new MethodSeparatorProvider(),
       // Pure-vscode providers the desktop had and the web did not: their four
       // settings were offered with nothing behind them.

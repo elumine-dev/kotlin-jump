@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.180
+
+Last release taught the `Remove unused …` quick fixes to skip their startup scan when the setting is off. It read the setting once and never looked again, so the switch only worked in one direction and at one moment.
+
+### Fixes
+- Turning the actions back on now primes the scan straight away. Before, the setting was only read at startup, so the next lightbulb had to run a full project scan itself, which is the wait the warm up exists to avoid.
+- Turning them off now hands the memory back. The scan holds the text of every source, 40.8 MB across 6278 files on the project measured, and that was kept for the rest of the session.
+- The provider listens to its own setting, so it is now disposed with the rest. Built inline inside its registration, nothing could ever release it. A guard in the suite fails if either entry point goes back to the inline form.
+
 ## 1.42.179
 
 The `Remove unused …` quick fixes prime a full project scan at startup so the first lightbulb does not keep VS Code waiting. That scan ran whether or not you had asked for those actions.

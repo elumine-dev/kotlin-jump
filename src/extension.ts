@@ -1555,10 +1555,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // Quick fixes that remove whatever the extension reports as unused:
   // resources with 0 usages, dependencies with 0 imports, manifest
   // permissions with no code behind them.
+  const deadWeight = new DeadWeightActionProvider();
   context.subscriptions.push(
+    deadWeight,
     vscode.languages.registerCodeActionsProvider(
       [{ language: 'xml' }, { pattern: '**/build.gradle{,.kts}' }],
-      new DeadWeightActionProvider(),
+      deadWeight,
       { providedCodeActionKinds: DeadWeightActionProvider.providedCodeActionKinds },
     ),
   );

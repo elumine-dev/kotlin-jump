@@ -8,7 +8,8 @@ import { importOrNull } from './harness';
  *     sourceSet: string;            // 'main' | flavor
  *     folder: string;               // 'values' | 'values-fr' | …
  *     value: string;
- *   }[]): { winner: number; shadowed: number[]; localeOverlays: number[] }
+ *   }[]): { winner: number; shadowed: number[]; tied: number[];
+ *           localeOverlays: number[] }
  */
 const mod: any = await importOrNull('src/indexer/ResourcePriorityResolver');
 

@@ -31,10 +31,15 @@ describe('KJ-017 adversarial — resolveWinner', () => {
     expect(r.localeOverlays).toEqual([0, 1]);
   });
 
-  it('égalité parfaite : la première gagne (stable)', () => {
+  // Ce test épinglait « la première gagne (stable) ». La stabilité était bien
+  // là, la vérité non : l'ordre du tableau vient du balayage des fichiers, donc
+  // couronner l'indice 0 revenait à couronner au hasard. Voir
+  // test/unit/ResourceShadowingTie.test.ts pour la mesure sur le vrai projet.
+  it('égalité parfaite : personne n ombrage personne', () => {
     const r = resolveWinner([def({ module: 'a' }), def({ module: 'b' })]);
     expect(r.winner).toBe(0);
-    expect(r.shadowed).toEqual([1]);
+    expect(r.shadowed).toEqual([]);
+    expect(r.tied).toEqual([1]);
   });
 
   it('values-night est un overlay de config, pas un concurrent', () => {
@@ -55,7 +60,8 @@ describe('KJ-017 adversarial — doublons intra-dossier (cas trouvé par Kevin)'
       def({ module: 'feature-battle', moduleType: 'library', value: '#FF0044' }),
     ]);
     expect(r.winner).toBe(0);
-    expect(r.shadowed).toEqual([1, 2]);
+    expect(r.tied, 'le doublon du même dossier est à égalité, pas ombragé').toEqual([1]);
+    expect(r.shadowed, 'seule la library perd vraiment').toEqual([2]);
   });
 });
 

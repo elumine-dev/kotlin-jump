@@ -21,6 +21,17 @@ export interface ResolvedPriority {
   winner: number;
   /** Indexes of the shadowed definitions (losers of the Gradle merge). */
   shadowed: number[];
+  /**
+   * Indexes of the competitors that share the top score with `winner`.
+   *
+   * `score` only knows two axes, app against library and main against another
+   * source set, so two libraries both in `main` land on the same number. Which
+   * one Gradle actually keeps comes from the dependency order, which is not
+   * visible from a resource path, and two exclusive variants of one module
+   * never compete at all. Reporting them apart from `shadowed` is what stops a
+   * caller from crowning whichever definition was indexed first.
+   */
+  tied: number[];
   /** Indexes of the configuration/locale overlays (out of competition). */
   localeOverlays: number[];
 }
@@ -45,7 +56,7 @@ export function resolveWinner(defs: ResourceDefinition[]): ResolvedPriority {
   });
 
   if (competitors.length === 0) {
-    return { winner: 0, shadowed: [], localeOverlays };
+    return { winner: 0, shadowed: [], tied: [], localeOverlays };
   }
 
   let winner = competitors[0];
@@ -53,9 +64,12 @@ export function resolveWinner(defs: ResourceDefinition[]): ResolvedPriority {
     if (score(defs[i]) > score(defs[winner])) winner = i;
   }
 
+  const top = score(defs[winner]);
+  const rest = competitors.filter(i => i !== winner);
   return {
     winner,
-    shadowed: competitors.filter(i => i !== winner),
+    shadowed: rest.filter(i => score(defs[i]) < top),
+    tied: rest.filter(i => score(defs[i]) === top),
     localeOverlays,
   };
 }

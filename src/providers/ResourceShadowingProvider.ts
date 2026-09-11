@@ -70,7 +70,9 @@ export class ResourceShadowingProvider implements vscode.HoverProvider {
       if (defs.length < 2) return undefined;
 
       const resolved = resolveWinner(defs.map(d => d.def));
-      if (resolved.shadowed.length === 0) return undefined;
+      // A tie is worth showing too: several definitions of one key, and no way
+      // to say from here which one Gradle keeps.
+      if (resolved.shadowed.length === 0 && resolved.tied.length === 0) return undefined;
 
       const md = new vscode.MarkdownString();
       md.appendMarkdown(`**R.${kind}.${key}**: ${defs.length} definitions (Gradle merge)\n\n`);
@@ -81,18 +83,33 @@ export class ResourceShadowingProvider implements vscode.HoverProvider {
       const bucket = (i: number) =>
         `${defs[i].def.module}|${defs[i].def.sourceSet}|${defs[i].def.folder}`;
       const winnerBucket = bucket(resolved.winner);
-      md.appendMarkdown(`- 🏆 ${describe(resolved.winner)} **wins**\n`);
-      for (const i of resolved.shadowed) {
-        if (bucket(i) === winnerBucket) {
-          md.appendMarkdown(
-            `- ⚠ ${describe(i)} **duplicated in the same folder** (Android merge error, not shadowing)\n`,
-          );
-        } else {
-          md.appendMarkdown(`- ~~${describe(i)}~~ shadowed\n`);
-        }
+      const sameBucket = (i: number) => bucket(i) === winnerBucket;
+      const duplicates = [...resolved.tied, ...resolved.shadowed].filter(sameBucket);
+      const rivals = resolved.tied.filter(i => !sameBucket(i));
+      const losers = resolved.shadowed.filter(i => !sameBucket(i));
+
+      if (rivals.length > 0) {
+        // Nobody can be crowned here: the winner index is only the first one
+        // the index happened to hold, and that order follows the file scan.
+        for (const i of [resolved.winner, ...rivals]) md.appendMarkdown(`- ⚖ ${describe(i)}\n`);
+      } else {
+        md.appendMarkdown(`- 🏆 ${describe(resolved.winner)} **wins**\n`);
+      }
+      for (const i of duplicates) {
+        md.appendMarkdown(
+          `- ⚠ ${describe(i)} **duplicated in the same folder** (Android merge error, not shadowing)\n`,
+        );
+      }
+      for (const i of losers) {
+        md.appendMarkdown(`- ~~${describe(i)}~~ shadowed\n`);
       }
       for (const i of resolved.localeOverlays) {
         md.appendMarkdown(`- ${describe(i)} overlay (picked at runtime)\n`);
+      }
+      if (rivals.length > 0) {
+        md.appendMarkdown(
+          '\nThe ⚖ definitions share the top priority: the Gradle dependency order picks one of them, and a resource path does not show which.\n',
+        );
       }
       return new vscode.Hover(md, new vscode.Range(position.line, m.index, position.line, m.index + m[0].length));
     }

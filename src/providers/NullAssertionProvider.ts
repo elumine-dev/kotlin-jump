@@ -6,6 +6,7 @@ export class NullAssertionProvider implements vscode.Disposable {
   private _editor:     vscode.TextEditor | undefined;
   private _lineDecos = new Map<number, vscode.DecorationOptions[]>();
   private _rawState:  boolean[] = [];
+  private _blockState: boolean[] = [];
   private _flushTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly _subs: vscode.Disposable[];
 
@@ -19,7 +20,7 @@ export class NullAssertionProvider implements vscode.Disposable {
       vscode.window.onDidChangeActiveTextEditor(e => {
         this._editor = e;
         if (e) this._fullScan(e);
-        else { this._lineDecos.clear(); this._rawState = []; }
+        else { this._lineDecos.clear(); this._rawState = []; this._blockState = []; }
       }),
       vscode.workspace.onDidChangeTextDocument(e => {
         if (this._editor && e.document === this._editor.document)
@@ -49,20 +50,49 @@ export class NullAssertionProvider implements vscode.Disposable {
   // ── Layer 1: raw-string oracle ─────────────────────────────────────────────
   private _buildRawState(doc: vscode.TextDocument): void {
     this._rawState = new Array(doc.lineCount).fill(false);
+    // Meme oracle pour les blocs de commentaire : la garde par ligne ne voit
+    // pas un `/*` ouvert plus haut, donc la prose d un KDoc recevait la
+    // decoration d assertion. Mesure sur un vrai projet : 2 occurrences,
+    // « NB: this implementation is temporary!! » et un marqueur « |!!| ».
+    this._blockState = new Array(doc.lineCount).fill(false);
     let inRaw = false;
+    let inBlock = false;
     for (let i = 0; i < doc.lineCount; i++) {
+      const text = doc.lineAt(i).text;
       this._rawState[i] = inRaw;
-      if (countTripleQuotes(doc.lineAt(i).text) % 2 !== 0) inRaw = !inRaw;
+      this._blockState[i] = inBlock;
+      if (inRaw) {
+        if (countTripleQuotes(text) % 2 !== 0) inRaw = false;
+        continue;
+      }
+      if (inBlock) {
+        const fin = text.indexOf('*' + '/');
+        if (fin < 0) continue;
+        inBlock = false;
+        inBlock = blocOuvertApres(text.slice(fin + 2));
+        continue;
+      }
+      if (countTripleQuotes(text) % 2 !== 0) { inRaw = true; continue; }
+      inBlock = blocOuvertApres(text);
     }
   }
 
   // ── Layer 2: per-line rescan ───────────────────────────────────────────────
   private _rescanLine(lineNum: number, text: string): void {
     if (this._rawState[lineNum]) { this._lineDecos.delete(lineNum); return; }
+    // Ligne commencee DANS un bloc : on masque jusqu a sa fermeture, en
+    // gardant la longueur, pour que le code qui suit `*/` sur la meme
+    // ligne garde ses colonnes et reste scanne.
+    let scan = text;
+    if (this._blockState[lineNum]) {
+      const fin = text.indexOf('*' + '/');
+      if (fin < 0) { this._lineDecos.delete(lineNum); return; }
+      scan = ' '.repeat(fin + 2) + text.slice(fin + 2);
+    }
     const decos: vscode.DecorationOptions[] = [];
     let idx = 0;
-    while ((idx = text.indexOf('!!', idx)) !== -1) {
-      if (!isInsideCommentOrString(text, idx))
+    while ((idx = scan.indexOf('!!', idx)) !== -1) {
+      if (!isInsideCommentOrString(scan, idx))
         decos.push({ range: new vscode.Range(lineNum, idx, lineNum, idx + 2) });
       idx += 2;
     }
@@ -173,4 +203,31 @@ export class NullAssertionProvider implements vscode.Disposable {
     this._decorType.dispose();
     for (const s of this._subs) s.dispose();
   }
+}
+
+/**
+ * Un `/*` reste-t-il ouvert a la fin de cette ligne ?
+ *
+ * Les chaines et le commentaire de ligne masquent leurs `/*`, sinon un
+ * `val s = "/*"` ouvrirait un bloc qui n existe pas.
+ */
+function blocOuvertApres(ligne: string): boolean {
+  let ouvert = false;
+  let dansChaine = false;
+  for (let i = 0; i < ligne.length; i++) {
+    const c = ligne[i];
+    if (dansChaine) {
+      if (c === '\\') { i++; continue; }
+      if (c === '"') dansChaine = false;
+      continue;
+    }
+    if (ouvert) {
+      if (c === '*' && ligne[i + 1] === '/') { ouvert = false; i++; }
+      continue;
+    }
+    if (c === '"') { dansChaine = true; continue; }
+    if (c === '/' && ligne[i + 1] === '/') return false;
+    if (c === '/' && ligne[i + 1] === '*') { ouvert = true; i++; }
+  }
+  return ouvert;
 }

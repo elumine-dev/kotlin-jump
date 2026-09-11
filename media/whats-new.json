@@ -1,32 +1,26 @@
 {
-  "version": "1.42.188",
+  "version": "1.42.189",
   "title": "What's New in Kotlin Jump",
-  "tagline": "States that had no lens",
-  "summary": "The lens that shows who writes and who reads a ViewModel state accepted only private, internal and protected in front of the property. A state declared with override, the shape of a ViewModel implementing a contract, had no lens at all.",
+  "tagline": "Zero writes, four files away",
+  "summary": "The write count next to a state only looks at the file it is in. For a private backing field that is the whole truth. For a property anyone can reach, it is not, and the lens still read 0 writes flatly.",
   "highlights": [
     {
-      "title": "13 states come back",
+      "title": "The count says its scope",
       "kind": "fix",
-      "description": "Measured on a real project of 3558 Kotlin files: 306 declarations were seen, and 13 more appear with the full modifier list."
+      "description": "A state that is not private now reads 0 writes in this file, the same reservation the reader count has carried all along."
     },
     {
-      "title": "First tests for the lens",
+      "title": "Three real cases",
       "kind": "improvement",
-      "description": "The provider had none. It has nine now, two of which pin its limits rather than its features."
+      "description": "Of 21 non private states with no write in their own file, 3 are written elsewhere, one of them in four other files."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "A state declared with override, open, public or lateinit is recognised like any other.",
-        "A declaration quoted inside a string is still not a state, and a constructor call that is not a declaration is not one either."
-      ]
-    },
-    {
-      "heading": "Notes",
-      "bullets": [
-        "Still out of scope: 24 properties on that project use var model by mutableStateOf. Their writes are plain assignments, so recognising them now would show 0 writes on states that are written all the time."
+        "A private state keeps the plain wording: nothing outside the file can write it, so the count is complete.",
+        "The reservation sits next to the number, ahead of the indirect writer note, so both stay readable."
       ]
     }
   ],

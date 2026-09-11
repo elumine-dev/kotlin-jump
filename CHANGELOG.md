@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.42.189
+
+The write count next to a state only looks at the file it is in. For a `private val _x` that is the whole truth, since nothing outside can write it. For a property anyone can reach, it is not, and the lens still read `✎ 0 writes` flatly.
+
+### Fixes
+- Measured on a real project: of 21 states that are not private and show no write in their own file, 3 are written elsewhere. `contentIsInflatedState` is written in four other files and the lens announced zero.
+- A state that is not private now reads `0 writes in this file`, the same reservation the reader count has carried all along for the same reason. A private one keeps the plain wording.
+
 ## 1.42.188
 
 The lens that shows who writes and who reads a ViewModel state accepted only `private`, `internal` and `protected` in front of the property. A state declared with `override`, the shape of a ViewModel implementing a contract, had no lens at all.

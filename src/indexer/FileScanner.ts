@@ -175,7 +175,12 @@ export class FileScanner {
 
   private async parseText(uriString: string, text: string, isJava: boolean) {
     if (isJava) return parseJava(uriString, text); // Java is lightweight — always inline
-    if (this.pool.available) return this.pool.run(uriString, text);
+    if (this.pool.available) {
+      // Un worker peut mourir entre ce test et la reponse. Le rejet ramene
+      // ici, ou le parse en ligne prend le relais : sans ce filet le fichier
+      // n'etait tout simplement pas indexe.
+      try { return await this.pool.run(uriString, text); } catch { /* pool hors service */ }
+    }
     return parse(uriString, text);
   }
 

@@ -1,27 +1,26 @@
 {
-  "version": "1.42.186",
+  "version": "1.42.187",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Three spellings for one default",
-  "summary": "Last release added a guard that every setting read with a literal fallback must match the default declared in package.json. It skipped lists, and lists turned out to be where the real divergence was.",
+  "tagline": "A guard that read half the code",
+  "summary": "The guard that keeps every setting fallback in step with package.json only read one of the two ways the code writes them. Fifteen readings use the other, including the exclusion list that decides which files the whole extension looks at.",
   "highlights": [
     {
-      "title": "One constant per setting",
+      "title": "Both forms covered",
       "kind": "fix",
-      "description": "The test source sets had three spellings across eleven call sites, one of them a constant named DEFAULT_TEST_SEGMENTS that was empty. The exclusion list had four."
+      "description": "The guard now reads get(key) ?? fallback as well as get(key, fallback), and resolves named constants. Coverage goes from 186 readings to 197."
     },
     {
-      "title": "29 tests that proved nothing",
-      "kind": "fix",
-      "description": "With the real list in place, the override arrow tests stopped passing: their fixtures had no file path, so the test source filter had never run in any of them."
+      "title": "Nothing skipped in silence",
+      "kind": "improvement",
+      "description": "A fallback the guard cannot read is reported rather than passed over, and the guard is now checked against its own inputs."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Every reading of the test source sets and of the exclusion patterns now goes through one constant that matches package.json.",
-        "The guard extended to lists and named constants, not only plain values.",
-        "No released build changes behaviour: the declared default was already the value in force."
+        "Fifteen settings readings used a form the guard never looked at, among them the exclusion list behind every workspace scan.",
+        "A computed fallback, such as one derived from the processor count, is accepted as it is; a fallback that cannot be read at all is reported."
       ]
     }
   ],

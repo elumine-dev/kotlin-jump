@@ -46,20 +46,39 @@ function fichiersTs(dossier: string): string[] {
 }
 
 const RE_APPEL_GET = /\.get<[^>]+>\(\s*'([\w.]+)'\s*,\s*((?:\[[^\]]*\]|[^),]+?))\s*\)/g;
+/**
+ * `get<T>('cle') ?? repli`, l'autre facon d'ecrire la meme chose. Quinze sites
+ * l'emploient et le gardien n'en voyait aucun : il annoncait une propriete
+ * qu'il ne verifiait que sur une moitie du code.
+ *
+ * Un repli en minuscules est une valeur locale deja validee plus haut dans la
+ * meme fonction (`?? excludeList`, `?? maxFiles`) : la chaine se termine sur un
+ * site que ce gardien controle par ailleurs.
+ */
+const RE_APPEL_NULLISH = /\.get<[^>]+>\(\s*'([\w.]+)'\s*\)\s*\?\?\s*((?:\[[^\]]*\]|[A-Za-z0-9_'.-]+))/g;
 const RE_PORTEE_CONFIG = /getConfiguration\(\s*'([\w.]+)'\s*\)/g;
 
-/** `const NOM = ['a', 'b'];` declare dans src/, pour resoudre un repli nomme. */
-function constantesTableau(fichiers: string[]): Map<string, string[]> {
-  const out = new Map<string, string[]>();
-  const re = /\bconst\s+([A-Z][A-Z0-9_]*)\s*(?::[^=]+)?=\s*(\[[^\]]*\])/g;
+/** `const NOM = […];` ou `const NOM = 20;` declares dans src/, pour resoudre un repli nomme. */
+function constantesNommees(fichiers: string[]): Map<string, unknown> {
+  const out = new Map<string, unknown>();
+  const tableau = /\bconst\s+([A-Z][A-Z0-9_]*)\s*(?::[^=]+)?=\s*(\[[^\]]*\])/g;
+  const scalaire = /\bconst\s+([A-Z][A-Z0-9_]*)\s*(?::[^=]+)?=\s*(-?[\d_]+|true|false|'[^']*')\s*;/g;
   for (const f of fichiers) {
     const src = fs.readFileSync(f, 'utf8');
-    let m: RegExpExecArray | null;
-    re.lastIndex = 0;
-    while ((m = re.exec(src)) !== null) {
-      const elements = [...m[2].matchAll(/'([^']*)'/g)].map(x => x[1]);
-      const vide = /^\[\s*\]$/.test(m[2]);
-      if (vide || elements.length > 0) out.set(m[1], elements);
+    for (const re of [tableau, scalaire]) {
+      re.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(src)) !== null) {
+        if (m[2].startsWith('[')) {
+          out.set(m[1], [...m[2].matchAll(/'([^']*)'/g)].map(x => x[1]));
+        } else if (m[2] === 'true' || m[2] === 'false') {
+          out.set(m[1], m[2] === 'true');
+        } else if (m[2].startsWith("'")) {
+          out.set(m[1], m[2].slice(1, -1));
+        } else {
+          out.set(m[1], Number(m[2].replace(/_/g, '')));
+        }
+      }
     }
   }
   return out;
@@ -74,14 +93,13 @@ function constantesTableau(fichiers: string[]): Map<string, string[]> {
  * filtre des sources de test ne filtrait donc rien, et 29 cas de
  * OverrideGutterProvider passaient sans jamais l'exercer.
  */
-function litteral(brut: string, constantes: Map<string, string[]>): unknown {
+function litteral(brut: string, constantes: Map<string, unknown>): unknown {
   if (brut === 'true') return true;
   if (brut === 'false') return false;
   if (/^-?[\d_]+$/.test(brut)) return Number(brut.replace(/_/g, ''));
   if (/^'[^']*'$/.test(brut)) return brut.slice(1, -1);
   if (/^\[[^\]]*\]$/.test(brut)) return [...brut.matchAll(/'([^']*)'/g)].map(x => x[1]);
-  const nomme = constantes.get(brut);
-  return nomme ? [...nomme] : undefined;
+  return constantes.get(brut);
 }
 
 /** Egalite structurelle suffisante pour des scalaires et des tableaux de chaines. */
@@ -92,6 +110,45 @@ function memeValeur(a: unknown, b: unknown): boolean {
   return a === b;
 }
 
+/** Analyse une source et rend les desaccords trouves, plus le compte verifie. */
+export function analyser(
+  source: string,
+  constantes: Map<string, unknown>,
+  defauts: Map<string, unknown>,
+  etiquette = 'source',
+): { verifies: number; desaccords: string[] } {
+  const desaccords: string[] = [];
+  let verifies = 0;
+  const sections: { at: number; nom: string }[] = [];
+  RE_PORTEE_CONFIG.lastIndex = 0;
+  let s: RegExpExecArray | null;
+  while ((s = RE_PORTEE_CONFIG.exec(source)) !== null) sections.push({ at: s.index, nom: s[1] });
+
+  for (const re of [RE_APPEL_GET, RE_APPEL_NULLISH]) {
+    re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(source)) !== null) {
+      const valeur = litteral(m[2], constantes);
+      if (valeur === undefined && /^[a-z][A-Za-z0-9_]*$/.test(m[2])) continue;
+      if (valeur === undefined && /[(.]/.test(m[2])) continue;
+      const precedente = [...sections].reverse().find(x => x.at < m!.index);
+      if (!precedente) continue;
+      const pleine = `${precedente.nom}.${m[1]}`;
+      if (!defauts.has(pleine)) continue;
+      verifies++;
+      const ligne = source.slice(0, m.index).split(String.fromCharCode(10)).length;
+      if (valeur === undefined) {
+        desaccords.push(`${etiquette}:${ligne}  ${pleine}  repli illisible: ${m[2]}`);
+      } else if (!memeValeur(defauts.get(pleine), valeur)) {
+        desaccords.push(
+          `${etiquette}:${ligne}  ${pleine}  code=${m[2]}  package.json=${JSON.stringify(defauts.get(pleine))}`,
+        );
+      }
+    }
+  }
+  return { verifies, desaccords };
+}
+
 describe('Les replis de configuration suivent package.json', () => {
   const defauts = defautsDeclares();
 
@@ -100,40 +157,51 @@ describe('Les replis de configuration suivent package.json', () => {
   });
 
   it('aucun repli ne contredit le defaut declare', () => {
+    const tous = fichiersTs(SRC);
+    const constantes = constantesNommees(tous);
     const desaccords: string[] = [];
     let verifies = 0;
-    const tous = fichiersTs(SRC);
-    const constantes = constantesTableau(tous);
-
     for (const fichier of tous) {
-      const source = fs.readFileSync(fichier, 'utf8');
-      // Positions des `getConfiguration('X')` pour retrouver la section en
-      // portee : la forme chainee et la forme `const cfg = …` sont locales.
-      const sections: { at: number; nom: string }[] = [];
-      RE_PORTEE_CONFIG.lastIndex = 0;
-      let s: RegExpExecArray | null;
-      while ((s = RE_PORTEE_CONFIG.exec(source)) !== null) sections.push({ at: s.index, nom: s[1] });
-
-      RE_APPEL_GET.lastIndex = 0;
-      let m: RegExpExecArray | null;
-      while ((m = RE_APPEL_GET.exec(source)) !== null) {
-        const valeur = litteral(m[2], constantes);
-        if (valeur === undefined) continue;      // expression, hors sujet
-        const precedente = [...sections].reverse().find(x => x.at < m!.index);
-        if (!precedente) continue;
-        const pleine = `${precedente.nom}.${m[1]}`;
-        if (!defauts.has(pleine)) continue;      // cle interne, non contribuee
-        verifies++;
-        if (!memeValeur(defauts.get(pleine), valeur)) {
-          const ligne = source.slice(0, m.index).split(String.fromCharCode(10)).length;
-          desaccords.push(
-            `${path.relative(RACINE, fichier)}:${ligne}  ${pleine}  code=${m[2]}  package.json=${JSON.stringify(defauts.get(pleine))}`,
-          );
-        }
-      }
+      const r = analyser(
+        fs.readFileSync(fichier, 'utf8'), constantes, defauts, path.relative(RACINE, fichier),
+      );
+      verifies += r.verifies;
+      desaccords.push(...r.desaccords);
     }
-
-    expect(verifies, 'le gardien doit voir un nombre serieux d appels').toBeGreaterThan(100);
+    expect(verifies, 'le gardien doit voir un nombre serieux d appels').toBeGreaterThan(180);
     expect(desaccords, desaccords.join(String.fromCharCode(10))).toEqual([]);
   });
+
+  it('la forme `?? repli` est bien couverte', () => {
+    const r = analyser(
+      "const cfg = vscode.workspace.getConfiguration('kotlinJump');" +
+      String.fromCharCode(10) +
+      "const x = cfg.get<number>('maxIndexedFiles') ?? 3000;",
+      new Map(), defauts,
+    );
+    expect(r.verifies).toBe(1);
+    expect(r.desaccords).toHaveLength(1);
+  });
+
+  it('un repli illisible est signale, pas saute', () => {
+    const r = analyser(
+      "const cfg = vscode.workspace.getConfiguration('kotlinJump');" +
+      String.fromCharCode(10) +
+      "const x = cfg.get<number>('maxIndexedFiles', PLAFOND_MYSTERE);",
+      new Map(), defauts,
+    );
+    expect(r.desaccords.join(''), 'un repli que le gardien ne sait pas lire n est pas sur')
+      .toContain('repli illisible');
+  });
+
+  it('un repli calcule est accepte tel quel', () => {
+    const r = analyser(
+      "const cfg = vscode.workspace.getConfiguration('kotlinJump');" +
+      String.fromCharCode(10) +
+      "const x = cfg.get<number>('parserWorkers') ?? Math.max(2, 8);",
+      new Map(), defauts,
+    );
+    expect(r.desaccords).toEqual([]);
+  });
 });
+

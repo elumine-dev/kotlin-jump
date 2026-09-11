@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.167
+
+Extract to string resource escaped every apostrophe, including the ones the Kotlin literal had already escaped, so the extracted text carried a backslash the app would have shown.
+
+### Fixes
+- A literal written with escaped apostrophes, such as a date pattern, came out of the extraction with two backslashes per apostrophe. The rule for the double quote right below already guarded against this; the one for the apostrophe did not.
+- Found by a round trip with a known answer: take every string literal of a real project, run it through the extraction, then read the result back using the Android escaping rules and compare with the source. Of 11786 literals, 10624 carry no template and 10621 of those came back identical. The two that did not were exactly this shape, and 9 files of that project carry it.
+- The third one that does not come back is a lone carriage return, which the Android escaping rules do not define. It is left as it is rather than guessed at.
+- Every literal that does carry a template still numbers its placeholders from one with no gap, 1162 out of 1162.
+
 ## 1.42.166
 
 The rule added yesterday to stop offering commented out lines as usages looked for a double slash without noticing it could be inside a string. A URL on the same line as a resource reference made that reference disappear.

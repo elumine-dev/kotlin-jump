@@ -5,7 +5,17 @@ const WORD_RE = /[A-Za-z_]\w*/g;
 export function mockDocument(uri: string, code: string) {
   const lines = code.split('\n');
   return {
-    uri: { toString: () => uri, path: uri.replace('file://', '') },
+    // `fsPath` et `scheme` comptent : cinq fournisseurs passent
+    // `document.uri.fsPath` a `buildAllowFilter`. Sans eux il recevait
+    // `undefined`, et le filtre des sources de test ne s'exercait dans aucun
+    // test de fournisseur. Un `buildAllowFilter` qui rend toujours vrai ne
+    // faisait alors tomber que deux fichiers sur 391.
+    uri: {
+      toString: () => uri,
+      path:     uri.replace('file://', ''),
+      fsPath:   uri.replace('file://', ''),
+      scheme:   /^([a-zA-Z][\w+.-]*):/.exec(uri)?.[1] ?? 'file',
+    },
     languageId: uri.endsWith('.java') ? 'java' : 'kotlin',
     version: 1,
     getText: (range?: any) => {

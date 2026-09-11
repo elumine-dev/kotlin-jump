@@ -30,6 +30,8 @@ import { SymbolIndex } from '../../src/indexer/SymbolIndex';
 import { parse } from '../../src/indexer/KotlinParser';
 import { KotlinDefinitionProvider } from '../../src/providers/DefinitionProvider';
 import { classifyFile } from '../../src/providers/FindUsagesPanel';
+import { Range, CodeActionTriggerKind } from './__mocks__/vscode';
+import { AutoImportProvider } from '../../src/providers/AutoImportProvider';
 
 const DEFAUTS = ['test/java', 'test/kotlin', 'androidTest', 'jvmTest', 'commonTest'];
 const PROD = '/p/app/src/main/java/com/x/Ecran.kt';
@@ -169,5 +171,45 @@ describe('plus aucune copie etroite dans src/', () => {
     };
     visiter(racine);
     expect(coupables, 'ces fichiers doivent passer par isTestSourceSet').toEqual([]);
+  });
+});
+
+/**
+ * L'auto import, que le correctif d'origine donnait comme le cas le plus grave
+ * (« le fichier ne compile plus »), n'avait aucun test au niveau du
+ * fournisseur. Preuve par mutation : un `buildAllowFilter` qui rend toujours
+ * vrai ne faisait tomber que deux fichiers sur 391, et aucun des quatre
+ * fournisseurs qui en dependent.
+ */
+describe("l'auto import n'offre pas ce qui ne compilerait pas", () => {
+  const NL = String.fromCharCode(10);
+  const AIDE = ['package com.aide', '', 'class AideDeTest'].join(NL);
+  const USAGE = ['package com.y', '', 'fun go() {', '    val a = AideDeTest()', '}'].join(NL);
+  const TEST_NON_LISTE = '/p/app/src/savedAndroidTest/java/com/aide/AideTest.kt';
+
+  function propositions(depuis: string): string[] {
+    avecDefauts();
+    const index = new SymbolIndex();
+    index.add(parse('file://' + TEST_NON_LISTE, AIDE));
+    index.add(parse('file://' + depuis, USAGE));
+    index.finalize();
+    const doc = mockDocument('file://' + depuis, USAGE) as any;
+    const col = USAGE.split(NL)[3].indexOf('AideDeTest');
+    const actions = new AutoImportProvider(index).provideCodeActions(
+      doc,
+      new Range(new Position(3, col) as any, new Position(3, col) as any) as any,
+      { triggerKind: CodeActionTriggerKind.Invoke, diagnostics: [] } as any,
+      {} as any,
+    );
+    return (actions ?? []).map(a => String(a.title));
+  }
+
+  it('depuis la production, rien venu d un source set de test non configure', () => {
+    expect(propositions(PROD)).toEqual([]);
+  });
+
+  it('mais depuis un fichier de test, la proposition revient', () => {
+    expect(propositions('/p/app/src/androidTest/java/com/y/GoTest.kt'))
+      .toEqual(["Add import 'com.aide.AideDeTest'"]);
   });
 });

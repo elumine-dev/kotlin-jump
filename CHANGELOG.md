@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.152
+
+Ctrl+. ranked its import suggestions by symbol kind alone, so among candidates of the same kind the order was whatever the index happened to hold.
+
+### Improvements
+- Between two candidates of the same kind, the one in your own Gradle module now comes first, then the one whose package shares the most with yours. The first suggestion is the one people take, and it used to be arbitrary.
+- Measured by a round trip with a known answer on a real project: remove an import from a file, ask for the quick fix at a use of that name, and the right answer is the import just removed. Over 5177 imports, the right one came first 4711 times before and 4955 after, and the number of times it fell outside the eight offered slots went from 16 to 4.
+- Kind stays the first criterion, so a class still outranks a function. Proximity only orders what was not ordered at all. Putting proximity first won 15 more cases out of 5177 but overturned a deliberate choice, so it was not taken.
+
+### Internal
+- The test double for a document carried no file system path, so the five providers that ask for one to hide test sources were handed nothing. A filter that let everything through failed only two files out of 391; auto import, the type hierarchy, the override gutter and the implementations list had no coverage of it at all. The double now carries a real path, and auto import has its own check.
+- Also swept and found sound, so nothing shipped for them: hover on 33820 results, and Ctrl+click across the 1901 Java files of the reference project.
+
 ## 1.42.151
 
 Go to Definition and the Find Usages panel were the last two places still using the narrow test detection rule, so they treated real test files as production code.

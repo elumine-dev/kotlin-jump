@@ -4,7 +4,7 @@ import { scanForUsages, scanImports, UsageResult, isExcluded, resolveSearchTarge
 import { resolveLocalScope, findLocalUsages, cachedLocalScopeIndex } from './DefinitionProvider';
 import { isInsideCommentOrString, isInsideStringInterpolation } from '../util/textUtils';
 import { FUN_RE, signatureEnd } from '../util/LocalScopeIndex';
-import { ACCENT, nomAccentueComposite } from '../util/backtickName';
+import { nomAccentueComposite, plagesDuNomAccentue } from '../util/backtickName';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 
@@ -190,24 +190,11 @@ function renommerNomAccentue(
   accent: { content: string },
   newName: string,
 ): vscode.WorkspaceEdit | null {
-  const litteral = ACCENT + accent.content + ACCENT;
+  const plages = plagesDuNomAccentue(document, accent.content);
+  if (plages.length === 0) return null;
   const edit = new vscode.WorkspaceEdit();
-  let trouve = 0;
-  for (let l = 0; l < document.lineCount; l++) {
-    const texte = document.lineAt(l).text;
-    let at = texte.indexOf(litteral);
-    while (at >= 0) {
-      edit.replace(
-        document.uri,
-        new vscode.Range(l, at + 1, l, at + litteral.length - 1),
-        newName,
-        META_OCCURRENCES,
-      );
-      trouve++;
-      at = texte.indexOf(litteral, at + litteral.length);
-    }
-  }
-  return trouve === 0 ? null : edit;
+  for (const plage of plages) edit.replace(document.uri, plage, newName, META_OCCURRENCES);
+  return edit;
 }
 
 export class KotlinRenameProvider implements vscode.RenameProvider {

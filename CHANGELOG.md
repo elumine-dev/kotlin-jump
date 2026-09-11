@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.174
+
+Hovering an `R.color` or `R.string` defined in several modules named a winner and struck the others through. When two definitions carry the same priority, that winner was only whichever file the index had scanned first.
+
+### Fixes
+- The priority score knows two things: app against library, and main against another source set. Two libraries both in `main` land on the same number, and so do two exclusive build variants of one module. The hover now lists those definitions side by side and says that the Gradle dependency order settles it, instead of crowning one and striking the others out.
+- Measured on a real project: of 122 shadowing hovers, 20 named an arbitrary winner. The remaining 102 have a real winner and keep it, and no hover was lost along the way.
+- A duplicate sitting in the very same folder keeps its Android merge error label. It shares the top score, so it would otherwise have dropped out of the list entirely.
+
 ## 1.42.173
 
 On a selection spanning several lines, surrounding with let or apply wrote an opening brace with nothing in front of it. Both are extension functions of the standard library and only exist when called on something.

@@ -1,22 +1,12 @@
 {
-  "version": "1.42.196",
+  "version": "1.42.197",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Decorations that stay on their line",
-  "summary": "Press Enter above an inline color swatch or a highlighted forced unwrap, and every decoration below the caret was repainted one line too high. Both providers now move the paint, not just the cache key.",
+  "tagline": "Deleting a comment block is seen again",
+  "summary": "Select a comment block near the bottom of a file and delete it, and the forced unwrap highlight and the color swatches below stayed painted inside text that had just become documentation.",
   "highlights": [
     {
-      "title": "Swatches Stay On Their Line",
-      "description": "Adding or removing a line above a hex color swatch no longer repaints it one line off. Measured on a real project: 882 swatches across 138 files, every one of them reachable by a single keystroke.",
-      "kind": "fix"
-    },
-    {
-      "title": "Unwrap Highlight Follows Its Line",
-      "description": "The forced unwrap highlight moves with its line, and so do the raw string and comment block oracles behind it, so a block opened or closed right after an edit is seen again.",
-      "kind": "fix"
-    },
-    {
-      "title": "A Deleted Triple Quote Is Seen",
-      "description": "Color swatches now notice when the triple quote that opened a raw string is deleted, instead of staying painted inside it. The forced unwrap highlight got that memory in 1.42.193.",
+      "title": "A Deleted Block Near The End",
+      "description": "Deleting three lines or more that carry the end of a comment block or of a raw string now rebuilds the decorations, even when the shortened document falls below the end of what was deleted.",
       "kind": "fix"
     }
   ],
@@ -24,9 +14,8 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "A hex color swatch and a forced unwrap highlight now repaint on the line they belong to after a keystroke adds or removes a line above them.",
-        "The per line oracles that read raw strings and comment blocks move with the lines, so a boundary deleted after an edit still triggers a rebuild.",
-        "Deleting the triple quote that opened a raw string now clears the swatches it was hiding."
+        "The rebuild trigger reads the memory of what each deleted line held over the whole range, not only over the part the shortened document still reaches.",
+        "Both the color swatches and the forced unwrap highlight carried the same bound, and both are fixed."
       ]
     }
   ],

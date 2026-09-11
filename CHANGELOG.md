@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.197
+
+Select a comment block near the bottom of a file and delete it. The forced unwrap highlight and the colour swatches below stayed painted, inside text that had just become documentation.
+
+### Fixes
+- The rebuild trigger reads two things per touched line: the new text, and the memory of what that line held before the keystroke. The memory is what makes a deleted `*/` or `"""` visible at all, since the change event never carries the text that was removed. Both reads shared one bound, capped at the length of the shortened document, and that bound belongs to the text alone.
+- Delete three lines or more, close enough to the end of the file that the document falls below the end of the deleted range, and the boundary sat past the cap. Nothing triggered, the per line oracles kept the shape of the old file, and the last surviving line was decorated as code while it now lives inside an open block.
+- The memory is now read over the whole deleted range, the text only where the new document reaches. Both providers had the same bound and both are fixed.
+
+### Notes
+- Measured in interleaved passes against the previous release: the keystroke path is unchanged, the distributions overlap on every run.
+- A test document that throws out of range, the way the editor's own does, now covers the other half: the doubles used in tests answer past the last line, so the cap on the text read could not be proven by anything before.
+
 ## 1.42.196
 
 Press Enter above a colour swatch or above a highlighted forced unwrap, and every decoration below the caret was repainted one line too high, on code that has nothing to do with it.

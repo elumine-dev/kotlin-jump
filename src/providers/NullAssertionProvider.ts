@@ -166,9 +166,13 @@ export class NullAssertionProvider implements vscode.Disposable {
     let needsFullRebuild = false;
     for (const change of sorted) {
       if (deplaceUneFrontiere(change.text)) { needsFullRebuild = true; break; }
-      for (let i = change.range.start.line;
-           i <= Math.min(change.range.end.line, doc.lineCount - 1); i++) {
-        if (deplaceUneFrontiere(doc.lineAt(i).text) || this._boundary[i]) {
+      // Le plafond ne vaut que pour `lineAt`, qui lit le NOUVEAU document. La
+      // memoire des lignes d avant, elle, se lit jusqu au bout de l ancienne
+      // plage : sinon effacer trois lignes pres de la fin du fichier raccourcit
+      // le document sous `end.line` et la frontiere supprimee sort du balayage.
+      const dernierLu = Math.min(change.range.end.line, doc.lineCount - 1);
+      for (let i = change.range.start.line; i <= change.range.end.line; i++) {
+        if (this._boundary[i] || (i <= dernierLu && deplaceUneFrontiere(doc.lineAt(i).text))) {
           needsFullRebuild = true;
           break;
         }

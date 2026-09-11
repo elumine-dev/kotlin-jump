@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.195
+
+The manifest badge called `VIBRATE` unused, greyed the line and offered to remove it. A notification channel that asks for vibration needs that permission, and it never mentions the vibrator.
+
+### Fixes
+- The table behind the badge knew only `Vibrator` and `VibratorManager`, the direct API. It now also counts `enableVibration`, `setVibrate`, `DEFAULT_VIBRATE` and `vibrationPattern`, which is how a notification channel asks.
+- Measured on a real project: of 56 permissions across 51 manifests, `VIBRATE` was the only one marked unused, and the project calls `enableVibration(true)` on its channels in five places. Removing the permission makes notifications stop vibrating with nothing else to show for it. The count of permissions with a real verdict goes from 15 to 16 and nothing is greyed any more.
+- A second test pins the other direction: a project that never asks for vibration still gets the finding.
+
 ## 1.42.194
 
 `RECEIVE_BOOT_COMPLETED` was reported as a permission nothing exercises. Nothing in an app's code ever can: it is exercised by a receiver declared in a manifest, and that receiver usually comes from a library. WorkManager declares one to reschedule periodic work after a reboot, and requires this permission for it.

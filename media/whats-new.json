@@ -1,27 +1,27 @@
 {
-  "version": "1.42.132",
+  "version": "1.42.133",
   "title": "What's New in Kotlin Jump",
-  "tagline": "One project no longer renames its neighbours",
-  "summary": "In a workspace holding several projects, one project renaming its catalog silently renamed its neighbours' too.",
+  "tagline": "One catalog, two names, both work",
+  "summary": "A catalog shared by an included build is reachable under both of its names again.",
   "highlights": [
     {
-      "title": "Catalog Rename Stays In Its Project",
+      "title": "Catalog Shared By An Included Build",
       "kind": "fix",
-      "description": "A rename declared in one settings.gradle.kts was matched by file name alone, so it applied to every other project in the workspace and silenced hover and Ctrl+click there. Settings now govern only their own directory."
+      "description": "A catalog reached as libs from the parent and as deps from an included build kept only one of the two names, leaving one half of the project without hover or Ctrl+click. Both names are now offered."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "A catalog rename declared in settings.gradle.kts was matched by file name alone. Every default catalog is called libs.versions.toml, so create(\"deps\") in one project also applied to every other project in the workspace: the neighbour believed its root was deps while its build files write libs, and hover and Ctrl+click went silent across it. A settings file now only governs the catalogs under its own directory, and the nearest one wins when a workspace has both a root settings file and a per project one.",
-        "The same rule now applies to the unused dependency scan and to Find Usages from inside the catalog, which shared the file name matching."
+        "A composite build can point at the parent's catalog with create(\"deps\") { from(files(\"../gradle/libs.versions.toml\")) }. The same file is then reachable as libs from the parent and as deps from the included build, and only one name was kept: before the previous release deps won and the parent went silent, since then libs won and the included build went silent. Both names are now offered, which the hover and Ctrl+click loops already knew how to handle.",
+        "The path in a from(files(...)) clause is resolved against the directory of the settings file that declares it, so a catalog is only claimed by a settings file that really points at it."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "A workspace holding a single project sees no change.",
+        "A project whose catalog is not shared this way sees exactly one name, as before, verified against a real one.",
         "No new commands or settings in this release."
       ]
     }

@@ -113,8 +113,23 @@ describe('les permissions', () => {
     '<manifest>\n' + perms.map(p => `    <uses-permission android:name="android.permission.${p}" />`).join('\n') + '\n</manifest>');
 
   it('une permission que rien n’exerce est signalée', () => {
-    expect(keys([manifest(['RECEIVE_BOOT_COMPLETED'])]))
-      .toEqual(['permission:android.permission.RECEIVE_BOOT_COMPLETED']);
+    // CAMERA est dangereuse : sans demande a l execution dans le code, elle
+    // n est vraiment pas exercee. L exemple d avant, RECEIVE_BOOT_COMPLETED,
+    // etait le pire choix possible : voir le cas suivant.
+    expect(keys([manifest(['CAMERA'])]))
+      .toEqual(['permission:android.permission.CAMERA']);
+  });
+
+  it('RECEIVE_BOOT_COMPLETED n’est pas signalée : rien ne peut l’exercer depuis le code', () => {
+    // Mesure sur /Users/kevin/Desktop/work/lapresse : le detecteur rendait
+    // deux constats, dont celui-ci. Le projet utilise WorkManager (47 mentions
+    // de `androidx.work`, 10 `PeriodicWorkRequest`), dont le manifeste fusionne
+    // declare le recepteur BOOT_COMPLETED et qui exige cette permission pour
+    // reprogrammer le travail periodique apres un redemarrage. Rien n en parle
+    // dans le code de l application, par construction. La retirer casse en
+    // silence le nettoyage nocturne et le telechargement de fond, ce que le
+    // commentaire du manifeste annonce mot pour mot.
+    expect(keys([manifest(['RECEIVE_BOOT_COMPLETED'])])).toEqual([]);
   });
 
   it('les permissions autosuffisantes ne sont jamais signalées', () => {

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.194
+
+`RECEIVE_BOOT_COMPLETED` was reported as a permission nothing exercises. Nothing in an app's code ever can: it is exercised by a receiver declared in a manifest, and that receiver usually comes from a library. WorkManager declares one to reschedule periodic work after a reboot, and requires this permission for it.
+
+### Fixes
+- Measured on a real project: the check produced two findings and this was one of them, on a permission whose own comment reads `Need to do cleanup during the night and background download`. Acting on it stops that work from ever resuming after a restart, silently.
+- It joins the permissions that are complete with their declaration alone, next to `WAKE_LOCK` and `FOREGROUND_SERVICE`, which are exempt for the same reason.
+- A test used `RECEIVE_BOOT_COMPLETED` as its example of a permission nothing exercises, which pinned the wrong answer. It now uses `CAMERA`, which really does need a runtime request in code, and a second test covers the exemption.
+
+### Notes
+- One finding remains on that project, an intent extra written and never read anywhere. That one is real.
+
 ## 1.42.193
 
 Last release taught the forced unwrap highlight to see comment blocks. It did not teach the keystroke path to notice when one opens or closes, so the highlight only followed the comment after some unrelated event rebuilt the whole file.

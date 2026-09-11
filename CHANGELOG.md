@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.121
+
+Yesterday's repair to the parsing threads was covered from every angle except the one that runs in production: a pool whose threads are alive.
+
+### Internal
+- Every test written yesterday exercised a dead pool. Had the repair broken the working path, parsing would have quietly fallen back to the main thread, correct but slower, and no test would have said a word. The pool now takes its worker path as an argument so a test can point it at the built file, and the working path is covered: a real parse through a thread, twelve jobs sharing three threads with each answer reaching its own caller, and a thread reused once the queue drains.
+- That last one matters more than it looks. Twelve jobs on three threads pass even when threads are never returned to the pool, because each finishing thread picks the next job directly. It is the request after the queue empties that waits forever, and only that request reveals it.
+- Nothing changes for anyone using the extension.
+
 ## 1.42.120
 
 Kotlin files are parsed on background threads. If the file holding that background code is missing, the extension used to index nothing at all, silently and for as long as the window stayed open.

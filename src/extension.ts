@@ -1566,10 +1566,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   // ── KJ-018 : reverse string map (cette string s'affiche où ?) ────────────
+  // Nomme, pas construit en ligne : il garde le listing complet du projet en
+  // memoire et doit donc etre libere avec le reste.
+  const stringXmlHover = new StringXmlHoverProvider();
   context.subscriptions.push(
+    stringXmlHover,
     vscode.languages.registerHoverProvider(
       [...KT_JAVA, { language: 'xml' }],
-      new StringXmlHoverProvider(),
+      stringXmlHover,
     ),
   );
 

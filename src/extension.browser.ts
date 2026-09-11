@@ -1303,6 +1303,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Named, not inlined: it listens to its own setting, so it has to be
     // disposed alongside its registration.
     const deadWeight = new DeadWeightActionProvider();
+    // Same reason: it keeps the whole project listing in memory.
+    const stringXmlHover = new StringXmlHoverProvider();
     context.subscriptions.push(
       kmpToggle,
       ...(!isCompanion ? [
@@ -1325,7 +1327,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       // settings were offered with nothing behind them.
       new LifecyclePairingProvider(),
       new RoomMigrationProvider(),
-      vscode.languages.registerHoverProvider([{ language: 'kotlin' }, { language: 'java' }, { language: 'xml' }], new StringXmlHoverProvider()),
+      stringXmlHover,
+      vscode.languages.registerHoverProvider([{ language: 'kotlin' }, { language: 'java' }, { language: 'xml' }], stringXmlHover),
       vscode.languages.registerCodeLensProvider({ language: 'kotlin' }, new StateProvenanceProvider()),
       vscode.languages.registerCodeActionsProvider([{ language: 'kotlin' }, { language: 'java' }], new ExtractStringResourceProvider(stringIndex), { providedCodeActionKinds: [vscode.CodeActionKind.RefactorExtract] }),
       vscode.commands.registerCommand('kotlin-jump.extractString.saveTarget', async (uri: vscode.Uri) => {

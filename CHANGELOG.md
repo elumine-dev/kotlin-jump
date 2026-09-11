@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.183
+
+Three features keep the text of every project file in memory so they can answer quickly. Raising their ceiling over the last two releases took that from about 64 MB to about 98 MB on the project measured, and two of the three never gave any of it back.
+
+### Fixes
+- The resource usage badge held 40.8 MB across 6278 files for the whole session. It now releases that when the extension shuts down, when the badges are switched off, and when a listing lands after they were switched off.
+- The reverse string map held about 17 MB the same way, with no release path at all. Built inline inside its registration, nothing could reach it to release it. It is now named and disposed with the rest in both entry points.
+- A count computed across that same moment is no longer shown. Without a listing to vouch for it, a zero would grey out a live resource, so the badge reads `? usages` and greys nothing.
+
 ## 1.42.182
 
 The usage count beside every resource key read 4000 of a project's 6278 files, and had no guard at all for the ones it never opened. A key used only in those files read `0 usages` and was greyed out as dead.

@@ -1,26 +1,32 @@
 {
-  "version": "1.42.182",
+  "version": "1.42.183",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Live resources greyed out as dead",
-  "summary": "The usage count beside every resource key read 4000 of a project's 6278 files, with no guard for the ones it never opened. A key used only in those files read 0 usages and was greyed out as dead.",
+  "tagline": "About 98 MB that was never given back",
+  "summary": "Three features keep the text of every project file in memory so they can answer quickly. Raising their ceiling over the last two releases took that from about 64 MB to about 98 MB on the project measured, and two of the three never gave any of it back.",
   "highlights": [
     {
-      "title": "419 to 756 false zeroes",
+      "title": "The resource badge lets go",
       "kind": "fix",
-      "description": "Measured on a real project of 2007 badged keys: 130 really are unused. The rest changed with the order the files came back in."
+      "description": "40.8 MB across 6278 files, held for the whole session. Released on shutdown, on switching the badges off, and for a listing that lands after that."
     },
     {
-      "title": "A question mark past the ceiling",
+      "title": "The reverse string map too",
+      "kind": "fix",
+      "description": "About 17 MB with no release path at all. Built inline inside its registration, nothing could reach it."
+    },
+    {
+      "title": "No count without a listing",
       "kind": "improvement",
-      "description": "The count now reads the whole project, and past the ceiling it shows ? usages and greys nothing, as the dependency badge already did."
+      "description": "A zero computed across that moment would grey out a live resource. The badge reads ? usages and greys nothing instead."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "The resource usage badge read only the first 4000 source files and had no truncation guard, so a key used beyond them was called dead.",
-        "The reverse string map, which lists the screens a string appears on, read the same 4000 files and now sees them all."
+        "The resource usage badge and the reverse string map now release the project listing they hold.",
+        "Both follow their setting at the moment the listing is written, not only when the work starts.",
+        "A guard in the test suite fails if either entry point goes back to building the hover provider inline."
       ]
     }
   ],

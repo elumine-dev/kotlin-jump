@@ -225,18 +225,16 @@ describe('ADV-RR-7 — idempotence de reindexFile', () => {
 
 // ── ADV-RR-8 : Faux positif — R.string dans un commentaire `//` ──────────────
 
-describe('ADV-RR-8 — faux positif connu : R.string dans un commentaire //', () => {
-  it('// R.string.commented est indexé (comportement actuel — faux positif documenté)', () => {
+describe('ADV-RR-8 — une référence commentée n\'est pas un usage', () => {
+  // Ce test pinnait le faux positif comme comportement connu, en demandant
+  // d'être mis à jour si quelqu'un le corrigeait. C'est fait en 1.42.165 :
+  // sur un projet réel, 5 cibles de navigation sur 4396 pointaient une ligne
+  // commentée, et aucun usage réel n'a été perdu au passage.
+  it('// R.string.commented n\'est plus indexé, R.string.real l\'est', () => {
     const rIndex = new RResourceIndex();
     rIndex.reindexFile(URI_A, '// TODO: use R.string.commented\nval x = R.string.real');
 
-    // La ligne commentée EST indexée — c'est un faux positif connu.
-    // Ce test sert de régression : si quelqu'un fixe silencieusement ce comportement,
-    // le test doit être mis à jour avec la nouvelle attente.
-    const usages = rIndex.getUsages('string', 'commented');
-    expect(usages).toHaveLength(1); // faux positif attendu
-
-    // La ligne réelle est aussi indexée
+    expect(rIndex.getUsages('string', 'commented')).toHaveLength(0);
     expect(rIndex.getUsages('string', 'real')).toHaveLength(1);
   });
 });

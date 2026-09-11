@@ -1,27 +1,29 @@
 {
-  "version": "1.42.164",
+  "version": "1.42.165",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The fourth place that guessed a length",
-  "summary": "Yesterday three of the four places that jump from a key to its usages stopped guessing the length of the highlight. The fourth, dimensions, was missed.",
+  "tagline": "A commented out reference is not a usage",
+  "summary": "Jumping from a resource key to its usages could land on a line that is commented out. The usage count shown next to the key already ignored those, so the two disagreed.",
   "highlights": [
     {
-      "title": "Dimensions join the other three",
+      "title": "Navigation and the usage count now agree",
       "kind": "fix",
-      "description": "A dimension is referenced from a layout far more often than from code, so it was the worst affected: of 1184 usages reached this way, 971 were highlighted one character too far. None are now."
+      "description": "A line reading TODO use R.string.something, or an XML comment mentioning a dimension, was offered as a place the key is used. It no longer is."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Each of the four lives in its own file with its own case, so no test could say the fourth had been forgotten. A check now reads every source file and fails if any of them sizes a highlight by rebuilding the code form of a reference, which is the mistake all four shared.",
-        "That check was calibrated before being trusted: run against yesterday's code it named exactly one file, the one that had been missed, and it fails again if the pattern comes back anywhere at all."
+        "Measured on a real project: of 4396 indexed usages, 5 pointed at a commented out line, two of them commented out test assertions. None do now, and not one real usage was lost in the process.",
+        "The repository already knew: a test pinned this as a documented false positive and asked to be updated if anyone fixed it. It now states the opposite.",
+        "Cost mattered here. Neutralising every comment of every Kotlin file the thorough way multiplied the cost of building the index by thirteen, 411 ms against 32, for those five targets. The rule is therefore a constant time check at each match rather than a sweep of the file, and it costs one millisecond over the whole project.",
+        "A comment at the end of a line still hides nothing that comes before it, in code as in XML."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "The census that found it was a deliberate change of method. Three releases in a row, a defect of a different family came from the same gesture: widening what the index holds without checking what its readers assumed. Listing every reader at once found the last one in a minute."
+        "Deliberately left alone: a design time preview attribute still shows up when navigating, while the count ignores it. On that project 83 references are of this kind. Both readings defend themselves, and picking one is a product decision rather than a defect to repair."
       ]
     }
   ],

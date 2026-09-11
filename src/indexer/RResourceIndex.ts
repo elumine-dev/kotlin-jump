@@ -1,3 +1,5 @@
+import { stripXmlComments } from '../util/xmlRefs';
+
 export interface RUsageEntry {
   uri:       string;
   line:      number;
@@ -29,6 +31,24 @@ const XML_REF_RE = /@(string|plurals|array|color|drawable|mipmap|dimen)\/([A-Za-
 
 export type RType = 'string' | 'plurals' | 'array' | 'color' | 'drawable' | 'mipmap' | 'dimen';
 
+const CH_ETOILE = 42;
+const CH_BARRE  = 47;
+
+/**
+ * Cette colonne est elle derriere un commentaire de ligne, ou sur une ligne de
+ * commentaire de bloc ?
+ *
+ * Volontairement grossier et en temps constant : la seule chose a eviter est
+ * d'offrir une ligne commentee comme cible de navigation.
+ */
+function estCommente(ligne: string, col: number): boolean {
+  if (ligne.lastIndexOf('//', col) >= 0) return true;
+  let k = 0;
+  while (k < ligne.length && (ligne.charCodeAt(k) === 32 || ligne.charCodeAt(k) === 9)) k++;
+  const c = ligne.charCodeAt(k);
+  return c === CH_ETOILE || (c === CH_BARRE && ligne.charCodeAt(k + 1) === CH_ETOILE);
+}
+
 export class RResourceIndex {
   private readonly string   = new Map<string, RUsageEntry[]>();
   private readonly plurals  = new Map<string, RUsageEntry[]>();
@@ -49,12 +69,19 @@ export class RResourceIndex {
     // sur la construction de l'index, pour zero reference utile.
     const estXml = uri.endsWith('.xml');
     const contributed: Array<{ type: RType; key: string }> = [];
-    const lines = content.split('\n');
+    // Un `@dimen/x` dans un commentaire XML n'est pas une reference. Cette
+    // regex fait UNE passe et ne coute presque rien ; desamorcer entierement
+    // chaque fichier Kotlin, lui, multipliait par treize le cout de l'index,
+    // 411 ms contre 32 sur un projet reel, pour deux cibles fautives.
+    const lines = (estXml ? stripXmlComments(content) : content).split('\n');
     for (let ln = 0; ln < lines.length; ln++) {
       for (const re of estXml ? [R_RE, XML_REF_RE] : [R_RE]) {
         re.lastIndex = 0;
         let m: RegExpExecArray | null;
         while ((m = re.exec(lines[ln]))) {
+          // Cote code, un controle par CORRESPONDANCE plutot qu'un balayage du
+          // fichier : `// assertEquals(R.drawable.x, ...)` n'est pas un usage.
+          if (!estXml && estCommente(lines[ln], m.index)) continue;
           const type = m[1] as RType;
           const key  = m[2];
           if (!this[type].has(key)) this[type].set(key, []);

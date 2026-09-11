@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.42.165
+
+Jumping from a resource key to its usages could land on a line that is commented out. The usage count shown next to the key already ignored those, so the two disagreed.
+
+### Fixes
+- A line reading TODO use R.string.something, or an XML comment mentioning a dimension, was offered as a place the key is used. It no longer is.
+- Measured on a real project: of 4396 indexed usages, 5 pointed at a commented out line, two of them commented out test assertions. None do now, and not one real usage was lost in the process.
+- The repository already knew: a test pinned this as a documented false positive and asked to be updated if anyone fixed it. It now states the opposite.
+- Cost mattered here. Neutralising every comment of every Kotlin file the thorough way multiplied the cost of building the index by thirteen, 411 ms against 32, for those five targets. The rule is therefore a constant time check at each match rather than a sweep of the file, and it costs one millisecond over the whole project.
+- A comment at the end of a line still hides nothing that comes before it, in code as in XML.
+
+### Notes
+- Deliberately left alone: a design time preview attribute still shows up when navigating, while the count ignores it. On that project 83 references are of this kind. Both readings defend themselves, and picking one is a product decision rather than a defect to repair.
+
 ## 1.42.164
 
 Yesterday three of the four places that jump from a key to its usages stopped guessing the length of the highlight. The fourth, dimensions, was missed.

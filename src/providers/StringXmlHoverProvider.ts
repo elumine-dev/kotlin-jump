@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { MAX_SWEEP_FILES } from '../util/sweepLimit';
 
 /**
  * KJ-018: Reverse String Map, "where does this string show up?".
@@ -143,7 +144,7 @@ export class StringXmlHoverProvider implements vscode.HoverProvider {
     if (this._loading) return this._loading;
     this._loading = (async () => {
       const uris = await vscode.workspace.findFiles(
-        '**/*.{kt,java}', '**/{build,.gradle}/**', 4000,
+        '**/*.{kt,java}', '**/{build,.gradle}/**', MAX_SWEEP_FILES,
       );
       const files: SourceFile[] = [];
       for (const uri of uris) {

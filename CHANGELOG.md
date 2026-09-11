@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.182
+
+The usage count beside every resource key read 4000 of a project's 6278 files, and had no guard at all for the ones it never opened. A key used only in those files read `0 usages` and was greyed out as dead.
+
+### Fixes
+- Measured on a real project, 229 resource files and 2007 keys badged: 130 keys really are at zero, and between 419 and 756 more were shown that way. The set changed with the order the files came back in, so the same project greyed out different keys on different runs.
+- The count now reads the whole project, and past the ceiling it shows `? usages` and greys nothing, the way the dependency badge already did.
+- The reverse string map, which lists the screens a string appears on, read the same 4000 files. It now sees them all.
+
 ## 1.42.181
 
 Turning the `Remove unused …` quick fixes off releases the project scan they hold. The scan running at that moment finished a few seconds later and put all of it straight back.

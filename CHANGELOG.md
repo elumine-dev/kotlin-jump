@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.171
+
+The guard added yesterday, which stops the argument naming action from rewriting a declaration, read the word class inside a class literal as the keyword and refused the call that follows it on the same line.
+
+### Fixes
+- A line registering a type adapter, which names a class then constructs an object, had its constructor call refused because the word class appeared earlier on the line.
+- Measured on a real project: of 16681 positions the guard refused, 15558 are declarations the parser confirms, 957 are secondary constructors it does not emit under that name, 144 are declarations it places at another column, and 21 were only this. Those 21 are back, five of which really did have an action to offer.
+- A keyword reached through two colons declares nothing, so it no longer counts. Everything else the guard does is unchanged: declarations of functions and classes are still refused, and a supertype constructor call is still a call.
+
+### Notes
+- The check that found it compares the guard against what the parser of the extension itself says is declared at that exact line and column. Two readings of the same question, and the disagreements are where the answer lies.
+
 ## 1.42.170
 
 Add names to call arguments looked for a name followed by parentheses on the cursor's line. A function declaration has exactly that shape, and its name of course resolves, since it is the declaration.

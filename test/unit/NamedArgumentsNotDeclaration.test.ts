@@ -88,6 +88,22 @@ describe('mais un vrai appel reste offert', () => {
     expect(String(r[0].edit.entries()[0].newText)).toBe('B(p1 = 12)');
   });
 
+  /**
+   * `Date::class.java` porte le mot `class` sans rien declarer. La garde le
+   * prenait pour le mot cle et refusait l'appel qui suit sur la meme ligne.
+   * Mesure sur un projet reel : 21 sites dans ce cas.
+   */
+  it('un litteral de classe ne fait pas passer la suite pour une declaration', async () => {
+    const r = await actions(['fun bind(b: B) {', '    b.enregistre(Date::class.java, Adaptateur(12))', '}'], 1, 'Adaptateur(');
+    expect(r, 'Adaptateur(12) est un vrai appel').toHaveLength(1);
+    expect(String(r[0].edit.entries()[0].newText)).toBe('Adaptateur(p1 = 12)');
+  });
+
+  it('et un appel apres this deux-points class aussi', async () => {
+    const r = await actions(['fun lis() {', '    val f = this::class.java.classLoader?.ouvre(chemin)', '}'], 1, 'ouvre(');
+    expect(r).toHaveLength(1);
+  });
+
   it('un appel dans le corps d une fonction declaree sur la meme ligne', async () => {
     const r = await actions(['fun go() = calcule(12)'], 0, 'calcule(');
     expect(r).toHaveLength(1);

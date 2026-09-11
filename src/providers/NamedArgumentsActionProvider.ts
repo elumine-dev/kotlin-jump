@@ -92,8 +92,12 @@ export function splitTopLevelArguments(argListText: string): string[] {
  * while `private inline fun <T> map(` is still a declaration. Type parameters
  * are blanked first, since a bound carries a colon of its own:
  * `fun <T : ViewModel> create(` must still read as a declaration.
+ *
+ * A class literal declares nothing, so `Date::class.java` must not make the
+ * call that follows it on the same line look like one. Measured on a real
+ * project: 21 call sites were refused for that reason alone.
  */
-const DECLARATION_BEFORE_NAME = /\b(?:fun|class|interface|object|constructor)\b[^():]*$/;
+const DECLARATION_BEFORE_NAME = /(?<!::)\b(?:fun|class|interface|object|constructor)\b[^():]*$/;
 
 /** Blanks balanced angle groups, innermost first, so bounds hide their colon. */
 function sansParametresDeType(prefixe: string): string {

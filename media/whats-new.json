@@ -1,21 +1,26 @@
 {
-  "version": "1.42.200",
+  "version": "1.42.201",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The dependency badge lets go",
-  "summary": "Five features read every source file of the project. Four release what they read when you switch the feature off or close the window. The dependency badge kept it.",
+  "tagline": "The long dash leaves the window",
+  "summary": "The long dash was banned from the README and the release notes and a script checked those. Nothing checked the extension itself, so it kept writing them in the window.",
   "highlights": [
     {
-      "title": "Sweep Released On Exit",
-      "description": "Around 5 MB of import lines, measured on a real project, stayed held by the dependency badge after the window closed or the badge was switched off. It now lets go, like its four neighbours.",
+      "title": "Reworded Where You Read It",
+      "description": "65 pieces of text: the What's New title, the Run Android App pickers, the pairing dialogs, the hovers, the suppression descriptions, the diagnostics, the chat answers, the logcat status bar.",
+      "kind": "improvement"
+    },
+    {
+      "title": "A Bare Dash Meant Nothing",
+      "description": "Two logcat status bar fields used a lone long dash to mean empty. They say none now, which a screen reader can read out.",
       "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Fixes",
+      "heading": "Notes",
       "bullets": [
-        "A project sweep that finishes after the provider is gone, or after the badge was switched off, no longer hands its result back.",
-        "Switching the badge off with a sweep already finished releases it at once, instead of waiting for a sweep that a badge which is off never runs."
+        "The script that guards the README and the release notes now guards the sources too, and a check confirms it fails when a dash is put back in a window title.",
+        "The output channel keeps its own, on purpose: those lines are for whoever is debugging the extension, not copy anyone reads."
       ]
     }
   ],

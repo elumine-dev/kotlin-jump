@@ -87,7 +87,7 @@ export class DeadIslandProvider implements vscode.CodeActionProvider, vscode.Dis
       for (const m of island.members) {
         const range = new vscode.Range(m.line, m.character, m.line, m.character + m.name.length);
         const chain = m.keptAliveBy.length > 0
-          ? ` — '${m.name}' kept alive only by ${m.keptAliveBy.join(', ')}, themselves dead`
+          ? `: '${m.name}' is kept alive only by ${m.keptAliveBy.join(', ')}, themselves dead`
           : '';
         const d = new vscode.Diagnostic(range, `${messageFor(island)}${chain}`,
           island.verdict === 'unreferenced'

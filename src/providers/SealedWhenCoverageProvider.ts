@@ -414,7 +414,7 @@ function resolveWhen(
   index: SymbolIndex,
   trace?: SealedWhenTrace,
 ): WhenAnalysis | undefined {
-  const at = `when@${raw.whenLine + 1}: no lens —`;
+  const at = `when@${raw.whenLine + 1}: no lens,`;
   const resolved: Array<{ entry: SymbolEntry; guarded: boolean }> = [];
   for (const ref of raw.refs) {
     const entry = resolveRef(ref.path, doc, index);

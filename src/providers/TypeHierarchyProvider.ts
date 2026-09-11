@@ -106,7 +106,7 @@ function buildDetail(entry: SymbolEntry, index: SymbolIndex, parentEntry?: Symbo
     }
   }
 
-  return parts.join(' — ');
+  return parts.join(', ');
 }
 
 function countOverrides(impl: SymbolEntry, parentMethods: SymbolEntry[], index: SymbolIndex): number {

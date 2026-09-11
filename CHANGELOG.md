@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.201
+
+The long dash was banned from the README, the Marketplace page and the release notes, and a script has been checking those four files for a while. Nothing was checking the extension itself, so it kept writing them in the window.
+
+### Fixes
+- 65 pieces of text the reader actually sees: the What's New tab title, every Run Android App picker, the pairing and device dialogs, the hover on a data class body property, the drawable and string resource hovers, the suppression descriptions, the hardcoded string warning, the dead island diagnostic, the unused resource sizes, the call and type hierarchy details, the chat answers, the logcat status bar. All reworded, none of them shortened into something vaguer.
+- Two status bar fields showed a bare long dash to mean "nothing here". They say `none` now, which is what a screen reader can read out.
+- The script that guards the four documents now guards the sources too, and a check confirms it fails when a dash is put back in a window title.
+
+### Notes
+- The output channel is left alone on purpose. Those lines are how the extension talks to its author while something is being debugged, not copy anyone reads, and the guard exempts a literal whose statement is a log call.
+- The recorded walkthrough fixtures keep theirs as well. Those strings are captured editor tab titles, which is the format the editor itself writes, and rewriting them would make the recording a lie.
+
 ## 1.42.200
 
 Five features read every source file of the project. Four of them release what they read when you switch the feature off or close the window. The dependency badge kept it.

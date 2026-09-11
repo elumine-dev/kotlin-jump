@@ -180,7 +180,7 @@ export class GradleTestRunner {
         placeHolder: 'Select the flavor to use for this module (choice will be remembered)',
       }) ?? candidates[0];
       const retryTask = gradleModule ? `${gradleModule}:${pick}` : pick;
-      run.appendOutput(`\r\n${C.yellow}⚑  ambiguous task — retrying with: ${pick}${C.reset}\r\n\r\n`);
+      run.appendOutput(`\r\n${C.yellow}⚑  ambiguous task, retrying with: ${pick}${C.reset}\r\n\r\n`);
       log.info(`[test:runner] ambiguous task detected — retrying with: ${retryTask}`);
       stdoutResults.clear();
       const retryArgs = [retryTask, ...filters];

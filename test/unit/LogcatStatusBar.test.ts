@@ -225,7 +225,7 @@ describe('LogcatStatusBar — tooltip', () => {
     const tip: any = lastItem.tooltip;
     expect(tip).toBeDefined();
     const md: string = tip.value ?? String(tip);
-    expect(md).toContain('Kotlin Jump — Logcat');
+    expect(md).toContain('Kotlin Jump: Logcat');
     expect(md).toContain('Pixel 8');
     expect(md).toContain('com.example.app');
     expect(md).toContain('14,812');

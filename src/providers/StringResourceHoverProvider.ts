@@ -75,7 +75,7 @@ export class StringResourceHoverProvider implements vscode.HoverProvider {
       appendFormatHint(md, entry.value);
       if (entry.quantities && !entry.quantities.has('other')) {
         md.appendMarkdown(
-          '\n\n*Note:* no `other` quantity defined — Android requires it as a fallback.',
+          '\n\n*Note:* no `other` quantity defined, and Android requires it as a fallback.',
         );
       }
       appendSourceLine(md, key, entry);
@@ -122,7 +122,7 @@ function appendSourceLine(
   const displayPath = resIdx >= 0
     ? uriStr.slice(resIdx + 1)
     : uriStr.split('/').slice(-2).join('/');
-  md.appendMarkdown(`\n\`${key}\` — ${displayPath}:${entry.line + 1}`);
+  md.appendMarkdown(`\n\`${key}\` in ${displayPath}:${entry.line + 1}`);
 }
 
 // Feature 4 — annotate format specifiers if any are found in the value.

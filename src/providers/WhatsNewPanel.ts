@@ -54,7 +54,7 @@ export class WhatsNewPanel {
 
     const panel = vscode.window.createWebviewPanel(
       'kotlinJumpWhatsNew',
-      `Kotlin Jump — What's New`,
+      `Kotlin Jump: What's New`,
       vscode.ViewColumn.One,
       {
         enableScripts: false,

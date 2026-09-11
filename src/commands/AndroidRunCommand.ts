@@ -180,7 +180,7 @@ export function registerAndroidRunCommand(
       _currentAppName = undefined;
       await clearAllAndroidCache(context);
       setIdle();
-      vscode.window.showInformationMessage('Kotlin Jump: app selection reset — next Run will ask again.');
+      vscode.window.showInformationMessage('Kotlin Jump: app selection reset. The next Run will ask again.');
     }),
   );
 
@@ -225,13 +225,13 @@ async function showDetectionModal(r: DetectionResult): Promise<void> {
     case 'not-found':
       message =
         `No Gradle project found in:\n  ${workspace}\n\n` +
-        `Scanned 2 levels deep — no settings.gradle.kts or build.gradle.kts found.\n\n` +
+        `Scanned 2 levels deep, no settings.gradle.kts or build.gradle.kts found.\n\n` +
         `How to fix\n` +
         `──────────\n` +
-        `Option A — Set the path explicitly (workspace setting):\n\n` +
+        `Option A. Set the path explicitly (workspace setting):\n\n` +
         `  {\n    "kotlinJump.gradleProjectRoot": "test/kotlin-jump-demo"\n  }\n\n` +
         `Path is relative to the workspace, or absolute.\n\n` +
-        `Option B — Open the Kotlin project directly:\n\n` +
+        `Option B. Open the Kotlin project directly:\n\n` +
         `  code ~/path/to/your-gradle-project`;
       buttons = ['Open Settings', 'Show Detection Log'];
       break;
@@ -328,7 +328,7 @@ function renderButton(state: 'ambiguous' | 'setting-invalid' | 'not-found' | 'wr
   switch (state) {
     case 'ambiguous':
       _runButton.text    = '$(play) Pick Gradle Project';
-      _runButton.tooltip = `Multiple Gradle projects found (${detail}) — click to choose.`;
+      _runButton.tooltip = `Multiple Gradle projects found (${detail}). Click to choose.`;
       _runButton.command = 'kotlin-jump.pickGradleProject';
       _runButton.backgroundColor = undefined;
       _runButton.show();
@@ -629,7 +629,7 @@ async function pickFromCandidates(
 
   const pick = await vscode.window.showQuickPick(
     sorted.map(t => ({ label: t, description: `${gradleModule || ''}:${t}`, task: t })),
-    { placeHolder: 'Multiple build variants found — select one', title: 'Kotlin Jump — Select Build Variant' },
+    { placeHolder: 'Multiple build variants found, select one', title: 'Kotlin Jump: Select Build Variant' },
   );
   if (!pick) return undefined;
 
@@ -795,7 +795,7 @@ async function pickWifiDevice(devices: WifiDevice[], title: string): Promise<Wif
   if (devices.length === 1) return devices[0];
   const pick = await vscode.window.showQuickPick(
     devices.map(d => ({ label: `$(device-mobile) ${d.instance}`, description: `port ${d.port}`, device: d })),
-    { placeHolder: 'Multiple devices found — select one', title },
+    { placeHolder: 'Multiple devices found, select one', title },
   );
   return pick?.device;
 }
@@ -812,13 +812,13 @@ async function pairAdbWifi(log: Logger): Promise<string | undefined> {
   const go = await vscode.window.showInformationMessage(
     'On your phone: Settings → Developer options → Wireless debugging → Pair device with pairing code',
     { modal: true },
-    'Ready — scan now',
+    'Ready, scan now',
   );
-  if (go !== 'Ready — scan now') return undefined;
+  if (go !== 'Ready, scan now') return undefined;
 
   let devices: WifiDevice[] = [];
   await vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: 'Kotlin Jump — ADB Pairing', cancellable: false },
+    { location: vscode.ProgressLocation.Notification, title: 'Kotlin Jump: ADB Pairing', cancellable: false },
     async progress => {
       progress.report({ message: 'Looking for device in pairing mode…' });
       devices = await discoverMdnsDevices('_adb-tls-pairing._tcp', log);
@@ -833,11 +833,11 @@ async function pairAdbWifi(log: Logger): Promise<string | undefined> {
     return undefined;
   }
 
-  const chosen = await pickWifiDevice(devices, 'Kotlin Jump — Pair Device');
+  const chosen = await pickWifiDevice(devices, 'Kotlin Jump: Pair Device');
   if (!chosen) return undefined;
 
   const code = await vscode.window.showInputBox({
-    title: 'Kotlin Jump — ADB Pairing',
+    title: 'Kotlin Jump: ADB Pairing',
     prompt: 'Enter the 6-digit code shown on your phone',
     placeHolder: '123456',
     ignoreFocusOut: true,
@@ -851,7 +851,7 @@ async function pairAdbWifi(log: Logger): Promise<string | undefined> {
   log.info(`[android:wifi] adb pair → ${pairResult}`);
 
   if (pairResult?.includes('Successfully paired')) {
-    vscode.window.showInformationMessage(`Kotlin Jump: Paired with ${chosen.instance} ✓ — connecting…`);
+    vscode.window.showInformationMessage(`Kotlin Jump: Paired with ${chosen.instance} ✓, connecting…`);
     return connectAdbWifi(log);
   }
 
@@ -869,7 +869,7 @@ async function connectAdbWifi(log: Logger): Promise<string | undefined> {
 
   let devices: WifiDevice[] = [];
   await vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: 'Kotlin Jump — ADB WiFi', cancellable: false },
+    { location: vscode.ProgressLocation.Notification, title: 'Kotlin Jump: ADB WiFi', cancellable: false },
     async progress => {
       progress.report({ message: 'Scanning network for Android devices…' });
       devices = await discoverMdnsDevices('_adb-tls-connect._tcp', log);
@@ -886,7 +886,7 @@ async function connectAdbWifi(log: Logger): Promise<string | undefined> {
     return undefined;
   }
 
-  const chosen = await pickWifiDevice(devices, 'Kotlin Jump — ADB WiFi');
+  const chosen = await pickWifiDevice(devices, 'Kotlin Jump: ADB WiFi');
   if (!chosen) return undefined;
 
   const serial = `${chosen.host}:${chosen.port}`;
@@ -899,7 +899,7 @@ async function connectAdbWifi(log: Logger): Promise<string | undefined> {
   }
   if (result?.includes('failed to authenticate')) {
     const action = await vscode.window.showErrorMessage(
-      'ADB authentication failed — device not paired.',
+      'ADB authentication failed, device not paired.',
       { modal: true, detail: 'The device was found but rejected the connection. Pair it first.' },
       'Pair now…',
     );
@@ -973,7 +973,7 @@ async function ensureDeviceConnected(context: vscode.ExtensionContext, log: Logg
       .sort((a, b) => Number(b.serial === remembered) - Number(a.serial === remembered));
     const pick = await vscode.window.showQuickPick(items, {
       placeHolder: 'Several devices connected: run on which one?',
-      title: 'Kotlin Jump — Pick Device',
+      title: 'Kotlin Jump: Pick Device',
     });
     if (!pick) return undefined;
     await context.workspaceState.update(RUN_DEVICE_KEY, pick.serial);
@@ -993,7 +993,7 @@ async function ensureDeviceConnected(context: vscode.ExtensionContext, log: Logg
     | { label: string; kind: vscode.QuickPickItemKind; tag: 'sep' };
 
   const items: DevicePick[] = [
-    { label: '$(wifi) Connect via WiFi…', description: 'Already paired — reconnect', tag: 'wifi' },
+    { label: '$(wifi) Connect via WiFi…', description: 'Already paired, reconnect', tag: 'wifi' },
     { label: '$(add) Pair new device via WiFi…', description: 'First-time setup', tag: 'pair' },
   ];
   if (avds.length > 0) {
@@ -1004,8 +1004,8 @@ async function ensureDeviceConnected(context: vscode.ExtensionContext, log: Logg
   }
 
   const pick = await vscode.window.showQuickPick(items, {
-    placeHolder: 'No device connected — connect via WiFi or start an emulator',
-    title: 'Kotlin Jump — Connect Device',
+    placeHolder: 'No device connected, connect via WiFi or start an emulator',
+    title: 'Kotlin Jump: Connect Device',
   });
   if (!pick || pick.tag === 'sep') return undefined;
 
@@ -1021,7 +1021,7 @@ async function ensureDeviceConnected(context: vscode.ExtensionContext, log: Logg
   );
 
   if (!booted) {
-    vscode.window.showWarningMessage('Kotlin Jump: Emulator may still be booting — try Run again in a moment.');
+    vscode.window.showWarningMessage('Kotlin Jump: Emulator may still be booting. Try Run again in a moment.');
     setIdle();
     return undefined;
   }
@@ -1113,7 +1113,7 @@ function onLaunchFailed(terminal: vscode.Terminal): void {
     setTimeout(setIdle, 6000);
   }
   vscode.window.showWarningMessage(
-    'Kotlin Jump: Build succeeded but app launch failed — check the terminal for details.',
+    'Kotlin Jump: Build succeeded but the app launch failed. Check the terminal for details.',
     'Show Terminal',
   ).then(choice => { if (choice) terminal.show(false); });
 }
@@ -1170,7 +1170,7 @@ async function detectAndroidProject(
 
   if (uris.length === 0) {
     vscode.window.showErrorMessage(
-      'Kotlin Jump: No AndroidManifest.xml found — is this an Android project?\n' +
+      'Kotlin Jump: No AndroidManifest.xml found. Is this an Android project?\n' +
       'Tip: set kotlinJump.androidProjects in settings.json for complex monorepos.',
     );
     return undefined;
@@ -1222,7 +1222,7 @@ async function detectAndroidProject(
     log.info(`[android:run] ${modules.length} modules — picker`);
     const pick = await vscode.window.showQuickPick(
       modules.map(m => ({ label: m.module, description: m.packageName, meta: m })),
-      { placeHolder: 'Select the Android app module to run', title: 'Kotlin Jump — Run Android App' },
+      { placeHolder: 'Select the Android app module to run', title: 'Kotlin Jump: Run Android App' },
     );
     if (!pick) return undefined;
     selected = pick.meta;
@@ -1257,8 +1257,8 @@ async function detectFromExplicit(
     } else {
       log.info(`[android:run] ${projects.length} explicit projects — picker`);
       const pick = await vscode.window.showQuickPick(
-        projects.map(p => ({ label: p.name, description: `${p.module} — ${p.package}`, meta: p })),
-        { placeHolder: 'Select app to run', title: 'Kotlin Jump — Run Android App' },
+        projects.map(p => ({ label: p.name, description: `${p.module}, ${p.package}`, meta: p })),
+        { placeHolder: 'Select app to run', title: 'Kotlin Jump: Run Android App' },
       );
       if (!pick) return undefined;
       selected = pick.meta;

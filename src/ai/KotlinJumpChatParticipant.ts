@@ -144,7 +144,7 @@ function streamEntries(entries: SymbolEntry[], stream: vscode.ChatResponseStream
       new vscode.Location(e.uri, new vscode.Position(e.line, e.character)),
       e.fqn,
     );
-    stream.markdown(` — \`${e.kind}\` in \`${e.packageName || '(default package)'}\`\n`);
+    stream.markdown(`: \`${e.kind}\` in \`${e.packageName || '(default package)'}\`\n`);
   }
   return {};
 }
@@ -194,7 +194,7 @@ function handleUsages(index: SymbolIndex, query: string, stream: vscode.ChatResp
     new vscode.Location(entry.uri, new vscode.Position(entry.line, entry.character)),
     entry.fqn,
   );
-  stream.markdown(` — \`${entry.kind}\` in \`${entry.packageName || '(default package)'}\`\n\n`);
+  stream.markdown(`: \`${entry.kind}\` in \`${entry.packageName || '(default package)'}\`\n\n`);
   stream.markdown('Use **Alt+F7** (Find Usages) to see all usages across the workspace.');
   return {};
 }
@@ -221,7 +221,7 @@ async function handleDoc(index: SymbolIndex, query: string, stream: vscode.ChatR
         new vscode.Location(entry.uri, new vscode.Position(entry.line, entry.character)),
         entry.fqn,
       );
-      stream.markdown(' — No KDoc found.');
+      stream.markdown(': no KDoc found.');
     }
   } catch {
     stream.markdown(`Could not read file for ${mdCode(entry.fqn)}.`);

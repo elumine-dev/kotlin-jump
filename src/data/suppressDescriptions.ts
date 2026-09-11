@@ -88,7 +88,7 @@ export const SUPPRESS_DESCRIPTIONS: Record<string, SuppressionDescription> = {
   },
   'OPT_IN_USAGE_ERROR': {
     kind: 'Kotlin error',
-    text: 'Using an API marked `@RequiresOptIn(level = ERROR)` without the corresponding `@OptIn`. Suppressing is almost never right — migrate instead.',
+    text: 'Using an API marked `@RequiresOptIn(level = ERROR)` without the corresponding `@OptIn`. Suppressing is almost never right, migrate instead.',
     docUrl: KOTLIN_DOCS,
   },
   'EXPERIMENTAL_API_USAGE': {
@@ -103,7 +103,7 @@ export const SUPPRESS_DESCRIPTIONS: Record<string, SuppressionDescription> = {
   },
   'REDUNDANT_OVERRIDE': {
     kind: 'Kotlin warning',
-    text: 'The overriding function calls `super()` with no change in behavior — delete it.',
+    text: 'The overriding function calls `super()` with no change in behavior, so delete it.',
     docUrl: KOTLIN_DOCS,
   },
   'REDUNDANT_VISIBILITY_MODIFIER': {
@@ -122,7 +122,7 @@ export const SUPPRESS_DESCRIPTIONS: Record<string, SuppressionDescription> = {
   },
   'LongLogTag': {
     kind: 'Android Log warning',
-    text: 'The TAG string passed to `Log.*` exceeds 23 characters — older Android releases truncate it silently.',
+    text: 'The TAG string passed to `Log.*` exceeds 23 characters, and older Android releases truncate it silently.',
   },
   'USELESS_CAST': {
     kind: 'Kotlin warning',
@@ -189,7 +189,7 @@ export const SUPPRESS_DESCRIPTIONS: Record<string, SuppressionDescription> = {
   },
   'CustomViewStyleable': {
     kind: 'Android Lint',
-    text: 'Custom View with `declare-styleable` whose name does not match the View class name — IDE integration (layout preview, attribute completion) will misbehave.',
+    text: 'Custom View with `declare-styleable` whose name does not match the View class name, so IDE integration (layout preview, attribute completion) will misbehave.',
     docUrl: LINT_DOCS + 'CustomViewStyleable.md.html',
   },
   'SetTextI18n': {
@@ -204,7 +204,7 @@ export const SUPPRESS_DESCRIPTIONS: Record<string, SuppressionDescription> = {
   },
   'ClickableViewAccessibility': {
     kind: 'Android Lint',
-    text: '`View.onTouchEvent` overridden without `performClick()` — screen readers cannot announce the interaction.',
+    text: '`View.onTouchEvent` overridden without `performClick()`, so screen readers cannot announce the interaction.',
     docUrl: LINT_DOCS + 'ClickableViewAccessibility.md.html',
   },
   'RtlHardcoded': {
@@ -214,7 +214,7 @@ export const SUPPRESS_DESCRIPTIONS: Record<string, SuppressionDescription> = {
   },
   'DefaultLocale': {
     kind: 'Android Lint',
-    text: 'String formatting without an explicit `Locale` depends on the device locale — prod bugs happen when a developer on en-US does not think about tr-TR.',
+    text: 'String formatting without an explicit `Locale` depends on the device locale, and prod bugs happen when a developer on en-US does not think about tr-TR.',
     docUrl: LINT_DOCS + 'DefaultLocale.md.html',
   },
   'SimpleDateFormat': {
@@ -234,7 +234,7 @@ export const SUPPRESS_DESCRIPTIONS: Record<string, SuppressionDescription> = {
   },
   'WakelockTimeout': {
     kind: 'Android Lint',
-    text: '`PowerManager.WakeLock.acquire()` without a timeout — a leak keeps the CPU awake forever. Pass the shortest timeout that makes sense.',
+    text: '`PowerManager.WakeLock.acquire()` without a timeout, and a leak keeps the CPU awake forever. Pass the shortest timeout that makes sense.',
     docUrl: LINT_DOCS + 'WakelockTimeout.md.html',
   },
   'GradleDependency': {
@@ -269,7 +269,7 @@ export const SUPPRESS_DESCRIPTIONS: Record<string, SuppressionDescription> = {
   },
   'RestrictedApi': {
     kind: 'Android Lint',
-    text: 'Call to an API marked with `@RestrictTo`. The library author intended it to stay internal — relying on it can break across versions.',
+    text: 'Call to an API marked with `@RestrictTo`. The library author intended it to stay internal, and relying on it can break across versions.',
     docUrl: LINT_DOCS + 'RestrictedApi.md.html',
   },
   'AppCompatCustomView': {
@@ -279,7 +279,7 @@ export const SUPPRESS_DESCRIPTIONS: Record<string, SuppressionDescription> = {
   },
   'ObsoleteSdkInt': {
     kind: 'Android Lint',
-    text: 'A `Build.VERSION.SDK_INT` check is always true (or always false) given the project\'s `minSdk`. Dead branch — remove it.',
+    text: 'A `Build.VERSION.SDK_INT` check is always true (or always false) given the project\'s `minSdk`. Dead branch, remove it.',
     docUrl: LINT_DOCS + 'ObsoleteSdkInt.md.html',
   },
   'MissingInflatedId': {
@@ -292,7 +292,7 @@ export const SUPPRESS_DESCRIPTIONS: Record<string, SuppressionDescription> = {
 
   'unchecked': {
     kind: 'javac warning',
-    text: 'Unchecked operation on a parameterised type — the compiler cannot verify the cast at compile time. Common in pre-generics Java interop.',
+    text: 'Unchecked operation on a parameterised type, so the compiler cannot verify the cast at compile time. Common in pre-generics Java interop.',
   },
   'rawtypes': {
     kind: 'javac warning',

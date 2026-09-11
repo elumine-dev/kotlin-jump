@@ -558,7 +558,7 @@ function renderMessageWithFrames(message: string, frames: ResolvedFrame[]): stri
     if (f.uri) {
       out += `<span class="frame" data-uri="${escapeAttr(f.uri)}" data-line="${f.line}" title="${escapeAttr(`${f.fqn}.${f.method}`)}">${text}</span>`;
     } else if (f.obfuscated) {
-      out += `<span class="frame obfuscated" title="Obfuscated — R8 mapping not yet supported">${text}</span>`;
+      out += `<span class="frame obfuscated" title="Obfuscated, R8 mapping not yet supported">${text}</span>`;
     } else {
       out += text;
     }

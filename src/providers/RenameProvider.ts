@@ -4,64 +4,9 @@ import { scanForUsages, scanImports, UsageResult, isExcluded, resolveSearchTarge
 import { resolveLocalScope, findLocalUsages, cachedLocalScopeIndex } from './DefinitionProvider';
 import { isInsideCommentOrString, isInsideStringInterpolation } from '../util/textUtils';
 import { FUN_RE, signatureEnd } from '../util/LocalScopeIndex';
-import { sanitizeForUsageScan } from '../util/kotlinScan';
+import { ACCENT, nomAccentueComposite } from '../util/backtickName';
 
 const WORD_RE = /[A-Za-z_]\w*/;
-
-/** Un nom Kotlin ecrit entre accents graves est un identifiant a part entiere. */
-const ACCENT = String.fromCharCode(96);
-const EST_IDENTIFIANT = /^[A-Za-z_]\w*$/;
-
-/**
- * La portee entre accents graves qui contient `col`, bornes du CONTENU.
- *
- * Kotlin autorise `fun `given a when b then c`()`. Le curseur n'y capte qu'un
- * mot, et le renommer comme un symbole ordinaire reecrit toutes les
- * declarations homonymes du workspace tout en cassant la declaration visee.
- */
-function porteeAccentuee(
-  lineText: string,
-  col: number,
-): { start: number; end: number; content: string } | undefined {
-  let i = 0;
-  while (i < lineText.length) {
-    const ouvre = lineText.indexOf(ACCENT, i);
-    if (ouvre < 0) return undefined;
-    const ferme = lineText.indexOf(ACCENT, ouvre + 1);
-    if (ferme < 0) return undefined;
-    if (col > ouvre && col <= ferme) {
-      return { start: ouvre + 1, end: ferme, content: lineText.slice(ouvre + 1, ferme) };
-    }
-    i = ferme + 1;
-  }
-  return undefined;
-}
-
-/**
- * Le curseur est il dans un nom accentue qui n'est PAS un simple identifiant ?
- *
- * ``is`` reste un renommage ordinaire : le mot sous le curseur et le nom
- * complet coincident, donc rien ne derape.
- */
-function nomAccentueComposite(
-  document: vscode.TextDocument,
-  position: vscode.Position,
-): { start: number; end: number; content: string } | undefined {
-  if (document.languageId !== 'kotlin') return undefined;
-  const portee = porteeAccentuee(document.lineAt(position.line).text, position.character);
-  if (!portee || portee.content === '') return undefined;
-  if (EST_IDENTIFIANT.test(portee.content)) return undefined;
-
-  // L'accent grave est aussi la syntaxe Markdown des KDoc, et une ligne de
-  // continuation de KDoc ne porte ni `//` ni `/*` : la garde de ligne ne voit
-  // donc rien. `sanitizeForUsageScan` blanchit commentaires et chaines en
-  // preservant les longueurs, donc l'accent grave n'y survit que s'il est du
-  // code. C'est le meme lecteur que les scanners d'usages, pas une copie.
-  const propre = sanitizeForUsageScan(document.getText()).split(String.fromCharCode(10));
-  if ((propre[position.line] ?? '')[portee.start - 1] !== ACCENT) return undefined;
-
-  return portee;
-}
 
 // ── Metadata constants ────────────────────────────────────────────────────────
 

@@ -143,8 +143,20 @@ export class HexColorFoldingProvider implements vscode.Disposable {
       (a, b) => b.range.start.line - a.range.start.line,
     );
 
-    let needsRawRebuild = false;
+    // Several cursors, at least one of them changing the line count: the ranges
+    // come in coordinates of the document BEFORE the edit, the document already
+    // carries them ALL, and the incremental path mixes the two. It rescans in
+    // final coordinates and then applies the shift of the cursor above to those
+    // same decorations, so the bottom of the file drifts one line per cursor.
+    // Same call as for a boundary that moved: the coordinates cannot be
+    // trusted, rescan everything.
+    const multiCursorLineShift = sorted.length > 1 && sorted.some(
+      c => (c.text.match(/\n/g) ?? []).length !== c.range.end.line - c.range.start.line,
+    );
+
+    let needsRawRebuild = multiCursorLineShift;
     for (const change of sorted) {
+      if (needsRawRebuild) break;
       if (change.text.includes('"""')) { needsRawRebuild = true; break; }
       // `_boundary` is what makes a DELETED `"""` visible: neither the event
       // nor the new line still carries it, so without the memory of the line

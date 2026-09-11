@@ -158,13 +158,26 @@ export class NullAssertionProvider implements vscode.Disposable {
       (a, b) => b.range.start.line - a.range.start.line,
     );
 
+    // Plusieurs curseurs dont l un change le nombre de lignes : les plages
+    // arrivent en coordonnees du document d AVANT, le document les porte deja
+    // TOUTES, et le chemin incrementiel melange les deux espaces. Il rebalaie
+    // en coordonnees finales puis applique encore le decalage du curseur
+    // au dessus, si bien que le bas du fichier part une ligne trop bas par
+    // curseur. Deux curseurs et une Entree suffisaient. Meme raisonnement que
+    // pour une frontiere qui bouge : les coordonnees ne sont plus fiables, on
+    // rebalaie tout.
+    const decalePlusieursFois = sorted.length > 1 && sorted.some(
+      c => (c.text.match(/\n/g) ?? []).length !== c.range.end.line - c.range.start.line,
+    );
+
     // A multi-line boundary moved: everything below it changes meaning, so the
     // incremental path cannot be trusted. Raw strings were covered from the
     // start; the comment-block oracle added later needs the same trigger, or
     // typing `/*` above a highlighted `!!` leaves the highlight standing on
     // code that has just become documentation.
-    let needsFullRebuild = false;
+    let needsFullRebuild = decalePlusieursFois;
     for (const change of sorted) {
+      if (needsFullRebuild) break;
       if (deplaceUneFrontiere(change.text)) { needsFullRebuild = true; break; }
       // Le plafond ne vaut que pour `lineAt`, qui lit le NOUVEAU document. La
       // memoire des lignes d avant, elle, se lit jusqu au bout de l ancienne

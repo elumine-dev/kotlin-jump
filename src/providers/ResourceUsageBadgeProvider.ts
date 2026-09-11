@@ -118,6 +118,7 @@ export class ResourceUsageBadgeProvider implements vscode.Disposable {
   private readonly _dead = vscode.window.createTextEditorDecorationType({ opacity: '0.45' });
   private readonly _subs: vscode.Disposable[];
   private _cache: { at: number; sources: UsageSource[]; truncated: boolean } | undefined;
+  private _disposed = false;
 
   constructor() {
     this._subs = [
@@ -162,7 +163,9 @@ export class ResourceUsageBadgeProvider implements vscode.Disposable {
     // Reading every source takes seconds through the extension host, one round
     // trip per file. A listing that lands after the badges were switched off
     // must not put those megabytes back.
-    if (this._enabled()) {
+    // `dispose()` alone is not enough: the scan running at that moment lands a
+    // second later and would hand its megabytes back to a dead provider.
+    if (!this._disposed && this._enabled()) {
       this._cache = { at: Date.now(), sources, truncated: uris.length >= MAX_SWEEP_FILES };
     }
     return sources;
@@ -234,6 +237,7 @@ export class ResourceUsageBadgeProvider implements vscode.Disposable {
   }
 
   dispose(): void {
+    this._disposed = true;
     this._badge.dispose();
     this._dead.dispose();
     for (const s of this._subs) s.dispose();

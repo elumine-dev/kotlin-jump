@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.42.184
+
+Releasing a cache achieves nothing if the scan already running hands its megabytes straight back. That is what happened to all three of the features that hold the project listing, a second or two after the extension shut down.
+
+### Fixes
+- The scan takes seconds, one round trip per file, so closing the window while it runs is the ordinary case rather than a corner case. Each of the three now refuses to write its result once it has been shut down: 40.8 MB for the quick fixes, 40.8 MB for the resource badge, about 17 MB for the reverse string map.
+- The same guard already covered the settings being switched off. Shutdown was covered nowhere, so the memory outlived the extension itself.
+
 ## 1.42.183
 
 Three features keep the text of every project file in memory so they can answer quickly. Raising their ceiling over the last two releases took that from about 64 MB to about 98 MB on the project measured, and two of the three never gave any of it back.

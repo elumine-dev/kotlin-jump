@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.125
+
+One more way to lose the whole extension through a settings file, closed.
+
+### Fixes
+- Writing kotlinJump.excludePatterns as a plain string instead of a list stopped the extension from loading. The value is read during activation, and reading it as a list failed there, so every feature went away at once with nothing to see but the extension host log. A lone string is now read as the single pattern it obviously is, and a value of any other shape is ignored instead of being fatal. This completes the previous release, which had learned to skip an empty entry inside the list but still assumed the setting itself was one.
+
+### Notes
+- No new commands or settings in this release.
+
 ## 1.42.124
 
 Three bugs in how kotlinJump.excludePatterns is read. One of them stopped the extension from starting at all.

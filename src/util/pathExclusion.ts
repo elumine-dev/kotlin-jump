@@ -1,6 +1,21 @@
 import picomatch from 'picomatch';
 
 /**
+ * Les motifs exploitables d'un reglage utilisateur.
+ *
+ * `kotlinJump.excludePatterns` arrive tel qu'il est ecrit dans settings.json :
+ * VS Code signale une valeur du mauvais type par un avertissement dans
+ * l'editeur, il ne l'empeche pas d'arriver jusqu'ici. Or ce reglage se lit
+ * dans `activate()`, donc la moindre levee y emporte l'extension entiere, sans
+ * autre trace que le journal de l'hote d'extensions. Une chaine seule est
+ * prise pour le motif unique qu'elle est, tout le reste est ignore.
+ */
+function motifsValides(patterns: unknown): string[] {
+  const liste = typeof patterns === 'string' ? [patterns] : Array.isArray(patterns) ? patterns : [];
+  return liste.filter(p => typeof p === 'string' && p.trim() !== '');
+}
+
+/**
  * Le motif d'exclusion a passer a `findFiles`.
  *
  * `findFiles` ne prend qu'UN motif, alors que le reglage
@@ -28,7 +43,7 @@ import picomatch from 'picomatch';
  * exclu que l'utilisateur n'ait pas demande.
  */
 export function excludeGlob(patterns: readonly string[]): string | undefined {
-  const valides = patterns.filter(p => typeof p === 'string' && p.trim() !== '');
+  const valides = motifsValides(patterns);
   if (valides.length === 0) return undefined; // pas `{}`, qui n'exclut rien
   const branches: string[] = [];
   for (const motif of valides) {
@@ -50,7 +65,7 @@ export function makeExclusionMatcher(
   // picomatch leve sur une chaine vide, et ce matcheur se construit en plein
   // `activate()` : une entree vide dans le reglage, chose qu'un editeur de
   // tableau produit d'un clic, tuait l'extension entiere.
-  const valides = patterns.filter(p => typeof p === 'string' && p.trim() !== '');
+  const valides = motifsValides(patterns);
   if (valides.length === 0) return () => false;
   const matchers = valides.map(p => picomatch(p, { dot: true }));
   const prefixes = roots.map(r => r.replace(/\/+$/, '') + '/');

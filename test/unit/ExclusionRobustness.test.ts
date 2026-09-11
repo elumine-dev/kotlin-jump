@@ -145,3 +145,74 @@ describe('DeadCodeSweep — l exclusion doit passer AVANT le plafond', () => {
     expect(tronque, 'le plafond n est pas atteint une fois l exclusion appliquee').toBe(false);
   });
 });
+
+describe('un reglage de la mauvaise FORME ne doit pas tuer activate non plus', () => {
+  // v1.42.124 a appris a ignorer une ENTREE vide dans le tableau. Mais le
+  // reglage lui meme peut ne pas etre un tableau : VS Code rend la valeur JSON
+  // telle quelle, un avertissement dans l'editeur ne l'empeche pas d'arriver
+  // ici. `patterns.filter` leve alors, en plein `activate()`, et l'extension
+  // entiere disparait comme avec l'entree vide.
+  it('une chaine au lieu d un tableau ne leve pas', () => {
+    expect(() => makeExclusionMatcher('**/build/**' as any)).not.toThrow();
+    expect(() => excludeGlob('**/build/**' as any)).not.toThrow();
+  });
+
+  it('et cette chaine est comprise comme le motif unique qu elle est', () => {
+    // Le repli inverse, ne rien exclure, indexerait tout `build/`, c est a
+    // dire exactement ce que l utilisateur cherchait a eviter.
+    const exclu = makeExclusionMatcher('**/build/**' as any, ['/w']);
+    expect(exclu('/w/app/build/G.kt')).toBe(true);
+    expect(exclu('/w/app/src/A.kt')).toBe(false);
+    expect(picomatch(excludeGlob('**/build/**' as any)!, { dot: true })('app/build/G.kt')).toBe(true);
+  });
+
+  it('une valeur absurde n exclut rien, au lieu de lever', () => {
+    for (const valeur of [42, {}, true, null, undefined, [[]]]) {
+      expect(() => makeExclusionMatcher(valeur as any), JSON.stringify(valeur)).not.toThrow();
+      expect(makeExclusionMatcher(valeur as any)('app/build/G.kt'), JSON.stringify(valeur)).toBe(false);
+      expect(excludeGlob(valeur as any), JSON.stringify(valeur)).toBeUndefined();
+    }
+  });
+});
+
+/**
+ * Les deux chemins d'exclusion filtrent chacun les entrees invalides. Deux
+ * copies de la meme regle derivent, et le desaccord qu'elles produiraient est
+ * invisible : le balayage indexerait ce que le veilleur refuse de rafraichir,
+ * sans qu'aucun test cible ne tombe. Cet invariant les tient ensemble.
+ */
+describe('invariant : balayage et veilleur voient pareil, sur toutes les combinaisons', () => {
+  const RACINE = '/w/projet';
+  const RELATIFS = [
+    'src/A.kt', 'app/src/main/B.kt', 'build/C.kt', 'app/build/D.kt', 'app/build/generated/E.kt',
+    '.gradle/F.kt', 'core/.gradle/G.kt', 'generated/H.kt', 'a/b/generated/I.kt', 'buildSrc/J.kt',
+    'out/K.kt', 'app/out/L.kt', 'node_modules/m/N.kt', 'app/src/build/O.kt', 'test/P.kt',
+  ];
+  const MORCEAUX: string[] = [
+    '**/build/**', '**/.gradle/**', '**/generated/**', '**/node_modules/**',
+    'out/**', 'buildSrc/**', 'app/**', '**/test/**',
+    '', '   ', null as any, undefined as any,
+  ];
+
+  it('aucun desaccord, entrees invalides comprises', () => {
+    const desaccords: string[] = [];
+    let combinaisons = 0;
+    for (let masque = 0; masque < (1 << MORCEAUX.length); masque++) {
+      const liste = MORCEAUX.filter((_, i) => masque & (1 << i));
+      if (liste.length > 4) continue; // le fond du treillis suffit, et reste rapide
+      combinaisons++;
+      const motif = excludeGlob(liste);
+      const exclut = motif === undefined ? () => false : picomatch(motif, { dot: true });
+      const veilleur = makeExclusionMatcher(liste, [RACINE]);
+      for (const rel of RELATIFS) {
+        const parLeBalayage = exclut(rel);                  // findFiles voit du relatif
+        const parLeVeilleur = veilleur(RACINE + '/' + rel); // le veilleur voit de l absolu
+        if (parLeBalayage !== parLeVeilleur) {
+          desaccords.push(JSON.stringify(liste) + ' | ' + rel);
+        }
+      }
+    }
+    expect(combinaisons, 'le treillis doit vraiment etre parcouru').toBeGreaterThan(700);
+    expect(desaccords).toEqual([]);
+  });
+});

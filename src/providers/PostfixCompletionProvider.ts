@@ -85,6 +85,41 @@ function stringLiteralStart(lineText: string, closeIdx: number): number {
   return -1;
 }
 
+/**
+ * Can this text stand as an expression inside a new construct?
+ *
+ * Kotlin chains freely across lines, and this provider reads one line at a
+ * time. On a continuation line the receiver it extracts is the fragment that
+ * line starts with, `?` or `}`, not the expression above it. Wrapping that
+ * produced `if () { }`, `for (item in ) { }` or `if (}) { }`. Measured on a
+ * real project: 123 of its 1044 postfix positions are such lines.
+ *
+ * `let` is exempt because it only appends: `?.let { }` on a continuation line
+ * is exactly what the author is reaching for.
+ */
+function canStandAsExpression(text: string): boolean {
+  if (text.length === 0) return false;
+  let parens = 0, braces = 0, brackets = 0;
+  let quote: '"' | null = null;
+  let raw = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quote) {
+      if (!raw && ch === '\\') { i++; continue; }
+      if (raw && text.startsWith('"""', i)) { quote = null; raw = false; i += 2; continue; }
+      if (!raw && ch === quote) quote = null;
+      continue;
+    }
+    if (text.startsWith('"""', i)) { quote = '"'; raw = true; i += 2; continue; }
+    if (ch === '"') { quote = '"'; continue; }
+    if (ch === '(') parens++; else if (ch === ')') parens--;
+    else if (ch === '{') braces++; else if (ch === '}') braces--;
+    else if (ch === '[') brackets++; else if (ch === ']') brackets--;
+    if (parens < 0 || braces < 0 || brackets < 0) return false;
+  }
+  return quote === null && parens === 0 && braces === 0 && brackets === 0;
+}
+
 // Ints, decimals, hex, binary: `if (3.14)` and `if (0xFF)` are invalid Kotlin.
 const NUMERIC_LITERAL = /^-?(?:0[xXbB][\dA-Fa-f_]+|\d[\d_]*(?:\.\d[\d_]*)?)[LfF]?$/;
 
@@ -111,6 +146,9 @@ export function expandPostfix(
   const base     = rawReceiver.replace(/\?+$/, '');
   const safeCall = base !== rawReceiver;
   const numeric = NUMERIC_LITERAL.test(base);
+  // Every template but `let` wraps the receiver in a new construct, which
+  // needs something that can stand as an expression.
+  if (template !== 'let' && !canStandAsExpression(base)) return null;
   // The receiver lands in a SnippetString: `$name` and `${total}` would be
   // read as snippet variables and vanish. Escape what the snippet grammar owns.
   const receiver = base.replace(/[\\$}]/g, '\\$&');

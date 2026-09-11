@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.172
+
+Kotlin chains across lines, and the postfix templates read one line at a time. On a continuation line the receiver they see is the fragment the line starts with, not the expression above it.
+
+### Fixes
+- On a line beginning with a safe call or a closing brace, the templates that wrap the receiver produced an empty condition, a loop over nothing or a value assigned from nothing. They are no longer offered there.
+- Measured on a real project: of 1044 postfix positions, 123 sit on such a line. Each was offering eight wrapping templates that could not compile, which is 984 suggestions in all. Offers drop from 8739 to 7755, and that difference is exactly those 984.
+- The let template is untouched, because it only appends behind the receiver: on a continuation line it produces exactly what the author is reaching for, and it stays available.
+- A receiver that holds braces or parentheses in the right order is still a receiver, so wrapping a filtered list or a call with arguments works as before. What is refused is a fragment that cannot stand alone, including one whose delimiters only balance because a closing one came first.
+
 ## 1.42.171
 
 The guard added yesterday, which stops the argument naming action from rewriting a declaration, read the word class inside a class literal as the keyword and refused the call that follows it on the same line.

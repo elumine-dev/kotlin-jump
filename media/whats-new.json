@@ -1,28 +1,29 @@
 {
-  "version": "1.42.156",
+  "version": "1.42.157",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Type Hierarchy opens on the type you asked for",
-  "summary": "Show Type Hierarchy returned every class in the project with that simple name as a root, so it often opened on an unrelated hierarchy.",
+  "tagline": "Clicking inside a backticked test name",
+  "summary": "A Kotlin name written between backticks is one identifier, but the cursor inside it only ever catches one word, and following that word led somewhere unrelated.",
   "highlights": [
     {
-      "title": "One root, the one under your cursor",
+      "title": "Go to Definition and Call Hierarchy read the whole name",
       "kind": "fix",
-      "description": "Variant names of a sealed class repeat a lot. Asking for the hierarchy of Success in a login result offered eleven roots, the one you clicked sitting fifth, and the view opened on an image loading state instead."
+      "description": "Clicking in the middle of a test called given a TextDO then it maps opened TextDO in another module, and Show Call Hierarchy on it opened on a function called values. Both now read the name as written."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "The cursor decides: a declaration under it wins outright, and a use resolves the way Go to Definition and rename already do, through the explicit import then the package. When nothing tells them apart the candidates are still all offered, since choosing at random would be worse.",
-        "The line matters and not just the file: 48 pairs of file and name on a real project carry two declarations or more, one Companion appearing four times in a single file.",
-        "Measured on that project over 745 types: 109 returned several roots and in 68 of them the declaration under the cursor was not the first. All 745 now return exactly one. The parents themselves were already right, 416 of them with none absent from the class declaration."
+        "Measured on a real project with 1095 such names, cursor in the middle of the name: 312 wrong targets for Go to Definition and 305 wrong roots for Call Hierarchy. Both are now right for all 1095.",
+        "The cursor can also land on one of the spaces in the name, where there is no word at all to catch. That case used to return nothing; it now resolves like any other position in the name.",
+        "When two classes hold a test of the same name, nothing links them and the line under the cursor decides. Four of the 1090 distinct names on that project appear in several files, one of them in five.",
+        "Rename received this in 1.42.153. The rule now lives in a single shared place so the three cannot drift apart, and a backticked name that is a plain identifier still behaves as it always did."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "Also swept this round and found sound: the quick fixes that delete code, over the 46 they offer on that project, checked for a replacement that misses its target name, a deletion that welds two identifiers together, unbalanced delimiters and a stray comma, with the check first proven to catch a deliberate one character shift in 45 of the 46."
+        "Also swept this round and found sound: the subtype direction of Type Hierarchy, 523 answers over 1329 types with every one of them naming its parent in its own declaration; and the ranges Call Hierarchy reports, 1358 of them all landing exactly on the name, with the check first proven to catch a deliberate one character shift 400 times out of 400."
       ]
     }
   ],

@@ -43,7 +43,10 @@ export class RoomMigrationProvider implements vscode.Disposable {
     const files = new Map<string, string>();
     // Past the cap the file holding the migrations may be the one left out,
     // and every "hole" or "no ADD COLUMN" would be invented: stay silent.
-    const cap = vscode.workspace.getConfiguration('kotlinJump').get<number>('maxIndexedFiles', 3000);
+    // Same budget as the indexer, and read the same way as everywhere else:
+    // the declared default wins for a contributed setting, so a different
+    // fallback here would only ever show up under a test stub.
+    const cap = vscode.workspace.getConfiguration('kotlinJump').get<number>('maxIndexedFiles') ?? 10000;
     const uris = await vscode.workspace.findFiles('**/*.kt', '**/{build,.gradle}/**', cap + 1);
     if (uris.length > cap) { this._cache = { at: Date.now(), files }; return files; }
     // Reads used to be sequential: a save waited on up to 3000 round trips.

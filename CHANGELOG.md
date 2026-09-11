@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.185
+
+A setting read as `get(key, fallback)` never returns that fallback once the key is declared in `package.json`. The test stub does return it, so a fallback that disagrees with the declared default is a value only the tests ever see.
+
+### Fixes
+- The Room migration check read the indexed file ceiling with a fallback of 3000 where the declared default is 10000. The code now reads it the same way as everywhere else, and a new guard checks all 135 of these calls against `package.json` so the two can no longer drift apart.
+
+### Notes
+- Nothing changes for anyone running a released build: the declared default was already the value in force.
+
 ## 1.42.184
 
 Releasing a cache achieves nothing if the scan already running hands its megabytes straight back. That is what happened to all three of the features that hold the project listing, a second or two after the extension shut down.

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { isInsideCommentOrString, countTripleQuotes } from '../util/textUtils';
+import { moveDecorationsToLine, shiftLineState } from '../util/decorationShift';
 
 export class NullAssertionProvider implements vscode.Disposable {
   private readonly _decorType: vscode.TextEditorDecorationType;
@@ -115,6 +116,13 @@ export class NullAssertionProvider implements vscode.Disposable {
     this._lineDecos = next;
   }
 
+  /** Les oracles par ligne suivent le meme deplacement que les decorations. */
+  private _shiftStates(fromLine: number, delta: number): void {
+    this._rawState   = shiftLineState(this._rawState,   fromLine, delta);
+    this._blockState = shiftLineState(this._blockState, fromLine, delta);
+    this._boundary   = shiftLineState(this._boundary,   fromLine, delta);
+  }
+
   // ── Layer 3: 16ms render throttle ─────────────────────────────────────────
   private _scheduleFlush(): void {
     if (this._flushTimer !== undefined) return;
@@ -126,8 +134,14 @@ export class NullAssertionProvider implements vscode.Disposable {
 
   private _flush(editor: vscode.TextEditor): void {
     const all: vscode.DecorationOptions[] = [];
-    for (const k of [...this._lineDecos.keys()].sort((a, b) => a - b))
-      all.push(...this._lineDecos.get(k)!);
+    for (const k of [...this._lineDecos.keys()].sort((a, b) => a - b)) {
+      // La cle n est que de la comptabilite : ce que VS Code peint, c est le
+      // Range porte par chaque option. Reindexer seul laissait chaque
+      // decoration sous le curseur dessinee une ligne trop haut.
+      const decos = moveDecorationsToLine(this._lineDecos.get(k)!, k);
+      this._lineDecos.set(k, decos);
+      all.push(...decos);
+    }
     editor.setDecorations(this._decorType, all);
   }
 
@@ -177,10 +191,15 @@ export class NullAssertionProvider implements vscode.Disposable {
       const addedLines   = (change.text.match(/\n/g) ?? []).length;
       const removedLines = change.range.end.line - change.range.start.line;
       const delta        = addedLines - removedLines;
-      if (delta !== 0)
+      if (delta !== 0) {
         this._shiftDecos(change.range.start.line + 1, delta);
+        this._shiftStates(change.range.start.line + 1, delta);
+      }
 
       const endLine = change.range.start.line + addedLines;
+      // `_boundary` n est pas recalcule ici : on n arrive sur ce chemin que si
+      // aucune des lignes touchees ne porte de marqueur, et les lignes nees de
+      // la frappe heritent deja de la ligne coupee.
       for (let i = change.range.start.line; i <= endLine && i < doc.lineCount; i++)
         this._rescanLine(i, doc.lineAt(i).text);
     }

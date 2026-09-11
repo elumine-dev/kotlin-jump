@@ -1,26 +1,32 @@
 {
-  "version": "1.42.187",
+  "version": "1.42.188",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A guard that read half the code",
-  "summary": "The guard that keeps every setting fallback in step with package.json only read one of the two ways the code writes them. Fifteen readings use the other, including the exclusion list that decides which files the whole extension looks at.",
+  "tagline": "States that had no lens",
+  "summary": "The lens that shows who writes and who reads a ViewModel state accepted only private, internal and protected in front of the property. A state declared with override, the shape of a ViewModel implementing a contract, had no lens at all.",
   "highlights": [
     {
-      "title": "Both forms covered",
+      "title": "13 states come back",
       "kind": "fix",
-      "description": "The guard now reads get(key) ?? fallback as well as get(key, fallback), and resolves named constants. Coverage goes from 186 readings to 197."
+      "description": "Measured on a real project of 3558 Kotlin files: 306 declarations were seen, and 13 more appear with the full modifier list."
     },
     {
-      "title": "Nothing skipped in silence",
+      "title": "First tests for the lens",
       "kind": "improvement",
-      "description": "A fallback the guard cannot read is reported rather than passed over, and the guard is now checked against its own inputs."
+      "description": "The provider had none. It has nine now, two of which pin its limits rather than its features."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Fifteen settings readings used a form the guard never looked at, among them the exclusion list behind every workspace scan.",
-        "A computed fallback, such as one derived from the processor count, is accepted as it is; a fallback that cannot be read at all is reported."
+        "A state declared with override, open, public or lateinit is recognised like any other.",
+        "A declaration quoted inside a string is still not a state, and a constructor call that is not a declaration is not one either."
+      ]
+    },
+    {
+      "heading": "Notes",
+      "bullets": [
+        "Still out of scope: 24 properties on that project use var model by mutableStateOf. Their writes are plain assignments, so recognising them now would show 0 writes on states that are written all the time."
       ]
     }
   ],

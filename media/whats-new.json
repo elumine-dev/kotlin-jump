@@ -1,26 +1,21 @@
 {
-  "version": "1.42.202",
+  "version": "1.42.203",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A leading star that skipped the root",
-  "summary": "The setting that keeps Gradle build logic out of the unreferenced symbol report never worked, because a leading double star was read as one directory or more instead of zero or more.",
+  "tagline": "A guard that guarded a missing folder",
+  "summary": "No behaviour changes. The guard added last release named a folder that does not exist, and left the four scripts that run on every publish unguarded.",
   "highlights": [
     {
-      "title": "buildSrc Is Excluded Again",
-      "description": "Gradle puts buildSrc at the root of the project, and the shipped default pattern demanded a directory before it. A convention plugin is named by its file, so every declaration inside looked unreferenced.",
-      "kind": "fix"
-    },
-    {
-      "title": "Your Own Ignore Patterns",
-      "description": "A pattern starting with a double star now covers the root as well, the way the editor's own globs and gitignore read it.",
-      "kind": "fix"
+      "title": "The Release Tooling Is Guarded",
+      "description": "The scan now reads `.github/scripts` in place of a folder that was never there. A hidden byte in the tooling that decides whether a release goes out would have been as invisible as one in a provider.",
+      "kind": "improvement"
     }
   ],
   "sections": [
     {
       "heading": "Notes",
       "bullets": [
-        "No verdict changes on the real project, the report stays at 99 findings. The file under buildSrc produced none today, which is luck rather than correctness.",
-        "Three sources carried a raw NUL byte where an escape was meant, and one of them was read as binary by git, so its deliveries showed no diff at all. A new guard fails the build if one comes back."
+        "Last release's glob fix was measured rather than trusted: of 5 093 sources it excludes exactly one more file, the one it was written for, and loses none.",
+        "Three audits found nothing: every declared setting is read, every declared command resolves in both builds, and each guard in the path exclusion helper is covered."
       ]
     }
   ],

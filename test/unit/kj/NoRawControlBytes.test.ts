@@ -19,7 +19,10 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import * as path from 'node:path';
 import { REPO_ROOT } from './harness';
 
-const ROOTS = ['src', 'test', 'scripts', 'media/logcat', 'media/whatsnew'];
+// `.github/scripts` holds the release tooling, which runs on every publish:
+// a byte hidden there would be as invisible as one in a provider. The list
+// named `media/whatsnew`, which does not exist, so it guarded nothing.
+const ROOTS = ['src', 'test', 'scripts', 'media/logcat', '.github/scripts'];
 const SOURCE = /\.(ts|mts|cts|js|mjs)$/;
 /** Everything below space except tab, newline and carriage return. */
 const CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/;
@@ -53,7 +56,9 @@ describe('Sources stay plain text', () => {
         );
       }
     }
-    expect(lus, 'le balayage doit voir des fichiers, sinon il ne prouve rien').toBeGreaterThan(400);
+    // 817 fichiers aujourd hui. Le seuil protege contre une racine renommee
+    // qui ferait rendre zero au balayage, il ne suit pas la taille du depot.
+    expect(lus, 'le balayage doit voir des fichiers, sinon il ne prouve rien').toBeGreaterThan(600);
     expect(coupables, 'ecrire le caractere en echappement, par exemple \\u0000').toEqual([]);
   });
 

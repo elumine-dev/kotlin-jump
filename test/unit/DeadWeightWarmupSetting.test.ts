@@ -15,6 +15,8 @@
  * l'activation. Pour un reglage a false, c'est entierement perdu.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import * as vscodeMock from './__mocks__/vscode';
 import { DeadWeightActionProvider } from '../../src/providers/DeadWeightActionProvider';
 import { Range, Position } from './__mocks__/vscode';
@@ -96,8 +98,9 @@ describe('DeadWeightActionProvider — prechauffage', () => {
       .toEqual(['Remove unused dependency com.squareup.retrofit2:retrofit']);
   });
 
-  it('reglage rallume apres coup : la premiere ampoule paie le balayage a froid', async () => {
-    // Sans prechauffage, le chemin froid doit quand meme rendre l action.
+  it('rallume sans evenement vu : le chemin froid rend quand meme l action', async () => {
+    // Filet de securite : si l evenement de configuration n arrive pas, la
+    // premiere ampoule paie le balayage elle meme plutot que de rendre [].
     let actif = false;
     vi.spyOn(vscodeMock.workspace, 'findFiles').mockImplementation((async () => (
       Array.from({ length: 5 }, (_, i) => ({
@@ -121,5 +124,74 @@ describe('DeadWeightActionProvider — prechauffage', () => {
     );
     expect(actions.map(a => a.title))
       .toEqual(['Remove unused dependency com.squareup.retrofit2:retrofit']);
+  });
+
+  it('rallume par l evenement de configuration : le prechauffage repart seul', async () => {
+    let actif = false;
+    let ecouteur: ((e: any) => void) | undefined;
+    vi.spyOn(vscodeMock.workspace, 'onDidChangeConfiguration')
+      .mockImplementation(((cb: any) => { ecouteur = cb; return { dispose: () => {} }; }) as any);
+    const findFiles = harnais(false);
+    vi.spyOn(vscodeMock.workspace, 'getConfiguration').mockReturnValue({
+      get: (cle: string, def: any) => (cle === 'deadWeightQuickFixes' ? actif : def),
+    } as any);
+
+    const p = new DeadWeightActionProvider();
+    await attendre();
+    expect(findFiles, 'coupe au demarrage, rien ne part').not.toHaveBeenCalled();
+
+    actif = true;
+    ecouteur?.({ affectsConfiguration: (cle: string) => cle === 'kotlinJump.deadWeightQuickFixes' });
+    await attendre();
+    expect(findFiles, 'le prechauffage part sans attendre une ampoule').toHaveBeenCalled();
+    p.dispose();
+  });
+
+  it('coupe apres coup : les caches sont relaches', async () => {
+    let actif = true;
+    let ecouteur: ((e: any) => void) | undefined;
+    vi.spyOn(vscodeMock.workspace, 'onDidChangeConfiguration')
+      .mockImplementation(((cb: any) => { ecouteur = cb; return { dispose: () => {} }; }) as any);
+    harnais(true);
+    vi.spyOn(vscodeMock.workspace, 'getConfiguration').mockReturnValue({
+      get: (cle: string, def: any) => (cle === 'deadWeightQuickFixes' ? actif : def),
+    } as any);
+
+    const p = new DeadWeightActionProvider();
+    await attendre();
+    expect((p as any)._sources, 'le balayage a bien rempli le cache').toBeTruthy();
+
+    actif = false;
+    ecouteur?.({ affectsConfiguration: (cle: string) => cle === 'kotlinJump.deadWeightQuickFixes' });
+    await attendre();
+    // 40,8 Mo de texte sur le vrai projet : les garder pour une fonctionnalite
+    // coupee est exactement ce que ce correctif evite.
+    expect((p as any)._sources, 'le cache est rendu').toBeUndefined();
+    expect((p as any)._imports).toBeUndefined();
+    p.dispose();
+  });
+
+  it('dispose libere l ecoute et les caches', async () => {
+    let libere = false;
+    vi.spyOn(vscodeMock.workspace, 'onDidChangeConfiguration')
+      .mockImplementation((() => ({ dispose: () => { libere = true; } })) as any);
+    harnais(true);
+    const p = new DeadWeightActionProvider();
+    await attendre();
+    p.dispose();
+    expect(libere, 'l ecoute de configuration doit etre liberee').toBe(true);
+    expect((p as any)._sources).toBeUndefined();
+  });
+
+  it('les deux points d entree liberent le fournisseur', () => {
+    // Construit en ligne dans registerCodeActionsProvider, il ecoutait la
+    // configuration sans que personne ne puisse le liberer.
+    for (const f of ['extension.ts', 'extension.browser.ts']) {
+      const src = fs.readFileSync(path.resolve(__dirname, '..', '..', 'src', f), 'utf8');
+      expect(src, `${f} : pas de construction en ligne`)
+        .not.toMatch(/new DeadWeightActionProvider\(\)\s*,/);
+      expect(src, `${f} : la variable figure dans les subscriptions`)
+        .toMatch(/\n\s*deadWeight,/);
+    }
   });
 });

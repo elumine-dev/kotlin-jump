@@ -21,25 +21,48 @@ import { MAX_SWEEP_FILES } from '../util/sweepLimit';
 const CACHE_MS = 20_000;
 const MAX_SOURCES = MAX_SWEEP_FILES;
 
-export class DeadWeightActionProvider implements vscode.CodeActionProvider {
+export class DeadWeightActionProvider implements vscode.CodeActionProvider, vscode.Disposable {
   static readonly providedCodeActionKinds = [vscode.CodeActionKind.QuickFix];
 
   private _sources: { at: number; value: UsageSource[]; truncated: boolean } | undefined;
   private _imports: { at: number; value: string[] } | undefined;
 
+  private readonly _subs: vscode.Disposable[] = [];
+
   constructor() {
-    // Warm-up: the first lightbulb used to scan ~4000 files on the spot,
-    // VS Code gave up waiting, and the user saw NO action on a dead
-    // dependency (reported 25/07). Prime the cache off the critical path.
-    //
-    // But only for someone who asked for these actions. This scan holds the
-    // text of every source: measured on a real project, 40.8 MB across 6278
-    // files, and 92 ms of reading during activation. Paying that for a feature
-    // switched off buys nothing. Turn the setting back on and the first
-    // lightbulb pays a cold scan once, which is what the warm-up spares.
+    this._subs.push(
+      vscode.workspace.onDidChangeConfiguration(e => {
+        if (e.affectsConfiguration('kotlinJump.deadWeightQuickFixes')) this._warmUp();
+      }),
+    );
+    this._warmUp();
+  }
+
+  /**
+   * Warm-up: the first lightbulb used to scan ~4000 files on the spot, VS Code
+   * gave up waiting, and the user saw NO action on a dead dependency (reported
+   * 25/07). Prime the cache off the critical path.
+   *
+   * But only for someone who asked for these actions. The scan holds the text
+   * of every source: measured on a real project, 40.8 MB across 6278 files and
+   * 92 ms of reading during activation. It follows the setting both ways, so
+   * turning the actions on primes the cache right away rather than leaving the
+   * next lightbulb to pay for it, and turning them off gives the memory back.
+   */
+  private _warmUp(): void {
     const cfg = vscode.workspace.getConfiguration('kotlinJump');
-    if (!cfg.get<boolean>('deadWeightQuickFixes', true)) return;
+    if (!cfg.get<boolean>('deadWeightQuickFixes', true)) {
+      this._sources = undefined;
+      this._imports = undefined;
+      return;
+    }
     void this.workspaceSources().then(() => this.workspaceImports()).catch(() => {});
+  }
+
+  dispose(): void {
+    for (const s of this._subs) s.dispose();
+    this._sources = undefined;
+    this._imports = undefined;
   }
 
   private _refreshing = false;

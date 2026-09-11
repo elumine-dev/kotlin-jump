@@ -1,12 +1,12 @@
 {
-  "version": "1.42.203",
+  "version": "1.42.204",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A guard that guarded a missing folder",
-  "summary": "No behaviour changes. The guard added last release named a folder that does not exist, and left the four scripts that run on every publish unguarded.",
+  "tagline": "A cut between two commas",
+  "summary": "No behaviour changes. The quick fix that drops an unread field from a data class cuts inside a line, and one of the three bounds that decide where was held by nothing.",
   "highlights": [
     {
-      "title": "The Release Tooling Is Guarded",
-      "description": "The scan now reads `.github/scripts` in place of a folder that was never there. A hidden byte in the tooling that decides whether a release goes out would have been as invisible as one in a provider.",
+      "title": "Removal Bounds Now Pinned",
+      "description": "Breaking the bound that eats a middle parameter's comma passed the whole suite while emitting a doubled comma on eleven removals of a real project. The tests now read the Kotlin that comes out of the cut.",
       "kind": "improvement"
     }
   ],
@@ -14,8 +14,8 @@
     {
       "heading": "Notes",
       "bullets": [
-        "Last release's glob fix was measured rather than trusted: of 5 093 sources it excludes exactly one more file, the one it was written for, and loses none.",
-        "Three audits found nothing: every declared setting is read, every declared command resolves in both builds, and each guard in the path exclusion helper is covered."
+        "Two harnesses check every removal against a real project rather than a fixture, and both were shown to fail first on a deliberately shifted bound.",
+        "On 85 declaration removals and 11 field removals they report nothing."
       ]
     }
   ],

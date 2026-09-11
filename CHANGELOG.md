@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.204
+
+No behaviour changes. The quick fix that drops an unread field from a data class cuts inside a line, between two commas, and one of the three bounds that decide where was held by nothing.
+
+### Fixes
+- Break the bound that eats a middle parameter's trailing comma and the whole suite still passes, while the fix starts emitting `val a: Long,,` on eleven removals of a real project. Kotlin that does not compile, offered as a one click fix. The other two bounds were already held by a test each; this one was the hole.
+- The new tests apply the cut and read the Kotlin that comes out, rather than comparing offsets to numbers written by hand. A number that drifts with the code proves nothing; a parameter list that still parses does.
+- Two harnesses now run the same check against a real project instead of a fixture: `verify-symbol-removals.ts` and `verify-dto-removals.ts`. On 85 declaration removals and 11 field removals they report nothing, and both were shown to fail first on a deliberately shifted bound.
+
+### Notes
+- Getting a probe to the point where it can be believed took three attempts. Testing for an orphan comma rather than counting them disarmed the whole file, because a trailing comma before the closing parenthesis is already there. Four invariants missed a start bound moved one line up, since the swallowed line unbalances nothing; what catches it is reading the first line of code inside the cut and checking it is the declaration itself.
+- One branch is left as it is: for the first parameter the special case computes the same bound as the line above it on every shape tried, so nothing can tell them apart. Dead as far as any test can see, and removing a line from code that deletes other people's code needs a better reason than that.
+
 ## 1.42.203
 
 No behaviour changes. The guard added last release named a folder that does not exist, and left the release tooling unguarded.

@@ -1,20 +1,20 @@
 {
-  "version": "1.42.125",
+  "version": "1.42.126",
   "title": "What's New in Kotlin Jump",
-  "tagline": "One less way to lose the extension",
-  "summary": "One more way to lose the whole extension through a settings file, closed.",
+  "tagline": "A stray space no longer disables a pattern",
+  "summary": "A stray space in kotlinJump.excludePatterns turned the pattern off without saying so.",
   "highlights": [
     {
-      "title": "Exclusion Setting Written As A String",
+      "title": "Stray Space In An Exclusion Pattern",
       "kind": "fix",
-      "description": "Writing kotlinJump.excludePatterns as a plain string instead of a list made activation fail, taking every feature with it. A lone string now counts as the single pattern it is, and any other shape is ignored rather than fatal."
+      "description": "A pattern with a space at either end silently stopped matching for the file watcher while the initial scan still honoured it, so those files were indexed once and never refreshed. Patterns are trimmed before use."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Writing kotlinJump.excludePatterns as a plain string instead of a list stopped the extension from loading. The value is read during activation, and reading it as a list failed there, so every feature went away at once with nothing to see but the extension host log. A lone string is now read as the single pattern it obviously is, and a value of any other shape is ignored instead of being fatal. This completes the previous release, which had learned to skip an empty entry inside the list but still assumed the setting itself was one."
+        "A pattern written with a space at either end, easy to leave behind when editing settings.json by hand, stopped matching anything for the file watcher while the initial scan still honoured it. The two disagreed again: those files were indexed once and then never refreshed. Patterns are now trimmed before use, so a stray space changes nothing."
       ]
     },
     {

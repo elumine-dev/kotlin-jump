@@ -216,3 +216,39 @@ describe('invariant : balayage et veilleur voient pareil, sur toutes les combina
     expect(desaccords).toEqual([]);
   });
 });
+
+describe('un espace parasite ne doit pas eteindre un motif en silence', () => {
+  /*
+   * `motifsValides` jugeait une entree sur `p.trim() !== ''` puis gardait `p`
+   * NON coupe. Une entree faite d'espaces etait donc jetee, mais une entree
+   * avec un espace en trop, ce qu'un fichier JSON ecrit a la main produit
+   * facilement, etait gardee CASSEE : picomatch ne matche plus rien des que
+   * le motif porte un espace au bord, alors que minimatch, lui, tolere.
+   *
+   * L'invariant du treillis ne pouvait pas le voir : les deux chemins
+   * partagent ce meme normaliseur, donc ils avaient tort ENSEMBLE et
+   * l'accord restait parfait.
+   */
+  it('picomatch, le moteur du veilleur, est bien sensible aux espaces', () => {
+    // Le fait brut sur lequel repose tout ce qui suit.
+    expect(picomatch('**/build/** ', { dot: true })('app/build/G.kt')).toBe(false);
+    expect(picomatch('**/build/**', { dot: true })('app/build/G.kt')).toBe(true);
+  });
+
+  it('le veilleur exclut quand meme', () => {
+    const exclu = makeExclusionMatcher([' **/build/** ', '**/.gradle/**  '], ['/w']);
+    expect(exclu('/w/app/build/G.kt'), 'espaces des deux cotes').toBe(true);
+    expect(exclu('/w/core/.gradle/H.kt'), 'espaces a droite').toBe(true);
+    expect(exclu('/w/app/src/A.kt'), 'et rien de plus qu avant').toBe(false);
+  });
+
+  it('le balayage aussi, et sans branche vide dans le groupe', () => {
+    const motif = excludeGlob([' **/build/** ', '  **/.gradle/**']);
+    expect(motif, 'les espaces ne doivent pas survivre dans le motif').not.toMatch(/ /);
+    const exclut = picomatch(motif!, { dot: true });
+    expect(exclut('app/build/G.kt')).toBe(true);
+    expect(exclut('build/G.kt'), 'et la profondeur zero tient toujours').toBe(true);
+    expect(exclut('core/.gradle/H.kt')).toBe(true);
+    expect(exclut('app/src/A.kt')).toBe(false);
+  });
+});

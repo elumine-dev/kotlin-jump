@@ -12,7 +12,11 @@ import picomatch from 'picomatch';
  */
 function motifsValides(patterns: unknown): string[] {
   const liste = typeof patterns === 'string' ? [patterns] : Array.isArray(patterns) ? patterns : [];
-  return liste.filter(p => typeof p === 'string' && p.trim() !== '');
+  // Coupe, et pas seulement pour juger du vide : picomatch ne matche plus
+  // rien des qu'un motif porte un espace au bord, alors que minimatch tolere.
+  // Un espace en trop dans settings.json eteignait donc l'exclusion cote
+  // veilleur, en silence, et faisait rediverger les deux chemins.
+  return liste.filter(p => typeof p === 'string').map(p => p.trim()).filter(p => p !== '');
 }
 
 /**

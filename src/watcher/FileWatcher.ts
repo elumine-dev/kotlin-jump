@@ -29,6 +29,14 @@ export class FileWatcher implements vscode.Disposable {
    * Un scan dont le compteur a bougé pendant son vol est donc jeté.
    */
   private readonly epoque = new Map<string, number>();
+
+  /**
+   * Les URIs dont un scan tourne EN CE MOMENT. `removeTree` a besoin de
+   * celles là, pas de tout l'historique : parcourir `epoque` coûtait 406 ms
+   * pour 200 suppressions de dossier une fois 50 000 fichiers vus, alors que
+   * cet ensemble tient dans la poignée de scans concurrents.
+   */
+  private readonly enVol = new Set<string>();
   private flushTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
@@ -76,7 +84,7 @@ export class FileWatcher implements vscode.Disposable {
     // Un fichier de ce dossier dont le scan est EN VOL n'est pas encore dans
     // l'index : `flush` l'en retire avant de lancer le scan. Sans le marquer
     // ici, son ajout tardif ressuscite un fichier d'un dossier effacé.
-    const connus = [...this.epoque.keys()].filter(k => k.startsWith(prefix));
+    const connus = [...this.enVol].filter(k => k.startsWith(prefix));
     for (const cle of new Set([...dansIndex, ...connus])) {
       this.marquer(vscode.Uri.parse(cle));
       this.pendingScan.delete(cle);
@@ -106,8 +114,9 @@ export class FileWatcher implements vscode.Disposable {
     if (uris.length === 0) return uris;
     this.log?.info(`[watcher] folder added: ${fileName(folder)} — ${uris.length} file(s)`);
     const jetons = new Map(uris.map(u => [u.toString(), this.epoque.get(u.toString()) ?? 0]));
-    for (const uri of uris) { evict(uri); this.index.remove(uri); }
-    await this.scanner.scanFiles(uris);
+    for (const uri of uris) { evict(uri); this.index.remove(uri); this.enVol.add(uri.toString()); }
+    try { await this.scanner.scanFiles(uris); }
+    finally { for (const uri of uris) this.enVol.delete(uri.toString()); }
     // Un dossier supprimé pendant le scan de son remplaçant laissait ses
     // fichiers indexés, par le même chemin que le cas fichier par fichier.
     // Une seule passe : `vivants.includes(u)` dans une boucle sur `uris` était
@@ -145,7 +154,9 @@ export class FileWatcher implements vscode.Disposable {
   private async scanEncoreValide(uri: vscode.Uri): Promise<boolean> {
     const cle = uri.toString();
     const jeton = this.epoque.get(cle) ?? 0;
+    this.enVol.add(cle);
     try { await this.scanner.scanFile(uri); } catch { /* illisible en plein checkout */ }
+    finally { this.enVol.delete(cle); }
     if ((this.epoque.get(cle) ?? 0) !== jeton) { this.index.remove(uri); return false; }
     return true;
   }
@@ -210,6 +221,7 @@ export class FileWatcher implements vscode.Disposable {
     this.treeWatcher.dispose();
     if (this.flushTimer) clearTimeout(this.flushTimer);
     this.pendingScan.clear();
+    this.enVol.clear();
   }
 }
 

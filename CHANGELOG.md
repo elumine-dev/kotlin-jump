@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.168
+
+Extract to string resource names the key after the text of the literal. When that text is a keyword of the language, the key was one too, and the project stopped compiling.
+
+### Fixes
+- The build tool writes the key as a field of the generated R class, so a Java keyword there is a syntax error, and a key named is cannot even be written in Kotlin without backticks.
+- Measured on a real project: of 11786 literals, 85 produced a reserved key, across ten distinct words. The word true alone accounted for 34 of them, then null, false, native, default, class, else, super, is and package. None do now.
+- The rescue is the prefix the code already used for a name that starts with a digit, so there is one habit rather than two, and the result still has to be unique against the keys already declared.
+- The list covers the keywords of both languages, since the key is read from Java in the generated class and written from Kotlin at the call site.
+
+### Notes
+- Found by asking a simple question of every literal in the project: is the key this would generate a name the build can actually carry. The same sweep confirms the escaping fixed yesterday, with 10623 of 10624 template free literals coming back identical through the extraction.
+
 ## 1.42.167
 
 Extract to string resource escaped every apostrophe, including the ones the Kotlin literal had already escaped, so the extracted text carried a backslash the app would have shown.

@@ -9,6 +9,28 @@ import { StringResourceIndex } from '../indexer/StringResourceIndex';
 
 const MAX_NAME_LENGTH = 40;
 
+/**
+ * Names the generated R class cannot carry.
+ *
+ * aapt writes `public static final int <name>` into R, so a Java keyword there
+ * is a syntax error, and `R.string.is` needs backticks to even parse in
+ * Kotlin. Either way the project stops compiling. Measured on a real project:
+ * 85 of its 11786 literals produced one of these, `true` alone 34 times.
+ */
+const RESERVED_NAMES = new Set([
+  // Java keywords and literals
+  'abstract', 'assert', 'boolean', 'break', 'byte', 'case', 'catch', 'char',
+  'class', 'const', 'continue', 'default', 'do', 'double', 'else', 'enum',
+  'extends', 'final', 'finally', 'float', 'for', 'goto', 'if', 'implements',
+  'import', 'instanceof', 'int', 'interface', 'long', 'native', 'new',
+  'package', 'private', 'protected', 'public', 'return', 'short', 'static',
+  'strictfp', 'super', 'switch', 'synchronized', 'this', 'throw', 'throws',
+  'transient', 'try', 'void', 'volatile', 'while',
+  'true', 'false', 'null',
+  // Kotlin hard keywords not already listed
+  'as', 'fun', 'in', 'is', 'object', 'typealias', 'val', 'var', 'when',
+]);
+
 /** snake_case name derived from the literal, unique against `existing`. */
 export function suggestResourceName(literal: string, existing: Set<string>): string {
   const base = literal
@@ -31,6 +53,7 @@ export function suggestResourceName(literal: string, existing: Set<string>): str
   }
   if (name.length === 0) name = 'extracted_string';
   if (/^\d/.test(name)) name = `s_${name}`;
+  if (RESERVED_NAMES.has(name)) name = `s_${name}`;
 
   if (!existing.has(name)) return name;
   for (let i = 2; ; i++) {

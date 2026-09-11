@@ -3,6 +3,7 @@ import { FileScanner } from '../indexer/FileScanner';
 import { SymbolIndex } from '../indexer/SymbolIndex';
 import { evict } from '../util/ImportResolver';
 import { Logger } from '../util/logger';
+import { excludeGlob } from '../util/pathExclusion';
 
 /**
  * Above this many files in one quiet-window, the flush switches from
@@ -188,7 +189,7 @@ export class FileWatcher implements vscode.Disposable {
     const excludeList = cfg.get<string[]>('excludePatterns') ?? ['**/build/**', '**/.gradle/**'];
     const found = await vscode.workspace.findFiles(
       new vscode.RelativePattern(folder, '**/*.{kt,kts,java}'),
-      `{${excludeList.join(',')}}`,
+      excludeGlob(excludeList),
       cfg.get<number>('maxIndexedFiles') ?? 10000,
     );
     const uris = found.filter(u => !this.isExcluded(u.path));

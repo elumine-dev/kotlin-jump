@@ -103,7 +103,7 @@ import { KotlinFoldingRangeProvider } from './providers/FoldingRangeProvider';
 import { KotlinSemanticTokensProvider, TOKEN_TYPES, TOKEN_MODIFIERS } from './providers/SemanticTokensProvider';
 import { Logger } from './util/logger';
 import { mapBatched } from './util/batched';
-import { makeExclusionMatcher } from './util/pathExclusion';
+import { makeExclusionMatcher, excludeGlob } from './util/pathExclusion';
 import { resolveCompanionMode, isJetBrainsKotlinInstalled } from './util/companionMode';
 import { resolveAll as resolveModules } from './gradle/ModuleResolver';
 import { resolveBest } from './util/ImportResolver';
@@ -872,7 +872,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const [gradleModules, { moduleMap: jsonModules, sourceRoots }, allUris] = await Promise.all([
     resolveModules(),
     readProjectConfigs(),
-    vscode.workspace.findFiles('**/*.{kt,kts,java}', `{${excludeList.join(',')}}`, maxFiles),
+    vscode.workspace.findFiles('**/*.{kt,kts,java}', excludeGlob(excludeList), maxFiles),
   ]);
 
   if (allUris.length >= maxFiles) {
@@ -978,7 +978,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // `<string-array>` tag, so colors.xml / dimens.xml cost nothing.
     vscode.workspace.findFiles(
       '**/res/values*/*.xml',
-      `{${excludeList.join(',')}}`,
+      excludeGlob(excludeList),
     ).then(uris => {
       log.info(`[StringFolding] found ${uris.length} values*.xml file(s)`);
       for (const u of uris) log.debug(`[StringFolding]   ${u.fsPath}`);
@@ -1695,7 +1695,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // pay zero indexing cost.
     vscode.workspace.findFiles(
       '**/res/values*/*.xml',
-      `{${excludeList.join(',')}}`,
+      excludeGlob(excludeList),
     ).then(uris => mapBatched(uris, handleColorChanged));
 
     const cW1 = vscode.workspace.createFileSystemWatcher('**/res/values/*.xml');
@@ -1729,7 +1729,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     };
     vscode.workspace.findFiles(
       '**/res/values*/dimens.xml',
-      `{${excludeList.join(',')}}`,
+      excludeGlob(excludeList),
     ).then(uris => mapBatched(uris, handleDimenChanged));
 
     const dW1 = vscode.workspace.createFileSystemWatcher('**/res/values/dimens.xml');
@@ -1769,7 +1769,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // from this async Promise therefore trigger their own repaint.
     vscode.workspace.findFiles(
       '**/res/{drawable,mipmap}*/*.{xml,png,webp,svg,jpg,jpeg,gif,bmp}',
-      `{${excludeList.join(',')}}`,
+      excludeGlob(excludeList),
     ).then(uris => { for (const u of uris) drawableIndex.addFile(u); });
 
     for (const w of [dwW1, dwW2]) {
@@ -2218,7 +2218,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const live = vscode.workspace.getConfiguration('kotlinJump');
       const freshUris = await vscode.workspace.findFiles(
         '**/*.{kt,kts,java}',
-        `{${(live.get<string[]>('excludePatterns') ?? excludeList).join(',')}}`,
+        excludeGlob(live.get<string[]>('excludePatterns') ?? excludeList),
         live.get<number>('maxIndexedFiles') ?? maxFiles,
       );
       await collectStats(freshUris);

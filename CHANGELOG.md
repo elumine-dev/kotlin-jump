@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.123
+
+Fixes two bugs that let generated build files bypass the extension's exclusion patterns, so they no longer get indexed or watched by mistake.
+
+### Fixes
+- Restores file exclusion when kotlinJump.excludePatterns holds a single entry. That entry was silently ignored by the initial scan, while the file watcher applied it correctly, so the excluded files were indexed once and then never refreshed. On a real project of 10064 source files, setting one exclusion pattern indexed all 10064 instead of 5138.
+- Fixes the default build and .gradle exclusion missing files sitting directly at the project root, the usual layout of a Gradle project with a single module.
+- Both bugs came from the same place: the initial scan has to fold the whole list into one pattern, and it folded it wrong. Scan and watcher now agree on every list of patterns, and a test holds them to it.
+
+### Notes
+- No new commands or settings in this release. The fix only changes which files get indexed and watched.
+
 ## 1.42.122
 
 The scanner keeps a count of the work it has in flight, and the watcher waits on it to redo a folder deletion once indexing settles. Nothing checked that the count comes back down.

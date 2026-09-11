@@ -6,6 +6,8 @@ import { fileCouldReference, scanForUsages } from '../../src/providers/FindUsage
 import { KotlinFileProvider } from '../../src/providers/FileProvider';
 import { mockDocument, positionOf } from './helpers';
 import { Location, workspace } from './__mocks__/vscode';
+import picomatch from 'picomatch';
+import { makeExclusionMatcher } from '../../src/util/pathExclusion';
 
 function addKt(index: SymbolIndex, uri: string, code: string) {
   index.add(parse(uri, code));
@@ -187,7 +189,7 @@ describe('setting: excludePatterns + maxIndexedFiles', () => {
     }) as any;
 
     let capturedGlob = '';
-    let capturedExclude = '';
+    let capturedExclude: string | undefined = '';
     let capturedMax = 0;
     workspace.findFiles = (async (glob: string, exclude: string, max: number) => {
       capturedGlob = glob;
@@ -196,16 +198,35 @@ describe('setting: excludePatterns + maxIndexedFiles', () => {
       return [];
     }) as any;
 
-    const { FileScanner } = await import('../../src/indexer/FileScanner');
-    const scanner = new FileScanner(new SymbolIndex(), { info: () => {} } as any);
-    await scanner.scanAll();
+    // try/finally : sans lui, une assertion qui tombe laissait le bouchon de
+    // getConfiguration en place et faisait echouer le test SUIVANT, celui de
+    // `concurrency`, sur une cause qui n'etait pas la sienne.
+    try {
+      const { FileScanner } = await import('../../src/indexer/FileScanner');
+      const scanner = new FileScanner(new SymbolIndex(), { info: () => {} } as any);
+      await scanner.scanAll();
+    } finally {
+      workspace.getConfiguration = origGetConfig;
+      workspace.findFiles = origFindFiles;
+    }
 
     expect(capturedGlob).toBe('**/*.{kt,kts,java}');
-    expect(capturedExclude).toBe('{**/out/**,**/generated/**}');
     expect(capturedMax).toBe(500);
 
-    workspace.getConfiguration = origGetConfig;
-    workspace.findFiles = origFindFiles;
+    // On juge sur le SENS, pas sur la chaine : recopier ici la construction du
+    // motif ne prouverait que sa propre copie. Le reglage veut dire « exclure
+    // out et generated, a n'importe quelle profondeur, racine comprise », et
+    // le veilleur est le second lecteur de ce meme reglage.
+    const exclut = picomatch(capturedExclude!, { dot: true });
+    const veilleur = makeExclusionMatcher(customExcludes);
+    for (const chemin of ['out/A.kt', 'app/out/B.kt', 'generated/C.kt', 'a/b/generated/D.kt']) {
+      expect(exclut(chemin), chemin + ' doit etre exclu du balayage').toBe(true);
+      expect(veilleur(chemin), chemin + ' doit aussi etre exclu du veilleur').toBe(true);
+    }
+    for (const chemin of ['src/A.kt', 'outillage/B.kt']) {
+      expect(exclut(chemin), chemin + ' ne doit PAS etre exclu').toBe(false);
+      expect(veilleur(chemin), chemin + ' ne doit PAS etre exclu du veilleur').toBe(false);
+    }
   });
 });
 

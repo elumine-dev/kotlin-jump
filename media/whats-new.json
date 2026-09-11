@@ -1,21 +1,21 @@
 {
-  "version": "1.42.118",
+  "version": "1.42.119",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A counter nobody read any more",
-  "summary": "Yesterday's fix replaced a counter of events with a plain question. The counter was left behind: still written on every deletion, read by nobody.",
+  "tagline": "A file put back during indexing is no longer swept away",
+  "summary": "A folder deleted while the project is being indexed gets a second sweep once indexing settles. That sweep worked from a stale list and removed files restored in the meantime.",
   "highlights": [
     {
-      "title": "No behaviour change",
-      "description": "A map grew by one entry per deleted file for the whole session and fed no decision. The test that forbade walking it guarded nothing.",
-      "kind": "note"
+      "title": "Restoring a file right after deleting its folder",
+      "description": "It stayed on disk while navigation lost track of it until the next edit. Checking out a branch that deletes a directory and restores one of its files is enough.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Internal",
+      "heading": "Fixed",
       "bullets": [
-        "The guard now watches the set that replaced the map, the only one left that can grow with the session.",
-        "The marks telling two overlapping scans apart are released on both exits rather than only on success."
+        "Each deletion and each recreation carries its rank, so the sweep can tell which came last.",
+        "The storm test meant to cover this could not: its stand in scanner reported it was never busy, so the sweep never ran in any test."
       ]
     }
   ],

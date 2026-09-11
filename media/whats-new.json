@@ -1,27 +1,27 @@
 {
-  "version": "1.42.176",
+  "version": "1.42.177",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Four warnings out of five were wrong",
-  "summary": "The lifecycle pairing warning fired four times out of five for nothing on a real project. It sits in the Problems panel and is on by default, so every false one costs attention.",
+  "tagline": "A count it could not know",
+  "summary": "The usage badge next to a Gradle dependency read the project imports with a ceiling of 4000 files. A project of 5088 sources walked past it, and the badge still printed a number.",
   "highlights": [
     {
-      "title": "The back dispatcher is not a leak",
+      "title": "Numbers you can trust",
       "kind": "fix",
-      "description": "A callback added to onBackPressedDispatcher needs no removal: the dispatcher belongs to the Activity and dies with it."
+      "description": "Of the 29 dependencies that got a figure on a real project, 22 were undercounted and up to 3 read 0 imports while being used."
     },
     {
-      "title": "bind with no argument",
-      "kind": "fix",
-      "description": "The bind and unbind pair stands for the bindService family. A bind() with no argument binds nothing, and the warning named the receiver instead."
+      "title": "A question mark instead of a guess",
+      "kind": "improvement",
+      "description": "Past the new ceiling of 20000 files the badge shows ? imports, and a line is never greyed out as dead on an incomplete sweep."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "A callback added to onBackPressedDispatcher, directly or through requireActivity(), no longer asks for a release in onDestroy.",
-        "A bind() call with no argument is left alone. A bind with an argument is still tracked, and still clears once unbind appears in the mirror method.",
-        "Measured on a real project of 5088 sources: 132 files reach this check, and the warnings drop from 5 to 1."
+        "The import sweep behind the dependency badge reached only the first 4000 source files, so the figure was wrong on any project bigger than that.",
+        "junit-jupiter-api, with 33 real imports, was among the dependencies shown at 0 imports and greyed out as dead.",
+        "The sweep costs 118 ms instead of 81 ms on that project, once per 20 second window and only while a Gradle file is open."
       ]
     }
   ],

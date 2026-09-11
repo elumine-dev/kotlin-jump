@@ -17,7 +17,19 @@ export type DependencyClass =
 
 const TABLE: Record<string, string[]> = artifactPackages as Record<string, string[]>;
 
-export function classifyDependency(coordinate: string, imports: string[]): DependencyClass {
+/**
+ * `sweepComplete` says whether the import sweep saw every source file. A sweep
+ * that stopped on its file cap cannot produce a count: an artifact used only in
+ * the files left out reads as "0 imports" and the line is greyed out as dead.
+ * Measured on a real project of 5088 sources against the old cap of 4000: three
+ * artifacts fell to zero, `junit-jupiter-api` among them with 33 real imports,
+ * and 22 more were undercounted. "? imports" is the honest answer there.
+ */
+export function classifyDependency(
+  coordinate: string,
+  imports: string[],
+  sweepComplete = true,
+): DependencyClass {
   const artifact = coordinate.split(':')[1] ?? coordinate;
 
   if (/-bom$/.test(artifact)) return { kind: 'bom' };
@@ -27,6 +39,7 @@ export function classifyDependency(coordinate: string, imports: string[]): Depen
 
   const prefixes = TABLE[coordinate];
   if (!prefixes) return { kind: 'unknown' };
+  if (!sweepComplete) return { kind: 'unknown' };
 
   const count = imports.filter(imp => {
     const path = imp.replace(/^import\s+/, '').trim();
@@ -63,6 +76,13 @@ export function parseCatalogCoordinates(tomlText: string): Map<string, string> {
 
 const CACHE_MS = 20_000;
 
+/**
+ * Ceiling on the import sweep. It used to be 4000, which a 5088 source project
+ * walked straight past. Reaching it now means the counts are dropped rather
+ * than shown wrong, so the number only has to bound the work, not the truth.
+ */
+export const MAX_SWEEP_FILES = 20_000;
+
 export class DependencyUsageBadgeProvider implements vscode.Disposable {
   private readonly _badge = vscode.window.createTextEditorDecorationType({
     after: {
@@ -72,7 +92,7 @@ export class DependencyUsageBadgeProvider implements vscode.Disposable {
   });
   private readonly _dead = vscode.window.createTextEditorDecorationType({ opacity: '0.45' });
   private readonly _subs: vscode.Disposable[];
-  private _cache: { at: number; imports: string[] } | undefined;
+  private _cache: { at: number; imports: string[]; complete: boolean } | undefined;
 
   constructor() {
     this._subs = [
@@ -88,11 +108,12 @@ export class DependencyUsageBadgeProvider implements vscode.Disposable {
     void this._refresh();
   }
 
-  private async _workspaceImports(): Promise<string[]> {
-    if (this._cache && Date.now() - this._cache.at < CACHE_MS) return this._cache.imports;
+  private async _workspaceImports(): Promise<{ imports: string[]; complete: boolean }> {
+    if (this._cache && Date.now() - this._cache.at < CACHE_MS) return this._cache;
     const uris = await vscode.workspace.findFiles(
-      '**/*.{kt,java}', '**/{build,.gradle,node_modules}/**', 4000,
+      '**/*.{kt,java}', '**/{build,.gradle,node_modules}/**', MAX_SWEEP_FILES,
     );
+    const complete = uris.length < MAX_SWEEP_FILES;
     const imports: string[] = [];
     for (const uri of uris) {
       try {
@@ -105,8 +126,8 @@ export class DependencyUsageBadgeProvider implements vscode.Disposable {
         continue;
       }
     }
-    this._cache = { at: Date.now(), imports };
-    return imports;
+    this._cache = { at: Date.now(), imports, complete };
+    return this._cache;
   }
 
   private async _catalog(): Promise<Map<string, string>> {
@@ -153,7 +174,7 @@ export class DependencyUsageBadgeProvider implements vscode.Disposable {
       return;
     }
 
-    const imports = await this._workspaceImports();
+    const { imports, complete } = await this._workspaceImports();
     const catalog = await this._catalog();
     const lines = editor.document.getText().split('\n');
     const badges: vscode.DecorationOptions[] = [];
@@ -172,7 +193,7 @@ export class DependencyUsageBadgeProvider implements vscode.Disposable {
       }
       if (!coordinate) continue;
 
-      const cls = classifyDependency(coordinate, imports);
+      const cls = classifyDependency(coordinate, imports, complete);
       badges.push({
         range: new vscode.Range(i, lines[i].length, i, lines[i].length),
         renderOptions: { after: { contentText: this._label(cls) } },

@@ -1,12 +1,12 @@
 {
-  "version": "1.42.121",
+  "version": "1.42.122",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The working parser pool finally has a test",
-  "summary": "Yesterday's repair to the parsing threads was covered from every angle except the one that runs in production: a pool whose threads are alive.",
+  "tagline": "The signal the watcher waits on is now checked",
+  "summary": "The scanner counts the work it has in flight and the watcher waits on it. Nothing checked that the count comes back down, and a stuck count would have stopped a repair silently.",
   "highlights": [
     {
       "title": "No behaviour change",
-      "description": "Had the repair broken the working path, parsing would have quietly fallen back to the main thread and no test would have said a word.",
+      "description": "Every watcher test supplies its own stand in for that signal, so none of them could see the real one going wrong.",
       "kind": "note"
     }
   ],
@@ -14,8 +14,8 @@
     {
       "heading": "Internal",
       "bullets": [
-        "A real parse through a thread, twelve jobs sharing three threads, and a thread reused once the queue drains.",
-        "That last one matters: twelve jobs on three threads pass even when threads are never returned to the pool. Only the request after the queue empties reveals it."
+        "Checked on the paths that are not the happy one: unreadable file, mixed batch, cancelled scan.",
+        "Seven hundred mixed events with real background threads leave the index equal to the filesystem and the count back at zero."
       ]
     }
   ],

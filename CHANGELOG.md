@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.122
+
+The scanner keeps a count of the work it has in flight, and the watcher waits on it to redo a folder deletion once indexing settles. Nothing checked that the count comes back down.
+
+### Internal
+- If that count were left hanging, the wait would never end and the second sweep after a folder deletion would stop happening, without a single test failing: every watcher test supplies its own stand in for that signal, so none of them can see the real one. It is now checked on the paths that are not the happy one, an unreadable file, a batch with one bad file among good ones, and a scan cancelled by the next one.
+- Also checked: the wait really waits. Returning immediately would have made every one of those checks pass while removing the delay the whole mechanism is built on.
+- Driving the watcher through seven hundred mixed events with real background threads leaves the index equal to the filesystem and the count back at zero, on every seed tried.
+
 ## 1.42.121
 
 Yesterday's repair to the parsing threads was covered from every angle except the one that runs in production: a pool whose threads are alive.

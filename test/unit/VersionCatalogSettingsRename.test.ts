@@ -239,6 +239,67 @@ describe('relectures de settings qui se chevauchent', () => {
   });
 });
 
+/**
+ * Un `settings.gradle` en Groovy, qui reste tres courant sur Android.
+ *
+ * Le balayage le lit bien, `**​/settings.gradle{,.kts}` le couvre, mais les
+ * motifs de `catalogRootOf` n'acceptaient que les guillemets doubles. Un
+ * `create('deps')` passait donc inapercu : la racine restait `libs` et le
+ * survol comme le Ctrl+clic se taisaient sur TOUS les accesseurs du projet.
+ * Les notes de v1.42.130 annoncaient pourtant que les renommages declares
+ * dans les settings etaient compris.
+ */
+describe('un settings.gradle en Groovy', () => {
+  const APO = String.fromCharCode(39);
+  const g = (s: string) => s.split('"').join(APO);
+  const CHEMIN_GROOVY = '/p/settings.gradle';
+
+  it('un renommage entre apostrophes est vu', () => {
+    const index = new VersionCatalogIndex();
+    index.setSettings([{ path: CHEMIN_GROOVY, text: g(SETTINGS_RENOMME) }]);
+    index.reindexFile(TOML, CHEMIN);
+    expect(index.rootFor(BUILD)).toBe('deps');
+  });
+
+  it('et la navigation suit', () => {
+    const index = new VersionCatalogIndex();
+    index.setSettings([{ path: CHEMIN_GROOVY, text: g(SETTINGS_RENOMME) }]);
+    index.reindexFile(TOML, CHEMIN);
+    const ligne = '    implementation(deps.retrofit)';
+    const doc = docDe(BUILD, 'dependencies {' + NL + ligne + NL + '}');
+    const col = ligne.indexOf('deps') + 2;
+    expect(new VersionCatalogHoverProvider(index).provideHover(doc, new Position(1, col) as any)).toBeDefined();
+    expect(new VersionCatalogDefinitionProvider(index).provideDefinition(doc, new Position(1, col) as any)).toBeDefined();
+  });
+
+  it('le catalogue partage d un build composite aussi', () => {
+    const index = new VersionCatalogIndex();
+    index.setSettings([{
+      path: '/w/buildA/settings.gradle',
+      text: g('versionCatalogs {' + NL + '  create("deps") { from(files("../gradle/libs.versions.toml")) }' + NL + '}'),
+    }]);
+    index.reindexFile(TOML, '/w/gradle/libs.versions.toml');
+    expect([...index.rootsFor('/w/app/build.gradle')].sort()).toEqual(['deps', 'libs']);
+  });
+
+  it('des guillemets depareilles ne sont pas acceptes', () => {
+    // Ce n'est pas du Gradle valide : le tolerer ferait passer du bruit pour
+    // une declaration.
+    const index = new VersionCatalogIndex();
+    index.setSettings([{ path: CHEMIN_GROOVY,
+      text: 'versionCatalogs {' + NL + '  create("deps' + APO + ') { from(files("gradle/libs.versions.toml")) }' + NL + '}' }]);
+    index.reindexFile(TOML, CHEMIN);
+    expect(index.rootFor(BUILD)).toBe('libs');
+  });
+
+  it('le Kotlin a guillemets doubles marche toujours', () => {
+    const index = new VersionCatalogIndex();
+    index.setSettings([{ path: '/p/settings.gradle.kts', text: SETTINGS_RENOMME }]);
+    index.reindexFile(TOML, CHEMIN);
+    expect(index.rootFor(BUILD)).toBe('deps');
+  });
+});
+
 describe('les settings doivent vraiment etre lus en production', () => {
   it('les deux extensions balaient settings.gradle et alimentent l index', () => {
     // Sans ce cablage, `setSettings` reste une API morte : tous les tests

@@ -1,27 +1,27 @@
 {
-  "version": "1.42.133",
+  "version": "1.42.134",
   "title": "What's New in Kotlin Jump",
-  "tagline": "One catalog, two names, both work",
-  "summary": "A catalog shared by an included build is reachable under both of its names again.",
+  "tagline": "Groovy settings files are read too",
+  "summary": "Version catalogs declared in a Groovy settings.gradle are read too, not just the Kotlin ones.",
   "highlights": [
     {
-      "title": "Catalog Shared By An Included Build",
+      "title": "Groovy Settings Files",
       "kind": "fix",
-      "description": "A catalog reached as libs from the parent and as deps from an included build kept only one of the two names, leaving one half of the project without hover or Ctrl+click. Both names are now offered."
+      "description": "A settings.gradle written in Groovy quotes with apostrophes, and only double quotes were accepted, so a Groovy project renaming its catalog got no hover and no Ctrl+click on any accessor. Both dialects are now read."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "A composite build can point at the parent's catalog with create(\"deps\") { from(files(\"../gradle/libs.versions.toml\")) }. The same file is then reachable as libs from the parent and as deps from the included build, and only one name was kept: before the previous release deps won and the parent went silent, since then libs won and the included build went silent. Both names are now offered, which the hover and Ctrl+click loops already knew how to handle.",
-        "The path in a from(files(...)) clause is resolved against the directory of the settings file that declares it, so a catalog is only claimed by a settings file that really points at it."
+        "A settings.gradle written in Groovy quotes with apostrophes, create('deps'), and the rule that reads catalog names only accepted double quotes. A Groovy project that renames its catalog therefore kept the name of the file, and hover and Ctrl+click stayed silent on every catalog accessor in every build file. The previous releases said settings renames were understood, which was only true of the Kotlin dialect. Both are now read, including the shared catalog of an included build.",
+        "Mismatched quotes are still rejected, since they are not valid Gradle and accepting them would turn noise into a declaration."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "A project whose catalog is not shared this way sees exactly one name, as before, verified against a real one.",
+        "A project using the Kotlin dialect sees no change.",
         "No new commands or settings in this release."
       ]
     }

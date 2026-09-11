@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.134
+
+Version catalogs declared in a Groovy settings.gradle are read too, not just the Kotlin ones.
+
+### Fixes
+- A settings.gradle written in Groovy quotes with apostrophes, create('deps'), and the rule that reads catalog names only accepted double quotes. A Groovy project that renames its catalog therefore kept the name of the file, and hover and Ctrl+click stayed silent on every catalog accessor in every build file. The previous releases said settings renames were understood, which was only true of the Kotlin dialect. Both are now read, including the shared catalog of an included build.
+- Mismatched quotes are still rejected, since they are not valid Gradle and accepting them would turn noise into a declaration.
+
+### Notes
+- A project using the Kotlin dialect sees no change.
+- No new commands or settings in this release.
+
 ## 1.42.133
 
 A catalog shared by an included build is reachable under both of its names again.

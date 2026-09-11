@@ -560,6 +560,23 @@ function gouvernants(cheminCatalogue: string, settings: readonly SettingsFile[])
   return candidats.filter(s => dossier(s.path).length === plusLong);
 }
 
+/**
+ * Les declarations de `versionCatalogs`, dans les deux dialectes.
+ *
+ * Un `settings.gradle` en Groovy ecrit `create('deps')` entre apostrophes,
+ * et c'est encore tres courant sur Android. Les motifs n'acceptaient que les
+ * guillemets doubles, donc tout un projet Groovy renomme gardait `libs` et
+ * se taisait sur chaque accesseur. La reference arriere `\1` interdit les
+ * guillemets depareilles, qui ne sont pas du Gradle valide.
+ *
+ * Les motifs en `g` ne servent qu'a `matchAll`, qui ne deplace pas le
+ * `lastIndex` de l'original : ne pas les passer a `.exec` sans remise a zero.
+ */
+const RE_CREATE = /create\s*\(\s*(["'])([^"']+)\1\s*\)/g;
+const RE_CREATE_BLOC = /create\s*\(\s*(["'])([^"']+)\1\s*\)\s*\{([^}]*)\}/g;
+const RE_FROM_FILES = /from\s*\(\s*files\s*\(\s*(["'])([^"']+)\1/;
+const RE_FROM_FILES_G = /from\s*\(\s*files\s*\(\s*(["'])([^"']+)\1/g;
+
 /** `base` + `relatif`, en repliant `.` et `..`. Pas de `node:path` ici : ce
  * module tourne aussi dans l'extension web. */
 function resoudreChemin(base: string, relatif: string): string {
@@ -594,11 +611,11 @@ export function catalogRootsOf(path: string, settingsFiles: readonly SettingsFil
   for (const s of settingsFiles) {
     if (!s.path || !s.text.includes('versionCatalogs')) continue;
     const base = /[\\/]/.test(s.path) ? s.path.replace(/[\\/][^\\/]*$/, '') : '';
-    for (const bloc of s.text.matchAll(/create\s*\(\s*"([^"]+)"\s*\)\s*\{([^}]*)\}/g)) {
-      const from = /from\s*\(\s*files\s*\(\s*"([^"]+)"/.exec(bloc[2])?.[1];
+    for (const bloc of s.text.matchAll(RE_CREATE_BLOC)) {
+      const from = RE_FROM_FILES.exec(bloc[3])?.[2];
       if (!from) continue;
       if (resoudreChemin(base, from) !== path) continue;
-      if (!racines.includes(bloc[1])) racines.push(bloc[1]);
+      if (!racines.includes(bloc[2])) racines.push(bloc[2]);
     }
   }
   return racines.length > 0 ? racines : ['libs'];
@@ -614,14 +631,14 @@ export function catalogRootOf(path: string, settingsFiles: readonly SettingsFile
     // A catalog built in Kotlin rather than declared in TOML: we cannot know
     // its aliases, so the caller must stay silent.
     if (/versionCatalogs\s*\{[\s\S]{0,400}?\blibrary\s*\(/.test(settings)) return undefined;
-    const created = [...settings.matchAll(/create\s*\(\s*"([^"]+)"\s*\)/g)].map(m => m[1]);
-    const froms = [...settings.matchAll(/from\s*\(\s*files\s*\(\s*"([^"]+)"/g)].map(m => m[1]);
+    const created = [...settings.matchAll(RE_CREATE)].map(m => m[2]);
+    const froms = [...settings.matchAll(RE_FROM_FILES_G)].map(m => m[2]);
     // `create("deps") { from(files("gradle/libs.versions.toml")) }`: the root
     // is the created name, not the file name. Each block is read on its own:
     // with two catalogs, every file used to map to the first `create`.
-    for (const block of settings.matchAll(/create\s*\(\s*"([^"]+)"\s*\)\s*\{([^}]*)\}/g)) {
-      const from = /from\s*\(\s*files\s*\(\s*"([^"]+)"/.exec(block[2])?.[1];
-      if (from && (from === fileName || from.endsWith('/' + fileName))) return block[1];
+    for (const block of settings.matchAll(RE_CREATE_BLOC)) {
+      const from = RE_FROM_FILES.exec(block[3])?.[2];
+      if (from && (from === fileName || from.endsWith('/' + fileName))) return block[2];
     }
     if (froms.some(f => f === fileName || f.endsWith('/' + fileName))) {
       // A `from` naming this file outside a readable block: unknown root.

@@ -35,13 +35,12 @@ export class ColorXmlDefinitionProvider implements vscode.DefinitionProvider {
       if (position.character < attrStart || position.character >= attrEnd) continue;
 
       const key = m[1];
-      const matchLen = `R.color.${key}`.length;
       return this.rIndex.getUsages('color', key).map(e =>
         new vscode.Location(
           vscode.Uri.parse(e.uri),
           new vscode.Range(
             new vscode.Position(e.line, e.character),
-            new vscode.Position(e.line, e.character + matchLen),
+            new vscode.Position(e.line, e.character + e.length),
           ),
         ),
       );

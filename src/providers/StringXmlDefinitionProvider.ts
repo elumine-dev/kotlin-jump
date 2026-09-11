@@ -66,14 +66,13 @@ export class StringXmlDefinitionProvider implements vscode.DefinitionProvider {
     if (!hit) return [];
 
     const { key, rType } = hit;
-    const matchLen = `R.${rType}.${key}`.length;
 
     return this.rIndex.getUsages(rType, key).map(e =>
       new vscode.Location(
         vscode.Uri.parse(e.uri),
         new vscode.Range(
           new vscode.Position(e.line, e.character),
-          new vscode.Position(e.line, e.character + matchLen),
+          new vscode.Position(e.line, e.character + e.length),
         ),
       )
     );

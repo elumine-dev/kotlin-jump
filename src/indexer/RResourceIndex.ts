@@ -2,6 +2,14 @@ export interface RUsageEntry {
   uri:       string;
   line:      number;
   character: number;
+  /**
+   * Longueur du texte reconnu, relevee ici et non devinee par l'appelant.
+   *
+   * `R.color.accent` et `@color/accent` ne font pas la meme longueur. Les
+   * fournisseurs reconstruisaient `R.<type>.<cle>` pour en deduire la plage,
+   * ce qui debordait d'un caractere sur tout usage venu d'un XML.
+   */
+  length:    number;
 }
 
 const R_RE = /(?<!(?<![\w.])android\.)(?<!(?<![\w.])androidx\.[\w.]*)(?<!(?<![\w.])com\.google\.(?:android|firebase)[\w.]*\.)\bR\.(string|plurals|array|color|drawable|mipmap|dimen)\.([A-Za-z_]\w*)\b/g;
@@ -50,7 +58,7 @@ export class RResourceIndex {
           const type = m[1] as RType;
           const key  = m[2];
           if (!this[type].has(key)) this[type].set(key, []);
-          this[type].get(key)!.push({ uri, line: ln, character: m.index });
+            this[type].get(key)!.push({ uri, line: ln, character: m.index, length: m[0].length });
           contributed.push({ type, key });
         }
       }

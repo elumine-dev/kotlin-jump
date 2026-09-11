@@ -1,21 +1,26 @@
 {
-  "version": "1.42.204",
+  "version": "1.42.205",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A cut between two commas",
-  "summary": "No behaviour changes. The quick fix that drops an unread field from a data class cuts inside a line, and one of the three bounds that decide where was held by nothing.",
+  "tagline": "A method with no body borrowed one",
+  "summary": "A method declared in an interface has no body. The code measuring how far a declaration reaches went looking for one anyway and closed on the brace of the class written below.",
   "highlights": [
     {
-      "title": "Removal Bounds Now Pinned",
-      "description": "Breaking the bound that eats a middle parameter's comma passed the whole suite while emitting a doubled comma on eleven removals of a real project. The tests now read the Kotlin that comes out of the cut.",
-      "kind": "improvement"
+      "title": "Removal No Longer Eats The Class",
+      "description": "Removing an unused interface method deleted around fifty live lines, the implementing class included. The extent now stops at the signature.",
+      "kind": "fix"
+    },
+    {
+      "title": "Fourteen False Reports Gone",
+      "description": "Calls living inside the swallowed class counted as mentions of the method itself, so implemented and called members were reported as unreferenced. The report goes from 316 to 302 on a real project.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
       "heading": "Notes",
       "bullets": [
-        "Two harnesses check every removal against a real project rather than a fixture, and both were shown to fail first on a deliberately shifted bound.",
-        "On 85 declaration removals and 11 field removals they report nothing."
+        "Found by applying every removal the four dead code detectors offer on a real project and checking the file still balances: 400 removals in total, all clean now.",
+        "A member with no body is left out of the report entirely. Losing a finding costs nothing, keeping one that deletes live code costs everything."
       ]
     }
   ],

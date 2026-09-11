@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.42.205
+
+A method declared in an interface has no body. The code that measures how far a declaration reaches went looking for one anyway, found the brace of the class written below it, and closed on that. The extent then ran from the method to the end of that class.
+
+### Fixes
+- Two consequences, both measured on a real project. The quick fix offered to remove such a member deleted around fifty live lines, the implementing class included. And every call to the method, living inside that implementation, fell INSIDE the member's own extent, so it counted as a mention of itself and was ignored: 14 members reported as unreferenced while they are implemented and called. The report goes from 316 to 302, the 14 that leave being exactly the 14 whose extent swallowed the file.
+- The search window now stops at the line after the signature, and earlier still if that line opens a new declaration or closes the block. A body sits on the signature's own line, or alone on the next one, never past a declaration boundary. A member with no body is left out of the report entirely, which is the safe direction: losing a finding costs nothing, keeping one that deletes live code costs everything.
+- The file that computes those extents opens by naming this exact hazard, that over reaching swallows the next declaration and hides a real usage. The branch for functions had no guard against it.
+
+### Notes
+- Found by applying every removal the four detectors offer on a real project and checking the file still balances: 250 member removals, 47 island removals, 18 enum entries, 85 declarations. All clean now, and the harness is in `verify-member-island-removals.ts`.
+- Two false alarms from the probe itself were fixed before trusting it: a line reading `@JvmStatic fun x()` carries the annotation AND the declaration, and a Java `'}'` character literal is not a brace.
+- Interleaved against the previous release, six passes: no metric survives the interleaving. The dead island sweep reads about 10 percent faster, which fits an early exit replacing a brace walk, but three passes are not enough to call it.
+
 ## 1.42.204
 
 No behaviour changes. The quick fix that drops an unread field from a data class cuts inside a line, between two commas, and one of the three bounds that decide where was held by nothing.

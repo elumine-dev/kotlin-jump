@@ -22,6 +22,10 @@ import {
 
 export type SpanKind = 'fun' | 'prop' | 'classLike';
 
+/** A line that opens something new, so nothing above it is still looking for a body. */
+const DECLARATION_FRAICHE =
+  /^\s*(?:\}|@|fun\b|val\b|var\b|class\b|object\b|interface\b|enum\b|companion\b|init\b|constructor\b|private\b|protected\b|internal\b|public\b|override\b|abstract\b|open\b|final\b|sealed\b|data\b|suspend\b|inline\b|operator\b|infix\b|external\b|expect\b|actual\b|typealias\b)/;
+
 export interface DeclarationSpan {
   /** Offset of the name token: the start of what gets blanked. */
   scanStart: number;
@@ -57,9 +61,27 @@ export function declarationSpan(
     if (clean[i] !== '(') return undefined;
     const closeParen = findMatchingParen(clean, i);
     if (closeParen === -1) return undefined;
-    const after = clean.slice(closeParen + 1, closeParen + 801);
+    // A function with NO body must not borrow the next declaration's brace.
+    // An abstract member of an interface, `fun format(x: Int): String`, has
+    // nothing after its return type, and searching 800 characters ahead found
+    // the `{` of the class below and closed on ITS brace. The extent then ran
+    // from the member to the end of that class, which is the exact hazard this
+    // file opens by naming: over-blanking hides a real usage and the removal
+    // deletes live code.
+    //
+    // The window therefore stops at the line after the signature, and earlier
+    // still if that line starts a new declaration or closes the block. A body
+    // opener sits on the signature's own line, or alone on the next one; never
+    // past a declaration boundary.
+    const sigLine = offsetToPos(lineStarts as number[], closeParen).line;
+    let fenetreFin = Math.min(lineEndOf(Math.min(sigLine + 1, lastLine)), closeParen + 801);
+    if (sigLine + 1 <= lastLine && sigLine + 1 < lineStarts.length) {
+      const suivante = clean.slice(lineStarts[sigLine + 1], lineEndOf(sigLine + 1));
+      if (DECLARATION_FRAICHE.test(suivante)) fenetreFin = lineEndOf(sigLine);
+    }
+    const after = clean.slice(closeParen + 1, Math.max(fenetreFin, closeParen + 1));
     const bodyRel = after.search(/[{=]/);
-    if (bodyRel === -1) return undefined; // no body in reach (external stubs, headers)
+    if (bodyRel === -1) return undefined; // no body in reach (abstract, external stubs, headers)
     const bodyAbs = closeParen + 1 + bodyRel;
 
     if (after[bodyRel] === '{') {

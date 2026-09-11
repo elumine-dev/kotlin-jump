@@ -1,22 +1,28 @@
 {
-  "version": "1.42.167",
+  "version": "1.42.168",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Extracting a string no longer adds a stray backslash",
-  "summary": "Extract to string resource escaped every apostrophe, including the ones the Kotlin literal had already escaped, so the extracted text carried a backslash the app would have shown.",
+  "tagline": "An extracted key is never a reserved word",
+  "summary": "Extract to string resource names the key after the text of the literal. When that text is a keyword of the language, the key was one too, and the project stopped compiling.",
   "highlights": [
     {
-      "title": "An apostrophe already escaped is not escaped twice",
+      "title": "A literal reading true no longer produces a key named true",
       "kind": "fix",
-      "description": "A literal written with escaped apostrophes, such as a date pattern, came out of the extraction with two backslashes per apostrophe. The rule for the double quote right below already guarded against this; the one for the apostrophe did not."
+      "description": "The build tool writes the key as a field of the generated R class, so a Java keyword there is a syntax error, and a key named is cannot even be written in Kotlin without backticks."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Found by a round trip with a known answer: take every string literal of a real project, run it through the extraction, then read the result back using the Android escaping rules and compare with the source. Of 11786 literals, 10624 carry no template and 10621 of those came back identical. The two that did not were exactly this shape, and 9 files of that project carry it.",
-        "The third one that does not come back is a lone carriage return, which the Android escaping rules do not define. It is left as it is rather than guessed at.",
-        "Every literal that does carry a template still numbers its placeholders from one with no gap, 1162 out of 1162."
+        "Measured on a real project: of 11786 literals, 85 produced a reserved key, across ten distinct words. The word true alone accounted for 34 of them, then null, false, native, default, class, else, super, is and package. None do now.",
+        "The rescue is the prefix the code already used for a name that starts with a digit, so there is one habit rather than two, and the result still has to be unique against the keys already declared.",
+        "The list covers the keywords of both languages, since the key is read from Java in the generated class and written from Kotlin at the call site."
+      ]
+    },
+    {
+      "heading": "Notes",
+      "bullets": [
+        "Found by asking a simple question of every literal in the project: is the key this would generate a name the build can actually carry. The same sweep confirms the escaping fixed yesterday, with 10623 of 10624 template free literals coming back identical through the extraction."
       ]
     }
   ],

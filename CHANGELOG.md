@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.117
+
+Saving the same file twice in quick succession could make it vanish from the index. It was still on disk, still open, and navigation no longer knew about it until the next edit.
+
+### Fixed
+- Two scans of one file can overlap, because a scan reads the file and then hands it to a worker thread while a second save arrives. Each scan wrote its result, then every scan the watcher considered outdated erased the entry, including the one a current scan had just written. The watcher now asks whether the file is deleted right now, rather than whether anything at all has happened to it. A save needs no such safety net: the next scan rewrites the entry, and erasing it undoes that work.
+- The same confusion cost files during a burst. Driving the watcher through three thousand interleaved creations, deletions and folder removals left files on disk that the index had lost, on every seed tried. The index and the disk now match exactly.
+
+### Internal
+- That storm is now a test: it drives the watcher through six hundred mixed events and requires the index to equal the filesystem, no ghost and nothing missing. Restoring the previous guard fails it.
+
 ## 1.42.116
 
 The replay added yesterday, so a folder deleted during the first scan does not leave files behind, ran once per deleted folder. Each run re reads the whole index, so a wave of deletions read it a second time from end to end.

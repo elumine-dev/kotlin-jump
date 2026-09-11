@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.42.113
+
+To catch a file being scanned at the moment its folder is deleted, the watcher was re reading every file it had ever seen an event for. That list only grows.
+
+### Fixed
+- Deleting folders is no longer slower the longer the session has run. Two hundred folder deletions, which is what a branch switch or a clean produces, took 406 ms of frozen extension host once fifty thousand files had been seen. It now takes 0.1 ms, and the cost no longer depends on how much has happened before.
+- The watcher tracks the scans actually running rather than the whole history. Detecting a scan in flight never needed more than the handful running at that instant.
+
 ## 1.42.112
 
 The test written yesterday to keep folder scanning linear counted array scans and required the count to be zero. Zero is also what a function that does nothing counts.

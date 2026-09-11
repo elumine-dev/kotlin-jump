@@ -1,21 +1,21 @@
 {
-  "version": "1.42.112",
+  "version": "1.42.113",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A guard that was checking half of what it claimed",
-  "summary": "The test added yesterday required zero array scans, which is also what a function that does nothing produces. It now proves the work happened first.",
+  "tagline": "Deleting folders no longer slows down as the session goes on",
+  "summary": "To catch a file being scanned as its folder is deleted, the watcher re read every file it had ever seen an event for. That list only grows.",
   "highlights": [
     {
-      "title": "No behaviour change",
-      "description": "Emptying the guarded function, or deleting the sort it watches, both left the test green. All three ways of breaking the code now fail it.",
-      "kind": "note"
+      "title": "406 ms of frozen editor became 0.1 ms",
+      "description": "Two hundred folder deletions, what a branch switch produces, cost 406 ms once fifty thousand files had been seen. The cost no longer depends on what came before.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Internal",
+      "heading": "Fixed",
       "bullets": [
-        "The test checks that the sort ran and discarded the file that went stale during the batch, before certifying how the sort was done.",
-        "Nothing changes for anyone using the extension."
+        "The watcher tracks the scans actually running rather than the whole history.",
+        "Detecting a scan in flight never needed more than the handful running at that instant."
       ]
     }
   ],

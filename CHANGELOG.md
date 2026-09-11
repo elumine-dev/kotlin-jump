@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.193
+
+Last release taught the forced unwrap highlight to see comment blocks. It did not teach the keystroke path to notice when one opens or closes, so the highlight only followed the comment after some unrelated event rebuilt the whole file.
+
+### Fixes
+- Typing the start of a comment above a highlighted unwrap left the highlight standing on code that had just become documentation. Closing the comment did not bring it back either.
+- The provider already forced a full rebuild when a raw string boundary moved, for exactly this reason. The trigger now covers comment boundaries as well.
+- Deleting a boundary is the harder half: the change event carries what was typed, never what was removed, so nothing in the new text says a boundary is gone. Each line now remembers whether it held one, and a line that loses it triggers the rebuild.
+
 ## 1.42.192
 
 Same blind spot as last release, in the neighbour. The highlight on a forced unwrap already carried a multi line oracle for raw strings, because a per line check cannot see a quote opened above. Comment blocks never got one, so an exclamation in the prose of a KDoc was marked as code.

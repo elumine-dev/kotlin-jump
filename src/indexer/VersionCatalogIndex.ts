@@ -286,7 +286,7 @@ export class VersionCatalogIndex {
   // ne peut venir que du nom du fichier, et un `create("deps")` passe a la
   // trappe. La navigation DANS le toml les lit depuis toujours : les deux
   // moitiés se contredisaient sur un projet renomme par les settings.
-  private settings: readonly string[] = [];
+  private settings: readonly SettingsFile[] = [];
   private seqSettings = 0;
   private racines: readonly string[] = LIBS_SEUL;
 
@@ -310,9 +310,9 @@ export class VersionCatalogIndex {
    * pas celle qui a DEMARRE en dernier, et un contenu perime pouvait rester
    * dans l'index jusqu'au prochain evenement, qui peut ne jamais venir.
    */
-  async chargerSettings(lire: () => Promise<readonly string[]>): Promise<void> {
+  async chargerSettings(lire: () => Promise<readonly SettingsFile[]>): Promise<void> {
     const mien = ++this.seqSettings;
-    let textes: readonly string[];
+    let textes: readonly SettingsFile[];
     try {
       textes = await lire();
     } catch {
@@ -329,7 +329,7 @@ export class VersionCatalogIndex {
    * ordre non garanti, donc appeler ceci redérive la racine des catalogues
    * DEJA indexes. Rien n'est reparsé : seule la racine depend des settings.
    */
-  setSettings(textes: readonly string[]): void {
+  setSettings(textes: readonly SettingsFile[]): void {
     this.settings = textes;
     for (const c of this.catalogs.values()) {
       c.catalog.root = catalogRootOf(c.key || c.uri, this.settings) ?? 'libs';
@@ -523,12 +523,45 @@ export class VersionCatalogIndex {
  * `libs.` would then find no reference at all and report every alias as dead,
  * which is the loudest possible false positive.
  */
-export function catalogRootOf(path: string, settingsTexts: readonly string[]): string | undefined {
+export interface SettingsFile {
+  /** Chemin du `settings.gradle(.kts)`. Vide si l'appelant ne le connait pas. */
+  path: string;
+  text: string;
+}
+
+/**
+ * Les settings qui GOUVERNENT ce catalogue : ceux dont le dossier contient le
+ * catalogue, le plus proche l'emportant.
+ *
+ * Sans ce filtre, `catalogRootOf` ne comparait que le nom du fichier cite
+ * dans `from(files("gradle/libs.versions.toml"))`. Tous les catalogues par
+ * defaut portant ce nom, le renommage declare par un projet s'appliquait a
+ * ceux de ses voisins : dans un workspace a plusieurs racines, le voisin
+ * croyait s'appeler `deps` alors que ses build files ecrivent `libs`, et le
+ * survol comme le Ctrl+clic s'y taisaient.
+ */
+function gouvernants(cheminCatalogue: string, settings: readonly SettingsFile[]): SettingsFile[] {
+  // Un chemin sans separateur est un nom nu, donc a la racine : son dossier
+  // est la chaine vide, PAS le nom du fichier. Sans ce cas, un appelant qui
+  // passe `settings.gradle.kts` tel quel ne gouvernait plus rien du tout.
+  const dossier = (p: string) => (/[\\/]/.test(p) ? p.replace(/[\\/][^\\/]*$/, '') : '');
+  // Un chemin vide vaut « je ne sais pas ou il est » et gouverne donc tout,
+  // ce qui garde le comportement d'un appelant qui n'a que le texte.
+  const candidats = settings.filter(s => {
+    const d = dossier(s.path);
+    return d === '' || cheminCatalogue.startsWith(d + '/') || cheminCatalogue.startsWith(d + '\\');
+  });
+  if (candidats.length === 0) return [];
+  const plusLong = Math.max(...candidats.map(s => dossier(s.path).length));
+  return candidats.filter(s => dossier(s.path).length === plusLong);
+}
+
+export function catalogRootOf(path: string, settingsFiles: readonly SettingsFile[]): string | undefined {
   const fileName = path.split(/[\\/]/).pop() ?? '';
   const fromName = /^(.+)\.versions\.toml$/.exec(fileName)?.[1];
   if (!fromName) return undefined;
 
-  for (const settings of settingsTexts) {
+  for (const { text: settings } of gouvernants(path, settingsFiles)) {
     if (!settings.includes('versionCatalogs')) continue;
     // A catalog built in Kotlin rather than declared in TOML: we cannot know
     // its aliases, so the caller must stay silent.

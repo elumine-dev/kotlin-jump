@@ -1914,10 +1914,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // lui la plus ancienne pouvait ecraser la plus recente.
     const relireSettings = () => vcIndex.chargerSettings(async () => {
       const uris = await vscode.workspace.findFiles(SETTINGS_GLOB, excludeGlob(excludeList));
-      const textes = await Promise.all(uris.map(async u => {
-        try { return new TextDecoder().decode(await vscode.workspace.fs.readFile(u)); } catch { return ''; }
+      // Le chemin compte autant que le texte : un settings ne gouverne que
+      // les catalogues de SON projet, sinon le renommage d'un projet
+      // contaminait ses voisins dans un workspace a plusieurs racines.
+      const lus = await Promise.all(uris.map(async u => {
+        try { return { path: u.fsPath, text: new TextDecoder().decode(await vscode.workspace.fs.readFile(u)) }; }
+        catch { return { path: u.fsPath, text: '' }; }
       }));
-      return textes.filter(t => t !== '');
+      return lus.filter(s => s.text !== '');
     });
     void relireSettings();
     const settingsW = vscode.workspace.createFileSystemWatcher(SETTINGS_GLOB);

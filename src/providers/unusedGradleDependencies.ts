@@ -192,7 +192,7 @@ export function collectCatalogs(
 ): { path: string; catalog: Catalog; text: string }[] {
   const settingsTexts = sources
     .filter(s => /(?:^|[\\/])settings\.gradle(?:\.kts)?$/.test(s.path))
-    .map(s => s.text);
+    .map(s => ({ path: s.path, text: s.text }));
 
   const out: { path: string; catalog: Catalog; text: string }[] = [];
   for (const src of sources) {

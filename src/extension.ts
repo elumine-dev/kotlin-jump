@@ -943,6 +943,28 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         rIndex.reindexFile(u.toString(), new TextDecoder().decode(bytes));
       } catch { /* skip unreadable files */ }
     });
+
+    // Les references `@string/cle` d'un layout, d'un menu ou d'un graphe de
+    // navigation comptent autant que `R.string.cle` dans le code. Mesure sur un
+    // projet reel de 1237 cles : 428, soit 35 %, ne vivent QUE la, et Ctrl+clic
+    // depuis `strings.xml` ne menait nulle part pour elles. Le corpus concerne
+    // pese 1081 fichiers pour 2,17 Mo la ou les sources en font 16,9.
+    const indexerResXml = (uris: readonly vscode.Uri[]) => mapBatched(uris, async u => {
+      try {
+        const bytes = await vscode.workspace.fs.readFile(u);
+        rIndex.reindexFile(u.toString(), new TextDecoder().decode(bytes));
+      } catch { /* skip unreadable files */ }
+    });
+    void vscode.workspace.findFiles('**/res/**/*.xml', excludeGlob(excludeList))
+      .then(uris => {
+        log.info(`[RIndex] ${uris.length} res xml file(s)`);
+        return indexerResXml(uris);
+      });
+    const resW = vscode.workspace.createFileSystemWatcher('**/res/**/*.xml');
+    resW.onDidChange(u => void indexerResXml([u]));
+    resW.onDidCreate(u => void indexerResXml([u]));
+    resW.onDidDelete(u => rIndex.removeFile(u.toString()));
+
     const rW = vscode.workspace.createFileSystemWatcher('**/*.{kt,kts,java}');
     // Global quiet-window batching: a checkout used to fire one immediate
     // readFile PER changed file — hundreds of concurrent disk reads racing

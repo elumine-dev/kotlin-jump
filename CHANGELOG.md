@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.42.160
+
+The index of where a resource key is used read only Kotlin, Kotlin script and Java. In Android most strings are referenced from a layout, a menu or a navigation graph, and those references were nowhere.
+
+### Improvements
+- Ctrl+click on a key in strings.xml found nothing when the string was used only from a layout. It now lands on every place the key appears, whether written R.string.key in code or @string/key in XML.
+- Measured on a real project of 1237 keys declared in the default locale: 723 are referenced from code and 428, which is 35 percent, only from XML. Of 1358 declarations, those with at least one target went from 802 to 1268, and the targets from 1105 to 1788, with every one of them landing on a line that really names the key.
+- The same now holds for colors, drawables, mipmaps, dimensions, plurals and arrays, which are referenced from XML far more often than from code.
+- The identifiers of a layout are left alone: a plus id reference does not name a string, and neither does a reference to the Android framework, since the type has to follow the at sign directly and be one we know.
+- The files added to the scan weigh 2.17 MB against 16.9 MB for the sources of that project, and they are read in bounded batches like the rest.
+
+### Notes
+- Also swept this round and found sound: Go to Definition on a string, color or dimension key from code, 1614 targets all landing on the line that declares the key; and the other direction before this change, 1105 targets with none wrong. Both checks were first proven to reject an altered key 400 times out of 400.
+
 ## 1.42.159
 
 A base module often declares a key with no value so the code compiles, and the app supplies the text. Hovering from the base module showed the empty placeholder rather than the text.

@@ -46,6 +46,17 @@ function motifsValides(patterns: unknown): string[] {
  * toujours une branche EN PLUS, jamais une en moins, donc rien ne peut etre
  * exclu que l'utilisateur n'ait pas demande.
  */
+/**
+ * The declared default of `kotlinJump.excludePatterns`, kept in one place.
+ *
+ * Four spellings coexisted for one key: this list, the same minus `.idea` and
+ * `kapt_metadata`, a two entry version behind `??`, and nothing at all. None of
+ * them is ever returned in production, since a contributed setting always
+ * yields its declared default, but every one of them was what the tests ran on.
+ */
+export const DEFAULT_EXCLUDE_PATTERNS: string[] =
+  ['**/build/**', '**/.gradle/**', '**/generated/**', '**/.idea/**', '**/*.kapt_metadata'];
+
 export function excludeGlob(patterns: readonly string[]): string | undefined {
   const valides = motifsValides(patterns);
   if (valides.length === 0) return undefined; // pas `{}`, qui n'exclut rien

@@ -1,31 +1,27 @@
 {
-  "version": "1.42.185",
+  "version": "1.42.186",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A default only the tests could see",
-  "summary": "A setting read as get(key, fallback) never returns that fallback once the key is declared in package.json. The test stub does return it, so a fallback that disagrees with the declared default is a value only the tests ever see.",
+  "tagline": "Three spellings for one default",
+  "summary": "Last release added a guard that every setting read with a literal fallback must match the default declared in package.json. It skipped lists, and lists turned out to be where the real divergence was.",
   "highlights": [
     {
-      "title": "One reading, one default",
+      "title": "One constant per setting",
       "kind": "fix",
-      "description": "The Room migration check read the indexed file ceiling with a fallback of 3000 where the declared default is 10000."
+      "description": "The test source sets had three spellings across eleven call sites, one of them a constant named DEFAULT_TEST_SEGMENTS that was empty. The exclusion list had four."
     },
     {
-      "title": "A guard over all 135 calls",
-      "kind": "improvement",
-      "description": "Every setting read with a literal fallback is now checked against package.json, so the two cannot drift apart again."
+      "title": "29 tests that proved nothing",
+      "kind": "fix",
+      "description": "With the real list in place, the override arrow tests stopped passing: their fixtures had no file path, so the test source filter had never run in any of them."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "The Room migration check now reads the indexed file ceiling the same way as every other consumer."
-      ]
-    },
-    {
-      "heading": "Notes",
-      "bullets": [
-        "Nothing changes for anyone running a released build: the declared default was already the value in force."
+        "Every reading of the test source sets and of the exclusion patterns now goes through one constant that matches package.json.",
+        "The guard extended to lists and named constants, not only plain values.",
+        "No released build changes behaviour: the declared default was already the value in force."
       ]
     }
   ],

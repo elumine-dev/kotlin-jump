@@ -92,8 +92,6 @@ async function readCachedFile(uri: vscode.Uri, uriString: string): Promise<strin
   return text;
 }
 
-export const DEFAULT_TEST_SEGMENTS: string[] = [];
-
 // ── Shared exclude filter (used by ReferenceProvider + CallHierarchyProvider) ──
 let _matcherKey = '';
 let _matchers: ((path: string) => boolean)[] = [];

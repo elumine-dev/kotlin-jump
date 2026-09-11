@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { DEFAULT_TEST_SEGMENTS } from '../util/testPaths';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { GradleTestRunner, TestSpec } from './GradleTestRunner';
 import { Logger } from '../util/logger';
@@ -410,7 +411,7 @@ export class KotlinTestController implements vscode.Disposable {
   // ── Utilities ─────────────────────────────────────────────────────────────
 
   private getExtraSegs(): string[] {
-    return vscode.workspace.getConfiguration('kotlinJump').get<string[]>('testSourceSets', []);
+    return vscode.workspace.getConfiguration('kotlinJump').get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS);
   }
 
   /** Expose the controller so extension.ts can pass it to commands */

@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { DEFAULT_EXCLUDE_PATTERNS } from '../util/pathExclusion';
 import * as os from 'os';
 import { parse } from './KotlinParser';
 import { parseJava } from './JavaParser';
@@ -47,7 +48,7 @@ export class FileScanner {
     const token = this.freshToken();
 
     const cfg         = vscode.workspace.getConfiguration('kotlinJump');
-    const excludeList = cfg.get<string[]>('excludePatterns') ?? ['**/build/**', '**/.gradle/**'];
+    const excludeList = cfg.get<string[]>('excludePatterns') ?? DEFAULT_EXCLUDE_PATTERNS;
     const maxFiles    = cfg.get<number>('maxIndexedFiles') ?? 10000;
     const motifExclu = excludeGlob(excludeList);
 

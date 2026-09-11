@@ -16,6 +16,7 @@
 // Move File, and bundled Kotlin stdlib navigation (a prebuilt JSON index,
 // see src/kotlin/BundledStdlibProvider.ts, not the raw JAR).
 import * as vscode from 'vscode';
+import { DEFAULT_EXCLUDE_PATTERNS } from './util/pathExclusion';
 import { StringXmlHoverProvider } from './providers/StringXmlHoverProvider';
 import { ResourceShadowingProvider } from './providers/ResourceShadowingProvider';
 import { RoomMigrationProvider } from './providers/RoomMigrationProvider';
@@ -669,7 +670,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   const cfg         = vscode.workspace.getConfiguration('kotlinJump');
-  const excludeList = cfg.get<string[]>('excludePatterns') ?? ['**/build/**', '**/.gradle/**'];
+  const excludeList = cfg.get<string[]>('excludePatterns') ?? DEFAULT_EXCLUDE_PATTERNS;
   // Rebuilt on change: the matcher was captured once, so a folder added to
   // excludePatterns kept feeding the watchers until a reload.
   const workspaceRoots = () => (vscode.workspace.workspaceFolders ?? []).map(f => f.uri.path);

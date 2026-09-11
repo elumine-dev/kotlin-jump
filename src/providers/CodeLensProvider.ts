@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { DEFAULT_TEST_SEGMENTS } from '../util/testPaths';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { SymbolKind } from '../indexer/KotlinParser';
 import { scanForUsagesWithTarget, isExcluded, UsageResult, withoutDeclarations } from './FindUsagesEngine';
@@ -50,7 +51,7 @@ export class KotlinCodeLensProvider implements vscode.CodeLensProvider {
     if (!enabled) return [];
 
     const testCodeLens = cfg.get<boolean>('testCodeLens', true);
-    const extraSegs    = cfg.get<string[]>('testSourceSets', []);
+    const extraSegs    = cfg.get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS);
 
     const symbols = this.index.getFileSymbols(document.uri.toString());
     const lenses: (KotlinCodeLens | vscode.CodeLens)[] = [];

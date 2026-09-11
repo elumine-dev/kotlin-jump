@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { DEFAULT_EXCLUDE_PATTERNS } from '../util/pathExclusion';
 import { mapBatched } from '../util/batched';
 import { excludeGlob, makeExclusionMatcher } from '../util/pathExclusion';
 import {
@@ -49,7 +50,7 @@ function isEnabled(): boolean {
 export async function scanWorkspace(token?: vscode.CancellationToken): Promise<SweepScan> {
   const cfg = vscode.workspace.getConfiguration('kotlinJump');
   const maxFiles = cfg.get<number>('maxIndexedFiles', 10000);
-  const patterns = cfg.get<string[]>('excludePatterns', ['**/build/**', '**/.gradle/**', '**/generated/**']);
+  const patterns = cfg.get<string[]>('excludePatterns', DEFAULT_EXCLUDE_PATTERNS);
   const isExcluded = makeExclusionMatcher(patterns, (vscode.workspace.workspaceFolders ?? []).map(f => f.uri.path));
 
   // L'exclusion doit partir AVEC la requete, pas s'appliquer sur son

@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { DEFAULT_TEST_SEGMENTS } from '../util/testPaths';
 import {
   ResourceCorpus,
   declaresPublishing,
@@ -109,7 +110,7 @@ export async function findEverythingUnusedCommand(
               && declaresPublishing(s.text)));
           const symbols = symbolFindings = findUnusedSymbols({
             sources: data.sources,
-            testSourceSets: cfg.get<string[]>('testSourceSets', []),
+            testSourceSets: cfg.get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS),
             publishedModules: published,
             libraryModules: data.libraryModules,
             ignoreNames: cfg.get<string[]>('unusedSymbolsIgnoreNames', []),
@@ -179,7 +180,7 @@ export async function findEverythingUnusedCommand(
       if (UnheardEventProvider.isEnabled()) {
         const scan = findUnheardEvents({
           sources: data.sources,
-          testSourceSets: cfg.get<string[]>('testSourceSets', []),
+          testSourceSets: cfg.get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS),
           truncated: data.sourcesTruncated,
           ignoreNames: cfg.get<string[]>('unheardEventsIgnoreNames', []),
           assumeSubscribed: cfg.get<string[]>('unheardEventsAssumeSubscribed', []),
@@ -210,7 +211,7 @@ export async function findEverythingUnusedCommand(
         } else {
           const entries = findUnusedEnumEntries({
             sources: data.sources,
-            testSourceSets: cfg.get<string[]>('testSourceSets', []),
+            testSourceSets: cfg.get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS),
             ignoreNames: cfg.get<string[]>('unusedEnumEntriesIgnoreNames', []),
             includeTestOnly: cfg.get<boolean>('unusedEnumEntriesIncludeTestOnly', true),
           });
@@ -281,7 +282,7 @@ export async function findEverythingUnusedCommand(
           const dead = (symbolFindings ?? []).map(f => ({ path: f.path, removeStart: f.removeStart, removeEnd: f.removeEnd }));
           const members = findUnusedMembers({
             sources: data.sources,
-            testSourceSets: cfg.get<string[]>('testSourceSets', []),
+            testSourceSets: cfg.get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS),
             ignoreNames: cfg.get<string[]>('unusedMembersIgnoreNames', []),
             ignorePaths: cfg.get<string[]>('unusedSymbolsIgnorePaths', ['**/buildSrc/**', '**/build-logic/**']),
             includeTestOnly: cfg.get<boolean>('unusedSymbolsIncludeTestOnly', true),
@@ -309,7 +310,7 @@ export async function findEverythingUnusedCommand(
         } else {
           const islands = findDeadIslands({
             sources: data.sources,
-            testSourceSets: cfg.get<string[]>('testSourceSets', []),
+            testSourceSets: cfg.get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS),
             ignoreNames: cfg.get<string[]>('deadIslandsIgnoreNames', []),
             includeTestOnly: cfg.get<boolean>('unusedSymbolsIncludeTestOnly', true),
             maxIslandSize: cfg.get<number>('deadIslandsMaxSize', 8),

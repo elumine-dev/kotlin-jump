@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { reportDecorations } from '../util/demoProbe';
 import { stripKotlinComments, stripXmlComments } from '../util/xmlRefs';
 import { UnusedResourceKeyProvider } from './UnusedResourceKeyProvider';
+import { MAX_SWEEP_FILES } from '../util/sweepLimit';
 
 // Re-exported: KJ-024 and the KJ-021 suites import them from here.
 export { stripKotlinComments, stripXmlComments };
@@ -116,7 +117,7 @@ export class ResourceUsageBadgeProvider implements vscode.Disposable {
   });
   private readonly _dead = vscode.window.createTextEditorDecorationType({ opacity: '0.45' });
   private readonly _subs: vscode.Disposable[];
-  private _cache: { at: number; sources: UsageSource[] } | undefined;
+  private _cache: { at: number; sources: UsageSource[]; truncated: boolean } | undefined;
 
   constructor() {
     this._subs = [
@@ -135,7 +136,7 @@ export class ResourceUsageBadgeProvider implements vscode.Disposable {
   private async _sources(): Promise<UsageSource[]> {
     if (this._cache && Date.now() - this._cache.at < CACHE_MS) return this._cache.sources;
     const uris = await vscode.workspace.findFiles(
-      '**/*.{kt,java,xml}', '**/{build,.gradle,node_modules}/**', 4000,
+      '**/*.{kt,java,xml}', '**/{build,.gradle,node_modules}/**', MAX_SWEEP_FILES,
     );
     const sources: UsageSource[] = [];
     for (const uri of uris) {
@@ -148,7 +149,7 @@ export class ResourceUsageBadgeProvider implements vscode.Disposable {
         continue;
       }
     }
-    this._cache = { at: Date.now(), sources };
+    this._cache = { at: Date.now(), sources, truncated: uris.length >= MAX_SWEEP_FILES };
     return sources;
   }
 
@@ -186,16 +187,25 @@ export class ResourceUsageBadgeProvider implements vscode.Disposable {
       }
     }
     const counts = countAllResourceUsages(entries, sources);
+    // A listing that stopped on its cap cannot prove a key unused. Measured on
+    // a real project of 6278 files against the old cap of 4000: 130 keys are
+    // really at zero, and between 419 and 756 more were shown that way, the set
+    // changing with the order the files came back in.
+    const truncated = this._cache?.truncated === true;
 
     for (const e of entries) {
       const n = counts.get(`${e.kind}/${e.name}`) ?? 0;
       badges.push({
         range: new vscode.Range(e.line, lines[e.line].length, e.line, lines[e.line].length),
         renderOptions: {
-          after: { contentText: n === 0 ? '0 usages' : `${n} usage${n > 1 ? 's' : ''}` },
+          after: {
+            contentText: truncated
+              ? '? usages'
+              : n === 0 ? '0 usages' : `${n} usage${n > 1 ? 's' : ''}`,
+          },
         },
       });
-      if (n === 0 && !UnusedResourceKeyProvider.isEnabled()) {
+      if (!truncated && n === 0 && !UnusedResourceKeyProvider.isEnabled()) {
         // KJ-031 grays through DiagnosticTag.Unnecessary, and two stacked
         // graying mechanisms read as a rendering bug. The count stays: it is
         // information, and "0 usages" without graying is the honest render for

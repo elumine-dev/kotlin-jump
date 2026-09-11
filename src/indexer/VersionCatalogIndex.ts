@@ -287,6 +287,7 @@ export class VersionCatalogIndex {
   // trappe. La navigation DANS le toml les lit depuis toujours : les deux
   // moitiés se contredisaient sur un projet renomme par les settings.
   private settings: readonly string[] = [];
+  private seqSettings = 0;
   private racines: readonly string[] = LIBS_SEUL;
 
   private rafraichir(): void {
@@ -297,6 +298,28 @@ export class VersionCatalogIndex {
 
   private primary(): ParsedCatalog | undefined {
     return this.catalogs.values().next().value;
+  }
+
+  /**
+   * Charge les settings depuis une lecture asynchrone, en ignorant tout
+   * chargement demarre AVANT celui ci mais fini apres.
+   *
+   * Un enregistrement de `settings.gradle.kts` emet souvent plusieurs
+   * evenements de veilleur, donc plusieurs relectures partent en meme temps.
+   * Sans ce numero d'ordre, c'est la lecture qui FINIT en dernier qui ecrit,
+   * pas celle qui a DEMARRE en dernier, et un contenu perime pouvait rester
+   * dans l'index jusqu'au prochain evenement, qui peut ne jamais venir.
+   */
+  async chargerSettings(lire: () => Promise<readonly string[]>): Promise<void> {
+    const mien = ++this.seqSettings;
+    let textes: readonly string[];
+    try {
+      textes = await lire();
+    } catch {
+      return; // une lecture impossible ne doit pas effacer ce qu'on sait deja
+    }
+    if (mien !== this.seqSettings) return;
+    this.setSettings(textes);
   }
 
   /**

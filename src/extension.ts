@@ -1909,13 +1909,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // dans n'importe quel ordre : `setSettings` redérive les racines des
     // catalogues deja indexes.
     const SETTINGS_GLOB = '**/settings.gradle{,.kts}';
-    const relireSettings = async () => {
+    // `chargerSettings` porte le numero d'ordre : un enregistrement emet
+    // plusieurs evenements, donc plusieurs relectures se chevauchent, et sans
+    // lui la plus ancienne pouvait ecraser la plus recente.
+    const relireSettings = () => vcIndex.chargerSettings(async () => {
       const uris = await vscode.workspace.findFiles(SETTINGS_GLOB, excludeGlob(excludeList));
       const textes = await Promise.all(uris.map(async u => {
         try { return new TextDecoder().decode(await vscode.workspace.fs.readFile(u)); } catch { return ''; }
       }));
-      vcIndex.setSettings(textes.filter(t => t !== ''));
-    };
+      return textes.filter(t => t !== '');
+    });
     void relireSettings();
     const settingsW = vscode.workspace.createFileSystemWatcher(SETTINGS_GLOB);
     settingsW.onDidCreate(() => void relireSettings());

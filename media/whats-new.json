@@ -1,12 +1,12 @@
 {
-  "version": "1.42.111",
+  "version": "1.42.112",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A test that counts instead of timing",
-  "summary": "Yesterday's release pinned a linear pass with a stopwatch, which reads ten times higher on a busy machine. It is now pinned by counting array scans, which the machine load does not move.",
+  "tagline": "A guard that was checking half of what it claimed",
+  "summary": "The test added yesterday required zero array scans, which is also what a function that does nothing produces. It now proves the work happened first.",
   "highlights": [
     {
-      "title": "No behaviour change, one fewer flaky guard",
-      "description": "The timing version failed at 60 ms against a 50 ms bound on a loaded machine while the work itself was fine. The counting version passes there and still catches the quadratic version.",
+      "title": "No behaviour change",
+      "description": "Emptying the guarded function, or deleting the sort it watches, both left the test green. All three ways of breaking the code now fail it.",
       "kind": "note"
     }
   ],
@@ -14,8 +14,8 @@
     {
       "heading": "Internal",
       "bullets": [
-        "The growth ratio was tried first and rejected on measurement: it swung from 1.7 to 11.9 on a loaded machine.",
-        "The last asynchronous stopwatch assertion in the suite is gone."
+        "The test checks that the sort ran and discarded the file that went stale during the batch, before certifying how the sort was done.",
+        "Nothing changes for anyone using the extension."
       ]
     }
   ],

@@ -1,21 +1,21 @@
 {
-  "version": "1.42.199",
+  "version": "1.42.200",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Seven tests that proved nothing",
-  "summary": "No behaviour changes. Seven tests meant to protect the last eight releases turned out to prove nothing, and now do.",
+  "tagline": "The dependency badge lets go",
+  "summary": "Five features read every source file of the project. Four release what they read when you switch the feature off or close the window. The dependency badge kept it.",
   "highlights": [
     {
-      "title": "Tests That Now Hold",
-      "description": "Each test was checked by breaking the code it claims to cover. Seven did not notice. They cover inline folding, the per line state that survives a deletion, and three comment block guards.",
-      "kind": "improvement"
+      "title": "Sweep Released On Exit",
+      "description": "Around 5 MB of import lines, measured on a real project, stayed held by the dependency badge after the window closed or the badge was switched off. It now lets go, like its four neighbours.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Notes",
+      "heading": "Fixes",
       "bullets": [
-        "Nothing changes in what the extension does today. What changes is what a future edit is allowed to break in silence.",
-        "The inline folding rewrite from 1.42.191 was re examined on the real project: none of its 30 403 folds lands inside a comment or a raw string, while a deliberately broken build produces 1 440 that do."
+        "A project sweep that finishes after the provider is gone, or after the badge was switched off, no longer hands its result back.",
+        "Switching the badge off with a sweep already finished releases it at once, instead of waiting for a sweep that a badge which is off never runs."
       ]
     }
   ],

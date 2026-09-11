@@ -89,6 +89,7 @@ export class DependencyUsageBadgeProvider implements vscode.Disposable {
   private readonly _dead = vscode.window.createTextEditorDecorationType({ opacity: '0.45' });
   private readonly _subs: vscode.Disposable[];
   private _cache: { at: number; imports: string[]; complete: boolean } | undefined;
+  private _disposed = false;
 
   constructor() {
     this._subs = [
@@ -98,10 +99,20 @@ export class DependencyUsageBadgeProvider implements vscode.Disposable {
         void this._refresh();
       }),
       vscode.workspace.onDidChangeConfiguration(e => {
-        if (e.affectsConfiguration('kotlinJump.dependencyUsageBadges')) void this._refresh();
+        if (!e.affectsConfiguration('kotlinJump.dependencyUsageBadges')) return;
+        // Badges switched off: the imports of the whole project are of no use
+        // to anyone any more. Measured on a real project, 56 589 of them.
+        if (!this._enabled()) this._cache = undefined;
+        void this._refresh();
       }),
     ];
     void this._refresh();
+  }
+
+  private _enabled(): boolean {
+    return vscode.workspace
+      .getConfiguration('kotlinJump')
+      .get<boolean>('dependencyUsageBadges', true);
   }
 
   private async _workspaceImports(): Promise<{ imports: string[]; complete: boolean }> {
@@ -122,8 +133,13 @@ export class DependencyUsageBadgeProvider implements vscode.Disposable {
         continue;
       }
     }
-    this._cache = { at: Date.now(), imports, complete };
-    return this._cache;
+    // The sweep reads one file at a time and takes seconds on a real project.
+    // A listing that lands after the badges were switched off, or after the
+    // provider was disposed, must not hand those megabytes back. Same pair of
+    // guards as the four other project sweeps.
+    const value = { at: Date.now(), imports, complete };
+    if (!this._disposed && this._enabled()) this._cache = value;
+    return value;
   }
 
   private async _catalog(): Promise<Map<string, string>> {
@@ -161,10 +177,7 @@ export class DependencyUsageBadgeProvider implements vscode.Disposable {
     const isToml = /libs\.versions\.toml$/.test(path);
     if (!isGradle && !isToml) return;
 
-    const enabled = vscode.workspace
-      .getConfiguration('kotlinJump')
-      .get<boolean>('dependencyUsageBadges', true);
-    if (!enabled) {
+    if (!this._enabled()) {
       editor.setDecorations(this._badge, []);
       editor.setDecorations(this._dead, []);
       return;
@@ -204,8 +217,10 @@ export class DependencyUsageBadgeProvider implements vscode.Disposable {
   }
 
   dispose(): void {
+    this._disposed = true;
     this._badge.dispose();
     this._dead.dispose();
     for (const s of this._subs) s.dispose();
+    this._cache = undefined;
   }
 }

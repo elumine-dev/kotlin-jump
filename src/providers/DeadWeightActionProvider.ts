@@ -31,6 +31,14 @@ export class DeadWeightActionProvider implements vscode.CodeActionProvider {
     // Warm-up: the first lightbulb used to scan ~4000 files on the spot,
     // VS Code gave up waiting, and the user saw NO action on a dead
     // dependency (reported 25/07). Prime the cache off the critical path.
+    //
+    // But only for someone who asked for these actions. This scan holds the
+    // text of every source: measured on a real project, 40.8 MB across 6278
+    // files, and 92 ms of reading during activation. Paying that for a feature
+    // switched off buys nothing. Turn the setting back on and the first
+    // lightbulb pays a cold scan once, which is what the warm-up spares.
+    const cfg = vscode.workspace.getConfiguration('kotlinJump');
+    if (!cfg.get<boolean>('deadWeightQuickFixes', true)) return;
     void this.workspaceSources().then(() => this.workspaceImports()).catch(() => {});
   }
 

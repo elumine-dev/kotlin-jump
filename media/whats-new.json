@@ -1,27 +1,28 @@
 {
-  "version": "1.42.129",
+  "version": "1.42.130",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Catalog hover back under budget",
-  "summary": "Hover and Ctrl+click on a catalog accessor got slower two releases ago. They are now faster than before either change.",
+  "tagline": "Catalogs renamed in settings, understood everywhere",
+  "summary": "Completes the catalog work of the last few releases: a catalog renamed in settings.gradle.kts is now understood by hover and Ctrl+click too.",
   "highlights": [
     {
-      "title": "Catalog Hover And Ctrl Click Speed",
+      "title": "Catalog Renamed In Settings",
       "kind": "fix",
-      "description": "Trying every catalog root rebuilt the search pattern on every call, on a path that runs at every mouse move. Alternating measurements: 34.9 ms before, 59.7 ms as shipped, 23.9 ms now, with no overlap between the three."
+      "description": "A catalog renamed with create(\"deps\") kept its file name, so hover and Ctrl+click looked for libs on a project that writes deps and answered nothing, while Find Usages from the toml got it right. Both now read the same rule."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Trying every catalog root, added in the previous release, rebuilt the search pattern on every call, and these run on every mouse move over a build file. Measured by alternating passes against the two earlier builds so machine drift cancels out: 34.9 ms before, 59.7 ms as shipped, 23.9 ms now, with the three sets of readings not overlapping at all. The pattern is now built once per catalog name and shared, which also removes a rebuild that Ctrl+click was already paying before any of this.",
-        "The list of catalogs and their names is now computed when a catalog file changes rather than on every lookup."
+        "Gradle lets settings.gradle.kts rename a catalog, with create(\"deps\") { from(files(\"gradle/libs.versions.toml\")) }, so the file keeps its name while build files write deps.retrofit. Find Usages from inside the toml has always read that, but hover and Ctrl+click took the name from the file alone, so they looked for libs on a project that writes deps and answered nothing. The two halves now read the same rule, and the settings files are watched so an edit takes effect right away.",
+        "The catalog sweep and the settings sweep are independent and can finish in either order, so the roots of catalogs already read are recomputed when settings arrive rather than being fixed once."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "No visible change other than speed. No new commands or settings."
+        "A project with no versionCatalogs block in its settings sees no change, verified against a real one.",
+        "No new commands or settings in this release."
       ]
     }
   ],

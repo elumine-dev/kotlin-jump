@@ -1901,6 +1901,28 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       void Promise.all(uris.map(handleTomlChanged));
     });
 
+    // `create("deps") { from(files("gradle/libs.versions.toml")) }` renomme la
+    // racine d'accesseur sans toucher au nom du fichier. Sans lire les
+    // settings, le survol et le Ctrl+clic cherchaient `libs.` sur un projet
+    // qui ecrit `deps.`, alors que Find Usages depuis le toml, lui, les
+    // lisait deja. Les deux balayages sont independants et peuvent arriver
+    // dans n'importe quel ordre : `setSettings` redérive les racines des
+    // catalogues deja indexes.
+    const SETTINGS_GLOB = '**/settings.gradle{,.kts}';
+    const relireSettings = async () => {
+      const uris = await vscode.workspace.findFiles(SETTINGS_GLOB, excludeGlob(excludeList));
+      const textes = await Promise.all(uris.map(async u => {
+        try { return new TextDecoder().decode(await vscode.workspace.fs.readFile(u)); } catch { return ''; }
+      }));
+      vcIndex.setSettings(textes.filter(t => t !== ''));
+    };
+    void relireSettings();
+    const settingsW = vscode.workspace.createFileSystemWatcher(SETTINGS_GLOB);
+    settingsW.onDidCreate(() => void relireSettings());
+    settingsW.onDidChange(() => void relireSettings());
+    settingsW.onDidDelete(() => void relireSettings());
+    context.subscriptions.push(settingsW);
+
     const tomlW = vscode.workspace.createFileSystemWatcher('**/gradle/*.versions.toml');
     tomlW.onDidCreate(handleTomlChanged);
     tomlW.onDidChange(handleTomlChanged);

@@ -1,23 +1,22 @@
 {
-  "version": "1.42.149",
+  "version": "1.42.150",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A guard that changed job, now held in place",
-  "summary": "Protects a guard that had quietly become a speed guard, and puts the check that found the last two navigation bugs into the suite.",
+  "tagline": "One copy of a thing that must not drift",
+  "summary": "A check added yesterday put back a leak that had been fixed seven releases earlier.",
   "highlights": [
     {
-      "title": "A Rule That Became A Speed Guard",
+      "title": "A Leak Put Back, And Removed Again",
       "kind": "improvement",
-      "description": "A rule added to fix wrong navigation is now redundant for that, but keeps parameter type clicks off the slower path: 42 percent faster on a real project. A check now holds it there, since no correctness test would miss it."
+      "description": "A check added yesterday captured a shared function after replacing it, so it restored its own replacement. The two copies of that dance are now one, with checks proving the real function comes back."
     }
   ],
   "sections": [
     {
       "heading": "Internal",
       "bullets": [
-        "The rule that tells a type annotation from a named argument was added two releases ago to stop Ctrl+click going to the wrong place. The release after it made that wrong place unreachable by another route, so every correctness check now passes without the rule.",
-        "It is not dead though: it keeps a click on a parameter type out of the slower path. On a real project, 928 clicks of that shape open no file and take 75.8 ms with it, against 1388 file reads and 130.3 ms without. A check now holds it there, with a companion proving a real named argument still takes the slower path, so neither can pass by doing nothing.",
-        "The sweep that found both navigation bugs is now part of the suite: every identifier of a sample of a real project is clicked and the line reached must contain the word. It reports 14224 correct landings and none wrong, against 616 suspicious before the two fixes.",
-        "Clicks on a declaration, import aliases and companion objects are counted apart, being right for reasons that rule cannot see."
+        "Two checks replace a shared function for the length of their run and put it back afterwards. The one added yesterday captured the original after installing its own replacement, so it put the replacement back and the real function stayed lost. Nothing said so: the test runner isolates each file, which hides it until someone turns that off.",
+        "The two copies of that dance are now one, so they cannot drift apart again, and two small checks prove the function comes back both when the body succeeds and when it throws. Reintroducing yesterday's ordering fails them.",
+        "Also verified while there: the sweep added yesterday resolves 3721 clicks on the reference project, so its floor of a hundred is a floor and not a description of today."
       ]
     },
     {

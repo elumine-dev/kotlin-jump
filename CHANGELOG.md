@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.150
+
+A check added yesterday put back a leak that had been fixed seven releases earlier.
+
+### Internal
+- Two checks replace a shared function for the length of their run and put it back afterwards. The one added yesterday captured the original after installing its own replacement, so it put the replacement back and the real function stayed lost. Nothing said so: the test runner isolates each file, which hides it until someone turns that off.
+- The two copies of that dance are now one, so they cannot drift apart again, and two small checks prove the function comes back both when the body succeeds and when it throws. Reintroducing yesterday's ordering fails them.
+- Also verified while there: the sweep added yesterday resolves 3721 clicks on the reference project, so its floor of a hundred is a floor and not a description of today.
+
+### Notes
+- No behaviour change in this release.
+
 ## 1.42.149
 
 Protects a guard that had quietly become a speed guard, and puts the check that found the last two navigation bugs into the suite.

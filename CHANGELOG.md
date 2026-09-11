@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.42.112
+
+The test written yesterday to keep folder scanning linear counted array scans and required the count to be zero. Zero is also what a function that does nothing counts.
+
+### Internal
+- That test now proves the work happened before it certifies how it was done. Emptying the function it guards, or deleting the sort it watches, both left it green; it only ever failed on the quadratic version. It now checks that the sort ran and discarded the one file that went stale during the batch, so all three ways of breaking the code fail it.
+- Nothing changes for anyone using the extension. This is a guard that was guarding half of what it claimed.
+
 ## 1.42.111
 
 Yesterday's release pinned a linear pass with a stopwatch. Under a busy machine that stopwatch reads ten times higher, so the test was a release blocker waiting to happen, which is exactly the kind this week has been spent removing.

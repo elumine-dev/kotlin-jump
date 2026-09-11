@@ -153,25 +153,32 @@ describe('FW-11 — addTree jette ce qu un evenement a depasse', () => {
 });
 
 describe('FW-12 — addTree ne balaie pas une grande liste dans une boucle', () => {
-  it('aucun scan lineaire sur la liste des fichiers pendant le tri des survivants', async () => {
+  it('trie 30 000 survivants sans un seul balayage lineaire', async () => {
     vi.useRealTimers();
     const uris = Array.from({ length: 30_000 }, (_, i) => vscode.Uri.parse('file:///big/F' + i + '.kt'));
     (vscode.workspace as any).findFiles = async () => uris;
-    const scanner = { scanFile: async () => {}, scanFiles: async () => {} } as any;
-    const w = new FileWatcher(scanner, new SymbolIndex());
+
+    // Un fichier est dépassé PENDANT le scan du lot. Sans lui, « zéro
+    // balayage » serait aussi ce que compte un addTree qui ne fait rien : le
+    // test passait sur un addTree vidé comme sur un tri supprimé.
+    const boite: { w?: FileWatcher } = {};
+    const scanner = {
+      scanFile: async () => {},
+      scanFiles: vi.fn(async () => { (boite.w as any).onDeleted(uris[7]); }),
+    } as any;
+    let notifies: vscode.Uri[] = [];
+    const w = new FileWatcher(scanner, new SymbolIndex(), undefined, undefined, us => { notifies = us; });
+    boite.w = w;
 
     // Le defaut livre en v1.42.109 etait `vivants.includes(u)` dans une boucle
     // sur `uris` : quadratique, et comme rien ne bouge dans le cas courant, le
     // cas courant etait le pire cas. Un budget d'horloge ne tient pas ce role,
     // il a echoue a 60 ms contre 50 des que la machine s'est chargee. On
     // compte donc les balayages, ce qu'aucune charge ne fait varier.
-    const origines = {
-      includes: Array.prototype.includes,
-      indexOf: Array.prototype.indexOf,
-      lastIndexOf: Array.prototype.lastIndexOf,
-    };
+    const noms = ['includes', 'indexOf', 'lastIndexOf'] as const;
+    const origines = { includes: Array.prototype.includes, indexOf: Array.prototype.indexOf, lastIndexOf: Array.prototype.lastIndexOf };
     let balayages = 0;
-    for (const nom of ['includes', 'indexOf', 'lastIndexOf'] as const) {
+    for (const nom of noms) {
       const origine = origines[nom];
       (Array.prototype as any)[nom] = function (this: unknown[], ...args: unknown[]) {
         if (Array.isArray(this) && this.length > 1_000) balayages++;
@@ -181,12 +188,12 @@ describe('FW-12 — addTree ne balaie pas une grande liste dans une boucle', () 
     try {
       await w.addTree(vscode.Uri.parse('file:///big2') as any);
     } finally {
-      for (const nom of ['includes', 'indexOf', 'lastIndexOf'] as const) {
-        (Array.prototype as any)[nom] = origines[nom];
-      }
+      for (const nom of noms) (Array.prototype as any)[nom] = origines[nom];
       w.dispose();
     }
 
+    expect(scanner.scanFiles).toHaveBeenCalledTimes(1);
+    expect(notifies, 'le tri a bien tourné et a jeté le fichier dépassé').toHaveLength(29_999);
     expect(balayages, 'un balayage lineaire par fichier redonne un quadratique').toBe(0);
   });
 });

@@ -1,29 +1,22 @@
 {
-  "version": "1.42.160",
+  "version": "1.42.161",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A string used only in a layout is no longer invisible",
-  "summary": "The index of where a resource key is used read only Kotlin, Kotlin script and Java. In Android most strings are referenced from a layout, a menu or a navigation graph, and those references were nowhere.",
+  "tagline": "A watcher added yesterday was never released",
+  "summary": "The file watcher that keeps layout references up to date, added in the previous release, was created inside the block that builds the list of things to release but was left out of that list.",
   "highlights": [
     {
-      "title": "Layout references count as usages",
-      "kind": "improvement",
-      "description": "Ctrl+click on a key in strings.xml found nothing when the string was used only from a layout. It now lands on every place the key appears, whether written R.string.key in code or @string/key in XML."
+      "title": "The resource watcher is released with the rest",
+      "kind": "fix",
+      "description": "It kept a native watch on every res folder after the extension was turned off, and its callbacks kept feeding an index nobody reads any more."
     }
   ],
   "sections": [
     {
-      "heading": "Improvements",
+      "heading": "Fixes",
       "bullets": [
-        "Measured on a real project of 1237 keys declared in the default locale: 723 are referenced from code and 428, which is 35 percent, only from XML. Of 1358 declarations, those with at least one target went from 802 to 1268, and the targets from 1105 to 1788, with every one of them landing on a line that really names the key.",
-        "The same now holds for colors, drawables, mipmaps, dimensions, plurals and arrays, which are referenced from XML far more often than from code.",
-        "The identifiers of a layout are left alone: a plus id reference does not name a string, and neither does a reference to the Android framework, since the type has to follow the at sign directly and be one we know.",
-        "The files added to the scan weigh 2.17 MB against 16.9 MB for the sources of that project, and they are read in bounded batches like the rest."
-      ]
-    },
-    {
-      "heading": "Notes",
-      "bullets": [
-        "Also swept this round and found sound: Go to Definition on a string, color or dimension key from code, 1614 targets all landing on the line that declares the key; and the other direction before this change, 1105 targets with none wrong. Both checks were first proven to reject an altered key 400 times out of 400."
+        "Nothing warned about it: the compiler is happy, and no behaviour test can see it either, because the watcher works perfectly. It simply never stops.",
+        "A check in the suite now reads both entry points, finds every watcher they create and fails if one of them is never released. It knows the four shapes used here: a name in a release list, a push, a direct release, and the return of an inline function that is itself pushed.",
+        "That check was calibrated against the real files before being trusted: of the 28 watchers the two entry points create, it flags exactly the two added yesterday and nothing else. It also fails if it stops finding any watcher at all, so it cannot pass by finding nothing."
       ]
     }
   ],

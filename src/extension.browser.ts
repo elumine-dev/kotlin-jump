@@ -838,6 +838,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       strW1,
       strW2,
       rW,
+      resW,
       vscode.languages.registerHoverProvider(
         [{ language: 'kotlin' }, { language: 'java' }],
         new StringResourceHoverProvider(stringIndex),

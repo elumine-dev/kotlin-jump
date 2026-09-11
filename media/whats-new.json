@@ -1,12 +1,12 @@
 {
-  "version": "1.42.197",
+  "version": "1.42.198",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Deleting a comment block is seen again",
-  "summary": "Select a comment block near the bottom of a file and delete it, and the forced unwrap highlight and the color swatches below stayed painted inside text that had just become documentation.",
+  "tagline": "Several cursors, one correct repaint",
+  "summary": "Two cursors and one Enter moved every color swatch and every forced unwrap highlight below the lower cursor one line too far down, one extra line per cursor above it.",
   "highlights": [
     {
-      "title": "A Deleted Block Near The End",
-      "description": "Deleting three lines or more that carry the end of a comment block or of a raw string now rebuilds the decorations, even when the shortened document falls below the end of what was deleted.",
+      "title": "Multi Cursor Line Edits",
+      "description": "A change event carrying several edits that add or remove lines now repaints the file whole. Organise imports, format on save and replace all send the same shape of event.",
       "kind": "fix"
     }
   ],
@@ -14,8 +14,8 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "The rebuild trigger reads the memory of what each deleted line held over the whole range, not only over the part the shortened document still reaches.",
-        "Both the color swatches and the forced unwrap highlight carried the same bound, and both are fixed."
+        "Edits in one event arrive in coordinates of the document from before the keystroke, while the document already carries them all. The incremental path counted the shift of the cursor above twice.",
+        "Typing with several cursors without changing the line count keeps the fast path, since the two coordinate spaces then agree."
       ]
     }
   ],

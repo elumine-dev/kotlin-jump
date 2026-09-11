@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.42.198
+
+Two cursors, one Enter. Every colour swatch and every forced unwrap highlight below the lower cursor moved one line too far down, one extra line per cursor above it.
+
+### Fixes
+- A change event can carry several edits. They all arrive in coordinates of the document from before the keystroke, while the document handed along already carries every one of them. The incremental path mixed the two spaces: it rescanned each edit against the final document, which places the decorations correctly, then applied the shift of the cursor above to those same decorations, counting it twice.
+- The reach is wider than a multi cursor. Organise imports, format on save and replace all send the same shape of event.
+- When an event carries several edits and any of them changes the line count, the file is rescanned whole, the same call already made when a comment or raw string boundary moves. Typing with several cursors on the same lines keeps the incremental path, since the two coordinate spaces then agree.
+- The existing test for several edits in one event used two edits that changed no line count, so the two spaces coincided and it proved nothing about this.
+
+### Notes
+- Found by a new differential harness, `scripts/fuzz-incremental-decorations.ts`, which replays random edits on real sources and compares the incremental result with a full rescan after every single one. Over 12 800 edits across both providers it now reports no disagreement. It runs on a real project rather than fixtures, because the shapes that break an incremental scan are the ones a hand written fixture never contains.
+- Measured in interleaved passes: an ordinary keystroke is unchanged, the distributions overlap. A multi cursor edit that adds lines goes from 43 to 250 microseconds on a file of 2 000 lines, which buys the right answer.
+
 ## 1.42.197
 
 Select a comment block near the bottom of a file and delete it. The forced unwrap highlight and the colour swatches below stayed painted, inside text that had just become documentation.

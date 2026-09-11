@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.187
+
+The guard that keeps every setting fallback in step with `package.json` only read one of the two ways the code writes them. Fifteen readings use the other, including the exclusion list that decides which files the whole extension looks at.
+
+### Fixes
+- The guard now reads `get(key) ?? fallback` as well as `get(key, fallback)`, resolves named constants holding a number or a string, and accepts a computed fallback such as one derived from the processor count. Coverage goes from 186 readings to 197, with none silently skipped.
+- A fallback it cannot read is now reported rather than passed over. Passing over is how a guard quietly stops guarding.
+- The guard is checked against its own inputs now, so removing either form, or the report of an unreadable fallback, fails the suite instead of just lowering a count.
+
 ## 1.42.186
 
 Last release added a guard that every setting read with a literal fallback must match the default declared in `package.json`. It skipped lists. Lists turned out to be where the real divergence was.

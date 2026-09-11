@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.127
+
+Two halves of version catalog support disagreed whenever the catalog file was not named libs.
+
+### Fixes
+- A catalog named anything other than libs, for example gradle/deps.versions.toml, was never picked up at all: the sweep that feeds the catalog index looked for that one file name. Colouring, folding and navigation inside the file already worked for it, since those are registered on any versions.toml, so half the feature responded and the other half stayed silent.
+- Even once found, the accessor root was always assumed to be libs. Gradle takes it from the file name, so deps.retrofit in a build file resolved to nothing. Hover and Ctrl+click from a build file now follow the file name, and the rule that already served the unused dependency scan is the one they use, rather than a second copy of it.
+
+### Notes
+- A project whose catalog is the usual gradle/libs.versions.toml sees no change.
+- No new commands or settings in this release.
+
 ## 1.42.126
 
 A stray space in kotlinJump.excludePatterns turned the pattern off without saying so.

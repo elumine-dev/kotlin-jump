@@ -1897,11 +1897,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       } catch { /* skip */ }
     };
 
-    vscode.workspace.findFiles('**/gradle/libs.versions.toml').then(uris => {
+    vscode.workspace.findFiles('**/gradle/*.versions.toml').then(uris => {
       void Promise.all(uris.map(handleTomlChanged));
     });
 
-    const tomlW = vscode.workspace.createFileSystemWatcher('**/gradle/libs.versions.toml');
+    const tomlW = vscode.workspace.createFileSystemWatcher('**/gradle/*.versions.toml');
     tomlW.onDidCreate(handleTomlChanged);
     tomlW.onDidChange(handleTomlChanged);
     tomlW.onDidDelete(uri => vcIndex.removeFile(uri.fsPath));

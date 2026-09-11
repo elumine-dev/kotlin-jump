@@ -1,21 +1,21 @@
 {
-  "version": "1.42.143",
+  "version": "1.42.144",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Checks that cannot fail a release by accident",
-  "summary": "Removes a way the checks added last release could have blocked an unrelated publish.",
+  "tagline": "Checks that skip on the right signal",
+  "summary": "Closes the last way the corpus checks could fail a release for a reason of their own.",
   "highlights": [
     {
-      "title": "Floors That Say Only What They Mean",
+      "title": "Deciding On The Sources, Not A Neighbour",
       "kind": "improvement",
-      "description": "The checks added last release asserted floors set just under what the reference project measures today. That project changes daily and the release script runs the whole suite, so the floors now state only that the result is not empty."
+      "description": "The corpus checks looked for the version catalog to decide whether to run, while reading the Kotlin sources beside it. A tree holding one without the other made them run against nothing and stop the release script."
     }
   ],
   "sections": [
     {
       "heading": "Internal",
       "bullets": [
-        "Those checks each assert a floor, so that a provider gone silent is caught. The floors were set just under what the reference project measures today, within a factor of about one and a half for one of them. That project is a live repository where branches change and files come and go, and the release script runs the whole suite, so a day of ordinary work there could have failed a release of this extension for no reason. The floors now state only that the result is not empty, which is what they are for, and the same three deliberate breakages are still caught.",
-        "The check that reads inlay hints replaces a shared function for the duration of its run and now puts it back. Nothing depends on that today because the test runner isolates each file, but that isolation is one configuration line away from being switched off."
+        "Those checks decide whether to run by looking for the reference project. They looked for one file, the version catalog, while the data they read is the Kotlin sources beside it. A checkout holding the first without the second, a worktree or a branch without the modules, made them run against nothing, fail their floor, and stop the release script. They now decide on the sources themselves, and a count below two hundred files counts as absent.",
+        "Checked on the three situations that matter: the real project runs the checks, a tree holding only the catalog skips them, and a path that does not exist skips them without raising."
       ]
     },
     {

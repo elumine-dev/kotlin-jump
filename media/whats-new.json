@@ -1,27 +1,38 @@
 {
-  "version": "1.42.177",
+  "version": "1.42.178",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A count it could not know",
-  "summary": "The usage badge next to a Gradle dependency read the project imports with a ceiling of 4000 files. A project of 5088 sources walked past it, and the badge still printed a number.",
+  "tagline": "Three features that stopped at 4000 files",
+  "summary": "Three features answer a question about an absence by walking the whole project, and each one stopped after 4000 files. On a project of 5088 sources their safety guards fired on every run, so they said nothing useful.",
   "highlights": [
     {
-      "title": "Numbers you can trust",
+      "title": "Manifest badges say something again",
       "kind": "fix",
-      "description": "Of the 29 dependencies that got a figure on a real project, 22 were undercounted and up to 3 read 0 imports while being used."
+      "description": "All 56 permissions measured across 51 manifests carried the same cautious label. With the full listing, 16 of them carry a real verdict."
     },
     {
-      "title": "A question mark instead of a guess",
+      "title": "The removal quick fixes come back",
+      "kind": "fix",
+      "description": "Remove unused resource, dependency and permission never appeared on a project above 4000 files. Their listing counts resource XML too, 6278 files there."
+    },
+    {
+      "title": "One ceiling for all three",
       "kind": "improvement",
-      "description": "Past the new ceiling of 20000 files the badge shows ? imports, and a line is never greyed out as dead on an incomplete sweep."
+      "description": "The dependency badge, the manifest badges and the quick fixes behind them now share a single limit of 20000, and each keeps its guard for what lies past it."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "The import sweep behind the dependency badge reached only the first 4000 source files, so the figure was wrong on any project bigger than that.",
-        "junit-jupiter-api, with 33 real imports, was among the dependencies shown at 0 imports and greyed out as dead.",
-        "The sweep costs 118 ms instead of 81 ms on that project, once per 20 second window and only while a Gradle file is open."
+        "The manifest necessity badges read the project sources with a ceiling of 4000 files and fell back to a cautious label whenever it was reached.",
+        "The Remove unused quick fixes read a listing that includes resource XML, so they overran even sooner and offered nothing.",
+        "The dependency badge, fixed last release, could say 0 imports and grey a line that no quick fix would then remove."
+      ]
+    },
+    {
+      "heading": "Notes",
+      "bullets": [
+        "Reading the extra files costs about a third more time, once per 20 second window, and only while a manifest or a Gradle file is open."
       ]
     }
   ],

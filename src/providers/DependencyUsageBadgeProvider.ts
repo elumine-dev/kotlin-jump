@@ -1,6 +1,9 @@
 import * as vscode from 'vscode';
 import { reportDecorations } from '../util/demoProbe';
 import artifactPackages from '../data/artifact-packages.json';
+import { MAX_SWEEP_FILES } from '../util/sweepLimit';
+
+export { MAX_SWEEP_FILES };
 
 /**
  * KJ-022: usage badges for Gradle dependencies. Every implementation(…)
@@ -75,13 +78,6 @@ export function parseCatalogCoordinates(tomlText: string): Map<string, string> {
 }
 
 const CACHE_MS = 20_000;
-
-/**
- * Ceiling on the import sweep. It used to be 4000, which a 5088 source project
- * walked straight past. Reaching it now means the counts are dropped rather
- * than shown wrong, so the number only has to bound the work, not the truth.
- */
-export const MAX_SWEEP_FILES = 20_000;
 
 export class DependencyUsageBadgeProvider implements vscode.Disposable {
   private readonly _badge = vscode.window.createTextEditorDecorationType({

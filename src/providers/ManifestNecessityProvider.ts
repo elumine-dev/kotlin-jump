@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
 import { reportDecorations } from '../util/demoProbe';
 import permissionApis from '../data/permission-apis.json';
+import { MAX_SWEEP_FILES } from '../util/sweepLimit';
 
-const MAX_SOURCES = 4000;
+const MAX_SOURCES = MAX_SWEEP_FILES;
 
 /**
  * KJ-023: necessity badges in the Manifest. Every <uses-permission> tells

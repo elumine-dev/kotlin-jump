@@ -3,6 +3,7 @@ import { countAllResourceUsages, ResKind, UsageSource } from './ResourceUsageBad
 import { classifyDependency, aliasToCatalogKey, parseCatalogCoordinates } from './DependencyUsageBadgeProvider';
 import { analyzeManifest, ProjectSearcher } from './ManifestNecessityProvider';
 import { UnusedResourceKeyProvider } from './UnusedResourceKeyProvider';
+import { MAX_SWEEP_FILES } from '../util/sweepLimit';
 
 /**
  * "Remove" quick fixes for everything the extension reports as unused.
@@ -18,7 +19,7 @@ import { UnusedResourceKeyProvider } from './UnusedResourceKeyProvider';
  */
 
 const CACHE_MS = 20_000;
-const MAX_SOURCES = 4000;
+const MAX_SOURCES = MAX_SWEEP_FILES;
 
 export class DeadWeightActionProvider implements vscode.CodeActionProvider {
   static readonly providedCodeActionKinds = [vscode.CodeActionKind.QuickFix];

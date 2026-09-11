@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.155
+
+When several declarations share one line, each one reached to the end of that line and swallowed its neighbours, so the breadcrumb and the Outline named the one on the left.
+
+### Fixes
+- With the cursor on RADIAL in an enum written LINEAR, RADIAL; the breadcrumb read LINEAR. Same for the properties of a data class declared on a single line: the cursor on the third one named the first.
+- A symbol reaches from its name to the end of the line that closes its body, so declarations sharing a line all ended at the same column. VS Code picks the first symbol whose extent holds the cursor, which is why the left neighbour won. Each one now stops just before the next begins.
+- Just before, not on: a range holds both of its bounds, so stopping exactly on the first letter of the neighbour still resolved to the previous symbol, which is precisely where the cursor lands when you click a name.
+- Measured on a real project of 5088 sources and 67519 outline symbols: 359 pairs of neighbours overlapped, and none do now. A symbol that has children of its own is left alone, since trimming it could push them outside it, which VS Code refuses.
+
+### Notes
+- Also swept this round and found sound, so nothing shipped for them: Organize Imports over 4693 import blocks, checked for an import invented, an import lost and for running twice giving the same result, with each of those three checks first proven to fire on a deliberately broken version; and the reader that blanks comments and strings, which keeps every length exactly over 5088 files and 16.9 MB.
+
 ## 1.42.154
 
 Yesterday's rename fix ran its new backtick handling before the guard that refuses comments and strings, so F2 on a code span inside a KDoc offered to rename that text.

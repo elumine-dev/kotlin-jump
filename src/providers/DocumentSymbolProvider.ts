@@ -75,6 +75,33 @@ export class KotlinDocumentSymbolProvider implements vscode.DocumentSymbolProvid
       );
       if (tags) sym.tags = tags;
 
+      // Plusieurs declarations peuvent partager une ligne :
+      // `data class Q(val top: Int, val end: Int)` ou `LINEAR, RADIAL;`.
+      // L'etendue d'un symbole court jusqu'a la fin de la ligne qui ferme son
+      // corps, donc la premiere avalait ses voisines. VS Code retient, pour le
+      // fil d'Ariane et le suivi du curseur, le premier symbole dont l'etendue
+      // contient le curseur : pose sur `RADIAL`, il affichait `LINEAR`. On
+      // arrete la precedente la ou celle ci commence, sans jamais passer avant
+      // la fin de ses propres descendants.
+      const freres = stack.length === 0 ? roots : stack[stack.length - 1].sym.children;
+      const precedent = freres[freres.length - 1];
+      // `children.length === 0` plutot qu'un calcul de la fin la plus lointaine
+      // des descendants : rogner un symbole qui en a pourrait les laisser hors
+      // de son etendue, ce que VS Code refuse. Aucune forme produite par le
+      // parseur ne met un frere a enfants sur la ligne de son voisin, donc la
+      // condition ne coute rien et garantit la containment par construction.
+      if (precedent && precedent.children.length === 0 && apres(precedent.range.end, nameStart)) {
+        // Juste AVANT le nom suivant, pas dessus : `Range.contains` inclut ses
+        // deux bornes, donc s'arreter pile sur la premiere lettre du voisin
+        // laissait le curseur pose dessus designer encore le precedent.
+        precedent.range = new vscode.Range(
+          precedent.range.start,
+          nameStart.character > 0
+            ? new vscode.Position(nameStart.line, nameStart.character - 1)
+            : document.lineAt(Math.max(0, nameStart.line - 1)).range.end,
+        );
+      }
+
       if (stack.length === 0) {
         roots.push(sym);
       } else {
@@ -86,6 +113,11 @@ export class KotlinDocumentSymbolProvider implements vscode.DocumentSymbolProvid
 
     return roots;
   }
+}
+
+/** `a` est il strictement apres `b` ? */
+function apres(a: vscode.Position, b: vscode.Position): boolean {
+  return a.line > b.line || (a.line === b.line && a.character > b.character);
 }
 
 // ── Detail field ─────────────────────────────────────────────────────────────

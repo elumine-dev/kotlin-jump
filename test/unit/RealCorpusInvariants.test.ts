@@ -10,6 +10,13 @@
  * violation : un fournisseur devenu muet ne viole aucun invariant, et c'est
  * exactement le defaut corrige en v1.42.137.
  *
+ * Ces planchers disent seulement « ce n'est pas muet », ils ne recopient PAS
+ * la mesure du jour. Le projet de reference est un depot vivant : on y change
+ * de branche, on y supprime des fichiers. Or `.publish` lance la suite
+ * complete, donc un seuil colle au corpus actuel bloquerait une publication
+ * sans rapport le jour ou ce corpus bouge. Un fournisseur casse rend zero,
+ * donc un plancher large attrape exactement la meme chose.
+ *
  * Le projet de reference n'existe que sur la machine de son auteur : ailleurs
  * ces tests sont sautes plutot que rouges.
  */
@@ -75,7 +82,7 @@ describe.skipIf(!present)('jetons semantiques sur un vrai projet', () => {
         precLigne = ligne; precFin = col + len;
       }
     }
-    expect(jetons, 'le corpus doit vraiment produire des jetons').toBeGreaterThan(50_000);
+    expect(jetons, 'le corpus doit vraiment produire des jetons').toBeGreaterThan(1_000);
     expect(pb.slice(0, 10)).toEqual([]);
   });
 });
@@ -83,6 +90,10 @@ describe.skipIf(!present)('jetons semantiques sur un vrai projet', () => {
 describe.skipIf(!present)('inlay hints sur un vrai projet', () => {
   it('chaque hint tient dans sa ligne et ne coupe pas un mot', async () => {
     const { textes, index } = charger();
+    // Bouchon GLOBAL : il doit etre rendu, sinon il fuit sur les tests qui
+    // suivent. L'isolation de vitest le masquerait aujourd'hui, mais elle se
+    // desactive d'une ligne de configuration.
+    const origOuvrir = (workspace as any).openTextDocument;
     (workspace as any).openTextDocument = async (u: any) => {
       const uri = typeof u === 'string' ? u : (u?.toString?.() ?? String(u));
       const t = textes.get(uri);
@@ -91,7 +102,8 @@ describe.skipIf(!present)('inlay hints sur un vrai projet', () => {
     const provider = new KotlinInlayHintsProvider(index, NUL);
     const pb: string[] = [];
     let hints = 0, redondants = 0;
-    for (const [uri, texte] of textes) {
+    try {
+      for (const [uri, texte] of textes) {
       const lignes = texte.split(NL);
       const range = new Range(new Position(0, 0), new Position(lignes.length - 1, lignes[lignes.length - 1].length));
       let res: any[] = [];
@@ -113,7 +125,10 @@ describe.skipIf(!present)('inlay hints sur un vrai projet', () => {
         }
       }
     }
-    expect(hints, 'le corpus doit vraiment produire des hints').toBeGreaterThan(10_000);
+    } finally {
+      (workspace as any).openTextDocument = origOuvrir;
+    }
+    expect(hints, 'le corpus doit vraiment produire des hints').toBeGreaterThan(500);
     expect(redondants, 'etiquette qui repete son argument').toBe(0);
     expect(pb.slice(0, 10)).toEqual([]);
   }, 120_000);
@@ -142,7 +157,7 @@ describe.skipIf(!present)('les deux lecteurs de commentaires restent d accord', 
         if (vue && !dansCommentaire) pb.push(uri + ' [' + nom + ']');
       }
     }
-    expect(refs, 'le corpus doit vraiment porter des references de doc').toBeGreaterThan(300);
+    expect(refs, 'le corpus doit vraiment porter des references de doc').toBeGreaterThan(50);
     expect(pb.slice(0, 10)).toEqual([]);
   });
 });

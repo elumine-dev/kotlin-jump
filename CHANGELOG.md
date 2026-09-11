@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.120
+
+Kotlin files are parsed on background threads. If the file holding that background code is missing, the extension used to index nothing at all, silently and for as long as the window stayed open.
+
+### Fixed
+- A missing or unreadable parser worker no longer stalls indexing. Node does not report a missing worker file when the thread is created; it reports it a moment later. The code was written expecting the opposite, so its fallback to parsing in the main thread, which the comment promised, never engaged. The dead thread went back into the pool, work was handed to it, and Node accepts that silently while the answer never comes.
+- Every Kotlin file therefore waited forever. No error, no diagnostic, an extension that simply did nothing. A partial install, a build that did not finish, or an antivirus quarantine is enough to reach it.
+- Work already waiting when the last thread dies is now released rather than left hanging, and parsing falls back to the main thread, which is what it did before background threads existed.
+
 ## 1.42.119
 
 A folder deleted while the project is being indexed gets a second sweep once the indexing settles. That sweep worked from the folder list captured earlier, so a file put back in the meantime was swept away with the rest.

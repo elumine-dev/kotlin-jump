@@ -1,12 +1,17 @@
 {
-  "version": "1.42.119",
+  "version": "1.42.120",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A file put back during indexing is no longer swept away",
-  "summary": "A folder deleted while the project is being indexed gets a second sweep once indexing settles. That sweep worked from a stale list and removed files restored in the meantime.",
+  "tagline": "A missing parser thread no longer stalls indexing forever",
+  "summary": "Node does not report a missing worker file when the thread is created, but a moment later. The code expected the opposite, so its fallback never engaged and every Kotlin file waited forever.",
   "highlights": [
     {
-      "title": "Restoring a file right after deleting its folder",
-      "description": "It stayed on disk while navigation lost track of it until the next edit. Checking out a branch that deletes a directory and restores one of its files is enough.",
+      "title": "An extension that silently did nothing",
+      "description": "A dead thread went back into the pool, work was handed to it, and Node accepts that silently while the answer never comes. No error, no diagnostic, no index.",
+      "kind": "fix"
+    },
+    {
+      "title": "Parsing falls back to the main thread",
+      "description": "Which is what it did before background threads existed. Work already waiting when the last thread dies is released rather than left hanging.",
       "kind": "fix"
     }
   ],
@@ -14,8 +19,8 @@
     {
       "heading": "Fixed",
       "bullets": [
-        "Each deletion and each recreation carries its rank, so the sweep can tell which came last.",
-        "The storm test meant to cover this could not: its stand in scanner reported it was never busy, so the sweep never ran in any test."
+        "A partial install, a build that did not finish, or an antivirus quarantine is enough to reach it.",
+        "Four ways of breaking the repair now fail the tests that cover it."
       ]
     }
   ],

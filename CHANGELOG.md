@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.162
+
+The pattern that recognises a resource reference written the XML way was being run over every line of every Kotlin and Java file, where it can never match, and the app manifest was left out of the scan.
+
+### Fixes
+- Code writes R.string.key, never the XML form, so searching for the XML form in every source line found nothing and cost time. Building the usage index went from 44 ms to 31 ms on a real project.
+- Alternating runs of the previous release and this one over the 6219 files of that project: 44, 44 and 46 ms against 31, 31 and 31, with the two sets of timings nowhere near each other. That is 30 percent off, for nothing lost, since a resource reference in XML syntax is only a reference inside XML.
+- The app manifest sits outside the res folder and was therefore never read, although it is where the launcher icon, the application name and several configuration keys are referenced. On that project it holds 24 references, 9 of which no other file carries.
+- With it read, declarations that lead somewhere went from 1268 to 1275 and their targets from 1788 to 1873, each one still landing on a line that really names the key.
+- Its watcher is released with the others, which the check added yesterday required before the code would pass.
+
 ## 1.42.161
 
 The file watcher that keeps layout references up to date, added in the previous release, was created inside the block that builds the list of things to release but was left out of that list.

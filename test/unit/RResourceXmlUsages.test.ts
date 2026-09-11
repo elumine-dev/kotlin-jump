@@ -70,3 +70,48 @@ describe('les references @type/cle des XML comptent comme usages', () => {
     expect(i.getUsages('string', 'titre').map(x => x.uri)).toEqual([CODE]);
   });
 });
+
+/**
+ * La syntaxe `@type/cle` n'a de sens que dans un XML. Du code Kotlin ou Java
+ * ecrit `R.string.cle` ; un `@string/cle` n'y apparait que dans une chaine ou
+ * un commentaire, et n'est pas une reference navigable.
+ *
+ * Chercher ce motif dans chaque ligne de chaque source coutait cher pour rien :
+ * A/B entrelace sur les 6219 fichiers d'un projet reel, 45 ms contre 32, soit
+ * 41 % de plus, distributions disjointes.
+ */
+describe('le motif XML ne sert que pour les fichiers XML', () => {
+  const KT = 'file:///p/app/src/main/java/com/x/A.kt';
+  const SRC_KT = [
+    'package com.x',
+    '',
+    '// voir @string/titre dans le layout',
+    'fun go() = getString("@string/titre")',
+  ].join(NL);
+
+  it('un @string dans du Kotlin n est pas un usage', () => {
+    const i = new RResourceIndex();
+    i.reindexFile(KT, SRC_KT);
+    expect(i.getUsages('string', 'titre')).toEqual([]);
+  });
+
+  it('mais le meme texte dans un XML en est un', () => {
+    const i = new RResourceIndex();
+    i.reindexFile('file:///p/app/src/main/res/layout/a.xml', '<T android:text="@string/titre"/>');
+    expect(i.getUsages('string', 'titre')).toHaveLength(1);
+  });
+
+  it('et un AndroidManifest.xml compte comme les autres XML', () => {
+    const i = new RResourceIndex();
+    i.reindexFile('file:///p/app/src/main/AndroidManifest.xml',
+      ['<manifest>', '  <application android:icon="@mipmap/ic_launcher"', '    android:label="@string/app_name" />', '</manifest>'].join(NL));
+    expect(i.getUsages('mipmap', 'ic_launcher')).toHaveLength(1);
+    expect(i.getUsages('string', 'app_name')).toHaveLength(1);
+  });
+
+  it('le R.string du code continue de compter', () => {
+    const i = new RResourceIndex();
+    i.reindexFile(KT, ['package com.x', '', 'fun go() = R.string.titre'].join(NL));
+    expect(i.getUsages('string', 'titre')).toHaveLength(1);
+  });
+});

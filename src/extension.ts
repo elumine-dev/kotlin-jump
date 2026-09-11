@@ -960,6 +960,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         log.info(`[RIndex] ${uris.length} res xml file(s)`);
         return indexerResXml(uris);
       });
+    // `AndroidManifest.xml` vit HORS de `res/` et y reference pourtant l'icone,
+    // le nom de l'application et les cles de configuration. Mesure sur un projet
+    // reel : 24 references, dont 9 qu'aucun autre fichier ne porte.
+    void vscode.workspace.findFiles('**/AndroidManifest.xml', excludeGlob(excludeList))
+      .then(uris => {
+        log.info(`[RIndex] ${uris.length} manifest(s)`);
+        return indexerResXml(uris);
+      });
+    const manW = vscode.workspace.createFileSystemWatcher('**/AndroidManifest.xml');
+    manW.onDidChange(u => void indexerResXml([u]));
+    manW.onDidCreate(u => void indexerResXml([u]));
+    manW.onDidDelete(u => rIndex.removeFile(u.toString()));
     const resW = vscode.workspace.createFileSystemWatcher('**/res/**/*.xml');
     resW.onDidChange(u => void indexerResXml([u]));
     resW.onDidCreate(u => void indexerResXml([u]));
@@ -1048,6 +1060,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       strW2,
       rW,
       resW,
+      manW,
       vscode.languages.registerHoverProvider(
         [{ language: 'kotlin' }, { language: 'java' }],
         new StringResourceHoverProvider(stringIndex),

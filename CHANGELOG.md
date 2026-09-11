@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.164
+
+Yesterday three of the four places that jump from a key to its usages stopped guessing the length of the highlight. The fourth, dimensions, was missed.
+
+### Fixes
+- A dimension is referenced from a layout far more often than from code, so it was the worst affected: of 1184 usages reached this way, 971 were highlighted one character too far. None are now.
+- Each of the four lives in its own file with its own case, so no test could say the fourth had been forgotten. A check now reads every source file and fails if any of them sizes a highlight by rebuilding the code form of a reference, which is the mistake all four shared.
+- That check was calibrated before being trusted: run against yesterday's code it named exactly one file, the one that had been missed, and it fails again if the pattern comes back anywhere at all.
+
+### Notes
+- The census that found it was a deliberate change of method. Three releases in a row, a defect of a different family came from the same gesture: widening what the index holds without checking what its readers assumed. Listing every reader at once found the last one in a minute.
+
 ## 1.42.163
 
 Jumping from a key in values to where it is used highlighted one character too many on every usage that comes from a layout, because the length of the highlight was guessed from the code form of the reference.

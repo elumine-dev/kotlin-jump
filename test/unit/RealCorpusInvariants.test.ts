@@ -82,6 +82,56 @@ function charger(): { textes: Map<string, string>; index: SymbolIndex } {
   return { textes, index };
 }
 
+
+/**
+ * Execute `corps` avec `openTextDocument` bouchonne sur le corpus, puis REND
+ * la fonction d'origine.
+ *
+ * Une seule implementation, parce que les deux tests qui en ont besoin la
+ * portaient en copie et que la seconde posait le bouchon AVANT de le
+ * capturer : elle restaurait donc le bouchon lui meme, et il fuyait. Rien ne
+ * le signalait, l'isolation de vitest masquant la fuite.
+ */
+async function avecOuvertureBouchonnee<T>(
+  textes: Map<string, string>,
+  corps: () => Promise<T>,
+): Promise<T> {
+  const orig = (workspace as any).openTextDocument;
+  (workspace as any).openTextDocument = async (u: any) => {
+    const uri = typeof u === 'string' ? u : (u?.toString?.() ?? String(u));
+    const t = textes.get(uri);
+    return t === undefined ? null : mockDocument(uri, t);
+  };
+  try {
+    return await corps();
+  } finally {
+    (workspace as any).openTextDocument = orig;
+  }
+}
+
+describe('le bouchon d ouverture est toujours rendu', () => {
+  it('apres un corps qui reussit', async () => {
+    const sentinelle = async () => null;
+    const avant = (workspace as any).openTextDocument;
+    (workspace as any).openTextDocument = sentinelle;
+    await avecOuvertureBouchonnee(new Map(), async () => undefined);
+    const apres = (workspace as any).openTextDocument;
+    (workspace as any).openTextDocument = avant;
+    expect(apres, 'la fonction d origine doit etre rendue').toBe(sentinelle);
+  });
+
+  it('et apres un corps qui leve', async () => {
+    const sentinelle = async () => null;
+    const avant = (workspace as any).openTextDocument;
+    (workspace as any).openTextDocument = sentinelle;
+    await expect(avecOuvertureBouchonnee(new Map(), async () => { throw new Error('boum'); }))
+      .rejects.toThrow('boum');
+    const apres = (workspace as any).openTextDocument;
+    (workspace as any).openTextDocument = avant;
+    expect(apres).toBe(sentinelle);
+  });
+});
+
 describe.skipIf(!present)('jetons semantiques sur un vrai projet', () => {
   it('encodage delta, bornes et legende tiennent sur tout le corpus', () => {
     const { textes, index } = charger();
@@ -114,19 +164,10 @@ describe.skipIf(!present)('jetons semantiques sur un vrai projet', () => {
 describe.skipIf(!present)('inlay hints sur un vrai projet', () => {
   it('chaque hint tient dans sa ligne et ne coupe pas un mot', async () => {
     const { textes, index } = charger();
-    // Bouchon GLOBAL : il doit etre rendu, sinon il fuit sur les tests qui
-    // suivent. L'isolation de vitest le masquerait aujourd'hui, mais elle se
-    // desactive d'une ligne de configuration.
-    const origOuvrir = (workspace as any).openTextDocument;
-    (workspace as any).openTextDocument = async (u: any) => {
-      const uri = typeof u === 'string' ? u : (u?.toString?.() ?? String(u));
-      const t = textes.get(uri);
-      return t === undefined ? null : mockDocument(uri, t);
-    };
     const provider = new KotlinInlayHintsProvider(index, NUL);
     const pb: string[] = [];
     let hints = 0, redondants = 0;
-    try {
+    await avecOuvertureBouchonnee(textes, async () => {
       for (const [uri, texte] of textes) {
       const lignes = texte.split(NL);
       const range = new Range(new Position(0, 0), new Position(lignes.length - 1, lignes[lignes.length - 1].length));
@@ -149,9 +190,7 @@ describe.skipIf(!present)('inlay hints sur un vrai projet', () => {
         }
       }
     }
-    } finally {
-      (workspace as any).openTextDocument = origOuvrir;
-    }
+    });
     expect(hints, 'le corpus doit vraiment produire des hints').toBeGreaterThan(500);
     expect(redondants, 'etiquette qui repete son argument').toBe(0);
     expect(pb.slice(0, 10)).toEqual([]);
@@ -222,12 +261,6 @@ describe('le lancement de find reste muet', () => {
 describe.skipIf(!present)('ou mene le Ctrl+clic sur un vrai projet', () => {
   it('aucune navigation ne quitte le mot cliqué', async () => {
     const { textes, index } = charger();
-    (workspace as any).openTextDocument = async (u: any) => {
-      const uri = typeof u === 'string' ? u : (u?.toString?.() ?? String(u));
-      const t = textes.get(uri);
-      return t === undefined ? null : mockDocument(uri, t);
-    };
-    const origOuvrir = (workspace as any).openTextDocument;
     const entries: any[] = (index as any).allEntries?.() ?? [];
     const declPos = new Set<string>();
     for (const e of entries) declPos.add(e.uri.toString() + ':' + e.line + ':' + e.character);
@@ -236,7 +269,7 @@ describe.skipIf(!present)('ou mene le Ctrl+clic sur un vrai projet', () => {
     const MOT = /(?<![A-Za-z0-9_])[A-Za-z_][A-Za-z0-9_]*(?![A-Za-z0-9_])/g;
     const suspects: string[] = [];
     let resolus = 0;
-    try {
+    await avecOuvertureBouchonnee(textes, async () => {
       // Un fichier sur 40 : assez pour couvrir toutes les formes, assez peu
       // pour rester sous deux secondes.
       const echantillon = [...textes.entries()].filter((_, i) => i % 40 === 0);
@@ -267,9 +300,7 @@ describe.skipIf(!present)('ou mene le Ctrl+clic sur un vrai projet', () => {
           }
         }
       }
-    } finally {
-      (workspace as any).openTextDocument = origOuvrir;
-    }
+    });
     expect(resolus, 'le corpus doit vraiment resoudre des clics').toBeGreaterThan(100);
     expect(suspects.slice(0, 10)).toEqual([]);
   }, 120_000);

@@ -1,27 +1,27 @@
 {
-  "version": "1.42.175",
+  "version": "1.42.176",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Separator lines that stopped showing",
-  "summary": "The method separator lines went silent on a whole class when a class without a body sat above it in the same file. A data class written as a header only is exactly that.",
+  "tagline": "Four warnings out of five were wrong",
+  "summary": "The lifecycle pairing warning fired four times out of five for nothing on a real project. It sits in the Problems panel and is on by default, so every false one costs attention.",
   "highlights": [
     {
-      "title": "Separators come back",
-      "description": "A class without a body no longer captures the brace of the class below it, so that class keeps its separator lines.",
-      "kind": "fix"
+      "title": "The back dispatcher is not a leak",
+      "kind": "fix",
+      "description": "A callback added to onBackPressedDispatcher needs no removal: the dispatcher belongs to the Activity and dies with it."
     },
     {
-      "title": "One false line removed",
-      "description": "A line drawn above the first member of a companion object is gone. Android Studio draws none there.",
-      "kind": "fix"
+      "title": "bind with no argument",
+      "kind": "fix",
+      "description": "The bind and unbind pair stands for the bindService family. A bind() with no argument binds nothing, and the warning named the receiver instead."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Restores the separator lines of a class that follows a class written without a body, such as a data class header.",
-        "Removes a line that used to appear above the first member of a companion object.",
-        "Measured on a real project of 3187 Kotlin files: 15 files change and 37 lines come back, including 5 files where the feature drew nothing at all."
+        "A callback added to onBackPressedDispatcher, directly or through requireActivity(), no longer asks for a release in onDestroy.",
+        "A bind() call with no argument is left alone. A bind with an argument is still tracked, and still clears once unbind appears in the mirror method.",
+        "Measured on a real project of 5088 sources: 132 files reach this check, and the warnings drop from 5 to 1."
       ]
     }
   ],

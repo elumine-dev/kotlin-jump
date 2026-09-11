@@ -94,12 +94,16 @@ describe('Un appel ne se résout pas vers une variable locale homonyme', () => {
     const DECL = 'package p\n\nsealed class Evenement(val type: String, val data: Any?)\n';
     // Forme réelle : l'appel au parent est sur sa propre ligne, sinon le
     // provider saute la ligne parce qu'elle déclare quelque chose.
+    // Le parametre s'appelle `charge` et non `data` : depuis que l'etiquette
+    // redondante est supprimee, `data` passe a un parametre `data` n'en
+    // produirait plus, et le test ne verifierait plus que la MOITIE de la
+    // resolution. Deux etiquettes attendues, donc deux verifiees.
     const USAGE = [
       'package p',
       '',
       'class Galerie(',
-      '    data: Any?,',
-      ') : Evenement("galleryChanged", data)',
+      '    charge: Any?,',
+      ') : Evenement("galleryChanged", charge)',
     ].join('\n');
     const libelles = await hintsDe('file:///a52/Sealed.kt', {
       'file:///a52/SealedDecl.kt': DECL,

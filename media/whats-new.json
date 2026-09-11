@@ -1,26 +1,28 @@
 {
-  "version": "1.42.139",
+  "version": "1.42.140",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A quote in a character literal no longer blinds the reader",
-  "summary": "A character literal holding a quote switched off the documentation check added last release for the rest of the file.",
+  "tagline": "Fewer hints, more signal",
+  "summary": "Parameter name hints no longer repeat a name the code already says. On a real project that removed 28 percent of them.",
   "highlights": [
     {
-      "title": "Character Literals In The Comment Reader",
+      "title": "Hints That Repeat The Argument",
       "kind": "fix",
-      "description": "A character literal holding a double quote was taken for the start of a string, so the rest of the file became invisible and imports named only by a documentation link were called dead again."
+      "description": "Passing a variable whose name matches the parameter showed the name twice on the line. More than one hint in four was this on a real project. The match is exact, so a different capitalisation or a property read keeps its hint."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "The reader that finds documentation links did not know about character literals, so a literal holding a double quote was taken for the start of a string. Everything after it in the file became invisible, the check that keeps an import named by a documentation link stopped applying there, and such imports were called dead again. Character literals are now understood, escapes and unicode escapes included.",
-        "Measured on a real project of 3187 Kotlin files: 36 hold a character literal and one holds a quote in one, with no finding affected today. The point is that the miss was silent and covered a whole file."
+        "Passing a variable whose name already matches the parameter produced a hint that added nothing: provide(actionListener) showed actionListener followed by actionListener. IntelliJ and the TypeScript hints in VS Code both drop this case by default. Measured on a real project of 3187 Kotlin files, 4460 of the 15943 parameter hints were this, so more than one in four, and they drowned the hints that do carry information, the ones naming a bare true, a zero or an it.",
+        "The match is exact, so a name differing only in capitalisation keeps its hint, and so does an argument that merely starts with the name, such as a property read or a call.",
+        "Type hints are untouched: the same count before and after, 1246."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
+        "Hints on arguments that are already named in the source were already suppressed, and positions were checked across 17189 hints in 1574 files with none out of bounds.",
         "No new commands or settings in this release."
       ]
     }

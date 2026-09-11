@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.140
+
+Parameter name hints no longer repeat a name the code already says. On a real project that removed 28 percent of them.
+
+### Fixes
+- Passing a variable whose name already matches the parameter produced a hint that added nothing: provide(actionListener) showed actionListener followed by actionListener. IntelliJ and the TypeScript hints in VS Code both drop this case by default. Measured on a real project of 3187 Kotlin files, 4460 of the 15943 parameter hints were this, so more than one in four, and they drowned the hints that do carry information, the ones naming a bare true, a zero or an it.
+- The match is exact, so a name differing only in capitalisation keeps its hint, and so does an argument that merely starts with the name, such as a property read or a call.
+- Type hints are untouched: the same count before and after, 1246.
+
+### Notes
+- Hints on arguments that are already named in the source were already suppressed, and positions were checked across 17189 hints in 1574 files with none out of bounds.
+- No new commands or settings in this release.
+
 ## 1.42.139
 
 A character literal holding a quote switched off the documentation check added last release for the rest of the file.

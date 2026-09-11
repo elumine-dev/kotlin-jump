@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.126
+
+A stray space in kotlinJump.excludePatterns turned the pattern off without saying so.
+
+### Fixes
+- A pattern written with a space at either end, easy to leave behind when editing settings.json by hand, stopped matching anything for the file watcher while the initial scan still honoured it. The two disagreed again: those files were indexed once and then never refreshed. Patterns are now trimmed before use, so a stray space changes nothing.
+
+### Notes
+- No new commands or settings in this release.
+
 ## 1.42.125
 
 One more way to lose the whole extension through a settings file, closed.

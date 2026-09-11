@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.145
+
+Stops the test suite printing a spurious error, and the author's local path, into every public build log.
+
+### Internal
+- The corpus checks look for the reference project by running an external command when the file loads, on every machine. On one without that project, which is every build machine, the command failed and its message went straight to the log: a line reading no such file or directory, which looks like a breakage and carries a local path. Its error output is now discarded, and the suite prints none.
+- The guard that keeps it that way builds the text it searches for at run time. Written out plainly, those strings would appear in the guard's own file and it would satisfy itself, which is the defect corrected three releases ago, met again while writing its cure.
+
+### Notes
+- No behaviour change in this release.
+
 ## 1.42.144
 
 Closes the last way the corpus checks could fail a release for a reason of their own.

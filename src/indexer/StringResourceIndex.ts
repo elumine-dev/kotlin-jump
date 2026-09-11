@@ -193,7 +193,16 @@ export class StringResourceIndex {
     for (const [fUri, map] of store) {
       const e = map.get(key);
       if (!e) continue;
-      const score = (nearModule !== undefined && moduleRootOfPath(fUri) === nearModule ? 2 : 0)
+      // Une valeur REMPLIE passe avant tout le reste. Un module de base
+      // declare souvent la cle sans valeur, `<string name="x"/>`, pour que le
+      // code qui la reference compile, et l'application fournit le texte ; la
+      // fusion de ressources d'Android laisse alors la valeur non vide
+      // l'emporter. Sans ce bonus l'espace reserve du module appelant gagnait
+      // et le survol n'affichait rien. Quand toutes les declarations sont
+      // remplies, ou toutes vides, elles recoivent le meme bonus et l'ordre
+      // reste celui d'avant.
+      const score = (e.value !== '' ? 4 : 0)
+        + (nearModule !== undefined && moduleRootOfPath(fUri) === nearModule ? 2 : 0)
         + (/\/values\/[^/]+$/.test(fUri) ? 1 : 0);
       if (score > bestScore) { best = e; bestScore = score; }
     }

@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.159
+
+A base module often declares a key with no value so the code compiles, and the app supplies the text. Hovering from the base module showed the empty placeholder rather than the text.
+
+### Fixes
+- Hovering R.string.settings_app_theme_mode_light_option from the base module showed nothing. It now shows Clair, which is what the app displays at runtime.
+- Android merges resources so a non empty value always beats an empty one, whichever module it comes from. The ranking put the calling file's own module first, so the placeholder won and the hover was blank.
+- Nothing else moves: when every declaration of a key is filled, or every one is empty, they all get the same bonus and the order stays exactly as it was. The module of the calling file still decides between two real values.
+- Measured on a real project: 5 keys are declared empty in one module and filled in another. Over the 926 keys that have a single value in the project, the hover matched the XML before and after, checked against a reader written from the Android escaping rules rather than from the extension.
+
+### Notes
+- That sweep covers 976 references to a string key across the project, 948 of which show a hover, and it was first proven to reject the value of a different key 300 times out of 300.
+
 ## 1.42.158
 
 Two more places still took one word out of a backticked Kotlin name: Find All References searched the workspace for that word, and the editor lit up every occurrence of it.

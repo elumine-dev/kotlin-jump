@@ -18,6 +18,7 @@ import { SymbolIndex } from '../../src/indexer/SymbolIndex';
 import { parse } from '../../src/indexer/KotlinParser';
 import { mockDocument } from './helpers';
 import { Location, Position } from './__mocks__/vscode';
+import { expectFasterThanAsync } from './perfBudget';
 
 function addFile(idx: SymbolIndex, uri: string, code: string) { idx.add(parse(uri, code)); }
 function setupP(code: string, uri = 'file:///src/F.kt') {
@@ -488,11 +489,11 @@ describe('ADV-PERF — provider stays responsive on large files', () => {
     // Cursor on `target` usage near the bottom.
     const usageLine = lines.length - 2;
     const c = lines[usageLine].indexOf('target');
-    const start = performance.now();
-    const r = await provider.provideDefinition(doc, new Position(usageLine, c + 1));
-    const elapsed = performance.now() - start;
-    expect(elapsed).toBeLessThan(200);
-    const loc = locOf(r);
+    let r: Awaited<ReturnType<typeof provider.provideDefinition>>;
+    await expectFasterThanAsync(200, async () => {
+      r = await provider.provideDefinition(doc, new Position(usageLine, c + 1));
+    });
+    const loc = locOf(r!);
     expect(loc).toBeDefined();
     expect(loc!.range.start.line).toBe(1);
   });

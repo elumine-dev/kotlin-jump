@@ -18,7 +18,7 @@
  *   FW-9  Dossier supprimé pendant un scan de l'un de ses fichiers
  *   FW-10 Une modification pendant le scan ne perd pas le contenu final
  *   FW-11 addTree jette les fichiers dépassés par un événement
- *   FW-12 addTree reste linéaire (le tri des survivants était quadratique)
+ *   FW-12 addTree ne balaie pas une grande liste par fichier (le tri était quadratique)
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -26,7 +26,6 @@ import * as vscode from 'vscode';
 import { FileWatcher } from '../../src/watcher/FileWatcher';
 import { SymbolIndex } from '../../src/indexer/SymbolIndex';
 import { parse } from '../../src/indexer/KotlinParser';
-import { expectFasterThanAsync } from './perfBudget';
 
 const NL = String.fromCharCode(10);
 const SOURCE = (nom: string) => 'package p' + NL + 'class ' + nom + NL;
@@ -153,18 +152,41 @@ describe('FW-11 — addTree jette ce qu un evenement a depasse', () => {
   });
 });
 
-describe('FW-12 — addTree reste lineaire', () => {
-  it('30 000 fichiers passent loin sous le budget qu un tri quadratique creverait', async () => {
+describe('FW-12 — addTree ne balaie pas une grande liste dans une boucle', () => {
+  it('aucun scan lineaire sur la liste des fichiers pendant le tri des survivants', async () => {
     vi.useRealTimers();
-    const n = 30_000;
-    const uris = Array.from({ length: n }, (_, i) => vscode.Uri.parse('file:///big/F' + i + '.kt'));
+    const uris = Array.from({ length: 30_000 }, (_, i) => vscode.Uri.parse('file:///big/F' + i + '.kt'));
     (vscode.workspace as any).findFiles = async () => uris;
     const scanner = { scanFile: async () => {}, scanFiles: async () => {} } as any;
     const w = new FileWatcher(scanner, new SymbolIndex());
-    // Mesuré: 10 ms en une passe, une centaine si le tri des survivants
-    // repasse en O(n²). Une borne large qui reste catégorique.
-    await expectFasterThanAsync(50, async () => { await w.addTree(vscode.Uri.parse('file:///big2') as any); },
-      'addTree doit rester lineaire');
-    w.dispose();
+
+    // Le defaut livre en v1.42.109 etait `vivants.includes(u)` dans une boucle
+    // sur `uris` : quadratique, et comme rien ne bouge dans le cas courant, le
+    // cas courant etait le pire cas. Un budget d'horloge ne tient pas ce role,
+    // il a echoue a 60 ms contre 50 des que la machine s'est chargee. On
+    // compte donc les balayages, ce qu'aucune charge ne fait varier.
+    const origines = {
+      includes: Array.prototype.includes,
+      indexOf: Array.prototype.indexOf,
+      lastIndexOf: Array.prototype.lastIndexOf,
+    };
+    let balayages = 0;
+    for (const nom of ['includes', 'indexOf', 'lastIndexOf'] as const) {
+      const origine = origines[nom];
+      (Array.prototype as any)[nom] = function (this: unknown[], ...args: unknown[]) {
+        if (Array.isArray(this) && this.length > 1_000) balayages++;
+        return (origine as any).apply(this, args);
+      };
+    }
+    try {
+      await w.addTree(vscode.Uri.parse('file:///big2') as any);
+    } finally {
+      for (const nom of ['includes', 'indexOf', 'lastIndexOf'] as const) {
+        (Array.prototype as any)[nom] = origines[nom];
+      }
+      w.dispose();
+    }
+
+    expect(balayages, 'un balayage lineaire par fichier redonne un quadratique').toBe(0);
   });
 });

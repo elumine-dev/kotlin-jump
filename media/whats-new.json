@@ -1,21 +1,21 @@
 {
-  "version": "1.42.110",
+  "version": "1.42.111",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Adding a folder is linear again",
-  "summary": "Yesterday's guard against a deleted file coming back sorted its survivors with a lookup inside a loop over the same list. Nothing moves in the ordinary case, so the ordinary case was the worst case.",
+  "tagline": "A test that counts instead of timing",
+  "summary": "Yesterday's release pinned a linear pass with a stopwatch, which reads ten times higher on a busy machine. It is now pinned by counting array scans, which the machine load does not move.",
   "highlights": [
     {
-      "title": "A folder rename no longer blocks on a quadratic pass",
-      "description": "At the default ceiling of 10000 files, 12.2 ms of blocked extension host became 2.6 ms; a project raising that ceiling to 24000 went from 66 ms to 8 ms.",
-      "kind": "fix"
+      "title": "No behaviour change, one fewer flaky guard",
+      "description": "The timing version failed at 60 ms against a 50 ms bound on a loaded machine while the work itself was fine. The counting version passes there and still catches the quadratic version.",
+      "kind": "note"
     }
   ],
   "sections": [
     {
-      "heading": "Fixed",
+      "heading": "Internal",
       "bullets": [
-        "A test pins the shape rather than the number: 30000 files under a bound the single pass clears with room to spare and the quadratic sort blew past six times over.",
-        "Timing budgets can now wrap an asynchronous workload, which used to require a bare wall clock assertion."
+        "The growth ratio was tried first and rejected on measurement: it swung from 1.7 to 11.9 on a loaded machine.",
+        "The last asynchronous stopwatch assertion in the suite is gone."
       ]
     }
   ],

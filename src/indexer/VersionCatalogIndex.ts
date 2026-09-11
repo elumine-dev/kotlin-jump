@@ -243,6 +243,8 @@ interface ParsedCatalog {
   uri: string;
   /** `[versions]` alias to its literal, so a `version.ref` can be resolved. */
   versions: Map<string, string>;
+  /** Toutes les racines sous lesquelles ce fichier est expose, la principale en tete. */
+  roots: string[];
 }
 
 const EMPTY_CATALOG: Catalog = { root: 'libs', aliases: [], unparsed: false };
@@ -292,7 +294,7 @@ export class VersionCatalogIndex {
 
   private rafraichir(): void {
     this.liste = [...this.catalogs.values()];
-    const r = [...new Set(this.liste.map(c => c.catalog.root))];
+    const r = [...new Set(this.liste.flatMap(c => c.roots))];
     this.racines = r.length > 0 ? Object.freeze(r) : LIBS_SEUL;
   }
 
@@ -332,7 +334,8 @@ export class VersionCatalogIndex {
   setSettings(textes: readonly SettingsFile[]): void {
     this.settings = textes;
     for (const c of this.catalogs.values()) {
-      c.catalog.root = catalogRootOf(c.key || c.uri, this.settings) ?? 'libs';
+      c.roots = catalogRootsOf(c.key || c.uri, this.settings);
+      c.catalog.root = c.roots[0];
     }
     this.rafraichir();
   }
@@ -381,7 +384,8 @@ export class VersionCatalogIndex {
 
     // `<project>/gradle/libs.versions.toml`: the project dir is two levels up.
     const projectDir = key.replace(/^file:\/\//, '').replace(/[\\/]gradle[\\/][^\\/]+$/, '');
-    this.catalogs.set(key, { entries, catalog, projectDir, key, uri: uriString, versions });
+    const roots = catalogRootsOf(key || uriString, this.settings);
+    this.catalogs.set(key, { entries, catalog, projectDir, key, uri: uriString, versions, roots });
     this.rafraichir();
   }
 
@@ -458,7 +462,7 @@ export class VersionCatalogIndex {
    */
   rootsFor(contextPath?: string): readonly string[] {
     if (this.liste.length <= 1 || !contextPath) return this.racines;
-    const racines = [...new Set(this.catalogsFor(contextPath).map(c => c.catalog.root))];
+    const racines = [...new Set(this.catalogsFor(contextPath).flatMap(c => c.roots))];
     return racines.length > 0 ? racines : LIBS_SEUL;
   }
 
@@ -471,7 +475,7 @@ export class VersionCatalogIndex {
    */
   describeAccessor(accessor: string, contextPath?: string, root?: string): string | undefined {
     for (const c of this.catalogsFor(contextPath)) {
-      if (root !== undefined && c.catalog.root !== root) continue;
+      if (root !== undefined && !c.roots.includes(root)) continue;
       const alias = this.resoudre(c, accessor);
       if (!alias) continue;
       const decrit = this.decrire(c, alias);
@@ -507,7 +511,7 @@ export class VersionCatalogIndex {
    */
   locate(accessor: string, contextPath?: string, root?: string): { alias: CatalogAlias; file: string } | undefined {
     for (const c of this.catalogsFor(contextPath)) {
-      if (root !== undefined && c.catalog.root !== root) continue;
+      if (root !== undefined && !c.roots.includes(root)) continue;
       const alias = this.resoudre(c, accessor);
       if (alias) return { alias, file: c.uri };
     }
@@ -554,6 +558,50 @@ function gouvernants(cheminCatalogue: string, settings: readonly SettingsFile[])
   if (candidats.length === 0) return [];
   const plusLong = Math.max(...candidats.map(s => dossier(s.path).length));
   return candidats.filter(s => dossier(s.path).length === plusLong);
+}
+
+/** `base` + `relatif`, en repliant `.` et `..`. Pas de `node:path` ici : ce
+ * module tourne aussi dans l'extension web. */
+function resoudreChemin(base: string, relatif: string): string {
+  const sep = base.includes('\\') && !base.includes('/') ? '\\' : '/';
+  const out: string[] = [];
+  for (const p of base.split(/[\\/]/).concat(relatif.split(/[\\/]/))) {
+    if (p === '.' || p === '') { if (out.length === 0) out.push(''); continue; }
+    if (p === '..') { if (out.length > 1) out.pop(); continue; }
+    out.push(p);
+  }
+  return out.join(sep);
+}
+
+/**
+ * TOUTES les racines sous lesquelles un catalogue est joignable.
+ *
+ * Un build composite partage le catalogue du parent :
+ * `create("deps") { from(files("../gradle/libs.versions.toml")) }`. Le meme
+ * fichier est alors expose sous deux noms a la fois, `libs` pour le parent et
+ * `deps` pour le build inclus, et n'en garder qu'un rend l'autre moitie du
+ * projet muette. Les deux providers bouclent deja sur les racines.
+ *
+ * Le `from` est resolu RELATIVEMENT au settings qui le declare, jamais
+ * compare au seul nom de fichier : tous les catalogues par defaut portent le
+ * meme nom, et les comparer ainsi ramenerait la contamination entre projets
+ * voisins corrigee en v1.42.132.
+ */
+export function catalogRootsOf(path: string, settingsFiles: readonly SettingsFile[]): string[] {
+  const racines: string[] = [];
+  const principal = catalogRootOf(path, settingsFiles);
+  if (principal !== undefined) racines.push(principal);
+  for (const s of settingsFiles) {
+    if (!s.path || !s.text.includes('versionCatalogs')) continue;
+    const base = /[\\/]/.test(s.path) ? s.path.replace(/[\\/][^\\/]*$/, '') : '';
+    for (const bloc of s.text.matchAll(/create\s*\(\s*"([^"]+)"\s*\)\s*\{([^}]*)\}/g)) {
+      const from = /from\s*\(\s*files\s*\(\s*"([^"]+)"/.exec(bloc[2])?.[1];
+      if (!from) continue;
+      if (resoudreChemin(base, from) !== path) continue;
+      if (!racines.includes(bloc[1])) racines.push(bloc[1]);
+    }
+  }
+  return racines.length > 0 ? racines : ['libs'];
 }
 
 export function catalogRootOf(path: string, settingsFiles: readonly SettingsFile[]): string | undefined {

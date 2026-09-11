@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.133
+
+A catalog shared by an included build is reachable under both of its names again.
+
+### Fixes
+- A composite build can point at the parent's catalog with create("deps") { from(files("../gradle/libs.versions.toml")) }. The same file is then reachable as libs from the parent and as deps from the included build, and only one name was kept: before the previous release deps won and the parent went silent, since then libs won and the included build went silent. Both names are now offered, which the hover and Ctrl+click loops already knew how to handle.
+- The path in a from(files(...)) clause is resolved against the directory of the settings file that declares it, so a catalog is only claimed by a settings file that really points at it.
+
+### Notes
+- A project whose catalog is not shared this way sees exactly one name, as before, verified against a real one.
+- No new commands or settings in this release.
+
 ## 1.42.132
 
 In a workspace holding several projects, one project renaming its catalog silently renamed its neighbours' too.

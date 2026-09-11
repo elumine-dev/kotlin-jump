@@ -101,6 +101,25 @@ describe('etiquette de parametre redondante', () => {
     expect(await etiquettes(decl, appel)).toEqual([]);
   });
 
+  it('un argument qui CONTINUE a la ligne suivante garde son etiquette', async () => {
+    // `getArgText` s'arrete en fin de ligne. La valeur passee est
+    // `actionListener.withTimeout(5)`, pas `actionListener` : l'etiquette
+    // garde tout son sens, et la supprimer cache que l'argument a ete
+    // transforme.
+    const decl = ['package p', 'fun chaine(actionListener: String, n: Int) {}'].join(NL);
+    const appel = ['package p', 'val actionListener = "a"', 'fun go() {',
+      '    chaine(', '        actionListener', '            .withTimeout(5),', '        1,', '    )', '}'].join(NL);
+    expect(await etiquettes(decl, appel)).toContain('actionListener:');
+  });
+
+  it('mais une simple fermeture a la ligne suivante supprime bien', async () => {
+    // Ici rien ne continue : la ligne suivante ferme l'appel.
+    const decl = ['package p', 'fun chaine(actionListener: String) {}'].join(NL);
+    const appel = ['package p', 'val actionListener = "a"', 'fun go() {',
+      '    chaine(', '        actionListener', '    )', '}'].join(NL);
+    expect(await etiquettes(decl, appel)).toEqual([]);
+  });
+
   it('mais un nom DIFFERENT reste etiquete', async () => {
     expect(await etiquettes(DECL, appelAvec('ecouteur', '1', 'true')))
       .toEqual(['actionListener:', 'viewModelFactory:', 'enabled:']);

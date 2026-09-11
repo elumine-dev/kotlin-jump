@@ -4,6 +4,7 @@ import { rememberCorpusUri } from '../util/corpusUri';
 import { makeExclusionMatcher } from '../util/pathExclusion';
 import { FileResourceIndex } from './FileResourceIndex';
 import { ResourceSource } from '../providers/UnusedResourceProvider';
+import { excludeGlob } from '../util/pathExclusion';
 
 /**
  * The workspace corpus KJ-029 reasons over: every source that could reference
@@ -108,13 +109,13 @@ export class ResourceCorpus {
     // here let VS Code fill the 10000 slots with `build/` output on a project
     // that has been built, hit the cap, and report a truncated corpus, which
     // silently disables every detector that reasons over absence.
-    const excludeGlob = patterns.length > 0 ? `{${patterns.join(',')}}` : undefined;
+    const motifExclu = excludeGlob(patterns);
 
     const [sourceUris, resUris, buildUris, serviceUris] = await Promise.all([
-      vscode.workspace.findFiles(SOURCE_GLOB, excludeGlob, maxFiles),
-      vscode.workspace.findFiles(RES_GLOB, excludeGlob, maxFiles),
-      vscode.workspace.findFiles('**/build.gradle{,.kts}', excludeGlob, 500),
-      vscode.workspace.findFiles(SERVICES_GLOB, excludeGlob, 200),
+      vscode.workspace.findFiles(SOURCE_GLOB, motifExclu, maxFiles),
+      vscode.workspace.findFiles(RES_GLOB, motifExclu, maxFiles),
+      vscode.workspace.findFiles('**/build.gradle{,.kts}', motifExclu, 500),
+      vscode.workspace.findFiles(SERVICES_GLOB, motifExclu, 200),
     ]);
 
     // Hitting the cap means we may have missed the one reference that matters.

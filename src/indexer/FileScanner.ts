@@ -5,6 +5,7 @@ import { parseJava } from './JavaParser';
 import { SymbolIndex } from './SymbolIndex';
 import { WorkerPool } from './WorkerPool';
 import { Logger } from '../util/logger';
+import { excludeGlob } from '../util/pathExclusion';
 
 const IO_CONCURRENCY_DEFAULT = 20;
 
@@ -48,11 +49,11 @@ export class FileScanner {
     const cfg         = vscode.workspace.getConfiguration('kotlinJump');
     const excludeList = cfg.get<string[]>('excludePatterns') ?? ['**/build/**', '**/.gradle/**'];
     const maxFiles    = cfg.get<number>('maxIndexedFiles') ?? 10000;
-    const excludeGlob = `{${excludeList.join(',')}}`;
+    const motifExclu = excludeGlob(excludeList);
 
     const ioConcurrency = cfg.get<number>('concurrency') ?? IO_CONCURRENCY_DEFAULT;
     const maxFileBytes  = (cfg.get<number>('fileSizeLimit', 512)) * 1024;
-    const uris = await vscode.workspace.findFiles('**/*.{kt,kts,java}', excludeGlob, maxFiles);
+    const uris = await vscode.workspace.findFiles('**/*.{kt,kts,java}', motifExclu, maxFiles);
     this.log.info(`Scanning ${uris.length} files (io=${ioConcurrency}, workers=${this.pool.available ? 'yes' : 'no'})…`);
 
     await this.pipeline(uris, ioConcurrency, token, maxFileBytes);

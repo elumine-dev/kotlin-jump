@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.178
+
+Three features answer a question about an absence by walking the whole project, and each one stopped after 4000 files. Each also carries a guard that refuses to answer once the walk was cut short, so on a real project of 5088 sources those guards fired on every single run.
+
+### Fixes
+- The manifest badges showed the same `may come from a library` label on all 56 permissions of the 51 manifests measured. With the full listing, 15 become `used in N files` and one becomes `no usage found`.
+- The `Remove unused …` quick fixes never appeared at all. The listing they read covers resource XML too, 6278 files there, so it overran even sooner.
+- Last release taught the dependency badge to read the whole project, which left it saying `0 imports` and greying a line that no quick fix would remove. All three now share one ceiling, raised to 20000, and the guards stay for whatever lies past it.
+
+### Notes
+- Reading the extra files costs about a third more time on that project, once per 20 second window, and only while a manifest or a Gradle file is the active editor.
+
 ## 1.42.177
 
 The usage badge next to a Gradle dependency read the project imports with a ceiling of 4000 files. A project of 5088 sources walked straight past it, and the badge still printed a number.

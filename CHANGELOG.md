@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.199
+
+No behaviour changes this release. Seven tests that were meant to protect the last eight releases turned out to prove nothing, and now do.
+
+### Notes
+- Each of them was found the same way: break the code the test claims to cover, then check whether the test notices. Seven did not. The inline folding test for a triple quote quoted inside a comment picked a closed example, so the parity was the same whether the count ran on the comment or on the stripped text. The two tests for moving a per line state through a deletion used values that were identical on both sides of the line that disappears, so an off by one and a wrong bound both passed.
+- The rest cover guards with no occurrence at all on the project this extension is tested against: a comment block that closes and reopens on one line, a block opener quoted inside a line comment, and the two characters of a block terminator being blanked rather than one. Nothing here changes what the extension does today, it changes what a future edit is allowed to break silently.
+- The inline folding rewrite from 1.42.191 was also re examined against the real project with two independent probes. Comment stripping preserves the length and the line count of all 5 093 sources, and none of the 30 403 folds it produces lands inside a comment or a raw string. The same probe run against a deliberately broken version reports 1 440 folds inside comments, which is what makes the zero worth reading.
+
 ## 1.42.198
 
 Two cursors, one Enter. Every colour swatch and every forced unwrap highlight below the lower cursor moved one line too far down, one extra line per cursor above it.

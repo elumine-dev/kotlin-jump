@@ -93,12 +93,51 @@ describe('ConstValFoldingProvider — les commentaires multilignes', () => {
     // La parite des `"""` etait comptee sur la ligne BRUTE : un exemple de
     // chaine brute dans un KDoc faisait croire a une chaine ouverte, et tout
     // le reste du fichier cessait d etre replie.
+    //
+    // Le compte doit etre IMPAIR pour que le test prouve quelque chose. Avec
+    // un exemple ferme, `"""texte"""`, la parite est la meme des deux cotes
+    // et la version fautive passait aussi.
+    expect(lignesRepliees([
+      '/**',
+      ' * exemple : val s = """',
+      ' */',
+      'val e = TIMEOUT_MS',
+    ])).toEqual([3]);
+  });
+
+  it('un exemple ferme cite dans un commentaire ne fausse rien non plus', () => {
     expect(lignesRepliees([
       '/**',
       ' * exemple : val s = """texte""" + "autre',
       ' */',
       'val e = TIMEOUT_MS',
     ])).toEqual([3]);
+  });
+
+  it('deux triples impairs dans deux commentaires ne s annulent pas', () => {
+    // Deux erreurs de parite se compensent : compter sur le texte brut
+    // rouvrirait puis refermerait la fausse chaine, et le fichier redeviendrait
+    // replie par accident. Il faut une ligne de code ENTRE les deux.
+    expect(lignesRepliees([
+      '/**',
+      ' * premier exemple : """',
+      ' */',
+      'val a = TIMEOUT_MS',
+      '/**',
+      ' * second exemple : """',
+      ' */',
+      'val b = TIMEOUT_MS',
+    ])).toEqual([3, 7]);
+  });
+
+  it('une ligne de declaration ne se fait pas replier', () => {
+    // `const val X = Y` : la ligne entiere est mise de cote, sinon la valeur
+    // lue a droite du signe egal se ferait remplacer sous les yeux de celui
+    // qui lit la declaration.
+    expect(lignesRepliees([
+      'const val AUTRE = TIMEOUT_MS',
+      'val e = TIMEOUT_MS',
+    ])).toEqual([1]);
   });
 
   it('temoin : une interpolation dans une chaine reste repliee', () => {

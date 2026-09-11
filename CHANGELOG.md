@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.116
+
+The replay added yesterday, so a folder deleted during the first scan does not leave files behind, ran once per deleted folder. Each run re reads the whole index, so a wave of deletions read it a second time from end to end.
+
+### Fixed
+- A wave of folder deletions during a scan is now taken up in a single pass. Two hundred deletions on a fifty thousand file index cost 853 ms of frozen extension host and now cost 464 ms; on a five thousand file project, 84 ms became 47 ms. Membership is decided by walking a path up to its parents, a handful of lookups, instead of testing every deleted folder against every file.
+
+### Corrected
+- The note published with version 1.42.113 claimed that deleting folders had gone from 406 ms to 0.1 ms. That measurement was taken against an empty index and left out the pass that dominates. The honest figure is that the read of the whole index remains, at 0.2 ms per deletion on a five thousand file project and 2.1 ms on fifty thousand. What that release did fix was a second pass whose cost grew with everything the session had ever seen, which is the part that had no ceiling.
+
 ## 1.42.115
 
 Six releases went into stopping a deleted file from coming back. Listing every state a file can be in turned up one the watcher cannot see at all: the files of the very first scan, which runs without going through it.

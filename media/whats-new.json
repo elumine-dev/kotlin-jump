@@ -1,28 +1,29 @@
 {
-  "version": "1.42.159",
+  "version": "1.42.160",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Hovering a string key shows the text you will see",
-  "summary": "A base module often declares a key with no value so the code compiles, and the app supplies the text. Hovering from the base module showed the empty placeholder rather than the text.",
+  "tagline": "A string used only in a layout is no longer invisible",
+  "summary": "The index of where a resource key is used read only Kotlin, Kotlin script and Java. In Android most strings are referenced from a layout, a menu or a navigation graph, and those references were nowhere.",
   "highlights": [
     {
-      "title": "A filled value wins over an empty placeholder",
-      "kind": "fix",
-      "description": "Hovering R.string.settings_app_theme_mode_light_option from the base module showed nothing. It now shows Clair, which is what the app displays at runtime."
+      "title": "Layout references count as usages",
+      "kind": "improvement",
+      "description": "Ctrl+click on a key in strings.xml found nothing when the string was used only from a layout. It now lands on every place the key appears, whether written R.string.key in code or @string/key in XML."
     }
   ],
   "sections": [
     {
-      "heading": "Fixes",
+      "heading": "Improvements",
       "bullets": [
-        "Android merges resources so a non empty value always beats an empty one, whichever module it comes from. The ranking put the calling file's own module first, so the placeholder won and the hover was blank.",
-        "Nothing else moves: when every declaration of a key is filled, or every one is empty, they all get the same bonus and the order stays exactly as it was. The module of the calling file still decides between two real values.",
-        "Measured on a real project: 5 keys are declared empty in one module and filled in another. Over the 926 keys that have a single value in the project, the hover matched the XML before and after, checked against a reader written from the Android escaping rules rather than from the extension."
+        "Measured on a real project of 1237 keys declared in the default locale: 723 are referenced from code and 428, which is 35 percent, only from XML. Of 1358 declarations, those with at least one target went from 802 to 1268, and the targets from 1105 to 1788, with every one of them landing on a line that really names the key.",
+        "The same now holds for colors, drawables, mipmaps, dimensions, plurals and arrays, which are referenced from XML far more often than from code.",
+        "The identifiers of a layout are left alone: a plus id reference does not name a string, and neither does a reference to the Android framework, since the type has to follow the at sign directly and be one we know.",
+        "The files added to the scan weigh 2.17 MB against 16.9 MB for the sources of that project, and they are read in bounded batches like the rest."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "That sweep covers 976 references to a string key across the project, 948 of which show a hover, and it was first proven to reject the value of a different key 300 times out of 300."
+        "Also swept this round and found sound: Go to Definition on a string, color or dimension key from code, 1614 targets all landing on the line that declares the key; and the other direction before this change, 1105 targets with none wrong. Both checks were first proven to reject an altered key 400 times out of 400."
       ]
     }
   ],

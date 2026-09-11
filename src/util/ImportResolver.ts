@@ -117,6 +117,16 @@ export function resolveBest<T>(
   return { priority: 'none', matches: [] };
 }
 
+/**
+ * Le paquet declare par ce fichier, ou la chaine vide s'il n'en declare pas.
+ *
+ * Passe par le meme cache que la resolution : une seule lecture du
+ * `package`, et pas une deuxieme expression reguliere qui derive.
+ */
+export function packageOf(document: vscode.TextDocument): string {
+  return getCache(document).packageName;
+}
+
 /** Cache size, for the test that proves the ceiling holds. */
 export function __cacheSizeForTests(): number {
   return cache.size;

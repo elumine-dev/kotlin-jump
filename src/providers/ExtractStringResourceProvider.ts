@@ -118,7 +118,16 @@ export function buildReplacement(
   return resIdOnly ? `R.string.${resName}` : `getString(R.string.${resName})`;
 }
 
-const RES_ID_SETTER_RE = /\b(?:setText|setHint|setTitle|setSubtitle|setContentDescription|setError|setMessage|setPositiveButton|setNegativeButton|setNeutralButton|setTitleText|setHelperText)\s*\($/;
+/**
+ * Setters that really have an `int` overload taking a resource id.
+ *
+ * Checked against android.jar of API 36 and Material 1.13, not from memory.
+ * Three names were dropped because their only signature takes a CharSequence,
+ * so handing them `R.string.x` passes an Int where text is expected and the
+ * project stops compiling: `TextView.setError`, `View.setContentDescription`
+ * and `TextInputLayout.setHelperText`.
+ */
+const RES_ID_SETTER_RE = /\b(?:setText|setHint|setTitle|setSubtitle|setMessage|setPositiveButton|setNegativeButton|setNeutralButton|setTitleText)\s*\($/;
 
 /** True when the literal at `litStart` is the direct argument of a setter that accepts a resource id. */
 export function isResIdSetterArgument(lineText: string, litStart: number): boolean {

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.169
+
+When the literal being extracted is the argument of a setter that accepts a resource id, the extraction writes the bare id. Three names on that list have no such overload, so the result would not compile.
+
+### Fixes
+- Extracting from setError, setContentDescription or setHelperText produced a bare resource id, which is a number, where those methods only accept text.
+- Checked against the real artifacts rather than from memory: android.jar of API 36 gives TextView.setError only as CharSequence, and View.setContentDescription likewise, while Material 1.13 gives TextInputLayout.setHelperText the same way. The ones kept, setText, setHint, setTitle, setSubtitle, setMessage and the dialog buttons, do have the overload.
+- These three now receive a call that returns text, as any other position already did.
+- The reference project has no literal in that position today, so nothing changes there. The shape itself, setting an error message on a field, is among the most common in Android, and the failure it caused was a project that no longer builds.
+- One name on the list belongs to no library that could be checked, so it was left exactly as it was rather than changed on a guess.
+
 ## 1.42.168
 
 Extract to string resource names the key after the text of the literal. When that text is a keyword of the language, the key was one too, and the project stopped compiling.

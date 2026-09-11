@@ -1,28 +1,23 @@
 {
-  "version": "1.42.168",
+  "version": "1.42.169",
   "title": "What's New in Kotlin Jump",
-  "tagline": "An extracted key is never a reserved word",
-  "summary": "Extract to string resource names the key after the text of the literal. When that text is a keyword of the language, the key was one too, and the project stopped compiling.",
+  "tagline": "Three setters were handed a number instead of text",
+  "summary": "When the literal being extracted is the argument of a setter that accepts a resource id, the extraction writes the bare id. Three names on that list have no such overload, so the result would not compile.",
   "highlights": [
     {
-      "title": "A literal reading true no longer produces a key named true",
+      "title": "Only setters that really take an id get one",
       "kind": "fix",
-      "description": "The build tool writes the key as a field of the generated R class, so a Java keyword there is a syntax error, and a key named is cannot even be written in Kotlin without backticks."
+      "description": "Extracting from setError, setContentDescription or setHelperText produced a bare resource id, which is a number, where those methods only accept text."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Measured on a real project: of 11786 literals, 85 produced a reserved key, across ten distinct words. The word true alone accounted for 34 of them, then null, false, native, default, class, else, super, is and package. None do now.",
-        "The rescue is the prefix the code already used for a name that starts with a digit, so there is one habit rather than two, and the result still has to be unique against the keys already declared.",
-        "The list covers the keywords of both languages, since the key is read from Java in the generated class and written from Kotlin at the call site."
-      ]
-    },
-    {
-      "heading": "Notes",
-      "bullets": [
-        "Found by asking a simple question of every literal in the project: is the key this would generate a name the build can actually carry. The same sweep confirms the escaping fixed yesterday, with 10623 of 10624 template free literals coming back identical through the extraction."
+        "Checked against the real artifacts rather than from memory: android.jar of API 36 gives TextView.setError only as CharSequence, and View.setContentDescription likewise, while Material 1.13 gives TextInputLayout.setHelperText the same way. The ones kept, setText, setHint, setTitle, setSubtitle, setMessage and the dialog buttons, do have the overload.",
+        "These three now receive a call that returns text, as any other position already did.",
+        "The reference project has no literal in that position today, so nothing changes there. The shape itself, setting an error message on a field, is among the most common in Android, and the failure it caused was a project that no longer builds.",
+        "One name on the list belongs to no library that could be checked, so it was left exactly as it was rather than changed on a guess."
       ]
     }
   ],

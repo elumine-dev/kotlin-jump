@@ -18,6 +18,14 @@ export interface StateProvenance {
   directWrites: number;
   indirectWriteFns: string[];
   kind: StateKind;
+  /**
+   * `private` means the file is the whole scope: nothing outside can write it.
+   * Anything else can be written from another file, so the count shown for it
+   * is only what THIS file does. Measured on a real project: of 21 non private
+   * states with no write here, 3 are written elsewhere, one of them in four
+   * other files while the lens read `0 writes`.
+   */
+  isPrivate: boolean;
   /** 0-based line of the declaration, used by the CodeLens. */
   line?: number;
 }
@@ -33,7 +41,7 @@ export interface StateProvenance {
 const MODIFIER =
   '(?:private|internal|protected|public|override|open|final|lateinit|const|actual|expect)\\s+';
 const DECL_RE = new RegExp(
-  `(?:^|[{;])\\s*(?:${MODIFIER})*va[lr]\\s+(\\w+)(?:\\s*:\\s*[^=]+?)?\\s*=\\s*` +
+  `(?:^|[{;])\\s*((?:${MODIFIER})*)va[lr]\\s+(\\w+)(?:\\s*:\\s*[^=]+?)?\\s*=\\s*` +
   '(MutableStateFlow|MutableLiveData|MutableSharedFlow|mutableStateOf)\\s*[(<]',
 );
 
@@ -125,8 +133,9 @@ export function analyzeStateProvenance(vmText: string, stripped?: string): State
   for (let i = 0; i < lines.length; i++) {
     const m = DECL_RE.exec(lines[i]);
     if (!m) continue;
-    const property = m[1];
-    const kind = KIND_MAP[m[2]];
+    const property = m[2];
+    const kind = KIND_MAP[m[3]];
+    const isPrivate = /\bprivate\b/.test(m[1]);
 
     // Exposure: `val hp… = _hp.asStateFlow()` / `= _hp` (bare LiveData).
     let exposedAs: string | undefined;
@@ -146,6 +155,7 @@ export function analyzeStateProvenance(vmText: string, stripped?: string): State
       directWrites: fileWrites.get(property) ?? 0,
       indirectWriteFns: [],
       kind,
+      isPrivate,
       line: i,
     });
   }
@@ -336,7 +346,11 @@ export class StateProvenanceProvider implements vscode.CodeLensProvider {
 
         // Readers are counted in this file only (Compose collectors live in
         // other files): say so rather than show "0 readers" as a fact.
-        const ecrits = `✎ ${s.directWrites} write${s.directWrites !== 1 ? 's' : ''}${indirect}`;
+        // The readers lens already says "in this file"; the writes count has
+        // the same scope as soon as something outside can write the property.
+        const portee = s.isPrivate ? '' : ' in this file';
+        const ecrits =
+          `✎ ${s.directWrites} write${s.directWrites !== 1 ? 's' : ''}${portee}${indirect}`;
         const lus = `👁 ${readerSites.length} reader${readerSites.length !== 1 ? 's' : ''} in this file`;
         // A second lens only when it has somewhere to go. A lens whose command
         // is the empty string is not reliably rendered (the drawable preview

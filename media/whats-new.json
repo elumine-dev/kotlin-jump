@@ -1,27 +1,29 @@
 {
-  "version": "1.42.145",
+  "version": "1.42.146",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A quieter build log",
-  "summary": "Stops the test suite printing a spurious error, and the author's local path, into every public build log.",
+  "tagline": "Test source sets recognised everywhere alike",
+  "summary": "Test sources that Gradle recognises but the settings list does not are no longer treated as production code.",
   "highlights": [
     {
-      "title": "No More Spurious Error In The Build Log",
-      "kind": "improvement",
-      "description": "The corpus checks ran an external command that failed on machines without the reference project, printing a no such file message and a local path into every public build log. Its error output is now discarded."
+      "title": "Auto Import No Longer Reaches Into Tests",
+      "kind": "fix",
+      "description": "Auto import, the implementation count on a lens and the type hierarchy judged test source sets by the settings list alone, so 29 test files on a real project passed for production. Auto import could offer an import that does not compile."
     }
   ],
   "sections": [
     {
-      "heading": "Internal",
+      "heading": "Fixes",
       "bullets": [
-        "The corpus checks look for the reference project by running an external command when the file loads, on every machine. On one without that project, which is every build machine, the command failed and its message went straight to the log: a line reading no such file or directory, which looks like a breakage and carries a local path. Its error output is now discarded, and the suite prints none.",
-        "The guard that keeps it that way builds the text it searches for at run time. Written out plainly, those strings would appear in the guard's own file and it would satisfy itself, which is the defect corrected three releases ago, met again while writing its cure."
+        "The extension holds two ways of deciding whether a file belongs to a test source set: the list in the settings, and Gradle's own convention that a source set under src whose name contains test is one. The dead code detectors have always used both. The filter behind the implementation count on a lens, auto import and the type hierarchy used only the list. On a real project of 3187 Kotlin files, 29 test files, 26 under savedAndroidTest and 3 under sharedTest, were therefore taken for production code.",
+        "Auto import was the worst of the three: it could offer to import a class declared in a test source set, which does not compile. Both ways are now used everywhere, so what one feature hides the others hide too.",
+        "Seen from a test file nothing changes: everything stays visible, since a test may legitimately reach both sides."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "No behaviour change in this release."
+        "A project whose source sets are all named in the settings sees no change.",
+        "No new commands or settings in this release."
       ]
     }
   ],

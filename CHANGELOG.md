@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.142
+
+Locks in the checks that found the last few defects, so the next regression on those surfaces cannot pass unnoticed.
+
+### Internal
+- Three checks that had only ever been run by hand are now part of the suite: every coloured token decoded from its compact form and held to its line, every inlay hint held to its line and forbidden from splitting a word, and the two readers of comments held to the same answer. They run against a real project of 3187 Kotlin files rather than fixtures, covering more than 50000 tokens, 10000 hints and 300 documentation references.
+- Each one also states what it must find, not only what must not be wrong. A provider gone silent breaks no rule, which is how a set of checks published two releases ago turned out to be unable to fail. Three deliberate breakages were tried, one per check, and each is caught.
+- The checks are skipped wherever that project is absent, which is every machine but the author's, so continuous integration is unaffected.
+
+### Notes
+- No behaviour change in this release.
+
 ## 1.42.141
 
 Corrects yesterday's change, which could hide a hint that was still worth showing.

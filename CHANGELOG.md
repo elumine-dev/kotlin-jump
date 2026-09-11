@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.153
+
+Pressing F2 inside a Kotlin name written between backticks renamed the single word under the cursor across the whole workspace, and left the name itself broken.
+
+### Fixes
+- Kotlin lets a test be called by a sentence between backticks. The cursor only ever sits on one word of it, and rename took that word for an ordinary symbol: every declaration of the same name in the project was rewritten, and the test name was left half replaced. Rename now offers the complete backticked name, and edits only the places that name appears literally, in the file that holds it.
+- Measured on a real project: 1102 backticked names contain a space, spread over 184 files, and they hold 5670 words that are also indexed symbols. The word event alone has 146 declarations, state 146, data 70. A sweep of the rename edits produced 128 edits in unrelated Java files from the single word given, and now produces none.
+- Editing only the current file is the correct rule here, not a compromise: 1086 of those 1090 distinct names exist in exactly one file, and the four that do not are tests of different classes that happen to share a name, which must never be renamed together.
+- A backticked name that is a plain identifier, such as one quoting a keyword, is untouched by this and still renames across the workspace with its usages.
+
+### Notes
+- The sweep that found this checks a rule that needs no reference: the text a rename edit replaces must be exactly the old name, at identifier boundaries. Over 150 symbols and 1870 edits it now reports nothing.
+
 ## 1.42.152
 
 Ctrl+. ranked its import suggestions by symbol kind alone, so among candidates of the same kind the order was whatever the index happened to hold.

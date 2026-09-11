@@ -138,6 +138,7 @@ export class StringXmlHoverProvider implements vscode.HoverProvider, vscode.Disp
   // Two hovers inside the load window used to start two full workspace
   // reads; every caller now awaits the same one.
   private _loading: Promise<SourceFile[]> | undefined;
+  private _disposed = false;
 
   /**
    * The listing behind the hover is every Kotlin and Java source of the
@@ -145,6 +146,7 @@ export class StringXmlHoverProvider implements vscode.HoverProvider, vscode.Disp
    * measured here. Nothing released it, so it outlived the extension itself.
    */
   dispose(): void {
+    this._disposed = true;
     this._cache = undefined;
     this._loading = undefined;
   }
@@ -167,7 +169,9 @@ export class StringXmlHoverProvider implements vscode.HoverProvider, vscode.Disp
           continue;
         }
       }
-      this._cache = { at: Date.now(), files };
+      // `dispose()` alone is not enough: the scan running at that moment lands a
+      // second later and would hand its megabytes back to a dead provider.
+      if (!this._disposed) this._cache = { at: Date.now(), files };
       return files;
     })().finally(() => { this._loading = undefined; });
     return this._loading;

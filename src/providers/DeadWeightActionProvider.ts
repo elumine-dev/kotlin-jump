@@ -28,6 +28,7 @@ export class DeadWeightActionProvider implements vscode.CodeActionProvider, vsco
   private _imports: { at: number; value: string[] } | undefined;
 
   private readonly _subs: vscode.Disposable[] = [];
+  private _disposed = false;
 
   constructor() {
     this._subs.push(
@@ -65,6 +66,7 @@ export class DeadWeightActionProvider implements vscode.CodeActionProvider, vsco
   }
 
   dispose(): void {
+    this._disposed = true;
     for (const s of this._subs) s.dispose();
     this._sources = undefined;
     this._imports = undefined;
@@ -89,7 +91,9 @@ export class DeadWeightActionProvider implements vscode.CodeActionProvider, vsco
     // the setting was switched off while it ran, `_warmUp` has already released
     // the caches and writing here would put the 40.8 MB straight back, for a
     // feature nobody asked for any more.
-    if (this._enabled()) {
+    // `dispose()` alone is not enough: the scan running at that moment lands a
+    // second later and would hand its megabytes back to a dead provider.
+    if (!this._disposed && this._enabled()) {
       this._sources = { at: Date.now(), value, truncated: uris.length >= MAX_SOURCES };
     }
     return value;
@@ -130,7 +134,7 @@ export class DeadWeightActionProvider implements vscode.CodeActionProvider, vsco
         if (m) value.push(`import ${m[1]}`);
       }
     }
-    if (this._enabled()) this._imports = { at: Date.now(), value };
+    if (!this._disposed && this._enabled()) this._imports = { at: Date.now(), value };
     return value;
   }
 

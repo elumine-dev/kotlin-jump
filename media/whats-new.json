@@ -1,32 +1,26 @@
 {
-  "version": "1.42.183",
+  "version": "1.42.184",
   "title": "What's New in Kotlin Jump",
-  "tagline": "About 98 MB that was never given back",
-  "summary": "Three features keep the text of every project file in memory so they can answer quickly. Raising their ceiling over the last two releases took that from about 64 MB to about 98 MB on the project measured, and two of the three never gave any of it back.",
+  "tagline": "Memory that came back after shutdown",
+  "summary": "Releasing a cache achieves nothing if the scan already running hands its megabytes straight back. That is what happened to all three of the features that hold the project listing, a second or two after the extension shut down.",
   "highlights": [
     {
-      "title": "The resource badge lets go",
+      "title": "Shutdown is now a stop sign",
       "kind": "fix",
-      "description": "40.8 MB across 6278 files, held for the whole session. Released on shutdown, on switching the badges off, and for a listing that lands after that."
+      "description": "Each of the three refuses to write its listing once shut down: 40.8 MB for the quick fixes, 40.8 MB for the resource badge, about 17 MB for the reverse string map."
     },
     {
-      "title": "The reverse string map too",
+      "title": "The window you actually hit",
       "kind": "fix",
-      "description": "About 17 MB with no release path at all. Built inline inside its registration, nothing could reach it."
-    },
-    {
-      "title": "No count without a listing",
-      "kind": "improvement",
-      "description": "A zero computed across that moment would grey out a live resource. The badge reads ? usages and greys nothing instead."
+      "description": "The scan takes seconds, one round trip per file, so closing the window while it runs is the ordinary case rather than a corner case."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "The resource usage badge and the reverse string map now release the project listing they hold.",
-        "Both follow their setting at the moment the listing is written, not only when the work starts.",
-        "A guard in the test suite fails if either entry point goes back to building the hover provider inline."
+        "A scan in flight could repopulate the cache of a provider that had already been disposed, so the memory outlived the extension.",
+        "The same guard already covered the settings being switched off; shutdown was covered nowhere."
       ]
     }
   ],

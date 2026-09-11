@@ -22,6 +22,14 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { workspace } from './__mocks__/vscode';
 import { buildAllowFilter } from '../../src/util/testFilter';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { mockDocument } from './helpers';
+import { Position } from './__mocks__/vscode';
+import { SymbolIndex } from '../../src/indexer/SymbolIndex';
+import { parse } from '../../src/indexer/KotlinParser';
+import { KotlinDefinitionProvider } from '../../src/providers/DefinitionProvider';
+import { classifyFile } from '../../src/providers/FindUsagesPanel';
 
 const DEFAUTS = ['test/java', 'test/kotlin', 'androidTest', 'jvmTest', 'commonTest'];
 const PROD = '/p/app/src/main/java/com/x/Ecran.kt';
@@ -82,5 +90,84 @@ describe('depuis un fichier de test', () => {
     const allow = buildAllowFilter('/p/replica/app/src/savedAndroidTest/java/ca/T.kt');
     expect(allow('/p/app/src/androidTest/java/com/x/Autre.kt'),
       'un test peut en voir un autre').toBe(true);
+  });
+});
+
+/**
+ * Les deux consommateurs que le correctif d'origine avait oublies.
+ *
+ * `buildAllowFilter` est passe au predicat complet, mais `DefinitionProvider`
+ * ne l'appelait pas : il refaisait la meme regle a la main, avec `isTestPath`.
+ * `FindUsagesPanel` classe ses fichiers avec le meme predicat etroit.
+ *
+ * Mesure sur le meme projet reel, 419 fichiers de production echantillonnes et
+ * 65 161 clics : 327 cibles dans un source set de test sont correctement
+ * ecartees, et 101 ne le sont pas. Cliquer `attributeStarts` depuis
+ * `ParagraphBuilder.java` ouvrait `AttributeContainsTest.java`.
+ */
+describe('les autres consommateurs de la meme regle', () => {
+  const TEST_NON_LISTE = '/p/app/src/savedAndroidTest/java/com/x/AideTest.kt';
+
+  it('Go to Definition ne mene pas dans un source set de test non configure', async () => {
+    avecDefauts();
+    const NL = String.fromCharCode(10);
+    const aide  = ['package com.x', '', 'class AideDeTest', '', 'fun brancherLeDouble() {}'].join(NL);
+    const appel = ['package com.x', '', 'fun vrai() {', '    brancherLeDouble()', '}'].join(NL);
+
+    const index = new SymbolIndex();
+    index.add(parse('file://' + TEST_NON_LISTE, aide));
+    index.add(parse('file://' + PROD, appel));
+    index.finalize();
+
+    vi.spyOn(workspace, 'openTextDocument').mockImplementation(async (u: any) => {
+      const uri = typeof u === 'string' ? u : (u?.toString?.() ?? String(u));
+      if (uri === 'file://' + TEST_NON_LISTE) return mockDocument(uri, aide) as any;
+      if (uri === 'file://' + PROD) return mockDocument(uri, appel) as any;
+      return null;
+    });
+
+    const r: any = await new KotlinDefinitionProvider(index).provideDefinition(
+      mockDocument('file://' + PROD, appel) as any,
+      new Position(3, 6) as any,
+      { isCancellationRequested: false } as any,
+    );
+    const cibles = (Array.isArray(r) ? r : r ? [r] : []).map((l: any) => String(l.uri.path));
+    expect(cibles, 'un fichier de production ne doit pas etre envoye dans un test').not.toContain(TEST_NON_LISTE);
+  });
+
+  it('Find Usages classe un source set de test non configure comme test', () => {
+    expect(classifyFile(TEST_NON_LISTE, DEFAUTS)).toBe('test');
+    expect(classifyFile('/p/app/src/sharedTest/java/com/x/Base.kt', DEFAUTS)).toBe('test');
+  });
+
+  it('et laisse la production et les apercus ou ils sont', () => {
+    expect(classifyFile(PROD, DEFAUTS)).toBe('production');
+    expect(classifyFile('/p/app/src/test/java/com/x/VraiTest.kt', DEFAUTS)).toBe('test');
+    expect(classifyFile('/p/app/src/debug/java/com/x/EcranPreview.kt', DEFAUTS)).toBe('preview');
+  });
+});
+
+/**
+ * Le gardien : `isTestPath` seul ne doit plus decider, dans `src/`, si un
+ * chemin est un test. C'est precisement la copie qui a derive. Les aiguilles
+ * sont assemblees a l'execution pour que ce fichier ne se satisfasse pas
+ * lui meme.
+ */
+describe('plus aucune copie etroite dans src/', () => {
+  it('aucun fichier de src ne decide avec le predicat etroit', () => {
+    const racine = path.resolve(__dirname, '..', '..', 'src');
+    const aiguille = 'isTest' + 'Path(';
+    const coupables: string[] = [];
+    const visiter = (dir: string) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) { visiter(p); continue; }
+        if (!e.name.endsWith('.ts')) continue;
+        if (p.endsWith('/util/testPaths.ts') || p.endsWith('/util/testFilter.ts')) continue;
+        if (fs.readFileSync(p, 'utf8').includes(aiguille)) coupables.push(p.slice(racine.length + 1));
+      }
+    };
+    visiter(racine);
+    expect(coupables, 'ces fichiers doivent passer par isTestSourceSet').toEqual([]);
   });
 });

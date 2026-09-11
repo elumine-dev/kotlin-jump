@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { scanForUsagesWithTarget, resolveSearchTarget, DEFAULT_TEST_SEGMENTS, UsageResult, isExcluded, withoutDeclaration, withoutDeclarations } from './FindUsagesEngine';
-import { isTestPath } from '../util/testFilter';
+import { isTestSourceSet } from '../util/testPaths';
 
 // ── Tree node types ───────────────────────────────────────────────────────────
 
@@ -357,13 +357,17 @@ function buildFileNodes(
   return fileNodes;
 }
 
-function classifyFile(path: string, testSegments: string[]): FileKind {
+export function classifyFile(path: string, testSegments: string[]): FileKind {
   // Share the same bounded-component matcher as the caller-side filter
   // in `util/testFilter.ts` — a plain `path.includes(segment)` would
   // misclassify files under a repo named `test/kotlin-jump-demo` as
   // tests (because `"test/kotlin"` is a literal substring of that
   // directory name).
-  if (isTestPath(path, testSegments)) return 'test';
+  // `isTestSourceSet` et non `isTestPath` : la liste configuree ne nomme pas
+  // les source sets qu'un vrai projet invente. Avec l'etroit, 170 fichiers d'un
+  // projet reel, sous `savedAndroidTest` et `sharedTest`, etaient annonces
+  // comme de la production dans le panneau, et tries avec elle.
+  if (isTestSourceSet(path, testSegments)) return 'test';
   if (path.includes('/src/debug/') && path.endsWith('Preview.kt')) return 'preview';
   return 'production';
 }

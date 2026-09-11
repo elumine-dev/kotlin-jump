@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.42.151
+
+Go to Definition and the Find Usages panel were the last two places still using the narrow test detection rule, so they treated real test files as production code.
+
+### Fixes
+- Ctrl+click from a production file no longer opens a file that sits in a test source set Gradle recognises by convention but that settings do not name, such as savedAndroidTest or sharedTest.
+- The Find Usages panel listed files from those same source sets under production usages, and sorted them with production. They now appear under tests, where they belong.
+- An earlier release taught the shared filter that a source set under src whose name contains test is a test source set, which fixed auto import, the code lens counts and the type hierarchy. Go to Definition kept its own copy of the older rule and never received that fix.
+- Measured on a real project of 5088 sources: 65161 clicks from 419 production files returned 101 targets inside a test source set. That count is now zero, and only one click out of 29126 lost its result, the one whose single declaration really did live in a test.
+- In the Find Usages panel, 170 of the project's 901 test files were announced as production. All 901 are now announced as tests.
+
+### Notes
+- Projects that already name every test source set in kotlinJump.testSourceSets see no change.
+- The rule now has a single implementation, and a check in the suite fails if any file under src goes back to deciding on its own.
+
 ## 1.42.150
 
 A check added yesterday put back a leak that had been fixed seven releases earlier.

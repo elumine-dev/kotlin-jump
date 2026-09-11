@@ -548,6 +548,16 @@ function commentSpans(text: string): string[] {
       if (text[i] === '"') { mode = 'chaine'; i++; continue; }
       if (two === '//') { mode = 'ligne'; debut = i; i += 2; continue; }
       if (two === '/*') { mode = 'bloc'; debut = i; i += 2; continue; }
+      if (text[i] === "'") {
+        // Litteral de caractere. Sans ce saut, `'"'` faisait entrer le
+        // lecteur en mode chaine et TOUT le reste du fichier devenait
+        // invisible : les liens de documentation qui suivaient ne comptaient
+        // plus, et leurs imports redevenaient signales a tort.
+        let j = i + 1;
+        if (text[j] === '\\') j += 2 + (text[j + 1] === 'u' ? 4 : 0);
+        else j += 1;
+        if (text[j] === "'") { i = j + 1; continue; }
+      }
       i++;
       continue;
     }

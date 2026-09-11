@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.139
+
+A character literal holding a quote switched off the documentation check added last release for the rest of the file.
+
+### Fixes
+- The reader that finds documentation links did not know about character literals, so a literal holding a double quote was taken for the start of a string. Everything after it in the file became invisible, the check that keeps an import named by a documentation link stopped applying there, and such imports were called dead again. Character literals are now understood, escapes and unicode escapes included.
+- Measured on a real project of 3187 Kotlin files: 36 hold a character literal and one holds a quote in one, with no finding affected today. The point is that the miss was silent and covered a whole file.
+
+### Notes
+- No new commands or settings in this release.
+
 ## 1.42.138
 
 An import named only by a documentation link is no longer reported as dead. On a real project that was two findings out of five.

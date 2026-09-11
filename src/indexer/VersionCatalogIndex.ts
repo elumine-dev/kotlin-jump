@@ -282,6 +282,11 @@ export class VersionCatalogIndex {
   // Recalcules a l'ecriture, qui est rare, et non a chaque lecture, qui part
   // au mouvement de souris.
   private liste: ParsedCatalog[] = [];
+  // Le contenu des `settings.gradle(.kts)` du workspace. Sans eux la racine
+  // ne peut venir que du nom du fichier, et un `create("deps")` passe a la
+  // trappe. La navigation DANS le toml les lit depuis toujours : les deux
+  // moitiés se contredisaient sur un projet renomme par les settings.
+  private settings: readonly string[] = [];
   private racines: readonly string[] = LIBS_SEUL;
 
   private rafraichir(): void {
@@ -292,6 +297,21 @@ export class VersionCatalogIndex {
 
   private primary(): ParsedCatalog | undefined {
     return this.catalogs.values().next().value;
+  }
+
+  /**
+   * Le contenu des settings du workspace.
+   *
+   * Les settings et les toml arrivent de deux balayages asynchrones, dans un
+   * ordre non garanti, donc appeler ceci redérive la racine des catalogues
+   * DEJA indexes. Rien n'est reparsé : seule la racine depend des settings.
+   */
+  setSettings(textes: readonly string[]): void {
+    this.settings = textes;
+    for (const c of this.catalogs.values()) {
+      c.catalog.root = catalogRootOf(c.key || c.uri, this.settings) ?? 'libs';
+    }
+    this.rafraichir();
   }
 
   removeFile(key: string): void {
@@ -312,7 +332,7 @@ export class VersionCatalogIndex {
     // repondait `libs`, et le Ctrl+clic depuis un build file ne trouvait
     // jamais son accesseur. Un nom que Gradle ne reconnait pas rend
     // `undefined`, et le `root = 'libs'` de parseCatalog le rattrape.
-    const catalog = parseCatalog(content, catalogRootOf(key || uriString, []));
+    const catalog = parseCatalog(content, catalogRootOf(key || uriString, this.settings));
     const entries = new Map<string, CatalogEntry>();
 
     const versions = new Map<string, string>();

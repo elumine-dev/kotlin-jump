@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.130
+
+Completes the catalog work of the last few releases: a catalog renamed in settings.gradle.kts is now understood by hover and Ctrl+click too.
+
+### Fixes
+- Gradle lets settings.gradle.kts rename a catalog, with create("deps") { from(files("gradle/libs.versions.toml")) }, so the file keeps its name while build files write deps.retrofit. Find Usages from inside the toml has always read that, but hover and Ctrl+click took the name from the file alone, so they looked for libs on a project that writes deps and answered nothing. The two halves now read the same rule, and the settings files are watched so an edit takes effect right away.
+- The catalog sweep and the settings sweep are independent and can finish in either order, so the roots of catalogs already read are recomputed when settings arrive rather than being fixed once.
+
+### Notes
+- A project with no versionCatalogs block in its settings sees no change, verified against a real one.
+- No new commands or settings in this release.
+
 ## 1.42.129
 
 Hover and Ctrl+click on a catalog accessor got slower two releases ago. They are now faster than before either change.

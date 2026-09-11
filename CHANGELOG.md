@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.144
+
+Closes the last way the corpus checks could fail a release for a reason of their own.
+
+### Internal
+- Those checks decide whether to run by looking for the reference project. They looked for one file, the version catalog, while the data they read is the Kotlin sources beside it. A checkout holding the first without the second, a worktree or a branch without the modules, made them run against nothing, fail their floor, and stop the release script. They now decide on the sources themselves, and a count below two hundred files counts as absent.
+- Checked on the three situations that matter: the real project runs the checks, a tree holding only the catalog skips them, and a path that does not exist skips them without raising.
+
+### Notes
+- No behaviour change in this release.
+
 ## 1.42.143
 
 Removes a way the checks added last release could have blocked an unrelated publish.

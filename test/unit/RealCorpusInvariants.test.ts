@@ -33,7 +33,28 @@ import { kdocReferences, sanitizeForUsageScan } from '../../src/util/kotlinScan'
 
 const NL = String.fromCharCode(10);
 const RACINE = '/Users/kevin/Desktop/work/lapresse';
-const present = fs.existsSync(RACINE + '/gradle/libs.versions.toml');
+/**
+ * Les fichiers du corpus, ou une liste vide s'il n'est pas la.
+ *
+ * La presence se juge sur les SOURCES elles memes, pas sur un fichier voisin.
+ * Juger sur `gradle/libs.versions.toml` laissait passer le cas ou ce fichier
+ * existe alors que les sources ont disparu, un worktree ou une branche sans
+ * les modules : les controles tournaient alors sur un corpus vide, tombaient
+ * sur leur plancher, et `.publish` refusait une release sans rapport.
+ */
+function fichiersDuCorpus(): string[] {
+  try {
+    return execSync(
+      `find ${RACINE} -type f -name '*.kt' -not -path '*/build/*' -not -path '*/.gradle/*' -not -path '*/generated/*'`,
+      { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+    ).trim().split(NL).filter(Boolean);
+  } catch {
+    return []; // projet absent : rien a verifier, on saute
+  }
+}
+
+const FICHIERS = fichiersDuCorpus();
+const present = FICHIERS.length >= 200;
 const MOT = /[A-Za-z0-9_$]/;
 const NUL = { info() {}, debug() {}, warn() {}, error() {} } as any;
 
@@ -42,12 +63,9 @@ let indexPartage: SymbolIndex | undefined;
 
 function charger(): { textes: Map<string, string>; index: SymbolIndex } {
   if (corpus && indexPartage) return { textes: corpus, index: indexPartage };
-  const fichiers = execSync(
-    `find ${RACINE} -type f -name '*.kt' -not -path '*/build/*' -not -path '*/.gradle/*' -not -path '*/generated/*'`,
-    { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).trim().split(NL).filter(Boolean);
   const textes = new Map<string, string>();
   const index = new SymbolIndex();
-  for (const f of fichiers) {
+  for (const f of FICHIERS) {
     let t: string;
     try { t = fs.readFileSync(f, 'utf8'); } catch { continue; }
     textes.set('file://' + f, t);

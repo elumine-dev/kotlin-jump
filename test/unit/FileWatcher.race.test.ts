@@ -77,6 +77,11 @@ describe('FW-7 — suppression pendant un scan normal', () => {
 
     expect(index.lookup('Fantome')).toHaveLength(0);
     expect(index.stats().files).toBe(0);
+    // Les marques de suppression ne servent qu'a departager les scans en vol.
+    // Sans cette borne, l'ensemble grossit d'une entree par fichier supprime
+    // pendant toute la session, ce qui est le defaut que la carte d'epoques
+    // avait deja eu.
+    expect((watcher as any).supprimes.size, 'les marques sont liberees une fois les scans finis').toBe(0);
   });
 });
 
@@ -214,18 +219,19 @@ describe('FW-13 — removeTree ne relit pas tout l historique', () => {
     watcher = new FileWatcher(scanner, index);
 
     // Une session de travail : beaucoup de fichiers ont eu un evenement.
-    for (let i = 0; i < 3_000; i++) (watcher as any).queue(uriOf(1000 + i));
-    (watcher as any).pendingScan.clear();
+    for (let i = 0; i < 3_000; i++) (watcher as any).noterSuppression(uriOf(1000 + i));
 
     (watcher as any).queue(uriOf(3));
     await vi.advanceTimersByTimeAsync(200);        // le scan de File3 est en vol
 
     // `removeTree` avait besoin de repérer ce scan en vol, et le faisait en
     // relisant toute la carte des époques : 406 ms pour 200 suppressions de
-    // dossier une fois 50 000 fichiers vus. Il ne doit plus la parcourir.
-    const historique: Map<string, number> = (watcher as any).epoque;
+    // dossier une fois 50 000 fichiers vus. Cette carte a disparu ; la garde
+    // vise maintenant `supprimes`, le seul ensemble du veilleur qui puisse
+    // encore grossir avec la session.
+    const historique: Set<string> = (watcher as any).supprimes;
     let parcours = 0;
-    (watcher as any).epoque = new Proxy(historique, {
+    (watcher as any).supprimes = new Proxy(historique, {
       get(cible, prop) {
         if (prop === 'keys' || prop === 'values' || prop === 'entries' || prop === 'forEach' || prop === Symbol.iterator) parcours++;
         const v = Reflect.get(cible, prop, cible);
@@ -239,7 +245,7 @@ describe('FW-13 — removeTree ne relit pas tout l historique', () => {
 
     // D'abord la garde fait son travail, sinon « zéro parcours » ne prouve rien.
     expect(index.lookup('DansLeDossier'), 'le scan en vol est bien attrapé').toHaveLength(0);
-    expect(parcours, 'l historique des fichiers vus ne doit plus etre parcouru').toBe(0);
+    expect(parcours, 'aucun ensemble a croissance libre ne doit etre parcouru').toBe(0);
     // Sans cette ligne, un ensemble qui ne se vide jamais redevient tout
     // l'historique et ramène le parcours par une autre porte.
     expect((watcher as any).enVol.size, 'aucun scan ne doit rester marqué en vol').toBe(0);

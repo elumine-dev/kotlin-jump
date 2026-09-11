@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { SymbolIndex } from '../indexer/SymbolIndex';
 import { isInsideCommentOrString, isInsideStringInterpolation } from '../util/textUtils';
+import { stripKotlinComments } from '../util/xmlRefs';
 
 // Only fold SCREAMING_SNAKE_CASE names (≥3 chars) to minimise false positives
 const CONST_NAME_RE = /\b([A-Z][A-Z0-9_]{2,})\b/g;
@@ -100,8 +101,19 @@ export class ConstValFoldingProvider implements vscode.Disposable {
     // précédentes.
     let inRawString = false;
 
+    // Meme raison pour les commentaires : `isInsideCommentOrString` voit le
+    // `/*` d'une ligne, jamais celui d'une ligne precedente, donc l'interieur
+    // d'un KDoc passait pour du code et sa prose se faisait reecrire.
+    // `stripKotlinComments` preserve les offsets et les chaines : les colonnes
+    // des decorations restent exactes, et le compte des guillemets triples
+    // cesse d'etre fausse par un exemple cite dans un commentaire.
+    const brut: string[] = [];
+    for (let i = 0; i < doc.lineCount; i++) brut.push(doc.lineAt(i).text);
+    const NL = String.fromCharCode(10);
+    const propres = stripKotlinComments(brut.join(NL)).split(NL);
+
     for (let i = 0; i < doc.lineCount; i++) {
-      const text = doc.lineAt(i).text;
+      const text = propres[i] ?? brut[i];
       const triples = (text.match(/"""/g) ?? []).length;
       if (inRawString) {
         if (triples % 2 !== 0) inRawString = false;

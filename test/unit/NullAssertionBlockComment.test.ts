@@ -95,6 +95,38 @@ describe('NullAssertionProvider — les blocs de commentaire', () => {
     ])).toEqual([3]);
   });
 
+  it('un bloc referme puis rouvert sur la meme ligne reste ouvert', () => {
+    // `*​/ /*` : la fermeture ne suffit pas, ce qui suit rouvre. Sans relire la
+    // fin de la ligne, la suite du fichier repasserait pour du code.
+    expect(lignesDecorees([
+      OUVRE,
+      ' texte',
+      ' ' + FERME + ' ' + OUVRE,
+      'val a = b!!',
+      ' ' + FERME + ' val c = d!!',
+    ])).toEqual([4]);
+  });
+
+  it('un ouvre bloc cite dans un commentaire de ligne n ouvre rien', () => {
+    // Zero occurrence sur le projet reel, mais la garde existe : sans elle un
+    // `/*` mentionne apres un `//` eteindrait tout le reste du fichier.
+    expect(lignesDecorees([
+      'val a = b!!  // voir ' + OUVRE + ' plus bas',
+      'val c = d!!',
+    ])).toEqual([0, 1]);
+  });
+
+  it('la fermeture est masquee, pas seulement son etoile', () => {
+    // Le masque couvre les DEUX caracteres de `*​/`. En laisser un seul
+    // recolle un `//` avec le slash qui suit, et la ligne passe pour un
+    // commentaire de ligne alors qu elle porte du code.
+    expect(lignesDecorees([
+      OUVRE,
+      ' texte',
+      ' *' + '/' + '/ val x = a!!',
+    ])).toEqual([2]);
+  });
+
   it('temoin : deux assertions sur une ligne de code en donnent deux', () => {
     setupMocks();
     const provider = new NullAssertionProvider();

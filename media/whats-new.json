@@ -1,21 +1,21 @@
 {
-  "version": "1.42.198",
+  "version": "1.42.199",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Several cursors, one correct repaint",
-  "summary": "Two cursors and one Enter moved every color swatch and every forced unwrap highlight below the lower cursor one line too far down, one extra line per cursor above it.",
+  "tagline": "Seven tests that proved nothing",
+  "summary": "No behaviour changes. Seven tests meant to protect the last eight releases turned out to prove nothing, and now do.",
   "highlights": [
     {
-      "title": "Multi Cursor Line Edits",
-      "description": "A change event carrying several edits that add or remove lines now repaints the file whole. Organise imports, format on save and replace all send the same shape of event.",
-      "kind": "fix"
+      "title": "Tests That Now Hold",
+      "description": "Each test was checked by breaking the code it claims to cover. Seven did not notice. They cover inline folding, the per line state that survives a deletion, and three comment block guards.",
+      "kind": "improvement"
     }
   ],
   "sections": [
     {
-      "heading": "Fixes",
+      "heading": "Notes",
       "bullets": [
-        "Edits in one event arrive in coordinates of the document from before the keystroke, while the document already carries them all. The incremental path counted the shift of the cursor above twice.",
-        "Typing with several cursors without changing the line count keeps the fast path, since the two coordinate spaces then agree."
+        "Nothing changes in what the extension does today. What changes is what a future edit is allowed to break in silence.",
+        "The inline folding rewrite from 1.42.191 was re examined on the real project: none of its 30 403 folds lands inside a comment or a raw string, while a deliberately broken build produces 1 440 that do."
       ]
     }
   ],

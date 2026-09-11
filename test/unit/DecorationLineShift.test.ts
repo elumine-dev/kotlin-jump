@@ -146,8 +146,23 @@ describe('shiftLineState', () => {
   });
 
   it('une ligne supprimee disparait de l etat', () => {
-    expect(shiftLineState([false, true, true, false], 2, -1))
-      .toEqual([false, true, false]);
+    // Etats volontairement alternes : avec [F,T,T,F] un decalage d un cran
+    // rendrait la meme chose, et le test ne prouverait pas quelle case part.
+    expect(shiftLineState([false, true, false, true], 2, -1))
+      .toEqual([false, true, true]);
+  });
+
+  it('une suppression de plusieurs lignes retire les bonnes cases', () => {
+    // Le chemin sans splice, celui d une selection de plusieurs lignes
+    // effacee d un coup. Les etats alternent pour que toute erreur de borne
+    // se voie.
+    expect(shiftLineState([true, true, false, false, true], 2, -2))
+      .toEqual([true, true, true]);
+  });
+
+  it('une suppression qui mange la fin du tableau', () => {
+    expect(shiftLineState([true, false, true, true, false], 3, -2))
+      .toEqual([true, false, true]);
   });
 
   it('un collage de trois lignes en herite aussi', () => {

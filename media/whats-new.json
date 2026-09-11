@@ -1,21 +1,21 @@
 {
-  "version": "1.42.144",
+  "version": "1.42.145",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Checks that skip on the right signal",
-  "summary": "Closes the last way the corpus checks could fail a release for a reason of their own.",
+  "tagline": "A quieter build log",
+  "summary": "Stops the test suite printing a spurious error, and the author's local path, into every public build log.",
   "highlights": [
     {
-      "title": "Deciding On The Sources, Not A Neighbour",
+      "title": "No More Spurious Error In The Build Log",
       "kind": "improvement",
-      "description": "The corpus checks looked for the version catalog to decide whether to run, while reading the Kotlin sources beside it. A tree holding one without the other made them run against nothing and stop the release script."
+      "description": "The corpus checks ran an external command that failed on machines without the reference project, printing a no such file message and a local path into every public build log. Its error output is now discarded."
     }
   ],
   "sections": [
     {
       "heading": "Internal",
       "bullets": [
-        "Those checks decide whether to run by looking for the reference project. They looked for one file, the version catalog, while the data they read is the Kotlin sources beside it. A checkout holding the first without the second, a worktree or a branch without the modules, made them run against nothing, fail their floor, and stop the release script. They now decide on the sources themselves, and a count below two hundred files counts as absent.",
-        "Checked on the three situations that matter: the real project runs the checks, a tree holding only the catalog skips them, and a path that does not exist skips them without raising."
+        "The corpus checks look for the reference project by running an external command when the file loads, on every machine. On one without that project, which is every build machine, the command failed and its message went straight to the log: a line reading no such file or directory, which looks like a breakage and carries a local path. Its error output is now discarded, and the suite prints none.",
+        "The guard that keeps it that way builds the text it searches for at run time. Written out plainly, those strings would appear in the guard's own file and it would satisfy itself, which is the defect corrected three releases ago, met again while writing its cure."
       ]
     },
     {

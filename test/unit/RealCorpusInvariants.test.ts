@@ -46,7 +46,12 @@ function fichiersDuCorpus(): string[] {
   try {
     return execSync(
       `find ${RACINE} -type f -name '*.kt' -not -path '*/build/*' -not -path '*/.gradle/*' -not -path '*/generated/*'`,
-      { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+      // stderr MUET : sans cela, `find` sur un chemin absent ecrit
+      // `No such file or directory` a chaque execution de la suite. Sur une
+      // machine sans le projet, donc la CI, ce message part dans un journal
+      // public a chaque build, ressemble a une panne, et y publie le chemin
+      // local de l'auteur.
+      { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] },
     ).trim().split(NL).filter(Boolean);
   } catch {
     return []; // projet absent : rien a verifier, on saute
@@ -177,5 +182,23 @@ describe.skipIf(!present)('les deux lecteurs de commentaires restent d accord', 
     }
     expect(refs, 'le corpus doit vraiment porter des references de doc').toBeGreaterThan(50);
     expect(pb.slice(0, 10)).toEqual([]);
+  });
+});
+
+/**
+ * Gardien : ce fichier lance un processus externe au CHARGEMENT du module,
+ * donc sur toute machine, y compris celles qui n'ont pas le projet. Une
+ * sortie d'erreur heritee y salit chaque build.
+ */
+describe('le lancement de find reste muet', () => {
+  it('stderr est explicitement ignore', () => {
+    // Motifs assembles a l'execution : ecrits en clair, ils apparaitraient
+    // dans CE fichier et le gardien se satisferait lui meme. C'est le defaut
+    // corrige en v1.42.137, retrouve en s'ecrivant.
+    const APPEL = 'exec' + 'Sync(';
+    const MUET = "stdio: ['ig" + "nore', 'pipe', 'ignore']";
+    const source = fs.readFileSync(__filename.replace(/\.js$/, '.ts'), 'utf8');
+    expect(source.split(APPEL).length - 1, 'un seul appel externe attendu').toBe(1);
+    expect(source.includes(MUET), 'stderr doit etre ignore a cet appel').toBe(true);
   });
 });

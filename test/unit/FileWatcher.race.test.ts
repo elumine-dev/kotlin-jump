@@ -22,6 +22,7 @@
  *   FW-13 removeTree ne parcourt pas tout l'historique des fichiers vus
  *   FW-14 Dossier supprimé avant que la file d'attente ait été vidée
  *   FW-15 Dossier supprimé pendant le balayage initial, qui ignore le veilleur
+ *   FW-16 Une vague de suppressions pendant un balayage ne fait qu'une reprise
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -274,7 +275,10 @@ describe('FW-15 — dossier supprime pendant le balayage initial', () => {
     // veilleur. Un .java pour rester en parse inline, hors pool de workers.
     const scanner = new FileScanner(index, journal, new Map());
     const w = new FileWatcher(scanner as any, index);
-    const cible = vscode.Uri.parse('file:///proj/src/Perdu.java');
+    // Imbriqué : la reprise doit remonter les parents pour le rattacher au
+    // dossier supprimé. Posé à la racine, un test passerait même si la reprise
+    // n'examinait que le dossier direct.
+    const cible = vscode.Uri.parse('file:///proj/src/sub/plus/loin/Perdu.java');
 
     let suppressions = 0;
     const vraiRemove = w.removeTree.bind(w);
@@ -299,7 +303,11 @@ describe('FW-15 — dossier supprime pendant le balayage initial', () => {
     }
 
     expect(index.lookup('Ressuscite'), 'le rejeu reprend le fichier').toHaveLength(0);
-    expect(suppressions, 'un seul rejeu, pas de recursion').toBe(2);
+    // Le rejeu passe par une reprise groupee, pas par un second removeTree :
+    // un rappel par dossier relisait tout l'index a chaque fois.
+    expect(suppressions, 'un seul appel a removeTree, pas de recursion').toBe(1);
+    expect((w as any).aRejouer.size, 'la file de reprise est videe').toBe(0);
+    expect((w as any).rejeuArme, 'plus aucune reprise armee').toBe(false);
     expect((scanner as any).actifs, 'le compteur d activite revient a zero').toBe(0);
 
     // Temoin : le meme balayage, sans suppression de dossier, indexe bien le
@@ -317,5 +325,43 @@ describe('FW-15 — dossier supprime pendant le balayage initial', () => {
       (vscode.workspace.fs as any).readFile = origRead2;
     }
     expect(temoinIndex.lookup('Ressuscite'), 'le balayage indexe bien ce fichier').toHaveLength(1);
+  });
+});
+
+describe('FW-16 — une vague de suppressions ne fait qu une reprise', () => {
+  it('200 dossiers supprimes pendant un balayage : un seul whenIdle, un seul parcours', async () => {
+    vi.useRealTimers();
+    const index = new SymbolIndex();
+    // Moitié à la racine du dossier, moitié dans des sous dossiers : sans les
+    // seconds, la remontée de parents n'est jamais exercée et un test qui
+    // n'examine que le dossier direct passerait aussi.
+    for (let i = 0; i < 400; i++) {
+      const dossier = 'file:///w/d' + (i % 200);
+      const chemin = i % 2 === 0 ? dossier + '/F' + i + '.kt' : dossier + '/sub/plus/loin/F' + i + '.kt';
+      index.add(parse(chemin, SOURCE('S' + i)));
+    }
+    index.finalize();
+
+    let liberer!: () => void;
+    const balayage = new Promise<void>(r => { liberer = r; });
+    let actif = true;
+    let appelsWhenIdle = 0;
+    const scanner = {
+      scanFile: async () => {}, scanFiles: async () => {},
+      busy: () => actif,
+      whenIdle: () => { appelsWhenIdle++; return balayage; },
+    } as any;
+    const w = new FileWatcher(scanner, index);
+
+    for (let d = 0; d < 200; d++) w.removeTree(vscode.Uri.parse('file:///w/d' + d) as any);
+    expect((w as any).aRejouer.size, 'les 200 dossiers attendent la fin du balayage').toBe(200);
+    expect(appelsWhenIdle, 'un seul rappel arme pour toute la vague').toBe(1);
+
+    actif = false; liberer();
+    await new Promise<void>(r => setTimeout(r, 0));
+
+    expect((w as any).aRejouer.size, 'la file est videe par la reprise').toBe(0);
+    expect(index.stats().files, 'tous les fichiers des dossiers morts sont partis').toBe(0);
+    w.dispose();
   });
 });

@@ -1,21 +1,21 @@
 {
-  "version": "1.42.115",
+  "version": "1.42.116",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Deleting a folder during the first scan no longer leaves files behind",
-  "summary": "Listing every state a file can be in turned up one the watcher cannot see: the files of the very first scan, which runs without going through it.",
+  "tagline": "A wave of folder deletions is taken up in one pass",
+  "summary": "Yesterday's replay ran once per deleted folder, and each run re reads the whole index. A wave of deletions therefore read it a second time from end to end.",
   "highlights": [
     {
-      "title": "Switching branch just after opening a project",
-      "description": "A file whose bytes had been read was added to the index moments after its folder was gone, and nothing removed it. Cmd+T then listed a file that no longer existed.",
+      "title": "Half the freeze on a wave of deletions",
+      "description": "Two hundred deletions on a fifty thousand file index cost 853 ms and now cost 464 ms. Membership is decided by walking a path up to its parents.",
       "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Fixed",
+      "heading": "Corrected",
       "bullets": [
-        "Only the files caught mid parse were affected: one not yet read fails its read, one already added is found and removed.",
-        "The removal is replayed once the scan finishes rather than filtered file by file, so the indexing path is untouched."
+        "The note published with version 1.42.113 claimed folder deletion had gone from 406 ms to 0.1 ms. That measurement used an empty index and left out the pass that dominates.",
+        "The honest figure: reading the whole index remains, at 0.2 ms per deletion on a five thousand file project. What 1.42.113 removed was a pass whose cost had no ceiling."
       ]
     }
   ],

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.176
+
+The lifecycle pairing warning fired four times out of five for nothing on a real project. It is a warning in the Problems panel, on by default, so every false one costs attention.
+
+### Fixes
+- A callback added to `onBackPressedDispatcher` needs no removal: the dispatcher belongs to the Activity and dies with it. That is the same reasoning already applied to `lifecycle.addObserver`, and it now covers `requireActivity().onBackPressedDispatcher` too.
+- The `bind` and `unbind` pair stands for the `bindService` family. A `bind()` carrying no argument binds no resource at all, and the warning then named the receiver instead: `viewModel.bind()` warned about `viewModel`. A `bind` with an argument is still tracked.
+- Measured on a real project of 5088 sources: 132 files reach this check, and the warnings drop from 5 to 1. The one that remains names its resource correctly.
+
 ## 1.42.175
 
 The method separator lines went silent on a whole class when a class without a body sat above it in the same file. A `data class Foo(...)` is exactly that, and there are 1290 of them in the project this was measured on.

@@ -118,8 +118,13 @@ function extractFunctions(text: string): FunSpan[] {
 
 const IDENT_RE = /^[A-Za-z_]\w*$/;
 const NOT_A_RESOURCE = new Set(['this', 'object', 'null', 'true', 'false', 'it']);
-/** Receivers whose observers detach themselves: `lifecycle.addObserver(x)`. */
-const SELF_DETACHING_RECEIVER = /(?:^|\.)lifecycle$/;
+/**
+ * Receivers the screen owns, so whatever is added to them dies with it and
+ * needs no release: `lifecycle.addObserver(x)`, and the back dispatcher, which
+ * belongs to the Activity, in `onBackPressedDispatcher.addCallback(cb)` as much
+ * as in `requireActivity().onBackPressedDispatcher.addCallback(cb)`.
+ */
+const OWNER_SCOPED_RECEIVER = /(?:^|\.)(?:lifecycle|onBackPressedDispatcher)$/;
 
 /** Calls of one half of a pair: optional receiver plus the identifying
  *  argument (the 1st by default; bindService is identified by the 2nd). */
@@ -144,9 +149,13 @@ function findHalfCalls(
     // `_binding = null`; `lifecycle.addObserver(x)` detaches itself;
     // `onBackPressedDispatcher.addCallback(viewLifecycleOwner) { }` too.
     if (method === 'bind' && receiver && /Binding$|DataBindingUtil$/.test(receiver)) continue;
-    if (method === 'addObserver' && receiver && SELF_DETACHING_RECEIVER.test(receiver)) continue;
+    if ((method === 'addObserver' || method === 'addCallback') && receiver && OWNER_SCOPED_RECEIVER.test(receiver)) continue;
     if (method === 'addCallback' && /^(?:this|viewLifecycleOwner|owner|activity|requireActivity\(\))$/.test(m[2] ?? '')) continue;
     const rawArgs = [m[2], m[3], m[4], m[5]].map(a => a?.replace(/^this\s*\.\s*/, ''));
+    // `bind`/`unbind` stands for the bindService family. A `bind()` with no
+    // argument binds no resource at all, and the name reported then fell back
+    // to the receiver: `viewModel.bind()` warned about `viewModel`.
+    if (method === 'bind' && !rawArgs.some(a => a)) continue;
     // Only an identifier can be released later: `acquire(10 * 60 * 1000L)`
     // and `registerReceiver(this, receiver, filter)` used to yield `10` and
     // `this` as the resource, and a quick fix that did not compile.

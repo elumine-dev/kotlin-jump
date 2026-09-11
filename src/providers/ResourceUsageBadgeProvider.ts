@@ -127,10 +127,20 @@ export class ResourceUsageBadgeProvider implements vscode.Disposable {
         void this._refresh();
       }),
       vscode.workspace.onDidChangeConfiguration(e => {
-        if (e.affectsConfiguration('kotlinJump.resourceUsageBadges')) void this._refresh();
+        if (!e.affectsConfiguration('kotlinJump.resourceUsageBadges')) return;
+        // Switched off, the listing is dead weight: 40.8 MB of file text on a
+        // real project, kept for the rest of the session.
+        if (!this._enabled()) this._cache = undefined;
+        void this._refresh();
       }),
     ];
     void this._refresh();
+  }
+
+  private _enabled(): boolean {
+    return vscode.workspace
+      .getConfiguration('kotlinJump')
+      .get<boolean>('resourceUsageBadges', true);
   }
 
   private async _sources(): Promise<UsageSource[]> {
@@ -149,7 +159,12 @@ export class ResourceUsageBadgeProvider implements vscode.Disposable {
         continue;
       }
     }
-    this._cache = { at: Date.now(), sources, truncated: uris.length >= MAX_SWEEP_FILES };
+    // Reading every source takes seconds through the extension host, one round
+    // trip per file. A listing that lands after the badges were switched off
+    // must not put those megabytes back.
+    if (this._enabled()) {
+      this._cache = { at: Date.now(), sources, truncated: uris.length >= MAX_SWEEP_FILES };
+    }
     return sources;
   }
 
@@ -191,7 +206,7 @@ export class ResourceUsageBadgeProvider implements vscode.Disposable {
     // a real project of 6278 files against the old cap of 4000: 130 keys are
     // really at zero, and between 419 and 756 more were shown that way, the set
     // changing with the order the files came back in.
-    const truncated = this._cache?.truncated === true;
+    const truncated = this._cache?.truncated !== false;
 
     for (const e of entries) {
       const n = counts.get(`${e.kind}/${e.name}`) ?? 0;
@@ -222,5 +237,6 @@ export class ResourceUsageBadgeProvider implements vscode.Disposable {
     this._badge.dispose();
     this._dead.dispose();
     for (const s of this._subs) s.dispose();
+    this._cache = undefined;
   }
 }

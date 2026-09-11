@@ -63,6 +63,13 @@ const SDK_EXTRA_OWNERS =
 const SELF_CONTAINED_PERMISSIONS = new Set([
   'INTERNET', 'ACCESS_NETWORK_STATE', 'ACCESS_WIFI_STATE', 'VIBRATE', 'WAKE_LOCK',
   'FOREGROUND_SERVICE', 'RECEIVE_INTERNET', 'DISABLE_KEYGUARD',
+  // Exercised by a manifest receiver, never by a line of code, and that
+  // receiver usually comes from a MERGED library manifest: WorkManager
+  // declares one to reschedule periodic work after a reboot, and requires
+  // this permission for it. Measured on a real project, it was one of the
+  // detector's two findings, on a permission whose own comment reads
+  // "Need to do cleanup during the night and background download".
+  'RECEIVE_BOOT_COMPLETED',
 ]);
 const SELF_CONTAINED_PERMISSION_PREFIXES = ['FOREGROUND_SERVICE_'];
 

@@ -146,13 +146,20 @@ export class HexColorFoldingProvider implements vscode.Disposable {
     let needsRawRebuild = false;
     for (const change of sorted) {
       if (change.text.includes('"""')) { needsRawRebuild = true; break; }
-      for (let i = change.range.start.line;
-           i <= Math.min(change.range.end.line, doc.lineCount - 1); i++) {
-        // `_boundary` is what makes a DELETED `"""` visible: neither the event
-        // nor the new line still carries it, so without the memory of the line
-        // before the keystroke nothing triggers, and the swatches below stay
-        // painted inside a raw string that has just been opened.
-        if (doc.lineAt(i).text.includes('"""') || this._boundary[i]) { needsRawRebuild = true; break; }
+      // `_boundary` is what makes a DELETED `"""` visible: neither the event
+      // nor the new line still carries it, so without the memory of the line
+      // before the keystroke nothing triggers, and the swatches below stay
+      // painted inside a raw string that has just been opened. That memory is
+      // read over the WHOLE old range: the cap belongs to `lineAt`, which reads
+      // the new document, and capping the memory too hides a boundary deleted
+      // near the end of the file, where the shorter document falls below
+      // `end.line`.
+      const lastReadable = Math.min(change.range.end.line, doc.lineCount - 1);
+      for (let i = change.range.start.line; i <= change.range.end.line; i++) {
+        if (this._boundary[i] || (i <= lastReadable && doc.lineAt(i).text.includes('"""'))) {
+          needsRawRebuild = true;
+          break;
+        }
       }
       if (needsRawRebuild) break;
     }

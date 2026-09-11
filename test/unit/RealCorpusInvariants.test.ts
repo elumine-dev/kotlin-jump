@@ -30,6 +30,7 @@ import { parse } from '../../src/indexer/KotlinParser';
 import { KotlinSemanticTokensProvider, TOKEN_TYPES, TOKEN_MODIFIERS } from '../../src/providers/SemanticTokensProvider';
 import { KotlinInlayHintsProvider } from '../../src/providers/InlayHintsProvider';
 import { kdocReferences, sanitizeForUsageScan } from '../../src/util/kotlinScan';
+import { KotlinDefinitionProvider } from '../../src/providers/DefinitionProvider';
 
 const NL = String.fromCharCode(10);
 const RACINE = '/Users/kevin/Desktop/work/lapresse';
@@ -201,4 +202,75 @@ describe('le lancement de find reste muet', () => {
     expect(source.split(APPEL).length - 1, 'un seul appel externe attendu').toBe(1);
     expect(source.includes(MUET), 'stderr doit etre ignore a cet appel').toBe(true);
   });
+});
+
+/**
+ * Ou mene le Ctrl+clic sur du vrai code.
+ *
+ * Invariant auto-evident : la ligne atteinte doit contenir le mot cliqué.
+ * C'est ce controle qui a trouve les deux defauts les plus visibles de cette
+ * serie, le type d'un parametre par defaut qui menait a la fonction
+ * englobante (699 clics sur 785) et l'argument nomme qui ouvrait une fonction
+ * sans ce parametre (266 sur 651).
+ *
+ * Trois familles sortent de l'invariant sans etre fausses, et sont comptees a
+ * part : un clic SUR une declaration lance la navigation vers ses
+ * implementations, un alias d'import mene a un nom different par
+ * construction, et `Companion` mene a `companion object`, que la casse
+ * separe.
+ */
+describe.skipIf(!present)('ou mene le Ctrl+clic sur un vrai projet', () => {
+  it('aucune navigation ne quitte le mot cliqué', async () => {
+    const { textes, index } = charger();
+    (workspace as any).openTextDocument = async (u: any) => {
+      const uri = typeof u === 'string' ? u : (u?.toString?.() ?? String(u));
+      const t = textes.get(uri);
+      return t === undefined ? null : mockDocument(uri, t);
+    };
+    const origOuvrir = (workspace as any).openTextDocument;
+    const entries: any[] = (index as any).allEntries?.() ?? [];
+    const declPos = new Set<string>();
+    for (const e of entries) declPos.add(e.uri.toString() + ':' + e.line + ':' + e.character);
+    const provider = new KotlinDefinitionProvider(index);
+    const token = { isCancellationRequested: false } as any;
+    const MOT = /(?<![A-Za-z0-9_])[A-Za-z_][A-Za-z0-9_]*(?![A-Za-z0-9_])/g;
+    const suspects: string[] = [];
+    let resolus = 0;
+    try {
+      // Un fichier sur 40 : assez pour couvrir toutes les formes, assez peu
+      // pour rester sous deux secondes.
+      const echantillon = [...textes.entries()].filter((_, i) => i % 40 === 0);
+      for (const [uri, texte] of echantillon) {
+        const lignes = texte.split(NL);
+        const doc = mockDocument(uri, texte);
+        const aAlias = (mot: string) => new RegExp('\\sas\\s+' + mot + '\\s*$', 'm').test(texte);
+        for (let l = 0; l < lignes.length; l++) {
+          const L = lignes[l];
+          if (/^\s*(import|package|\/\/|\*)/.test(L)) continue;
+          MOT.lastIndex = 0;
+          let m: RegExpExecArray | null;
+          while ((m = MOT.exec(L)) !== null) {
+            if (declPos.has(uri + ':' + l + ':' + m.index)) continue;
+            let r: any;
+            try { r = await provider.provideDefinition(doc as any, new Position(l, m.index + 1) as any, token); }
+            catch { continue; }
+            const loc = Array.isArray(r) ? r[0] : r;
+            if (!loc?.range) continue;
+            const tc = textes.get(loc.uri.toString());
+            if (tc === undefined) continue;
+            resolus++;
+            const dp = loc.range.start ?? loc.range;
+            const ligneCible = tc.split(NL)[dp.line] ?? '';
+            if (new RegExp('(?<![A-Za-z0-9_])' + m[0] + '(?![A-Za-z0-9_])').test(ligneCible)) continue;
+            if (aAlias(m[0]) || m[0] === 'Companion') continue;
+            suspects.push(uri + ':' + (l + 1) + ' ' + m[0] + ' -> ' + loc.uri + ':' + (dp.line + 1));
+          }
+        }
+      }
+    } finally {
+      (workspace as any).openTextDocument = origOuvrir;
+    }
+    expect(resolus, 'le corpus doit vraiment resoudre des clics').toBeGreaterThan(100);
+    expect(suspects.slice(0, 10)).toEqual([]);
+  }, 120_000);
 });

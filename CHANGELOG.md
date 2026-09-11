@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.136
+
+A project folder containing a dollar sign broke the catalog path resolution added last release.
+
+### Fixes
+- The directory of a settings file is substituted into a from files path wherever it names the rootDir property. A dollar sign in that directory was read as a back reference by the substitution itself, and a second check meant to spot variables it cannot resolve was looking at the result rather than at the expression, so it rejected a path that was perfectly resolvable. Both now handle a dollar in a folder name.
+
+### Notes
+- The scanner that colours and folds a catalog file was audited this release and left unchanged. Its result is now held to properties it must satisfy on its own: no token reaching past the end of its line, no two tokens overlapping, no impossible fold, and the same token reported by colouring and by navigation at any position. Checked on twelve awkward inputs and on a real catalog of 292 lines and 1128 tokens.
+- No new commands or settings in this release.
+
 ## 1.42.135
 
 A shared catalog reached through the rootDir property is found again, which the previous release only handled for plain relative paths.

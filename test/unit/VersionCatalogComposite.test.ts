@@ -170,3 +170,27 @@ describe('un from qui passe par rootDir', () => {
     expect(i.rootsFor('/w/projetB/app/build.gradle.kts')).toEqual(['libs']);
   });
 });
+
+describe('un dossier de projet qui contient un dollar', () => {
+  /*
+   * Le dossier du settings sert de valeur de remplacement pour `rootDir`.
+   * Passe comme CHAINE a String.replace, `$&`, `$\`` et `$'` y sont
+   * interpretes comme des references au texte capture : le chemin resolu
+   * devenait faux et la racine secondaire etait perdue. Rare, mais un `$`
+   * dans un chemin de projet n'a rien d'interdit.
+   */
+  const D = String.fromCharCode(36);
+  for (const bizarre of [D + '&', D + "'", D + '1', D + '`']) {
+    it('resiste a ' + JSON.stringify(bizarre) + ' dans le chemin', () => {
+      const racine = '/w/mon' + bizarre + 'projet';
+      const i = new VersionCatalogIndex();
+      i.setSettings([{
+        path: racine + '/buildA/settings.gradle.kts',
+        text: ['versionCatalogs {', '  create("deps") {',
+          '    from(files("' + D + '{rootDir}/../gradle/libs.versions.toml"))', '  }', '}'].join(NL),
+      }]);
+      i.reindexFile(TOML, racine + '/gradle/libs.versions.toml');
+      expect([...i.rootsFor(racine + '/buildA/app/build.gradle.kts')].sort()).toEqual(['deps', 'libs']);
+    });
+  }
+});

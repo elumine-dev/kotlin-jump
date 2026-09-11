@@ -587,10 +587,20 @@ const RE_FROM_FILES_G = /from\s*\(\s*files\s*\(\s*(["'])([^"']+)\1/g;
  * interpolation reste inconnaissable : elle est laissee telle quelle pour que
  * l'appelant ecarte le chemin, plutot que de deviner.
  */
+function variableInconnue(chemin: string): boolean {
+  // On juge le GABARIT, pas son resultat : substituer d'abord puis chercher
+  // un dollar prenait le dollar du dossier lui meme pour une variable non
+  // resolue, et ecartait un chemin pourtant parfaitement resoluble.
+  return substituerVariables(chemin, '').includes('$');
+}
+
 function substituerVariables(chemin: string, dossierSettings: string): string {
+  // Remplacement par FONCTION : dans une chaine de remplacement, `$&`, `$\``,
+  // `$'` et `$1` sont interpretes, donc un dossier qui contient un dollar
+  // corrompait le chemin resolu.
   return chemin
-    .replace(/\$\{\s*(?:rootDir|rootProject\.projectDir)\s*\}/g, dossierSettings)
-    .replace(/\$(?:rootDir|rootProject\.projectDir)\b/g, dossierSettings);
+    .replace(/\$\{\s*(?:rootDir|rootProject\.projectDir)\s*\}/g, () => dossierSettings)
+    .replace(/\$(?:rootDir|rootProject\.projectDir)\b/g, () => dossierSettings);
 }
 
 /** `base` + `relatif`, en repliant `.` et `..`. Pas de `node:path` ici : ce
@@ -630,11 +640,11 @@ export function catalogRootsOf(path: string, settingsFiles: readonly SettingsFil
     for (const bloc of s.text.matchAll(RE_CREATE_BLOC)) {
       const from = RE_FROM_FILES.exec(bloc[3])?.[2];
       if (!from) continue;
-      const resolu = substituerVariables(from, base);
       // Une variable qu'on ne sait pas resoudre : ne pas deviner. La deviner
       // reviendrait a comparer les noms de fichier, ce qui ramene la
       // contamination entre projets voisins corrigee en v1.42.132.
-      if (resolu.includes('$')) continue;
+      if (variableInconnue(from)) continue;
+      const resolu = substituerVariables(from, base);
       const absolu = /^([\\/]|[A-Za-z]:)/.test(resolu);
       if (resoudreChemin(absolu ? '' : base, resolu) !== path) continue;
       if (!racines.includes(bloc[2])) racines.push(bloc[2]);

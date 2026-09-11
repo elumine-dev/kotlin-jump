@@ -1,27 +1,26 @@
 {
-  "version": "1.42.135",
+  "version": "1.42.136",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Shared catalogs found through rootDir",
-  "summary": "A shared catalog reached through the rootDir property is found again, which the previous release only handled for plain relative paths.",
+  "tagline": "A dollar in a folder name no longer breaks a path",
+  "summary": "A project folder containing a dollar sign broke the catalog path resolution added last release.",
   "highlights": [
     {
-      "title": "Catalog Path Through rootDir",
+      "title": "Dollar Sign In A Project Folder",
       "kind": "fix",
-      "description": "A from files clause whose path goes through the rootDir property was cut short by the brace in the expression, so the second name of a shared catalog was lost and the included build had no hover or Ctrl+click. It is now resolved exactly."
+      "description": "The directory of a settings file is substituted into a catalog path. A dollar sign in that directory was read as a back reference, and the guard meant to spot unresolvable variables judged the result instead of the expression. Both are fixed."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "An included build can point at the parent catalog with a from files clause whose path goes through the rootDir property. The brace in that expression ended the reading of the block early, so the clause became invisible and the second name of the catalog was lost, leaving that build without hover or Ctrl+click. In a settings file rootDir is the directory holding that file, and rootProject.projectDir means the same, so both are now resolved exactly, with or without braces around them.",
-        "Any other variable in such a path is left alone rather than guessed. Guessing would mean matching on file name, which is what made one project rename its neighbours two releases ago."
+        "The directory of a settings file is substituted into a from files path wherever it names the rootDir property. A dollar sign in that directory was read as a back reference by the substitution itself, and a second check meant to spot variables it cannot resolve was looking at the result rather than at the expression, so it rejected a path that was perfectly resolvable. Both now handle a dollar in a folder name."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "A project that does not share a catalog this way sees no change, verified against a real one.",
+        "The scanner that colours and folds a catalog file was audited this release and left unchanged. Its result is now held to properties it must satisfy on its own: no token reaching past the end of its line, no two tokens overlapping, no impossible fold, and the same token reported by colouring and by navigation at any position. Checked on twelve awkward inputs and on a real catalog of 292 lines and 1128 tokens.",
         "No new commands or settings in this release."
       ]
     }

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.166
+
+The rule added yesterday to stop offering commented out lines as usages looked for a double slash without noticing it could be inside a string. A URL on the same line as a resource reference made that reference disappear.
+
+### Fixes
+- A line such as a message holding an address followed by a call to getString lost its reference entirely: the double slash of the address was taken for the start of a comment.
+- The reference project holds no line of that shape, which is why yesterday's measurement found nothing lost. The shape itself is entirely ordinary, and losing a real usage is worse than keeping a commented out one.
+- An escaped quote does not end a string either, so an odd number of them before the address no longer flips the reading.
+- Cost is unchanged: alternating runs over the 6219 files of that project give 33 against 33 milliseconds, with the two sets of timings on top of each other. The scan still stops at the column being judged rather than reading the whole file.
+- The project still shows 4391 usages and none of them inside a comment, so nothing was gained or lost there.
+
 ## 1.42.165
 
 Jumping from a resource key to its usages could land on a line that is commented out. The usage count shown next to the key already ignored those, so the two disagreed.

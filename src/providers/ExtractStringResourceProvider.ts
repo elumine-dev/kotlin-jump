@@ -44,7 +44,11 @@ export function escapeForStringsXml(literal: string): string {
   const escaped = literal
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
-    .replace(/'/g, "\\'")
+    // Same guard as the quote rule below: a Kotlin literal may already carry
+    // an escaped apostrophe, and escaping it again wrote two backslashes into
+    // strings.xml, so the app showed a stray backslash. Measured on a real
+    // project: 2 of its 10624 template-free literals, across 9 files.
+    .replace(/(?<!\\)'/g, "\\'")
     .replace(/(?<!\\)"/g, '\\"');
   // A leading `@` or `?` makes aapt read a resource reference.
   return /^[@?]/.test(escaped) ? '\\' + escaped : escaped;

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.190
+
+Kotlin writes the same pairing two ways. `val x = _x.asStateFlow()` was recognised; `val state get() = _state.asStateFlow()` was not, so the backing field looked unexposed.
+
+### Fixes
+- The reader count then looked for collectors of the private backing, which nothing collects, and read `0 readers in this file` on a state the screen collects every time it draws. The tooltip said `no public exposure detected` for good measure.
+- Measured on a real project: of 166 states with a backing field, 141 exposures were found and 143 are now. The two recovered are ordinary view models, and of the 23 that still show none, all 23 genuinely have none.
+
+### Notes
+- The entry for 1.42.188 said this lens had no tests. It had two files of them; what had none was the modifier list. The line is corrected above.
+
 ## 1.42.189
 
 The write count next to a state only looks at the file it is in. For a `private val _x` that is the whole truth, since nothing outside can write it. For a property anyone can reach, it is not, and the lens still read `✎ 0 writes` flatly.
@@ -14,7 +25,7 @@ The lens that shows who writes and who reads a ViewModel state accepted only `pr
 
 ### Fixes
 - Measured on a real project of 3558 Kotlin files: 306 state declarations were seen, and 13 more appear with the full modifier list. Those are ordinary `MutableStateFlow` properties written through `.value =` and `.update`, so the counts are right as soon as they are visible.
-- The provider had no tests. It has nine now, including two that pin the limits: a declaration quoted inside a string is still not a state, and a constructor call that is not a declaration is not one either.
+- The modifier list had no coverage. Nine tests carry it now, including two that pin the limits: a declaration quoted inside a string is still not a state, and a constructor call that is not a declaration is not one either.
 
 ### Notes
 - Still out of scope, and measured: 24 properties on that project use `var model by mutableStateOf(...)`. Their writes are plain assignments rather than `.value =`, so recognising them without changing how writes are found would show `0 writes` on states that are written all the time.

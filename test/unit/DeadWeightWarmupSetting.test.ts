@@ -194,4 +194,79 @@ describe('DeadWeightActionProvider — prechauffage', () => {
         .toMatch(/\n\s*deadWeight,/);
     }
   });
+
+  it('coupe PENDANT le balayage : le scan en vol ne remet pas les caches', async () => {
+    // Course : le balayage du demarrage tourne encore (sur le vrai projet il
+    // dure plusieurs secondes, 6278 allers-retours). Si l utilisateur coupe le
+    // reglage entre temps, _warmUp vide des caches encore vides, puis le scan
+    // se termine et REPOSE ses 40,8 Mo. Le reglage est coupe, la memoire reste.
+    let actif = true;
+    let ecouteur: ((e: any) => void) | undefined;
+    let relacher!: () => void;
+    const barriere = new Promise<void>(r => { relacher = r; });
+
+    vi.spyOn(vscodeMock.workspace, 'onDidChangeConfiguration')
+      .mockImplementation(((cb: any) => { ecouteur = cb; return { dispose: () => {} }; }) as any);
+    vi.spyOn(vscodeMock.workspace, 'findFiles').mockImplementation((async () => (
+      Array.from({ length: 5 }, (_, i) => ({
+        toString: () => `file:///w/src/F${i}.kt`,
+        fsPath: `/w/src/F${i}.kt`,
+      }))
+    )) as any);
+    vi.spyOn(vscodeMock.workspace.fs as any, 'readFile').mockImplementation((async () => {
+      await barriere;
+      return encode('import kotlin.math.max' + NL + 'class A');
+    }) as any);
+    vi.spyOn(vscodeMock.workspace, 'getConfiguration').mockReturnValue({
+      get: (cle: string, def: any) => (cle === 'deadWeightQuickFixes' ? actif : def),
+    } as any);
+
+    const p = new DeadWeightActionProvider();
+    await attendre();
+    expect((p as any)._sources, 'le balayage est encore en vol').toBeUndefined();
+
+    actif = false;
+    ecouteur?.({ affectsConfiguration: (cle: string) => cle === 'kotlinJump.deadWeightQuickFixes' });
+    relacher();
+    await attendre();
+
+    expect((p as any)._sources, 'un scan en vol ne doit pas repeupler un cache coupe').toBeUndefined();
+    expect((p as any)._imports, 'ni la liste des imports').toBeUndefined();
+    p.dispose();
+  });
+
+  it('coupe PENDANT une ampoule : aucune action rendue sur un listing sans garant', async () => {
+    // Fenetre etroite mais reelle : l ampoule calcule, l utilisateur coupe le
+    // reglage, le scan se termine sans rien mettre en cache. Sans garant, la
+    // suite du calcul proposerait quand meme une SUPPRESSION.
+    let actif = true;
+    let relacher!: () => void;
+    const barriere = new Promise<void>(r => { relacher = r; });
+    vi.spyOn(vscodeMock.workspace, 'onDidChangeConfiguration')
+      .mockImplementation((() => ({ dispose: () => {} })) as any);
+    vi.spyOn(vscodeMock.workspace, 'findFiles').mockImplementation((async () => (
+      Array.from({ length: 5 }, (_, i) => ({
+        toString: () => `file:///w/src/F${i}.kt`,
+        fsPath: `/w/src/F${i}.kt`,
+      }))
+    )) as any);
+    vi.spyOn(vscodeMock.workspace.fs as any, 'readFile').mockImplementation((async () => {
+      await barriere;
+      return encode('import kotlin.math.max' + NL + 'class A');
+    }) as any);
+    vi.spyOn(vscodeMock.workspace, 'getConfiguration').mockReturnValue({
+      get: (cle: string, def: any) => (cle === 'deadWeightQuickFixes' ? actif : def),
+    } as any);
+
+    const p = new DeadWeightActionProvider();
+    const promesse = p.provideCodeActions(
+      documentGradle(),
+      new Range(new Position(1, 4), new Position(1, 4)) as any,
+    );
+    await attendre();
+    actif = false;          // coupe pendant l attente
+    relacher();
+    expect(await promesse, 'rien ne doit etre propose').toEqual([]);
+    p.dispose();
+  });
 });

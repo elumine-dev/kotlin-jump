@@ -38,6 +38,12 @@ export class DeadWeightActionProvider implements vscode.CodeActionProvider, vsco
     this._warmUp();
   }
 
+  private _enabled(): boolean {
+    return vscode.workspace
+      .getConfiguration('kotlinJump')
+      .get<boolean>('deadWeightQuickFixes', true);
+  }
+
   /**
    * Warm-up: the first lightbulb used to scan ~4000 files on the spot, VS Code
    * gave up waiting, and the user saw NO action on a dead dependency (reported
@@ -50,8 +56,7 @@ export class DeadWeightActionProvider implements vscode.CodeActionProvider, vsco
    * next lightbulb to pay for it, and turning them off gives the memory back.
    */
   private _warmUp(): void {
-    const cfg = vscode.workspace.getConfiguration('kotlinJump');
-    if (!cfg.get<boolean>('deadWeightQuickFixes', true)) {
+    if (!this._enabled()) {
       this._sources = undefined;
       this._imports = undefined;
       return;
@@ -80,13 +85,25 @@ export class DeadWeightActionProvider implements vscode.CodeActionProvider, vsco
         });
       } catch { continue; }
     }
-    this._sources = { at: Date.now(), value, truncated: uris.length >= MAX_SOURCES };
+    // The scan takes seconds on a real project, one round trip per file. If
+    // the setting was switched off while it ran, `_warmUp` has already released
+    // the caches and writing here would put the 40.8 MB straight back, for a
+    // feature nobody asked for any more.
+    if (this._enabled()) {
+      this._sources = { at: Date.now(), value, truncated: uris.length >= MAX_SOURCES };
+    }
     return value;
   }
 
-  /** A listing that hit the cap cannot prove a class or an import absent. */
+  /**
+   * A listing that hit the cap cannot prove a class or an import absent.
+   *
+   * No cache at all means the same thing, and then some: the scan behind it was
+   * dropped mid flight. Refusing there keeps a destructive action from running
+   * on a listing nobody can vouch for.
+   */
   private sourcesTruncated(): boolean {
-    return this._sources?.truncated ?? false;
+    return this._sources?.truncated ?? true;
   }
 
   private async workspaceSources(): Promise<UsageSource[]> {
@@ -113,7 +130,7 @@ export class DeadWeightActionProvider implements vscode.CodeActionProvider, vsco
         if (m) value.push(`import ${m[1]}`);
       }
     }
-    this._imports = { at: Date.now(), value };
+    if (this._enabled()) this._imports = { at: Date.now(), value };
     return value;
   }
 
@@ -137,8 +154,7 @@ export class DeadWeightActionProvider implements vscode.CodeActionProvider, vsco
     document: vscode.TextDocument,
     range: vscode.Range | vscode.Selection,
   ): Promise<vscode.CodeAction[]> {
-    const cfg = vscode.workspace.getConfiguration('kotlinJump');
-    if (!cfg.get<boolean>('deadWeightQuickFixes', true)) return [];
+    if (!this._enabled()) return [];
 
     const fsPath = document.uri.fsPath;
     const line = range.start.line;

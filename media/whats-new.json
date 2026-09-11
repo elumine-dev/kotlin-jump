@@ -1,32 +1,26 @@
 {
-  "version": "1.42.180",
+  "version": "1.42.181",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A switch that only worked once",
-  "summary": "Last release taught the Remove unused quick fixes to skip their startup scan when the setting is off. It read the setting once and never looked again, so the switch only worked in one direction and at one moment.",
+  "tagline": "The scan that came back after being released",
+  "summary": "Turning the Remove unused quick fixes off releases the project scan they hold. The scan running at that moment finished a few seconds later and put all of it straight back.",
   "highlights": [
     {
-      "title": "Turning it on primes the scan",
+      "title": "The memory really goes",
       "kind": "fix",
-      "description": "Before, the setting was only read at startup, so the next lightbulb ran a full project scan itself, which is the wait the warm up exists to avoid."
+      "description": "A scan in flight now checks the setting before writing its result, and so does the import list built from it."
     },
     {
-      "title": "Turning it off gives the memory back",
+      "title": "No deletion without a listing",
       "kind": "fix",
-      "description": "The scan holds the text of every source, 40.8 MB across 6278 files on the project measured. That was kept for the rest of the session."
+      "description": "A quick fix computed across that same moment is no longer offered. Nothing vouches for an absence there, and these actions delete code."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "The quick fix provider now follows its setting both ways instead of reading it once at startup.",
-        "It listens to that setting, so it is disposed with the rest of the extension. Built inline inside its registration, nothing could release it."
-      ]
-    },
-    {
-      "heading": "Notes",
-      "bullets": [
-        "A guard in the test suite fails if either entry point goes back to building the provider inline."
+        "The project scan takes seconds, one round trip per file, so switching the setting off while it runs is ordinary rather than a corner case.",
+        "Both caches, the sources and the imports derived from them, now follow the setting at the moment they are written."
       ]
     }
   ],

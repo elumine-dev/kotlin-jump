@@ -246,12 +246,49 @@ interface ParsedCatalog {
 }
 
 const EMPTY_CATALOG: Catalog = { root: 'libs', aliases: [], unparsed: false };
+const LIBS_SEUL: readonly string[] = Object.freeze(['libs']);
+const MOTIFS = new Map<string, RegExp>();
+
+/**
+ * Le motif d'un accesseur `<racine>.<quelque chose>`, compile une fois par
+ * racine.
+ *
+ * v1.42.128 a mis une boucle sur les racines dans le survol et le Ctrl+clic,
+ * en compilant le motif a chaque appel. Mesure en A/B entrelace contre
+ * v1.42.127 : 34,9 ms contre 59,1 ms, distributions disjointes, soit 69 % de
+ * plus sur un chemin qui part a chaque mouvement de souris au dessus d'un
+ * build file. Compiler coute 0,240 us, relire le cache 0,048 us.
+ *
+ * Le drapeau `g` porte un `lastIndex` qui survit a un `return` au milieu
+ * d'une boucle `exec`, et les deux appelants sortent justement par un
+ * `return`. Il est remis a zero ici pour que l'appelant ne puisse pas se
+ * faire piéger par le partage.
+ */
+export function accessorRegExp(root: string): RegExp {
+  let re = MOTIFS.get(root);
+  if (!re) {
+    re = new RegExp(`\\b${root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.([A-Za-z0-9_.]+)\\b`, 'g');
+    MOTIFS.set(root, re);
+  }
+  re.lastIndex = 0;
+  return re;
+}
 
 export class VersionCatalogIndex {
   // One catalog per libs.versions.toml. A single in-memory catalog meant
   // that in a multi-root workspace the last file read won and a delete of
   // any toml emptied everything.
   private readonly catalogs = new Map<string, ParsedCatalog>();
+  // Recalcules a l'ecriture, qui est rare, et non a chaque lecture, qui part
+  // au mouvement de souris.
+  private liste: ParsedCatalog[] = [];
+  private racines: readonly string[] = LIBS_SEUL;
+
+  private rafraichir(): void {
+    this.liste = [...this.catalogs.values()];
+    const r = [...new Set(this.liste.map(c => c.catalog.root))];
+    this.racines = r.length > 0 ? Object.freeze(r) : LIBS_SEUL;
+  }
 
   private primary(): ParsedCatalog | undefined {
     return this.catalogs.values().next().value;
@@ -259,6 +296,7 @@ export class VersionCatalogIndex {
 
   removeFile(key: string): void {
     this.catalogs.delete(key);
+    this.rafraichir();
   }
 
   /**
@@ -301,6 +339,7 @@ export class VersionCatalogIndex {
     // `<project>/gradle/libs.versions.toml`: the project dir is two levels up.
     const projectDir = key.replace(/^file:\/\//, '').replace(/[\\/]gradle[\\/][^\\/]+$/, '');
     this.catalogs.set(key, { entries, catalog, projectDir, key, uri: uriString, versions });
+    this.rafraichir();
   }
 
   /**
@@ -314,7 +353,7 @@ export class VersionCatalogIndex {
    * `libs` lui meme pouvait perdre.
    */
   private catalogsFor(contextPath?: string): ParsedCatalog[] {
-    const tous = [...this.catalogs.values()];
+    const tous = this.liste;
     if (tous.length <= 1 || !contextPath) return tous;
     const dedans = (c: ParsedCatalog) =>
       !!c.projectDir
@@ -374,9 +413,10 @@ export class VersionCatalogIndex {
    * catalogues en expose deux, et un consommateur qui n'en lit qu'une laisse
    * l'autre sans reponse.
    */
-  rootsFor(contextPath?: string): string[] {
-    const racines = this.catalogsFor(contextPath).map(c => c.catalog.root);
-    return racines.length > 0 ? [...new Set(racines)] : ['libs'];
+  rootsFor(contextPath?: string): readonly string[] {
+    if (this.liste.length <= 1 || !contextPath) return this.racines;
+    const racines = [...new Set(this.catalogsFor(contextPath).map(c => c.catalog.root))];
+    return racines.length > 0 ? racines : LIBS_SEUL;
   }
 
   /**

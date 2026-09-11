@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { VersionCatalogIndex } from '../indexer/VersionCatalogIndex';
+import { VersionCatalogIndex, accessorRegExp } from '../indexer/VersionCatalogIndex';
 
 /**
  * Ctrl+click on `libs.plugins.android.library` inside a build file and land on
@@ -26,7 +26,7 @@ export class VersionCatalogDefinitionProvider implements vscode.DefinitionProvid
     for (const root of this.index.rootsFor(contextPath)) {
       // The accessor as written, e.g. `libs.plugins.android.library`. Anchored
       // on the root so a plain `plugins { }` block is never mistaken for one.
-      const re = new RegExp(`\\b${escapeForRegExp(root)}\\.([A-Za-z0-9_.]+)`, 'g');
+      const re = accessorRegExp(root);
       let m: RegExpExecArray | null;
       while ((m = re.exec(line)) !== null) {
         const start = m.index;
@@ -47,7 +47,3 @@ export class VersionCatalogDefinitionProvider implements vscode.DefinitionProvid
 
 // `vscode-vfs://…` on the web, a plain path when the caller only had one.
 const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
-
-function escapeForRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}

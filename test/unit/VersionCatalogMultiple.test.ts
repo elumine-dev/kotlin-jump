@@ -135,3 +135,49 @@ describe('un catalogue renomme, seul : le survol doit le suivre', () => {
     expect(String((h as any).contents[0].value)).toContain('com.squareup.retrofit2:retrofit');
   });
 });
+
+/**
+ * Le motif est desormais compile une fois par racine et PARTAGE entre le
+ * survol et le Ctrl+clic. Un regex `g` garde son `lastIndex`, et les deux
+ * appelants sortent de leur boucle `exec` par un `return`, donc en plein
+ * milieu. Sans remise a zero, le deuxieme appel reprend la ligne la ou le
+ * premier s'etait arrete et ne trouve plus rien.
+ */
+describe('le motif partage ne garde pas la position du dernier appel', () => {
+  const DEUX = ['dependencies {',
+    '    implementation(libs.retrofit)',
+    '    implementation(libs.okhttp)',
+    '}'].join(NL);
+  const AVEC_OKHTTP = LIBS + NL + 'okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "kotlin" }';
+
+  function index1(): VersionCatalogIndex {
+    const i = new VersionCatalogIndex();
+    i.reindexFile(AVEC_OKHTTP, CHEMIN_LIBS);
+    return i;
+  }
+
+  it('deux survols de suite repondent tous les deux', () => {
+    const h = new VersionCatalogHoverProvider(index1());
+    const doc = docDe(BUILD, DEUX);
+    expect(h.provideHover(doc, new Position(1, 25) as any), 'premier survol').toBeDefined();
+    expect(h.provideHover(doc, new Position(1, 25) as any), 'second survol, meme position').toBeDefined();
+    expect(h.provideHover(doc, new Position(2, 25) as any), 'survol de la ligne suivante').toBeDefined();
+  });
+
+  it('deux Ctrl+clic de suite aussi', () => {
+    const d = new VersionCatalogDefinitionProvider(index1());
+    const doc = docDe(BUILD, DEUX);
+    expect(d.provideDefinition(doc, new Position(1, 25) as any)).toBeDefined();
+    expect(d.provideDefinition(doc, new Position(2, 25) as any)).toBeDefined();
+    expect(d.provideDefinition(doc, new Position(1, 25) as any), 'retour en arriere').toBeDefined();
+  });
+
+  it('et le survol ne laisse rien derriere lui pour le Ctrl+clic', () => {
+    // Les deux providers partagent maintenant le MEME objet regex.
+    const i = index1();
+    const doc = docDe(BUILD, DEUX);
+    expect(new VersionCatalogHoverProvider(i).provideHover(doc, new Position(1, 25) as any)).toBeDefined();
+    expect(new VersionCatalogDefinitionProvider(i).provideDefinition(doc, new Position(1, 25) as any),
+      'le Ctrl+clic doit repondre apres un survol').toBeDefined();
+  });
+});

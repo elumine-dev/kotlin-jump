@@ -52,6 +52,31 @@ function snippetText(s: string): string {
   return s.replace(/[\\$}]/g, m => '\\' + m);
 }
 
+/**
+ * Templates that only make sense on an expression.
+ *
+ * `let` and `apply` are extension functions of the standard library: they
+ * exist only when called on a receiver. On one line the expression branch
+ * writes `expr.let { }`, which is right. Across lines the block branch wrote
+ * `let {` with nothing in front of it, and that does not compile. `run` has a
+ * top level form in the library, so it is unaffected, and so are the control
+ * structures.
+ */
+const EXPRESSION_ONLY = new Set(['let', 'apply']);
+
+/** Does this range cover more than one line, as the command will read it? */
+export function isMultilineSelection(
+  document: vscode.TextDocument,
+  range: vscode.Range,
+): boolean {
+  // Selecting a whole line usually lands the end on column 0 of the NEXT one.
+  // `applySurround` pulls that end back before acting, so this must agree, or
+  // the list would hide `let` on the most ordinary gesture there is.
+  let endLine = range.end.line;
+  if (range.end.character === 0 && endLine > range.start.line) endLine -= 1;
+  return endLine > range.start.line;
+}
+
 export function surroundSelection(id: string, selection: string, baseIndent: string): string {
   const singleLine = !selection.includes('\n');
 
@@ -80,6 +105,11 @@ export function surroundSelection(id: string, selection: string, baseIndent: str
         return selection;
     }
   }
+
+  // No receiver to attach them to: leaving the selection untouched is the
+  // honest answer. Both entry points filter these out beforehand, so this is
+  // a guard rather than a path.
+  if (EXPRESSION_ONLY.has(id)) return selection;
 
   const body = snippetText(reindent(selection, baseIndent));
   switch (id) {
@@ -112,7 +142,8 @@ export class SurroundWithProvider implements vscode.CodeActionProvider {
     if (!cfg.get<boolean>('surroundWith', true)) return [];
     if (range.isEmpty) return [];
 
-    return SURROUND_TEMPLATES.map(t => {
+    const multiline = isMultilineSelection(document, range);
+    return SURROUND_TEMPLATES.filter(t => !(multiline && EXPRESSION_ONLY.has(t.id))).map(t => {
       const action = new vscode.CodeAction(
         `Surround with ${t.label}`,
         vscode.CodeActionKind.RefactorRewrite,
@@ -169,8 +200,11 @@ export async function applySurround(
 
 /** QuickPick for the keyboard command (Cmd+Alt+T). */
 export async function surroundWithQuickPick(editor: vscode.TextEditor): Promise<void> {
+  const multiline = isMultilineSelection(editor.document, editor.selection);
   const pick = await vscode.window.showQuickPick(
-    SURROUND_TEMPLATES.map(t => ({ label: t.label, id: t.id })),
+    SURROUND_TEMPLATES
+      .filter(t => !(multiline && EXPRESSION_ONLY.has(t.id)))
+      .map(t => ({ label: t.label, id: t.id })),
     { placeHolder: 'Surround with…' },
   );
   if (!pick) return;

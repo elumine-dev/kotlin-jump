@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.173
+
+On a selection spanning several lines, surrounding with let or apply wrote an opening brace with nothing in front of it. Both are extension functions of the standard library and only exist when called on something.
+
+### Fixes
+- On one line the action already wrote the selection followed by the call, which is right. Across lines it put the selection inside the braces and left the call with no receiver, which never compiled.
+- Both are now offered on a single line selection only, in the quick fix list and in the keyboard list alike, so the option that could not work is simply absent.
+- Run keeps working across lines, because the library declares a top level form of it, and so do the control structures around a block.
+- Selecting a whole line usually lands the end of the selection on the first column of the next one. The list now pulls that end back exactly as the command does, so the most ordinary selection gesture there is still offers everything.
+
 ## 1.42.172
 
 Kotlin chains across lines, and the postfix templates read one line at a time. On a continuation line the receiver they see is the fragment the line starts with, not the expression above it.

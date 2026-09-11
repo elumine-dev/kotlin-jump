@@ -1,22 +1,22 @@
 {
-  "version": "1.42.172",
+  "version": "1.42.173",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Postfix templates stop offering broken code",
-  "summary": "Kotlin chains across lines, and these templates read one line at a time. On a continuation line the receiver they see is the fragment the line starts with, not the expression above it.",
+  "tagline": "Surround with let no longer writes code without a receiver",
+  "summary": "On a selection spanning several lines, surrounding with let or apply wrote an opening brace with nothing in front of it. Both are extension functions of the standard library and only exist when called on something.",
   "highlights": [
     {
-      "title": "Nothing to wrap, nothing offered",
+      "title": "Two templates that only make sense on an expression",
       "kind": "fix",
-      "description": "On a line beginning with a safe call or a closing brace, the templates that wrap the receiver produced an empty condition, a loop over nothing or a value assigned from nothing. They are no longer offered there."
+      "description": "On one line the action already wrote the selection followed by the call, which is right. Across lines it put the selection inside the braces and left the call with no receiver, which never compiled."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Measured on a real project: of 1044 postfix positions, 123 sit on such a line. Each was offering eight wrapping templates that could not compile, which is 984 suggestions in all. Offers drop from 8739 to 7755, and that difference is exactly those 984.",
-        "The let template is untouched, because it only appends behind the receiver: on a continuation line it produces exactly what the author is reaching for, and it stays available.",
-        "A receiver that holds braces or parentheses in the right order is still a receiver, so wrapping a filtered list or a call with arguments works as before. What is refused is a fragment that cannot stand alone, including one whose delimiters only balance because a closing one came first."
+        "Both are now offered on a single line selection only, in the quick fix list and in the keyboard list alike, so the option that could not work is simply absent.",
+        "Run keeps working across lines, because the library declares a top level form of it, and so do the control structures around a block.",
+        "Selecting a whole line usually lands the end of the selection on the first column of the next one. The list now pulls that end back exactly as the command does, so the most ordinary selection gesture there is still offers everything."
       ]
     }
   ],

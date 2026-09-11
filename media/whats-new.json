@@ -1,28 +1,27 @@
 {
-  "version": "1.42.170",
+  "version": "1.42.171",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Adding argument names no longer rewrites a declaration",
-  "summary": "Add names to call arguments looked for a name followed by parentheses on the cursor's line. A function declaration has exactly that shape, and its name of course resolves, since it is the declaration.",
+  "tagline": "A class literal declares nothing",
+  "summary": "The guard added yesterday, which stops the argument naming action from rewriting a declaration, read the word class inside a class literal as the keyword and refused the call that follows it on the same line.",
   "highlights": [
     {
-      "title": "A declaration is not a call site",
+      "title": "Calls after a class literal are offered again",
       "kind": "fix",
-      "description": "With the cursor in the parameter list of a function, the action offered to rewrite that declaration, turning a parameter into an argument named after itself, which does not compile. One case even borrowed the parameter name of a function with the same name elsewhere."
+      "description": "A line registering a type adapter, which names a class then constructs an object, had its constructor call refused because the word class appeared earlier on the line."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Measured on a real project with the resolver the extension really uses: of 2991 offers across 13137 candidate positions, 975 targeted a function declaration, 110 a class one and 27 another declaration form, so 37 percent of everything offered. None do now, and the count of offers falls to 1891, which is exactly the declarations removed.",
-        "A supertype constructor call, written as a class extending another with arguments, is a real call site and is still offered. The keyword has to reach the name without crossing a parenthesis or a colon, which is what separates the two.",
-        "Type parameters are set aside before that test, because a bound carries a colon of its own and would otherwise break the link between the keyword and the name, in nested bounds as well as simple ones."
+        "Measured on a real project: of 16681 positions the guard refused, 15558 are declarations the parser confirms, 957 are secondary constructors it does not emit under that name, 144 are declarations it places at another column, and 21 were only this. Those 21 are back, five of which really did have an action to offer.",
+        "A keyword reached through two colons declares nothing, so it no longer counts. Everything else the guard does is unchanged: declarations of functions and classes are still refused, and a supertype constructor call is still a call."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "Also swept and found sound on the way: the splitting of an argument list, over 46523 arguments of 34523 calls, each one with balanced delimiters and the split stable when run again. Its single reported mismatch is a trailing comma, which Kotlin allows and which correctly adds no argument."
+        "The check that found it compares the guard against what the parser of the extension itself says is declared at that exact line and column. Two readings of the same question, and the disagreements are where the answer lies."
       ]
     }
   ],

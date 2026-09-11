@@ -304,19 +304,42 @@ export class VersionCatalogIndex {
   }
 
   /**
-   * The catalog that applies to a build file: the one whose project dir is
-   * the longest prefix of `contextPath`; with a single catalog, that one.
+   * Les catalogues qui s'appliquent a un build file : ceux dont le dossier
+   * projet est le plus long prefixe de `contextPath`.
+   *
+   * Il y en a plusieurs, et c'est le point : Gradle autorise
+   * `create("libs")` et `create("testLibs")` cote a cote dans le meme
+   * `gradle/`, donc a egalite de dossier projet. N'en rendre qu'un rendait
+   * l'autre injoignable, et comme le gagnant etait simplement le premier lu,
+   * `libs` lui meme pouvait perdre.
    */
+  private catalogsFor(contextPath?: string): ParsedCatalog[] {
+    const tous = [...this.catalogs.values()];
+    if (tous.length <= 1 || !contextPath) return tous;
+    const dedans = (c: ParsedCatalog) =>
+      !!c.projectDir
+      && (contextPath.startsWith(c.projectDir + '/') || contextPath.startsWith(c.projectDir + '\\'));
+    let plusLong = -1;
+    for (const c of tous) if (dedans(c) && c.projectDir.length > plusLong) plusLong = c.projectDir.length;
+    if (plusLong < 0) return tous; // aucun ne contient ce fichier : les essayer tous
+    return tous.filter(c => dedans(c) && c.projectDir.length === plusLong);
+  }
+
   private catalogFor(contextPath?: string): ParsedCatalog | undefined {
-    if (this.catalogs.size <= 1 || !contextPath) return this.primary();
-    let best: ParsedCatalog | undefined;
-    for (const c of this.catalogs.values()) {
-      const dir = c.projectDir;
-      if (!dir) continue;
-      const inside = contextPath.startsWith(dir + '/') || contextPath.startsWith(dir + '\\');
-      if (inside && (!best || dir.length > best.projectDir.length)) best = c;
-    }
-    return best ?? this.primary();
+    return this.catalogsFor(contextPath)[0];
+  }
+
+  /** Resout un accesseur dans UN catalogue donne. */
+  private resoudre(c: ParsedCatalog, accessor: string): CatalogAlias | undefined {
+    const segments = aliasSegments(accessor);
+    if (segments.length === 0) return undefined;
+    const head = segments[0];
+    const namespaced: CatalogNamespace | undefined =
+      head === 'plugins' ? 'plugins' : head === 'bundles' ? 'bundles' : head === 'versions' ? 'versions' : undefined;
+    return (namespaced && segments.length > 1
+      ? resolveAccessor(c.catalog.aliases, namespaced, segments.slice(1))
+      : undefined)
+      ?? resolveAccessor(c.catalog.aliases, 'libraries', segments);
   }
 
   /** The parsed catalog, for callers that need aliases rather than coordinates. */
@@ -333,15 +356,27 @@ export class VersionCatalogIndex {
    * asking, so a multi-root workspace reads its own project's catalog.
    */
   getByAccessor(accessor: string, contextPath?: string): CatalogEntry | undefined {
-    const c = this.catalogFor(contextPath);
-    if (!c) return undefined;
-    const alias = resolveAccessor(c.catalog.aliases, 'libraries', aliasSegments(accessor));
-    return alias ? c.entries.get(alias.raw) : undefined;
+    for (const c of this.catalogsFor(contextPath)) {
+      const alias = resolveAccessor(c.catalog.aliases, 'libraries', aliasSegments(accessor));
+      const entree = alias ? c.entries.get(alias.raw) : undefined;
+      if (entree) return entree;
+    }
+    return undefined;
   }
 
   /** Accessor root of the catalog a build file reads, `libs` unless renamed. */
   rootFor(contextPath?: string): string {
     return this.catalogFor(contextPath)?.catalog.root ?? 'libs';
+  }
+
+  /**
+   * Toutes les racines qu'un build file peut ecrire. Un projet a deux
+   * catalogues en expose deux, et un consommateur qui n'en lit qu'une laisse
+   * l'autre sans reponse.
+   */
+  rootsFor(contextPath?: string): string[] {
+    const racines = this.catalogsFor(contextPath).map(c => c.catalog.root);
+    return racines.length > 0 ? [...new Set(racines)] : ['libs'];
   }
 
   /**
@@ -351,11 +386,18 @@ export class VersionCatalogIndex {
    * other three namespaces showed nothing at all, which read as "this accessor
    * is unknown" on a line that Gradle resolves perfectly well.
    */
-  describeAccessor(accessor: string, contextPath?: string): string | undefined {
-    const c = this.catalogFor(contextPath);
-    const hit = this.locate(accessor, contextPath);
-    if (!c || !hit) return undefined;
-    const { alias } = hit;
+  describeAccessor(accessor: string, contextPath?: string, root?: string): string | undefined {
+    for (const c of this.catalogsFor(contextPath)) {
+      if (root !== undefined && c.catalog.root !== root) continue;
+      const alias = this.resoudre(c, accessor);
+      if (!alias) continue;
+      const decrit = this.decrire(c, alias);
+      if (decrit !== undefined) return decrit;
+    }
+    return undefined;
+  }
+
+  private decrire(c: ParsedCatalog, alias: CatalogAlias): string | undefined {
     const version = alias.versionRef ? c.versions.get(alias.versionRef) : undefined;
     switch (alias.namespace) {
       case 'libraries': {
@@ -380,19 +422,13 @@ export class VersionCatalogIndex {
    * namespaced accessor is retried as a plain library, which is what an alias
    * literally called `versions-something` needs.
    */
-  locate(accessor: string, contextPath?: string): { alias: CatalogAlias; file: string } | undefined {
-    const c = this.catalogFor(contextPath);
-    if (!c) return undefined;
-    const segments = aliasSegments(accessor);
-    if (segments.length === 0) return undefined;
-    const head = segments[0];
-    const namespaced: CatalogNamespace | undefined =
-      head === 'plugins' ? 'plugins' : head === 'bundles' ? 'bundles' : head === 'versions' ? 'versions' : undefined;
-    const alias = (namespaced && segments.length > 1
-      ? resolveAccessor(c.catalog.aliases, namespaced, segments.slice(1))
-      : undefined)
-      ?? resolveAccessor(c.catalog.aliases, 'libraries', segments);
-    return alias ? { alias, file: c.uri } : undefined;
+  locate(accessor: string, contextPath?: string, root?: string): { alias: CatalogAlias; file: string } | undefined {
+    for (const c of this.catalogsFor(contextPath)) {
+      if (root !== undefined && c.catalog.root !== root) continue;
+      const alias = this.resoudre(c, accessor);
+      if (alias) return { alias, file: c.uri };
+    }
+    return undefined;
   }
 }
 

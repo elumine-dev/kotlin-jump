@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.128
+
+Corrects the previous release, which claimed more than it delivered, and repairs what widening the catalog sweep broke.
+
+### Fixes
+- Hover over a catalog accessor still only recognised the name libs. The previous release said hover followed the file name; that was true of Ctrl+click and not of hover, which carried its own hardcoded pattern. It now follows the file name too, so deps.retrofit shows its coordinates.
+- A project with two catalogs side by side, for instance libs and testLibs, which Gradle supports and recommends for separating test dependencies, only ever answered for one of them. Widening the sweep in the previous release is what brought the second one into the index, and whichever file was read first won, so libs itself could be the one that stopped working. Hover and Ctrl+click now try every catalog a build file can reach.
+- When the same alias name exists in two catalogs, the answer now comes from the one actually written on the line rather than from whichever catalog was read first.
+
+### Notes
+- A project with a single gradle/libs.versions.toml sees no change.
+- No new commands or settings in this release.
+
 ## 1.42.127
 
 Two halves of version catalog support disagreed whenever the catalog file was not named libs.

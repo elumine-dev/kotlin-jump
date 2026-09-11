@@ -1,32 +1,33 @@
 {
-  "version": "1.42.127",
+  "version": "1.42.128",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Version catalogs that are not named libs",
-  "summary": "Two halves of version catalog support disagreed whenever the catalog file was not named libs.",
+  "tagline": "Hover catches up, and two catalogs both answer",
+  "summary": "Corrects the previous release, which claimed more than it delivered, and repairs what widening the catalog sweep broke.",
   "highlights": [
     {
-      "title": "Renamed Catalogs Are Found",
+      "title": "Hover Follows The Catalog Name",
       "kind": "fix",
-      "description": "A catalog such as gradle/deps.versions.toml was never picked up, because the sweep feeding the index looked for that one file name. Any versions.toml under gradle is now indexed."
+      "description": "Hover still only recognised libs, despite the previous release saying otherwise. It carried its own hardcoded pattern, and now follows the file name like Ctrl+click does."
     },
     {
-      "title": "Accessor Root Follows The File Name",
+      "title": "Two Catalogs Side By Side",
       "kind": "fix",
-      "description": "The root was always assumed to be libs, so deps.retrofit in a build file resolved to nothing. Hover and Ctrl+click now take it from the file name, using the same rule as the unused dependency scan."
+      "description": "A project declaring both libs and testLibs only ever answered for whichever file was read first, so libs itself could stop working. Every catalog a build file can reach is now tried."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "A catalog named anything other than libs, for example gradle/deps.versions.toml, was never picked up at all: the sweep that feeds the catalog index looked for that one file name. Colouring, folding and navigation inside the file already worked for it, since those are registered on any versions.toml, so half the feature responded and the other half stayed silent.",
-        "Even once found, the accessor root was always assumed to be libs. Gradle takes it from the file name, so deps.retrofit in a build file resolved to nothing. Hover and Ctrl+click from a build file now follow the file name, and the rule that already served the unused dependency scan is the one they use, rather than a second copy of it."
+        "Hover over a catalog accessor still only recognised the name libs. The previous release said hover followed the file name; that was true of Ctrl+click and not of hover, which carried its own hardcoded pattern. It now follows the file name too, so deps.retrofit shows its coordinates.",
+        "A project with two catalogs side by side, for instance libs and testLibs, which Gradle supports and recommends for separating test dependencies, only ever answered for one of them. Widening the sweep in the previous release is what brought the second one into the index, and whichever file was read first won, so libs itself could be the one that stopped working. Hover and Ctrl+click now try every catalog a build file can reach.",
+        "When the same alias name exists in two catalogs, the answer now comes from the one actually written on the line rather than from whichever catalog was read first."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "A project whose catalog is the usual gradle/libs.versions.toml sees no change.",
+        "A project with a single gradle/libs.versions.toml sees no change.",
         "No new commands or settings in this release."
       ]
     }

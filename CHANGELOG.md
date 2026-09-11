@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.131
+
+A settings file read twice at once could leave the older content in place, undoing the fix shipped in the previous release.
+
+### Fixes
+- Saving settings.gradle.kts often emits several file events, so several rereads start at once. Whichever one finished last was the one that took effect, not whichever started last, so a stale read could overwrite a fresh one and the catalog root would stay wrong until the next event, which may never come. Each reread now carries a sequence number and an older one is dropped.
+- A settings file that cannot be read no longer clears what is already known about the catalog roots.
+
+### Notes
+- No new commands or settings in this release.
+
 ## 1.42.130
 
 Completes the catalog work of the last few releases: a catalog renamed in settings.gradle.kts is now understood by hover and Ctrl+click too.

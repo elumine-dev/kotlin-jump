@@ -1,27 +1,26 @@
 {
-  "version": "1.42.130",
+  "version": "1.42.131",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Catalogs renamed in settings, understood everywhere",
-  "summary": "Completes the catalog work of the last few releases: a catalog renamed in settings.gradle.kts is now understood by hover and Ctrl+click too.",
+  "tagline": "The freshest settings read wins",
+  "summary": "A settings file read twice at once could leave the older content in place, undoing the fix shipped in the previous release.",
   "highlights": [
     {
-      "title": "Catalog Renamed In Settings",
+      "title": "Overlapping Settings Rereads",
       "kind": "fix",
-      "description": "A catalog renamed with create(\"deps\") kept its file name, so hover and Ctrl+click looked for libs on a project that writes deps and answered nothing, while Find Usages from the toml got it right. Both now read the same rule."
+      "description": "One save emits several file events, so several rereads race. The one that finished last used to win rather than the one that started last, leaving a stale catalog root behind. Rereads are now ordered."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Gradle lets settings.gradle.kts rename a catalog, with create(\"deps\") { from(files(\"gradle/libs.versions.toml\")) }, so the file keeps its name while build files write deps.retrofit. Find Usages from inside the toml has always read that, but hover and Ctrl+click took the name from the file alone, so they looked for libs on a project that writes deps and answered nothing. The two halves now read the same rule, and the settings files are watched so an edit takes effect right away.",
-        "The catalog sweep and the settings sweep are independent and can finish in either order, so the roots of catalogs already read are recomputed when settings arrive rather than being fixed once."
+        "Saving settings.gradle.kts often emits several file events, so several rereads start at once. Whichever one finished last was the one that took effect, not whichever started last, so a stale read could overwrite a fresh one and the catalog root would stay wrong until the next event, which may never come. Each reread now carries a sequence number and an older one is dropped.",
+        "A settings file that cannot be read no longer clears what is already known about the catalog roots."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "A project with no versionCatalogs block in its settings sees no change, verified against a real one.",
         "No new commands or settings in this release."
       ]
     }

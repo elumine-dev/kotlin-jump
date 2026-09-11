@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.200
+
+Five features read every source file of the project. Four of them release what they read when you switch the feature off or close the window. The dependency badge kept it.
+
+### Fixes
+- Measured on a real project: 56 589 import lines over 5 093 sources, around 5 MB of text plus the header of every string, held by a provider nobody can reach any more. The sweep reads one file at a time and takes seconds, so closing the window or switching the badge off while it runs is the ordinary case, not the edge case.
+- Three holes, all three the ones its four neighbours had already closed between 1.42.180 and 1.42.187. A sweep that lands after the provider is gone now drops its result. A sweep that lands after the badge was switched off drops it too. Disposing releases what is already held.
+- A fourth: switching the badge off with a sweep already finished kept everything until the next sweep, and a badge that is off never runs one, so the memory stayed for the life of the window.
+
+### Notes
+- The four neighbours were checked again and are intact. The manifest badge needs no guard of its own, its sweep lives in a local that goes away when the call returns.
+- The state provenance work from 1.42.189 and 1.42.190 was put through the same treatment, breaking each guard in turn to see whether a test notices. Seven of the eight are held. The eighth, a tolerance for a trailing line comment in the exposure match, is unreachable: the analysis already runs on a comment free view of the file.
+
 ## 1.42.199
 
 No behaviour changes this release. Seven tests that were meant to protect the last eight releases turned out to prove nothing, and now do.

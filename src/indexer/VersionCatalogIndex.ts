@@ -573,9 +573,25 @@ function gouvernants(cheminCatalogue: string, settings: readonly SettingsFile[])
  * `lastIndex` de l'original : ne pas les passer a `.exec` sans remise a zero.
  */
 const RE_CREATE = /create\s*\(\s*(["'])([^"']+)\1\s*\)/g;
-const RE_CREATE_BLOC = /create\s*\(\s*(["'])([^"']+)\1\s*\)\s*\{([^}]*)\}/g;
+// Le corps tolere `${...}` : `[^}]*` s'arretait sur l'accolade de
+// `${rootDir}` et le `from` devenait invisible.
+const RE_CREATE_BLOC = /create\s*\(\s*(["'])([^"']+)\1\s*\)\s*\{((?:\$\{[^}]*\}|[^}])*)\}/g;
 const RE_FROM_FILES = /from\s*\(\s*files\s*\(\s*(["'])([^"']+)\1/;
 const RE_FROM_FILES_G = /from\s*\(\s*files\s*\(\s*(["'])([^"']+)\1/g;
+
+/**
+ * Remplace les variables dont la valeur est connue avec certitude.
+ *
+ * Dans un `settings.gradle(.kts)`, `rootDir` EST le dossier qui contient ce
+ * fichier, et `rootProject.projectDir` designe le meme. Toute autre
+ * interpolation reste inconnaissable : elle est laissee telle quelle pour que
+ * l'appelant ecarte le chemin, plutot que de deviner.
+ */
+function substituerVariables(chemin: string, dossierSettings: string): string {
+  return chemin
+    .replace(/\$\{\s*(?:rootDir|rootProject\.projectDir)\s*\}/g, dossierSettings)
+    .replace(/\$(?:rootDir|rootProject\.projectDir)\b/g, dossierSettings);
+}
 
 /** `base` + `relatif`, en repliant `.` et `..`. Pas de `node:path` ici : ce
  * module tourne aussi dans l'extension web. */
@@ -614,7 +630,13 @@ export function catalogRootsOf(path: string, settingsFiles: readonly SettingsFil
     for (const bloc of s.text.matchAll(RE_CREATE_BLOC)) {
       const from = RE_FROM_FILES.exec(bloc[3])?.[2];
       if (!from) continue;
-      if (resoudreChemin(base, from) !== path) continue;
+      const resolu = substituerVariables(from, base);
+      // Une variable qu'on ne sait pas resoudre : ne pas deviner. La deviner
+      // reviendrait a comparer les noms de fichier, ce qui ramene la
+      // contamination entre projets voisins corrigee en v1.42.132.
+      if (resolu.includes('$')) continue;
+      const absolu = /^([\\/]|[A-Za-z]:)/.test(resolu);
+      if (resoudreChemin(absolu ? '' : base, resolu) !== path) continue;
       if (!racines.includes(bloc[2])) racines.push(bloc[2]);
     }
   }

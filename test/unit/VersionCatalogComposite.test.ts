@@ -100,3 +100,73 @@ describe('la racine supplementaire ne contamine pas les voisins', () => {
     expect(i.rootsFor('/p/app/build.gradle.kts')).toEqual(['libs']);
   });
 });
+
+/**
+ * Le chemin du `from` peut passer par `rootDir`.
+ *
+ * Dans un `settings.gradle(.kts)`, `rootDir` EST le dossier qui contient ce
+ * settings, donc le chemin reste resoluble exactement. Mais le corps du bloc
+ * `create(...) { ... }` etait lu avec `[^}]*`, qui s'arrete sur l'accolade de
+ * `${rootDir}` : le `from` n'etait plus visible et la racine secondaire
+ * disparaissait. Le calcul de la racine PRINCIPALE, lui, a un repli sur le
+ * texte entier et s'en sortait, d'ou une moitie qui marchait et pas l'autre.
+ */
+describe('un from qui passe par rootDir', () => {
+  const D = String.fromCharCode(36); // dollar
+  const compositeAvec = (chemin: string) => {
+    const i = new VersionCatalogIndex();
+    i.setSettings([{
+      path: '/w/buildA/settings.gradle.kts',
+      text: ['versionCatalogs {', '  create("deps") {',
+        '    from(files("' + chemin + '"))', '  }', '}'].join(NL),
+    }]);
+    i.reindexFile(TOML, CATALOGUE);
+    return i;
+  };
+
+  it('avec accolades', () => {
+    expect([...compositeAvec(D + '{rootDir}/../gradle/libs.versions.toml')
+      .rootsFor('/w/buildA/app/build.gradle.kts')].sort()).toEqual(['deps', 'libs']);
+  });
+
+  it('sans accolades', () => {
+    expect([...compositeAvec(D + 'rootDir/../gradle/libs.versions.toml')
+      .rootsFor('/w/buildA/app/build.gradle.kts')].sort()).toEqual(['deps', 'libs']);
+  });
+
+  it('et par rootProject.projectDir, qui designe le meme dossier', () => {
+    expect([...compositeAvec(D + '{rootProject.projectDir}/../gradle/libs.versions.toml')
+      .rootsFor('/w/buildA/app/build.gradle.kts')].sort()).toEqual(['deps', 'libs']);
+  });
+
+  it('une variable inconnue est ignoree plutot que devinee', () => {
+    // La deviner reviendrait a comparer les noms de fichier, ce qui ramene la
+    // contamination entre projets voisins corrigee en v1.42.132.
+    expect(compositeAvec(D + '{maVariable}/gradle/libs.versions.toml')
+      .rootsFor('/w/buildA/app/build.gradle.kts')).toEqual(['libs']);
+  });
+
+  it('un bloc suivi d un sous bloc reste lu', () => {
+    const i = new VersionCatalogIndex();
+    i.setSettings([{
+      path: '/w/buildA/settings.gradle.kts',
+      text: ['versionCatalogs {', '  create("deps") {',
+        '    from(files("../gradle/libs.versions.toml"))',
+        '    version("x") { require("1.0") }', '  }', '}'].join(NL),
+    }]);
+    i.reindexFile(TOML, CATALOGUE);
+    expect([...i.rootsFor('/w/app/build.gradle.kts')].sort()).toEqual(['deps', 'libs']);
+  });
+
+  it('rootDir ne contamine pas le catalogue du voisin', () => {
+    const i = new VersionCatalogIndex();
+    i.setSettings([{
+      path: '/w/projetA/settings.gradle.kts',
+      text: ['versionCatalogs {', '  create("deps") {',
+        '    from(files("' + D + '{rootDir}/gradle/libs.versions.toml"))', '  }', '}'].join(NL),
+    }]);
+    i.reindexFile(TOML, '/w/projetA/gradle/libs.versions.toml');
+    i.reindexFile(TOML, '/w/projetB/gradle/libs.versions.toml');
+    expect(i.rootsFor('/w/projetB/app/build.gradle.kts')).toEqual(['libs']);
+  });
+});

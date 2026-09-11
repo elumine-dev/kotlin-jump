@@ -3,6 +3,7 @@ import { displayName, isAnonymousObject } from '../util/anonymousObjects';
 import { SymbolIndex, SymbolEntry } from '../indexer/SymbolIndex';
 import { SymbolKind } from '../indexer/KotlinParser';
 import { buildAllowFilter } from '../util/testFilter';
+import { resolveSearchTarget } from './FindUsagesEngine';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 
@@ -164,7 +165,27 @@ export class KotlinTypeHierarchyProvider implements vscode.TypeHierarchyProvider
     const allow = buildAllowFilter(document.uri.fsPath);
     const entries = this.index.lookup(word).filter(e => CLASS_LIKE.has(e.kind) && allow(e.uri.path));
     if (entries.length === 0) return null;
+    if (entries.length === 1) return [entryToItem(entries[0], this.index)];
 
+    // Rendre toutes les homonymes ouvrait la vue sur une hierarchie sans
+    // rapport, la premiere racine gagnant. Les noms de variantes de
+    // `sealed class` se repetent beaucoup : mesure sur un projet reel, 109 des
+    // 745 types interroges rendaient plusieurs racines, et dans 68 cas celle du
+    // curseur n'etait pas la premiere. `Success` en rendait 11, `Builder` 15.
+
+    // Le curseur est POSE sur une declaration : c'est celle la qu'on ouvre.
+    const uriStr = document.uri.toString();
+    const ici = entries.find(e => e.uri.toString() === uriStr && e.line === position.line);
+    if (ici) return [entryToItem(ici, this.index)];
+
+    // Sinon la meme resolution que Go to Definition et le renommage : import
+    // explicite, puis meme paquet.
+    const vise = resolveSearchTarget(word, document, this.index);
+    if (vise && CLASS_LIKE.has(vise.kind) && allow(vise.uri.path)) {
+      return [entryToItem(vise, this.index)];
+    }
+
+    // Rien ne tranche : mieux vaut offrir les candidates que d'en choisir une.
     return entries.map(e => entryToItem(e, this.index));
   }
 

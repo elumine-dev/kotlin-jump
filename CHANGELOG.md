@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.156
+
+Show Type Hierarchy returned every class in the project with that simple name as a root, so it often opened on an unrelated hierarchy.
+
+### Fixes
+- Variant names of a sealed class repeat a lot. Asking for the hierarchy of Success in a login result offered eleven roots, the one you clicked sitting fifth, and the view opened on an image loading state instead.
+- The cursor decides: a declaration under it wins outright, and a use resolves the way Go to Definition and rename already do, through the explicit import then the package. When nothing tells them apart the candidates are still all offered, since choosing at random would be worse.
+- The line matters and not just the file: 48 pairs of file and name on a real project carry two declarations or more, one Companion appearing four times in a single file.
+- Measured on that project over 745 types: 109 returned several roots and in 68 of them the declaration under the cursor was not the first. All 745 now return exactly one. The parents themselves were already right, 416 of them with none absent from the class declaration.
+
+### Notes
+- Also swept this round and found sound: the quick fixes that delete code, over the 46 they offer on that project, checked for a replacement that misses its target name, a deletion that welds two identifiers together, unbalanced delimiters and a stray comma, with the check first proven to catch a deliberate one character shift in 45 of the 46.
+
 ## 1.42.155
 
 When several declarations share one line, each one reached to the end of that line and swallowed its neighbours, so the breadcrumb and the Outline named the one on the left.

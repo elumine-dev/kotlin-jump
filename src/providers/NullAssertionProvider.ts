@@ -7,6 +7,9 @@ export class NullAssertionProvider implements vscode.Disposable {
   private _lineDecos = new Map<number, vscode.DecorationOptions[]>();
   private _rawState:  boolean[] = [];
   private _blockState: boolean[] = [];
+  /** Par ligne, l etat AVANT la frappe : une frontiere supprimee ne se lit
+   *  plus nulle part apres coup, l evenement ne portant pas le texte retire. */
+  private _boundary: boolean[] = [];
   private _flushTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly _subs: vscode.Disposable[];
 
@@ -20,7 +23,7 @@ export class NullAssertionProvider implements vscode.Disposable {
       vscode.window.onDidChangeActiveTextEditor(e => {
         this._editor = e;
         if (e) this._fullScan(e);
-        else { this._lineDecos.clear(); this._rawState = []; this._blockState = []; }
+        else { this._lineDecos.clear(); this._rawState = []; this._blockState = []; this._boundary = []; }
       }),
       vscode.workspace.onDidChangeTextDocument(e => {
         if (this._editor && e.document === this._editor.document)
@@ -55,12 +58,14 @@ export class NullAssertionProvider implements vscode.Disposable {
     // decoration d assertion. Mesure sur un vrai projet : 2 occurrences,
     // « NB: this implementation is temporary!! » et un marqueur « |!!| ».
     this._blockState = new Array(doc.lineCount).fill(false);
+    this._boundary = new Array(doc.lineCount).fill(false);
     let inRaw = false;
     let inBlock = false;
     for (let i = 0; i < doc.lineCount; i++) {
       const text = doc.lineAt(i).text;
       this._rawState[i] = inRaw;
       this._blockState[i] = inBlock;
+      this._boundary[i] = deplaceUneFrontiere(text);
       if (inRaw) {
         if (countTripleQuotes(text) % 2 !== 0) inRaw = false;
         continue;
@@ -139,18 +144,25 @@ export class NullAssertionProvider implements vscode.Disposable {
       (a, b) => b.range.start.line - a.range.start.line,
     );
 
-    // Detect whether any """ appeared in the changed text or the affected lines
-    let needsRawRebuild = false;
+    // A multi-line boundary moved: everything below it changes meaning, so the
+    // incremental path cannot be trusted. Raw strings were covered from the
+    // start; the comment-block oracle added later needs the same trigger, or
+    // typing `/*` above a highlighted `!!` leaves the highlight standing on
+    // code that has just become documentation.
+    let needsFullRebuild = false;
     for (const change of sorted) {
-      if (change.text.includes('"""')) { needsRawRebuild = true; break; }
+      if (deplaceUneFrontiere(change.text)) { needsFullRebuild = true; break; }
       for (let i = change.range.start.line;
            i <= Math.min(change.range.end.line, doc.lineCount - 1); i++) {
-        if (doc.lineAt(i).text.includes('"""')) { needsRawRebuild = true; break; }
+        if (deplaceUneFrontiere(doc.lineAt(i).text) || this._boundary[i]) {
+          needsFullRebuild = true;
+          break;
+        }
       }
-      if (needsRawRebuild) break;
+      if (needsFullRebuild) break;
     }
 
-    if (needsRawRebuild) {
+    if (needsFullRebuild) {
       // Raw-string boundaries changed — full rescan (happens rarely, e.g. on """ typing)
       this._lineDecos.clear();
       this._buildRawState(doc);
@@ -230,4 +242,9 @@ function blocOuvertApres(ligne: string): boolean {
     if (c === '/' && ligne[i + 1] === '*') { ouvert = true; i++; }
   }
   return ouvert;
+}
+
+/** Un texte qui peut ouvrir ou fermer une portee multiligne suivie par les oracles. */
+function deplaceUneFrontiere(texte: string): boolean {
+  return texte.includes('"""') || texte.includes('/' + '*') || texte.includes('*' + '/');
 }

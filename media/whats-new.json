@@ -1,26 +1,26 @@
 {
-  "version": "1.42.192",
+  "version": "1.42.193",
   "title": "What's New in Kotlin Jump",
-  "tagline": "An exclamation is not an unwrap",
-  "summary": "The highlight on a forced unwrap already carried a multi line oracle for raw strings. Comment blocks never got one, so an exclamation in the prose of a KDoc was marked as code.",
+  "tagline": "A boundary the keystroke path could not see",
+  "summary": "Last release taught the forced unwrap highlight to see comment blocks. It did not teach the keystroke path to notice when one opens or closes, so the highlight only followed the comment after an unrelated event rebuilt the file.",
   "highlights": [
     {
-      "title": "KDoc prose left alone",
+      "title": "The highlight follows the comment",
       "kind": "fix",
-      "description": "Measured on a real project: 2 cases, NB: this implementation is temporary!! and a |!!| warning marker, both plain documentation."
+      "description": "Typing the start of a comment above a highlighted unwrap left the highlight standing on code that had just become documentation."
     },
     {
-      "title": "Nothing else lost",
-      "kind": "improvement",
-      "description": "Code that follows the end of a block on the same line is still scanned with its columns unchanged, and a block opener quoted inside a string opens nothing."
+      "title": "Deleting a boundary counts too",
+      "kind": "fix",
+      "description": "A change event carries what was typed, never what was removed. Each line now remembers whether it held a boundary, so losing one triggers the rebuild."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "A test used to pin the old behaviour with a comment saying it documented a known limitation. It asserts the corrected behaviour now.",
-        "The same shape exists with no occurrence on that project in resource folding, colour folding and the resource diagnostics."
+        "The full rebuild already fired when a raw string boundary moved. It now fires for comment boundaries as well.",
+        "Ordinary typing still takes the incremental path, one line at a time."
       ]
     }
   ],

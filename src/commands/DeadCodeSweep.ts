@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { mapBatched } from '../util/batched';
-import { makeExclusionMatcher } from '../util/pathExclusion';
+import { excludeGlob, makeExclusionMatcher } from '../util/pathExclusion';
 import {
   SweepDetector,
   SweepFinding,
@@ -49,11 +49,16 @@ function isEnabled(): boolean {
 export async function scanWorkspace(token?: vscode.CancellationToken): Promise<SweepScan> {
   const cfg = vscode.workspace.getConfiguration('kotlinJump');
   const maxFiles = cfg.get<number>('maxIndexedFiles', 10000);
-  const isExcluded = makeExclusionMatcher(
-    cfg.get<string[]>('excludePatterns', ['**/build/**', '**/.gradle/**', '**/generated/**']),
-  );
+  const patterns = cfg.get<string[]>('excludePatterns', ['**/build/**', '**/.gradle/**', '**/generated/**']);
+  const isExcluded = makeExclusionMatcher(patterns, (vscode.workspace.workspaceFolders ?? []).map(f => f.uri.path));
 
-  const uris = await vscode.workspace.findFiles(SWEEP_GLOB, undefined, maxFiles);
+  // L'exclusion doit partir AVEC la requete, pas s'appliquer sur son
+  // resultat : sans elle les sorties de build remplissaient le plafond, le
+  // balayage se declarait tronque et conseillait de lever
+  // `kotlinJump.maxIndexedFiles` alors que le plafond n'etait pas la cause.
+  // Mesure sur un projet reel : 10014 fichiers .kt et .java dont 4926 de
+  // build, donc plafond atteint des la configuration par defaut.
+  const uris = await vscode.workspace.findFiles(SWEEP_GLOB, excludeGlob(patterns), maxFiles);
   const truncated = uris.length >= maxFiles;
   const kept = uris.filter(u => !isExcluded(u.fsPath));
 

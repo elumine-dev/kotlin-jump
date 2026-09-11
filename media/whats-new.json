@@ -1,33 +1,33 @@
 {
-  "version": "1.42.123",
+  "version": "1.42.124",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Reliable build folder exclusion",
-  "summary": "Fixes two bugs that let generated build files bypass the extension's exclusion patterns, so they no longer get indexed or watched by mistake.",
+  "tagline": "Exclusion settings that no longer misfire",
+  "summary": "Three bugs in how kotlinJump.excludePatterns is read. One of them stopped the extension from starting at all.",
   "highlights": [
     {
-      "title": "Single Pattern Exclusion Fix",
+      "title": "Extension Starts Again With An Empty Exclusion Entry",
       "kind": "fix",
-      "description": "A workspace with a single entry in kotlinJump.excludePatterns had it silently ignored by the initial scan while the watcher applied it, so those files were indexed once and never refreshed. On a real project of 10064 source files, one exclusion pattern indexed all 10064 instead of 5138."
+      "description": "An empty entry in kotlinJump.excludePatterns made activation fail, so every feature disappeared at once. Empty and malformed entries are now skipped."
     },
     {
-      "title": "Root Level Build Folder Exclusion",
+      "title": "Projects Under A Folder Named Build",
       "kind": "fix",
-      "description": "The default exclusion for build and .gradle folders missed files sitting directly at the project root, the common layout for a single module Gradle project, so its build output is now skipped instead of indexed."
+      "description": "A project stored inside a folder named build, generated or .gradle had all of its own files treated as excluded. Patterns are relative to the workspace folder and are now matched that way."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Restores file exclusion when kotlinJump.excludePatterns holds a single entry. That entry was silently ignored by the initial scan, while the file watcher applied it correctly, so the excluded files were indexed once and then never refreshed. On a real project of 10064 source files, setting one exclusion pattern indexed all 10064 instead of 5138.",
-        "Fixes the default build and .gradle exclusion missing files sitting directly at the project root, the usual layout of a Gradle project with a single module.",
-        "Both bugs came from the same place: the initial scan has to fold the whole list into one pattern, and it folded it wrong. Scan and watcher now agree on every list of patterns, and a test holds them to it."
+        "An empty entry in kotlinJump.excludePatterns stopped the whole extension from loading. The matcher is built during activation and an empty string made it fail there, so every feature went away, with the cause visible only in the extension host log. Empty and malformed entries are now skipped.",
+        "A project stored inside a folder named build, generated or .gradle had all of its own files treated as excluded, so the extension went quiet across the entire workspace. Exclusion patterns are relative to the workspace folder, and they are now matched that way instead of against the full path on disk.",
+        "The dead code sweep reached its file cap on build output, then reported that files had been skipped and suggested raising kotlinJump.maxIndexedFiles, which was never the cause. It now excludes before asking for the file list, the way the rest of the extension already did. On a real project of 10014 candidate files, 5088 of them actual sources, the sweep skipped 4 real files and showed that warning on every run. It now reads all 5088 and stays well under the cap."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "No new commands or settings in this release. The fix only changes which files get indexed and watched."
+        "No new commands or settings in this release."
       ]
     }
   ],

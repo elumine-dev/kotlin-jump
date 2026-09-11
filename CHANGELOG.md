@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.124
+
+Three bugs in how kotlinJump.excludePatterns is read. One of them stopped the extension from starting at all.
+
+### Fixes
+- An empty entry in kotlinJump.excludePatterns stopped the whole extension from loading. The matcher is built during activation and an empty string made it fail there, so every feature went away, with the cause visible only in the extension host log. Empty and malformed entries are now skipped.
+- A project stored inside a folder named build, generated or .gradle had all of its own files treated as excluded, so the extension went quiet across the entire workspace. Exclusion patterns are relative to the workspace folder, and they are now matched that way instead of against the full path on disk.
+- The dead code sweep reached its file cap on build output, then reported that files had been skipped and suggested raising kotlinJump.maxIndexedFiles, which was never the cause. It now excludes before asking for the file list, the way the rest of the extension already did. On a real project of 10014 candidate files, 5088 of them actual sources, the sweep skipped 4 real files and showed that warning on every run. It now reads all 5088 and stays well under the cap.
+
+### Notes
+- No new commands or settings in this release.
+
 ## 1.42.123
 
 Fixes two bugs that let generated build files bypass the extension's exclusion patterns, so they no longer get indexed or watched by mistake.

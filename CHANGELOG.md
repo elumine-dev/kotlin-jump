@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.191
+
+Inline folding replaces a constant name with its value in the editor. The guard that keeps it out of comments reads one line at a time, so it sees a comment that opens on that line and knows nothing of one opened above. Inside a KDoc block, the prose was treated as code and its words were rewritten under the reader.
+
+### Fixes
+- Measured on a real project: 120 constants qualify for folding and 3 sit inside a comment block, all three in KDoc. One reads `USER_INTERFACE_IS_UNSPECIFIED is returned when the api is too low`, with the name swapped for a number.
+- The scan now runs on a comment free view of the file, which keeps offsets and strings intact, so the decorations land on the same columns and a value referenced from a string template still folds. Multi line raw strings keep their own protection.
+- A triple quoted example quoted inside a comment no longer breaks the raw string tracking for the rest of the file.
+
+### Notes
+- The extra pass costs 2.2 ms on the largest file of that project, 85 KB, and runs once per document version rather than per keystroke.
+
 ## 1.42.190
 
 Kotlin writes the same pairing two ways. `val x = _x.asStateFlow()` was recognised; `val state get() = _state.asStateFlow()` was not, so the backing field looked unexposed.

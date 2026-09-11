@@ -1,32 +1,27 @@
 {
-  "version": "1.42.190",
+  "version": "1.42.191",
   "title": "What's New in Kotlin Jump",
-  "tagline": "An exposure written the other way",
-  "summary": "Kotlin writes the same pairing two ways. val x = _x.asStateFlow() was recognised; val state get() = _state.asStateFlow() was not, so the backing field looked unexposed.",
+  "tagline": "Documentation rewritten under the reader",
+  "summary": "Inline folding replaces a constant name with its value. The guard that keeps it out of comments reads one line at a time, so it knew nothing of a comment block opened above. Inside a KDoc, the prose was treated as code.",
   "highlights": [
     {
-      "title": "Readers found again",
+      "title": "KDoc left alone",
       "kind": "fix",
-      "description": "The count looked for collectors of the private backing, which nothing collects, and read 0 readers on a state the screen collects every time it draws."
+      "description": "Measured on a real project: 120 constants qualify for folding and 3 sit inside a comment block, all three in KDoc."
     },
     {
-      "title": "141 exposures, now 143",
+      "title": "Columns and strings intact",
       "kind": "improvement",
-      "description": "Measured on a real project of 166 states with a backing field. Of the 23 that still show none, all 23 genuinely have none."
+      "description": "The scan runs on a comment free view that keeps offsets, so decorations land on the same columns and a value used from a string template still folds."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "An exposure written with an accessor is recognised, with or without a declared type.",
-        "An accessor pointing at a different state is still not an exposure: the end of line guard holds."
-      ]
-    },
-    {
-      "heading": "Notes",
-      "bullets": [
-        "The changelog entry for 1.42.188 said this lens had no tests. It had two files of them; what had none was the modifier list. The line is corrected."
+        "A constant named inside a KDoc block is no longer replaced by its value.",
+        "A triple quoted example quoted inside a comment no longer breaks the raw string tracking for the rest of the file.",
+        "The extra pass costs 2.2 ms on an 85 KB file and runs once per document version."
       ]
     }
   ],

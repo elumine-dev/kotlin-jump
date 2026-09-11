@@ -17,6 +17,7 @@ import { findUnusedImports } from '../../src/providers/unusedImports';
 
 const NL = String.fromCharCode(10);
 const Q3 = String.fromCharCode(34).repeat(3);
+const CAR = String.fromCharCode(39);
 const fichier = (...lignes: string[]) => lignes.join(NL);
 
 const morts = (texte: string) => findUnusedImports(texte).map(u => u.statement.trim());
@@ -115,6 +116,62 @@ describe('un import cite dans une KDoc reste vivant', () => {
       'val doc = ' + Q3,
       'voir [Flow]',
       Q3,
+    ))).toEqual(['import kotlinx.coroutines.flow.Flow']);
+  });
+
+  it('un litteral de caractere guillemet ne desynchronise pas le lecteur', () => {
+    // `'"'` faisait entrer le lecteur de commentaires en mode chaine : tout
+    // le RESTE du fichier devenait invisible, donc la garde KDoc ne
+    // s'appliquait plus et l'import redevenait signale a tort.
+    expect(morts(fichier(
+      'package p',
+      '',
+      'import kotlinx.coroutines.flow.Flow',
+      '',
+      'val guillemet = ' + CAR + '"' + CAR,
+      '',
+      '/** rend un [Flow]. */',
+      'fun f(): Int = 1',
+    ))).toEqual([]);
+  });
+
+  it('ni un litteral en echappement unicode', () => {
+    expect(morts(fichier(
+      'package p',
+      '',
+      'import kotlinx.coroutines.flow.Flow',
+      '',
+      'val u = ' + CAR + String.raw`\u0022` + CAR,
+      '',
+      '/** rend un [Flow]. */',
+      'fun f(): Int = 1',
+    ))).toEqual([]);
+  });
+
+  it('ni une apostrophe echappee', () => {
+    expect(morts(fichier(
+      'package p',
+      '',
+      'import kotlinx.coroutines.flow.Flow',
+      '',
+      'val a = ' + CAR + String.raw`\'` + CAR,
+      '',
+      '/** rend un [Flow]. */',
+      'fun f(): Int = 1',
+    ))).toEqual([]);
+  });
+
+  it('et une chaine ouverte apres un litteral masque toujours ses crochets', () => {
+    // Non regression : le litteral traite, la chaine qui suit reste une
+    // chaine, donc son [Flow] ne compte pas.
+    expect(morts(fichier(
+      'package p',
+      '',
+      'import kotlinx.coroutines.flow.Flow',
+      '',
+      'val c = ' + CAR + '"' + CAR,
+      'val s = "voir [Flow]"',
+      'fun f(): Int = 1',
     ))).toEqual(['import kotlinx.coroutines.flow.Flow']);
   });
 

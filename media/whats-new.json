@@ -1,27 +1,26 @@
 {
-  "version": "1.42.138",
+  "version": "1.42.139",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Documentation links keep their imports alive",
-  "summary": "An import named only by a documentation link is no longer reported as dead. On a real project that was two findings out of five.",
+  "tagline": "A quote in a character literal no longer blinds the reader",
+  "summary": "A character literal holding a quote switched off the documentation check added last release for the rest of the file.",
   "highlights": [
     {
-      "title": "Imports Named Only By Documentation",
+      "title": "Character Literals In The Comment Reader",
       "kind": "fix",
-      "description": "A bracketed type name in Kotlin documentation resolves through the imports, so removing the import breaks the docs. The sweep read the file with comments stripped and called 15 of 37 such imports dead on a real project."
+      "description": "A character literal holding a double quote was taken for the start of a string, so the rest of the file became invisible and imports named only by a documentation link were called dead again."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "In Kotlin a documentation link such as a bracketed type name resolves through the file's imports, so removing the import breaks the generated documentation and the quick doc popup. IntelliJ, ktlint and detekt all count such a reference as a use. The sweep read the file with comments stripped, so these references were invisible: on a real project of 3187 Kotlin files, 15 of the 37 imports it called dead were named only by documentation, which is 41 percent. None of them was used in code, so nothing would have failed to compile, but following the advice would have broken 15 documentation links.",
-        "The see, throws, exception and sample tags count too, since they name a type directly. A name merely mentioned in prose does not, and neither does one inside a string, since nothing resolves there."
+        "The reader that finds documentation links did not know about character literals, so a literal holding a double quote was taken for the start of a string. Everything after it in the file became invisible, the check that keeps an import named by a documentation link stopped applying there, and such imports were called dead again. Character literals are now understood, escapes and unicode escapes included.",
+        "Measured on a real project of 3187 Kotlin files: 36 hold a character literal and one holds a quote in one, with no finding affected today. The point is that the miss was silent and covered a whole file."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "The same check was run on the declarations detector and it has no such finding on that project, so it is unchanged.",
         "No new commands or settings in this release."
       ]
     }

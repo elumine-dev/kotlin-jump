@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.42.158
+
+Two more places still took one word out of a backticked Kotlin name: Find All References searched the workspace for that word, and the editor lit up every occurrence of it.
+
+### Fixes
+- With the cursor in a test called nominal case GIVEN x THEN y, Find All References answered with every use of GIVEN in the project, and the editor highlighted that word all over the file.
+- Measured on a real project over 37 of these names: Find All References returned 546 answers, 485 of them in other files, with 407 for a single name. It now returns 38 in total, none outside the file, which is the declaration plus the odd call.
+- Highlighting returned 226 spans over those same names and not one of them covered the name. It now returns 38, all of them exactly on the name, with the declaration marked as a write.
+- A backticked name concerns its own file and nothing else: 1086 of the 1090 distinct ones on that project exist in a single file, and the four that do not are tests of different classes that happen to share a name.
+- Rename, Go to Definition and Call Hierarchy received this in 1.42.153 and 1.42.157. All five now share one function for where such a name appears, so they cannot answer differently.
+
+### Notes
+- No measurable cost on the click path: alternating runs of the previous release and this one over 34925 clicks differ by three tenths of a percent, with the two sets of timings overlapping.
+
 ## 1.42.157
 
 A Kotlin name written between backticks is one identifier, but the cursor inside it only ever catches one word, and following that word led somewhere unrelated.

@@ -61,3 +61,28 @@ export function nomAccentueComposite(
   if ((propre[position.line] ?? '')[portee.start - 1] !== ACCENT) return undefined;
   return portee;
 }
+
+/**
+ * Les plages du CONTENU de ce nom, la ou il apparait LITTERALEMENT dans ce
+ * document, accents graves exclus.
+ *
+ * Le fichier suffit : 1086 des 1090 noms accentues distincts d'un projet reel
+ * n'existent que dans un seul fichier, et les 4 restants sont des tests
+ * homonymes de classes differentes, qu'il ne faut surtout pas relier.
+ */
+export function plagesDuNomAccentue(
+  document: vscode.TextDocument,
+  contenu: string,
+): vscode.Range[] {
+  const litteral = ACCENT + contenu + ACCENT;
+  const out: vscode.Range[] = [];
+  for (let l = 0; l < document.lineCount; l++) {
+    const texte = document.lineAt(l).text;
+    let at = texte.indexOf(litteral);
+    while (at >= 0) {
+      out.push(new vscode.Range(l, at + 1, l, at + litteral.length - 1));
+      at = texte.indexOf(litteral, at + litteral.length);
+    }
+  }
+  return out;
+}

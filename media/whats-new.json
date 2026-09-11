@@ -1,28 +1,23 @@
 {
-  "version": "1.42.152",
+  "version": "1.42.153",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The right import comes first",
-  "summary": "Ctrl+. ranked its import suggestions by symbol kind alone, so among candidates of the same kind the order was whatever the index happened to hold.",
+  "tagline": "Rename no longer rewrites the wrong symbol",
+  "summary": "Pressing F2 inside a Kotlin name written between backticks renamed the single word under the cursor across the whole workspace, and left the name itself broken.",
   "highlights": [
     {
-      "title": "Import suggestions now favour what is near",
-      "kind": "improvement",
-      "description": "Between two candidates of the same kind, the one in your own Gradle module comes first, then the one whose package shares the most with yours. The first suggestion is the one people take, and it used to be arbitrary."
+      "title": "A backticked name renames as a whole, in its own file",
+      "kind": "fix",
+      "description": "Kotlin lets a test be called by a sentence between backticks. The cursor only ever sits on one word of it, and rename took that word for an ordinary symbol: every declaration of the same name in the project was rewritten, and the test name was left half replaced."
     }
   ],
   "sections": [
     {
-      "heading": "Improvements",
+      "heading": "Fixes",
       "bullets": [
-        "Measured by a round trip with a known answer on a real project: remove an import from a file, ask for the quick fix at a use of that name, and the right answer is the import just removed. Over 5177 imports, the right one came first 4711 times before and 4955 after, and the number of times it fell outside the eight offered slots went from 16 to 4.",
-        "Kind stays the first criterion, so a class still outranks a function. Proximity only orders what was not ordered at all. Putting proximity first won 15 more cases out of 5177 but overturned a deliberate choice, so it was not taken."
-      ]
-    },
-    {
-      "heading": "Internal",
-      "bullets": [
-        "The test double for a document carried no file system path, so the five providers that ask for one to hide test sources were handed nothing. A filter that let everything through failed only two files out of 391; auto import, the type hierarchy, the override gutter and the implementations list had no coverage of it at all. The double now carries a real path, and auto import has its own check.",
-        "Also swept and found sound, so nothing shipped for them: hover on 33820 results, and Ctrl+click across the 1901 Java files of the reference project."
+        "Rename now offers the complete backticked name, and edits only the places that name appears literally, in the file that holds it.",
+        "Measured on a real project: 1102 backticked names contain a space, spread over 184 files, and they hold 5670 words that are also indexed symbols. The word event alone has 146 declarations, state 146, data 70. A sweep of the rename edits produced 128 edits in unrelated Java files from the single word given, and now produces none.",
+        "Editing only the current file is the correct rule here, not a compromise: 1086 of those 1090 distinct names exist in exactly one file, and the four that do not are tests of different classes that happen to share a name, which must never be renamed together.",
+        "A backticked name that is a plain identifier, such as one quoting a keyword, is untouched by this and still renames across the workspace with its usages."
       ]
     }
   ],

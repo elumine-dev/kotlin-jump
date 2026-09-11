@@ -4,6 +4,7 @@ import { scanForUsages, scanImports, UsageResult, isExcluded, resolveSearchTarge
 import { resolveLocalScope, findLocalUsages, cachedLocalScopeIndex } from './DefinitionProvider';
 import { isInsideCommentOrString, isInsideStringInterpolation } from '../util/textUtils';
 import { FUN_RE, signatureEnd } from '../util/LocalScopeIndex';
+import { sanitizeForUsageScan } from '../util/kotlinScan';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 
@@ -49,7 +50,17 @@ function nomAccentueComposite(
   if (document.languageId !== 'kotlin') return undefined;
   const portee = porteeAccentuee(document.lineAt(position.line).text, position.character);
   if (!portee || portee.content === '') return undefined;
-  return EST_IDENTIFIANT.test(portee.content) ? undefined : portee;
+  if (EST_IDENTIFIANT.test(portee.content)) return undefined;
+
+  // L'accent grave est aussi la syntaxe Markdown des KDoc, et une ligne de
+  // continuation de KDoc ne porte ni `//` ni `/*` : la garde de ligne ne voit
+  // donc rien. `sanitizeForUsageScan` blanchit commentaires et chaines en
+  // preservant les longueurs, donc l'accent grave n'y survit que s'il est du
+  // code. C'est le meme lecteur que les scanners d'usages, pas une copie.
+  const propre = sanitizeForUsageScan(document.getText()).split(String.fromCharCode(10));
+  if ((propre[position.line] ?? '')[portee.start - 1] !== ACCENT) return undefined;
+
+  return portee;
 }
 
 // ── Metadata constants ────────────────────────────────────────────────────────

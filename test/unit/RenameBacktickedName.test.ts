@@ -73,6 +73,79 @@ function contexte() {
 const LIGNE_DECL = 3;
 const COL_STATE = TEST_KT.split(NL)[LIGNE_DECL].indexOf('state');
 
+/**
+ * L'accent grave est AUSSI la syntaxe Markdown des KDoc. La detection du nom
+ * accentue avait ete placee AVANT la garde qui refuse commentaires et chaines,
+ * donc F2 sur un extrait de code d'une KDoc proposait de renommer ce texte, et
+ * l'edition ne touchait que le commentaire en laissant le vrai symbole intact.
+ *
+ * Mesure sur un projet reel : 1126 portees accentuees composites, dont 1102
+ * vraies declarations et 15 extraits de code dans des KDoc.
+ *
+ * La garde de ligne ne suffit pas : une ligne de continuation de KDoc ne porte
+ * ni `//` ni `/*`. C'est `sanitizeForUsageScan`, deja partage par les scanners
+ * d'usages, qui tranche : il blanchit commentaires et chaines en preservant les
+ * longueurs, donc l'accent grave n'y survit que s'il est du code.
+ */
+describe('un accent grave de KDoc n est pas un identifiant', () => {
+  function refuse(lignes: string[], ligne: number, aiguille: string) {
+    const src = lignes.join(NL);
+    const uri = 'file:///p/app/src/main/java/com/x/Doc.kt';
+    const index = new SymbolIndex();
+    index.add(parse(uri, src));
+    index.finalize();
+    vi.spyOn(workspace, 'getConfiguration').mockReturnValue({
+      get: (cle: string, defaut: any) => (cle === 'testSourceSets' ? [] : defaut),
+      update: async () => {},
+    } as any);
+    const col = lignes[ligne].indexOf(aiguille);
+    expect(col, 'aiguille presente dans la ligne').toBeGreaterThanOrEqual(0);
+    return new KotlinRenameProvider(index).prepareRename(
+      mockDocument(uri, src) as any,
+      new Position(ligne, col + 1) as any,
+    );
+  }
+
+  it('une ligne de continuation de KDoc est refusee', () => {
+    expect(refuse([
+      'package com.x',
+      '',
+      '/**',
+      ' * Le lecteur utilise ' + AG + 'extraire le JSON' + AG + ' pour isoler la charge.',
+      ' */',
+      'fun lire() {}',
+    ], 3, 'extraire')).toBeNull();
+  });
+
+  it('une ligne de commentaire simple est refusee', () => {
+    expect(refuse([
+      'package com.x',
+      '',
+      '// voir ' + AG + 'a b c' + AG + ' plus bas',
+      'fun lire() {}',
+    ], 2, 'a b c')).toBeNull();
+  });
+
+  it('une chaine de caracteres est refusee', () => {
+    expect(refuse([
+      'package com.x',
+      '',
+      'val requete = "select ' + AG + 'ma colonne' + AG + ' from t"',
+    ], 2, 'ma colonne')).toBeNull();
+  });
+
+  it('mais une declaration accentuee sur la meme ligne qu un commentaire reste acceptee', () => {
+    const prep = refuse([
+      'package com.x',
+      '',
+      'class T {',
+      '    fun ' + AG + 'given a when b' + AG + '() {} // voir plus bas',
+      '}',
+    ], 3, 'given a when b');
+    expect(prep?.placeholder).toBe('given a when b');
+  });
+});
+
 describe('renommer un nom de test entre accents graves', () => {
   it('propose le nom ENTIER, pas le mot sous le curseur', () => {
     const index = contexte();

@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.154
+
+Yesterday's rename fix ran its new backtick handling before the guard that refuses comments and strings, so F2 on a code span inside a KDoc offered to rename that text.
+
+### Fixes
+- Backticks are also the Markdown syntax of a KDoc. Pressing F2 on a code span there proposed a rename that would have edited only the comment, leaving the real symbol untouched everywhere else.
+- Checking the line was not enough: a KDoc continuation line carries neither a double slash nor a slash star, so a line level guard sees nothing there. The decision now comes from the same reader the usage scanners already use, which blanks comments and strings while keeping every length, so a backtick survives it only when it really is code.
+- Measured on a real project: of 1126 backticked spans that are not plain identifiers, all 1126 were accepted for rename yesterday and 1113 are now. The 15 that sat inside doc comments are refused, and the 1102 real test names are untouched.
+- The remaining ones are backticked constants such as a name beginning with a digit. Every one of them on that project is a private value declared and used inside its own file, so renaming within the file is the right answer for them too.
+
+### Notes
+- The rule that the text a rename edit replaces must be exactly the old name still reports nothing over 150 symbols and 1870 edits.
+
 ## 1.42.153
 
 Pressing F2 inside a Kotlin name written between backticks renamed the single word under the cursor across the whole workspace, and left the name itself broken.

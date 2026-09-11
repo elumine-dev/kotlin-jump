@@ -1,26 +1,21 @@
 {
-  "version": "1.42.205",
+  "version": "1.42.206",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A method with no body borrowed one",
-  "summary": "A method declared in an interface has no body. The code measuring how far a declaration reaches went looking for one anyway and closed on the brace of the class written below.",
+  "tagline": "Proving the narrowing lost nothing",
+  "summary": "No behaviour changes. Last release narrowed the window that looks for a function body, and this one is about proving it lost nothing it should have kept.",
   "highlights": [
     {
-      "title": "Removal No Longer Eats The Class",
-      "description": "Removing an unused interface method deleted around fifty live lines, the implementing class included. The extent now stops at the signature.",
-      "kind": "fix"
-    },
-    {
-      "title": "Fourteen False Reports Gone",
-      "description": "Calls living inside the swallowed class counted as mentions of the method itself, so implemented and called members were reported as unreferenced. The report goes from 316 to 302 on a real project.",
-      "kind": "fix"
+      "title": "Compared Finding By Finding",
+      "description": "On a real project 14 reports leave and none arrives, and all 14 are methods declared in an interface. A count alone would not have settled it.",
+      "kind": "improvement"
     }
   ],
   "sections": [
     {
       "heading": "Notes",
       "bullets": [
-        "Found by applying every removal the four dead code detectors offer on a real project and checking the file still balances: 400 removals in total, all clean now.",
-        "A member with no body is left out of the report entirely. Losing a finding costs nothing, keeping one that deletes live code costs everything."
+        "A signature can finish on a second line with `throws` in Java or `where` in Kotlin, and two methods of the real project do. A test now pins that the brace is still found there.",
+        "The two other branches that measure a declaration were re examined and need nothing: a property looks only at its own line, and a class header already walks its supertype list with a rule written for this hazard."
       ]
     }
   ],

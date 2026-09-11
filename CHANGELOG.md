@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.206
+
+No behaviour changes. Last release narrowed the window that looks for a function body, which is the kind of change that quietly loses findings, so this one is about proving it did not.
+
+### Notes
+- The report was compared finding by finding on a real project rather than by count: 14 leave, none arrives, and all 14 are methods declared in an interface. Those are exactly the ones whose extent used to swallow the class written below. A count alone would not have settled it, since a legitimate loss and a correct removal cancel out in a total.
+- A signature can end on one line and finish on the next, with `throws` in Java or `where` in Kotlin, and the brace then sits on that second line. Two methods of the real project have that shape. Adding either word to the list of things that open a new declaration would break both, and a test now says so.
+- The other two branches that measure a declaration were re examined and need nothing. A property only ever looks for a brace on its own line, and a class header already walks its supertype list with a rule written for this exact hazard, falling back to the header line when no brace belongs to it.
+- One shape is left unguarded because the real project has none: a signature spread over three lines with the brace alone on a fourth. It loses the finding rather than swallowing anything, which is the safe direction.
+
 ## 1.42.205
 
 A method declared in an interface has no body. The code that measures how far a declaration reaches went looking for one anyway, found the brace of the class written below it, and closed on that. The extent then ran from the method to the end of that class.

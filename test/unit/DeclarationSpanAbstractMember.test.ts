@@ -133,6 +133,38 @@ describe('declarationSpan - une fonction sans corps', () => {
     expect(texte.slice(s!.scanStart, s!.scanEnd)).toContain('return x + 1');
   });
 
+  it('une clause throws sur la ligne suivante laisse trouver le corps', () => {
+    // Forme reelle, deux fois sur /Users/kevin/Desktop/work/lapresse. La ligne
+    // qui suit la signature n ouvre pas une declaration, elle la termine, donc
+    // la fenetre doit continuer jusqu a son accolade. Ajouter `throws` a la
+    // liste des debuts de declaration casserait ces deux methodes.
+    const texte = [
+      'class A {',
+      '    public static int getNbChars(final TextPaint p, final String s)',
+      '            throws InterruptedException {',
+      '        return 1;',
+      '    }',
+      '}',
+    ].join(NL);
+    const s = span(texte, 'getNbChars');
+    expect(s).toBeDefined();
+    expect(texte.slice(s!.scanStart, s!.scanEnd)).toContain('return 1;');
+  });
+
+  it('une clause where sur la ligne suivante aussi', () => {
+    const texte = [
+      'class A {',
+      '    fun <T> plusGrand(a: T, b: T): T',
+      '        where T : Comparable<T> {',
+      '        return if (a > b) a else b',
+      '    }',
+      '}',
+    ].join(NL);
+    const s = span(texte, 'plusGrand');
+    expect(s).toBeDefined();
+    expect(texte.slice(s!.scanStart, s!.scanEnd)).toContain('a else b');
+  });
+
   it('temoin : une signature sur plusieurs lignes trouve encore son corps', () => {
     const texte = [
       'class A {',

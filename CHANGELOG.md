@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.179
+
+The `Remove unused …` quick fixes prime a full project scan at startup so the first lightbulb does not keep VS Code waiting. That scan ran whether or not you had asked for those actions.
+
+### Fixes
+- The warm up now reads the `kotlinJump.deadWeightQuickFixes` setting first. With the actions switched off, nothing is read and nothing is held.
+- What it costs when it does run, measured on a real project with interleaved passes: 92 ms of reading and 40.8 MB of file text kept for the session, across 6278 files. Raising the ceiling last release took that from 60 ms and 26.5 MB, so someone who had turned the feature off was paying more for nothing.
+- Switching the setting back on still works: the first lightbulb then pays the scan once, which is exactly what the warm up spares.
+
 ## 1.42.178
 
 Three features answer a question about an absence by walking the whole project, and each one stopped after 4000 files. Each also carries a guard that refuses to answer once the walk was cut short, so on a real project of 5088 sources those guards fired on every single run.

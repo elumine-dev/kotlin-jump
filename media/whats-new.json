@@ -1,38 +1,32 @@
 {
-  "version": "1.42.178",
+  "version": "1.42.179",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Three features that stopped at 4000 files",
-  "summary": "Three features answer a question about an absence by walking the whole project, and each one stopped after 4000 files. On a project of 5088 sources their safety guards fired on every run, so they said nothing useful.",
+  "tagline": "A startup scan you had not asked for",
+  "summary": "The Remove unused quick fixes prime a full project scan at startup so the first lightbulb does not keep VS Code waiting. That scan ran whether or not you had asked for those actions.",
   "highlights": [
     {
-      "title": "Manifest badges say something again",
+      "title": "The warm up reads the setting",
       "kind": "fix",
-      "description": "All 56 permissions measured across 51 manifests carried the same cautious label. With the full listing, 16 of them carry a real verdict."
+      "description": "With kotlinJump.deadWeightQuickFixes switched off, nothing is read at startup and nothing is held in memory."
     },
     {
-      "title": "The removal quick fixes come back",
-      "kind": "fix",
-      "description": "Remove unused resource, dependency and permission never appeared on a project above 4000 files. Their listing counts resource XML too, 6278 files there."
-    },
-    {
-      "title": "One ceiling for all three",
+      "title": "40.8 MB and 92 ms",
       "kind": "improvement",
-      "description": "The dependency badge, the manifest badges and the quick fixes behind them now share a single limit of 20000, and each keeps its guard for what lies past it."
+      "description": "What the scan costs on a real project of 6278 files, measured with interleaved passes. Raising the ceiling last release took it from 26.5 MB and 60 ms."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "The manifest necessity badges read the project sources with a ceiling of 4000 files and fell back to a cautious label whenever it was reached.",
-        "The Remove unused quick fixes read a listing that includes resource XML, so they overran even sooner and offered nothing.",
-        "The dependency badge, fixed last release, could say 0 imports and grey a line that no quick fix would then remove."
+        "The quick fix provider scanned the whole project at activation without ever looking at its own setting.",
+        "Switching the setting back on still works: the first lightbulb then pays the scan once, which is what the warm up spares."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "Reading the extra files costs about a third more time, once per 20 second window, and only while a manifest or a Gradle file is open."
+        "Nothing changes for anyone who leaves the quick fixes on."
       ]
     }
   ],

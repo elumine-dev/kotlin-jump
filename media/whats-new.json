@@ -1,17 +1,17 @@
 {
-  "version": "1.42.201",
+  "version": "1.42.202",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The long dash leaves the window",
-  "summary": "The long dash was banned from the README and the release notes and a script checked those. Nothing checked the extension itself, so it kept writing them in the window.",
+  "tagline": "A leading star that skipped the root",
+  "summary": "The setting that keeps Gradle build logic out of the unreferenced symbol report never worked, because a leading double star was read as one directory or more instead of zero or more.",
   "highlights": [
     {
-      "title": "Reworded Where You Read It",
-      "description": "65 pieces of text: the What's New title, the Run Android App pickers, the pairing dialogs, the hovers, the suppression descriptions, the diagnostics, the chat answers, the logcat status bar.",
-      "kind": "improvement"
+      "title": "buildSrc Is Excluded Again",
+      "description": "Gradle puts buildSrc at the root of the project, and the shipped default pattern demanded a directory before it. A convention plugin is named by its file, so every declaration inside looked unreferenced.",
+      "kind": "fix"
     },
     {
-      "title": "A Bare Dash Meant Nothing",
-      "description": "Two logcat status bar fields used a lone long dash to mean empty. They say none now, which a screen reader can read out.",
+      "title": "Your Own Ignore Patterns",
+      "description": "A pattern starting with a double star now covers the root as well, the way the editor's own globs and gitignore read it.",
       "kind": "fix"
     }
   ],
@@ -19,8 +19,8 @@
     {
       "heading": "Notes",
       "bullets": [
-        "The script that guards the README and the release notes now guards the sources too, and a check confirms it fails when a dash is put back in a window title.",
-        "The output channel keeps its own, on purpose: those lines are for whoever is debugging the extension, not copy anyone reads."
+        "No verdict changes on the real project, the report stays at 99 findings. The file under buildSrc produced none today, which is luck rather than correctness.",
+        "Three sources carried a raw NUL byte where an escape was meant, and one of them was read as binary by git, so its deliveries showed no diff at all. A new guard fails the build if one comes back."
       ]
     }
   ],

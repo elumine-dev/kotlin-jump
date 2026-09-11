@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.42.202
+
+The setting that keeps Gradle build logic out of the unreferenced symbol report never worked. Its own description says why it has to: a convention plugin is named by its file, so every declaration inside it looks unreferenced and gets offered for deletion, and deleting it breaks the build.
+
+### Fixes
+- A leading `**` was translated as "one directory or more" instead of "zero or more", the way the editor's own globs and gitignore read it. The shipped default is `**/buildSrc/**`, and Gradle puts `buildSrc` at the root of the project, so the pattern had nothing to match. Measured on a real project: one file under `buildSrc`, zero excluded.
+- The same held for any pattern a user writes: `**/generated/**` skipped a `generated` folder at the root, `**/*.kt` skipped a file at the root. `a/**/d.kt` now matches `a/d.kt`, which is what every other glob reader does.
+- The test that covered the setting used a fixture path of `/w/buildSrc/...`. That leading `/w/` supplied the directory the pattern wrongly demanded, so it passed on a setting that excluded nothing. It uses a path relative to the root now, the shape production actually produces.
+
+### Notes
+- No verdict changes on the real project: the report stays at 99 findings, 85 of them removable. The file under `buildSrc` produced none today, which is luck rather than correctness, and one unused helper added there would have been offered for deletion.
+- Three sources carried a raw NUL byte where an escape was meant. Git decides a file is binary by looking for one in the first 8 000 bytes, and `FindUnheardEvents.ts` had one at 5 768, so both of its deliveries showed up as `1 file changed, 0 insertions(+), 0 deletions(-)`. Nobody could review them. Two more carried the byte at 8 021 and 8 986, a few lines from the same fate. All three now write `\u0000`, which is the same character at runtime, and a new guard fails the build if a raw control byte comes back.
+- Interleaved against the previous release on the repository bench, six passes: no metric survives the interleaving. Three passes had flagged two of them as separated by 1 and 3 percent, and the extra passes dissolved both.
+
 ## 1.42.201
 
 The long dash was banned from the README, the Marketplace page and the release notes, and a script has been checking those four files for a while. Nothing was checking the extension itself, so it kept writing them in the window.

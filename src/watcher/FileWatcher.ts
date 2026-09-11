@@ -21,23 +21,6 @@ export class FileWatcher implements vscode.Disposable {
   private readonly treeWatcher: vscode.FileSystemWatcher;
   private readonly pendingScan = new Set<string>();
   /**
-   * Compteur de SUPPRESSIONS par URI. `flush` retire l'entrée de l'index PUIS
-   * lance un scan qu'il n'attend pas, et ce scan fait deux await, dont un
-   * aller retour par le pool de workers. Une suppression qui tombe dans cette
-   * fenêtre voyait son `remove` passer avant l'`add` du scan, et le fichier
-   * effacé revenait : Cmd+T le listait, Cmd+click ouvrait « file not found ».
-   *
-   * Ce compteur ne bouge QUE sur une suppression. Il comptait aussi les
-   * modifications, et deux scans du même fichier qui se chevauchent, ce que
-   * des sauvegardes rapprochées produisent, se piétinaient : chacun ajoutait
-   * le fichier, puis chaque scan déclaré périmé le retirait, y compris celui
-   * qu'un scan valide venait d'écrire. Le fichier disparaissait de l'index
-   * alors qu'il était bien là. Une modification n'a pas besoin de ce filet :
-   * le scan suivant réécrit l'entrée.
-   */
-  private readonly epoque = new Map<string, number>();
-
-  /**
    * Les URIs dont un scan tourne EN CE MOMENT. `removeTree` a besoin de
    * celles là, pas de tout l'historique : parcourir `epoque` coûtait 406 ms
    * pour 200 suppressions de dossier une fois 50 000 fichiers vus, alors que
@@ -114,7 +97,7 @@ export class FileWatcher implements vscode.Disposable {
     const connus = [...this.enVol].filter(k => k.startsWith(prefix));
     const enAttente = [...this.pendingScan].filter(k => k.startsWith(prefix));
     for (const cle of new Set([...dansIndex, ...connus, ...enAttente])) {
-      this.marquer(vscode.Uri.parse(cle));
+      this.noterSuppression(vscode.Uri.parse(cle));
       this.pendingScan.delete(cle);
     }
     // Programme AVANT le retour anticipe : au moment ou le dossier disparait,
@@ -174,7 +157,7 @@ export class FileWatcher implements vscode.Disposable {
       }
       if (!sousUnDossierMort) continue;
       const uri = vscode.Uri.parse(cle);
-      this.marquer(uri);
+      this.noterSuppression(uri);
       this.pendingScan.delete(cle);
       evict(uri);
       this.index.remove(uri);
@@ -230,10 +213,8 @@ export class FileWatcher implements vscode.Disposable {
    * expiring simultaneously.
    */
   /** Une SUPPRESSION périme les scans déjà en vol pour ce fichier. */
-  private marquer(uri: vscode.Uri): void {
-    const cle = uri.toString();
-    this.epoque.set(cle, (this.epoque.get(cle) ?? 0) + 1);
-    this.supprimes.add(cle);
+  private noterSuppression(uri: vscode.Uri): void {
+    this.supprimes.add(uri.toString());
   }
 
   /** Scanne, puis jette le résultat si un événement l'a dépassé entre temps. */
@@ -245,9 +226,12 @@ export class FileWatcher implements vscode.Disposable {
     // Le fichier est il supprime MAINTENANT ? Une modification survenue
     // pendant le scan n'a pas besoin de ce filet : le scan suivant reecrit
     // l'entree, et la retirer ici effacerait son travail.
-    if (this.supprimes.has(cle)) { this.index.remove(uri); return false; }
-    if (this.enVol.size === 0) this.supprimes.clear();   // borne l'ensemble
-    return true;
+    const perime = this.supprimes.has(cle);
+    if (perime) this.index.remove(uri);
+    // Borne l'ensemble sur les DEUX sorties : ne le vider qu'en cas de succes
+    // le laissait grossir tant qu'un scan perime terminait en dernier.
+    if (this.enVol.size === 0) this.supprimes.clear();
+    return !perime;
   }
 
   private queue(uri: vscode.Uri): void {
@@ -294,7 +278,7 @@ export class FileWatcher implements vscode.Disposable {
 
   private onDeleted(uri: vscode.Uri): void {
     this.log?.info(`[watcher] deleted: ${fileName(uri)}`);
-    this.marquer(uri);
+    this.noterSuppression(uri);
     this.pendingScan.delete(uri.toString());
     evict(uri);
     this.index.remove(uri);

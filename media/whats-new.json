@@ -1,21 +1,21 @@
 {
-  "version": "1.42.117",
+  "version": "1.42.118",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Saving twice in a row no longer loses the file",
-  "summary": "Two scans of one file can overlap when a second save arrives mid parse. Each wrote its result, then every scan the watcher thought outdated erased the entry, including the one just written.",
+  "tagline": "A counter nobody read any more",
+  "summary": "Yesterday's fix replaced a counter of events with a plain question. The counter was left behind: still written on every deletion, read by nobody.",
   "highlights": [
     {
-      "title": "A file could vanish from the index while still on disk",
-      "description": "The watcher now asks whether the file is deleted right now, rather than whether anything at all has happened to it. A save needs no safety net: the next scan rewrites the entry.",
-      "kind": "fix"
+      "title": "No behaviour change",
+      "description": "A map grew by one entry per deleted file for the whole session and fed no decision. The test that forbade walking it guarded nothing.",
+      "kind": "note"
     }
   ],
   "sections": [
     {
-      "heading": "Fixed",
+      "heading": "Internal",
       "bullets": [
-        "Driving the watcher through three thousand interleaved creations, deletions and folder removals left files on disk that the index had lost. They now match exactly.",
-        "That storm is now a test, and restoring the previous guard fails it."
+        "The guard now watches the set that replaced the map, the only one left that can grow with the session.",
+        "The marks telling two overlapping scans apart are released on both exits rather than only on success."
       ]
     }
   ],

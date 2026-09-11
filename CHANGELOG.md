@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.118
+
+Yesterday's fix replaced a counter of events with a plain question, is this file deleted right now. The counter was left behind: still written on every deletion, read by nobody.
+
+### Internal
+- Removes a map that grew by one entry per deleted file for the whole session and fed no decision. The test that forbade walking it was therefore guarding a property with no consequence; it now guards the set that replaced it, which is the only one left that can grow with the session.
+- The marks that let the watcher tell two overlapping scans apart are released on both exits rather than only on success. A scan finishing last while considered outdated used to leave its mark behind for good.
+- Nothing changes for anyone using the extension.
+
 ## 1.42.117
 
 Saving the same file twice in quick succession could make it vanish from the index. It was still on disk, still open, and navigation no longer knew about it until the next edit.

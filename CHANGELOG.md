@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.137
+
+The check added last release for the catalog colouring could not have caught a broken scanner.
+
+### Internal
+- Those checks only asked that nothing be wrong: no token past the end of its line, no overlap, no impossible fold. A scanner that produced nothing at all breaks none of those, so twelve of the thirteen checks still passed when it was made silent. The thirteenth, the one that reads a real catalog, is the one skipped wherever that project is absent, which is every machine but the author's.
+- Each case now states what it must produce, the tokens and their kinds and the number of folds, so the same silent scanner fails thirteen of fourteen instead of one. Four further deliberate breakages were tried: losing the difference between a key and an inline field, dropping comments, folding an empty table, and losing the difference between a version number and a plain string. Each is now caught by the cases that care about it.
+
+### Notes
+- No user visible change in this release.
+
 ## 1.42.136
 
 A project folder containing a dollar sign broke the catalog path resolution added last release.

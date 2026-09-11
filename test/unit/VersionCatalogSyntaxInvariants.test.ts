@@ -70,25 +70,44 @@ function violations(texte: string): string[] {
   return pb;
 }
 
-const CAS: Array<[string, string]> = [
-  ['un crochet jamais ferme',    '[libraries]' + NL + 'a = { module = "g:a"' + NL + 'b = "1.0"'],
-  ['un diese dans une chaine',   '[libraries]' + NL + 'a = { module = "g:a#frag", version = "1" }'],
-  ['des apostrophes',            '[versions]' + NL + 'k = ' + APO + '1.9.0' + APO],
-  ['une chaine jamais fermee',   '[versions]' + NL + 'k = "1.9.0'],
-  ['un tableau multiligne',      '[bundles]' + NL + 'ui = [' + NL + '  "a",' + NL + '  "b",' + NL + ']'],
-  ['un entete a double crochet', '[[plugins]]' + NL + 'p = "x"'],
-  ['des fins de ligne CRLF',     '[versions]\r' + NL + 'k = "1.0"\r'],
-  ['un document vide',           ''],
-  ['un commentaire seul',        '# rien'],
-  ['un egal sans cle',           '[versions]' + NL + ' = "1.0"'],
-  ['un antislash final',         '[versions]' + NL + 'k = "a\\\\"'],
-  ['une table vide',             '[versions]' + NL + NL + '[libraries]' + NL + 'a = "1"'],
+/**
+ * Chaque cas porte ce qu'il DOIT produire, pas seulement l'absence de
+ * violation : un scanner qui ne rendrait plus rien ne viole aucun invariant,
+ * et douze cas sur treize passaient encore. Le treizieme, celui du corpus
+ * reel, est justement celui que la CI saute faute du projet.
+ */
+const CAS: Array<[string, string, number, number, string]> = [
+  ['un crochet jamais ferme',    '[libraries]' + NL + 'a = { module = "g:a"' + NL + 'b = "1.0"', 6, 1, 'namespace,property,parameter,string,parameter,number'],
+  ['un diese dans une chaine',   '[libraries]' + NL + 'a = { module = "g:a#frag", version = "1" }', 6, 1, 'namespace,property,parameter,string,parameter,number'],
+  ['des apostrophes',            '[versions]' + NL + 'k = ' + APO + '1.9.0' + APO, 3, 1, 'namespace,property,number'],
+  ['une chaine jamais fermee',   '[versions]' + NL + 'k = "1.9.0', 3, 1, 'namespace,property,number'],
+  ['un tableau multiligne',      '[bundles]' + NL + 'ui = [' + NL + '  "a",' + NL + '  "b",' + NL + ']', 4, 2, 'namespace,property,string,string'],
+  ['un entete a double crochet', '[[plugins]]' + NL + 'p = "x"', 3, 1, 'namespace,property,string'],
+  ['des fins de ligne CRLF',     '[versions]\r' + NL + 'k = "1.0"\r', 3, 1, 'namespace,property,number'],
+  ['un document vide',           '', 0, 0, ''],
+  ['un commentaire seul',        '# rien', 1, 0, 'comment'],
+  ['un egal sans cle',           '[versions]' + NL + ' = "1.0"', 2, 1, 'namespace,number'],
+  ['un antislash final',         '[versions]' + NL + 'k = "a\\\\"', 3, 1, 'namespace,property,string'],
+  ['une table vide',             '[versions]' + NL + NL + '[libraries]' + NL + 'a = "1"', 4, 1, 'namespace,namespace,property,number'],
 ];
 
 describe('le scanner de catalogue respecte ses propres invariants', () => {
-  for (const [nom, texte] of CAS) {
-    it('sur ' + nom, () => expect(violations(texte)).toEqual([]));
+  for (const [nom, texte, nbJetons, nbReplis, types] of CAS) {
+    it('sur ' + nom, () => {
+      const { tokens, regions } = scanVersionCatalog(texte);
+      expect(tokens.map(t => t.type).join(','), 'les jetons produits').toBe(types);
+      expect(tokens.length, 'nombre de jetons').toBe(nbJetons);
+      expect(regions.length, 'nombre de replis').toBe(nbReplis);
+      expect(violations(texte)).toEqual([]);
+    });
   }
+
+  it('l ensemble des cas produit vraiment quelque chose', () => {
+    // Garde grossiere mais decisive : un scanner muet tombe ici meme si
+    // chaque cas etait un jour affaibli separement.
+    const total = CAS.reduce((n, [, texte]) => n + scanVersionCatalog(texte).tokens.length, 0);
+    expect(total).toBeGreaterThan(30);
+  });
 });
 
 /**

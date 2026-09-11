@@ -15,12 +15,14 @@
  *  - nested calls: `Modifier.padding(top = 8.dp)` — `top` is `padding`'s arg
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { KotlinDefinitionProvider } from '../../src/providers/DefinitionProvider';
 import { SymbolIndex } from '../../src/indexer/SymbolIndex';
 import { parse } from '../../src/indexer/KotlinParser';
 import { mockDocument } from './helpers';
-import { Location, Position } from './__mocks__/vscode';
+import { Location, Position, workspace } from './__mocks__/vscode';
+
+afterEach(() => vi.restoreAllMocks());
 
 function addFile(index: SymbolIndex, uri: string, code: string) {
   index.add(parse(uri, code));
@@ -248,6 +250,19 @@ fun main() {
     const idx = new SymbolIndex();
     addFile(idx, 'file:///src/widget/Greet.kt', widget);
     addFile(idx, 'file:///src/app/Main.kt', caller);
+    // La resolution ouvre desormais le fichier de la candidate pour verifier
+    // qu'elle porte bien ce parametre : sans ce bouchon, elle ne peut pas
+    // lire `Greet.kt` et s'abstient, ce qui est le comportement voulu quand
+    // le fichier est illisible.
+    const contenus = new Map([
+      ['file:///src/widget/Greet.kt', widget],
+      ['file:///src/app/Main.kt', caller],
+    ]);
+    vi.spyOn(workspace, 'openTextDocument').mockImplementation(async (u: any) => {
+      const uri = typeof u === 'string' ? u : (u?.toString?.() ?? String(u));
+      const t = contenus.get(uri);
+      return t === undefined ? null : (mockDocument(uri, t) as any);
+    });
     const provider = new KotlinDefinitionProvider(idx);
     const doc = mockDocument('file:///src/app/Main.kt', caller);
     const lines = caller.split('\n');

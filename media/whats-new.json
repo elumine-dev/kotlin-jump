@@ -1,21 +1,22 @@
 {
-  "version": "1.42.147",
+  "version": "1.42.148",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Ctrl+click on a default parameter type",
-  "summary": "Ctrl+click on the type of a parameter that has a default value went to the enclosing function instead of the type.",
+  "tagline": "Named arguments land on the right parameter",
+  "summary": "Ctrl+click on the name of a named argument no longer opens a function that has no such parameter.",
   "highlights": [
     {
-      "title": "Types Of Parameters With A Default",
+      "title": "Clicking A Named Argument",
       "kind": "fix",
-      "description": "A parameter with a default value looked like a named argument to one resolution step, so clicking its type went to the enclosing function. On a real project 699 of 785 such clicks landed wrong, affecting most Compose code."
+      "description": "Across files, every same named function was offered without checking it has that parameter: 41 percent of those clicks opened the wrong function. The candidate is now checked, and the click lands on the parameter itself."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "A parameter written as a name, a colon, a type and a default value looks, to one of the resolution steps, exactly like a named argument: a word followed by a single equals sign. The extension then walked back to the opening bracket, took the enclosing function for the one being called, and sent you there. Measured on a real project of 3187 Kotlin files: 699 of the 785 such clicks that resolved, so 89 percent, landed on the wrong place. It affects every function with a default value, which in Compose code is most of them, and types as common as Modifier or Boolean.",
-        "A named argument is never preceded by a colon and a type annotation always is, which is what now tells them apart. Clicking the left side of a real named argument still goes to the parameter of the function being called, including when a colon appears elsewhere on the same line, and the same measurement over 17588 such clicks is unchanged."
+        "When the called function is declared in another file, the extension returned the declaration line of every same named function it knew of, without ever checking that the function actually has that parameter. The code said as much, calling itself a strict improvement over returning nothing. Measured on a real project of 3187 Kotlin files, it was not: 266 of the 651 clicks concerned, so 41 percent, opened a function without that parameter. Clicking margin took you to a photo model taking a url and a width, in another module.",
+        "The candidate is now opened and the parameter located in its signature, so the click lands on the parameter itself rather than on the function line: 715 clicks that used to stop at the signature now reach the exact word. When no candidate has the parameter, nothing happens, which beats being sent somewhere unrelated.",
+        "Only this one step became asynchronous, and only when a click really is on the left of a named argument, so every other resolution path keeps its previous timing."
       ]
     },
     {

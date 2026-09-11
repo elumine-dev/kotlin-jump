@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.148
+
+Ctrl+click on the name of a named argument no longer opens a function that has no such parameter.
+
+### Fixes
+- When the called function is declared in another file, the extension returned the declaration line of every same named function it knew of, without ever checking that the function actually has that parameter. The code said as much, calling itself a strict improvement over returning nothing. Measured on a real project of 3187 Kotlin files, it was not: 266 of the 651 clicks concerned, so 41 percent, opened a function without that parameter. Clicking margin took you to a photo model taking a url and a width, in another module.
+- The candidate is now opened and the parameter located in its signature, so the click lands on the parameter itself rather than on the function line: 715 clicks that used to stop at the signature now reach the exact word. When no candidate has the parameter, nothing happens, which beats being sent somewhere unrelated.
+- Only this one step became asynchronous, and only when a click really is on the left of a named argument, so every other resolution path keeps its previous timing.
+
+### Notes
+- No new commands or settings in this release.
+
 ## 1.42.147
 
 Ctrl+click on the type of a parameter that has a default value went to the enclosing function instead of the type.

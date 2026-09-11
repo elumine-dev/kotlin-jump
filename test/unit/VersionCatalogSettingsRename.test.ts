@@ -54,14 +54,14 @@ function lesDeuxVues(index: VersionCatalogIndex, racine: string) {
 describe('un catalogue renomme par settings.gradle.kts', () => {
   it('la racine suit les settings, pas le nom du fichier', () => {
     const index = new VersionCatalogIndex();
-    index.setSettings([SETTINGS_RENOMME]);
+    index.setSettings([{ path: '/p/settings.gradle.kts', text: SETTINGS_RENOMME }]);
     index.reindexFile(TOML, CHEMIN);
     expect(index.rootFor(BUILD)).toBe('deps');
   });
 
   it('le survol et le Ctrl+clic repondent sur deps.retrofit', () => {
     const index = new VersionCatalogIndex();
-    index.setSettings([SETTINGS_RENOMME]);
+    index.setSettings([{ path: '/p/settings.gradle.kts', text: SETTINGS_RENOMME }]);
     index.reindexFile(TOML, CHEMIN);
     const { survol, clic } = lesDeuxVues(index, 'deps');
     expect(survol, 'survol de deps.retrofit').toBeDefined();
@@ -70,7 +70,7 @@ describe('un catalogue renomme par settings.gradle.kts', () => {
 
   it('et plus rien sur libs.retrofit, que Gradle n expose plus', () => {
     const index = new VersionCatalogIndex();
-    index.setSettings([SETTINGS_RENOMME]);
+    index.setSettings([{ path: '/p/settings.gradle.kts', text: SETTINGS_RENOMME }]);
     index.reindexFile(TOML, CHEMIN);
     const { survol, clic } = lesDeuxVues(index, 'libs');
     expect(survol, 'libs n est plus une racine valide').toBeUndefined();
@@ -83,16 +83,16 @@ describe('un catalogue renomme par settings.gradle.kts', () => {
     const index = new VersionCatalogIndex();
     index.reindexFile(TOML, CHEMIN);
     expect(index.rootFor(BUILD), 'avant les settings').toBe('libs');
-    index.setSettings([SETTINGS_RENOMME]);
+    index.setSettings([{ path: '/p/settings.gradle.kts', text: SETTINGS_RENOMME }]);
     expect(index.rootFor(BUILD), 'apres les settings').toBe('deps');
     expect(lesDeuxVues(index, 'deps').clic).toBeDefined();
   });
 
   it('des settings qui repassent a l ordinaire rendent la racine du fichier', () => {
     const index = new VersionCatalogIndex();
-    index.setSettings([SETTINGS_RENOMME]);
+    index.setSettings([{ path: '/p/settings.gradle.kts', text: SETTINGS_RENOMME }]);
     index.reindexFile(TOML, CHEMIN);
-    index.setSettings([SETTINGS_ORDINAIRE]);
+    index.setSettings([{ path: '/p/settings.gradle.kts', text: SETTINGS_ORDINAIRE }]);
     expect(index.rootFor(BUILD)).toBe('libs');
     expect(lesDeuxVues(index, 'libs').clic, 'libs redevient joignable').toBeDefined();
   });
@@ -106,7 +106,7 @@ describe('un catalogue renomme par settings.gradle.kts', () => {
 
   it('un settings sans bloc versionCatalogs ne change rien non plus', () => {
     const index = new VersionCatalogIndex();
-    index.setSettings([SETTINGS_ORDINAIRE]);
+    index.setSettings([{ path: '/p/settings.gradle.kts', text: SETTINGS_ORDINAIRE }]);
     index.reindexFile(TOML, CHEMIN);
     expect(index.rootFor(BUILD)).toBe('libs');
   });
@@ -122,9 +122,74 @@ describe('un catalogue renomme par settings.gradle.kts', () => {
  * DEMARRE en dernier. Le plus ancien peut donc ecraser le plus recent, et
  * l'index reste perime jusqu'au prochain evenement, qui peut ne jamais venir.
  */
+/**
+ * Un workspace a plusieurs racines, ou un build compose : chaque projet a son
+ * `settings.gradle.kts`.
+ *
+ * `catalogRootOf` ne comparait que le NOM du fichier cite dans
+ * `from(files("gradle/libs.versions.toml"))`. Tous les catalogues par defaut
+ * portant ce meme nom, le renommage declare par le projet A s'appliquait
+ * aussi au catalogue du projet B. Avant v1.42.130 l'index ne lisait pas les
+ * settings, donc B allait bien ; depuis, B croit s'appeler `deps` alors que
+ * ses build files ecrivent `libs`, et le survol comme le Ctrl+clic s'y
+ * taisent completement.
+ */
+describe('deux projets, un seul renomme son catalogue', () => {
+  const SET_A = { path: '/w/projetA/settings.gradle.kts', text: SETTINGS_RENOMME };
+  const SET_B = { path: '/w/projetB/settings.gradle.kts', text: SETTINGS_ORDINAIRE };
+  const TOML_A = '/w/projetA/gradle/libs.versions.toml';
+  const TOML_B = '/w/projetB/gradle/libs.versions.toml';
+
+  function indexDeux(): VersionCatalogIndex {
+    const i = new VersionCatalogIndex();
+    i.setSettings([SET_A, SET_B]);
+    i.reindexFile(TOML, TOML_A);
+    i.reindexFile(TOML, TOML_B);
+    return i;
+  }
+
+  it('le projet qui renomme prend deps', () => {
+    expect(indexDeux().rootFor('/w/projetA/app/build.gradle.kts')).toBe('deps');
+  });
+
+  it('et le projet voisin garde libs', () => {
+    expect(indexDeux().rootFor('/w/projetB/app/build.gradle.kts')).toBe('libs');
+  });
+
+  it('les build files du voisin restent navigables', () => {
+    const index = indexDeux();
+    const ligne = '    implementation(libs.retrofit)';
+    const doc = docDe('/w/projetB/app/build.gradle.kts', 'dependencies {' + NL + ligne + NL + '}');
+    const col = ligne.indexOf('libs') + 2;
+    expect(new VersionCatalogHoverProvider(index).provideHover(doc, new Position(1, col) as any),
+      'survol dans le projet voisin').toBeDefined();
+    expect(new VersionCatalogDefinitionProvider(index).provideDefinition(doc, new Position(1, col) as any),
+      'Ctrl+clic dans le projet voisin').toBeDefined();
+  });
+
+  it('un settings a la racine du workspace gouverne les deux', () => {
+    const i = new VersionCatalogIndex();
+    i.setSettings([{ path: '/w/settings.gradle.kts', text: SETTINGS_RENOMME }]);
+    i.reindexFile(TOML, TOML_A);
+    i.reindexFile(TOML, TOML_B);
+    expect(i.rootFor('/w/projetA/app/build.gradle.kts')).toBe('deps');
+    expect(i.rootFor('/w/projetB/app/build.gradle.kts')).toBe('deps');
+  });
+
+  it('le settings le plus proche l emporte sur celui de la racine', () => {
+    const i = new VersionCatalogIndex();
+    i.setSettings([
+      { path: '/w/settings.gradle.kts', text: SETTINGS_RENOMME },
+      { path: '/w/projetB/settings.gradle.kts', text: SETTINGS_ORDINAIRE },
+    ]);
+    i.reindexFile(TOML, TOML_B);
+    expect(i.rootFor('/w/projetB/app/build.gradle.kts')).toBe('libs');
+  });
+});
+
 describe('relectures de settings qui se chevauchent', () => {
   /** Transcription du cablage de production, sans garde. */
-  function relireSansGarde(index: VersionCatalogIndex, lire: () => Promise<string[]>) {
+  function relireSansGarde(index: VersionCatalogIndex, lire: () => Promise<{ path: string; text: string }[]>) {
     return (async () => { index.setSettings(await lire()); })();
   }
 
@@ -134,8 +199,8 @@ describe('relectures de settings qui se chevauchent', () => {
     let liberer!: () => void;
     const lente = new Promise<void>(r => { liberer = r; });
 
-    const ancienne = relireSansGarde(index, async () => { await lente; return [SETTINGS_ORDINAIRE]; });
-    const recente  = relireSansGarde(index, async () => [SETTINGS_RENOMME]);
+    const ancienne = relireSansGarde(index, async () => { await lente; return [{ path: '/p/settings.gradle.kts', text: SETTINGS_ORDINAIRE }]; });
+    const recente  = relireSansGarde(index, async () => [{ path: '/p/settings.gradle.kts', text: SETTINGS_RENOMME }]);
     await recente;
     expect(index.rootFor(BUILD), 'la recente a bien pris').toBe('deps');
     liberer();
@@ -150,8 +215,8 @@ describe('relectures de settings qui se chevauchent', () => {
     let liberer!: () => void;
     const lente = new Promise<void>(r => { liberer = r; });
 
-    const ancienne = index.chargerSettings(async () => { await lente; return [SETTINGS_ORDINAIRE]; });
-    const recente  = index.chargerSettings(async () => [SETTINGS_RENOMME]);
+    const ancienne = index.chargerSettings(async () => { await lente; return [{ path: '/p/settings.gradle.kts', text: SETTINGS_ORDINAIRE }]; });
+    const recente  = index.chargerSettings(async () => [{ path: '/p/settings.gradle.kts', text: SETTINGS_RENOMME }]);
     await recente;
     liberer();
     await ancienne;
@@ -161,7 +226,7 @@ describe('relectures de settings qui se chevauchent', () => {
   it('une lecture qui echoue ne vide pas les settings deja connus', async () => {
     const index = new VersionCatalogIndex();
     index.reindexFile(TOML, CHEMIN);
-    await index.chargerSettings(async () => [SETTINGS_RENOMME]);
+    await index.chargerSettings(async () => [{ path: '/p/settings.gradle.kts', text: SETTINGS_RENOMME }]);
     await index.chargerSettings(async () => { throw new Error('EACCES'); });
     expect(index.rootFor(BUILD)).toBe('deps');
   });
@@ -169,7 +234,7 @@ describe('relectures de settings qui se chevauchent', () => {
   it('une lecture normale prend bien effet', async () => {
     const index = new VersionCatalogIndex();
     index.reindexFile(TOML, CHEMIN);
-    await index.chargerSettings(async () => [SETTINGS_RENOMME]);
+    await index.chargerSettings(async () => [{ path: '/p/settings.gradle.kts', text: SETTINGS_RENOMME }]);
     expect(index.rootFor(BUILD)).toBe('deps');
   });
 });
@@ -189,6 +254,10 @@ describe('les settings doivent vraiment etre lus en production', () => {
         .not.toContain('vcIndex.setSettings(');
       expect(texte, rel + ' doit surveiller les settings')
         .toContain('createFileSystemWatcher(SETTINGS_GLOB)');
+      // Sans le chemin, un settings gouverne tout le workspace et le
+      // renommage d'un projet contamine ses voisins.
+      expect(texte, rel + ' doit transmettre le chemin du settings, pas que son texte')
+        .toContain('{ path: u.fsPath, text: new TextDecoder()');
     }
   });
 });

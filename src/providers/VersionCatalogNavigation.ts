@@ -136,7 +136,8 @@ async function usagesInWorkspace(alias: CatalogAlias, cheminCatalogue: string): 
     } catch { return undefined; }
   }));
   const presents = lus.filter((x): x is { uri: vscode.Uri; texte: string } => x !== undefined);
-  const settings = presents.filter(x => RE_SETTINGS.test(x.uri.fsPath)).map(x => x.texte);
+  const settings = presents.filter(x => RE_SETTINGS.test(x.uri.fsPath))
+    .map(x => ({ path: x.uri.fsPath, text: x.texte }));
 
   const root = catalogRootOf(cheminCatalogue, settings);
   if (root === undefined) return [];

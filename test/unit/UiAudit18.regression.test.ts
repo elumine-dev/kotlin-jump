@@ -99,9 +99,9 @@ describe('Catalogues de versions', () => {
       '  }',
       '}',
     ].join('\n');
-    expect(catalogRootOf('/p/gradle/libs.versions.toml', [settings])).toBe('libs');
-    expect(catalogRootOf('/p/gradle/testLibs.versions.toml', [settings])).toBe('testLibs');
-    expect(catalogRootOf('/p/gradle/deps.versions.toml', ['versionCatalogs { create("deps") { from(files("gradle/deps.versions.toml")) } }'])).toBe('deps');
+    expect(catalogRootOf('/p/gradle/libs.versions.toml', [{ path: '/p/settings.gradle.kts', text: settings }])).toBe('libs');
+    expect(catalogRootOf('/p/gradle/testLibs.versions.toml', [{ path: '/p/settings.gradle.kts', text: settings }])).toBe('testLibs');
+    expect(catalogRootOf('/p/gradle/deps.versions.toml', [{ path: '/p/settings.gradle.kts', text: 'versionCatalogs { create("deps") { from(files("gradle/deps.versions.toml")) } }' }])).toBe('deps');
   });
 
   it('includeBuild("gradle/plugins") est un dossier de plugins de convention', () => {

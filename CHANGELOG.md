@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.132
+
+In a workspace holding several projects, one project renaming its catalog silently renamed its neighbours' too.
+
+### Fixes
+- A catalog rename declared in settings.gradle.kts was matched by file name alone. Every default catalog is called libs.versions.toml, so create("deps") in one project also applied to every other project in the workspace: the neighbour believed its root was deps while its build files write libs, and hover and Ctrl+click went silent across it. A settings file now only governs the catalogs under its own directory, and the nearest one wins when a workspace has both a root settings file and a per project one.
+- The same rule now applies to the unused dependency scan and to Find Usages from inside the catalog, which shared the file name matching.
+
+### Notes
+- A workspace holding a single project sees no change.
+- No new commands or settings in this release.
+
 ## 1.42.131
 
 A settings file read twice at once could leave the older content in place, undoing the fix shipped in the previous release.

@@ -1,26 +1,27 @@
 {
-  "version": "1.42.131",
+  "version": "1.42.132",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The freshest settings read wins",
-  "summary": "A settings file read twice at once could leave the older content in place, undoing the fix shipped in the previous release.",
+  "tagline": "One project no longer renames its neighbours",
+  "summary": "In a workspace holding several projects, one project renaming its catalog silently renamed its neighbours' too.",
   "highlights": [
     {
-      "title": "Overlapping Settings Rereads",
+      "title": "Catalog Rename Stays In Its Project",
       "kind": "fix",
-      "description": "One save emits several file events, so several rereads race. The one that finished last used to win rather than the one that started last, leaving a stale catalog root behind. Rereads are now ordered."
+      "description": "A rename declared in one settings.gradle.kts was matched by file name alone, so it applied to every other project in the workspace and silenced hover and Ctrl+click there. Settings now govern only their own directory."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Saving settings.gradle.kts often emits several file events, so several rereads start at once. Whichever one finished last was the one that took effect, not whichever started last, so a stale read could overwrite a fresh one and the catalog root would stay wrong until the next event, which may never come. Each reread now carries a sequence number and an older one is dropped.",
-        "A settings file that cannot be read no longer clears what is already known about the catalog roots."
+        "A catalog rename declared in settings.gradle.kts was matched by file name alone. Every default catalog is called libs.versions.toml, so create(\"deps\") in one project also applied to every other project in the workspace: the neighbour believed its root was deps while its build files write libs, and hover and Ctrl+click went silent across it. A settings file now only governs the catalogs under its own directory, and the nearest one wins when a workspace has both a root settings file and a per project one.",
+        "The same rule now applies to the unused dependency scan and to Find Usages from inside the catalog, which shared the file name matching."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
+        "A workspace holding a single project sees no change.",
         "No new commands or settings in this release."
       ]
     }

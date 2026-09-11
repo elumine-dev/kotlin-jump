@@ -201,7 +201,7 @@ describe('la racine d’accesseur', () => {
     // trouverait aucune référence et sortirait tous les alias d'un coup.
     const settings = f('settings.gradle.kts',
       'dependencyResolutionManagement {\n  versionCatalogs {\n    create("deps")\n  }\n}');
-    expect(catalogRootOf(TOML, [settings.text])).toBe('deps');
+    expect(catalogRootOf(TOML, [{ path: 'settings.gradle.kts', text: settings.text }])).toBe('deps');
 
     const sources = [
       settings,
@@ -213,7 +213,7 @@ describe('la racine d’accesseur', () => {
 
   it('un catalogue construit en Kotlin met le scan en silence', () => {
     const settings = 'versionCatalogs {\n  create("libs") {\n    library("x", "g:a:1")\n  }\n}';
-    expect(catalogRootOf(TOML, [settings])).toBeUndefined();
+    expect(catalogRootOf(TOML, [{ path: 'settings.gradle.kts', text: settings }])).toBeUndefined();
   });
 
   it('sans settings, la racine vient du nom de fichier', () => {

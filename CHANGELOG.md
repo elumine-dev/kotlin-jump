@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.42.111
+
+Yesterday's release pinned a linear pass with a stopwatch. Under a busy machine that stopwatch reads ten times higher, so the test was a release blocker waiting to happen, which is exactly the kind this week has been spent removing.
+
+### Internal
+- The test that keeps folder scanning linear now counts array scans instead of milliseconds. Measured on a loaded machine, the timing version failed at 60 ms against a 50 ms bound while the work itself was fine; the counting version passes there and still fails the quadratic version, reporting thirty thousand scans where zero are allowed. A count does not move with the load.
+- The growth ratio was tried first and rejected on measurement: between two runs it swung from 1.7 to 11.9 on a loaded machine, less trustworthy than the absolute bound it was meant to replace.
+- The last asynchronous stopwatch assertion in the suite is gone, now that a budget can wrap an await.
+
 ## 1.42.110
 
 The guard added yesterday, so that a file deleted mid scan does not come back, sorted its survivors with a lookup inside a loop over the same list. That is quadratic, and nothing moves in the ordinary case, so the ordinary case was the worst case.

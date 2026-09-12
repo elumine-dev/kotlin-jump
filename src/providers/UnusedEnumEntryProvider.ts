@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { addCascade } from './applyCascade';
+import { addCascadePlan, planOneFile } from './applyCascade';
 import { corpusUri } from '../util/corpusUri';
 import {
   UnusedEnumEntry,
@@ -100,9 +100,9 @@ export class UnusedEnumEntryProvider implements vscode.CodeActionProvider, vscod
         new vscode.Range(document.positionAt(hit.removeStart), document.positionAt(hit.removeEnd)),
         { needsConfirmation: true, label: deleteTitleFor(hit) },
       );
-      addCascade(
+      addCascadePlan(
         edit,
-        new Map([[document.uri.fsPath, [{ start: hit.removeStart, end: hit.removeEnd }]]]),
+        planOneFile(document.uri.fsPath, document.getText(), { start: hit.removeStart, end: hit.removeEnd }),
         new Map([[document.uri.fsPath, document.getText()]]),
       );
       action.edit = edit;

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { addCascade } from './applyCascade';
+import { addCascadePlan, planOneFile } from './applyCascade';
 import { narrowToPrivate } from './narrowToPrivate';
 import { corpusUri } from '../util/corpusUri';
 import { insertImport } from './AutoImportProvider';
@@ -97,18 +97,18 @@ export class UnusedMemberProvider implements vscode.CodeActionProvider, vscode.D
     if (hit.verdict === 'unreferenced' && hit.removeStart !== -1) {
       const action = new vscode.CodeAction(deleteTitleFor(hit), vscode.CodeActionKind.QuickFix);
       const edit = new vscode.WorkspaceEdit();
-      edit.delete(
-        document.uri,
-        new vscode.Range(document.positionAt(hit.removeStart), document.positionAt(hit.removeEnd)),
-        { needsConfirmation: true, label: deleteTitleFor(hit) },
-      );
-      // KJ-048: the imports this member was the last user of, and the file
-      // itself when nothing is left in it.
-      addCascade(
-        edit,
-        new Map([[document.uri.fsPath, [{ start: hit.removeStart, end: hit.removeEnd }]]]),
-        new Map([[document.uri.fsPath, document.getText()]]),
-      );
+      // KJ-048, asked BEFORE the range edit: a WorkspaceEdit that both deletes
+      // a URI and edits a range in it is rejected whole, and in silence.
+      const texts = new Map([[document.uri.fsPath, document.getText()]]);
+      const plan = planOneFile(document.uri.fsPath, document.getText(), { start: hit.removeStart, end: hit.removeEnd });
+      if (!plan.deleteFiles.has(document.uri.fsPath)) {
+        edit.delete(
+          document.uri,
+          new vscode.Range(document.positionAt(hit.removeStart), document.positionAt(hit.removeEnd)),
+          { needsConfirmation: true, label: deleteTitleFor(hit) },
+        );
+      }
+      addCascadePlan(edit, plan, texts);
       action.edit = edit;
       action.isPreferred = false;
       actions.push(action);

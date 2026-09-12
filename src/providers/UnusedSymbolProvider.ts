@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { corpusUri } from '../util/corpusUri';
-import { addCascade } from './applyCascade';
+import { addCascadePlan, planCascade } from './applyCascade';
 import { insertImport } from './AutoImportProvider';
 import { parse } from '../indexer/KotlinParser';
 import {
@@ -206,7 +206,6 @@ export async function buildSymbolRemovalEdit(
   }
   // KJ-048: what the cuts orphan. Filled as the ranges are computed below, so
   // the cascade sees exactly what this edit removes and nothing else.
-  const cutsByPath = new Map<string, { start: number; end: number }[]>();
   const textForCascade = new Map<string, string>();
 
   // Decided up front: a stale-import edit aimed at a file this same edit
@@ -216,34 +215,54 @@ export async function buildSymbolRemovalEdit(
     if (group.every(f => f.fileBecomesEmpty) && group[0].fileBecomesEmpty) deleted.add(p);
   }
 
+  // KJ-048 first pass: the ranges, computed but not emitted. The cascade has to
+  // answer BEFORE any range edit is written, because a WorkspaceEdit that both
+  // deletes a URI and edits a range in it is rejected whole, and in silence.
+  const rangesByPath = new Map<string, { start: number; end: number }[]>();
+  for (const [p, group] of perFile) {
+    if (deleted.has(p)) continue;
+    const text = await textOf(p);
+    if (text === undefined) continue;
+    const ranges = group
+      .filter(f => f.removeStart !== -1)
+      .map(f => currentRemovalExtent(p, text, f.name, f.kind, f.line))
+      .filter((e): e is { removeStart: number; removeEnd: number } => e !== undefined && e.removeStart !== -1)
+      .map(e => wholeLineExtent(text, e.removeStart, e.removeEnd))
+      .sort((a, b) => a.start - b.start);
+    const kept: { start: number; end: number }[] = [];
+    let previousEnd = -1;
+    for (const r of ranges) {
+      if (r.start < previousEnd) continue; // overlapping extents: keep the first
+      previousEnd = r.end;
+      kept.push({ start: r.start, end: r.end });
+    }
+    if (kept.length > 0) { rangesByPath.set(p, kept); textForCascade.set(p, text); }
+  }
+  const cascade = planCascade(rangesByPath, textForCascade, deleted);
+  // `deleted` keeps the files THIS loop deletes; `doomed` is every file that
+  // must receive no range edit. Merging them would emit two deleteFile ops for
+  // the same URI, since `addCascadePlan` writes the cascade's own.
+  const doomed = new Set([...deleted, ...cascade.deleteFiles]);
+
   for (const [p, group] of perFile) {
     const text = await textOf(p);
     if (text === undefined) continue;
 
     // Never a deleteFile AND range edits on the same URI in one WorkspaceEdit.
-    if (deleted.has(p)) {
-      edit.deleteFile(
-        corpusUri(p),
-        { ignoreIfNotExists: true },
-        { needsConfirmation: true, label: `Delete ${basename(p)}` },
-      );
+    if (doomed.has(p)) {
+      // A file the CASCADE deletes gets its deleteFile from addCascadePlan, so
+      // writing one here too would put two of them on the same URI. Either way
+      // the stale imports below still have to go.
+      if (deleted.has(p)) {
+        edit.deleteFile(
+          corpusUri(p),
+          { ignoreIfNotExists: true },
+          { needsConfirmation: true, label: `Delete ${basename(p)}` },
+        );
+      }
     } else {
       const starts = lineStartsOf(text);
-      // Recomputed on the text as it is now: the scan's offsets were applied
-      // to a document edited since, and the deletion landed a line off.
-      const ranges = group
-        .filter(f => f.removeStart !== -1)
-        .map(f => currentRemovalExtent(p, text, f.name, f.kind, f.line))
-        .filter((e): e is { removeStart: number; removeEnd: number } => e !== undefined && e.removeStart !== -1)
-        .map(e => wholeLineExtent(text, e.removeStart, e.removeEnd))
-        .sort((a, b) => a.start - b.start);
-
-      let previousEnd = -1;
-      const cuts: { start: number; end: number }[] = [];
-      for (const r of ranges) {
-        if (r.start < previousEnd) continue; // overlapping extents: keep the first
-        previousEnd = r.end;
-        cuts.push({ start: r.start, end: r.end });
+      for (const r of rangesByPath.get(p) ?? []) {
         edit.replace(
           corpusUri(p),
           new vscode.Range(posAt(starts, r.start), posAt(starts, r.end)),
@@ -251,7 +270,6 @@ export async function buildSymbolRemovalEdit(
           { needsConfirmation: true, label: `Remove unreferenced declaration` },
         );
       }
-      if (cuts.length > 0) { cutsByPath.set(p, cuts); textForCascade.set(p, text); }
     }
 
     // Imports left dangling in OTHER files are part of the fix, not a nicety:
@@ -259,7 +277,7 @@ export async function buildSymbolRemovalEdit(
     // goes away.
     for (const f of group) {
       for (const stale of f.staleImports) {
-        if (deleted.has(stale.path)) continue;
+        if (doomed.has(stale.path)) continue;
         const importText = await textOf(stale.path);
         if (importText === undefined) continue;
         const line = importText.split('\n')[stale.line];
@@ -274,7 +292,7 @@ export async function buildSymbolRemovalEdit(
     }
   }
 
-  addCascade(edit, cutsByPath, textForCascade, deleted);
+  addCascadePlan(edit, cascade, textForCascade);
   return edit;
 }
 

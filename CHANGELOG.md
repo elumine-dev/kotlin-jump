@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.218
+
+The fix from seven releases ago had two siblings nobody had looked at.
+
+### Fixes
+- Switching the resource usage badges off while their project sweep is running switched them back on a few seconds later. The provider reads the setting, then reads every source of the project, which takes seconds, then paints. The pair of guards given to the dependency badges in 1.42.211 sat on the cache write only, and the paint is the half the user sees.
+- The manifest necessity badges had the same shape and no disposal flag at all, so a sweep landing after the provider is gone wrote through a decoration type that no longer exists.
+
+### Notes
+- One test had been written around the old behaviour: it switched the setting off mid sweep to reach the render where no count can be asserted. That path now paints nothing at all, which is the whole point, so the test reaches the same render through the listing cap, which is the real reason a count cannot be guaranteed. A witness beside it proves the count IS asserted when the listing is complete, since an empty render would otherwise satisfy both.
+- The two other providers that sweep the project, the string XML hover and the dead weight actions, return a value rather than painting, so an answer that lands late harms nothing there.
+
 ## 1.42.217
 
 Two commands did nothing at all in the browser, in the very situation where the desktop stops to explain.

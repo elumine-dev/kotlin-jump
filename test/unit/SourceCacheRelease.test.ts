@@ -109,30 +109,50 @@ describe('ResourceUsageBadgeProvider — le listing est rendu', () => {
     p.dispose();
     (vscodeMock.window as any).activeTextEditor = undefined;
   });
-  it('coupe PENDANT le balayage : ni chiffre ni grisage sur un listing sans garant', async () => {
-    // Meme fenetre, cote rendu. Sans garant, un zero calcule sur un listing que
-    // plus personne ne garde griserait une ressource bien vivante.
-    let actif = true;
-    let relacher!: () => void;
-    const barriere = new Promise<void>(r => { relacher = r; });
-    vi.spyOn(vscodeMock.workspace, 'onDidChangeConfiguration')
-      .mockImplementation((() => ({ dispose: () => {} })) as any);
-    const editor = monter(() => actif, async () => {
-      await barriere;
-      return encode('rien qui utilise la couleur');
-    });
-
-    const p = new ResourceUsageBadgeProvider();
-    await attendre();
-    actif = false;            // coupe pendant l attente, sans evenement
-    relacher();
-    await attendre();
+  it('un listing sans garant ne donne ni chiffre ni grisage', async () => {
+    // Sans garant, un zero calcule sur un listing que plus personne ne garde
+    // griserait une ressource bien vivante : la pastille tombe sur « ? ».
+    //
+    // Le declencheur a change en v1.42.218. Cette fenetre etait ouverte en
+    // coupant le reglage PENDANT le balayage, ce qui peignait des pastilles
+    // que l utilisateur venait d eteindre ; la peinture est gardee maintenant
+    // et ne dessine plus rien dans ce cas la, voir
+    // `BadgePaintAfterSweep.test.ts`. Le vrai garant reste le plafond du
+    // listing, pose ici directement.
+    const editor = monter(() => true);
+    const p: any = new ResourceUsageBadgeProvider();
+    p._cache = {
+      at: Date.now(),
+      sources: [{ path: '/w/src/F0.kt', text: 'rien qui utilise la couleur' }],
+      truncated: true,
+    };
+    editor.setDecorations.mockClear();
+    await p._refresh();
 
     const calls = editor.setDecorations.mock.calls;
     const etiquettes = (calls[calls.length - 2]?.[1] ?? []).map((b: any) => b.renderOptions.after.contentText);
     const grises = (calls[calls.length - 1]?.[1] ?? []).length;
     expect(etiquettes, 'aucun chiffre ne peut etre affirme ici').toEqual(['? usages']);
     expect(grises, 'et surtout rien de grise').toBe(0);
+    p.dispose();
+    (vscodeMock.window as any).activeTextEditor = undefined;
+  });
+
+  it('temoin : avec un garant, le chiffre est affirme', async () => {
+    // Sans ce temoin, le test d au dessus passerait aussi sur un rendu vide.
+    const editor = monter(() => true);
+    const p: any = new ResourceUsageBadgeProvider();
+    p._cache = {
+      at: Date.now(),
+      sources: [{ path: '/w/src/F0.kt', text: 'val c = R.color.c' }],
+      truncated: false,
+    };
+    editor.setDecorations.mockClear();
+    await p._refresh();
+
+    const calls = editor.setDecorations.mock.calls;
+    const etiquettes = (calls[calls.length - 2]?.[1] ?? []).map((b: any) => b.renderOptions.after.contentText);
+    expect(etiquettes).toEqual(['1 usage']);
     p.dispose();
     (vscodeMock.window as any).activeTextEditor = undefined;
   });

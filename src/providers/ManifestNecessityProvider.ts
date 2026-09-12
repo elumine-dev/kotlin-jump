@@ -124,6 +124,7 @@ export class ManifestNecessityProvider implements vscode.Disposable {
   });
   private readonly _dead = vscode.window.createTextEditorDecorationType({ opacity: '0.45' });
   private readonly _subs: vscode.Disposable[];
+  private _disposed = false;
 
   constructor() {
     this._subs = [
@@ -167,6 +168,17 @@ export class ManifestNecessityProvider implements vscode.Disposable {
         continue;
       }
     }
+    // Reading every source of the project takes seconds. Whatever started this
+    // pass may be gone by now: the setting switched off, or the provider
+    // disposed. Painting either way redraws what the user turned off and
+    // writes through a decoration type that no longer exists.
+    if (this._disposed) return;
+    if (!vscode.workspace.getConfiguration('kotlinJump').get<boolean>('manifestNecessityBadges', true)) {
+      editor.setDecorations(this._badge, []);
+      editor.setDecorations(this._dead, []);
+      return;
+    }
+
     const project: ProjectSearcher = {
       classExists: fqn => {
         const simple = fqn.split('.').pop() ?? fqn;
@@ -226,6 +238,7 @@ export class ManifestNecessityProvider implements vscode.Disposable {
   }
 
   dispose(): void {
+    this._disposed = true;
     this._badge.dispose();
     this._dead.dispose();
     for (const s of this._subs) s.dispose();

@@ -1,17 +1,17 @@
 {
-  "version": "1.42.217",
+  "version": "1.42.218",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Two silent commands in the browser",
-  "summary": "Find usages and Go to test returned without a word in the browser build, where the desktop explains what to open first.",
+  "tagline": "Badges that came back on their own, twice more",
+  "summary": "Two more badge providers repainted what the user had just switched off, once their project sweep landed.",
   "highlights": [
     {
-      "title": "A walkthrough link that looked broken",
-      "description": "Find usages clicked from the walkthrough page, with nothing focused, says what to do on the desktop and said nothing at all in the browser.",
+      "title": "A setting that undid itself",
+      "description": "Resource usage badges switched off while the sweep was running were drawn again when it landed, seconds later.",
       "kind": "fix"
     },
     {
-      "title": "Checked command by command",
-      "description": "The two builds share 65 commands. A test now requires that a shared command never speaks on one side and stays silent on the other.",
+      "title": "Painting through a provider that is gone",
+      "description": "The manifest necessity badges had no disposal flag at all, so a late sweep wrote through a decoration type that no longer exists.",
       "kind": "fix"
     }
   ],
@@ -19,8 +19,8 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Find usages tells you what to open in the browser too, instead of returning silently.",
-        "Go to test does the same."
+        "Resource usage badges stay off once switched off, even when a project sweep was already running.",
+        "Manifest necessity badges do the same, and no longer paint after the provider is disposed."
       ]
     }
   ],

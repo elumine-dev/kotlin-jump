@@ -136,3 +136,46 @@ describe('la boucle d offsets compare des bases identiques', () => {
     expect(source).toContain('stripImportLines(stripKotlinComments(src.text))');
   });
 });
+
+describe.skipIf(!mod)('le decalage des imports, reproduit', () => {
+  /**
+   * Obtenu par REDUCTION sur le vrai fichier, pas en devinant. Quatre formes
+   * inventees avaient echoue, y compris une transcription de la geometrie
+   * exacte : je modelisais la fenetre de la classe, alors que le decalage
+   * deplace aussi la borne du SPAN DU MEMBRE.
+   *
+   * Le mecanisme, une fois vu, est general : des qu'il y a un import, la
+   * mention que le membre fait de lui meme dans sa propre declaration tombe
+   * HORS de son span, et l'egalite qui decide selfOnly bascule. Cinq imports
+   * et dix lignes de corps suffisent.
+   */
+  const A = [
+    'package com.x', '',
+    ...Array.from({ length: 5 }, (_, i) => `import com.paquet.Type${i}`), '',
+    'class A {',
+    ...Array.from({ length: 10 }, (_, i) => `    private val garniture${i} = ${i}`),
+    '    fun cible() {',
+    '        garniture0',
+    '    }',
+    '}', '',
+    'class B(private val a: A) {',
+    '    fun go() { a.cible() }',
+    '}', '',
+  ].join('\n');
+
+  const sources = [
+    { path: `${MAIN}/A.kt`, text: A },
+    { path: `${MAIN}/Racine.kt`, text: 'package com.x\n\nfun racine(b: B) = b.go()\n' },
+  ];
+
+  it('un membre appele par la classe soeur n est pas selfOnly, imports ou pas', () => {
+    const out = mod.findUnusedMembers({ sources, testSourceSets: SEGS, includeSelfOnly: true, deadDeclarations: [] });
+    expect(out.filter((m: any) => m.name === 'cible')).toEqual([]);
+  });
+
+  it('temoin : sans les imports, le meme fichier donne le meme verdict', () => {
+    const sansImports = sources.map(s => ({ ...s, text: s.text.split('\n').filter(l => !l.startsWith('import ')).join('\n') }));
+    const out = mod.findUnusedMembers({ sources: sansImports, testSourceSets: SEGS, includeSelfOnly: true, deadDeclarations: [] });
+    expect(out.filter((m: any) => m.name === 'cible')).toEqual([]);
+  });
+});

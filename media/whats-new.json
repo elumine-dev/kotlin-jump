@@ -1,22 +1,22 @@
 {
-  "version": "1.42.231",
+  "version": "1.42.232",
   "title": "What's New in Kotlin Jump",
-  "tagline": "private means this class, not this file",
-  "summary": "Narrowing 119 members on a real project and compiling turned up two defects in the selfOnly verdict, one of them an offset comparison between two texts of different lengths.",
+  "tagline": "Three things it could find but not cut",
+  "summary": "Removable unreferenced symbols go from 84 to 95 out of 98 on a real project, and enum entries from 24 to 33 out of 33.",
   "highlights": [
     {
-      "title": "Indices and bounds from the same text",
-      "description": "Mentions were located in a text with the import lines emptied and compared against bounds from the full text. A shift of 2697 characters moved a sibling class mention into the class above it.",
+      "title": "A constructor that wraps is no longer a wall",
+      "description": "The header was anchored on the line holding the name, so a data class whose parameters span several lines had no removal at all.",
       "kind": "fix"
     },
     {
-      "title": "A test is a use that private breaks",
-      "description": "The verdict never looked at the test mentions, so sixty two members were offered for narrowing while their tests used them. An assembleDebug never builds those sources.",
+      "title": "Java fields can be removed",
+      "description": "The continuation test listed Kotlin keywords only, and a Java field starts with its type. A trailing semicolon closes the statement in both languages.",
       "kind": "fix"
     },
     {
-      "title": "Built once per file, not once per member",
-      "description": "The blanked text never depended on the member. Hoisting it out of the symbol loop removes tens of thousands of whole file rebuilds on a large corpus.",
+      "title": "One line, two declarations",
+      "description": "A whole line extent took the live neighbour with the dead one. No removal invariant counts declarations inside a cut, so nothing reported it.",
       "kind": "fix"
     }
   ],
@@ -24,9 +24,10 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "A member reached from a sibling class in the same file is no longer reported as used only inside its own class.",
-        "A member its tests use is never offered for narrowing.",
-        "The import blanked text is computed once per file."
+        "A declaration whose primary constructor wraps has a removal extent.",
+        "A Java field ending on a semicolon has one too.",
+        "An enum entry is removable wherever it sits in its list.",
+        "A line that carries two declarations yields no removal, so taking the dead one cannot take the live one."
       ]
     }
   ],

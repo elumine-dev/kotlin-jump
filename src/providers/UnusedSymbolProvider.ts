@@ -185,7 +185,20 @@ export async function buildSymbolRemovalEdit(
 ): Promise<vscode.WorkspaceEdit> {
   const edit = new vscode.WorkspaceEdit();
   const decoder = new TextDecoder();
+  // Memoized, and that is a correctness property before it is a speed one.
+  // The range pass and the writing pass both ask for the same file, and a
+  // second read between two `await`s can return DIFFERENT text: the offsets
+  // computed on the first would then land somewhere else in the second. It
+  // also stops a file imported by thirty dead symbols from being read thirty
+  // times.
+  const cache = new Map<string, string | undefined>();
   const textOf = async (p: string): Promise<string | undefined> => {
+    if (cache.has(p)) return cache.get(p);
+    const lu = await lire(p);
+    cache.set(p, lu);
+    return lu;
+  };
+  const lire = async (p: string): Promise<string | undefined> => {
     if (openDocument && openDocument.uri.fsPath === p) return openDocument.getText();
     try {
       // The corpus computed its offsets on open editors' text (1.42.11); the

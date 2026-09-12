@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.226
+
+Offsets measured on one read of a file and applied to another.
+
+### Fixes
+- Building the removal edit for unreferenced symbols read every file twice: once to compute the ranges, once to write them. Between those two `await`s the file can change, and the offsets from the first read then land somewhere else in the second. The read is memoized per edit, so the ranges and the text they are written against are the same bytes. This also stops a file imported by thirty dead symbols from being read thirty times, once per stale import.
+
+### Notes
+- The second pass is what made the cascade of 1.42.225 possible, and it is what introduced the double read. The witness counts the reads rather than trusting the shape of the code: one closed file, one read, and one file imported by two dead symbols, still one read.
+
 ## 1.42.225
 
 A removal that did nothing at all, and said nothing about it.

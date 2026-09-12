@@ -188,6 +188,16 @@ export class ResourceUsageBadgeProvider implements vscode.Disposable {
 
     // Exclude the active file: the definition is not a usage.
     const sources = (await this._sources()).filter(s => s.path !== path);
+    // The sweep takes seconds on a real project, and the state that started it
+    // can be gone when it lands. The cache already refuses to come back from
+    // there; the paint has to refuse too, or badges just switched off are drawn
+    // again, and a disposed decoration type is written through.
+    if (this._disposed) return;
+    if (!this._enabled()) {
+      editor.setDecorations(this._badge, []);
+      editor.setDecorations(this._dead, []);
+      return;
+    }
     const text = editor.document.getText();
     const lines = text.split('\n');
 

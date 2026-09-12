@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.214
+
+`Add names to call arguments` was offered inside prose, and accepting it rewrote the sentence.
+
+### Fixes
+- The scan that looks for a call on the cursor line kept comments out with a helper that reads ONE line. The body of a KDoc and the body of a raw string therefore passed for code, and a line such as `* taller (late reflow, slow assets)` looks exactly like a call with two arguments. Measured on a real project: 642 call sites read out of comments and strings, 511 of them the action would rewrite, and 118 whose name really is declared somewhere in the project, which is what the resolver requires before offering anything at all.
+- Candidates now come from a copy of the line with comments and string contents blanked out, lengths preserved so an offset still points at the same character of the real text. A call that follows a block comment on the same line stays eligible, and so does a call inside a string template, since that is real code.
+
+### Notes
+- The blanking runs once per document version and is kept: 3.3 ms on the largest source of that project, then 0.004 ms for every later request on the same version.
+- Two neighbouring rewrites were read back and left alone. The argument splitter drops an empty segment, so a trailing comma and an empty argument list produce nothing rather than `p0 = `; and rewriting every call the action would offer across the project, 61 167 of them, changes nothing but the names it inserts.
+
 ## 1.42.213
 
 The same quick fix as last release, one line above the one that was corrected. `Add a subscriber for this event` looked for the closing brace of the last class by taking the last brace of the TEXT, which is not the same thing.

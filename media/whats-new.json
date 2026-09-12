@@ -1,17 +1,17 @@
 {
-  "version": "1.42.213",
+  "version": "1.42.214",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A subscriber written into a JSON fixture",
-  "summary": "The quick fix that adds an event subscriber aimed at the last brace of the file text, which can sit inside a string or a comment.",
+  "tagline": "A refactoring offered inside a comment",
+  "summary": "Add names to call arguments read the cursor line one line at a time, so the body of a KDoc or of a raw string passed for code.",
   "highlights": [
     {
-      "title": "Inserted into the data, not the class",
-      "description": "Six files of a real project end with a raw string holding a JSON fixture. The subscriber went inside it: the file still compiles, the method does not exist, and the fixture is corrupted.",
+      "title": "Prose that looked like a call",
+      "description": "A KDoc line such as taller (late reflow, slow assets) has the exact shape of a call with two arguments. On a real project, 642 such sites were read out of comments and strings.",
       "kind": "fix"
     },
     {
-      "title": "A handler name learned from a comment",
-      "description": "The fix copies the handler name from the subscriber already in the file so it matches the bus in use. A commented out one counted.",
+      "title": "Read from the code, not from the text",
+      "description": "Candidates come from a copy of the line with comments and string contents blanked out. A call after a block comment on the same line, or inside a string template, is still real code and still gets the action.",
       "kind": "fix"
     }
   ],
@@ -19,9 +19,9 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "The subscriber is inserted before the closing brace of the last class, never inside a string or a comment.",
-        "The handler name is learned from real code only.",
-        "The import decision reads the same cleaned text."
+        "Add names to call arguments is no longer offered on the body of a KDoc, a block comment or a raw string.",
+        "A call sitting after a comment on the same line, or inside a string template, keeps the action.",
+        "The blanked copy of the file is computed once per version, so the lightbulb stays free after the first request."
       ]
     }
   ],

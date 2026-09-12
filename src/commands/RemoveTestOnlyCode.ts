@@ -11,6 +11,7 @@ import { findUnusedEnumEntries } from '../providers/unusedEnumEntries';
 import { isOfferable, planTestCoRemoval, TestCoRemovalPlan } from '../providers/testCoRemoval';
 import { addCascadePlan, planCascade } from '../providers/applyCascade';
 import { plural } from '../util/plural';
+import { stillTheMeasuredText } from '../util/measuredText';
 
 /**
  * KJ-047: remove a declaration used only by its tests, AND those tests, in one
@@ -226,10 +227,16 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
 /**
  * Offsets to a Range, on the TEXT the scan measured them on.
  *
- * An open document wins over the corpus copy: the corpus already prefers a
- * dirty editor's text, and mixing the two put a deletion a few characters off.
+ * Exported for the witness: the rule below is a one line condition whose
+ * failure deletes the wrong lines, and it deserves to be checked directly.
+ *
+ * The first version asked `isDirty`, which answers "was this edited in the
+ * editor", not "is this still what we measured". A document reloaded from disk
+ * by a checkout or by another tool is CLEAN and has different content, and the
+ * corpus keeps its copy for a minute: the positions were then computed on the
+ * stale text and applied to the live document.
  */
-function makeRangeOf(textByPath: ReadonlyMap<string, string>) {
+export function makeRangeOf(textByPath: ReadonlyMap<string, string>) {
   const startsByPath = new Map<string, number[]>();
   const startsOf = (path: string): number[] | undefined => {
     const cached = startsByPath.get(path);
@@ -250,11 +257,10 @@ function makeRangeOf(textByPath: ReadonlyMap<string, string>) {
     return new vscode.Position(low, offset - starts[low]);
   };
   return (path: string, start: number, end: number): vscode.Range | undefined => {
+    const mesure = stillTheMeasuredText(path, textByPath.get(path));
+    if (mesure === undefined) return undefined;
     const doc = vscode.workspace.textDocuments.find(d => d.uri.fsPath === path);
-    if (doc && !doc.isDirty && doc.getText() === textByPath.get(path)) {
-      return new vscode.Range(doc.positionAt(start), doc.positionAt(end));
-    }
-    if (doc?.isDirty) return undefined; // edited since the scan: never guess
+    if (doc) return new vscode.Range(doc.positionAt(start), doc.positionAt(end));
     const starts = startsOf(path);
     if (!starts) return undefined;
     return new vscode.Range(posAt(starts, start), posAt(starts, end));

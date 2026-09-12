@@ -348,6 +348,9 @@ export const workspace = {
   },
 };
 
+/** Real API shape, so a command that reports progress can be exercised. */
+export const ProgressLocation = { SourceControl: 1, Window: 10, Notification: 15 };
+
 export const window = {
   activeTextEditor: undefined as any,
   visibleTextEditors: [] as any[],

@@ -1,17 +1,22 @@
 {
-  "version": "1.42.226",
+  "version": "1.42.227",
   "title": "What's New in Kotlin Jump",
-  "tagline": "One read per file, and it is a correctness rule",
-  "summary": "The removal edit read every file twice, computing offsets on one read and applying them to another. Between the two, a file can change.",
+  "tagline": "Dirty is not the same question as unchanged",
+  "summary": "Both commands that write into closed files placed their edits after checking whether the document was dirty. A file reloaded from disk is clean and different.",
   "highlights": [
     {
-      "title": "Ranges and text from the same bytes",
-      "description": "Offsets measured on a first read were written against a second one. A file that changes between two awaits put the deletion somewhere else.",
+      "title": "Clean and changed at the same time",
+      "description": "A checkout or a stash pop reloads a document with new content and no dirty flag. The old offsets were then applied to it and landed on the wrong lines.",
       "kind": "fix"
     },
     {
-      "title": "Thirty dead symbols, one read",
-      "description": "A file reached by many stale imports was read once per import. The read is memoized for the whole edit now.",
+      "title": "The bulk narrowing never looked",
+      "description": "The command that makes every self only member private read the corpus copy and never consulted the open documents, so it always wrote at the measured position.",
+      "kind": "fix"
+    },
+    {
+      "title": "One rule, one place",
+      "description": "Both commands call the same check now. Two copies of one condition is how one of them drifts, and this pair had already drifted.",
       "kind": "fix"
     }
   ],
@@ -19,8 +24,8 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "The text of a file is read once per removal edit, so the ranges and the text they apply to cannot diverge.",
-        "A file named by several stale imports is no longer read once per import."
+        "An edit is placed only when the open text still equals the text the scan measured.",
+        "A file that has moved on is skipped and counted, never edited at a guessed position."
       ]
     }
   ],

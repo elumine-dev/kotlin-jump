@@ -58,7 +58,12 @@ export function cascadeAfterRemoval(
   for (const [path, cuts] of cutsByPath) {
     const text = textByPath.get(path);
     if (text === undefined || cuts.length === 0) continue;
-    if (!/\.kt$/.test(path)) continue; // the import detector carries Kotlin grammar
+
+    // Emptiness is language agnostic: `package a;` reads the same either way.
+    // Only the IMPORT half carries Kotlin grammar, and gating both on the
+    // extension left every emptied Java file standing as a shell.
+    if (fileBecomesEmpty(text, [...cuts])) cascade.emptyFiles.push(path);
+    if (!/\.kt$/.test(path)) continue;
 
     const before = new Set(findUnusedImports(text).map(i => i.statement.trim()));
     const after = applyCuts(text, cuts);
@@ -68,16 +73,19 @@ export function cascadeAfterRemoval(
     // its line in the original by its statement, which is unique per file.
     const lignes = text.split('\n');
     const extents: Cut[] = [];
+    // A file may import the same name twice. Mapping both orphans by the first
+    // matching line produced the SAME extent twice, so the plan asked to delete
+    // one range and leave the duplicate standing.
+    const consommees = new Set<number>();
     for (const imp of orphaned) {
       const wanted = imp.statement.trim();
-      const line = lignes.findIndex(l => l.trim() === wanted);
+      const line = lignes.findIndex((l, i) => !consommees.has(i) && l.trim() === wanted);
       if (line === -1) continue;
+      consommees.add(line);
       const e = lineExtent(text, line);
       if (e) extents.push(e);
     }
     if (extents.length > 0) cascade.imports.set(path, extents);
-
-    if (fileBecomesEmpty(text, [...cuts])) cascade.emptyFiles.push(path);
   }
   return cascade;
 }

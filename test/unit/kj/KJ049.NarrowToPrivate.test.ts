@@ -49,4 +49,29 @@ describe.skipIf(!mod)('narrowToPrivate', () => {
   it('temoin : une propriete de constructeur primaire reste valide', () => {
     expect(pose('    val titre: String,')).toBe('    private val titre: String,');
   });
+  it('le mot cle est cherche dans les MODIFICATEURS, pas dans la ligne entiere', () => {
+    // Premiere version livree : la regex balayait toute la ligne. Un
+    // commentaire etait mutile et le membre n etait pas restreint, et pire, le
+    // CONTENU d une chaine etait reecrit. Un refactor qui modifie un litteral
+    // en silence est pire qu un refactor qui ne fait rien.
+    expect(pose('    fun draw() { // make public later'))
+      .toBe('    private fun draw() { // make public later');
+    expect(pose('    val label = "make it public "'))
+      .toBe('    private val label = "make it public "');
+  });
+
+  it('un commentaire qui contient le mot prive ne fait plus renoncer', () => {
+    expect(pose('    fun draw() { // not private')).toBe('    private fun draw() { // not private');
+  });
+
+  it('private se pose APRES les annotations', () => {
+    expect(pose('    @Inject lateinit var analytics: Tracker'))
+      .toBe('    @Inject private lateinit var analytics: Tracker');
+    expect(pose('    @JvmField @Suppress("unused") val x = 1'))
+      .toBe('    @JvmField @Suppress("unused") private val x = 1');
+  });
+
+  it('temoin : un modificateur reel est toujours remplace, pas double', () => {
+    expect(pose('    internal suspend fun load() {')).toBe('    private suspend fun load() {');
+  });
 });

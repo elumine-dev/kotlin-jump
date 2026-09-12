@@ -602,6 +602,44 @@ describe('l’étendue de suppression', () => {
     expect(scan(sources).events[0].removeStart).toBeGreaterThanOrEqual(0);
   });
 
+  it('un post SEUL DANS SA BRANCHE ne l’est pas', () => {
+    // Le retrait laissait `} else if (cond) {\n}` : ça compile, donc rien ne
+    // l’attrape, et les locales que l’instruction consommait meurent avec
+    // elle. Vu sur /Users/kevin/Desktop/work/lapresse dans
+    // DeepLinkIntentController, branche vide et `deepLinkUrl` orpheline.
+    const sources = [
+      ...base,
+      f(`${MAIN}/Orphan.kt`, 'package com.x\n\nclass Orphan\n'),
+      f(`${MAIN}/Poster.kt`,
+        'package com.x\n\nclass Poster {\n    fun go(ready: Boolean) {\n' +
+        '        if (ready) {\n            println("a")\n        } else if (!ready) {\n' +
+        '            EventBus.getDefault().post(Orphan())\n        }\n    }\n}\n'),
+    ];
+    expect(scan(sources).events[0].removeStart).toBe(-1);
+  });
+
+  it('témoin : le même post avec un voisin dans la branche reste supprimable', () => {
+    const sources = [
+      ...base,
+      f(`${MAIN}/Orphan.kt`, 'package com.x\n\nclass Orphan\n'),
+      f(`${MAIN}/Poster.kt`,
+        'package com.x\n\nclass Poster {\n    fun go(ready: Boolean) {\n' +
+        '        if (ready) {\n            println("a")\n            EventBus.getDefault().post(Orphan())\n        }\n    }\n}\n'),
+    ];
+    expect(scan(sources).events[0].removeStart).toBeGreaterThanOrEqual(0);
+  });
+
+  it('témoin : un corps de fonction vidé reste supprimable, le scan suivant le voit', () => {
+    const sources = [
+      ...base,
+      f(`${MAIN}/Orphan.kt`, 'package com.x\n\nclass Orphan\n'),
+      f(`${MAIN}/Poster.kt`,
+        'package com.x\n\nclass Poster {\n    fun go() {\n' +
+        '        EventBus.getDefault().post(Orphan())\n    }\n}\n'),
+    ];
+    expect(scan(sources).events[0].removeStart).toBeGreaterThanOrEqual(0);
+  });
+
   it('un post sous condition ne l’est pas', () => {
     // Supprimer laisserait `if (ready)` orphelin. Le verdict tient, le
     // correctif abandonne (X1).

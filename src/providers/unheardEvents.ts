@@ -878,6 +878,36 @@ export function localAssignedType(clean: string, raw: string, varName: string, p
 }
 
 /**
+ * True when the `{` at `braceIdx` opens a CONTROL FLOW branch rather than a
+ * body.
+ *
+ * The difference decides whether emptying the block is visible. A function
+ * left with an empty body becomes a declaration the next scan reports; an
+ * `if` or `else` branch left empty is reported by nothing at all, compiles,
+ * and takes the locals it consumed down with it.
+ */
+function ouvreUneBranche(clean: string, braceIdx: number): boolean {
+  let k = braceIdx - 1;
+  while (k >= 0 && /\s/.test(clean[k])) k--;
+  if (k >= 1 && clean[k] === '>' && clean[k - 1] === '-') return true;  // `when` branch
+  if (clean[k] === ')') {
+    let depth = 0;
+    let j = k;
+    for (; j >= 0; j--) {
+      if (clean[j] === ')') depth++;
+      else if (clean[j] === '(') { depth--; if (depth === 0) break; }
+    }
+    if (j <= 0) return false;
+    let m = j - 1;
+    while (m >= 0 && /\s/.test(clean[m])) m--;
+    const mot = /([A-Za-z_]\w*)$/.exec(clean.slice(0, m + 1))?.[1];
+    return mot === 'if' || mot === 'while' || mot === 'for' || mot === 'catch' || mot === 'when';
+  }
+  const mot = /([A-Za-z_]\w*)$/.exec(clean.slice(0, k + 1))?.[1];
+  return mot === 'else' || mot === 'try' || mot === 'finally' || mot === 'do';
+}
+
+/**
  * The whole statement holding the post, or -1 when removing it would leave
  * something behind. Same discipline as `removalExtent` in unusedSymbols: the
  * fix is allowed to give up while the verdict still stands (X1, X2).
@@ -910,9 +940,24 @@ function statementExtent(
   if (/\w\s*\([^)]*\w\s*\(/.test(arg)) return { start: -1, end: -1 };
 
   const endLine = offsetToPos(lineStarts as number[], closeIdx).line;
+  const end = endLine + 1 < lineStarts.length ? lineStarts[endLine + 1] : raw.length;
+
+  // The post may be the whole CONTENT OF ITS BLOCK. Removing it then leaves
+  // `} else if (cond) {\n}` behind: it compiles, so nothing catches it, and
+  // the locals the statement consumed go dead with it. Seen on
+  // /Users/kevin/Desktop/work/lapresse in DeepLinkIntentController, where the
+  // cut left an empty branch and an unused `deepLinkUrl`.
+  let avant = lineStart - 1;
+  while (avant >= 0 && /\s/.test(clean[avant])) avant--;
+  let apres = end;
+  while (apres < clean.length && /\s/.test(clean[apres])) apres++;
+  if (clean[avant] === '{' && clean[apres] === '}' && ouvreUneBranche(clean, avant)) {
+    return { start: -1, end: -1 };
+  }
+
   return {
     start: lineStart,
-    end: endLine + 1 < lineStarts.length ? lineStarts[endLine + 1] : raw.length,
+    end,
   };
 }
 

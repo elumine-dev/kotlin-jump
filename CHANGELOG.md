@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.42.223
+
+Five defects in yesterday's own removals, four of which edit code nothing would have caught.
+
+### Fixes
+- Narrowing a member to private looked for the visibility keyword anywhere on the line. On `val label = "make it public "` it rewrote the CONTENT OF THE STRING and left the member public; on a comment it mangled the comment the same way. The keyword is read from the leading modifier run only, and `private` now lands after the annotations rather than in front of them.
+- Removing a post nothing subscribes to could empty the branch it lived in, leaving `} else if (cond) {` and a closing brace with nothing between them. That compiles, so nothing reports it, and the locals the statement consumed die with it. A post alone in an `if`, `else`, `when`, `for`, `while`, `try` or `catch` branch no longer offers a removal. A post alone in a function BODY still does: the empty function is a declaration the next scan reports.
+- A file emptied by a removal was only noticed in Kotlin. Emptiness reads the same in Java, `package a;` included, and gating it on the extension left every emptied Java file standing as a shell.
+- A file that imports the same name twice had both orphans mapped to the first matching line, so one range was removed and the duplicate stayed.
+- An island pushes one group per member and they share one plan, so the count of removed tests was multiplied by the number of members.
+
+### Notes
+- All five were found by reading the diff of 1.42.222 against a real project rather than against the tests. Each one is pinned by a witness that fails without the fix, and the two guards are pinned in BOTH directions: widening them fails a different test.
+
 ## 1.42.222
 
 Two removals that were deleting live code, and the bulk commands the dead code family was missing.

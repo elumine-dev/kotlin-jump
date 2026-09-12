@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.217
+
+Two commands did nothing at all in the browser, in the very situation where the desktop stops to explain.
+
+### Fixes
+- `Find usages` clicked from the walkthrough page, with no editor focused, answers `open a Kotlin or Java file and put the cursor on a symbol first` on the desktop. That sentence exists for that click and the comment beside it says so. The browser build returned without a word, so the walkthrough link looked broken.
+- `Go to test` behaved the same way: the desktop asks for a file to be open, the browser stayed silent.
+
+### Notes
+- The two builds share 65 commands. A test reads both entry points and requires that a command they share never speaks on one side while staying silent on the other, setting aside the ones the browser replaces wholesale with its own unavailable message. It found these two and nothing else. The single remaining difference is Move File, which says one thing more in the browser, since a workspace there can be read only.
+- This is the second half of what shipped last release: the pickers were reworded on one side and not the other, these two were written on one side and not the other. Same shape, one level deeper.
+
 ## 1.42.216
 
 Two builds of the same extension, one for the desktop and one for the browser, and the same sentence reworded twice in two different ways.

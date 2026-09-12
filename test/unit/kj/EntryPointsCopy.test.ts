@@ -42,6 +42,43 @@ function marquePlaces(fichier: string): string[] {
  */
 const WEB_SEUL: readonly string[] = [];
 
+/**
+ * Messages visibles a l interieur du gestionnaire de chaque commande.
+ *
+ * Comparer les phrases fichier par fichier ne suffit pas : un message peut
+ * manquer d un cote sans qu aucune phrase ne diverge. `findUsages` disait sur
+ * le bureau « open a Kotlin or Java file and put the cursor on a symbol
+ * first. » et rendait la main EN SILENCE sur le web, alors que le message
+ * existe justement pour le clic depuis la page de bienvenue, ou rien n est
+ * focalise. Le lien paraissait casse.
+ */
+function messagesParCommande(fichier: string): Map<string, string[]> {
+  const texte = readFileSync(path.join(RACINE, fichier), 'utf8');
+  const sf = ts.createSourceFile(fichier, texte, ts.ScriptTarget.Latest, true);
+  const MSG = /^vscode\.window\.(showInformationMessage|showWarningMessage|showErrorMessage)$/;
+  const out = new Map<string, string[]>();
+  const visite = (n: ts.Node): void => {
+    if (ts.isCallExpression(n) && /registerCommand$/.test(n.expression.getText(sf))
+        && n.arguments.length >= 2 && ts.isStringLiteralLike(n.arguments[0])) {
+      const messages: string[] = [];
+      const p = (x: ts.Node): void => {
+        if (ts.isCallExpression(x) && MSG.test(x.expression.getText(sf)) && x.arguments.length > 0) {
+          messages.push(x.arguments[0].getText(sf));
+        }
+        ts.forEachChild(x, p);
+      };
+      p(n.arguments[1]);
+      out.set(n.arguments[0].text, messages);
+    }
+    ts.forEachChild(n, visite);
+  };
+  visite(sf);
+  return out;
+}
+
+/** Commandes dont le web dit legitimement autre chose, une par une. */
+const COMMANDES_A_PART: readonly string[] = [];
+
 describe('les deux points d entree disent la meme chose', () => {
   it('chaque marque place du web existe mot pour mot cote bureau', () => {
     const bureau = new Set(marquePlaces('src/extension.ts'));
@@ -55,6 +92,28 @@ describe('les deux points d entree disent la meme chose', () => {
     const web = marquePlaces('src/extension.browser.ts');
     const perimees = WEB_SEUL.filter(m => !web.includes(m));
     expect(perimees, 'exception devenue inutile, la retirer').toEqual([]);
+    const commandes = messagesParCommande('src/extension.browser.ts');
+    const inconnues = COMMANDES_A_PART.filter(id => !commandes.has(id));
+    expect(inconnues, 'commande mise a part qui n existe plus, la retirer').toEqual([]);
+  });
+
+  it('une commande partagee ne se tait pas d un cote et parle de l autre', () => {
+    const bureau = messagesParCommande('src/extension.ts');
+    const web = messagesParCommande('src/extension.browser.ts');
+    const communes = [...bureau.keys()].filter(id => web.has(id));
+    expect(communes.length, 'sans commande commune, la regle ne prouve rien').toBeGreaterThan(30);
+    const muettes: string[] = [];
+    for (const id of communes) {
+      if (COMMANDES_A_PART.includes(id)) continue;
+      const cotesWeb = web.get(id) ?? [];
+      // Le web remplace parfois la commande entiere par son message
+      // d indisponibilite : la comparaison n a alors aucun sens.
+      if (cotesWeb.some(m => m.includes('WEB_UNAVAILABLE'))) continue;
+      for (const m of bureau.get(id) ?? []) {
+        if (!cotesWeb.includes(m)) muettes.push(`${id} :: ${m.slice(0, 70)}`);
+      }
+    }
+    expect(muettes, 'le web doit dire au moins ce que le bureau dit').toEqual([]);
   });
 
   it('temoin : les trois phrases qui avaient diverge sont bien comparees', () => {

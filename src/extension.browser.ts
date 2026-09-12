@@ -495,9 +495,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     vscode.commands.registerCommand('kotlin-jump.findUsages', async (args?: { excludeUri?: string; excludeLine?: number }) => {
       const editor = vscode.window.activeTextEditor;
-      if (!editor) return;
-      const lang = editor.document.languageId;
-      if (lang !== 'kotlin' && lang !== 'java') return;
+      const lang = editor?.document.languageId;
+      if (!editor || (lang !== 'kotlin' && lang !== 'java')) {
+        // Clicked from the walkthrough page: nothing was focused and the link did nothing.
+        void vscode.window.showInformationMessage('Kotlin Jump: open a Kotlin or Java file and put the cursor on a symbol first.');
+        return;
+      }
       const smartNav = vscode.workspace.getConfiguration('kotlinJump').get<boolean>('smartNavigation', false);
       if (!smartNav && !args) {
         await vscode.commands.executeCommand('editor.action.goToReferences');
@@ -532,7 +535,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     vscode.commands.registerCommand('kotlin-jump.goToTest', async () => {
       const editor = vscode.window.activeTextEditor;
-      if (!editor) return;
+      if (!editor) {
+        void vscode.window.showInformationMessage('Kotlin Jump: open a Kotlin or Java file first.');
+        return;
+      }
       const uri = editor.document.uri;
       const filePath = uri.path;
       const basename = filePath.split('/').pop() ?? '';

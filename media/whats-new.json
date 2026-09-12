@@ -1,17 +1,17 @@
 {
-  "version": "1.42.216",
+  "version": "1.42.217",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The same picker, two different sentences",
-  "summary": "Three pickers said one thing on the desktop and another in the browser, each reworded on its own side by the same copy pass.",
+  "tagline": "Two silent commands in the browser",
+  "summary": "Find usages and Go to test returned without a word in the browser build, where the desktop explains what to open first.",
   "highlights": [
     {
-      "title": "One sentence, two builds",
-      "description": "Multiple matches, pick the implementation file on the desktop against Multiple matches. Pick implementation file in the browser. The browser now says what the desktop says, to the word.",
+      "title": "A walkthrough link that looked broken",
+      "description": "Find usages clicked from the walkthrough page, with nothing focused, says what to do on the desktop and said nothing at all in the browser.",
       "kind": "fix"
     },
     {
-      "title": "Checked from now on",
-      "description": "A test reads both entry points and requires every picker the browser shows to exist word for word on the desktop side.",
+      "title": "Checked command by command",
+      "description": "The two builds share 65 commands. A test now requires that a shared command never speaks on one side and stays silent on the other.",
       "kind": "fix"
     }
   ],
@@ -19,8 +19,8 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "The three pickers of go to test, go to preview and copy the qualified name read the same in the browser as on the desktop.",
-        "The string folding scan logs the files it actually looks for."
+        "Find usages tells you what to open in the browser too, instead of returning silently.",
+        "Go to test does the same."
       ]
     }
   ],

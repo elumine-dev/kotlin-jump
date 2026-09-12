@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.220
+
+The same race, on the Problems panel this time.
+
+### Fixes
+- The Room migration drift detector reads its setting, then reads every Kotlin file of the workspace, then publishes. Switching the detection off during that read put the warnings the user had just turned off straight back. The provider also had no disposal flag at all, so a scan landing after the extension is gone calls clear and then set on a diagnostic collection that no longer exists, which the editor refuses outright.
+
+### Notes
+- Found with the recipe that closed the badge family, pointed at diagnostics rather than decorations: walk the source, keep the functions that await and then publish, report the ones where nothing in between reads the state again. Over the whole source it returns exactly one function, this one.
+- Its witness needed the fixture shape the detector actually links, the entity, its migration and the `@Database` in ONE file. Split across three nothing links, and the test would have proved that zero equals zero.
+
 ## 1.42.219
 
 The third and last provider that paints after waiting.

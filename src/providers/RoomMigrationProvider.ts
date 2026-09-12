@@ -19,6 +19,7 @@ export class RoomMigrationProvider implements vscode.Disposable {
   private readonly _diag = vscode.languages.createDiagnosticCollection('kotlin-jump-room');
   private readonly _subs: vscode.Disposable[];
   private _cache: { at: number; files: Map<string, string> } | undefined;
+  private _disposed = false;
 
   constructor() {
     this._subs = [
@@ -84,6 +85,16 @@ export class RoomMigrationProvider implements vscode.Disposable {
     // Clear only once the new set is ready: every save used to blank all
     // Room warnings for the seconds the workspace read took.
     const files = await this._roomFiles();
+    // Reading the workspace takes seconds, and the state that started this
+    // scan can be gone when it lands: the setting switched off, or the
+    // provider disposed. Publishing anyway puts back the warnings the user
+    // just turned off, and a disposed collection throws on the very clear
+    // below.
+    if (this._disposed) return;
+    if (!vscode.workspace.getConfiguration('kotlinJump').get<boolean>('roomMigrationDrift', true)) {
+      this._diag.clear();
+      return;
+    }
     if (files.size === 0) { this._diag.clear(); return; }
 
     // Keep the array in Map insertion order: the analyzer's fileIndex refers
@@ -142,6 +153,7 @@ export class RoomMigrationProvider implements vscode.Disposable {
   }
 
   dispose(): void {
+    this._disposed = true;
     this._diag.dispose();
     for (const s of this._subs) s.dispose();
   }

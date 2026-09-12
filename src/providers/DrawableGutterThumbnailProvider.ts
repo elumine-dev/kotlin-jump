@@ -195,10 +195,18 @@ export class DrawableGutterThumbnailProvider implements vscode.Disposable {
     // the live map before calling setDecorations — a disposed type throws.
     const liveTypes = new Set(this.typeByCachePath.values());
     const applied = new Set<vscode.TextEditorDecorationType>();
+    // The setting is read live again for the same reason: `ensureCached`
+    // yields once per icon, and the switch can be flipped between two of
+    // them. Turning it off triggers a flush that clears, and that clearing
+    // flush finishes FIRST, so painting what this one collected would put the
+    // icons straight back. Empty lists still go out: that is what clears.
+    const encoreActif = vscode.workspace.getConfiguration('kotlinJump')
+      .get<boolean>('drawableThumbnails', true);
     for (const [type, decors] of decorsByType) {
       if (!liveTypes.has(type)) continue;
-      editor.setDecorations(type, decors);
-      if (decors.length > 0) applied.add(type);
+      const aPeindre = encoreActif ? decors : [];
+      editor.setDecorations(type, aPeindre);
+      if (aPeindre.length > 0) applied.add(type);
     }
     this.appliedTypes.set(editor, applied);
     } finally {

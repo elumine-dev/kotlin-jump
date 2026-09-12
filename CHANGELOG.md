@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.219
+
+The third and last provider that paints after waiting.
+
+### Fixes
+- Switching the drawable gutter thumbnails off while they are being rendered brought them straight back. The render yields once per icon, the time to read and convert the source file, and the switch can be flipped between two of them. Turning it off starts a render that clears, and that clearing render finishes FIRST, so the one still in flight put every icon back. The setting is read again just before painting now.
+
+### Notes
+- This one already handled the other half of the same race, and handled it well: a decoration type disposed mid render is cross checked against the live map before painting, because painting through a disposed type throws. Only the setting was read once and trusted to the end.
+- That closes the family. Of the providers that paint decorations after an await, the three that needed the guard have it, and the remaining two hand back a value rather than painting, so an answer that lands late costs nothing.
+
 ## 1.42.218
 
 The fix from seven releases ago had two siblings nobody had looked at.

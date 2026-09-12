@@ -1,32 +1,27 @@
 {
-  "version": "1.42.234",
+  "version": "1.42.235",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Cuts that landed on the wrong lines",
-  "summary": "The workspace sweep measured its cuts on one text and applied them to another, and a diff view made three commands read HEAD while writing the working file.",
+  "tagline": "Every finding carries a fix",
+  "summary": "A declaration whose body starts on the next line had no removal at all. The extent test now walks down to where the expression really ends.",
   "highlights": [
     {
-      "title": "The workspace sweep cuts where it measured",
+      "title": "Bodies that start on the next line",
       "kind": "fix",
-      "description": "It swept the disk, re converted its offsets against a second read, then applied the result to the open document. One line added above and every cut in that file moved down, silently. A file whose text moved since the scan is now left alone and says so."
-    },
-    {
-      "title": "A diff view is not the file",
-      "kind": "fix",
-      "description": "A comparison opens a document whose scheme is `git:` and whose path is the real file path. Three commands recognised it by path alone and read HEAD while writing the working file."
+      "description": "`fun f(): T =` with its body below, a call chain over three lines, `val x = listOf(` over four, `get() = if (a) { } else { }`. The extent test asked one question and gave up on a yes; it walks down to the real end now, counting brackets on sanitized text."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Clean Dead Code in Workspace measured its offsets on the disk, converted them against a second read, and applied them to the open buffer. Written down as a test: a cut aimed at line 4 landed on line 1, inside the package declaration.",
-        "Remove Code Used Only by Tests, Make Every Self Only Member Private and the unused symbol removals all took a `git:` diff document for the file itself."
+        "A declaration whose expression body starts on the following line had no removal. The walk stops on the first line that closes every bracket the declaration opened, does not end on an operator, and is not followed by a continuation.",
+        "A declaration that never closes still yields no fix, rather than a guess."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "The VS Code test double kept the scheme inside the parsed path, which made a diff document distinguishable in a test while it is indistinguishable in reality."
+        "On a real 6329 source project: 418 findings, 418 with a fix. It was 8 without before this release, and 66 before 1.42.233. No existing cut moved, checked one by one across both versions."
       ]
     }
   ],

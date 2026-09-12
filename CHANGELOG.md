@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.229
+
+A headline count that added eleven findings twice.
+
+### Fixes
+- The summary of Find Everything Unused adds its sections up, so a finding has to belong to exactly one of them. The symbol and member sections have always kept their testOnly findings out of their count; the enum entry and dead island sections had not. The line added in 1.42.222 for what is kept alive only by its tests therefore counted those twice, and on a real project the headline was eleven findings too high: three enum entries and eight islands. Each finding sits on one line now, and the per family lists were always right, only the total was not.
+
+### Notes
+- The first witness only lit the enum family, so the island half of the fix survived its mutant. That is the whole point of putting the bug back: a test that cannot fail on half of a change is only testing the other half. The pair covers both now, and each mutant prints the doubled total it produces.
+
 ## 1.42.228
 
 The one cache a file changed on disk did not drop.

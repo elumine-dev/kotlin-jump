@@ -225,11 +225,16 @@ export async function findEverythingUnusedCommand(
           });
           enumEntryProvider.setFindings(entries);
           keptAliveByTests += entries.filter(e => e.verdict === 'testOnly').length;
-          const enums = new Set(entries.map(e => e.enumName)).size;
+          // Counted on THIS line only when the entry is not already counted on
+          // the testOnly one. The symbol and member sections have always
+          // excluded their testOnly findings; these two did not, so the total
+          // in the headline counted eleven of them twice on a real project.
+          const propres = entries.filter(e => e.verdict !== 'testOnly');
+          const enums = new Set(propres.map(e => e.enumName)).size;
           sections.push({
             label: 'enum entries',
             one: 'enum entry',
-            count: entries.length,
+            count: propres.length,
             detail: enums > 0 ? `across ${enums} enum${enums > 1 ? 's' : ''}` : undefined,
           });
         }
@@ -331,12 +336,14 @@ export async function findEverythingUnusedCommand(
           });
           islandProvider.setFindings(islands, new Map(data.sources.map(s => [s.path, s.text])));
           keptAliveByTests += islands.filter(i => i.verdict === 'testOnly').length;
-          const islandDecls = islands.reduce((sum, i) => sum + i.members.length, 0);
+          // Same reason as the enum entries above: one finding, one section.
+          const ilotsPropres = islands.filter(i => i.verdict !== 'testOnly');
+          const islandDecls = ilotsPropres.reduce((sum, i) => sum + i.members.length, 0);
           sections.push({
             label: 'dead islands',
             one: 'dead island',
-            count: islands.length,
-            detail: islands.length > 0
+            count: ilotsPropres.length,
+            detail: ilotsPropres.length > 0
               ? `${plural(islandDecls, 'declaration')}${islandDecls > 1 ? ' holding each other' : ''}`
               : undefined,
           });

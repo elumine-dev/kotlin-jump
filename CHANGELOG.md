@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.209
+
+The guard added two releases ago only looked at the word glued to the count, so a noun written in two words went through whole. Fetching a single dependency read `downloading 1 library sources`, twelve lines below a sentence the same pass had just corrected.
+
+### Fixes
+- The progress notification that downloads library sources counted them itself. One dependency to fetch is the common case, not the edge one.
+- The index tooltip read `incl. 1 library files from 1 JARs`. One library with sources attached is enough to see it.
+
+### Notes
+- The guard reads up to two words between the count and the noun now, which is exactly what those two sites hid behind.
+- Its tolerance was granted by FILE. `src/extension.ts` and its browser twin, more than two thousand lines each, were exempt in full, so any count written anywhere in them was invisible. Tolerance is granted line by line now, and an entry that matches nothing any more fails the suite: four of the ten files named in it had already stopped carrying a fault.
+- Both holes are proven rather than described. The matching engine is a plain function the test calls directly, so a fault injected into an exempt file has to come back as a fault, and a stale tolerance has to come back as a stale tolerance.
+
 ## 1.42.208
 
 A summary that names its own internals. The command that reports every unused thing at once printed the detector key rather than its label, so on a real project of 5093 Kotlin and Java files its dead code line read `43 locals, 21 imports, 19 declarations, 4 writeOnly, 2 parameters`.

@@ -2097,7 +2097,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         const { symbols: totalSymbols } = index.stats();
         const jdkLabel = jdk.jdkHome ? ` + JDK${jdk.files > 0 ? '✓' : '⚠'}` : '';
         statusBar.text    = `$(symbol-class) Kotlin Jump: ${totalSymbols.toLocaleString()} symbols${isCompanion ? ' · companion' : ''}`;
-        statusBar.tooltip = `${totalSymbols.toLocaleString()} symbols (incl. ${totalFiles} library files from ${totalJars} JARs${jdkLabel})`;
+        statusBar.tooltip = `${totalSymbols.toLocaleString()} symbols (incl. ${plural(totalFiles, 'library file')} from ${plural(totalJars, 'JAR')}${jdkLabel})`;
         _semanticTokens?.invalidate();
 
         // Compute "missing" by diffing parsed coords vs indexed JARs.

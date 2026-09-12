@@ -1,22 +1,22 @@
 {
-  "version": "1.42.208",
+  "version": "1.42.209",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Wrong words in the unused code summaries",
-  "summary": "The command that reports everything unused printed its own detector keys, and every label inside those summaries only knew the plural.",
+  "tagline": "A count and a noun in two words",
+  "summary": "The check that keeps counts agreeing only looked at the word glued to the count, so two sentences written with a noun in two words kept their plural at one.",
   "highlights": [
     {
-      "title": "The summary named its own internals",
-      "description": "Detector keys such as writeOnly and locals reached the notification instead of the words for them. On a project of 5093 Kotlin and Java files it read 43 locals, 21 imports, 19 declarations, 4 writeOnly, 2 parameters.",
+      "title": "Downloading one library source",
+      "description": "The progress notification that fetches library sources read downloading 1 library sources when a single dependency was missing.",
       "kind": "fix"
     },
     {
-      "title": "Nine labels that only knew the plural",
-      "description": "A single result read 1 dead islands, 1 enum entries, 1 catalog aliases. Each label carries its own singular now, since entrys and aliass would follow from any rule that guesses one.",
+      "title": "One library file from one JAR",
+      "description": "The index tooltip read incl. 1 library files from 1 JARs.",
       "kind": "fix"
     },
     {
-      "title": "Two sentences that ended badly",
-      "description": "The per file clean up line agreed its count in the previous release and left the verb behind. With every check empty and one check skipped, the summary ended on a colon with nothing after it.",
+      "title": "The check itself had two holes",
+      "description": "It read only the word next to the count, and it granted its exceptions by file, which left two files of more than two thousand lines exempt in full. Both holes now fail a test.",
       "kind": "fix"
     }
   ],
@@ -24,11 +24,10 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "The aggregate unused code summary shows the label of each dead code detector, not its key, and shares that table with the command that reports the same scan.",
-        "Nine section labels and five detector labels now carry a singular, so one finding reads 1 dead island, 1 enum entry, 1 catalog alias, 1 write-only variable.",
-        "The per file clean up message no longer disagrees with its own count when a single finding needs a manual fix.",
-        "The count of freed version catalog entries agrees at one.",
-        "With nothing found and a check skipped, the summary no longer ends on a colon followed by a full stop."
+        "The library sources download notification agrees at one.",
+        "The index tooltip agrees at one library file and one JAR.",
+        "The count check reads up to two words between the number and its noun.",
+        "Its exceptions are granted line by line, and one that no longer matches anything fails the suite."
       ]
     }
   ],

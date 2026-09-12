@@ -8,8 +8,21 @@
  */
 
 
+/**
+ * Blanks a span while keeping every newline.
+ *
+ * Blanking must preserve the length AND the line count: three dead code
+ * detectors build their line table from this copy and report their removals
+ * through it, and the named arguments action reads one line of it by index.
+ */
+function blancs(text: string, i: number, n: number): string {
+  let out = '';
+  for (let k = i; k < i + n && k < text.length; k++) out += text[k] === '\n' ? '\n' : ' ';
+  return out;
+}
+
 /** Blanks out comments and string contents while PRESERVING the code inside
- *  `${…}` templates (lengths are kept). */
+ *  `${…}` templates (lengths and line count are kept). */
 export function sanitizeForUsageScan(text: string): string {
   const out: string[] = [];
   let i = 0;
@@ -33,7 +46,7 @@ export function sanitizeForUsageScan(text: string): string {
           if (text[j] === '\\') j += 2 + (text[j + 1] === 'u' ? 4 : 0);
           else j += 1;
           if (text[j] === "'") {
-            out.push(' '.repeat(j + 1 - i));
+            out.push(blancs(text, i, j + 1 - i));
             i = j + 1;
             continue;
           }
@@ -76,7 +89,15 @@ export function sanitizeForUsageScan(text: string): string {
           continue;
         }
         if (mode === 'string') {
-          if (ch === '\\') { out.push('  '); i += 2; continue; }
+          // A backslash cannot escape the end of a line: the string ends
+          // there. Consuming the newline kept the length right and moved every
+          // line below up by one.
+          if (ch === '\\') {
+            if (text[i + 1] === '\n') { out.push(' '); i++; continue; }
+            // `blancs` borne la fin du texte : un antislash final poussait
+            // deux caracteres pour un seul consomme.
+            out.push(blancs(text, i, 2)); i += 2; continue;
+          }
           if (ch === '"') { mode = 'code'; out.push(' '); i++; continue; }
           if (ch === '\n') { mode = 'code'; out.push('\n'); i++; continue; }
         } else if (three === '"""') {

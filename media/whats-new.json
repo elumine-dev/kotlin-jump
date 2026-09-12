@@ -1,17 +1,17 @@
 {
-  "version": "1.42.214",
+  "version": "1.42.215",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A refactoring offered inside a comment",
-  "summary": "Add names to call arguments read the cursor line one line at a time, so the body of a KDoc or of a raw string passed for code.",
+  "tagline": "A newline eaten by an escape",
+  "summary": "The shared scan primitive could return a copy with one line fewer, and three detectors number their findings from that copy.",
   "highlights": [
     {
-      "title": "Prose that looked like a call",
-      "description": "A KDoc line such as taller (late reflow, slow assets) has the exact shape of a call with two arguments. On a real project, 642 such sites were read out of comments and strings.",
+      "title": "One line short",
+      "description": "A backslash at the end of a line inside a string was consumed together with the newline. The copy kept its length and lost a line, so every line number below it moved up by one.",
       "kind": "fix"
     },
     {
-      "title": "Read from the code, not from the text",
-      "description": "Candidates come from a copy of the line with comments and string contents blanked out. A call after a block comment on the same line, or inside a string template, is still real code and still gets the action.",
+      "title": "An invariant that is now checked",
+      "description": "Length and line count are asserted on a thousand deliberately malformed texts. The property test found a second defect on its own: a trailing backslash made the copy longer than the file.",
       "kind": "fix"
     }
   ],
@@ -19,9 +19,9 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Add names to call arguments is no longer offered on the body of a KDoc, a block comment or a raw string.",
-        "A call sitting after a comment on the same line, or inside a string template, keeps the action.",
-        "The blanked copy of the file is computed once per version, so the lightbulb stays free after the first request."
+        "Blanking a comment or a string never changes the line count of the copy the detectors read.",
+        "A backslash at the very end of a file no longer makes that copy longer than the file.",
+        "A backslash at the end of a line no longer keeps the string open over the next line."
       ]
     }
   ],

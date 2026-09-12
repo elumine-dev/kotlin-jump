@@ -188,6 +188,7 @@ import {
 } from './providers/VersionCatalogNavigation';
 import { OverrideGutterProvider } from './providers/OverrideGutterProvider';
 import { NavigationHistoryProvider } from './providers/NavigationHistoryProvider';
+import { plural } from './util/plural';
 
 const WORD_RE = /[A-Za-z_]\w*/;
 
@@ -2378,7 +2379,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     if (report.toScan.length > 0) {
       log.info(`[startup] ${report.toScan.length} stale files — rescanning…`);
-      statusBar.text = `$(sync~spin) Kotlin Jump: updating ${report.toScan.length} files…`;
+      statusBar.text = `$(sync~spin) Kotlin Jump: updating ${plural(report.toScan.length, 'file')}…`;
       await scanner.rescan(report.toScan);
       codeLens.refresh();
     } else {

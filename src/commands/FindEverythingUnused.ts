@@ -29,6 +29,7 @@ import { UnusedRemoteConfigKeyProvider, findUnusedRemoteConfigKeys } from '../pr
 import { UnusedGradleDependencyProvider, findUnusedGradleDependencies } from '../providers/UnusedGradleDependencyProvider';
 import { UnusedMemberProvider, findUnusedMembers } from '../providers/UnusedMemberProvider';
 import { DeadIslandProvider, findDeadIslands } from '../providers/DeadIslandProvider';
+import { plural } from '../util/plural';
 
 /**
  * One command for the whole picture: every dead-code detector the extension
@@ -242,7 +243,7 @@ export async function findEverythingUnusedCommand(
           sections.push({
             label: 'Remote Config keys',
             count: keys.length,
-            detail: decls > keys.length ? `${decls} declarations` : undefined,
+            detail: decls > keys.length ? plural(decls, 'declaration') : undefined,
           });
         }
       } else {
@@ -320,7 +321,9 @@ export async function findEverythingUnusedCommand(
           sections.push({
             label: 'dead islands',
             count: islands.length,
-            detail: islands.length > 0 ? `${islandDecls} declarations holding each other` : undefined,
+            detail: islands.length > 0
+              ? `${plural(islandDecls, 'declaration')}${islandDecls > 1 ? ' holding each other' : ''}`
+              : undefined,
           });
         }
       } else {
@@ -331,7 +334,7 @@ export async function findEverythingUnusedCommand(
       const total = sections.reduce((sum, s) => sum + s.count, 0);
       if (total === 0 && skipped.length === 0) {
         void vscode.window.showInformationMessage(
-          `Nothing unused found across ${data.sources.length} files.`,
+          `Nothing unused found across ${plural(data.sources.length, 'file')}.`,
         );
         return;
       }
@@ -341,7 +344,7 @@ export async function findEverythingUnusedCommand(
         .map(s => `${s.count} ${s.label}${s.detail ? ` (${s.detail})` : ''}`);
       const skippedNote = skipped.length > 0 ? ` Skipped: ${skipped.join('; ')}.` : '';
       void vscode.window.showInformationMessage(
-        `${total} findings across ${data.sources.length} files: ${parts.join(' · ')}.${skippedNote}`,
+        `${plural(total, 'finding')} across ${plural(data.sources.length, 'file')}: ${parts.join(' · ')}.${skippedNote}`,
       );
     },
   );

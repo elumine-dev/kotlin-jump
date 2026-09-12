@@ -5,6 +5,7 @@ import {
   UnusedEnumEntryProvider,
   findUnusedEnumEntries,
 } from '../providers/UnusedEnumEntryProvider';
+import { plural } from '../util/plural';
 
 /** KJ-039 command. Shares the corpus read with the other workspace scans. */
 
@@ -49,7 +50,7 @@ export async function findUnusedEnumEntriesCommand(
 
       if (found.length === 0) {
         void vscode.window.showInformationMessage(
-          `Every enum entry is referenced somewhere (${data.sources.length} files).`,
+          `Every enum entry is referenced somewhere (${plural(data.sources.length, 'file')}).`,
         );
         return;
       }
@@ -57,7 +58,7 @@ export async function findUnusedEnumEntriesCommand(
       const testOnly = found.filter(e => e.verdict === 'testOnly').length;
       void vscode.window.showInformationMessage(
         `${found.length} unused enum entr${found.length > 1 ? 'ies' : 'y'} across ${enums} enum${enums > 1 ? 's' : ''}`
-        + `${testOnly > 0 ? `, ${testOnly} used only from tests` : ''}, in ${data.sources.length} files.`,
+        + `${testOnly > 0 ? `, ${testOnly} used only from tests` : ''}, in ${plural(data.sources.length, 'file')}.`,
       );
     },
   );

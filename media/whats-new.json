@@ -1,21 +1,26 @@
 {
-  "version": "1.42.206",
+  "version": "1.42.207",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Proving the narrowing lost nothing",
-  "summary": "No behaviour changes. Last release narrowed the window that looks for a function body, and this one is about proving it lost nothing it should have kept.",
+  "tagline": "One declaration is not each other",
+  "summary": "Counts written next to a hardcoded plural. One dead island read `1 declarations across 1 file(s) reference only each other`, a sentence that is not just ungrammatical but false.",
   "highlights": [
     {
-      "title": "Compared Finding By Finding",
-      "description": "On a real project 14 reports leave and none arrives, and all 14 are methods declared in an interface. A count alone would not have settled it.",
-      "kind": "improvement"
+      "title": "A Sentence That Was False",
+      "description": "A lone declaration cannot reference each other. The dead island message changes shape at one now, and the quick fix no longer offers to delete `1 declarations`.",
+      "kind": "fix"
+    },
+    {
+      "title": "Twenty Four More Counts",
+      "description": "The screen flow legend carried four on one line, none agreeing. Twenty other places now share one helper, and a guard fails the build if a new one appears.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
       "heading": "Notes",
       "bullets": [
-        "A signature can finish on a second line with `throws` in Java or `where` in Kotlin, and two methods of the real project do. A test now pins that the brace is still found there.",
-        "The two other branches that measure a declaration were re examined and need nothing: a property looks only at its own line, and a class header already walks its supertype list with a rule written for this hazard."
+        "A test reading a whole real project sat 173 milliseconds under the default five second limit while its two neighbours had an explicit ceiling. All four share one constant now.",
+        "The three quick fixes never checked against a real project now are: 86 XML cuts, 21 statement cuts, 2 TOML lines, nothing wrong in any of them."
       ]
     }
   ],

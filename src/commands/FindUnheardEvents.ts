@@ -5,6 +5,7 @@ import {
   UnheardEventScan,
   findUnheardEvents,
 } from '../providers/UnheardEventProvider';
+import { plural } from '../util/plural';
 
 /**
  * KJ-038 commands.
@@ -70,11 +71,11 @@ export function reportUnheardEvents(
   }
   if (parts.length === 0) {
     void vscode.window.showInformationMessage(
-      `Every posted event has a subscriber and every subscription has a poster (${files} files).`,
+      `Every posted event has a subscriber and every subscription has a poster (${plural(files, 'file')}).`,
     );
     return;
   }
-  void vscode.window.showInformationMessage(`${parts.join(' · ')}, across ${files} files.`);
+  void vscode.window.showInformationMessage(`${parts.join(' · ')}, across ${plural(files, 'file')}.`);
 }
 
 export async function findUnheardEventsCommand(

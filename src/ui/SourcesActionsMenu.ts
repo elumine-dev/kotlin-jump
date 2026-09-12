@@ -4,6 +4,7 @@ import { DependencyResolver } from '../http/DependencyResolver';
 import { HttpSourcesDownloader } from '../http/HttpSourcesDownloader';
 import { formatCoords } from '../http/MavenCoordinatesParser';
 import { SourcesStatusBar } from './SourcesStatusBar';
+import { plural } from '../util/plural';
 
 const FIRST_SCAN_SUPPRESSED = 'kotlinJump.suppressFirstScanPrompt';
 
@@ -50,7 +51,7 @@ export class SourcesActionsMenu implements vscode.Disposable {
 
     const choice = await vscode.window.showInformationMessage(
       `Kotlin Jump: library navigation needs sources. ` +
-      `${state.missingCoords} libraries can be downloaded (~${state.missingCoords * 500} KB).`,
+      `${plural(state.missingCoords, 'library', 'libraries')} can be downloaded (~${state.missingCoords * 500} KB).`,
       'Download now',
       'Configure',
       "Don't show again",
@@ -72,7 +73,7 @@ export class SourcesActionsMenu implements vscode.Disposable {
     if (state.missingCoords > 0) {
       items.push({
         label: '$(cloud-download) Download missing sources',
-        description: `${state.missingCoords} libs · via HTTP (no JVM)`,
+        description: `${plural(state.missingCoords, 'lib')} · via HTTP (no JVM)`,
       });
     }
     items.push({

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { DEFAULT_TEST_SEGMENTS } from '../util/testPaths';
 import { ResourceCorpus } from '../indexer/ResourceCorpus';
 import { DeadIslandProvider, findDeadIslands } from '../providers/DeadIslandProvider';
+import { plural } from '../util/plural';
 
 /**
  * KJ-046 command.
@@ -18,6 +19,26 @@ export function islandSettings() {
     includeTestOnly: cfg.get<boolean>('unusedSymbolsIncludeTestOnly', true),
     maxIslandSize: cfg.get<number>('deadIslandsMaxSize', 8),
   };
+}
+
+/**
+ * The one line the command reports.
+ *
+ * The noun agreed already; the rest of the sentence did not. One declaration
+ * cannot `reference each other`, and the verb has to follow its subject, so
+ * the parenthesis changes shape at one rather than losing an `s`.
+ */
+export function resumeIlots(
+  islands: number,
+  declarations: number,
+  testOnly: number,
+  files: number,
+): string {
+  const quoi = declarations === 1
+    ? '1 declaration referenced by nothing else'
+    : `${declarations} declarations that only reference each other`;
+  const tests = testOnly > 0 ? `, ${testOnly} referenced only from tests` : '';
+  return `${plural(islands, 'dead island')} (${quoi})${tests}, across ${plural(files, 'file')}.`;
 }
 
 export async function findDeadIslandsCommand(
@@ -52,15 +73,14 @@ export async function findDeadIslandsCommand(
 
       if (found.length === 0) {
         void vscode.window.showInformationMessage(
-          `No dead islands: nothing is kept alive only by dead code (${data.sources.length} files).`,
+          `No dead islands: nothing is kept alive only by dead code (${plural(data.sources.length, 'file')}).`,
         );
         return;
       }
       const declarations = found.reduce((sum, i) => sum + i.members.length, 0);
       const testOnly = found.filter(i => i.verdict === 'testOnly').length;
       void vscode.window.showInformationMessage(
-        `${found.length} dead island${found.length > 1 ? 's' : ''} (${declarations} declaration${declarations === 1 ? '' : 's'} that only reference each other)`
-        + `${testOnly > 0 ? `, ${testOnly} referenced only from tests` : ''}, across ${data.sources.length} files.`,
+        resumeIlots(found.length, declarations, testOnly, data.sources.length),
       );
     },
   );

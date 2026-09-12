@@ -10,6 +10,7 @@ import {
   buildSymbolRemovalEdit,
   findUnusedSymbols,
 } from '../providers/UnusedSymbolProvider';
+import { plural } from '../util/plural';
 
 /**
  * KJ-032 commands.
@@ -97,7 +98,7 @@ export async function findUnusedSymbolsCommand(
 
       if (result.findings.length === 0) {
         void vscode.window.showInformationMessage(
-          `No unreferenced top-level symbols across ${result.files} files.`,
+          `No unreferenced top-level symbols across ${plural(result.files, 'file')}.`,
         );
         return;
       }

@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { plural } from '../util/plural';
 
 export interface SourcesState {
   /** Total libraries indexed (Gradle + Maven + bundled). */
@@ -78,14 +79,14 @@ export class SourcesStatusBar implements vscode.Disposable {
     if (s.missingCoords > 0) {
       const total = s.libsIndexed + s.missingCoords;
       this.item.text    = `$(cloud-download) KJ: ${s.missingCoords}/${total} libs missing`;
-      this.item.tooltip = this.buildTooltip(`${s.missingCoords} sources can be downloaded. Click to fetch.`);
+      this.item.tooltip = this.buildTooltip(`${plural(s.missingCoords, 'source')} can be downloaded. Click to fetch.`);
       this.item.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
       return;
     }
     // All-good state
     const jdkBadge = s.jdk === 'ok' ? ' · JDK' : '';
     const stdlibBadge = s.bundledStdlib ? ' · stdlib ✓' : '';
-    this.item.text    = `$(library) KJ: ${s.libsIndexed} libs${jdkBadge}${stdlibBadge}`;
+    this.item.text    = `$(library) KJ: ${plural(s.libsIndexed, 'lib')}${jdkBadge}${stdlibBadge}`;
     this.item.tooltip = this.buildTooltip('All known library sources indexed. Click for actions.');
     this.item.backgroundColor = undefined;
   }

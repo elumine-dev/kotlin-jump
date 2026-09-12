@@ -9,6 +9,7 @@ import {
   summarize,
   sweepFile,
 } from '../providers/DeadCodeSweep';
+import { plural } from '../util/plural';
 
 /**
  * KJ-030: one command to see every dead thing at once, and one to remove them.
@@ -173,7 +174,7 @@ export async function findDeadCodeCommand(report: DeadCodeSweepReport): Promise<
       }
       const truncatedNote = scan.truncated ? ' Some files were skipped: raise kotlinJump.maxIndexedFiles.' : '';
       void vscode.window.showInformationMessage(
-        `${all.length} findings in ${scan.files.length} files: ${describe(all)}.${truncatedNote}`,
+        `${plural(all.length, 'finding')} in ${plural(scan.files.length, 'file')}: ${describe(all)}.${truncatedNote}`,
       );
     },
   );
@@ -195,7 +196,7 @@ export async function cleanDeadCodeInFileCommand(): Promise<void> {
     const skipped = findings.length;
     void vscode.window.showInformationMessage(
       skipped > 0
-        ? `Nothing to remove automatically: ${skipped} findings need a per-case fix.`
+        ? `Nothing to remove automatically: ${plural(skipped, 'finding')} need a per-case fix.`
         : 'No dead code in this file.',
     );
     return;

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.235
+
+Every finding carries a fix now. The last eight did not.
+
+### Fixes
+- A declaration whose body starts on the NEXT line had no removal. The extent test could ask one question, "does this line continue", and when the answer was yes it gave up. It walks now: line by line, counting brackets on the sanitized text so a parenthesis inside a string closes nothing, stopping on the first line that closes everything the declaration opened, does not itself end on an operator, and is not followed by a continuation. `fun f(): T =` with its body below, `val x =` followed by a call chain, `val x = listOf(` over four lines, and `get() = if (a) { } else { }` all cut correctly. A declaration that never closes still yields no fix rather than a guess.
+
+### Notes
+- Measured on a real 6329 source project: 418 findings, 418 with a fix. Before this release 8 had none, and before 1.42.233 it was 66. No existing cut moved: every cut was compared one by one across both versions.
+- The seven removal invariants stay at zero on those sources, including the one that counts declarations inside a cut, which is what would catch a walk that went too far.
+
 ## 1.42.234
 
 Two ways for a removal to land on the wrong lines, both closed.

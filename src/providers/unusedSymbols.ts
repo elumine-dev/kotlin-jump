@@ -266,6 +266,71 @@ export function accessorNames(name: string): string[] {
 
 
 /**
+ * A line that OPENS something of its own, so the line above it ended.
+ *
+ * Written once and used twice, by the freshness test and by the expression
+ * walk below: two copies of this list would drift apart in a week.
+ */
+const OUVRE_UNE_DECLARATION_RE =
+  /^\s*(?:\}|\/\/|\/\*|@|va[lr]\b|fun\b|class\b|object\b|interface\b|companion\b|init\b|constructor\b|private\b|protected\b|internal\b|public\b|override\b|abstract\b|open\b|enum\b|sealed\b|data\b|suspend\b|inline\b|typealias\b|const\b|lateinit\b|final\b|static\b|inner\b|annotation\b|value\b|external\b|expect\b|actual\b|operator\b|infix\b|tailrec\b)/;
+
+/** Une ligne qui se termine sur un operateur appelle une suite. */
+const FINIT_SUR_UN_OPERATEUR_RE = /(?:[+\-*/,.&|?:=(]|->)$/;
+
+/**
+ * Where a declaration's expression body really ends.
+ *
+ * `fun f(): T =` with its body on the next line, `val x =` followed by a call
+ * chain, `get() = if (a) { } else { }`: the extent test could only ask "does
+ * this line continue" and, when the answer was yes, give up. The answer is one
+ * line further down, and then the same question again.
+ *
+ * Whole lines only, with bracket depth counted on the SANITIZED text so a `)`
+ * inside a string closes nothing. A line ends the expression when it closes
+ * every bracket the declaration opened, does not itself end on an operator,
+ * and is not followed by a continuation. Returns -1 when the walk runs past
+ * the enclosing block, past the file, or past 80 lines, which leaves the
+ * caller refusing the extent exactly as it did before.
+ */
+function finDeLExpression(
+  clean: string,
+  lines: readonly string[],
+  lineStarts: readonly number[],
+  lineEndOf: (l: number) => number,
+  premiereLigne: number,
+  depuis: number,
+  lastLine: number,
+): number {
+  const compte = (t: string): number => {
+    let d = 0;
+    for (const c of t) {
+      if (c === '(' || c === '[' || c === '{') d++;
+      else if (c === ')' || c === ']' || c === '}') d--;
+    }
+    return d;
+  };
+  let profondeur = compte(clean.slice(lineStarts[premiereLigne], lineEndOf(depuis)));
+  if (profondeur < 0) return -1;
+
+  for (let l = depuis + 1; l <= lastLine && l <= depuis + 80; l++) {
+    const brute = lines[l] ?? '';
+    profondeur += compte(clean.slice(lineStarts[l], lineEndOf(l)));
+    // Sortir du bloc qui contient la declaration : la marche est perdue.
+    if (profondeur < 0) return -1;
+    if (profondeur > 0 || brute.trim() === '') continue;
+
+    // Juge la continuation sur le texte BRUT, comme le test d origine : le
+    // nettoyeur vide les chaines et `val X = "done"` se lirait sur `=`.
+    if (FINIT_SUR_UN_OPERATEUR_RE.test(brute.trimEnd())) continue;
+    let suivante = l + 1;
+    while (suivante <= lastLine && (lines[suivante] ?? '').trim() === '') suivante++;
+    if (suivante <= lastLine && !OUVRE_UNE_DECLARATION_RE.test(lines[suivante] ?? '')) continue;
+    return lineEndOf(l);
+  }
+  return -1;
+}
+
+/**
  * Whole-line removal extent: KDoc and annotations above, accessors below, and
  * -1 when the statement visibly continues past our end.
  *
@@ -343,16 +408,21 @@ export function removalExtent(
   // l etendue vient de la portee, ce test decide seulement de la rendre.
   const nextStartsFresh =
     nextNonBlank > lastLine ||
-    /^\s*(?:\}|\/\/|\/\*|@|va[lr]\b|fun\b|class\b|object\b|interface\b|companion\b|init\b|constructor\b|private\b|protected\b|internal\b|public\b|override\b|abstract\b|open\b|enum\b|sealed\b|data\b|suspend\b|inline\b|typealias\b|const\b|lateinit\b|final\b|static\b|inner\b|annotation\b|value\b|external\b|expect\b|actual\b|operator\b|infix\b|tailrec\b)/
-      .test(lines[nextNonBlank] ?? '');
+    OUVRE_UNE_DECLARATION_RE.test(lines[nextNonBlank] ?? '');
   // A trailing `;` closes the statement, in Java as in Kotlin. Without this the
   // freshness test decides, and its keyword list is Kotlin only: a Java field
   // starts with its TYPE (`int`, `String`), never with `val` or `fun`, so the
   // next line never read as fresh and no Java constant could be removed.
   const termine = /;$/.test(trailing);
   const continues = span.lineBasedEnd && !termine
-    && (/(?:[+\-*/,.&|?:=(]|->)$/.test(trailing) || !nextStartsFresh);
-  if (continues) return { removeStart: -1, removeEnd: -1 };
+    && (FINIT_SUR_UN_OPERATEUR_RE.test(trailing) || !nextStartsFresh);
+  if (continues) {
+    const vraieFin = finDeLExpression(
+      clean, lines, lineStarts, lineEndOf, sym.line,
+      offsetToPos(lineStarts as number[], Math.max(endOffset - 1, 0)).line, lastLine);
+    if (vraieFin === -1) return { removeStart: -1, removeEnd: -1 };
+    endOffset = vraieFin;
+  }
 
   const removeStart = lineStarts[firstLine];
   const removeEnd = lineEndOf(offsetToPos(lineStarts as number[], Math.max(endOffset - 1, removeStart)).line);

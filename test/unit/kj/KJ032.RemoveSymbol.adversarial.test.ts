@@ -63,11 +63,37 @@ describe.skipIf(!mod)('étendue de la déclaration', () => {
     expect(removed(text, f)).not.toContain('ghostly');
   });
 
-  it('un initialiseur multiligne rend l’étendue incertaine, donc pas de fix', () => {
+  it('un initialiseur multiligne se coupe en entier', () => {
+    // L'étendue était refusée ici : la ligne finit sur `(` et le test de
+    // continuation ne savait qu'abandonner. Il descend maintenant jusqu'à la
+    // ligne qui referme tout ce que la déclaration a ouvert.
     const text = 'package com.x\n\nval ghostly = listOf(\n  1,\n  2,\n)\n';
     const f = only([kt(`${MAIN}/M.kt`, text)], 'ghostly');
     expect(f).toBeDefined();
-    // signalé, mais sans suppression automatique : l'étendue n'est pas sûre
+    expect(text.slice(f.removeStart, f.removeEnd)).toBe('val ghostly = listOf(\n  1,\n  2,\n)\n');
+    expect(removed(text, f)).toBe('package com.x\n\n');
+  });
+
+  it('un corps-expression à la ligne suivante, une chaîne, un if else à blocs', () => {
+    const cas: [string, string][] = [
+      ['package com.x\n\nfun ghostly(): Int =\n    42\n\nfun kept() = 1\n',
+       'fun ghostly(): Int =\n    42\n'],
+      ['package com.x\n\nval ghostly = Foo\n    .bar()\n    .baz()\n\nclass K\n',
+       'val ghostly = Foo\n    .bar()\n    .baz()\n'],
+      ['package com.x\n\nval ghostly: Int\n    get() = if (a) {\n        1\n    } else {\n        2\n    }\n\nclass K\n',
+       'val ghostly: Int\n    get() = if (a) {\n        1\n    } else {\n        2\n    }\n'],
+    ];
+    for (const [text, attendu] of cas) {
+      const f = only([kt(`${MAIN}/M.kt`, text)], 'ghostly');
+      expect(f).toBeDefined();
+      expect(text.slice(f.removeStart, f.removeEnd)).toBe(attendu);
+    }
+  });
+
+  it('une déclaration qui ne referme jamais reste sans fix', () => {
+    const text = 'package com.x\n\nval ghostly = listOf(\n  1,\n';
+    const f = only([kt(`${MAIN}/M.kt`, text)], 'ghostly');
+    expect(f).toBeDefined();
     expect(f.removeStart).toBe(-1);
   });
 

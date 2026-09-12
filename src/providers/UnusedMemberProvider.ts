@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import { addCascade } from './applyCascade';
+import { narrowToPrivate } from './narrowToPrivate';
 import { corpusUri } from '../util/corpusUri';
 import { insertImport } from './AutoImportProvider';
 import {
@@ -100,6 +102,13 @@ export class UnusedMemberProvider implements vscode.CodeActionProvider, vscode.D
         new vscode.Range(document.positionAt(hit.removeStart), document.positionAt(hit.removeEnd)),
         { needsConfirmation: true, label: deleteTitleFor(hit) },
       );
+      // KJ-048: the imports this member was the last user of, and the file
+      // itself when nothing is left in it.
+      addCascade(
+        edit,
+        new Map([[document.uri.fsPath, [{ start: hit.removeStart, end: hit.removeEnd }]]]),
+        new Map([[document.uri.fsPath, document.getText()]]),
+      );
       action.edit = edit;
       action.isPreferred = false;
       actions.push(action);
@@ -110,14 +119,13 @@ export class UnusedMemberProvider implements vscode.CodeActionProvider, vscode.D
       // once private, KJ-026 tracks the member file-locally, in real time.
       const makePrivate = new vscode.CodeAction(makePrivateTitleFor(hit), vscode.CodeActionKind.QuickFix);
       const edit = new vscode.WorkspaceEdit();
-      const visibility = /\b(public|internal|protected)\s+/.exec(lineText);
-      if (visibility) {
-        const start = new vscode.Position(hit.line, visibility.index);
-        const end = new vscode.Position(hit.line, visibility.index + visibility[0].length);
-        edit.replace(document.uri, new vscode.Range(start, end), 'private ');
-      } else {
-        const indent = /^[ \t]*/.exec(lineText)?.[0].length ?? 0;
-        edit.insert(document.uri, new vscode.Position(hit.line, indent), 'private ');
+      const narrow = narrowToPrivate(lineText);
+      if (narrow) {
+        edit.replace(
+          document.uri,
+          new vscode.Range(hit.line, narrow.column, hit.line, narrow.column + narrow.length),
+          narrow.text,
+        );
       }
       makePrivate.edit = edit;
       makePrivate.isPreferred = true;

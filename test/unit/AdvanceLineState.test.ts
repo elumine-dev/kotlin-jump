@@ -76,9 +76,14 @@ describe('advanceLineState', () => {
       const t = 1 + Math.floor(suivant() * 14);
       for (let k = 0; k < t; k++) ligne += alphabet[Math.floor(suivant() * alphabet.length)];
       for (const depart of DEPARTS) {
+        // L offset de depart varie aussi : le seul appel de production passe
+        // `codeStart`, qui n est pas zero des qu une chaine brute ou un bloc
+        // de commentaire se ferme en milieu de ligne. Le differentiel ne
+        // couvrait que zero et prouvait donc moins qu il ne le disait.
+        const debut = Math.floor(suivant() * (ligne.length + 2));
         cas++;
-        expect(advanceLineState(ligne, 0, depart), JSON.stringify([ligne, depart]))
-          .toEqual(ancienne(ligne, 0, depart));
+        expect(advanceLineState(ligne, debut, depart), JSON.stringify([ligne, debut, depart]))
+          .toEqual(ancienne(ligne, debut, depart));
       }
     }
     expect(cas, 'sans cas compare, la comparaison ne prouve rien').toBe(180000);

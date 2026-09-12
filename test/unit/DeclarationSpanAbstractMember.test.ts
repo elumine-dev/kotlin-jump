@@ -179,4 +179,28 @@ describe('declarationSpan - une fonction sans corps', () => {
     expect(s).toBeDefined();
     expect(texte.slice(s!.scanStart, s!.scanEnd)).toContain('return x + 1');
   });
+  it('un nom entre accents graves trouve quand meme sa parenthese', () => {
+    // Le parseur rend `it draws` sans ses quotes, donc `nameOffset + longueur`
+    // tombe sur l accent grave fermant et non sur la parenthese. Toute
+    // fonction de test Kotlin ecrite ainsi perdait son etendue, et aucun
+    // correctif ne pouvait la delimiter.
+    const texte = [
+      'class WidgetTest {',
+      '    @Test',
+      '    fun `it draws`() {',
+      '        Widget().draw()',
+      '    }',
+      '}',
+    ].join(NL);
+    const s = span(texte, 'it draws');
+    expect(s).toBeDefined();
+    expect(texte.slice(s!.scanStart, s!.scanEnd)).toContain('Widget().draw()');
+  });
+
+  it('temoin : un nom ordinaire n a pas change', () => {
+    const texte = ['class A {', '    fun simple() {', '        rien()', '    }', '}'].join(NL);
+    const s = span(texte, 'simple');
+    expect(s).toBeDefined();
+    expect(texte.slice(s!.scanStart, s!.scanEnd)).toContain('rien()');
+  });
 });

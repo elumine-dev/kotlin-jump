@@ -76,6 +76,10 @@ export async function findEverythingUnusedCommand(
       const cfg = vscode.workspace.getConfiguration('kotlinJump');
       const sections: Section[] = [];
       const skipped: string[] = [];
+      // KJ-047: everything the four cross-file detectors say is exercised and
+      // nothing else. It gets its own line, because the fix is a different
+      // move: the declaration AND its tests, or neither.
+      let keptAliveByTests = 0;
 
       let symbolFindings: ReturnType<typeof findUnusedSymbols> | undefined;
       // ── 1. Dead code inside files ────────────────────────────────────────
@@ -122,6 +126,7 @@ export async function findEverythingUnusedCommand(
           symbolProvider.setFindings(symbols);
           const unreferenced = symbols.filter(s => s.verdict === 'unreferenced');
           const testOnly = symbols.filter(s => s.verdict === 'testOnly');
+          keptAliveByTests += testOnly.length;
           sections.push({
             label: 'unreferenced symbols',
             one: 'unreferenced symbol',
@@ -219,6 +224,7 @@ export async function findEverythingUnusedCommand(
             includeTestOnly: cfg.get<boolean>('unusedEnumEntriesIncludeTestOnly', true),
           });
           enumEntryProvider.setFindings(entries);
+          keptAliveByTests += entries.filter(e => e.verdict === 'testOnly').length;
           const enums = new Set(entries.map(e => e.enumName)).size;
           sections.push({
             label: 'enum entries',
@@ -298,6 +304,7 @@ export async function findEverythingUnusedCommand(
           memberProvider.setFindings(members);
           const unref = members.filter(m => m.verdict === 'unreferenced').length;
           const selfOnly = members.filter(m => m.verdict === 'selfOnly').length;
+          keptAliveByTests += members.filter(m => m.verdict === 'testOnly').length;
           sections.push({
             label: 'class members',
             one: 'class member',
@@ -323,6 +330,7 @@ export async function findEverythingUnusedCommand(
             maxIslandSize: cfg.get<number>('deadIslandsMaxSize', 8),
           });
           islandProvider.setFindings(islands, new Map(data.sources.map(s => [s.path, s.text])));
+          keptAliveByTests += islands.filter(i => i.verdict === 'testOnly').length;
           const islandDecls = islands.reduce((sum, i) => sum + i.members.length, 0);
           sections.push({
             label: 'dead islands',
@@ -335,6 +343,15 @@ export async function findEverythingUnusedCommand(
         }
       } else {
         skipped.push('dead islands');
+      }
+
+      if (keptAliveByTests > 0) {
+        sections.push({
+          label: 'kept alive only by their tests',
+          one: 'kept alive only by its tests',
+          count: keptAliveByTests,
+          detail: 'Remove Code Used Only by Tests, With Its Tests takes both',
+        });
       }
 
       // ── the one summary ──────────────────────────────────────────────────

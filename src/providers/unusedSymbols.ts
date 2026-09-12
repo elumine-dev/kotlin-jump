@@ -709,6 +709,9 @@ interface ScanContext {
   unmentionedDuplicates: ReadonlySet<string>;
 }
 
+/** A name the mention harvest can actually look for. */
+const BARE_IDENTIFIER_RE = /^[A-Za-z_]\w*$/;
+
 function rejectionReason(
   c: Candidate,
   input: UnusedSymbolScanInput,
@@ -720,6 +723,13 @@ function rejectionReason(
   if (exemptByEntryPoint.has(c.path)) return 'F9j:java-entry-point';
 
   if (c.optsOutUnused) return 'F12:suppress-unused';
+  // F11: a backtick name is not an identifier, and the mention harvest is
+  // identifier based. `\`a ghost\`()` at a call site is invisible to it, so
+  // absence can never be proven here. This used to hold by accident, because
+  // `declarationSpan` could not delimit such a declaration either; teaching it
+  // backticks (KJ-047 needs it for test functions) turned a called function
+  // into a removable finding.
+  if (!BARE_IDENTIFIER_RE.test(c.name)) return 'F11:backtick-name';
   if (sym.isPrivate) return 'F1:private';
   if ((topLevelNameCounts.get(c.name) ?? 0) > 1 && !unmentionedDuplicates.has(c.name)) {
     return 'F3:duplicate-name';

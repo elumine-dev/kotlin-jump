@@ -57,6 +57,12 @@ export function declarationSpan(
 
   if (kind === 'fun') {
     let i = nameOffset + name.length;
+    // A backtick name arrives stripped of its quotes: the parser reports
+    // `it draws` for ``fun `it draws`()``, and `nameOffset + length` lands on
+    // the closing backtick rather than the parenthesis. Every Kotlin test
+    // function written that way lost its span, so no quick fix could delimit
+    // one.
+    if (clean[i] === '`') i++;
     while (i < clean.length && /\s/.test(clean[i])) i++;
     if (clean[i] !== '(') return undefined;
     const closeParen = findMatchingParen(clean, i);

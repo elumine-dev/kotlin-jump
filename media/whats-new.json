@@ -1,17 +1,12 @@
 {
-  "version": "1.42.218",
+  "version": "1.42.219",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Badges that came back on their own, twice more",
-  "summary": "Two more badge providers repainted what the user had just switched off, once their project sweep landed.",
+  "tagline": "Gutter icons that came back on their own",
+  "summary": "Switching the drawable thumbnails off while they were being rendered brought them straight back.",
   "highlights": [
     {
-      "title": "A setting that undid itself",
-      "description": "Resource usage badges switched off while the sweep was running were drawn again when it landed, seconds later.",
-      "kind": "fix"
-    },
-    {
-      "title": "Painting through a provider that is gone",
-      "description": "The manifest necessity badges had no disposal flag at all, so a late sweep wrote through a decoration type that no longer exists.",
+      "title": "The render outlived the switch",
+      "description": "Rendering yields once per icon. Turning the setting off starts a render that clears, and it finished before the one still in flight, which then put every icon back.",
       "kind": "fix"
     }
   ],
@@ -19,8 +14,7 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Resource usage badges stay off once switched off, even when a project sweep was already running.",
-        "Manifest necessity badges do the same, and no longer paint after the provider is disposed."
+        "Drawable gutter thumbnails stay off once switched off, even mid render."
       ]
     }
   ],

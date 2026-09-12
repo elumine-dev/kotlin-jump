@@ -161,6 +161,72 @@ describe('KJD-DGT-2 — caches every supported file format to disk', () => {
   });
 });
 
+// ── KJD-DGT-2b — le reglage coupe PENDANT le rendu ───────────────────────────
+
+describe('KJD-DGT-2b — coupe pendant le rendu', () => {
+  /**
+   * `ensureCached` rend la main une fois par icone, le temps de lire et de
+   * convertir le fichier source. Couper le reglage dans cette fenetre declenche
+   * un rendu qui efface, et ce rendu la se termine AVANT celui qui etait en
+   * vol : les icones revenaient donc toutes seules.
+   */
+  function lectureSuspendue() {
+    let relacher!: () => void;
+    const barriere = new Promise<void>(r => { relacher = r; });
+    const vraie = (vscode as any).workspace.fs.readFile;
+    (vscode as any).workspace.fs.readFile = async (u: any) => {
+      await barriere;
+      return vraie(u);
+    };
+    return relacher;
+  }
+
+  it('couper le reglage pendant le rendu ne rallume pas les icones', async () => {
+    let actif = true;
+    (vscode as any).workspace.getConfiguration = () => ({
+      get: (k: string, def: any) => (k === 'drawableThumbnails' ? actif : def),
+    });
+    const idx = new DrawableResourceIndex();
+    seed(idx, '/r/res/drawable/ic.xml', Buffer.from(VEC_XML));
+    const relacher = lectureSuspendue();
+    const provider = new DrawableGutterThumbnailProvider(idx, tmpStorage);
+    const editor = mockEditor(['val x = R.drawable.ic']);
+    (vscode as any).window.activeTextEditor = editor;
+    (vscode as any).window.visibleTextEditors = [editor];
+    provider.refreshAllEditors();
+    await new Promise(r => setTimeout(r, 60));
+
+    actif = false;                       // coupe pendant la lecture
+    relacher();
+    await new Promise(r => setTimeout(r, 60));
+
+    const total = editor.captures.reduce((n: number, c: Capture) => n + c.decorations.length, 0);
+    expect(total, 'l icone coupee ne doit pas revenir toute seule').toBe(0);
+    provider.dispose();
+  });
+
+  it('temoin : sans coupure, la meme fenetre peint bien l icone', async () => {
+    (vscode as any).workspace.getConfiguration = () => ({
+      get: (_k: string, def: any) => def,
+    });
+    const idx = new DrawableResourceIndex();
+    seed(idx, '/r/res/drawable/ic.xml', Buffer.from(VEC_XML));
+    const relacher = lectureSuspendue();
+    const provider = new DrawableGutterThumbnailProvider(idx, tmpStorage);
+    const editor = mockEditor(['val x = R.drawable.ic']);
+    (vscode as any).window.activeTextEditor = editor;
+    (vscode as any).window.visibleTextEditors = [editor];
+    provider.refreshAllEditors();
+    await new Promise(r => setTimeout(r, 60));
+    relacher();
+    await new Promise(r => setTimeout(r, 60));
+
+    const total = editor.captures.reduce((n: number, c: Capture) => n + c.decorations.length, 0);
+    expect(total, 'sans cette icone le test d au dessus ne prouverait rien').toBeGreaterThan(0);
+    provider.dispose();
+  });
+});
+
 // ── KJD-DGT-3 — setting toggle ───────────────────────────────────────────────
 
 describe('KJD-DGT-3 — setting toggle', () => {

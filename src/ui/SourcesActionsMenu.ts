@@ -138,7 +138,7 @@ export class SourcesActionsMenu implements vscode.Disposable {
     await vscode.window.withProgress(
       {
         location:    vscode.ProgressLocation.Notification,
-        title:       `Kotlin Jump: downloading ${coordsAll.length} library sources`,
+        title:       `Kotlin Jump: downloading ${plural(coordsAll.length, 'library source')}`,
         cancellable: true,
       },
       async (progress, token) => {

@@ -74,4 +74,36 @@ describe.skipIf(!mod)('narrowToPrivate', () => {
   it('temoin : un modificateur reel est toujours remplace, pas double', () => {
     expect(pose('    internal suspend fun load() {')).toBe('    private suspend fun load() {');
   });
+  it('les ARGUMENTS d une annotation ne sont pas des modificateurs', () => {
+    // Deuxieme couche du meme defaut. La version d avant lisait la suite de
+    // modificateurs, mais celle ci contient encore les arguments des
+    // annotations. Le pire cas renomme un champ JSON en silence.
+    expect(pose('    @SerializedName("internal ") val y = 2'))
+      .toBe('    @SerializedName("internal ") private val y = 2');
+    expect(pose('    @Suppress("public ") fun draw() {'))
+      .toBe('    @Suppress("public ") private fun draw() {');
+    expect(pose('    @Deprecated("use the public one ") val x = 1'))
+      .toBe('    @Deprecated("use the public one ") private val x = 1');
+  });
+
+  it('un vrai modificateur apres une annotation est bien remplace', () => {
+    expect(pose('    @Suppress("unused") public fun ok() {'))
+      .toBe('    @Suppress("unused") private fun ok() {');
+  });
+
+  it('une annotation a parentheses imbriquees est franchie', () => {
+    expect(pose('    @Foo(bar(1)) public val z = 1')).toBe('    @Foo(bar(1)) private val z = 1');
+    expect(pose('    @RequiresApi(Build.VERSION_CODES.O) fun n() {'))
+      .toBe('    @RequiresApi(Build.VERSION_CODES.O) private fun n() {');
+  });
+
+  it('une annotation qu on ne sait pas fermer ne donne aucune edition', () => {
+    // Plutot que de deviner ou elle se termine : rien.
+    expect(mod.narrowToPrivate('    @Foo("(" fun draw() {')).toBeUndefined();
+    expect(mod.narrowToPrivate('    @Foo(1, 2 val x = 1')).toBeUndefined();
+  });
+
+  it('une parenthese dans une chaine d annotation ne casse pas l equilibre', () => {
+    expect(pose('    @Foo("a)b") val w = 1')).toBe('    @Foo("a)b") private val w = 1');
+  });
 });

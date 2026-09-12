@@ -96,6 +96,20 @@ function cursorMoveCalls() {
 }
 
 describe('Stage.scrollThrough — duration-driven continuous scroll', () => {
+  // Pauses neutralisees, comme dans le fichier adversarial voisin : rien ici
+  // ne mesure une duree. On compte des etapes et des lignes, toutes calculees
+  // a partir de `durationMs` sans dependre de la vitesse de la machine.
+  //
+  // Les laisser reelles rendait ce bloc dependant de la charge, et pas
+  // seulement lent : un test qui depasse son budget n est pas interrompu par
+  // vitest, sa boucle continue, et son `cursorMove` en retard atterrit dans le
+  // test SUIVANT. C est ainsi que « short-circuits a zero-delta call » voyait
+  // un mouvement qu il n avait jamais demande.
+  //
+  // Que chaque pause soit bien attendue est verifie a part, dans
+  // DemoStage.adversarial.test.ts, avec des pauses relachees une a une.
+  beforeEach(() => { vi.spyOn(stage as any, 'pause').mockResolvedValue(undefined); });
+
   it('descends 22 lines with the full delta split across cursorMove calls', async () => {
     const editor = makeEditor({ line: 7 });
     (vscode.window as any).activeTextEditor = editor;

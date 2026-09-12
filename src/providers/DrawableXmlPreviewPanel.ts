@@ -3,6 +3,7 @@ import { vectorXmlToSvg } from '../util/vectorToSvg';
 import { SymbolIndex } from '../indexer/SymbolIndex';
 import { isExcluded } from './FindUsagesEngine';
 import { decodeUtf8 } from '../util/encoding';
+import { plural } from '../util/plural';
 
 const DRAWABLE_PATH_RE = /\/res\/drawable[^/]*\//;
 const VECTOR_OPEN_RE = /<vector\b/;
@@ -134,7 +135,7 @@ export class DrawableXmlPreviewLensProvider implements vscode.CodeLensProvider, 
       };
     } else {
       lens.command = {
-        title: `${count} references`,
+        title: plural(count, 'reference'),
         command: 'kotlinJump.vectorPreview.showRefsAutoClose',
         arguments: [docUri, new vscode.Position(0, 0), locations],
         tooltip: 'Show every R.drawable / R.mipmap usage of this resource.',

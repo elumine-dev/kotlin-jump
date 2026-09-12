@@ -697,7 +697,14 @@ function offsetToLineNumber(text: string, offset: number): number {
 
 export function messageFor(island: DeadIsland): string {
   const files = new Set(island.members.map(m => m.path)).size;
-  const base = `Dead island: ${island.members.length} declarations across ${files} file(s) reference only each other and are referenced by nothing else`;
+  const n = island.members.length;
+  // A single declaration cannot reference each other, so the sentence changes
+  // shape rather than growing a parenthesised plural. The line below already
+  // agreed its own count; these two did not.
+  const ou = files > 1 ? `across ${files} files` : 'in 1 file';
+  const base = n > 1
+    ? `Dead island: ${n} declarations ${ou} reference only each other and are referenced by nothing else`
+    : 'Dead island: 1 declaration in 1 file, referenced by nothing else';
   if (island.verdict === 'testOnly') {
     return `${base} (referenced only from tests: ${island.testMentions} reference${island.testMentions > 1 ? 's' : ''})`;
   }
@@ -705,5 +712,6 @@ export function messageFor(island: DeadIsland): string {
 }
 
 export function deleteTitleFor(island: DeadIsland): string {
-  return `Delete dead island (${island.members.length} declarations)`;
+  const n = island.members.length;
+  return `Delete dead island (${n} declaration${n > 1 ? 's' : ''})`;
 }

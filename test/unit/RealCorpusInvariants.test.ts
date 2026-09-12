@@ -61,6 +61,18 @@ function fichiersDuCorpus(): string[] {
 
 const FICHIERS = fichiersDuCorpus();
 const present = FICHIERS.length >= 200;
+/**
+ * Un test qui balaie le vrai projet ne tient pas dans les 5 s par defaut de
+ * vitest. Les deux tests asynchrones portaient deja un plafond explicite ; les
+ * deux synchrones etaient restes sur le defaut. Le plus lourd prend 4,8 s sur
+ * une machine au repos, soit 173 ms sous la limite : le moindre travail en
+ * parallele le fait tomber, et c est la publication entiere qui s arrete.
+ * Mesure pendant que la suite tournait sous charge : 15,1 s, puis 75,8 s.
+ *
+ * Une seule constante pour les quatre, sinon un ajustement futur ne
+ * s appliquerait qu a la moitie d entre eux.
+ */
+const CORPUS_TIMEOUT = 120_000;
 const MOT = /[A-Za-z0-9_$]/;
 const NUL = { info() {}, debug() {}, warn() {}, error() {} } as any;
 
@@ -158,7 +170,7 @@ describe.skipIf(!present)('jetons semantiques sur un vrai projet', () => {
     }
     expect(jetons, 'le corpus doit vraiment produire des jetons').toBeGreaterThan(1_000);
     expect(pb.slice(0, 10)).toEqual([]);
-  });
+  }, CORPUS_TIMEOUT);
 });
 
 describe.skipIf(!present)('inlay hints sur un vrai projet', () => {
@@ -194,7 +206,7 @@ describe.skipIf(!present)('inlay hints sur un vrai projet', () => {
     expect(hints, 'le corpus doit vraiment produire des hints').toBeGreaterThan(500);
     expect(redondants, 'etiquette qui repete son argument').toBe(0);
     expect(pb.slice(0, 10)).toEqual([]);
-  }, 120_000);
+  }, CORPUS_TIMEOUT);
 });
 
 describe.skipIf(!present)('les deux lecteurs de commentaires restent d accord', () => {
@@ -222,7 +234,7 @@ describe.skipIf(!present)('les deux lecteurs de commentaires restent d accord', 
     }
     expect(refs, 'le corpus doit vraiment porter des references de doc').toBeGreaterThan(50);
     expect(pb.slice(0, 10)).toEqual([]);
-  });
+  }, CORPUS_TIMEOUT);
 });
 
 /**
@@ -303,5 +315,5 @@ describe.skipIf(!present)('ou mene le Ctrl+clic sur un vrai projet', () => {
     });
     expect(resolus, 'le corpus doit vraiment resoudre des clics').toBeGreaterThan(100);
     expect(suspects.slice(0, 10)).toEqual([]);
-  }, 120_000);
+  }, CORPUS_TIMEOUT);
 });

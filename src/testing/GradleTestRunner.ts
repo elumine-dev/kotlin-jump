@@ -6,6 +6,7 @@ import { resolveAll as resolveModules } from '../gradle/ModuleResolver';
 import { Logger } from '../util/logger';
 import { afterAnnotations } from '../util/kotlinScan';
 import { detectGradleRoot, type DetectionResult, walkUpToGradleRoot } from './GradleRootDetector';
+import { plural } from '../util/plural';
 
 const C = {
   reset:  '\x1b[0m',
@@ -666,8 +667,8 @@ function formatRunHeader(specs: TestSpec[]): string {
   if (specs.length === 1)
     return `\r\n  ${arrow}  ${specs[0].entry.name}  ${dot}  ${C.dim}${classNames[0]}${C.reset}\r\n\r\n`;
   if (classNames.length === 1)
-    return `\r\n  ${arrow}  ${specs.length} tests  ${dot}  ${C.dim}${classNames[0]}${C.reset}\r\n\r\n`;
-  return `\r\n  ${arrow}  ${specs.length} tests\r\n\r\n`;
+    return `\r\n  ${arrow}  ${plural(specs.length, 'test')}  ${dot}  ${C.dim}${classNames[0]}${C.reset}\r\n\r\n`;
+  return `\r\n  ${arrow}  ${plural(specs.length, 'test')}\r\n\r\n`;
 }
 
 function formatDuration(ms: number): string {

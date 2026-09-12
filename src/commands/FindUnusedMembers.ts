@@ -6,6 +6,7 @@ import {
   UnusedMemberProvider,
   findUnusedMembers,
 } from '../providers/UnusedMemberProvider';
+import { plural } from '../util/plural';
 
 /**
  * KJ-042 command.
@@ -66,7 +67,7 @@ export async function findUnusedMembersCommand(
 
       if (found.length === 0) {
         void vscode.window.showInformationMessage(
-          `Every class member is referenced somewhere (${data.sources.length} files).`,
+          `Every class member is referenced somewhere (${plural(data.sources.length, 'file')}).`,
         );
         return;
       }
@@ -76,7 +77,7 @@ export async function findUnusedMembersCommand(
       void vscode.window.showInformationMessage(
         `${unref} unreferenced member${unref > 1 ? 's' : ''}`
         + `${selfOnly > 0 ? `, ${selfOnly} that could be private` : ''}`
-        + `${testOnly > 0 ? `, ${testOnly} used only from tests` : ''}, across ${data.sources.length} files.`,
+        + `${testOnly > 0 ? `, ${testOnly} used only from tests` : ''}, across ${plural(data.sources.length, 'file')}.`,
       );
     },
   );

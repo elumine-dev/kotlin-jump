@@ -3,6 +3,7 @@ import { DEFAULT_TEST_SEGMENTS } from '../util/testPaths';
 import { ResourceCorpus } from '../indexer/ResourceCorpus';
 import { UnusedDtoFieldProvider, findUnusedDtoFields } from '../providers/UnusedDtoFieldProvider';
 import { WriteOnlyKeyProvider, findWriteOnlyKeys } from '../providers/WriteOnlyKeyProvider';
+import { plural } from '../util/plural';
 
 /** KJ-044 and KJ-045 commands, both riding the shared corpus read. */
 
@@ -32,7 +33,7 @@ export async function findUnusedDtoFieldsCommand(
       provider.setFindings(found);
       const classes = new Set(found.map(x => x.className)).size;
       void vscode.window.showInformationMessage(found.length === 0
-        ? `Every DTO field is read somewhere (${data.sources.length} files).`
+        ? `Every DTO field is read somewhere (${plural(data.sources.length, 'file')}).`
         : `${found.length} DTO field${found.length > 1 ? 's' : ''} deserialized but never read, across ${classes} class${classes > 1 ? 'es' : ''}.`);
     },
   );

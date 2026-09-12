@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.42.207
+
+Counts written next to a hardcoded plural. One dead island read `1 declarations across 1 file(s) reference only each other`, which is not just ungrammatical: a lone declaration cannot reference each other, so the sentence was false.
+
+### Fixes
+- The dead island diagnostic and its quick fix, `Delete dead island (1 declarations)`. Measured on a real project: of 21 islands, 2 hold one declaration and 13 sit in one file. The sentence changes shape at one now instead of growing a parenthesised plural.
+- The screen flow legend carried four counts on one line and none of them agreed: a map of one screen read `1 screens · 1 navigations · 1 deeplinks · 1 orphan(s)`. A regression test even pinned `1 navigations`, because it was checking the number rather than the sentence.
+- Twenty more places where a count met a plural written in place: the status bar during a rescan, the drawable preview title, the test runner summary, the library sources status bar and its menu, the closing count of eight workspace scan reports. They share one helper now, and a guard fails the build if a new one appears.
+- The command that reports the same islands kept the fault the diagnostic had lost. It agreed the noun, `1 declaration`, and left the rest of the sentence plural: `1 declaration that only reference each other`. A subject and its verb have to agree too, and one declaration cannot reference each other at all, so the parenthesis changes shape rather than dropping an `s`.
+- The guard itself was too narrow at first. It only looked for a count computed on the spot, `${xs.length} files`, and missed eleven sites where the count already sat in a variable, `${files} files`. Widening it also meant naming, one by one, the ten places that must stay as they are: two behind a length check, one the ambiguous case of a picker, one that already tells zero, one and many apart, and the rest ratios where `1/12 libs missing` reads perfectly well.
+- A scroll test slept for real and counted the steps it produced. It measures the algorithm, not the machine, so on a busy one it overran its budget. Worse, a test that overruns is not interrupted: its loop keeps running, and its late `cursorMove` landed in the NEXT test, which then saw a movement it had never asked for. The neighbouring file had already converted two timing tests for exactly this reason, with the reason written down; this block never followed. Its pauses are neutralised now, the six tests run in two milliseconds instead of seconds, and that each pause is truly awaited stays covered next door by releasing them one at a time.
+- A test that reads the whole of a real project sat 173 milliseconds under the five second limit vitest gives by default. Its two asynchronous neighbours had an explicit two minute ceiling; the two synchronous ones did not. Under load, three runs in a row gave 15.1 s then 75.8 s. All four share one constant now, and in the run that followed the fix the same test took 12.1 s and passed.
+
+### Notes
+- The three quick fixes that had never been checked against a real project now are, which closes the family. Unused resource keys cut XML, where a wrong bound leaves a dangling tag rather than an unbalanced brace: 86 cuts across 68 keys, each a complete fragment leaving the file with the same tag balance. Unheard events cut a statement, 21 of them. A catalog alias and its orphaned version entry cut a line out of a TOML table, 2 of them. Nothing wrong in any of the three, and with the five detectors checked over the last two releases that is 520 deletions applied and read back.
+- Two assertions were written before they could prove anything. A probe accepted a statement cut shifted by one character, since that only nibbles indentation; reading the line boundaries catches all 21. And `contains "1 file"` passes on `across 1 files`, so the plural test asks for the exact phrase instead.
+
 ## 1.42.206
 
 No behaviour changes. Last release narrowed the window that looks for a function body, which is the kind of change that quietly loses findings, so this one is about proving it did not.

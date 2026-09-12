@@ -59,6 +59,6 @@ describe('le cas de base', () => {
     const a = f(`${MAIN}/LegacySync.kt`, 'package com.x\n\nfun legacySync() {\n    uploaderSend()\n}\n');
     const b = f(`${MAIN}/Uploader.kt`, 'package com.x\n\nfun uploaderSend() {\n    legacySync()\n}\n');
     const found = findDeadIslands({ sources: [a, b], testSourceSets: TEST_SETS });
-    expect(messageFor(found[0])).toContain('2 declarations across 2 file(s)');
+    expect(messageFor(found[0])).toContain('2 declarations across 2 files');
   });
 });

@@ -111,7 +111,9 @@ describe('Légende du panneau', () => {
     };
     const html = renderHtml(nav);
     // Avant : « 3 navigations » alors que le dessin n'en montrait qu'une.
-    expect(html).toContain('1 navigations');
+    // Le compte reste l'objet du test ; la faute d'accord qu'il epinglait
+    // (« 1 navigations ») a ete corrigee, elle, dans la legende.
+    expect(html).toContain('1 navigation ');
     expect((html.match(/<line /g) ?? []).length).toBe(1);
   });
 });

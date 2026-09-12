@@ -9,6 +9,7 @@ import {
   routeMatches,
   resolveTargetRoute,
 } from '../indexer/NavigationIndex';
+import { plural } from '../util/plural';
 
 /**
  * KJ-013 — Screen Flow Map : self-contained webview (inline SVG, no lib)
@@ -273,9 +274,13 @@ export function renderHtml(nav: MergedNavigation): string {
     })
     .join('');
 
-  const legend = `${nav.nodes.length} screens · ${drawnEdges.length} navigations · ${
-    nav.deepLinks.length
-  } deeplinks · ${orphans.size} orphan(s)${nav.truncated ? ` · only the first ${MAX_KT_FILES} Kotlin files were read` : ''}`;
+  // Four counts on one line, all four written plural in place: a map with one
+  // screen read `1 screens · 1 navigations · 1 deeplinks · 1 orphan(s)`. A
+  // regression test even pinned `1 navigations`, because it was checking the
+  // number rather than the sentence.
+  const legend = `${plural(nav.nodes.length, 'screen')} · ${plural(drawnEdges.length, 'navigation')} · ${
+    plural(nav.deepLinks.length, 'deeplink')
+  } · ${plural(orphans.size, 'orphan')}${nav.truncated ? ` · only the first ${MAX_KT_FILES} Kotlin files were read` : ''}`;
 
   return `<!DOCTYPE html><html><body style="margin:0;padding:10px;overflow:auto;">
     <div style="font:12px var(--vscode-font-family);opacity:.75;margin-bottom:8px;">${esc(legend)} · click a screen to jump to the code</div>

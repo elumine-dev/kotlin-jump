@@ -95,16 +95,19 @@ export class UnusedEnumEntryProvider implements vscode.CodeActionProvider, vscod
     if (hit.verdict === 'unreferenced' && hit.removeStart !== -1) {
       const action = new vscode.CodeAction(deleteTitleFor(hit), vscode.CodeActionKind.QuickFix);
       const edit = new vscode.WorkspaceEdit();
-      edit.delete(
-        document.uri,
-        new vscode.Range(document.positionAt(hit.removeStart), document.positionAt(hit.removeEnd)),
-        { needsConfirmation: true, label: deleteTitleFor(hit) },
-      );
-      addCascadePlan(
-        edit,
-        planOneFile(document.uri.fsPath, document.getText(), { start: hit.removeStart, end: hit.removeEnd }),
-        new Map([[document.uri.fsPath, document.getText()]]),
-      );
+      // Plan first, like the other three removals. Removing one entry leaves
+      // the enum class behind, so the emptiness branch is not reachable here
+      // today; the order is aligned anyway, because the day an extent widens
+      // the failure is a WorkspaceEdit rejected whole and in silence.
+      const plan = planOneFile(document.uri.fsPath, document.getText(), { start: hit.removeStart, end: hit.removeEnd });
+      if (!plan.deleteFiles.has(document.uri.fsPath)) {
+        edit.delete(
+          document.uri,
+          new vscode.Range(document.positionAt(hit.removeStart), document.positionAt(hit.removeEnd)),
+          { needsConfirmation: true, label: deleteTitleFor(hit) },
+        );
+      }
+      addCascadePlan(edit, plan, new Map([[document.uri.fsPath, document.getText()]]));
       action.edit = edit;
       action.isPreferred = false;
       actions.push(action);

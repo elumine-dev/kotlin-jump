@@ -464,9 +464,21 @@ export function advanceLineState(
   let raw = start.raw;
   let block = start.block;
   let i = from;
+  // Codes plutot que `startsWith` : ce balayage passe sur CHAQUE caractere de
+  // chaque ligne de chaque fichier du scan d usages. Ecrit avec trois
+  // `startsWith` par position, il a coute x2,9 sur `references.class` et x2,3
+  // sur `scan.object` entre la v1.42.32 et la v1.42.33. Le comportement est
+  // le meme, seule la façon de lire change.
+  const GUILLEMET = 34;   // "
+  const APOSTROPHE = 39;  // '
+  const BARRE = 47;       // /
+  const ETOILE = 42;      // *
+  const ANTISLASH = 92;   // \
   while (i < text.length) {
     if (raw) {
-      if (text.startsWith('"""', i)) { raw = false; i += 3; } else i++;
+      if (text.charCodeAt(i) === GUILLEMET
+        && text.charCodeAt(i + 1) === GUILLEMET
+        && text.charCodeAt(i + 2) === GUILLEMET) { raw = false; i += 3; } else i++;
       continue;
     }
     if (block) {
@@ -476,20 +488,30 @@ export function advanceLineState(
       i = close + 2;
       continue;
     }
-    if (text.startsWith('"""', i)) { raw = true; i += 3; continue; }
-    if (text.startsWith('//', i)) return { raw, block };
-    if (text.startsWith('/*', i)) { block = true; i += 2; continue; }
-    if (text[i] === '"' || text[i] === "'") {
-      const quote = text[i];
-      i++;
-      while (i < text.length) {
-        if (text[i] === '\\') { i += 2; continue; }
-        if (text[i] === quote) { i++; break; }
-        i++;
+    const c = text.charCodeAt(i);
+    if (c === GUILLEMET) {
+      if (text.charCodeAt(i + 1) === GUILLEMET && text.charCodeAt(i + 2) === GUILLEMET) {
+        raw = true; i += 3; continue;
       }
+    } else if (c === BARRE) {
+      const suivant = text.charCodeAt(i + 1);
+      if (suivant === BARRE) return { raw, block };
+      if (suivant === ETOILE) { block = true; i += 2; continue; }
+      i++;
+      continue;
+    } else if (c !== APOSTROPHE) {
+      i++;
       continue;
     }
+    // Une chaine simple ou un litteral de caractere : saute jusqu a sa
+    // fermeture, en tenant compte des echappements.
     i++;
+    while (i < text.length) {
+      const d = text.charCodeAt(i);
+      if (d === ANTISLASH) { i += 2; continue; }
+      if (d === c) { i++; break; }
+      i++;
+    }
   }
   return { raw, block };
 }

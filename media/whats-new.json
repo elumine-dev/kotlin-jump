@@ -1,26 +1,34 @@
 {
-  "version": "1.42.207",
+  "version": "1.42.208",
   "title": "What's New in Kotlin Jump",
-  "tagline": "One declaration is not each other",
-  "summary": "Counts written next to a hardcoded plural. One dead island read `1 declarations across 1 file(s) reference only each other`, a sentence that is not just ungrammatical but false.",
+  "tagline": "Wrong words in the unused code summaries",
+  "summary": "The command that reports everything unused printed its own detector keys, and every label inside those summaries only knew the plural.",
   "highlights": [
     {
-      "title": "A Sentence That Was False",
-      "description": "A lone declaration cannot reference each other. The dead island message changes shape at one now, and the quick fix no longer offers to delete `1 declarations`.",
+      "title": "The summary named its own internals",
+      "description": "Detector keys such as writeOnly and locals reached the notification instead of the words for them. On a project of 5093 Kotlin and Java files it read 43 locals, 21 imports, 19 declarations, 4 writeOnly, 2 parameters.",
       "kind": "fix"
     },
     {
-      "title": "Twenty Four More Counts",
-      "description": "The screen flow legend carried four on one line, none agreeing. Twenty other places now share one helper, and a guard fails the build if a new one appears.",
+      "title": "Nine labels that only knew the plural",
+      "description": "A single result read 1 dead islands, 1 enum entries, 1 catalog aliases. Each label carries its own singular now, since entrys and aliass would follow from any rule that guesses one.",
+      "kind": "fix"
+    },
+    {
+      "title": "Two sentences that ended badly",
+      "description": "The per file clean up line agreed its count in the previous release and left the verb behind. With every check empty and one check skipped, the summary ended on a colon with nothing after it.",
       "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Notes",
+      "heading": "Fixes",
       "bullets": [
-        "A test reading a whole real project sat 173 milliseconds under the default five second limit while its two neighbours had an explicit ceiling. All four share one constant now.",
-        "The three quick fixes never checked against a real project now are: 86 XML cuts, 21 statement cuts, 2 TOML lines, nothing wrong in any of them."
+        "The aggregate unused code summary shows the label of each dead code detector, not its key, and shares that table with the command that reports the same scan.",
+        "Nine section labels and five detector labels now carry a singular, so one finding reads 1 dead island, 1 enum entry, 1 catalog alias, 1 write-only variable.",
+        "The per file clean up message no longer disagrees with its own count when a single finding needs a manual fix.",
+        "The count of freed version catalog entries agrees at one.",
+        "With nothing found and a check skipped, the summary no longer ends on a colon followed by a full stop."
       ]
     }
   ],

@@ -25,12 +25,18 @@ import { plural } from '../util/plural';
 
 const SWEEP_GLOB = '**/*.{kt,java}';
 
-const DETECTOR_LABEL: Record<SweepDetector, string> = {
-  imports: 'imports',
-  parameters: 'parameters',
-  declarations: 'declarations',
-  locals: 'variables',
-  writeOnly: 'write-only variables',
+/**
+ * Singular and plural, because the count in front of the label can be one.
+ *
+ * The aggregate command used to print the raw detector key instead of these
+ * words, so a real workspace read `4 writeOnly, 43 locals`.
+ */
+export const DETECTOR_LABEL: Record<SweepDetector, readonly [string, string]> = {
+  imports: ['import', 'imports'],
+  parameters: ['parameter', 'parameters'],
+  declarations: ['declaration', 'declarations'],
+  locals: ['variable', 'variables'],
+  writeOnly: ['write-only variable', 'write-only variables'],
 };
 
 export interface SweptFile {
@@ -141,12 +147,23 @@ function toDiagnostic(finding: SweepFinding): vscode.Diagnostic {
   return diagnostic;
 }
 
-function describe(findings: readonly SweepFinding[]): string {
+export function describeFindings(findings: readonly SweepFinding[]): string {
   const counts = summarize(findings);
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1])
-    .map(([detector, n]) => `${n} ${DETECTOR_LABEL[detector]}`)
+    .map(([detector, n]) => plural(n, ...DETECTOR_LABEL[detector]))
     .join(', ');
+}
+
+/**
+ * What the per-file clean command says when it can remove nothing.
+ *
+ * The count agreed with its noun and then the verb followed the plural, so a
+ * lone finding read `1 finding need a per-case fix`. The sentence no longer
+ * carries a verb at all.
+ */
+export function resumeNonRetirable(skipped: number): string {
+  return `Nothing to remove automatically: ${plural(skipped, 'finding')} to fix by hand.`;
 }
 
 export async function findDeadCodeCommand(report: DeadCodeSweepReport): Promise<void> {
@@ -174,7 +191,7 @@ export async function findDeadCodeCommand(report: DeadCodeSweepReport): Promise<
       }
       const truncatedNote = scan.truncated ? ' Some files were skipped: raise kotlinJump.maxIndexedFiles.' : '';
       void vscode.window.showInformationMessage(
-        `${plural(all.length, 'finding')} in ${plural(scan.files.length, 'file')}: ${describe(all)}.${truncatedNote}`,
+        `${plural(all.length, 'finding')} in ${plural(scan.files.length, 'file')}: ${describeFindings(all)}.${truncatedNote}`,
       );
     },
   );
@@ -196,7 +213,7 @@ export async function cleanDeadCodeInFileCommand(): Promise<void> {
     const skipped = findings.length;
     void vscode.window.showInformationMessage(
       skipped > 0
-        ? `Nothing to remove automatically: ${plural(skipped, 'finding')} need a per-case fix.`
+        ? resumeNonRetirable(skipped)
         : 'No dead code in this file.',
     );
     return;

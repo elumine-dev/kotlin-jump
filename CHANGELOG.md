@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.221
+
+Find Usages is between a fifth and half as expensive again, and the answer it gives is unchanged to the character.
+
+### Fixes
+- Deciding whether a line leaves a raw string or a block comment open is done once per character of every line of every file the scan reads. Since 1.42.33 that decision was made with three `startsWith` calls per position. It is one character code read now.
+- Measured in interleaved passes against the previous release, four passes a side, every distribution disjoint: `references.class` drops 48 %, `references.public-fun` and the object and class scans 33 %, and nothing in the family gains less than 21 %.
+
+### Notes
+- The regression was found by comparing the current bench against the reference committed in April, then rejecting that comparison: the demo fixture has grown from 56 files to 93, so the two runs did not measure the same work. Rerunning April's own bench on today's fixture, interleaved, gave the real figure, and bisecting the tags put the step between 1.42.32 and 1.42.33.
+- The reason that release made the decision expensive was sound and is untouched: a `""` quoted inside a line comment used to open an imaginary raw string, and the rest of the file stopped being read. The old routine is kept in the test file as the oracle, and the new one has to agree with it on 60 000 deliberately malformed lines, in each of the three possible entry states.
+
 ## 1.42.220
 
 The same race, on the Problems panel this time.

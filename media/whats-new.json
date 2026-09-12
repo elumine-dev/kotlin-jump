@@ -1,17 +1,17 @@
 {
-  "version": "1.42.220",
+  "version": "1.42.221",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Room warnings that came back on their own",
-  "summary": "Switching the Room migration drift detection off while it was reading the workspace published its warnings again a few seconds later.",
+  "tagline": "Find Usages, up to twice as fast again",
+  "summary": "The line state decision at the heart of the usage scan is read one character code at a time instead of three string comparisons per position.",
   "highlights": [
     {
-      "title": "Warnings that outlived the switch",
-      "description": "The detector reads every Kotlin file before publishing. Turning it off during that read did not stop the scan already in flight.",
+      "title": "Between 21 and 48 percent off the scan",
+      "description": "Measured in interleaved passes against the previous release, every distribution disjoint: the class reference scan drops 48 percent, and nothing in the family gains less than 21.",
       "kind": "fix"
     },
     {
-      "title": "Writing to a collection that is gone",
-      "description": "The provider had no disposal flag, so a scan landing after the extension is gone wrote to a diagnostic collection the editor had already destroyed.",
+      "title": "The same answer, to the character",
+      "description": "The routine it replaces is kept as the oracle in the test file: the new one has to agree with it on 60 000 deliberately malformed lines in each of the three entry states.",
       "kind": "fix"
     }
   ],
@@ -19,8 +19,8 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Room migration warnings stay off once the detection is switched off, even mid scan.",
-        "A scan that lands after the provider is disposed no longer writes to the Problems panel."
+        "Find Usages and the reference scans are between a fifth and half as expensive again.",
+        "The correctness fix that made them expensive is untouched: a triple quote written inside a comment still opens nothing."
       ]
     }
   ],

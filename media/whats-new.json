@@ -1,12 +1,17 @@
 {
-  "version": "1.42.219",
+  "version": "1.42.220",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Gutter icons that came back on their own",
-  "summary": "Switching the drawable thumbnails off while they were being rendered brought them straight back.",
+  "tagline": "Room warnings that came back on their own",
+  "summary": "Switching the Room migration drift detection off while it was reading the workspace published its warnings again a few seconds later.",
   "highlights": [
     {
-      "title": "The render outlived the switch",
-      "description": "Rendering yields once per icon. Turning the setting off starts a render that clears, and it finished before the one still in flight, which then put every icon back.",
+      "title": "Warnings that outlived the switch",
+      "description": "The detector reads every Kotlin file before publishing. Turning it off during that read did not stop the scan already in flight.",
+      "kind": "fix"
+    },
+    {
+      "title": "Writing to a collection that is gone",
+      "description": "The provider had no disposal flag, so a scan landing after the extension is gone wrote to a diagnostic collection the editor had already destroyed.",
       "kind": "fix"
     }
   ],
@@ -14,7 +19,8 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Drawable gutter thumbnails stay off once switched off, even mid render."
+        "Room migration warnings stay off once the detection is switched off, even mid scan.",
+        "A scan that lands after the provider is disposed no longer writes to the Problems panel."
       ]
     }
   ],

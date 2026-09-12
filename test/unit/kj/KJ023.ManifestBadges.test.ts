@@ -54,6 +54,7 @@ describe.skipIf(!mod)('KJ-023 — analyse du manifest fixture', () => {
 
   it('jamais d’affirmation trompeuse : statut ternaire respecté', () => {
     const r = mod.analyzeManifest(manifest(), projectStub());
+    expect(r.permissions.length, 'sans permission, le statut ne prouve rien').toBeGreaterThan(0);
     for (const p of r.permissions) {
       expect(['used', 'unused', 'maybe-lib']).toContain(p.status);
     }

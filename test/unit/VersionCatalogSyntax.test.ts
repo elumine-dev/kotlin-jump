@@ -102,6 +102,7 @@ describe('version catalog colouring', () => {
     const lignes = CATALOGUE.split(NL);
     let precedent: CatalogToken | undefined;
     const finDeLigne = new Map<number, number>();
+    expect(tokens.length, 'sans jeton, l ordre ne prouve rien').toBeGreaterThan(0);
     for (const t of tokens) {
       expect(t.start, `ligne ${t.line}`).toBeGreaterThanOrEqual(0);
       expect(t.start + t.length, `ligne ${t.line}`).toBeLessThanOrEqual(lignes[t.line].length);
@@ -132,6 +133,7 @@ describe('version catalog folding', () => {
 
   it('never emits a region of a single line or past the end', () => {
     const total = CATALOGUE.split(NL).length;
+    expect(regions.length, 'sans region, la borne ne prouve rien').toBeGreaterThan(0);
     for (const r of regions) {
       expect(r.end, JSON.stringify(r)).toBeGreaterThan(r.start);
       expect(r.end, JSON.stringify(r)).toBeLessThan(total);

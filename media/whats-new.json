@@ -1,17 +1,17 @@
 {
-  "version": "1.42.215",
+  "version": "1.42.216",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A newline eaten by an escape",
-  "summary": "The shared scan primitive could return a copy with one line fewer, and three detectors number their findings from that copy.",
+  "tagline": "The same picker, two different sentences",
+  "summary": "Three pickers said one thing on the desktop and another in the browser, each reworded on its own side by the same copy pass.",
   "highlights": [
     {
-      "title": "One line short",
-      "description": "A backslash at the end of a line inside a string was consumed together with the newline. The copy kept its length and lost a line, so every line number below it moved up by one.",
+      "title": "One sentence, two builds",
+      "description": "Multiple matches, pick the implementation file on the desktop against Multiple matches. Pick implementation file in the browser. The browser now says what the desktop says, to the word.",
       "kind": "fix"
     },
     {
-      "title": "An invariant that is now checked",
-      "description": "Length and line count are asserted on a thousand deliberately malformed texts. The property test found a second defect on its own: a trailing backslash made the copy longer than the file.",
+      "title": "Checked from now on",
+      "description": "A test reads both entry points and requires every picker the browser shows to exist word for word on the desktop side.",
       "kind": "fix"
     }
   ],
@@ -19,9 +19,8 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Blanking a comment or a string never changes the line count of the copy the detectors read.",
-        "A backslash at the very end of a file no longer makes that copy longer than the file.",
-        "A backslash at the end of a line no longer keeps the string open over the next line."
+        "The three pickers of go to test, go to preview and copy the qualified name read the same in the browser as on the desktop.",
+        "The string folding scan logs the files it actually looks for."
       ]
     }
   ],

@@ -573,7 +573,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           uri: u,
         }));
         const picked = await vscode.window.showQuickPick(items, {
-          placeHolder: `Multiple matches. Pick ${isTest ? 'implementation' : 'test'} file`,
+          placeHolder: `Multiple matches, pick the ${isTest ? 'implementation' : 'test'} file`,
         });
         if (!picked) return;
         target = picked.uri;
@@ -626,7 +626,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           entry: e,
         }));
         const picked = await vscode.window.showQuickPick(items, {
-          placeHolder: `Multiple matches. Pick ${isComposable ? 'preview' : 'composable'}`,
+          placeHolder: `Multiple matches, pick the ${isComposable ? 'preview' : 'composable'}`,
         });
         if (!picked) return;
         target = picked.entry;
@@ -811,7 +811,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       '**/res/values*/*.xml',
       excludeGlob(excludeList),
     ).then(uris => {
-      log.info(`[StringFolding] found ${uris.length} strings.xml file(s)`);
+      log.info(`[StringFolding] found ${uris.length} values*.xml file(s)`);
       return mapBatched(uris, async u => {
         const bytes = await vscode.workspace.fs.readFile(u);
         stringIndex.reindexFile(u, new TextDecoder().decode(bytes));
@@ -1657,7 +1657,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           fqn: entry.fqn,
         }));
         const picked = await vscode.window.showQuickPick(items, {
-          placeHolder: `Multiple matches for ${word}. Pick the FQN to copy`,
+          placeHolder: `Multiple matches for ${word}, pick the FQN to copy`,
         });
         if (!picked) return;
         fqn = picked.fqn;

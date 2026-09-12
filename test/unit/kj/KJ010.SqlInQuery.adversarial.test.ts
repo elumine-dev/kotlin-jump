@@ -59,7 +59,9 @@ describe('KJ-010 adversarial — règle kj-query-sql', () => {
   });
 
   it('les keywords SQL sont case-insensitive et bornés', () => {
-    for (const block of stringBlocks()) {
+    const blocs = stringBlocks();
+    expect(blocs.length, 'sans bloc, le motif ne prouve rien').toBeGreaterThan(0);
+    for (const block of blocs) {
       const kw = sqlPatternsOf(block);
       const re = new RegExp(kw.match.replace('(?i)', ''), 'i');
       expect(re.test('select')).toBe(true);
@@ -70,7 +72,9 @@ describe('KJ-010 adversarial — règle kj-query-sql', () => {
   });
 
   it(':param matche les paramètres Room mais pas les URLs', () => {
-    for (const block of stringBlocks()) {
+    const blocs = stringBlocks();
+    expect(blocs.length, 'sans bloc, le motif ne prouve rien').toBeGreaterThan(0);
+    for (const block of blocs) {
       const param = block.patterns.find((p: any) => p.name?.includes('variable.parameter'));
       const re = new RegExp(param.match, 'g');
       expect('WHERE id = :id AND lvl >= :minLevel'.match(re)).toEqual([':id', ':minLevel']);

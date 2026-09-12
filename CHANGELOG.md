@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.216
+
+Two builds of the same extension, one for the desktop and one for the browser, and the same sentence reworded twice in two different ways.
+
+### Fixes
+- The picker shown when several files match said `Multiple matches, pick the implementation file` on the desktop and `Multiple matches. Pick implementation file` in the browser. Three pickers had drifted apart like this, all three from the copy pass that took the dashes out: it rewrote each sentence where it found it, and nothing ever compared the two entry points. The browser now says what the desktop says, to the word.
+- The string folding scan logged `strings.xml` while it looks for `values*.xml`, in the browser build only.
+
+### Notes
+- A test reads both entry points and requires every picker the browser shows to exist word for word on the desktop side. An exception has to be named one at a time, and one that no longer protects anything fails the suite.
+- Four corrections to the workbench ride along, none of them to the extension itself. The perf diff no longer prints a percentage below what the bench can measure: between the two committed references it announced a bright green minus one hundred percent for six tenths of a microsecond, on a scenario whose time is the measuring loop. The differential fuzzer for the incremental decorations now carries the witness its own header had been promising since the first day, without which its clean runs proved nothing: with it on, 38 files out of 40 diverge. The hardcoded string lint is read back against a real project, 47 findings all pointing at the quote they name. And eleven tests that only asserted inside a loop now check the loop has something to iterate: none of them was empty today, but a regression that emptied one would have left them green.
+
 ## 1.42.215
 
 The primitive every dead code detector shares could change the line count of the copy it hands back, which is the one thing it must never do.

@@ -126,6 +126,7 @@ describe('JPF-2 — negative depth regression: unmatched } never produces depth 
   it('unbalanced nested classes — no negative depth anywhere', () => {
     const code = 'public class Outer { public class Inner { } }}}}}';
     const result = parseJava('file:///Outer.java', code);
+    expect(result.symbols.length, 'sans symbole, la profondeur ne prouve rien').toBeGreaterThan(0);
     for (const sym of result.symbols) {
       expect(sym.depth, `${sym.name} depth`).toBeGreaterThanOrEqual(0);
     }

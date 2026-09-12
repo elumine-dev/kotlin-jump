@@ -183,6 +183,7 @@ describe('Code Lens — positions', () => {
   it('all lens symbols have valid line numbers', () => {
     const lenses = getLensSymbols(index, 'file:///App.kt');
     const lineCount = APP_CODE.split('\n').length;
+    expect(lenses.length, 'sans lens, la boucle ne verifie aucune ligne').toBeGreaterThan(0);
     for (const s of lenses) {
       expect(s.line).toBeGreaterThanOrEqual(0);
       expect(s.line).toBeLessThan(lineCount);

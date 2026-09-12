@@ -27,6 +27,40 @@ export interface Cascade {
   emptyFiles: string[];
 }
 
+/**
+ * The same answer, arranged so a caller can act on it BEFORE writing its own
+ * edits.
+ *
+ * That order is not a style choice. VS Code rejects a WorkspaceEdit that both
+ * deletes a URI and edits a range in it, and it rejects the WHOLE edit without
+ * a word. Consulted afterwards, the cascade would ask to delete a file the
+ * caller had already range edited, and the removal would silently do nothing.
+ * Reachable on any testOnly declaration alone in its file, which the scan never
+ * marks as emptying it.
+ */
+export interface CascadePlan {
+  /** Delete these whole. The caller must add NO range edit for them. */
+  deleteFiles: Set<string>;
+  /** Import lines to cut, per file that survives. */
+  imports: Map<string, Cut[]>;
+}
+
+export function planCascade(
+  cutsByPath: ReadonlyMap<string, readonly Cut[]>,
+  textByPath: ReadonlyMap<string, string>,
+  /** Files the caller already decided to delete. */
+  alreadyDeleted: ReadonlySet<string> = new Set(),
+): CascadePlan {
+  const cascade = cascadeAfterRemoval(cutsByPath, textByPath);
+  const deleteFiles = new Set(cascade.emptyFiles.filter(p => !alreadyDeleted.has(p)));
+  const imports = new Map<string, Cut[]>();
+  for (const [path, extents] of cascade.imports) {
+    if (deleteFiles.has(path) || alreadyDeleted.has(path)) continue;
+    imports.set(path, extents);
+  }
+  return { deleteFiles, imports };
+}
+
 function applyCuts(text: string, cuts: readonly Cut[]): string {
   let out = text;
   for (const c of [...cuts].sort((a, b) => b.start - a.start)) {

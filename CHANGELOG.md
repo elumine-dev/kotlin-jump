@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.225
+
+A removal that did nothing at all, and said nothing about it.
+
+### Fixes
+- The cascade added in 1.42.222 was consulted AFTER the caller had written its range edits, so it could ask to delete a file that already had one. VS Code rejects a WorkspaceEdit that both deletes a URI and edits a range in it, silently and as a whole: the removal did nothing, with no error and no diagnostic. Reachable on any declaration whose file the scan did not see emptying, which is what every testOnly finding is, since those are never counted as removable. The cascade is now planned BEFORE any edit is written, and the caller adds no range edit for a file the plan takes.
+
+### Notes
+- The four call sites share one planner and one writer, so the order cannot drift back apart at one of them. The witness builds a real WorkspaceEdit and asserts that no URI receives both a deletion and a range edit; restoring the published order fails it.
+
 ## 1.42.224
 
 The same defect one layer down, in yesterday's own fix for it.

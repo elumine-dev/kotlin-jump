@@ -9,7 +9,7 @@ import { findUnusedMembers } from '../providers/unusedMembers';
 import { findDeadIslands } from '../providers/deadIslands';
 import { findUnusedEnumEntries } from '../providers/unusedEnumEntries';
 import { isOfferable, planTestCoRemoval, TestCoRemovalPlan } from '../providers/testCoRemoval';
-import { addCascade } from '../providers/applyCascade';
+import { addCascadePlan, planCascade } from '../providers/applyCascade';
 import { plural } from '../util/plural';
 
 /**
@@ -157,6 +157,28 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
   const deletedFiles = new Set<string>([...scan.testFiles]);
   for (const { group } of scan.groups) if (group.fileBecomesEmpty) deletedFiles.add(group.path);
 
+  // KJ-048 asked FIRST. A testOnly declaration alone in its file is never
+  // marked as emptying it by the scan, so the cascade is the only thing that
+  // knows, and a WorkspaceEdit that both deletes a URI and edits a range in it
+  // is rejected whole and in silence.
+  const planned = new Map<string, { start: number; end: number }[]>();
+  const note = (path: string, start: number, end: number) => {
+    (planned.get(path) ?? planned.set(path, []).get(path)!).push({ start, end });
+  };
+  const vus = new Set<string>();
+  for (const { group, plan } of scan.groups) {
+    const cle = `${group.path}:${group.removeStart}`;
+    if (!vus.has(cle) && !deletedFiles.has(group.path)) { vus.add(cle); note(group.path, group.removeStart, group.removeEnd); }
+    for (const cut of plan.cuts) {
+      const cleCut = `${cut.path}:${cut.start}`;
+      if (vus.has(cleCut) || deletedFiles.has(cut.path)) continue;
+      vus.add(cleCut);
+      note(cut.path, cut.start, cut.end);
+    }
+  }
+  const cascade = planCascade(planned, scan.textByPath, deletedFiles);
+  const doomed = new Set([...deletedFiles, ...cascade.deleteFiles]);
+
   // Never a deleteFile AND range edits on the same URI: VS Code rejects the
   // whole WorkspaceEdit, silently.
   for (const p of deletedFiles) {
@@ -164,23 +186,18 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
   }
   const rangeOf = makeRangeOf(scan.textByPath);
   const done = new Set<string>();
-  const cutsByPath = new Map<string, { start: number; end: number }[]>();
-  const noteCut = (path: string, start: number, end: number) => {
-    (cutsByPath.get(path) ?? cutsByPath.set(path, []).get(path)!).push({ start, end });
-  };
   let skipped = 0;
   for (const { group, plan } of scan.groups) {
     const key = `${group.path}:${group.removeStart}`;
-    if (!done.has(key) && !deletedFiles.has(group.path)) {
+    if (!done.has(key) && !doomed.has(group.path)) {
       done.add(key);
       const range = rangeOf(group.path, group.removeStart, group.removeEnd);
       if (range) {
         edit.replace(corpusUri(group.path), range, '', { needsConfirmation: true, label: `Remove ${group.label}` });
-        noteCut(group.path, group.removeStart, group.removeEnd);
       } else { skipped++; }
     }
     for (const cut of plan.cuts) {
-      if (deletedFiles.has(cut.path)) continue;
+      if (doomed.has(cut.path)) continue;
       const cutKey = `${cut.path}:${cut.start}`;
       if (done.has(cutKey)) continue;
       done.add(cutKey);
@@ -188,12 +205,10 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
       if (!range) { skipped++; continue; }
       edit.replace(corpusUri(cut.path), range, '',
         { needsConfirmation: true, label: cut.kind === 'import' ? `Remove the stale import of ${cut.name}` : `Remove the test ${cut.name}` });
-      noteCut(cut.path, cut.start, cut.end);
     }
   }
 
-  // KJ-048: the imports these cuts orphan, and the shells they leave behind.
-  const swept = addCascade(edit, cutsByPath, scan.textByPath, deletedFiles);
+  const swept = addCascadePlan(edit, cascade, scan.textByPath);
 
   const ok = await vscode.workspace.applyEdit(edit);
   void vscode.window.showInformationMessage(ok

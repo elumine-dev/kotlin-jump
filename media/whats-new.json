@@ -1,22 +1,22 @@
 {
-  "version": "1.42.224",
+  "version": "1.42.225",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The same defect one layer down",
-  "summary": "Yesterday's fix narrowed the search from the whole line to the modifier run. The modifier run still contained the arguments of the annotations.",
+  "tagline": "A removal that did nothing, and said nothing",
+  "summary": "The cascade added in 1.42.222 could ask to delete a file the same edit was already changing. VS Code rejects that whole edit without a word.",
   "highlights": [
     {
-      "title": "An annotation argument is not a modifier",
-      "description": "Making a member private rewrote @SerializedName(\"internal \") into @SerializedName(\"private \"), which renames a JSON field and says nothing about it.",
+      "title": "Deleted and edited at once",
+      "description": "A WorkspaceEdit that both removes a URI and edits a range in it is rejected entirely and in silence, so the removal appeared to run and changed nothing.",
       "kind": "fix"
     },
     {
-      "title": "Parentheses balanced, strings skipped",
-      "description": "The annotation scanner counts nested parentheses and steps over string bodies. An annotation it cannot close on the line yields no edit rather than a guess.",
+      "title": "Planned before anything is written",
+      "description": "The cascade answers first, and the caller adds no range edit for a file the plan takes. One planner and one writer for the four places that remove code.",
       "kind": "fix"
     },
     {
-      "title": "Two suspicions dropped, not shipped",
-      "description": "Zero posts alone in a scope function on a 6300 file project, and 4363 test function extents checked on 901 real files with no violation.",
+      "title": "Reachable on every testOnly finding",
+      "description": "A declaration used only from tests is never counted as removable, so the scan never marks its file as emptied, and the cascade was the only thing that knew.",
       "kind": "fix"
     }
   ],
@@ -24,8 +24,8 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "The visibility keyword is read from the modifiers alone, never from an annotation's arguments.",
-        "An annotation whose parentheses cannot be closed on the line yields no edit."
+        "The cascade is planned before any edit is written, so no URI is both deleted and edited.",
+        "A file the cascade takes receives no range edit, and exactly one deletion."
       ]
     }
   ],

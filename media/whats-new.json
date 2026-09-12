@@ -1,28 +1,32 @@
 {
-  "version": "1.42.233",
+  "version": "1.42.234",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The word that was missing from the list",
-  "summary": "A run of const val lines read as one declaration spread over six lines, so every unused constant showed a diagnostic with no quick fix behind it.",
+  "tagline": "Cuts that landed on the wrong lines",
+  "summary": "The workspace sweep measured its cuts on one text and applied them to another, and a diff view made three commands read HEAD while writing the working file.",
   "highlights": [
     {
-      "title": "Unused constants can be removed again",
+      "title": "The workspace sweep cuts where it measured",
       "kind": "fix",
-      "description": "The list of words that open a declaration was missing const, so a companion object read as a single declaration and its extent was refused. On a real 6329 source project, 58 of the 66 findings offered without a fix were exactly that."
+      "description": "It swept the disk, re converted its offsets against a second read, then applied the result to the open document. One line added above and every cut in that file moved down, silently. A file whose text moved since the scan is now left alone and says so."
+    },
+    {
+      "title": "A diff view is not the file",
+      "kind": "fix",
+      "description": "A comparison opens a document whose scheme is `git:` and whose path is the real file path. Three commands recognised it by path alone and read HEAD while writing the working file."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "A block of constants had no removal at all: `const` was absent from the list of words that open a declaration, so a run of `const val` lines read as ONE declaration spanning them all and the extent was refused.",
-        "The same list was missing `lateinit`, `final`, `static`, `inner`, `annotation`, `value`, `external`, `expect`, `actual`, `operator`, `infix` and `tailrec`."
+        "Clean Dead Code in Workspace measured its offsets on the disk, converted them against a second read, and applied them to the open buffer. Written down as a test: a cut aimed at line 4 landed on line 1, inside the package declaration.",
+        "Remove Code Used Only by Tests, Make Every Self Only Member Private and the unused symbol removals all took a `git:` diff document for the file itself."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "Every cut was compared on 6329 real sources before and after: no existing cut moved, 58 appeared, and the 8 refusals left are declarations whose body starts on the following line.",
-        "Removable class members go from 257 to 313, unreferenced symbols from 95 to 97 out of 98."
+        "The VS Code test double kept the scheme inside the parsed path, which made a diff document distinguishable in a test while it is indistinguishable in reality."
       ]
     }
   ],

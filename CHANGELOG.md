@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.234
+
+Two ways for a removal to land on the wrong lines, both closed.
+
+### Fixes
+- Clean Dead Code in Workspace could delete the wrong lines. It swept the DISK, re converted its offsets against a SECOND read of the disk, then applied the result to the open document, which for an unsaved file is a THIRD text. Nothing compared the three. One line added above and every cut in that file moved down, silently, behind a preview that looked ordinary. Written down as a test: a cut aimed at `class Mort` on line 4 landed on line 1, in the middle of `package com.x`. The sweep reads the open buffer now, and a file whose text moved since the scan is left alone with a message that says so rather than cut blind.
+- A diff view made three commands read HEAD and write the working file. A comparison opens a document whose URI scheme is `git:` and whose path is the real file's path, so recognising a document by its path alone hands back the content of HEAD. Remove Code Used Only by Tests, Make Every Self Only Member Private and the unused symbol removals all matched that way.
+
+### Notes
+- The test double for VS Code kept the scheme inside the parsed path, so a `git:` document was distinguishable in a test while it is indistinguishable in reality. Fixing that is what allowed the defect above to be written down as a test at all.
+
 ## 1.42.233
 
 The diagnostic said a constant was unused and the lightbulb offered nothing.

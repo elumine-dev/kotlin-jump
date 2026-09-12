@@ -42,6 +42,8 @@ export const DETECTOR_LABEL: Record<SweepDetector, readonly [string, string]> = 
 export interface SweptFile {
   uri: vscode.Uri;
   findings: SweepFinding[];
+  /** Le texte sur lequel les offsets des trouvailles ont ete mesures. */
+  text: string;
 }
 
 export interface SweepScan {
@@ -72,16 +74,25 @@ export async function scanWorkspace(token?: vscode.CancellationToken): Promise<S
 
   const decoder = new TextDecoder();
   const files: SweptFile[] = [];
+  // Un fichier ouvert et non enregistre n'est PAS ce que porte le disque, et
+  // c'est au document que l'edition s'appliquera. Balayer le disque puis
+  // supprimer dans le tampon revient a viser un texte et frapper l'autre.
+  const ouverts = docsParChemin();
   await mapBatched(kept, async uri => {
     if (token?.isCancellationRequested) return;
     let text: string;
-    try {
-      text = decoder.decode(await vscode.workspace.fs.readFile(uri));
-    } catch {
-      return; // an unreadable file simply contributes nothing
+    const ouvert = ouverts.get(uri.fsPath);
+    if (ouvert) {
+      text = ouvert.getText();
+    } else {
+      try {
+        text = decoder.decode(await vscode.workspace.fs.readFile(uri));
+      } catch {
+        return; // an unreadable file simply contributes nothing
+      }
     }
     const findings = sweepFile(text, uri.fsPath.endsWith('.java') ? 'java' : 'kotlin');
-    if (findings.length > 0) files.push({ uri, findings });
+    if (findings.length > 0) files.push({ uri, findings, text });
   });
 
   files.sort((a, b) => a.uri.fsPath.localeCompare(b.uri.fsPath));
@@ -246,33 +257,81 @@ export async function cleanDeadCodeInWorkspaceCommand(): Promise<void> {
 
       const edit = new vscode.WorkspaceEdit();
       let count = 0;
+      let bouges = 0;
       const decoder = new TextDecoder();
+      const ouverts = docsParChemin();
       for (const file of scan.files) {
         const plan = planFileEdits(file.findings);
         if (plan.length === 0) continue;
-        let text: string;
-        try {
-          text = decoder.decode(await vscode.workspace.fs.readFile(file.uri));
-        } catch {
-          continue;
+        // Le texte auquel l'edition va s'appliquer : le tampon quand le fichier
+        // est ouvert, le disque sinon. C'est celui la qu'il faut confronter au
+        // texte balaye, pas une seconde lecture du disque.
+        const ouvert = ouverts.get(file.uri.fsPath);
+        let vivant: string;
+        if (ouvert) {
+          vivant = ouvert.getText();
+        } else {
+          try {
+            vivant = decoder.decode(await vscode.workspace.fs.readFile(file.uri));
+          } catch {
+            continue;
+          }
         }
-        const starts = lineStartsOf(text);
-        for (const e of plan) {
-          edit.replace(file.uri, new vscode.Range(posAt(starts, e.start), posAt(starts, e.end)), e.text, {
+        const plages = sweptRanges(file.text, vivant, plan);
+        if (plages === undefined) { bouges++; continue; }
+        plan.forEach((e, i) => {
+          edit.replace(file.uri, new vscode.Range(plages[i].start, plages[i].end), e.text, {
             needsConfirmation: true,
             label: 'Remove dead code',
           });
           count++;
-        }
+        });
       }
 
+      // Dire « rien a retirer » alors que des fichiers ont bouge depuis le
+      // balayage serait faux : la reponse est « je ne sais plus ou couper ».
+      const noteBouges = bouges > 0
+        ? ` ${plural(bouges, 'file')} changed since the scan and ${bouges > 1 ? 'were' : 'was'} left alone: run the sweep again.`
+        : '';
       if (count === 0) {
-        void vscode.window.showInformationMessage('Nothing to remove automatically.');
+        void vscode.window.showInformationMessage(`Nothing to remove automatically.${noteBouges}`);
         return;
       }
+      if (bouges > 0) void vscode.window.showInformationMessage(noteBouges.trim());
       await vscode.workspace.applyEdit(edit);
     },
   );
+}
+
+/**
+ * Exported for the witness: an offset measured on one text and applied to
+ * another lands on the wrong lines, and this command did exactly that. It
+ * swept the DISK, re converted its offsets against a SECOND read, then applied
+ * the result to the open document, which for an unsaved file is a THIRD text.
+ * Nothing compared them. One line inserted above and every cut of the file
+ * moved down by one, silently, behind a preview that looked ordinary.
+ *
+ * All of a file's cuts or none: a text that moved invalidates every offset
+ * measured on it, not just the ones after the change.
+ */
+/**
+ * Les documents ouverts par chemin, les vues de comparaison exclues : un
+ * document `git:` porte le `fsPath` du vrai fichier et le contenu de HEAD.
+ */
+function docsParChemin(): Map<string, vscode.TextDocument> {
+  return new Map(vscode.workspace.textDocuments
+    .filter(d => d.uri.scheme === 'file')
+    .map(d => [d.uri.fsPath, d]));
+}
+
+export function sweptRanges(
+  swept: string,
+  live: string,
+  cuts: readonly { start: number; end: number }[],
+): { start: vscode.Position; end: vscode.Position }[] | undefined {
+  if (live !== swept) return undefined;
+  const starts = lineStartsOf(swept);
+  return cuts.map(c => ({ start: posAt(starts, c.start), end: posAt(starts, c.end) }));
 }
 
 function lineStartsOf(text: string): number[] {

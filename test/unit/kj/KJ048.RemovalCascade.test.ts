@@ -100,4 +100,32 @@ describe.skipIf(!mod)('cascadeAfterRemoval', () => {
     expect(FICHIER[e.end - 1]).toBe('\n');
     expect(FICHIER.slice(e.start, e.end)).toBe('import java.io.File\n');
   });
+  it('un import declare deux fois donne deux extents distincts', () => {
+    // Les deux orphelins etaient mappes sur la PREMIERE ligne correspondante :
+    // le plan demandait deux fois la meme coupe et laissait le doublon debout.
+    const texte = ['package a', 'import java.io.File', 'import java.io.File', '', 'fun morte(f: File) = f.name'].join(NL);
+    const c = cascade('a/A.kt', texte, [extentOf(texte, 'fun morte', 'f.name')]);
+    const extents = (c.imports.get('a/A.kt') ?? []) as any[];
+    expect(extents.length).toBe(2);
+    expect(new Set(extents.map(e => `${e.start}:${e.end}`)).size).toBe(2);
+    for (const e of extents) expect(texte.slice(e.start, e.end)).toBe('import java.io.File' + NL);
+  });
+  it('un fichier JAVA vide par une coupe est signale lui aussi', () => {
+    // La garde `.kt` coupait DEUX choses alors qu une seule est propre a
+    // Kotlin. La vacuite se lit pareil dans les deux langages, `package a;`
+    // compris, et gater les deux sur l extension laissait chaque fichier Java
+    // vide debout comme une coquille.
+    const texte = ['package com.x;', '', 'import java.io.File;', '',
+      'class Coquille {', '    void f(File x) {}', '}'].join(NL);
+    const c = cascade('a/A.java', texte, [{ start: texte.indexOf('class Coquille'), end: texte.length }]);
+    expect(c.emptyFiles).toEqual(['a/A.java']);
+    // L autre moitie reste Kotlin : aucun import Java n est touche.
+    expect(c.imports.size).toBe(0);
+  });
+
+  it('temoin : un fichier Java qui garde une classe n est pas signale', () => {
+    const texte = ['package com.x;', '', 'class A {}', 'class B {}'].join(NL);
+    const c = cascade('a/B.java', texte, [{ start: texte.indexOf('class A'), end: texte.indexOf('class B') }]);
+    expect(c.emptyFiles).toEqual([]);
+  });
 });

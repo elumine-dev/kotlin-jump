@@ -1,39 +1,34 @@
 {
-  "version": "1.42.222",
+  "version": "1.42.223",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Two removals that were deleting live code",
-  "summary": "Applying every removal the extension offers on a 6300 file project broke the build twice. Both holes are closed, and the three bulk commands the family was missing are here.",
+  "tagline": "Five defects in yesterday's own removals",
+  "summary": "Reading the 1.42.222 diff against a real project rather than against the tests turned up five defects, four of which edit code nothing would have caught.",
   "highlights": [
     {
-      "title": "The R class reached without spelling R",
-      "description": "A colour written as color.name after import ca.foo.R.color was invisible to the scan, so two live colours were reported dead and deleted. Aliases and an aliased R class count now too.",
+      "title": "A refactor that rewrote a string literal",
+      "description": "Making a member private looked for the visibility keyword anywhere on the line, so `val label = \"make it public \"` came back with the string rewritten and the member still public.",
       "kind": "fix"
     },
     {
-      "title": "A name between backticks is never reported",
-      "description": "The mention harvest looks for identifiers, so it cannot see a backtick name at a call site. A called member came back unreferenced, and its quick fix deleted live code.",
+      "title": "A branch emptied in silence",
+      "description": "Removing an unheard post could leave an if or else branch with nothing in it. That compiles, so nothing reports it. A post alone in a branch is no longer offered for removal.",
       "kind": "fix"
     },
     {
-      "title": "The declaration and its tests, together",
-      "description": "One command removes what is kept alive only by its own tests, and those tests, in a single Refactor Preview. A test that also covers something else is left alone.",
-      "kind": "feature"
+      "title": "Java shells stayed standing",
+      "description": "A file left with nothing but its package line was only noticed in Kotlin, because one language check gated two concerns and only one of them is Kotlin specific.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Resource keys and resource files reached through an imported R class count as referenced, under all three spellings.",
-        "Neither the symbol detector nor the member detector reports a name written between backticks: absence cannot be proven for a name the harvest cannot look for."
-      ]
-    },
-    {
-      "heading": "Improvements",
-      "bullets": [
-        "Remove Code Used Only by Tests, With Its Tests: the declaration and the tests that exercise it, in one preview.",
-        "Make Every Self Only Member Private: 142 lightbulbs on a real project, one command now.",
-        "A removal takes the imports it leaves with no user, and deletes the file when nothing but a package line remains."
+        "The visibility keyword is read from the leading modifier run, and private lands after the annotations.",
+        "A post alone in an if, else, when, for, while, try or catch branch offers no removal; alone in a function body it still does.",
+        "A file emptied by a removal is reported in Java as well as in Kotlin.",
+        "A name imported twice gives two distinct removals instead of the same one twice.",
+        "A dead island counts the tests it removes once, not once per member."
       ]
     }
   ],

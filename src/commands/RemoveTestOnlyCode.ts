@@ -117,11 +117,16 @@ export async function scanTestOnly(
       plan = planTestCoRemoval(group.names, data.sources, segs, live, group.allowed);
       planByLabel.set(group.label, plan);
       if (isOfferable(plan)) result.offered++; else result.withheld++;
+      // Counted with the PLAN, not with the group: an island pushes one group
+      // per member and they all share a plan, so counting here announced three
+      // times the tests a three member island actually removes.
+      if (isOfferable(plan)) {
+        for (const f of plan.files) result.testFiles.add(f);
+        result.testFunctions += plan.functions;
+      }
     }
     if (!isOfferable(plan)) continue;
     result.groups.push({ group, plan });
-    for (const f of plan.files) result.testFiles.add(f);
-    result.testFunctions += plan.functions;
   }
   return result;
 }

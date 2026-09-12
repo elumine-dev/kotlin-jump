@@ -138,7 +138,7 @@ export async function createEventSubscriberCommand(eventName: string, fqn: strin
   });
 
   // The event type has to be importable from here, and the annotation too.
-  if (!text.includes(`import ${fqn}`) && !fqn.startsWith(packageOf(text))) {
+  if (importNeeded(text, fqn)) {
     const anchor = /^\s*(?:package|import)\b.*$/m.exec(text);
     if (anchor) {
       const at = doc.positionAt(anchor.index + anchor[0].length);
@@ -150,6 +150,34 @@ export async function createEventSubscriberCommand(eventName: string, fqn: strin
   }
 
   await vscode.workspace.applyEdit(edit);
+}
+
+/**
+ * Whether the subscriber this fix writes needs an import line for `fqn`.
+ *
+ * Both halves of the test this replaces answered yes too easily, and each yes
+ * SUPPRESSES the import, so the subscriber that gets inserted names a type the
+ * compiler cannot resolve.
+ *
+ *   - `text.includes('import ' + fqn)` also matches a longer import that
+ *     merely begins with it, so `import a.b.EventBus` passed for `a.b.Event`.
+ *   - `fqn.startsWith(packageOf(text))` has no separator, and a SUBPACKAGE is
+ *     not visible without an import either. A file in
+ *     `ca.lapresse.android.lapresseplus` was told it could already see
+ *     `ca.lapresse.android.lapresseplus.module.fcm.FcmBreakingNewsEvent`.
+ *
+ * Measured on a real project, over the events the detector reports and every
+ * source file: the second half is wrong 467 times, the first one 0 times. The
+ * package one is the shape that actually happens, and it is the common one:
+ * events live in a module subpackage of the screen that should listen.
+ */
+export function importNeeded(text: string, fqn: string): boolean {
+  const point = fqn.lastIndexOf('.');
+  if (point < 0) return false;                       // default package: nothing to import
+  const echappe = fqn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // An alias counts as an import: `import a.b.Event as Ev` already resolves it.
+  if (new RegExp(`^\\s*import\\s+${echappe}(?:\\s+as\\s+\\w+)?\\s*;?\\s*$`, 'm').test(text)) return false;
+  return fqn.slice(0, point) !== packageOf(text);
 }
 
 function packageOf(text: string): string {

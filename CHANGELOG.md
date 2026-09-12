@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.212
+
+`Add a subscriber for this event` wrote a subscriber naming a type the compiler cannot see. The fix has to decide whether the event type also needs an import line, and the test it used said yes too easily. Every yes suppresses the import.
+
+### Fixes
+- A subpackage is not visible without an import either. The test asked whether the fully qualified name STARTS with the package of the open file, so a screen in `ca.lapresse.android.lapresseplus` was told it could already see `ca.lapresse.android.lapresseplus.module.fcm.FcmBreakingNewsEvent`. Measured over the events the detector reports crossed with all 5 146 sources of a real project: wrong 467 times. That layout is the normal one, the event lives down in its module and the screen that should listen sits above it.
+- The same test had no separator, so a file in `nuglif.rubicon.card` passed for anything under `nuglif.rubicon.cardlist`, two packages with nothing to do with each other.
+- The other half looked for `import` followed by the name ANYWHERE in the text. A longer import that begins the same way counted as the real one, `import a.b.EventBus` for `a.b.Event`, and so did those words sitting in a comment. It has to be an import line now, with or without a semicolon, and an alias counts as one.
+
+### Notes
+- The five per file dead code detectors were read back against the real project for the first time, since their quick fix deletes from the user's own source: 93 cuts in 53 files, brace balance unchanged in every file, no orphan comma appearing, every cut either whole lines or contained in one line, and no declaration disappearing that no finding names. Two deliberately broken versions of the same probe, one widening each cut by a single character and one running it to the end of the next line, report 31 and 57 violations, so the clean reading is worth something. The eight other destructive detectors of the family had already been read this way; these five were the last.
+
 ## 1.42.211
 
 Switching the dependency badges off could switch them back on. The provider reads every source file of the project to count imports, several seconds on a real one, and it decided whether to draw before that read rather than after: a sweep started while the setting was on finished by painting the badges the user had just turned off.

@@ -1,17 +1,22 @@
 {
-  "version": "1.42.211",
+  "version": "1.42.212",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Badges that came back on their own",
-  "summary": "Turning the dependency badges off while the project sweep was running let that sweep paint them again seconds later.",
+  "tagline": "A subscriber that could not compile",
+  "summary": "The quick fix that adds an event subscriber skipped the import line whenever the event type merely lived under the same package prefix.",
   "highlights": [
     {
-      "title": "A setting that undid itself",
-      "description": "The sweep that counts imports across the project takes seconds. It decided whether to draw before that read instead of after, so badges switched off mid sweep were drawn again when it landed.",
+      "title": "A subpackage still needs an import",
+      "description": "The fix asked whether the type name starts with the package of the open file. A screen in one package was told it could see an event two packages deeper. On a real project that answer is wrong 467 times.",
       "kind": "fix"
     },
     {
-      "title": "Painting through a disposed provider",
-      "description": "A sweep landing after the provider was disposed wrote through a decoration type that no longer exists.",
+      "title": "Two packages that merely start alike",
+      "description": "With no separator in the test, a file in one package passed for anything under a longer package name beginning with it.",
+      "kind": "fix"
+    },
+    {
+      "title": "An import that was only a lookalike",
+      "description": "A longer import beginning the same way counted as the real one, and so did those words inside a comment. It has to be an import line now.",
       "kind": "fix"
     }
   ],
@@ -19,9 +24,10 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "The dependency badges stay off once switched off, even when a project sweep was already running.",
-        "A sweep that lands after the provider is gone no longer paints.",
-        "The release check for banned dashes now reads inside multi line templates, so webview text is covered like every other string."
+        "Adding a subscriber for an event declared in a subpackage now writes the import it needs.",
+        "Two packages that merely share a prefix are no longer treated as one.",
+        "A longer import, or the same words in a comment, no longer passes for the import of the event type.",
+        "An aliased import counts as importing the type."
       ]
     }
   ],

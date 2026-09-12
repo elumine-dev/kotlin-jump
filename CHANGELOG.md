@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.231
+
+Two defects in the selfOnly verdict, both found by narrowing 119 members on a real project and compiling.
+
+### Fixes
+- The mentions of a member were searched in a text whose import lines had been emptied of their characters, then compared against bounds measured on the full text. On a file with 55 imports the shift was 2697 characters, enough to drop a mention from a sibling class into the body of the class above it. The member came back selfOnly, the bulk command made it private, and the module stopped compiling: `private` in Kotlin means visible inside this CLASS, never inside this file. The shift was wrong in both directions: it produced one false positive and hid 83 findings on that project alone. The two texts now have the same length, so an index and a bound can be compared at all.
+- The selfOnly verdict never consulted the test mentions. A member used inside its own class AND from a test was offered for narrowing, and the test sources stopped compiling with `Cannot access ...: it is private in ...`. Sixty two members on the same project, none of them visible to an `assembleDebug`, which never builds the test sources.
+- The blanked text is built once per FILE instead of once per symbol. It never depended on the member, and on a 6300 file corpus that is tens of thousands of whole file rebuilds for one value per file.
+
+### Notes
+- The second defect has a witness that fails without the fix. The first does not: four synthetic shapes were tried, including a transcription of the real file's geometry, and none reproduced it. What proves it is the compiler error and the 84 verdicts the fix moves on a real corpus, which is stronger evidence than a unit test, but it is not the usual standard and the guard is structural in the meantime.
+
 ## 1.42.230
 
 Narrowing a member to private produced Kotlin that does not compile.

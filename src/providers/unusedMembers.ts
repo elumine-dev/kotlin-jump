@@ -25,6 +25,7 @@ import {
   isUnder,
   matchesGlob,
   removalExtent,
+  blankImportLines,
   stripImportLines,
 } from './unusedSymbols';
 
@@ -295,6 +296,11 @@ export function collectMemberCandidates(
       if (close !== -1) companionExtents.push({ start: open, end: close, name: cm[1] ?? 'Companion' });
     }
 
+    // Hoisted out of the symbol loop: it depends on the FILE, not on the
+    // member. Rebuilt once per symbol it was, which on a 6300 file corpus is
+    // tens of thousands of full file rebuilds for one value per file.
+    const cleanNoImports = blankImportLines(clean);
+
     const stack: EnclosingInfo[] = [];
     for (const sym of parsed.symbols) {
       while (stack.length > 0 && stack[stack.length - 1].sym.depth >= sym.depth) stack.pop();
@@ -344,7 +350,6 @@ export function collectMemberCandidates(
 
       const selfInSpan = countWord(clean.slice(span.scanStart, span.scanEnd), sym.name);
       const selfInFile = countWord(keptText, sym.name);
-      const cleanNoImports = stripImportLines(clean);
       const cleanTotal = countWord(cleanNoImports, sym.name);
 
       // Positions of code mentions outside the member's own span, to decide
@@ -543,7 +548,15 @@ export function findUnusedMembers(input: UnusedMemberScanInput): UnusedMember[] 
       // Used elsewhere in its own file. selfOnly only when every residual code
       // mention sits inside the enclosing class AND none hides in a string
       // (a `getMethod("x")` next door is reflection, not over-exposure).
+      // A test that names the member is a use `private` would break, and the
+      // compiler only says so when the test sources are built, which an
+      // `assembleDebug` never does. Measured on a real project: sixteen
+      // members went private and `:core:utils` and `:replica:consent` stopped
+      // compiling their tests with
+      //   Cannot access 'val EMAIL_FORBIDDEN_CHARS': it is private in ...
+      const usedByTests = mentionsOf(harvest.test, c) > 0;
       const selfOnly = c.stringMentions === 0
+        && !usedByTests
         && c.codeOutsideSpan > 0
         && c.codeOutsideSpan === c.codeInsideClass;
       if (!selfOnly) continue;

@@ -1,22 +1,22 @@
 {
-  "version": "1.42.227",
+  "version": "1.42.228",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Dirty is not the same question as unchanged",
-  "summary": "Both commands that write into closed files placed their edits after checking whether the document was dirty. A file reloaded from disk is clean and different.",
+  "tagline": "The one cache a checkout did not drop",
+  "summary": "A file changing on disk evicts six caches. The workspace corpus was not one of them, so a checkout left it serving offsets from the old content for a minute.",
   "highlights": [
     {
-      "title": "Clean and changed at the same time",
-      "description": "A checkout or a stash pop reloads a document with new content and no dirty flag. The old offsets were then applied to it and landed on the wrong lines.",
+      "title": "A checkout fires no save event",
+      "description": "The corpus was dropped on save, and a git checkout or a stash pop touches files nobody has open. Its offsets stayed measured on content that was gone.",
       "kind": "fix"
     },
     {
-      "title": "The bulk narrowing never looked",
-      "description": "The command that makes every self only member private read the corpus copy and never consulted the open documents, so it always wrote at the measured position.",
+      "title": "The burst path is the checkout path",
+      "description": "The watcher has a separate path for the hundreds of files a checkout changes at once. That is exactly the one that mattered, and it drops the corpus too.",
       "kind": "fix"
     },
     {
-      "title": "One rule, one place",
-      "description": "Both commands call the same check now. Two copies of one condition is how one of them drifts, and this pair had already drifted.",
+      "title": "Both entry points",
+      "description": "The desktop and the browser builds share this wiring. Fixing one and leaving the other is how a change ships half applied.",
       "kind": "fix"
     }
   ],
@@ -24,8 +24,8 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "An edit is placed only when the open text still equals the text the scan measured.",
-        "A file that has moved on is skipped and counted, never edited at a guessed position."
+        "A file changed on disk drops the workspace corpus, on the per file path and on the burst path.",
+        "The browser entry point gets the same eviction as the desktop one."
       ]
     }
   ],

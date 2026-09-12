@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.228
+
+The one cache a file changed on disk did not drop.
+
+### Fixes
+- When a file changes on disk, the watcher evicts six caches. The workspace corpus was not one of them: it was dropped on create, delete, rename, and on a SAVE from the editor. A `git checkout`, a `stash pop` or a formatter run from the terminal touches files nobody has open, so no save event fires, and the corpus kept serving offsets measured on the old content for up to a minute. The squiggle landing on unrelated code was already known and fixed for saves; the two commands that write into files the user never opens make the same staleness delete the wrong lines. Both the per file path and the burst path, which is the git checkout path, drop it now.
+- The same wiring exists in the browser entry point and was fixed there too. Fixing one entry point and leaving the other is how a change ships half applied, and this repository has that in its notes already.
+
+### Notes
+- The witness reads both entry points, because this is wiring: the rule is that the corpus sits in the same eviction list as the other caches, and there is nowhere else to check it. It also pins the declaration order, since the watcher can only drop what already exists.
+
 ## 1.42.227
 
 A guard that asked the wrong question, in both commands that write into closed files.

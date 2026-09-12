@@ -718,12 +718,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   const scanner = new FileScanner(index, log, moduleMap);
 
+  // Same reason as in the desktop entry point: every other cache is dropped
+  // when a file changes on disk, and this one was not. Fixing one entry point
+  // and leaving the other is how a fix ships half applied.
+  const resourceCorpusWeb = new ResourceCorpus();
   const watcher = new FileWatcher(scanner, index, uri => {
     _semanticTokens?.invalidate(uri.toString());
     codeLens.evictFile(uri.toString());
     _signatureHelp?.evictFile(uri.toString());
     _inlayHints?.evictFile(uri.toString());
     invalidateContentCache(uri.toString());
+    resourceCorpusWeb.invalidate();  // its offsets were measured on the old content
     _sealedWhen?.bumpEpoch(); // sealed subtype sets may have changed in any file
     refreshStatusBarCount();
   }, log, uris => {
@@ -734,6 +739,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       _inlayHints?.evictFile(uri.toString());
       invalidateContentCache(uri.toString());
     }
+    resourceCorpusWeb.invalidate();  // once for the batch, like the epoch bump
     _sealedWhen?.bumpEpoch();
     refreshStatusBarCount();
   }, isExcludedPath);
@@ -949,7 +955,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
   // KJ-029 : workspace scan through vscode APIs only, so the web build too
   const unusedResourceProviderWeb = new UnusedResourceProvider();
-  const resourceCorpusWeb = new ResourceCorpus();
   context.subscriptions.push(
     vscode.workspace.onDidCreateFiles(() => resourceCorpusWeb.invalidate()),
     vscode.workspace.onDidDeleteFiles(e => {

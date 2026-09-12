@@ -14,9 +14,13 @@
  * end of a file) are the ones a hand written fixture never contains.
  *
  * Chaque edition est traduite en un vrai TextDocumentChangeEvent, appliquee au
- * modele de texte, puis les deux resultats sont compares. Un temoin integre
- * casse volontairement le fournisseur pour verifier que le harnais sait dire
- * non.
+ * modele de texte, puis les deux resultats sont compares.
+ *
+ * `KJ_TEMOIN=1` ne transmet PAS un evenement sur sept au chemin incrementiel,
+ * ce que fait une invalidation manquante, et le harnais doit alors crier. Sans
+ * ce temoin, zero divergence ne prouve rien : le comparateur pourrait ne rien
+ * comparer du tout. L'en tete annonçait ce temoin depuis le premier jour, et
+ * il n'existait pas.
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -148,6 +152,7 @@ function main(): void {
   const nbEditions = Number(process.argv[5] ?? 40);
   const graine = Number(process.argv[6] ?? 12345);
   const multi = process.argv[7] !== 'mono';
+  const temoin = process.env.KJ_TEMOIN === '1';
   const Provider = quoi === 'hex' ? HexColorFoldingProvider : NullAssertionProvider;
 
   const tous: string[] = [];
@@ -177,8 +182,13 @@ function main(): void {
       const lot = multi && r() < 0.34 ? tirerLot(lignes, r) : [tirerEdition(lignes, r)];
       if (lot.length === 0) continue;
       for (const e of lot) appliquer(lignes, e);   // deja tries du bas vers le haut
-      (provider as any)._applyChanges(evenement(ed.document, lot));
-      (provider as any)._flush(ed);
+      // Le temoin saute la transmission, pas l'edition : le texte bouge, le
+      // fournisseur ne l'apprend pas. C'est exactement la forme du defaut que
+      // ce harnais existe pour attraper.
+      if (!(temoin && k % 7 === 3)) {
+        (provider as any)._applyChanges(evenement(ed.document, lot));
+        (provider as any)._flush(ed);
+      }
       editions++;
       const e = lot[0];
       const incremental = empreinte(ed.derniere);
@@ -196,7 +206,7 @@ function main(): void {
     }
   }
 
-  console.log(JSON.stringify({ quoi, graine, fichiers, editions, divergences }, null, 0));
+  console.log(JSON.stringify({ quoi, graine, temoin, fichiers, editions, divergences }, null, 0));
   for (const x of exemples) console.log('  ' + x);
 }
 

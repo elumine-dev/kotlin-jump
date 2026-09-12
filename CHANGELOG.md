@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.213
+
+The same quick fix as last release, one line above the one that was corrected. `Add a subscriber for this event` looked for the closing brace of the last class by taking the last brace of the TEXT, which is not the same thing.
+
+### Fixes
+- A brace inside a comment or a string is not the end of a class. Measured on a real project: 6 files out of 5 093 end with a raw string holding a JSON fixture, so the subscriber was written INTO the fixture. It compiles, since it is now text, the method does not exist, and the fixture data is quietly corrupted. In the worst of the six the insertion point moves from offset 11 637, deep inside the JSON, to 578, the real closing brace of the class.
+- The handler name is learned from the file so the fix matches the bus in use. It was read the same way, so a subscriber sitting in a commented out block named the new one. Both readings now skip comments and strings.
+- The import decision added last release reads the same cleaned text, so a line that merely looks like an import inside a raw string no longer counts as one.
+
+### Notes
+- Read back over the whole project: 4 690 files get an insertion point, none of them lands outside code any more, and exactly those 6 move.
+- The differential fuzzer for the two incremental decoration providers claimed in its own header to carry a witness that breaks the provider on purpose. It carried none, so its clean runs proved nothing. It has one now, which skips the delivery of one event in seven to the incremental path, the shape of a missing invalidation: 38 files out of 40 diverge with it on, and 28 794 random edits over 240 real files diverge nowhere with it off.
+
 ## 1.42.212
 
 `Add a subscriber for this event` wrote a subscriber naming a type the compiler cannot see. The fix has to decide whether the event type also needs an import line, and the test it used said yes too easily. Every yes suppresses the import.

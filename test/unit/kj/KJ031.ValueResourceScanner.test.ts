@@ -181,6 +181,7 @@ describe.skipIf(!mod)('le tokeniseur tient les cas pénibles', () => {
   it('une balise jamais fermée ne fait pas déborder la plage', () => {
     const xml = '<resources>\n  <string name="unclosed">v\n';
     const found = scan(xml);
+    expect(found.length, 'sans declaration trouvee, la plage n existe pas').toBeGreaterThan(0);
     for (const d of found) {
       expect(d.start).toBeGreaterThanOrEqual(0);
       expect(d.end).toBeLessThanOrEqual(xml.length);

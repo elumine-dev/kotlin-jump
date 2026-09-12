@@ -6,6 +6,7 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 interface ScenarioResult {
   name: string;
@@ -40,6 +41,25 @@ function color(v: number): string {
   return       `\x1b[90m${v.toFixed(1)}%\x1b[0m`;          // gray (noise)
 }
 
+/**
+ * Below this absolute difference, the two numbers say nothing about the code.
+ *
+ * `resolveTarget.*` runs in 0.4 to 1 microsecond, which is the cost of the
+ * measuring loop itself. Comparing two of those printed a bright green
+ * `-100.0%` between the two committed baselines, a improvement of six tenths
+ * of a microsecond announced as a doubling of speed. A percentage is only
+ * worth reading once the difference is bigger than the floor of what the
+ * bench can see, and a reader who has learned to skip a false alarm skips the
+ * real one next to it.
+ */
+const PLANCHER_MS = 0.002;
+
+export function ecart(base: number, apres: number): string {
+  if (Math.abs(apres - base) < PLANCHER_MS) return '\x1b[90msous le seuil\x1b[0m';
+  if (base === 0) return '\x1b[90mbase a zero\x1b[0m';
+  return color(((apres - base) / base) * 100);
+}
+
 function main() {
   const [a, b] = [process.argv[2], process.argv[3]];
   if (!a || !b) { console.error('usage: perf-diff <baseline> <after>'); process.exit(1); }
@@ -58,19 +78,18 @@ function main() {
       console.log(pad(s.name, 36), pad('(new)', 10), pad(s.p50Ms.toFixed(3), 10));
       continue;
     }
-    const dP50 = ref.p50Ms === 0 ? 0 : ((s.p50Ms - ref.p50Ms) / ref.p50Ms) * 100;
-    const dP95 = ref.p95Ms === 0 ? 0 : ((s.p95Ms - ref.p95Ms) / ref.p95Ms) * 100;
     console.log(
       pad(s.name, 36),
       pad(ref.p50Ms.toFixed(3), 10),
       pad(s.p50Ms.toFixed(3),  10),
-      pad(color(dP50), 19),
+      pad(ecart(ref.p50Ms, s.p50Ms), 24),
       pad(ref.p95Ms.toFixed(3), 10),
       pad(s.p95Ms.toFixed(3),  10),
-      color(dP95),
+      ecart(ref.p95Ms, s.p95Ms),
     );
   }
   console.log();
 }
 
-main();
+// Importable par la suite : seul l appel en ligne de commande compare.
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) main();

@@ -164,6 +164,7 @@ describe('CallHierarchyProvider — provideCallHierarchyIncomingCalls', () => {
 
     // No incoming call should be "from" CALLEE_URI on the greet declaration line
     const declLine = CALLEE_CODE.split('\n').findIndex(l => l.includes('fun greet'));
+    expect(results.length, 'sans appel entrant, l exclusion ne prouve rien').toBeGreaterThan(0);
     for (const r of results) {
       for (const range of r.fromRanges) {
         if (r.from.uri.toString() === CALLEE_URI) {

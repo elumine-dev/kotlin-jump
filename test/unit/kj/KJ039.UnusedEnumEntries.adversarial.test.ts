@@ -207,7 +207,9 @@ describe('l’étendue de suppression', () => {
     // `LOW, HIGH,` : retirer une entrée demande de recoller la ligne, ce que
     // le correctif ne fait pas. Le verdict tient, le correctif abandonne.
     const packed = f(`${MAIN}/Level.kt`, 'package com.x\n\nenum class Level {\n    LOW, HIGH,\n}\n');
-    for (const e of find([packed])) expect(e.removeStart).toBe(-1);
+    const trouves = find([packed]);
+    expect(trouves.length, 'sans entree trouvee, le verdict ne prouve rien').toBeGreaterThan(0);
+    for (const e of trouves) expect(e.removeStart).toBe(-1);
   });
 
   it('une entrée avec des arguments reste supprimable', () => {

@@ -21,7 +21,9 @@ describe.skipIf(!mod)('KJ-028 — fixture réelle', () => {
   });
 
   it('chaque mort a une suppression proposée', () => {
-    for (const v of mod.findWriteOnlyVariables(demo())) {
+    const morts = mod.findWriteOnlyVariables(demo());
+    expect(morts.length, 'sans mort trouvee, la boucle ne prouve rien').toBeGreaterThan(0);
+    for (const v of morts) {
       expect(v.edits.length, `« ${v.name} » devrait avoir un fix`).toBeGreaterThan(0);
     }
   });

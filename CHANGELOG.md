@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.42.210
+
+Six settings say `globs allowed` in their own description, and not one of them read `?`. Left untranslated the character stays a regular expression quantifier, which makes the letter before it optional: a pattern ending in `Test?.kt` kept `Test.kt` out of the report and let `Test1.kt` in. Both sides wrong, in opposite directions.
+
+### Fixes
+- A `?` with nothing before it does not compile at all. Writing `?.kt` in any of those six lists threw out of the detector, and in the command that runs all ten detectors at once the throw took the nine others down with it.
+- Three providers each carried their own copy of the translation, so this had to be fixed three times or not at all. There is one translator now, and a test fails if a fourth copy appears.
+- The neighbouring setting that excludes files from indexing goes through picomatch and has always read `?` correctly. Two settings that both promise globs while disagreeing on what a glob is: that gap is what produced this.
+
+### Notes
+- The pattern was translated and recompiled on every call, once per candidate and per pattern. Measured in interleaved passes over 40 000 calls with the two shipped defaults: 34.5 ms against 5.1 ms, the two distributions disjoint. The compiled form is kept now.
+- Braces and character classes stay literal, on purpose. Reading them would widen what an exclusion list takes out, and that is the direction that hides a real finding rather than showing a false one.
+- `tools:keep` in an Android resource file is AAPT's dialect, not this one, and its parser refuses a `?` outright rather than mistranslating it. Zero files use `tools:keep` on the project this is measured against, so it stays as it is.
+
 ## 1.42.209
 
 The guard added two releases ago only looked at the word glued to the count, so a noun written in two words went through whole. Fetching a single dependency read `downloading 1 library sources`, twelve lines below a sentence the same pass had just corrected.

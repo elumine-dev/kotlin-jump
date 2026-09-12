@@ -1,3 +1,4 @@
+import { matchesGlob } from '../util/glob';
 import {
   Catalog,
   CatalogAlias,
@@ -126,12 +127,6 @@ function canReferenceAlias(path: string, extraDirs: readonly string[] = []): boo
 }
 
 
-function matchesGlob(name: string, pattern: string): boolean {
-  const re = new RegExp('^' + pattern
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-    .replace(/\*/g, '.*') + '$');
-  return re.test(name);
-}
 
 interface Reference {
   namespace: CatalogNamespace;

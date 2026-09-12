@@ -1,22 +1,22 @@
 {
-  "version": "1.42.209",
+  "version": "1.42.210",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A count and a noun in two words",
-  "summary": "The check that keeps counts agreeing only looked at the word glued to the count, so two sentences written with a noun in two words kept their plural at one.",
+  "tagline": "The question mark in a glob",
+  "summary": "Six settings accept glob patterns and none of them read the single character wildcard, which either matched the wrong files or stopped the scan outright.",
   "highlights": [
     {
-      "title": "Downloading one library source",
-      "description": "The progress notification that fetches library sources read downloading 1 library sources when a single dependency was missing.",
+      "title": "One character, matched backwards",
+      "description": "A pattern ending in Test?.kt kept Test.kt out of the report and let Test1.kt in, since the character stayed a regular expression quantifier and made the letter before it optional.",
       "kind": "fix"
     },
     {
-      "title": "One library file from one JAR",
-      "description": "The index tooltip read incl. 1 library files from 1 JARs.",
+      "title": "A pattern that stopped the whole scan",
+      "description": "A question mark with nothing before it does not compile. In the command that runs every unused code check at once, one such pattern took all ten down.",
       "kind": "fix"
     },
     {
-      "title": "The check itself had two holes",
-      "description": "It read only the word next to the count, and it granted its exceptions by file, which left two files of more than two thousand lines exempt in full. Both holes now fail a test.",
+      "title": "One translator instead of three copies",
+      "description": "Three providers each carried their own, so any glob fix had to be made three times. Compiled patterns are also kept now rather than rebuilt for every candidate: 34.5 ms against 5.1 ms over 40 000 calls.",
       "kind": "fix"
     }
   ],
@@ -24,10 +24,10 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "The library sources download notification agrees at one.",
-        "The index tooltip agrees at one library file and one JAR.",
-        "The count check reads up to two words between the number and its noun.",
-        "Its exceptions are granted line by line, and one that no longer matches anything fails the suite."
+        "A question mark in any ignore setting now covers exactly one character, and never crosses a path separator.",
+        "A pattern starting with a question mark no longer throws out of the detector.",
+        "The six settings that accept globs share one translator, and a test fails if a fourth copy of it appears.",
+        "Translated patterns are kept instead of being rebuilt on every candidate."
       ]
     }
   ],

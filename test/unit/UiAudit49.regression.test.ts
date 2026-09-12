@@ -95,12 +95,14 @@ describe('Deux entrées d\'enum mortes sur la même ligne', () => {
     const ligne = CODE.split('\n').findIndex(l => l.includes('enum class'));
     const colSub = CODE.split('\n')[ligne].indexOf('SUB_PAGE');
     const actions = provider.provideCodeActions(doc(PATH, CODE), { start: { line: ligne, character: colSub }, end: { line: ligne, character: colSub } } as any);
-    // Le detecteur ne sait pas retirer une entree d'un enum ecrit sur une
-    // seule ligne (`removeStart` vaut -1 pour les deux), donc aucune
-    // suppression n'est offerte, avant comme apres. Ce que le correctif
-    // garantit ici, c'est que l'entree retenue est celle du curseur : la
-    // regle est la meme que pour les champs DTO, ou l'effet est visible.
-    expect(actions.some(a => a.title.startsWith('Delete'))).toBe(false);
+    // Jusqu'a 1.42.232 le detecteur ne savait pas retirer une entree d'un enum
+    // ecrit sur une seule ligne : `removeStart` valait -1 pour les deux et
+    // aucune suppression n'etait offerte. Il sait maintenant, et ce test
+    // garde ce qui comptait deja, que l'entree visee est celle du CURSEUR.
+    const suppressions = actions.filter(a => a.title.startsWith('Delete'));
+    expect(suppressions.length, actions.map(a => a.title).join(' | ')).toBe(1);
+    expect(suppressions[0].title).toContain('SUB_PAGE');
+    expect(suppressions[0].title).not.toContain('PAGE,');
     expect(findingAt(
       findUnusedEnumEntries({ sources: [{ path: PATH, text: CODE }], testSourceSets: [] }),
       { line: ligne, character: colSub },

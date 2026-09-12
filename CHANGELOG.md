@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.42.232
+
+The limit stopped being what the detector finds and became what it can cut. Three of those limits are gone.
+
+### Fixes
+- A declaration whose primary constructor wraps over several lines had no removal at all. The header was anchored on the line holding the NAME, so the span collapsed to that first line and the extent refused the declaration because the line ends on an open parenthesis. `data class X(` on its own line is the ordinary shape, and on a real project ten of the twelve remaining unreferenced symbols were exactly that: five delegates of seventeen lines, three data classes of five to ten.
+- A Java field could never be removed. The test that decides whether a declaration continues past its line lists Kotlin keywords only, and a Java field starts with its TYPE, never with `val` or `fun`, so the next line never read as fresh. A trailing semicolon closes the statement in both languages and is read as such now.
+- A whole line extent took everything the line carried, a second declaration included. `val mort = 1; val vivant = 2` and the Java `static int MORT = 1; static int VIVANT = 2;` both deleted live code when the first went. None of the five removal invariants counts the declarations inside a cut, so nothing said so. The Kotlin side predates this release; the Java side opened with the semicolon rule above, which made those fields removable for the first time. The check is limited to line based extents, because inside a body a `for (int i = 0; i < 2; i++)` has semicolons of its own and refusing there would withhold every function.
+- An enum entry sharing its line with its neighbours had no removal either. It takes the entry and ONE adjacent comma, the following one when there is one, the preceding one for the last entry. Two dead neighbours used to claim the same comma, which a single lightbulb never showed and which ate the closing brace of `enum SortOrder { ASC, DESC }` when both went at once; the later extent yields.
+
+### Notes
+- Measured on /Users/kevin/Desktop/work/lapresse: removable unreferenced symbols go from 84 to 95 out of 98, and enum entries from 24 to 33 out of 33, with the five removal invariants clean on 6329 sources both before and after.
+- Two tests said the opposite of what this release does. They were not wrong, they recorded a limit, and each is rewritten to assert the new behaviour rather than deleted: one of them now checks something stronger than before, that the lightbulb cuts the entry under the CURSOR and not its neighbour.
+
 ## 1.42.231
 
 Two defects in the selfOnly verdict, both found by narrowing 119 members on a real project and compiling.

@@ -7,6 +7,8 @@ import {
   collectAnnotationTargets,
   offsetToPos,
   sanitizeForUsageScan,
+  findMatchingParen,
+  matchBrace,
 } from '../util/kotlinScan';
 import { isTestSourceSet } from '../util/testPaths';
 import { isBuildArtifactPath, isGeneratedSource } from '../util/resourceAllowlists';
@@ -278,19 +280,84 @@ function findDeserializedEnums(enumNames: ReadonlySet<string>, sources: readonly
   return out;
 }
 
-/** Whole-line extent when the entry sits alone on its line, -1 otherwise. */
+/**
+ * Where the entry ENDS: past its argument list and past its body, if it has
+ * either. -1 when either cannot be closed.
+ */
+function finDeLEntree(clean: string, nameEnd: number): number {
+  let i = nameEnd;
+  while (i < clean.length && (clean[i] === ' ' || clean[i] === '\t')) i++;
+  if (clean[i] === '(') {
+    const close = findMatchingParen(clean, i);
+    if (close === -1) return -1;
+    i = close + 1;
+    while (i < clean.length && (clean[i] === ' ' || clean[i] === '\t')) i++;
+  }
+  if (clean[i] === '{') {
+    const close = matchBrace(clean, i);
+    if (close === -1) return -1;
+    i = close + 1;
+  }
+  return i;
+}
+
+/**
+ * The extent of one entry inside its list, comma included.
+ *
+ * An entry alone on its line takes the whole line, which is what this used to
+ * do and all it used to do: `A, B, C` on one line, the shape Java enums take
+ * for short lists, left every entry unremovable. Measured on
+ * /Users/kevin/Desktop/work/lapresse, six of the nine remaining enum findings
+ * were exactly that.
+ *
+ * The rule is the one a human applies: take the entry and ONE adjacent comma,
+ * the following one when there is one, the preceding one for the last entry.
+ * Anything the scan cannot close, an argument list or an entry body, yields -1
+ * rather than a guess.
+ */
 function entryExtent(
   text: string,
   lineStarts: readonly number[],
   entry: RawSymbol,
 ): { removeStart: number; removeEnd: number } {
-  const start = lineStarts[entry.line];
-  const end = entry.line + 1 < lineStarts.length ? lineStarts[entry.line + 1] : text.length;
-  const line = text.slice(start, end);
-  // `ALLOW,` or `ALLOW(1),` alone. Anything else (two entries on a line, a
-  // trailing `;` starting the member section, a comment) is left to the user.
+  const debutLigne = lineStarts[entry.line];
+  const finLigne = entry.line + 1 < lineStarts.length ? lineStarts[entry.line + 1] : text.length;
+  const ligne = text.slice(debutLigne, finLigne);
   const alone = new RegExp(`^\\s*${entry.name}\\s*(?:\\([^)]*\\))?\\s*,\\s*$`);
-  return alone.test(line) ? { removeStart: start, removeEnd: end } : { removeStart: -1, removeEnd: -1 };
+  if (alone.test(ligne)) return { removeStart: debutLigne, removeEnd: finLigne };
+
+  // Comments and string bodies are blanked, so a `//` after the entry cannot
+  // be read as code and an argument holding a `,` cannot split the list.
+  const clean = sanitizeForUsageScan(text);
+  const nameStart = debutLigne + entry.character;
+  if (clean.slice(nameStart, nameStart + entry.name.length) !== entry.name) {
+    return { removeStart: -1, removeEnd: -1 };
+  }
+  const fin = finDeLEntree(clean, nameStart + entry.name.length);
+  if (fin === -1) return { removeStart: -1, removeEnd: -1 };
+
+  // A comma AFTER: the entry and that comma go, plus the spaces that followed
+  // it on the same line so the neighbours do not end up glued.
+  // Tout blanc, retours a la ligne compris : une liste se poursuit volontiers
+  // a la ligne suivante, et la derniere entree est suivie d un `\n` avant son
+  // `}`.
+  let apres = fin;
+  while (apres < clean.length && /\s/.test(clean[apres])) apres++;
+  if (clean[apres] === ',') {
+    let coupeFin = apres + 1;
+    while (coupeFin < clean.length && (clean[coupeFin] === ' ' || clean[coupeFin] === '\t')) coupeFin++;
+    return { removeStart: nameStart, removeEnd: coupeFin };
+  }
+
+  // No comma after: this is the last entry, so the comma BEFORE it goes with
+  // it. `;` and `}` are the only things allowed to follow the list.
+  if (clean[apres] !== ';' && clean[apres] !== '}' && apres < clean.length) {
+    return { removeStart: -1, removeEnd: -1 };
+  }
+  let avant = nameStart - 1;
+  while (avant >= 0 && /\s/.test(clean[avant])) avant--;
+  if (clean[avant] !== ',') return { removeStart: -1, removeEnd: -1 };
+  return { removeStart: avant, removeEnd: fin };
 }
 
 export function findUnusedEnumEntries(input: UnusedEnumEntryScanInput): UnusedEnumEntry[] {
@@ -348,6 +415,31 @@ export function findUnusedEnumEntries(input: UnusedEnumEntryScanInput): UnusedEn
         testMentions,
         ...entryExtent(text, lineStarts, entry),
       });
+    }
+  }
+
+  // Two neighbours claim the same comma: the one before it as its trailing
+  // separator, the one after it as its leading one. Applied one at a time by a
+  // lightbulb that is harmless, applied together it ate the closing brace of
+  // `enum SortOrder { ASC, DESC }` when both entries were dead. The later
+  // extent yields the overlap.
+  const parFichier = new Map<string, UnusedEnumEntry[]>();
+  for (const e of out) {
+    if (e.removeStart < 0) continue;
+    (parFichier.get(e.path) ?? parFichier.set(e.path, []).get(e.path)!).push(e);
+  }
+  for (const liste of parFichier.values()) {
+    liste.sort((a, b) => a.removeStart - b.removeStart);
+    for (let i = 1; i < liste.length; i++) {
+      const precedent = liste[i - 1];
+      const courant = liste[i];
+      if (courant.removeStart < precedent.removeEnd) {
+        courant.removeStart = precedent.removeEnd;
+        if (courant.removeEnd <= courant.removeStart) {
+          courant.removeStart = -1;
+          courant.removeEnd = -1;
+        }
+      }
     }
   }
 

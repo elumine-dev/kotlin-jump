@@ -139,7 +139,13 @@ export function declarationSpan(
   // `{` would swallow the following declaration's body and blank the usages
   // inside it (`private class Boom : Exception()` then
   // `fun log() { throw Boom() }` reads as unused).
-  let headerEnd = lineEndOf(line);
+  // The header runs at least to the end of the line holding the constructor's
+  // closing parenthesis. Anchoring it on the NAME's line collapsed the span of
+  // every declaration whose primary constructor wraps, `data class X(` on its
+  // own line being the common shape, and the removal extent then refused the
+  // whole declaration because its first line ends on `(`.
+  const ligneCtor = offsetToPos(lineStarts as number[], Math.max(i - 1, 0)).line;
+  let headerEnd = lineEndOf(Math.max(line, ligneCtor));
   let brace = clean.slice(i, headerEnd).indexOf('{');
   while (brace === -1) {
     const headerText = clean.slice(i, headerEnd).trimEnd();

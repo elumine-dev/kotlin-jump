@@ -203,13 +203,85 @@ describe('l’étendue de suppression', () => {
     expect(find([mode])[0].removeStart).toBeGreaterThanOrEqual(0);
   });
 
-  it('plusieurs entrées sur une ligne ne le sont pas', () => {
-    // `LOW, HIGH,` : retirer une entrée demande de recoller la ligne, ce que
-    // le correctif ne fait pas. Le verdict tient, le correctif abandonne.
+  it('plusieurs entrées sur une ligne le sont aussi, virgule comprise', () => {
+    // Ce test disait l'inverse jusqu'a 1.42.232 : recoller la ligne n'etait pas
+    // fait, donc le correctif abandonnait. Six des neuf trouvailles restantes
+    // sur /Users/kevin/Desktop/work/lapresse etaient exactement cette forme,
+    // que les enums Java prennent des que la liste est courte.
     const packed = f(`${MAIN}/Level.kt`, 'package com.x\n\nenum class Level {\n    LOW, HIGH,\n}\n');
     const trouves = find([packed]);
     expect(trouves.length, 'sans entree trouvee, le verdict ne prouve rien').toBeGreaterThan(0);
-    for (const e of trouves) expect(e.removeStart).toBe(-1);
+    for (const e of trouves) expect(e.removeStart, e.name).toBeGreaterThanOrEqual(0);
+  });
+
+  it('la coupe emporte UNE virgule et laisse la liste valide', () => {
+    const texte = 'package com.x\n\nenum class Level {\n    LOW, MID, HIGH,\n}\n';
+    const packed = f(`${MAIN}/Level.kt`, texte);
+    const mid = find([packed]).find(e => e.name === 'MID');
+    expect(mid, 'MID doit etre trouve').toBeDefined();
+    const apres = texte.slice(0, mid!.removeStart) + texte.slice(mid!.removeEnd);
+    expect(apres).toContain('LOW, HIGH,');
+    expect(apres).not.toContain('MID');
+  });
+
+  it('la DERNIERE entree emporte la virgule qui la precede', () => {
+    // LOW est utilise : HIGH est la seule morte, donc aucune voisine ne lui
+    // dispute la virgule et la regle de la derniere entree s applique seule.
+    const texte = 'package com.x\n\nenum class Level {\n    LOW, HIGH\n}\n';
+    const packed = f(`${MAIN}/Level.kt`, texte);
+    const user = f(`${MAIN}/Use.kt`, 'package com.x\n\nfun go() = Level.LOW\n');
+    const high = find([packed, user]).find(e => e.name === 'HIGH');
+    expect(high, 'HIGH doit etre trouve').toBeDefined();
+    const apres = texte.slice(0, high!.removeStart) + texte.slice(high!.removeEnd);
+    expect(apres).toContain('    LOW\n');
+    expect(apres).not.toContain('HIGH');
+  });
+
+  it('en Java, le point virgule qui ouvre les membres est preserve', () => {
+    const texte = 'package com.x;\n\npublic enum Level {\n    LOW, HIGH;\n    int v;\n}\n';
+    const packed = f('/w/app/src/main/java/com/x/Level.java', texte);
+    const user = f('/w/app/src/main/java/com/x/Use.java',
+      'package com.x;\n\nclass Use { Level l = Level.LOW; }\n');
+    const high = find([packed, user]).find(e => e.name === 'HIGH');
+    expect(high, 'HIGH doit etre trouve').toBeDefined();
+    const apres = texte.slice(0, high!.removeStart) + texte.slice(high!.removeEnd);
+    expect(apres).toContain('LOW;');
+    expect(apres).not.toContain('HIGH');
+  });
+
+  it('deux voisines mortes ne se disputent pas la meme virgule', () => {
+    // `enum SortOrder { ASC, DESC }` : ASC reclame la virgule comme separateur
+    // suivant, DESC la reclame comme separateur precedent. Une ampoule a la
+    // fois, c'est sans consequence ; appliquees ensemble, la seconde coupe
+    // mangeait l'accolade fermante. Vu sur
+    // /Users/kevin/Desktop/work/lapresse dans LogDatabaseCriteria.java.
+    const texte = 'package com.x\n\nenum class SortOrder { ASC, DESC }\n';
+    const packed = f(`${MAIN}/SortOrder.kt`, texte);
+    const trouves = find([packed]).filter(e => e.removeStart >= 0)
+      .sort((a, b) => a.removeStart - b.removeStart);
+    expect(trouves.length, 'les deux entrees doivent etre trouvees').toBe(2);
+    for (let i = 1; i < trouves.length; i++) {
+      expect(trouves[i].removeStart, 'chevauchement').toBeGreaterThanOrEqual(trouves[i - 1].removeEnd);
+    }
+    let apres = texte;
+    for (const e of [...trouves].reverse()) apres = apres.slice(0, e.removeStart) + apres.slice(e.removeEnd);
+    const solde = (t: string) => [...t].reduce((a, c) => a + (c === '{' ? 1 : c === '}' ? -1 : 0), 0);
+    expect(solde(apres), apres).toBe(solde(texte));
+    expect(apres).not.toContain('ASC');
+    expect(apres).not.toContain('DESC');
+  });
+
+  it('une entree a CORPS sur une ligne partagee n est pas devinee', () => {
+    // `A { override fun f() = 1 }, B` : la coupe doit passer le corps, et si
+    // elle ne sait pas le fermer elle abandonne plutot que de trancher dedans.
+    const texte = 'package com.x\n\nenum class Level {\n    LOW { fun f() = 1 }, HIGH,\n}\n';
+    const packed = f(`${MAIN}/Level.kt`, texte);
+    for (const e of find([packed])) {
+      if (e.removeStart < 0) continue;
+      const apres = texte.slice(0, e.removeStart) + texte.slice(e.removeEnd);
+      const solde = (t: string) => [...t].reduce((a, c) => a + (c === '{' ? 1 : c === '}' ? -1 : 0), 0);
+      expect(solde(apres), e.name).toBe(solde(texte));
+    }
   });
 
   it('une entrée avec des arguments reste supprimable', () => {

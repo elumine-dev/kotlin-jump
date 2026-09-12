@@ -338,15 +338,32 @@ export function removalExtent(
     nextNonBlank > lastLine ||
     /^\s*(?:\}|\/\/|\/\*|@|va[lr]\b|fun\b|class\b|object\b|interface\b|companion\b|init\b|constructor\b|private\b|protected\b|internal\b|public\b|override\b|abstract\b|open\b|enum\b|sealed\b|data\b|suspend\b|inline\b|typealias\b)/
       .test(lines[nextNonBlank] ?? '');
-  const continues = span.lineBasedEnd
+  // A trailing `;` closes the statement, in Java as in Kotlin. Without this the
+  // freshness test decides, and its keyword list is Kotlin only: a Java field
+  // starts with its TYPE (`int`, `String`), never with `val` or `fun`, so the
+  // next line never read as fresh and no Java constant could be removed.
+  const termine = /;$/.test(trailing);
+  const continues = span.lineBasedEnd && !termine
     && (/(?:[+\-*/,.&|?:=(]|->)$/.test(trailing) || !nextStartsFresh);
   if (continues) return { removeStart: -1, removeEnd: -1 };
 
   const removeStart = lineStarts[firstLine];
-  return {
-    removeStart,
-    removeEnd: lineEndOf(offsetToPos(lineStarts as number[], Math.max(endOffset - 1, removeStart)).line),
-  };
+  const removeEnd = lineEndOf(offsetToPos(lineStarts as number[], Math.max(endOffset - 1, removeStart)).line);
+
+  // A line-based extent takes WHOLE LINES, so a second declaration sharing the
+  // line would go with the first. `val mort = 1; val vivant = 2` and the Java
+  // `static int MORT = 1; static int VIVANT = 2;` both deleted live code.
+  // Checked on the sanitized cut and only for a line-based end: inside a body
+  // a `for (i = 0; i < n; i++)` has semicolons of its own, and refusing there
+  // would withhold every function.
+  if (span.lineBasedEnd) {
+    for (const l of clean.slice(removeStart, removeEnd).split('\n')) {
+      const pv = l.indexOf(';');
+      if (pv !== -1 && l.slice(pv + 1).trim() !== '') return { removeStart: -1, removeEnd: -1 };
+    }
+  }
+
+  return { removeStart, removeEnd };
 }
 
 /** Kotlin declarations of the corpus, top-level only, before any filtering. */

@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.42.222
+
+Two removals that were deleting live code, and the bulk commands the dead code family was missing.
+
+### Fixes
+- A resource key or a resource file reached through an imported R class was invisible to the scan. `import ca.foo.R.color` followed by `color.name`, the same with an alias, and `import ca.foo.R as AppR` followed by `AppR.color.name` all count as references now. Found by applying every removal the extension offers on a 6300 file project: two live colours went, and `:rubicon:component-feed` stopped compiling on two unresolved references.
+- A member whose name is written between backticks came back unreferenced even when it was called. The mention harvest looks for identifiers, and `w.` + backtick + `a ghost` + backtick + `()` is not one, so absence could never be proven for such a name. The symbol detector held by accident, because the extent could not be delimited either; the member detector did not hold at all. Both stay silent on those names now, called or not.
+
+### Improvements
+- New command, Remove Code Used Only by Tests, With Its Tests. It takes the declaration and the test functions that exercise it in one Refactor Preview. A test that also covers something the removal keeps is left alone, and the count of what was withheld is reported rather than hidden.
+- New command, Make Every Self Only Member Private. There are 142 of those on a real project, and one lightbulb each was the whole workflow.
+- A removal now takes the imports it leaves with no user, and deletes the file when nothing but a package line remains. Applying every removal the extension offered on that same project used to leave 100 newly dead imports across 36 files.
+- Find Everything Unused reports what is kept alive only by its tests on its own line, because the fix there is a different move: the declaration and its tests, or neither.
+
+### Notes
+- The extent finder learns names written between backticks. It could not delimit one before, which is what the new test removal needs: a Kotlin test function is almost always named that way.
+
 ## 1.42.221
 
 Find Usages is between a fifth and half as expensive again, and the answer it gives is unchanged to the character.

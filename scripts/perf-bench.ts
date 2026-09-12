@@ -260,6 +260,20 @@ async function main(): Promise<void> {
     await IndexStore.load(ctx);
   }));
 
+  // The parser itself, which nothing here timed until now. It is the single
+  // most load bearing component of the extension, the reason there is no LSP
+  // and no JVM, and a regression in it would have been invisible to every
+  // interleaved comparison this bench serves. `parse.workspace` reads the
+  // whole fixture the way a cold start does; `parse.file` isolates one file
+  // large enough to dominate its own call overhead.
+  const biggestFile = files.reduce((a, b) => (b.src.length > a.src.length ? b : a), files[0]);
+  scenarios.push(await bench('parse.workspace', 10, () => {
+    for (const f of files) parse(f.uri, f.src);
+  }));
+  scenarios.push(await bench('parse.file', 200, () => {
+    parse(biggestFile.uri, biggestFile.src);
+  }));
+
   // KJ-046: full dead-island analysis over the fixture (candidates via
   // explainSymbols/explainMembers, attributed harvest, liveness fixpoint).
   const islandSources = files.map(f => ({ path: f.uri.replace('file://', ''), text: f.src }));

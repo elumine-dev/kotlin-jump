@@ -395,6 +395,10 @@ export function collectMemberCandidates(
 }
 
 /** Guard that takes the whole enclosing chain out of scope, or null (M4/M5). */
+
+/** A name the mention harvest can actually look for. */
+const BARE_IDENTIFIER_RE = /^[A-Za-z_]\w*$/;
+
 function rejectEnclosingChain(chain: readonly EnclosingInfo[]): string | null {
   for (const e of chain) {
     if (e.isFunInterface) return 'M5:sam-interface';
@@ -455,6 +459,11 @@ function memberRejectionReason(
   if (inherited) return inherited;
 
   if (sym.isExpect || sym.isActual) return 'F4:kmp';
+  // A backtick name is not an identifier, and the harvest looks for
+  // identifiers: `w.\`a ghost\`()` at a call site is invisible to it. Probed
+  // on a two file corpus, a CALLED backtick member came back `unreferenced`,
+  // and its quick fix deletes live code.
+  if (!BARE_IDENTIFIER_RE.test(c.name)) return 'M10:backtick-name';
   if (sym.isOperator) return 'M8:operator';
   if (CONVENTION_FUN_NAMES.has(c.name)) return 'M8:convention';
   if (/^component\d+$/.test(c.name)) return 'M8:destructuring';

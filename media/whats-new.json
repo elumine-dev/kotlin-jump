@@ -1,26 +1,39 @@
 {
-  "version": "1.42.221",
+  "version": "1.42.222",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Find Usages, up to twice as fast again",
-  "summary": "The line state decision at the heart of the usage scan is read one character code at a time instead of three string comparisons per position.",
+  "tagline": "Two removals that were deleting live code",
+  "summary": "Applying every removal the extension offers on a 6300 file project broke the build twice. Both holes are closed, and the three bulk commands the family was missing are here.",
   "highlights": [
     {
-      "title": "Between 21 and 48 percent off the scan",
-      "description": "Measured in interleaved passes against the previous release, every distribution disjoint: the class reference scan drops 48 percent, and nothing in the family gains less than 21.",
+      "title": "The R class reached without spelling R",
+      "description": "A colour written as color.name after import ca.foo.R.color was invisible to the scan, so two live colours were reported dead and deleted. Aliases and an aliased R class count now too.",
       "kind": "fix"
     },
     {
-      "title": "The same answer, to the character",
-      "description": "The routine it replaces is kept as the oracle in the test file: the new one has to agree with it on 60 000 deliberately malformed lines in each of the three entry states.",
+      "title": "A name between backticks is never reported",
+      "description": "The mention harvest looks for identifiers, so it cannot see a backtick name at a call site. A called member came back unreferenced, and its quick fix deleted live code.",
       "kind": "fix"
+    },
+    {
+      "title": "The declaration and its tests, together",
+      "description": "One command removes what is kept alive only by its own tests, and those tests, in a single Refactor Preview. A test that also covers something else is left alone.",
+      "kind": "feature"
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Find Usages and the reference scans are between a fifth and half as expensive again.",
-        "The correctness fix that made them expensive is untouched: a triple quote written inside a comment still opens nothing."
+        "Resource keys and resource files reached through an imported R class count as referenced, under all three spellings.",
+        "Neither the symbol detector nor the member detector reports a name written between backticks: absence cannot be proven for a name the harvest cannot look for."
+      ]
+    },
+    {
+      "heading": "Improvements",
+      "bullets": [
+        "Remove Code Used Only by Tests, With Its Tests: the declaration and the tests that exercise it, in one preview.",
+        "Make Every Self Only Member Private: 142 lightbulbs on a real project, one command now.",
+        "A removal takes the imports it leaves with no user, and deletes the file when nothing but a package line remains."
       ]
     }
   ],

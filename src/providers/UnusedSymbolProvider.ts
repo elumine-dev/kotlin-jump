@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { corpusUri } from '../util/corpusUri';
+import { addCascade } from './applyCascade';
 import { insertImport } from './AutoImportProvider';
 import { parse } from '../indexer/KotlinParser';
 import {
@@ -203,6 +204,10 @@ export async function buildSymbolRemovalEdit(
     list.push(f);
     perFile.set(f.path, list);
   }
+  // KJ-048: what the cuts orphan. Filled as the ranges are computed below, so
+  // the cascade sees exactly what this edit removes and nothing else.
+  const cutsByPath = new Map<string, { start: number; end: number }[]>();
+  const textForCascade = new Map<string, string>();
 
   // Decided up front: a stale-import edit aimed at a file this same edit
   // deletes made VS Code reject the whole WorkspaceEdit, silently.
@@ -234,9 +239,11 @@ export async function buildSymbolRemovalEdit(
         .sort((a, b) => a.start - b.start);
 
       let previousEnd = -1;
+      const cuts: { start: number; end: number }[] = [];
       for (const r of ranges) {
         if (r.start < previousEnd) continue; // overlapping extents: keep the first
         previousEnd = r.end;
+        cuts.push({ start: r.start, end: r.end });
         edit.replace(
           corpusUri(p),
           new vscode.Range(posAt(starts, r.start), posAt(starts, r.end)),
@@ -244,6 +251,7 @@ export async function buildSymbolRemovalEdit(
           { needsConfirmation: true, label: `Remove unreferenced declaration` },
         );
       }
+      if (cuts.length > 0) { cutsByPath.set(p, cuts); textForCascade.set(p, text); }
     }
 
     // Imports left dangling in OTHER files are part of the fix, not a nicety:
@@ -266,6 +274,7 @@ export async function buildSymbolRemovalEdit(
     }
   }
 
+  addCascade(edit, cutsByPath, textForCascade, deleted);
   return edit;
 }
 

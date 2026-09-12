@@ -105,12 +105,64 @@ export function collectXmlResourceRefs(xml: string, kinds: readonly string[]): R
 }
 
 /** Every `R.kind.name` (and `R2.`) in Kotlin/Java, comments excluded. */
+/**
+ * The R class reached WITHOUT spelling `R.`, in the three forms a real project
+ * uses: `import ca.foo.R.color` then `color.primary`, the same with an alias
+ * (`as baseColor`), and the R class itself aliased (`import ca.foo.R as AppR`
+ * then `AppR.string.hello`).
+ *
+ * Missing them is not a debatable diagnostic: on /Users/kevin/Desktop/work/lapresse
+ * two live colours were reported dead, deleted, and `:rubicon:component-feed`
+ * stopped compiling. 7 files import a nested `R.<kind>` there, 5 alias R.
+ *
+ * `android.R` is the platform's, so `import android.R.style` opens nothing of
+ * ours. A returned `kind` of undefined means the prefix opens EVERY kind,
+ * because the next segment carries it.
+ */
+export function importedResourcePrefixes(code: string): { prefix: string; kind?: string }[] {
+  // Cheap gate: the vast majority of files have no R import at all, and this
+  // runs once per source of the corpus.
+  if (!code.includes('.R.') && !code.includes('.R ')) return [];
+  const out: { prefix: string; kind?: string }[] = [];
+  const nested = /^[ \t]*import[ \t]+(?:static[ \t]+)?([\w.]*?)\bR2?\.([a-z]\w*)(?:[ \t]+as[ \t]+([A-Za-z_]\w*))?[ \t]*;?[ \t]*$/gm;
+  const whole = /^[ \t]*import[ \t]+([\w.]*?)\bR2?[ \t]+as[ \t]+([A-Za-z_]\w*)[ \t]*;?[ \t]*$/gm;
+  let m: RegExpExecArray | null;
+  while ((m = nested.exec(code)) !== null) {
+    if (/(^|\.)android\.$/.test(m[1])) continue;
+    out.push({ prefix: m[3] ?? m[2], kind: m[2] });
+  }
+  while ((m = whole.exec(code)) !== null) {
+    if (/(^|\.)android\.$/.test(m[1])) continue;
+    out.push({ prefix: m[2] });
+  }
+  return out;
+}
+
+/** Every `<prefix>.<name>` an imported R class makes a resource reference. */
+function importedRRefs(clean: string, kinds: readonly string[], namePattern: string): ResourceRef[] {
+  const out: ResourceRef[] = [];
+  for (const { prefix, kind } of importedResourcePrefixes(clean)) {
+    if (kind === undefined) {
+      const re = new RegExp(`\\b${prefix}\\.(${kinds.join('|')})\\.(${namePattern})\\b`, 'g');
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(clean)) !== null) out.push({ kind: m[1], name: m[2] });
+      continue;
+    }
+    if (!kinds.includes(kind)) continue;
+    const re = new RegExp(`\\b${prefix}\\.(${namePattern})\\b`, 'g');
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(clean)) !== null) out.push({ kind, name: m[1] });
+  }
+  return out;
+}
+
 export function collectCodeResourceRefs(code: string, kinds: readonly string[]): ResourceRef[] {
   const clean = stripKotlinComments(code);
   const re = new RegExp(`\\bR2?\\.(${kinds.join('|')})\\.([A-Za-z_]\\w*)\\b`, 'g');
   const out: ResourceRef[] = [];
   let m: RegExpExecArray | null;
   while ((m = re.exec(clean)) !== null) out.push({ kind: m[1], name: m[2] });
+  out.push(...importedRRefs(clean, kinds, '[A-Za-z_]\\w*'));
   return out;
 }
 
@@ -182,6 +234,7 @@ export function collectValueResourceRefs(
     const clean = stripKotlinComments(text);
     const re = new RegExp(`\\bR2?\\.(${group})\\.([A-Za-z_][\\w.]*)\\b`, 'g');
     while ((m = re.exec(clean)) !== null) out.push({ kind: m[1], name: m[2] });
+    out.push(...importedRRefs(clean, kinds, '[A-Za-z_][\\w.]*'));
     return out;
   }
 

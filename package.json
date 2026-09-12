@@ -2,7 +2,7 @@
   "name": "kotlin-jump",
   "displayName": "Kotlin Jump: Fast Kotlin & Android Studio Navigation",
   "description": "Fast Kotlin & Android Studio navigation. Find Usages, Go to Definition, Compose, R.string, Android Run. No JVM, no language server. The Android Studio experience inside VS Code.",
-  "version": "1.42.221",
+  "version": "1.42.222",
   "publisher": "elumine",
   "license": "MIT",
   "icon": "media/logo.png",
@@ -248,6 +248,16 @@
       {
         "command": "kotlin-jump.findEverythingUnused",
         "title": "Find Everything Unused",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.removeTestOnlyCode",
+        "title": "Remove Code Used Only by Tests, With Its Tests",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.makeSelfOnlyPrivate",
+        "title": "Make Every Self Only Member Private",
         "category": "Kotlin Jump"
       },
       {

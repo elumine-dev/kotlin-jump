@@ -62,6 +62,8 @@ import {
 } from './commands/FindUnusedRemoteConfigKeys';
 import { findUnusedEnumEntriesCommand } from './commands/FindUnusedEnumEntries';
 import { findEverythingUnusedCommand } from './commands/FindEverythingUnused';
+import { removeTestOnlyCodeCommand } from './commands/RemoveTestOnlyCode';
+import { makeSelfOnlyPrivateCommand } from './commands/MakeSelfOnlyPrivate';
 import {
   createEventSubscriberCommand,
   findUnheardEventsCommand,
@@ -1511,6 +1513,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         unusedMemberProvider,
         deadIslandProvider,
       ),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.removeTestOnlyCode', () =>
+      removeTestOnlyCodeCommand(resourceCorpus),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.makeSelfOnlyPrivate', () =>
+      makeSelfOnlyPrivateCommand(resourceCorpus),
     ),
     vscode.workspace.onDidCreateFiles(() => resourceCorpus.invalidate()),
     // The explorer reports a deleted or renamed folder as one event for the

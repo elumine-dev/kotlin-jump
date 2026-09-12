@@ -1,22 +1,22 @@
 {
-  "version": "1.42.228",
+  "version": "1.42.229",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The one cache a checkout did not drop",
-  "summary": "A file changing on disk evicts six caches. The workspace corpus was not one of them, so a checkout left it serving offsets from the old content for a minute.",
+  "tagline": "Eleven findings counted twice",
+  "summary": "The summary adds its sections up, and two of them still counted the findings that the new testOnly line had taken over.",
   "highlights": [
     {
-      "title": "A checkout fires no save event",
-      "description": "The corpus was dropped on save, and a git checkout or a stash pop touches files nobody has open. Its offsets stayed measured on content that was gone.",
+      "title": "One finding, one line",
+      "description": "Enum entries and dead islands kept their testOnly findings in their own count while the testOnly line counted them again, so the headline ran eleven too high on a real project.",
       "kind": "fix"
     },
     {
-      "title": "The burst path is the checkout path",
-      "description": "The watcher has a separate path for the hundreds of files a checkout changes at once. That is exactly the one that mattered, and it drops the corpus too.",
+      "title": "The lists were right all along",
+      "description": "Only the number in front of the colon was wrong. Every per family list showed the findings it claimed.",
       "kind": "fix"
     },
     {
-      "title": "Both entry points",
-      "description": "The desktop and the browser builds share this wiring. Fixing one and leaving the other is how a change ships half applied.",
+      "title": "A mutant that survived",
+      "description": "The first witness only lit one of the two families, so half the fix could be undone with every test still green. Both halves are pinned now.",
       "kind": "fix"
     }
   ],
@@ -24,8 +24,8 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "A file changed on disk drops the workspace corpus, on the per file path and on the burst path.",
-        "The browser entry point gets the same eviction as the desktop one."
+        "A finding kept alive only by its tests is counted on that line and nowhere else.",
+        "The enum entry and dead island sections count what they actually list."
       ]
     }
   ],

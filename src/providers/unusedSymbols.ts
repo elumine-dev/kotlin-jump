@@ -334,9 +334,16 @@ export function removalExtent(
   const nextLineNum = offsetToPos(lineStarts as number[], Math.max(endOffset - 1, 0)).line + 1;
   let nextNonBlank = nextLineNum;
   while (nextNonBlank <= lastLine && (lines[nextNonBlank] ?? '').trim() === '') nextNonBlank++;
+  // Tout mot qui OUVRE une declaration, pas seulement ceux qui portent son
+  // genre. La liste s arretait a `data` et `inline` : un bloc de constantes,
+  // la forme que prend tout companion object, se lisait comme UNE declaration
+  // etalee sur six lignes, l etendue etait refusee et le diagnostic sortait
+  // sans correctif. 58 des 66 declarations sans coupe sur lapresse tenaient a
+  // `const`. Ajouter un mot ne peut qu ouvrir une coupe, jamais l elargir :
+  // l etendue vient de la portee, ce test decide seulement de la rendre.
   const nextStartsFresh =
     nextNonBlank > lastLine ||
-    /^\s*(?:\}|\/\/|\/\*|@|va[lr]\b|fun\b|class\b|object\b|interface\b|companion\b|init\b|constructor\b|private\b|protected\b|internal\b|public\b|override\b|abstract\b|open\b|enum\b|sealed\b|data\b|suspend\b|inline\b|typealias\b)/
+    /^\s*(?:\}|\/\/|\/\*|@|va[lr]\b|fun\b|class\b|object\b|interface\b|companion\b|init\b|constructor\b|private\b|protected\b|internal\b|public\b|override\b|abstract\b|open\b|enum\b|sealed\b|data\b|suspend\b|inline\b|typealias\b|const\b|lateinit\b|final\b|static\b|inner\b|annotation\b|value\b|external\b|expect\b|actual\b|operator\b|infix\b|tailrec\b)/
       .test(lines[nextNonBlank] ?? '');
   // A trailing `;` closes the statement, in Java as in Kotlin. Without this the
   // freshness test decides, and its keyword list is Kotlin only: a Java field

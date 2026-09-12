@@ -67,6 +67,18 @@ function declares(texte: string): Set<string> {
   return out;
 }
 
+/** Le texte avec tout ce qui est entre accolades remplace par des blancs. */
+function sansCorps(texte: string): string {
+  let profondeur = 0;
+  let out = '';
+  for (const c of texte) {
+    if (c === '{') { profondeur++; out += c; continue; }
+    if (c === '}') { profondeur = Math.max(0, profondeur - 1); out += c; continue; }
+    out += profondeur > 0 ? (c === '\n' ? '\n' : ' ') : c;
+  }
+  return out;
+}
+
 function main(): void {
   const root = process.argv[2];
   const sources: { path: string; text: string }[] = [];
@@ -93,7 +105,7 @@ function main(): void {
 
   let removables = 0;
   const fautes: string[] = [];
-  const compte = { nom: 0, bornes: 0, solde: 0, ligne: 0, voisin: 0 };
+  const compte = { nom: 0, bornes: 0, solde: 0, ligne: 0, voisin: 0, voisine: 0 };
 
   for (const f of findings as any[]) {
     const start = f.removeStart, end = f.removeEnd;
@@ -130,6 +142,26 @@ function main(): void {
     if (premiere !== undefined && !premiere.includes(f.name)) {
       compte.voisin++;
       if (fautes.length < 12) fautes.push(`DEPART ${f.name} ${f.path}:${f.line + 1} premiere ligne de code coupee = ${JSON.stringify(premiere.trim().slice(0, 70))}`);
+    }
+
+    // 6. la coupe ne contient QU UNE declaration, la sienne.
+    //
+    // Invariant ajoute apres coup : les cinq precedents ont annonce zero
+    // violation sur 6329 sources pendant que `val mort = 1; val vivant = 2`
+    // perdait sa moitie vivante. Le nom est present, les bornes tiennent, la
+    // coupe part d un debut de ligne, le solde ne bouge pas et la premiere
+    // ligne est bien la declaration : tout est vrai, et du code vivant part
+    // quand meme. Elargir une extraction expose ce que l etroitesse cachait,
+    // donc l oracle doit compter ce qu il coupe.
+    const DECLS = /(?:^|[;{])\s*(?:(?:public|private|internal|protected|open|abstract|final|sealed|data|enum|annotation|value|inline|suspend|external|expect|actual|operator|infix|lateinit|const|override|companion|static|synchronized|native|transient|volatile)\s+)*(?:val|var|fun|class|object|interface|typealias)\s+[A-Za-z_`]/g;
+    // Seulement le MEME niveau : les membres de la classe coupee sont dedans a
+    // juste titre, ce sont ses voisins de ligne qui ne le sont pas. Les corps
+    // sont blanchis avant de compter.
+    const coupePropre = sansCorps(stripKotlinComments(coupe));
+    const combien = (coupePropre.match(DECLS) ?? []).length;
+    if (combien > 1) {
+      compte.voisine++;
+      if (fautes.length < 12) fautes.push(`VOISINE ${f.name} ${f.path}:${f.line + 1} ${combien} declarations dans la coupe = ${JSON.stringify(coupePropre.trim().slice(0, 70))}`);
     }
 
     // 4. le fichier reste equilibre apres la coupe

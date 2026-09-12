@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.233
+
+The diagnostic said a constant was unused and the lightbulb offered nothing.
+
+### Fixes
+- A block of constants had no removal at all. The test that decides whether a declaration continues on the next line reads the first word of that line, and its list of keywords stopped at `data` and `inline`: `const` was not in it. A companion object, which is a run of `const val` lines, therefore read as ONE declaration spread over six lines, the extent was refused, and the diagnostic appeared with no quick fix at all. On a real 6329 source project, 58 of the 66 findings shown without a fix were exactly that.
+- The same list was missing `lateinit`, `final`, `static`, `inner`, `annotation`, `value`, `external`, `expect`, `actual`, `operator`, `infix` and `tailrec`. Every one of them opens a declaration and none of them could.
+
+### Notes
+- Adding a word to that list can only turn a refusal into an offer, never widen a cut: the extent comes from the declaration span, and this test only decides whether to hand it over. Checked rather than assumed, by comparing every cut on those 6329 sources before and after. No existing cut moved, 58 appeared, and the 8 refusals left are declarations whose body starts on the following line.
+- Removable class members go from 257 to 313 and unreferenced symbols from 95 to 97 out of 98, with the seven removal invariants clean on both sides. One of those seven was reporting zero because it was never actually counted, which is fixed too.
+
 ## 1.42.232
 
 The limit stopped being what the detector finds and became what it can cut. Three of those limits are gone.

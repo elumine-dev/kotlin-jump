@@ -1,3 +1,4 @@
+import { matchesGlob } from '../util/glob';
 import { isBuildArtifactPath, isGeneratedSource } from '../util/resourceAllowlists';
 import { stripXmlComments } from '../util/xmlRefs';
 import { harvestMentions, SymbolSource } from './unusedSymbols';
@@ -84,12 +85,6 @@ export function isRemoteConfigDefaults(path: string, text: string): boolean {
   return /<defaults\s*>/.test(text) && /<key\s*>/.test(text);
 }
 
-function matchesGlob(name: string, pattern: string): boolean {
-  const re = new RegExp('^' + pattern
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-    .replace(/\*/g, '.*') + '$');
-  return re.test(name);
-}
 
 function lineStartsOf(text: string): number[] {
   const starts = [0];

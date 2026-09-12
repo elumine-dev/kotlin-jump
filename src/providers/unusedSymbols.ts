@@ -1,3 +1,4 @@
+import { matchesGlob } from '../util/glob';
 import { parse, RawSymbol, SymbolKind } from '../indexer/KotlinParser';
 import { parseJava } from '../indexer/JavaParser';
 import {
@@ -219,25 +220,7 @@ export function countWord(text: string, name: string): number {
   return n;
 }
 
-export function matchesGlob(path: string, pattern: string): boolean {
-  // `**/` spans zero or more directories, the way the editor's own globs and
-  // gitignore read it. Translating it to `.*/` demanded at least one, so the
-  // shipped default `**/buildSrc/**` matched nothing on the standard Gradle
-  // layout, where `buildSrc` sits at the root of the workspace.
-  //
-  // Both markers are parked as escapes, never as raw bytes: a raw control byte
-  // makes git read the whole file as binary and stop showing its diffs.
-  const re = new RegExp(
-    '^' + pattern
-      .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-      .replace(/\*\*\//g, '\u0000')   // `**/` parked: zero or more directories
-      .replace(/\*\*/g, '\u0001')     // a bare `**` parked: anything at all
-      .replace(/\*/g, '[^/]*')
-      .replace(/\u0000/g, '(?:.*/)?')
-      .replace(/\u0001/g, '.*') + '$',
-  );
-  return re.test(path);
-}
+export { matchesGlob };
 
 export function isUnder(path: string, dir: string): boolean {
   return path === dir || path.startsWith(`${dir}/`) || path.startsWith(`${dir}\\`);

@@ -145,3 +145,89 @@ describe('DependencyUsageBadgeProvider - le cache du balayage projet', () => {
     p.dispose();
   });
 });
+
+/**
+ * La meme paire de gardes manquait sur la PEINTURE.
+ *
+ * `_refresh` lit le projet entier, puis le catalogue, puis dessine. Les deux
+ * lectures durent plusieurs secondes sur un vrai projet, et l etat qui les a
+ * lancees peut avoir disparu quand elles reviennent. Le cache refusait deja de
+ * revenir de la ; le trace, lui, repeignait.
+ *
+ * Deux consequences, la seconde etant la plus visible : couper le reglage
+ * pendant le balayage rallumait les badges tout seuls quelques secondes plus
+ * tard, et un balayage qui atterrit apres `dispose()` ecrit a travers un type
+ * de decoration deja detruit.
+ */
+describe('DependencyUsageBadgeProvider - la peinture apres le balayage', () => {
+  /** Un balayage suspendu qui produit VRAIMENT un badge une fois relache. */
+  function balayageAvecCatalogue(reglage: { actif: boolean }) {
+    let relacher!: () => void;
+    const barriere = new Promise<void>(r => { relacher = r; });
+    vi.spyOn(vscodeMock.workspace, 'onDidChangeConfiguration')
+      .mockImplementation((() => ({ dispose: () => {} })) as any);
+    vi.spyOn(vscodeMock.workspace, 'findFiles').mockImplementation((async (motif: string) => (
+      /versions\.toml/.test(String(motif))
+        ? [{ toString: () => 'file:///w/gradle/libs.versions.toml', fsPath: '/w/gradle/libs.versions.toml' }]
+        : [{ toString: () => 'file:///w/src/F0.kt', fsPath: '/w/src/F0.kt' }]
+    )) as any);
+    vi.spyOn(vscodeMock.workspace.fs as any, 'readFile').mockImplementation((async (uri: any) => {
+      if (/toml/.test(String(uri.fsPath))) {
+        return encode('[libraries]\ntimber = { module = "com.jakewharton.timber:timber" }\n');
+      }
+      await barriere;
+      return encode('import com.jakewharton.timber.Timber');
+    }) as any);
+    vi.spyOn(vscodeMock.workspace, 'getConfiguration').mockReturnValue({
+      get: (cle: string, def: any) => (cle === 'dependencyUsageBadges' ? reglage.actif : def),
+    } as any);
+    return relacher;
+  }
+
+  const badgesPeints = () => {
+    const editeur: any = (vscodeMock.window as any).activeTextEditor;
+    return editeur.setDecorations.mock.calls.filter((c: any[]) => (c[1] ?? []).length > 0).length;
+  };
+
+  it('temoin : un balayage qui aboutit dessine bien un badge', async () => {
+    const relacher = balayageAvecCatalogue({ actif: true });
+    ouvrirGradle();
+    const p: any = new DependencyUsageBadgeProvider();
+    relacher();
+    await attendre();
+    expect(badgesPeints(), 'sans ce badge les deux tests suivants ne prouveraient rien')
+      .toBeGreaterThan(0);
+    p.dispose();
+  });
+
+  it('couper le reglage pendant le balayage ne rallume pas les badges', async () => {
+    const reglage = { actif: true };
+    const relacher = balayageAvecCatalogue(reglage);
+    ouvrirGradle();
+    const p: any = new DependencyUsageBadgeProvider();
+    await attendre();
+
+    reglage.actif = false;      // l utilisateur coupe le badge pendant le balayage
+    relacher();
+    await attendre();
+
+    expect(badgesPeints(), 'le badge coupe ne doit pas revenir tout seul').toBe(0);
+    p.dispose();
+  });
+
+  it('un fournisseur detruit ne peint plus rien', async () => {
+    const relacher = balayageAvecCatalogue({ actif: true });
+    ouvrirGradle();
+    const p: any = new DependencyUsageBadgeProvider();
+    await attendre();
+    const editeur: any = (vscodeMock.window as any).activeTextEditor;
+    const avant = editeur.setDecorations.mock.calls.length;
+
+    p.dispose();
+    relacher();
+    await attendre();
+
+    expect(editeur.setDecorations.mock.calls.length,
+      'ecrire a travers un type de decoration detruit').toBe(avant);
+  });
+});

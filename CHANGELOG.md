@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.42.215
+
+The primitive every dead code detector shares could change the line count of the copy it hands back, which is the one thing it must never do.
+
+### Fixes
+- Comments and string contents are blanked out on a copy of the file, lengths kept, so an offset computed on the copy points at the same character of the real text. Three detectors go further and build their whole line table from that copy, and the action added last release reads one of its lines by index. The escape branch consumed two characters without looking at them, so a backslash at the end of a line inside a string ate the newline: the length stayed right and every line below moved up by one. A removal expressed in lines then lands on the wrong line.
+- The same branch, at the very end of a file, pushed two characters for the one it consumed, so the copy came back longer than the original.
+- A backslash before the end of a line no longer keeps the string open either, so the code on the next line stays visible to the scan instead of being blanked away with it.
+
+### Notes
+- Zero file of the project this is measured against produces either shape, since neither compiles. A file being typed does.
+- The invariant is now a test rather than a comment: length and line count, on a thousand deliberately malformed texts drawn from a fixed seed. It found the second defect on its own, and each half of the fix is proven by putting the old branch back.
+- Interleaved against the previous version on the repository bench, four passes a side: no metric has disjoint distributions. The widest apparent gap, 9.6 % on the dead island sweep, has the two sides fully interleaved.
+
 ## 1.42.214
 
 `Add names to call arguments` was offered inside prose, and accepting it rewrote the sentence.

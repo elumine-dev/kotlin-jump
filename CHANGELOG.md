@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.42.236
+
+A modifier alone proves nothing, and 1.42.233 had taken it as proof.
+
+### Fixes
+- A cut could stop one line short and leave code that does not compile. Every Kotlin modifier is a soft keyword, which is to say an ordinary identifier: `value`, `data`, `open`, `expect` name variables every day. The test that decides whether the line below opens a declaration matched them bare, so in
+
+      val ghostly = if (a)
+          value
+      else
+          other
+
+  the second line read as a new declaration, the first line was judged finished, and the cut took it alone. The other three stayed behind. `open` was already in that list; 1.42.233 added eleven more words to it and widened the hole. A modifier counts now when a hard keyword follows it, or, in Java, a type and a name.
+- The expression walk stops on a semicolon at bracket depth zero. A statement ends there whatever the next line says, and without it the walk could read on into the Java method below.
+
+### Notes
+- Not reachable on the 6329 source project this is measured against: the same 418 findings keep byte for byte the same 418 cuts. The shape is ordinary Kotlin all the same, and the test writes it down.
+- Seven adversarial shapes were put to the walk at the same time and hold: a string template, braces inside a string, braces inside a comment, a raw string, a lambda body, a 90 line initializer, which yields no fix rather than a guess, and a declaration that never closes.
+
 ## 1.42.235
 
 Every finding carries a fix now. The last eight did not.

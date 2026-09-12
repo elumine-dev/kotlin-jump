@@ -265,14 +265,37 @@ export function accessorNames(name: string): string[] {
 }
 
 
+/** Every modifier a declaration can wear, Kotlin and Java together. */
+const MODIFICATEUR =
+  '(?:(?:public|private|protected|internal|override|open|final|abstract|sealed|data|inner'
+  + '|enum|annotation|value|companion|const|lateinit|inline|noinline|crossinline|suspend'
+  + '|operator|infix|tailrec|external|expect|actual|static|synchronized|native|strictfp'
+  + '|transient|volatile)\\s+)';
+
 /**
  * A line that OPENS something of its own, so the line above it ended.
  *
  * Written once and used twice, by the freshness test and by the expression
  * walk below: two copies of this list would drift apart in a week.
+ *
+ * A modifier ALONE proves nothing. Every Kotlin modifier is a soft keyword,
+ * which is to say an ordinary identifier: `value`, `data`, `open`, `expect`
+ * name variables every day. Matching them bare read the continuation line of
+ *   val ghostly = if (a)
+ *       value
+ *   else
+ *       other
+ * as a new declaration, so the cut took the first line alone and left the
+ * three others behind. Only the HARD keywords stand on their own; a modifier
+ * counts when a hard keyword follows it, or, in Java, a type and a name.
  */
-const OUVRE_UNE_DECLARATION_RE =
-  /^\s*(?:\}|\/\/|\/\*|@|va[lr]\b|fun\b|class\b|object\b|interface\b|companion\b|init\b|constructor\b|private\b|protected\b|internal\b|public\b|override\b|abstract\b|open\b|enum\b|sealed\b|data\b|suspend\b|inline\b|typealias\b|const\b|lateinit\b|final\b|static\b|inner\b|annotation\b|value\b|external\b|expect\b|actual\b|operator\b|infix\b|tailrec\b)/;
+const OUVRE_UNE_DECLARATION_RE = new RegExp(
+  '^\\s*(?:'
+  + '\\}|//|/\\*|@'
+  + '|' + MODIFICATEUR + '*(?:va[lr]|fun|class|object|interface|typealias|init|constructor|companion)\\b'
+  + '|' + MODIFICATEUR + '+[\\w.<>\\[\\],?]+\\s+\\w+\\s*[=(;]'
+  + ')',
+);
 
 /** Une ligne qui se termine sur un operateur appelle une suite. */
 const FINIT_SUR_UN_OPERATEUR_RE = /(?:[+\-*/,.&|?:=(]|->)$/;
@@ -321,7 +344,11 @@ function finDeLExpression(
 
     // Juge la continuation sur le texte BRUT, comme le test d origine : le
     // nettoyeur vide les chaines et `val X = "done"` se lirait sur `=`.
-    if (FINIT_SUR_UN_OPERATEUR_RE.test(brute.trimEnd())) continue;
+    const fin = brute.trimEnd();
+    if (FINIT_SUR_UN_OPERATEUR_RE.test(fin)) continue;
+    // Un `;` a profondeur zero clot la declaration, quelle que soit la ligne
+    // suivante : sans cela la marche traversait la methode Java d en dessous.
+    if (fin.endsWith(';')) return lineEndOf(l);
     let suivante = l + 1;
     while (suivante <= lastLine && (lines[suivante] ?? '').trim() === '') suivante++;
     if (suivante <= lastLine && !OUVRE_UNE_DECLARATION_RE.test(lines[suivante] ?? '')) continue;

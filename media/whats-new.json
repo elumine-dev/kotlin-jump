@@ -1,27 +1,27 @@
 {
-  "version": "1.42.235",
+  "version": "1.42.236",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Every finding carries a fix",
-  "summary": "A declaration whose body starts on the next line had no removal at all. The extent test now walks down to where the expression really ends.",
+  "tagline": "A modifier alone proves nothing",
+  "summary": "Every Kotlin modifier is a soft keyword, so `value` and `data` name variables every day. Matching them bare made a cut stop one line short and leave code that does not compile.",
   "highlights": [
     {
-      "title": "Bodies that start on the next line",
+      "title": "Cuts that stopped one line short",
       "kind": "fix",
-      "description": "`fun f(): T =` with its body below, a call chain over three lines, `val x = listOf(` over four, `get() = if (a) { } else { }`. The extent test asked one question and gave up on a yes; it walks down to the real end now, counting brackets on sanitized text."
+      "description": "A continuation line starting with `value`, `data` or `open` read as a new declaration, so the line above was judged finished and cut alone. A modifier counts now when a hard keyword follows it, or, in Java, a type and a name."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "A declaration whose expression body starts on the following line had no removal. The walk stops on the first line that closes every bracket the declaration opened, does not end on an operator, and is not followed by a continuation.",
-        "A declaration that never closes still yields no fix, rather than a guess."
+        "A cut could stop one line short and leave code behind that does not compile. `open` was already matched bare; 1.42.233 added eleven more words and widened the hole.",
+        "The expression walk stops on a semicolon at bracket depth zero, so it can no longer read on into the Java method below."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "On a real 6329 source project: 418 findings, 418 with a fix. It was 8 without before this release, and 66 before 1.42.233. No existing cut moved, checked one by one across both versions."
+        "Not reachable on the 6329 source project this is measured against: the same 418 findings keep the same 418 cuts, byte for byte. The shape is ordinary Kotlin all the same."
       ]
     }
   ],

@@ -1,22 +1,17 @@
 {
-  "version": "1.42.225",
+  "version": "1.42.226",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A removal that did nothing, and said nothing",
-  "summary": "The cascade added in 1.42.222 could ask to delete a file the same edit was already changing. VS Code rejects that whole edit without a word.",
+  "tagline": "One read per file, and it is a correctness rule",
+  "summary": "The removal edit read every file twice, computing offsets on one read and applying them to another. Between the two, a file can change.",
   "highlights": [
     {
-      "title": "Deleted and edited at once",
-      "description": "A WorkspaceEdit that both removes a URI and edits a range in it is rejected entirely and in silence, so the removal appeared to run and changed nothing.",
+      "title": "Ranges and text from the same bytes",
+      "description": "Offsets measured on a first read were written against a second one. A file that changes between two awaits put the deletion somewhere else.",
       "kind": "fix"
     },
     {
-      "title": "Planned before anything is written",
-      "description": "The cascade answers first, and the caller adds no range edit for a file the plan takes. One planner and one writer for the four places that remove code.",
-      "kind": "fix"
-    },
-    {
-      "title": "Reachable on every testOnly finding",
-      "description": "A declaration used only from tests is never counted as removable, so the scan never marks its file as emptied, and the cascade was the only thing that knew.",
+      "title": "Thirty dead symbols, one read",
+      "description": "A file reached by many stale imports was read once per import. The read is memoized for the whole edit now.",
       "kind": "fix"
     }
   ],
@@ -24,8 +19,8 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "The cascade is planned before any edit is written, so no URI is both deleted and edited.",
-        "A file the cascade takes receives no range edit, and exactly one deletion."
+        "The text of a file is read once per removal edit, so the ranges and the text they apply to cannot diverge.",
+        "A file named by several stale imports is no longer read once per import."
       ]
     }
   ],

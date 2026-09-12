@@ -185,6 +185,17 @@ export class DependencyUsageBadgeProvider implements vscode.Disposable {
 
     const { imports, complete } = await this._workspaceImports();
     const catalog = await this._catalog();
+    // Both reads above take seconds on a real project, and the state they were
+    // started under can be gone by the time they land. The cache already
+    // refuses to come back from there; the paint has to refuse too, or the
+    // badges the user just switched off are drawn again behind their back, and
+    // a disposed decoration type is written through.
+    if (this._disposed) return;
+    if (!this._enabled()) {
+      editor.setDecorations(this._badge, []);
+      editor.setDecorations(this._dead, []);
+      return;
+    }
     const lines = editor.document.getText().split('\n');
     const badges: vscode.DecorationOptions[] = [];
     const dead: vscode.Range[] = [];

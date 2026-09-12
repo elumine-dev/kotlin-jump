@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.211
+
+Switching the dependency badges off could switch them back on. The provider reads every source file of the project to count imports, several seconds on a real one, and it decided whether to draw before that read rather than after: a sweep started while the setting was on finished by painting the badges the user had just turned off.
+
+### Fixes
+- The release two versions ago gave that sweep a pair of guards, so its result no longer comes back into the cache once the setting is off or the provider is gone. The paint was left out of the pair, which is the half the user actually sees. A sweep landing after the provider is disposed also wrote through a decoration type that no longer exists.
+- The check that keeps em dashes and en dashes out of what the extension says only ever read a string that opened and closed on the same line. A panel is written as one template running over a hundred lines, so nothing inside a webview was ever examined, and the check said so itself in a comment: `every banned dash lives in a single line literal`. That was true the day it was written and nothing kept it true. It reads the source through the TypeScript parser now, and a stylesheet comment inside a template stays code rather than becoming copy.
+
+### Notes
+- Nothing was hiding in that blind spot: one dash lives there today, in a comment explaining a checkered background, and it is not copy. The hole was real, the leak was not.
+- Both defects are proven by a test that fails without the fix, and the dash check is proven twice: on a template written by hand, and on the real panel with a sentence injected into it.
+
 ## 1.42.210
 
 Six settings say `globs allowed` in their own description, and not one of them read `?`. Left untranslated the character stays a regular expression quantifier, which makes the letter before it optional: a pattern ending in `Test?.kt` kept `Test.kt` out of the report and let `Test1.kt` in. Both sides wrong, in opposite directions.

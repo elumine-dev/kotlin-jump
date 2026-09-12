@@ -1,22 +1,17 @@
 {
-  "version": "1.42.210",
+  "version": "1.42.211",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The question mark in a glob",
-  "summary": "Six settings accept glob patterns and none of them read the single character wildcard, which either matched the wrong files or stopped the scan outright.",
+  "tagline": "Badges that came back on their own",
+  "summary": "Turning the dependency badges off while the project sweep was running let that sweep paint them again seconds later.",
   "highlights": [
     {
-      "title": "One character, matched backwards",
-      "description": "A pattern ending in Test?.kt kept Test.kt out of the report and let Test1.kt in, since the character stayed a regular expression quantifier and made the letter before it optional.",
+      "title": "A setting that undid itself",
+      "description": "The sweep that counts imports across the project takes seconds. It decided whether to draw before that read instead of after, so badges switched off mid sweep were drawn again when it landed.",
       "kind": "fix"
     },
     {
-      "title": "A pattern that stopped the whole scan",
-      "description": "A question mark with nothing before it does not compile. In the command that runs every unused code check at once, one such pattern took all ten down.",
-      "kind": "fix"
-    },
-    {
-      "title": "One translator instead of three copies",
-      "description": "Three providers each carried their own, so any glob fix had to be made three times. Compiled patterns are also kept now rather than rebuilt for every candidate: 34.5 ms against 5.1 ms over 40 000 calls.",
+      "title": "Painting through a disposed provider",
+      "description": "A sweep landing after the provider was disposed wrote through a decoration type that no longer exists.",
       "kind": "fix"
     }
   ],
@@ -24,10 +19,9 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "A question mark in any ignore setting now covers exactly one character, and never crosses a path separator.",
-        "A pattern starting with a question mark no longer throws out of the detector.",
-        "The six settings that accept globs share one translator, and a test fails if a fourth copy of it appears.",
-        "Translated patterns are kept instead of being rebuilt on every candidate."
+        "The dependency badges stay off once switched off, even when a project sweep was already running.",
+        "A sweep that lands after the provider is gone no longer paints.",
+        "The release check for banned dashes now reads inside multi line templates, so webview text is covered like every other string."
       ]
     }
   ],

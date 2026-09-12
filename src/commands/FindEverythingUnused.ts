@@ -8,8 +8,7 @@ import {
   collectValueKeyDeclarations,
   parseValuesPath,
 } from '../indexer/ValueResourceScanner';
-import { DeadCodeSweepReport, scanWorkspace } from './DeadCodeSweep';
-import { summarize as summarizeSweep } from '../providers/DeadCodeSweep';
+import { DeadCodeSweepReport, describeFindings, scanWorkspace } from './DeadCodeSweep';
 import {
   UnusedResourceKeyProvider,
   findUnusedResourceKeys,
@@ -45,8 +44,10 @@ import { plural } from '../util/plural';
  * more than running the most expensive one alone.
  */
 
-interface Section {
+export interface Section {
+  /** Plural form of the label, and the singular the count may need. */
   label: string;
+  one: string;
   count: number;
   detail?: string;
 }
@@ -84,12 +85,11 @@ export async function findEverythingUnusedCommand(
         if (token.isCancellationRequested) return;
         sweepReport.setScan(sweep);
         const all = sweep.files.flatMap(f => f.findings);
-        const byDetector = summarizeSweep(all);
         sections.push({
           label: 'dead code',
+          one: 'dead code',
           count: all.length,
-          detail: [...byDetector.entries()].sort((a, b) => b[1] - a[1])
-            .map(([d, n]) => `${n} ${d}`).join(', '),
+          detail: describeFindings(all),
         });
       } else {
         skipped.push('dead code');
@@ -124,6 +124,7 @@ export async function findEverythingUnusedCommand(
           const testOnly = symbols.filter(s => s.verdict === 'testOnly');
           sections.push({
             label: 'unreferenced symbols',
+            one: 'unreferenced symbol',
             count: unreferenced.length,
             detail: testOnly.length > 0 ? `${testOnly.length} used only from tests` : undefined,
           });
@@ -149,7 +150,7 @@ export async function findEverythingUnusedCommand(
             ignorePrefixes: cfg.get<string[]>('unusedResourceKeysIgnorePrefixes', []),
           });
           keyProvider.setFindings(keys);
-          sections.push({ label: 'resource keys', count: keys.length });
+          sections.push({ label: 'resource keys', one: 'resource key', count: keys.length });
         }
       } else {
         skipped.push('resource keys');
@@ -170,7 +171,7 @@ export async function findEverythingUnusedCommand(
             includeDrawables: resourceSettings.includeDrawables,
           });
           resourceProvider.setFindings(files);
-          sections.push({ label: 'resource files', count: files.length });
+          sections.push({ label: 'resource files', one: 'resource file', count: files.length });
         }
       } else {
         skipped.push('resource files');
@@ -196,6 +197,7 @@ export async function findEverythingUnusedCommand(
           const types = new Set(scan.events.map(e => e.name)).size;
           sections.push({
             label: 'unheard events',
+            one: 'unheard event',
             count: scan.events.length,
             detail: types > 0 ? `${types} event type${types > 1 ? 's' : ''}` : undefined,
           });
@@ -220,6 +222,7 @@ export async function findEverythingUnusedCommand(
           const enums = new Set(entries.map(e => e.enumName)).size;
           sections.push({
             label: 'enum entries',
+            one: 'enum entry',
             count: entries.length,
             detail: enums > 0 ? `across ${enums} enum${enums > 1 ? 's' : ''}` : undefined,
           });
@@ -242,6 +245,7 @@ export async function findEverythingUnusedCommand(
           const decls = keys.reduce((n, k) => n + k.declarations.length, 0);
           sections.push({
             label: 'Remote Config keys',
+            one: 'Remote Config key',
             count: keys.length,
             detail: decls > keys.length ? plural(decls, 'declaration') : undefined,
           });
@@ -264,8 +268,9 @@ export async function findEverythingUnusedCommand(
           const versions = aliases.filter(a => a.orphanedVersion).length;
           sections.push({
             label: 'catalog aliases',
+            one: 'catalog alias',
             count: aliases.length,
-            detail: versions > 0 ? `${versions} version entries freed` : undefined,
+            detail: versions > 0 ? `${plural(versions, 'version entry', 'version entries')} freed` : undefined,
           });
         }
       } else {
@@ -295,6 +300,7 @@ export async function findEverythingUnusedCommand(
           const selfOnly = members.filter(m => m.verdict === 'selfOnly').length;
           sections.push({
             label: 'class members',
+            one: 'class member',
             count: unref,
             detail: selfOnly > 0 ? `${selfOnly} could be private` : undefined,
           });
@@ -320,6 +326,7 @@ export async function findEverythingUnusedCommand(
           const islandDecls = islands.reduce((sum, i) => sum + i.members.length, 0);
           sections.push({
             label: 'dead islands',
+            one: 'dead island',
             count: islands.length,
             detail: islands.length > 0
               ? `${plural(islandDecls, 'declaration')}${islandDecls > 1 ? ' holding each other' : ''}`
@@ -331,21 +338,30 @@ export async function findEverythingUnusedCommand(
       }
 
       // ── the one summary ──────────────────────────────────────────────────
-      const total = sections.reduce((sum, s) => sum + s.count, 0);
-      if (total === 0 && skipped.length === 0) {
-        void vscode.window.showInformationMessage(
-          `Nothing unused found across ${plural(data.sources.length, 'file')}.`,
-        );
-        return;
-      }
-
-      const parts = sections
-        .filter(s => s.count > 0)
-        .map(s => `${s.count} ${s.label}${s.detail ? ` (${s.detail})` : ''}`);
-      const skippedNote = skipped.length > 0 ? ` Skipped: ${skipped.join('; ')}.` : '';
-      void vscode.window.showInformationMessage(
-        `${plural(total, 'finding')} across ${plural(data.sources.length, 'file')}: ${parts.join(' · ')}.${skippedNote}`,
-      );
+      void vscode.window.showInformationMessage(resumeTout(sections, data.sources.length, skipped));
     },
   );
+}
+
+/**
+ * The one line the aggregate command reports.
+ *
+ * Every section label was written once, in the plural, and printed as is, so a
+ * single finding read `1 dead islands` and `1 enum entries`. The empty list
+ * had its own shape too: with everything at zero but a detector skipped, the
+ * sentence ended on `: .` before naming what was skipped.
+ */
+export function resumeTout(
+  sections: readonly Section[],
+  files: number,
+  skipped: readonly string[],
+): string {
+  const total = sections.reduce((sum, s) => sum + s.count, 0);
+  const skippedNote = skipped.length > 0 ? ` Skipped: ${skipped.join('; ')}.` : '';
+  if (total === 0) return `Nothing unused found across ${plural(files, 'file')}.${skippedNote}`;
+
+  const parts = sections
+    .filter(s => s.count > 0)
+    .map(s => `${plural(s.count, s.one, s.label)}${s.detail ? ` (${s.detail})` : ''}`);
+  return `${plural(total, 'finding')} across ${plural(files, 'file')}: ${parts.join(' · ')}.${skippedNote}`;
 }

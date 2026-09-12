@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.42.208
+
+A summary that names its own internals. The command that reports every unused thing at once printed the detector key rather than its label, so on a real project of 5093 Kotlin and Java files its dead code line read `43 locals, 21 imports, 19 declarations, 4 writeOnly, 2 parameters`.
+
+### Fixes
+- `locals` and `writeOnly` are identifiers from the source. The words for them, variables and `write-only variables`, already existed in the command that reports the same scan, three lines above the code that ignored them. One table now, used by both, and it carries the singular as well as the plural.
+- The labels inside those summaries were each written once, in the plural. Nine of them sit in the aggregate command, so a lone finding read `1 dead islands`, `1 enum entries`, `1 catalog aliases`. Two would grow a second fault under a rule that guesses, entrys and aliass, which is why every singular is written down instead of derived.
+- The per file clean up message agreed its noun in the previous release and left the verb behind: `1 finding need a per-case fix`. That sentence carries no verb at all now.
+- The count of freed version entries in the same summary had the same shape, `1 version entries freed`.
+- With every check empty and at least one check skipped, the aggregate sentence ended on a colon and a full stop with nothing between them: `0 findings across 4 files: . Skipped: resource keys.` The empty case now says nothing was found, then names what was skipped.
+
+### Notes
+- Measured on the real project: the wrong labels are visible today, the disagreement at one is not, since the smallest count there is two unused parameters. Both faults come from the same release and the same half applied idea, so both leave together.
+- Three verification harnesses ride along, unused by the build and by the extension. They check the Room migration drift detector, the sealed `when` lens and the string resource hover against a real project, and each carries the deliberately broken input that proves it can still fail.
+
 ## 1.42.207
 
 Counts written next to a hardcoded plural. One dead island read `1 declarations across 1 file(s) reference only each other`, which is not just ungrammatical: a lone declaration cannot reference each other, so the sentence was false.

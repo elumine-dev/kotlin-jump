@@ -1,22 +1,22 @@
 {
-  "version": "1.42.223",
+  "version": "1.42.224",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Five defects in yesterday's own removals",
-  "summary": "Reading the 1.42.222 diff against a real project rather than against the tests turned up five defects, four of which edit code nothing would have caught.",
+  "tagline": "The same defect one layer down",
+  "summary": "Yesterday's fix narrowed the search from the whole line to the modifier run. The modifier run still contained the arguments of the annotations.",
   "highlights": [
     {
-      "title": "A refactor that rewrote a string literal",
-      "description": "Making a member private looked for the visibility keyword anywhere on the line, so `val label = \"make it public \"` came back with the string rewritten and the member still public.",
+      "title": "An annotation argument is not a modifier",
+      "description": "Making a member private rewrote @SerializedName(\"internal \") into @SerializedName(\"private \"), which renames a JSON field and says nothing about it.",
       "kind": "fix"
     },
     {
-      "title": "A branch emptied in silence",
-      "description": "Removing an unheard post could leave an if or else branch with nothing in it. That compiles, so nothing reports it. A post alone in a branch is no longer offered for removal.",
+      "title": "Parentheses balanced, strings skipped",
+      "description": "The annotation scanner counts nested parentheses and steps over string bodies. An annotation it cannot close on the line yields no edit rather than a guess.",
       "kind": "fix"
     },
     {
-      "title": "Java shells stayed standing",
-      "description": "A file left with nothing but its package line was only noticed in Kotlin, because one language check gated two concerns and only one of them is Kotlin specific.",
+      "title": "Two suspicions dropped, not shipped",
+      "description": "Zero posts alone in a scope function on a 6300 file project, and 4363 test function extents checked on 901 real files with no violation.",
       "kind": "fix"
     }
   ],
@@ -24,11 +24,8 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "The visibility keyword is read from the leading modifier run, and private lands after the annotations.",
-        "A post alone in an if, else, when, for, while, try or catch branch offers no removal; alone in a function body it still does.",
-        "A file emptied by a removal is reported in Java as well as in Kotlin.",
-        "A name imported twice gives two distinct removals instead of the same one twice.",
-        "A dead island counts the tests it removes once, not once per member."
+        "The visibility keyword is read from the modifiers alone, never from an annotation's arguments.",
+        "An annotation whose parentheses cannot be closed on the line yields no edit."
       ]
     }
   ],

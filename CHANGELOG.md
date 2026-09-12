@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.224
+
+The same defect one layer down, in yesterday's own fix for it.
+
+### Fixes
+- Narrowing a member to private read the visibility keyword from the leading modifier run, which still contains the ARGUMENTS of the annotations. `@SerializedName("internal ") val y` came back as `@SerializedName("private ")`, silently renaming a JSON field, and `@Suppress("public ")` was rewritten the same way. The keyword is read from the modifiers alone now, after an annotation scanner that balances parentheses and skips string bodies. An annotation this scanner cannot close on the line yields no edit at all.
+
+### Notes
+- Two suspicions were dropped rather than shipped. A post left alone inside a scope function block leaves `also { }` behind, and there are zero of those among the sixteen removals offered on a 6300 file project, so the guard was not widened. And the extent of every `@Test` function was checked against that project: 4363 of them across 901 files, all starting on a line start, ending on a line end, none overlapping its neighbour, and the brace balance of every file preserved once all of them are cut.
+
 ## 1.42.223
 
 Five defects in yesterday's own removals, four of which edit code nothing would have caught.

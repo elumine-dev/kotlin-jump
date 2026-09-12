@@ -6,6 +6,7 @@ import {
   findUnheardEvents,
 } from '../providers/UnheardEventProvider';
 import { plural } from '../util/plural';
+import { sanitizeForUsageScan } from '../util/kotlinScan';
 
 /**
  * KJ-038 commands.
@@ -119,14 +120,13 @@ export async function createEventSubscriberCommand(eventName: string, fqn: strin
   const text = doc.getText();
   const isJava = doc.uri.fsPath.endsWith('.java');
 
-  // Insert before the closing brace of the last class in the file.
-  const lastBrace = text.lastIndexOf('}');
-  if (lastBrace === -1) {
+  const ancre = subscriberAnchor(text);
+  if (!ancre) {
     void vscode.window.showWarningMessage('Could not find a class to add the subscriber to.');
     return;
   }
+  const { at: lastBrace, handler } = ancre;
 
-  const handler = /@Subscribe[\s\S]{0,80}?\b(?:fun|void)\s+(\w+)\s*\(/.exec(text)?.[1] ?? 'onBusEvent';
   const body = isJava
     ? `\n    @Subscribe\n    public void ${handler}(${eventName} event) {\n        // TODO: handle ${eventName}\n    }\n`
     : `\n    @Subscribe\n    fun ${handler}(event: ${eventName}) {\n        TODO("handle ${eventName}")\n    }\n`;
@@ -138,7 +138,7 @@ export async function createEventSubscriberCommand(eventName: string, fqn: strin
   });
 
   // The event type has to be importable from here, and the annotation too.
-  if (importNeeded(text, fqn)) {
+  if (importNeeded(ancre.code, fqn)) {
     const anchor = /^\s*(?:package|import)\b.*$/m.exec(text);
     if (anchor) {
       const at = doc.positionAt(anchor.index + anchor[0].length);
@@ -150,6 +150,24 @@ export async function createEventSubscriberCommand(eventName: string, fqn: strin
   }
 
   await vscode.workspace.applyEdit(edit);
+}
+
+/**
+ * Where the subscriber goes, and the name to give its handler.
+ *
+ * Both were read off the RAW text. A brace inside a comment or a string is not
+ * the end of a class: measured on a real project, 6 files of 5 093 end with a
+ * raw string holding a JSON fixture, so the subscriber was inserted INTO the
+ * fixture, where it is text that compiles and never runs. The handler name was
+ * learned the same way, so a subscriber sitting in a commented out block named
+ * the new one.
+ */
+export function subscriberAnchor(text: string): { at: number; handler: string; code: string } | undefined {
+  const code = sanitizeForUsageScan(text);
+  const at = code.lastIndexOf('}');
+  if (at === -1) return undefined;
+  const handler = /@Subscribe[\s\S]{0,80}?\b(?:fun|void)\s+(\w+)\s*\(/.exec(code)?.[1] ?? 'onBusEvent';
+  return { at, handler, code };
 }
 
 /**

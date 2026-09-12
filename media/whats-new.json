@@ -1,22 +1,17 @@
 {
-  "version": "1.42.212",
+  "version": "1.42.213",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A subscriber that could not compile",
-  "summary": "The quick fix that adds an event subscriber skipped the import line whenever the event type merely lived under the same package prefix.",
+  "tagline": "A subscriber written into a JSON fixture",
+  "summary": "The quick fix that adds an event subscriber aimed at the last brace of the file text, which can sit inside a string or a comment.",
   "highlights": [
     {
-      "title": "A subpackage still needs an import",
-      "description": "The fix asked whether the type name starts with the package of the open file. A screen in one package was told it could see an event two packages deeper. On a real project that answer is wrong 467 times.",
+      "title": "Inserted into the data, not the class",
+      "description": "Six files of a real project end with a raw string holding a JSON fixture. The subscriber went inside it: the file still compiles, the method does not exist, and the fixture is corrupted.",
       "kind": "fix"
     },
     {
-      "title": "Two packages that merely start alike",
-      "description": "With no separator in the test, a file in one package passed for anything under a longer package name beginning with it.",
-      "kind": "fix"
-    },
-    {
-      "title": "An import that was only a lookalike",
-      "description": "A longer import beginning the same way counted as the real one, and so did those words inside a comment. It has to be an import line now.",
+      "title": "A handler name learned from a comment",
+      "description": "The fix copies the handler name from the subscriber already in the file so it matches the bus in use. A commented out one counted.",
       "kind": "fix"
     }
   ],
@@ -24,10 +19,9 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Adding a subscriber for an event declared in a subpackage now writes the import it needs.",
-        "Two packages that merely share a prefix are no longer treated as one.",
-        "A longer import, or the same words in a comment, no longer passes for the import of the event type.",
-        "An aliased import counts as importing the type."
+        "The subscriber is inserted before the closing brace of the last class, never inside a string or a comment.",
+        "The handler name is learned from real code only.",
+        "The import decision reads the same cleaned text."
       ]
     }
   ],

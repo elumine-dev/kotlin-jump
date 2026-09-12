@@ -895,12 +895,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   const scanner = new FileScanner(index, log, moduleMap);
 
+  // Declared before the watcher because the watcher has to drop it: every
+  // other cache is evicted when a file changes on disk, and this one was not.
+  // A `git checkout` or a `stash pop` touches files nobody has open, so no
+  // save event fires, and the corpus served offsets from the old content for
+  // up to a minute. A squiggle on the wrong line is cosmetic; a REMOVAL on the
+  // wrong line is not.
+  const resourceCorpus = new ResourceCorpus();
   const watcher = new FileWatcher(scanner, index, uri => {
     _semanticTokens?.invalidate(uri.toString());
     codeLens.evictFile(uri.toString());     // surgical: only evict symbols in the changed file
     _signatureHelp?.evictFile(uri.toString());
     _inlayHints?.evictFile(uri.toString());
     invalidateContentCache(uri.toString()); // file changed — next scan re-reads from disk
+    resourceCorpus.invalidate();            // its offsets were measured on the old content
     _sealedWhen?.bumpEpoch();               // sealed subtype sets may have changed in any file
     testCtrl.notifyFileIndexed(uri);    // index is fresh — safe to refresh test tree now
     refreshStatusBarCount();
@@ -915,6 +923,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       _inlayHints?.evictFile(uri.toString());
       invalidateContentCache(uri.toString());
     }
+    resourceCorpus.invalidate();  // once for the batch, like the epoch bump
     _sealedWhen?.bumpEpoch();
     refreshStatusBarCount();
     testCtrl.notifyScanComplete();
@@ -1302,7 +1311,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   // ── KJ-029 : fichiers de ressources jamais référencés ────────────────────
   const unusedResourceProvider = new UnusedResourceProvider();
-  const resourceCorpus = new ResourceCorpus();
   const deadCodeSweepReport = new DeadCodeSweepReport();
   const unusedResourceKeyProvider = new UnusedResourceKeyProvider();
   const unusedSymbolProvider = new UnusedSymbolProvider();

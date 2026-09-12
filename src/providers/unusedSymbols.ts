@@ -237,6 +237,22 @@ export function stripImportLines(text: string): string {
   return text.split('\n').map(l => (/^\s*import\s/.test(l) ? '' : l)).join('\n');
 }
 
+/**
+ * The same, with LENGTH preserved: each import line becomes spaces.
+ *
+ * `stripImportLines` keeps the line count and drops the characters, which is
+ * fine for counting occurrences and wrong for anything that then compares an
+ * index in the result against an offset measured on the unstripped text. On
+ * one real file with 55 imports the shift was 2697 characters, enough to move
+ * a mention from a sibling class into the body of the class above it. The
+ * member came back `selfOnly`, the bulk narrowing made it private, and the
+ * module stopped compiling:
+ *   Cannot access 'fun onItemRangeInserted(): Unit': it is private in ...
+ */
+export function blankImportLines(text: string): string {
+  return text.split('\n').map(l => (/^\s*import\s/.test(l) ? ' '.repeat(l.length) : l)).join('\n');
+}
+
 /** Java sees a top-level `val x` as `FileKt.getX()` (H9). */
 export function accessorNames(name: string): string[] {
   const cap = name[0].toUpperCase() + name.slice(1);

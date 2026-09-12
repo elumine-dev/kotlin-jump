@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.227
+
+A guard that asked the wrong question, in both commands that write into closed files.
+
+### Fixes
+- Placing an edit from an offset checked whether the document was dirty. That answers "did the editor change this", not "is this still what the scan read". A file reloaded from disk by a checkout, a stash pop or another tool comes back CLEAN with new content, and the corpus keeps its copy for a minute, so the edit was placed with the old offsets and landed on the wrong lines. The question is now whether the open text still equals the measured text, and a file that has moved on is skipped.
+- The bulk command that narrows members to private never consulted the open documents at all, so it always wrote at the position the corpus had measured. Both commands share one rule now, in one place, because two copies of the same condition is how one of them drifts.
+
+### Notes
+- The mock gained `ProgressLocation`, which the real API has, so a command that reports progress can be exercised end to end rather than only through its helpers. The witness runs the bulk command against a corpus whose file is open with different content and asserts that nothing is written.
+
 ## 1.42.226
 
 Offsets measured on one read of a file and applied to another.

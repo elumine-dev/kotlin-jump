@@ -6,6 +6,7 @@ import { findUnusedSymbols } from '../providers/unusedSymbols';
 import { findUnusedMembers } from '../providers/unusedMembers';
 import { plural } from '../util/plural';
 import { narrowToPrivate } from '../providers/narrowToPrivate';
+import { stillTheMeasuredText } from '../util/measuredText';
 
 /**
  * KJ-049: narrow every member that is only ever used inside its own class.
@@ -68,7 +69,10 @@ export async function makeSelfOnlyPrivateCommand(corpus: ResourceCorpus): Promis
   const takenLines = new Set<string>();
 
   for (const m of found.members) {
-    const text = found.textByPath.get(m.path);
+    // Same rule as the removal command: an offset is only valid against the
+    // text it was measured on, and an open document that has moved on is
+    // skipped rather than edited at a guessed position.
+    const text = stillTheMeasuredText(m.path, found.textByPath.get(m.path));
     if (text === undefined) { skipped++; continue; }
     const lineText = text.split('\n')[m.line];
     // Re-verify against the text the scan measured: a line that no longer

@@ -219,10 +219,17 @@ export class WorkspaceEdit {
 
 export const Uri = {
   parse: (s: string) => {
-    // Extract path from scheme://authority/path  (e.g. file:///foo, kotlin-jar:///foo)
-    const m = s.match(/^[a-z][a-z0-9+.-]*:\/\/[^/]*(\/[^?#]*)/i);
-    const path = m ? m[1] : s.replace(/^file:\/\//, '');
+    // scheme:[//authority]/path[?query][#fragment]
+    // L'autorite est facultative : `git:/w/a.kt?{"ref":""}`, la forme qu'une vue
+    // de comparaison donne a un fichier, n'en a pas. Le mock ne retirait alors
+    // pas le schema et rendait `fsPath` = `git:/w/a.kt`, la ou VS Code rend
+    // `/w/a.kt`. Un document de comparaison devenait donc reconnaissable en
+    // test alors qu'il se confond avec le vrai fichier en vrai.
     const scheme = s.match(/^([a-z][a-z0-9+.-]*):/i)?.[1] ?? 'file';
+    const reste = s.replace(/^[a-z][a-z0-9+.-]*:/i, '').replace(/[?#].*$/, '');
+    const path = reste.startsWith('//')
+      ? (reste.slice(2).match(/^[^/]*(\/.*)$/)?.[1] ?? '/')
+      : reste;
     return { toString: () => s, path, fsPath: path, scheme };
   },
   file: (p: string) => ({ toString: () => `file://${p}`, path: p, fsPath: p, scheme: 'file' }),

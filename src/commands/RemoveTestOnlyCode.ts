@@ -11,7 +11,7 @@ import { findUnusedEnumEntries } from '../providers/unusedEnumEntries';
 import { isOfferable, planTestCoRemoval, TestCoRemovalPlan } from '../providers/testCoRemoval';
 import { addCascadePlan, planCascade } from '../providers/applyCascade';
 import { plural } from '../util/plural';
-import { stillTheMeasuredText } from '../util/measuredText';
+import { stillTheMeasuredText, estLeFichier } from '../util/measuredText';
 
 /**
  * KJ-047: remove a declaration used only by its tests, AND those tests, in one
@@ -259,7 +259,7 @@ export function makeRangeOf(textByPath: ReadonlyMap<string, string>) {
   return (path: string, start: number, end: number): vscode.Range | undefined => {
     const mesure = stillTheMeasuredText(path, textByPath.get(path));
     if (mesure === undefined) return undefined;
-    const doc = vscode.workspace.textDocuments.find(d => d.uri.fsPath === path);
+    const doc = vscode.workspace.textDocuments.find(estLeFichier(path));
     if (doc) return new vscode.Range(doc.positionAt(start), doc.positionAt(end));
     const starts = startsOf(path);
     if (!starts) return undefined;

@@ -1,22 +1,22 @@
 {
-  "version": "1.42.229",
+  "version": "1.42.230",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Eleven findings counted twice",
-  "summary": "The summary adds its sections up, and two of them still counted the findings that the new testOnly line had taken over.",
+  "tagline": "private open does not compile",
+  "summary": "The bulk narrowing rewrote a protected open member into a private open one, which Kotlin rejects, and a real project stopped compiling.",
   "highlights": [
     {
-      "title": "One finding, one line",
-      "description": "Enum entries and dead islands kept their testOnly findings in their own count while the testOnly line counted them again, so the headline ran eleven too high on a real project.",
+      "title": "A member that can be overridden stays visible",
+      "description": "Kotlin refuses private open and private abstract, since a private member cannot be overridden. Those members are left alone rather than rewritten.",
       "kind": "fix"
     },
     {
-      "title": "The lists were right all along",
-      "description": "Only the number in front of the colon was wrong. Every per family list showed the findings it claimed.",
+      "title": "Refusing beats dropping the keyword",
+      "description": "Removing the open instead would change what subclasses outside the workspace can do, and the detector only proves that nothing inside it uses the member.",
       "kind": "fix"
     },
     {
-      "title": "A mutant that survived",
-      "description": "The first witness only lit one of the two families, so half the fix could be undone with every test still green. Both halves are pinned now.",
+      "title": "One rule, four producers",
+      "description": "The rule against deleting and editing the same URI held at one of its four call sites. A witness now exercises each of them.",
       "kind": "fix"
     }
   ],
@@ -24,8 +24,8 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "A finding kept alive only by its tests is counted on that line and nowhere else.",
-        "The enum entry and dead island sections count what they actually list."
+        "A member carrying open, abstract or sealed is never narrowed to private.",
+        "The enum entry removal plans its cascade before writing, like the other three."
       ]
     }
   ],

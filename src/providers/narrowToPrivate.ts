@@ -16,6 +16,22 @@
  */
 const VISIBILITY_RE = /\b(public|internal|protected)\s+/;
 
+/**
+ * Modifiers that make `private` illegal rather than merely narrower.
+ *
+ * Kotlin rejects `private open` and `private abstract`: a private member
+ * cannot be overridden, so the pair is contradictory. Found by running the
+ * bulk narrowing on /Users/kevin/Desktop/work/lapresse, where
+ * `protected open fun createLibrarySessionCallback` became `private open fun`
+ * and `:core:ui` stopped compiling with two errors on one line:
+ *   Modifier 'private' is incompatible with 'open'.
+ *
+ * Dropping the `open` instead of refusing would be worse: in a library module
+ * an open member is an extension point for subclasses this workspace cannot
+ * see, and the detector only ever proves that nothing HERE uses it.
+ */
+const INCOMPATIBLE_RE = /\b(open|abstract|sealed)\b/;
+
 /** Modifiers Kotlin or Java may put between the annotations and the keyword. */
 const MODIFIER_RUN_RE = new RegExp(
   '^(?:(?:public|internal|protected|private|open|abstract|final|sealed|data|enum|annotation'
@@ -79,6 +95,7 @@ export function narrowToPrivate(lineText: string): PrivateEdit | undefined {
   const reste = lineText.slice(afterAnnotations);
   const modifiers = MODIFIER_RUN_RE.exec(reste)?.[0] ?? '';
   if (/\bprivate\b/.test(modifiers)) return undefined;
+  if (INCOMPATIBLE_RE.test(modifiers)) return undefined;
 
   const visibility = VISIBILITY_RE.exec(modifiers);
   if (visibility) {

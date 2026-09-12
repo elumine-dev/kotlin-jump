@@ -106,4 +106,25 @@ describe.skipIf(!mod)('narrowToPrivate', () => {
   it('une parenthese dans une chaine d annotation ne casse pas l equilibre', () => {
     expect(pose('    @Foo("a)b") val w = 1')).toBe('    @Foo("a)b") private val w = 1');
   });
+  it('un membre OPEN ou ABSTRACT ne peut pas devenir prive', () => {
+    // Kotlin refuse la paire : un membre prive ne peut pas etre surcharge.
+    // Trouve en lancant la commande de masse sur
+    // /Users/kevin/Desktop/work/lapresse : `protected open fun` est devenu
+    // `private open fun` et :core:ui a cesse de compiler.
+    //   Modifier 'private' is incompatible with 'open'.
+    expect(mod.narrowToPrivate('    protected open fun createLibrarySessionCallback(): X {')).toBeUndefined();
+    expect(mod.narrowToPrivate('    open fun getModifiedDateVisibility(): Int =')).toBeUndefined();
+    expect(mod.narrowToPrivate('    abstract fun render()')).toBeUndefined();
+    expect(mod.narrowToPrivate('    protected abstract val x: Int')).toBeUndefined();
+  });
+
+  it('temoin : le meme membre sans open est bien restreint', () => {
+    expect(pose('    protected fun ordinaire() {')).toBe('    private fun ordinaire() {');
+  });
+
+  it('temoin : le mot open dans un commentaire ou un nom ne bloque rien', () => {
+    // La garde lit la suite de modificateurs, pas la ligne entiere.
+    expect(pose('    fun openDrawer() {')).toBe('    private fun openDrawer() {');
+    expect(pose('    protected fun x() { // keep it open')).toBe('    private fun x() { // keep it open');
+  });
 });

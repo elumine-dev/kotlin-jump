@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.230
+
+Narrowing a member to private produced Kotlin that does not compile.
+
+### Fixes
+- `Make Every Self Only Member Private` rewrote `protected open fun` into `private open fun`. Kotlin rejects that pair outright, because a private member cannot be overridden, and `:core:ui` stopped compiling on a real project with two errors on one line. A member carrying `open`, `abstract` or `sealed` is left alone now. Dropping the `open` instead would be worse: in a library module an open member is an extension point for subclasses this workspace cannot see, and the detector only ever proves that nothing HERE uses it.
+- The enum entry quick fix now plans the cascade before writing its range, like the other three removals. Removing one entry leaves the enum class behind, so the emptiness branch is not reachable there today; the order is aligned because the day an extent widens, the failure is a WorkspaceEdit rejected whole and in silence.
+
+### Notes
+- The rule that a removal never both deletes a URI and edits a range in it held at ONE of its four call sites: the member lightbulb could be reverted with all 7484 tests still green. A witness now exercises each producer of an edit, not only the one the fix was written against.
+
 ## 1.42.229
 
 A headline count that added eleven findings twice.

@@ -72,8 +72,14 @@ function sansCorps(texte: string): string {
   let profondeur = 0;
   let out = '';
   for (const c of texte) {
-    if (c === '{') { profondeur++; out += c; continue; }
-    if (c === '}') { profondeur = Math.max(0, profondeur - 1); out += c; continue; }
+    // Les PARENTHESES comptent autant que les accolades. Un parametre de
+    // constructeur, `class X(\n    private val prefs: SharedPreferences)`,
+    // est une declaration au sens de la grammaire mais pas au sens qui nous
+    // interesse : il n'est pas un VOISIN de la classe, il est dedans. Ne
+    // blanchir que les accolades le faisait compter et l'invariant criait sur
+    // onze coupes parfaitement saines.
+    if (c === '{' || c === '(') { profondeur++; out += c; continue; }
+    if (c === '}' || c === ')') { profondeur = Math.max(0, profondeur - 1); out += c; continue; }
     out += profondeur > 0 ? (c === '\n' ? '\n' : ' ') : c;
   }
   return out;
@@ -153,10 +159,17 @@ function main(): void {
     // ligne est bien la declaration : tout est vrai, et du code vivant part
     // quand meme. Elargir une extraction expose ce que l etroitesse cachait,
     // donc l oracle doit compter ce qu il coupe.
-    const DECLS = /(?:^|[;{])\s*(?:(?:public|private|internal|protected|open|abstract|final|sealed|data|enum|annotation|value|inline|suspend|external|expect|actual|operator|infix|lateinit|const|override|companion|static|synchronized|native|transient|volatile)\s+)*(?:val|var|fun|class|object|interface|typealias)\s+[A-Za-z_`]/g;
+    const DECLS = /(?:^|[;{\n])\s*(?:(?:public|private|internal|protected|open|abstract|final|sealed|data|enum|annotation|value|inline|suspend|external|expect|actual|operator|infix|lateinit|const|override|companion|static|synchronized|native|transient|volatile)\s+)*(?:val|var|fun|class|object|interface|typealias)\s+[A-Za-z_`]/g;
     // Seulement le MEME niveau : les membres de la classe coupee sont dedans a
     // juste titre, ce sont ses voisins de ligne qui ne le sont pas. Les corps
     // sont blanchis avant de compter.
+    //
+    // Le `\n` dans la classe de separateurs n'est pas decoratif. Sans lui, et
+    // sans le drapeau `m`, le `^` ne matchait qu'a l'offset zero de la coupe :
+    // l'invariant ne voyait donc QUE la premiere declaration, et le cas pour
+    // lequel il existe, une seconde declaration partie avec la premiere, lui
+    // echappait des qu'elles etaient sur deux lignes. Il n'attrapait que
+    // `val mort = 1; val vivant = 2`, la forme sur UNE ligne.
     const coupePropre = sansCorps(stripKotlinComments(coupe));
     const combien = (coupePropre.match(DECLS) ?? []).length;
     if (combien > 1) {

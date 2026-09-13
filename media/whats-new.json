@@ -1,12 +1,12 @@
 {
-  "version": "1.42.275",
+  "version": "1.42.276",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The question says what it knows",
-  "summary": "Remove Everything Unused announced a number of changes that the edit it sends was never going to match.",
+  "tagline": "The count is said once",
+  "summary": "The dialog carried two counts of the same thing, and called renamed names declarations and imports.",
   "highlights": [
     {
-      "title": "Found, Not Promised",
-      "description": "The line under the question counted the plan while the edit is built after the click, on purpose. It now says what was found and where, and leaves the closing report to say what was done.",
+      "title": "Title Counts, Detail Reaches",
+      "description": "The title counts what will be removed and the line under it says across how many files. Counting again underneath meant counting something else, and the two numbers disagreed as soon as one name was renamed.",
       "kind": "fix"
     }
   ],
@@ -14,16 +14,15 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Remove Everything Unused told you how many changes were coming, and the edit it sent carried a different number. Measured on three files where removing a class orphans an import: the question read `4 changes in 3 files` and the edit carried three operations, all of them whole file deletions and not one replacement.",
-        "The count came from the plan. A file emptied of everything goes whole, which turns several cuts into one deletion, and the cascade adds removals the plan never counted. On the reference project the cascade alone is 100 import cuts and 54 deleted files, so this is not a rounding difference."
+        "Yesterday's wording for Remove Everything Unused put a second count in the dialog, and the two did not match. The title counts what will be removed, the new line counted what was found, and those part company the moment one name is renamed rather than removed: `Remove 7 unused declarations, locals and imports?` sat directly above `10 unused declarations, locals and imports found in 4 files.`",
+        "On a round made only of renamings it was plainly wrong rather than merely confusing. The title says `Rename 3 unused names to `_`?`, which is right, and the line under it called them declarations, locals and imports that had been found. A lambda parameter is none of those three, and nothing was being removed at all."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "The exact number cannot be known before the question, and that is deliberate. The edit is built after the click so that a file which moved since the scan is dropped then rather than earlier, which is the guard that stops an edit landing on text that has changed. Working the number out beforehand and reusing it would reopen exactly that hole. So the line says what it knows, what was found and where, and the closing report keeps its job of saying what was done.",
-        "Five other commands keep the stronger promise because they build their edit before they ask, and they were left alone. The rule the test states holds for all of them: if the line names a number of changes, that number is the one the edit carries.",
-        "Two more gaps in the test double had to be filled to measure any of this, after the two filled yesterday. Warning and error popups did not exist, so the path taken when an edit is refused could not be reached at all."
+        "The count now appears once, in the title, and the line under it says the one thing the title cannot: how far the change reaches. Two releases ago the same fix was made to the title itself, and reintroducing the wrong wording one line lower is exactly the sort of thing these rounds exist to catch.",
+        "A test written yesterday had to be rewritten, because it asserted the wording rather than the rule. It now says where each number belongs: the count in the title, the reach in the detail."
       ]
     }
   ],

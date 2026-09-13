@@ -1,32 +1,27 @@
 {
-  "version": "1.42.237",
+  "version": "1.42.238",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A closing brace is not always the end",
-  "summary": "A member whose expression body carried on past a lambda lost that continuation: the cut took the first line and left `?: View.GONE` alone in the file.",
+  "tagline": "A combination Java never allowed",
+  "summary": "The bulk narrowing could write `private default`, which no version of Java accepts, into a file the user never opened.",
   "highlights": [
     {
-      "title": "Expressions that continue past a lambda",
+      "title": "Narrowing no longer breaks a Java interface",
       "kind": "fix",
-      "description": "The span stops on the lambda closing brace, so the end is not line based and the continuation test was gated on that. A positive test answers now where the span cannot: a line opening on `?:`, `.`, `::` or `else` can only continue what is above it."
-    },
-    {
-      "title": "The walk stopped allocating",
-      "kind": "fix",
-      "description": "It cut one substring per line it read. A single pass never got slower, but the workspace sweep fell into a slow mode 65 % of the time against 30 % before. Counting over indices puts both back at the same rate."
+      "description": "A `default` method is a public interface method with a body, so `private default` is refused by javac. The list that makes the narrowing give up held only `open`, `abstract` and `sealed`, all three Kotlin."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "A member whose expression body carried on past a lambda lost that continuation, and the remainder no longer compiled. Three such members on a real 6329 source project, all live code.",
-        "The expression walk counts brackets over indices instead of cutting a substring per line."
+        "Make Every Self Only Member Private could write `private default String x()`. The command edits files the user never opened, so the first sign of it would have been a broken build."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "Found by a new invariant in the removal witness: the seven already there watch what a cut CONTAINS, not one watched what it LEAVES. It compares indentation, chosen because it does not replay the production rule it judges."
+        "All 171 narrowings offered on the 6329 source project are unchanged, compared one by one before and after.",
+        "The cascade that removes the imports a deletion orphans had no witness of any kind. It has one now: 100 import cuts and 54 file deletions, every one of them holding."
       ]
     }
   ],

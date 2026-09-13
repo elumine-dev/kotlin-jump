@@ -12,6 +12,7 @@ import { isOfferable, planTestCoRemoval, TestCoRemovalPlan } from '../providers/
 import { addCascadePlan, planCascade } from '../providers/applyCascade';
 import { plural } from '../util/plural';
 import { stillTheMeasuredText, estLeFichier } from '../util/measuredText';
+import { askHowToApply, bulkDetail } from '../util/bulkEdit';
 
 /**
  * KJ-047: remove a declaration used only by its tests, AND those tests, in one
@@ -154,62 +155,85 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
     return;
   }
 
-  const edit = new vscode.WorkspaceEdit();
-  const deletedFiles = new Set<string>([...scan.testFiles]);
-  for (const { group } of scan.groups) if (group.fileBecomesEmpty) deletedFiles.add(group.path);
+  // Asked once, up front. The flag that opens the Refactor Preview is the same
+  // one that leaves every box in it unticked, and that view has no "select
+  // all", so a hundred cuts meant a hundred clicks. Building the edit twice
+  // costs nothing: a WorkspaceEdit is a data structure, not an effect.
+  const construire = (confirm: boolean) => {
+    const edit = new vscode.WorkspaceEdit();
+    const touches = new Set<string>();
+    const deletedFiles = new Set<string>([...scan.testFiles]);
+    for (const { group } of scan.groups) if (group.fileBecomesEmpty) deletedFiles.add(group.path);
 
-  // KJ-048 asked FIRST. A testOnly declaration alone in its file is never
-  // marked as emptying it by the scan, so the cascade is the only thing that
-  // knows, and a WorkspaceEdit that both deletes a URI and edits a range in it
-  // is rejected whole and in silence.
-  const planned = new Map<string, { start: number; end: number }[]>();
-  const note = (path: string, start: number, end: number) => {
-    (planned.get(path) ?? planned.set(path, []).get(path)!).push({ start, end });
+    // KJ-048 asked FIRST. A testOnly declaration alone in its file is never
+    // marked as emptying it by the scan, so the cascade is the only thing that
+    // knows, and a WorkspaceEdit that both deletes a URI and edits a range in it
+    // is rejected whole and in silence.
+    const planned = new Map<string, { start: number; end: number }[]>();
+    const note = (path: string, start: number, end: number) => {
+      (planned.get(path) ?? planned.set(path, []).get(path)!).push({ start, end });
+    };
+    const vus = new Set<string>();
+    for (const { group, plan } of scan.groups) {
+      const cle = `${group.path}:${group.removeStart}`;
+      if (!vus.has(cle) && !deletedFiles.has(group.path)) { vus.add(cle); note(group.path, group.removeStart, group.removeEnd); }
+      for (const cut of plan.cuts) {
+        const cleCut = `${cut.path}:${cut.start}`;
+        if (vus.has(cleCut) || deletedFiles.has(cut.path)) continue;
+        vus.add(cleCut);
+        note(cut.path, cut.start, cut.end);
+      }
+    }
+    const cascade = planCascade(planned, scan.textByPath, deletedFiles);
+    const doomed = new Set([...deletedFiles, ...cascade.deleteFiles]);
+
+    // Never a deleteFile AND range edits on the same URI: VS Code rejects the
+    // whole WorkspaceEdit, silently.
+    for (const p of deletedFiles) {
+      edit.deleteFile(corpusUri(p), { ignoreIfNotExists: true }, { needsConfirmation: confirm, label: `Delete ${p.split(/[\\/]/).pop()}` });
+      touches.add(p);
+    }
+    const rangeOf = makeRangeOf(scan.textByPath);
+    const done = new Set<string>();
+    let skipped = 0;
+    for (const { group, plan } of scan.groups) {
+      const key = `${group.path}:${group.removeStart}`;
+      if (!done.has(key) && !doomed.has(group.path)) {
+        done.add(key);
+        const range = rangeOf(group.path, group.removeStart, group.removeEnd);
+        if (range) {
+          edit.replace(corpusUri(group.path), range, '', { needsConfirmation: confirm, label: `Remove ${group.label}` });
+          touches.add(group.path);
+        } else { skipped++; }
+      }
+      for (const cut of plan.cuts) {
+        if (doomed.has(cut.path)) continue;
+        const cutKey = `${cut.path}:${cut.start}`;
+        if (done.has(cutKey)) continue;
+        done.add(cutKey);
+        const range = rangeOf(cut.path, cut.start, cut.end);
+        if (!range) { skipped++; continue; }
+        edit.replace(corpusUri(cut.path), range, '',
+          { needsConfirmation: confirm, label: cut.kind === 'import' ? `Remove the stale import of ${cut.name}` : `Remove the test ${cut.name}` });
+        touches.add(cut.path);
+      }
+    }
+
+    const swept = addCascadePlan(edit, cascade, scan.textByPath, confirm);
+    for (const p of cascade.imports.keys()) touches.add(p);
+    for (const p of cascade.deleteFiles) touches.add(p);
+    return { edit, swept, skipped, fichiers: touches.size };
   };
-  const vus = new Set<string>();
-  for (const { group, plan } of scan.groups) {
-    const cle = `${group.path}:${group.removeStart}`;
-    if (!vus.has(cle) && !deletedFiles.has(group.path)) { vus.add(cle); note(group.path, group.removeStart, group.removeEnd); }
-    for (const cut of plan.cuts) {
-      const cleCut = `${cut.path}:${cut.start}`;
-      if (vus.has(cleCut) || deletedFiles.has(cut.path)) continue;
-      vus.add(cleCut);
-      note(cut.path, cut.start, cut.end);
-    }
-  }
-  const cascade = planCascade(planned, scan.textByPath, deletedFiles);
-  const doomed = new Set([...deletedFiles, ...cascade.deleteFiles]);
 
-  // Never a deleteFile AND range edits on the same URI: VS Code rejects the
-  // whole WorkspaceEdit, silently.
-  for (const p of deletedFiles) {
-    edit.deleteFile(corpusUri(p), { ignoreIfNotExists: true }, { needsConfirmation: true, label: `Delete ${p.split(/[\\/]/).pop()}` });
-  }
-  const rangeOf = makeRangeOf(scan.textByPath);
-  const done = new Set<string>();
-  let skipped = 0;
-  for (const { group, plan } of scan.groups) {
-    const key = `${group.path}:${group.removeStart}`;
-    if (!done.has(key) && !doomed.has(group.path)) {
-      done.add(key);
-      const range = rangeOf(group.path, group.removeStart, group.removeEnd);
-      if (range) {
-        edit.replace(corpusUri(group.path), range, '', { needsConfirmation: true, label: `Remove ${group.label}` });
-      } else { skipped++; }
-    }
-    for (const cut of plan.cuts) {
-      if (doomed.has(cut.path)) continue;
-      const cutKey = `${cut.path}:${cut.start}`;
-      if (done.has(cutKey)) continue;
-      done.add(cutKey);
-      const range = rangeOf(cut.path, cut.start, cut.end);
-      if (!range) { skipped++; continue; }
-      edit.replace(corpusUri(cut.path), range, '',
-        { needsConfirmation: true, label: cut.kind === 'import' ? `Remove the stale import of ${cut.name}` : `Remove the test ${cut.name}` });
-    }
-  }
-
-  const swept = addCascadePlan(edit, cascade, scan.textByPath);
+  const apercu = construire(true);
+  const { swept, skipped } = apercu;
+  const combien = scan.offered + scan.testFunctions + swept.imports + swept.files;
+  const choix = await askHowToApply(
+    `Remove ${plural(scan.offered, 'declaration')} and ${plural(scan.testFunctions, 'test')}?`,
+    bulkDetail(combien, apercu.fichiers),
+  );
+  if (choix === 'cancel') return;
+  const { edit } = choix === 'apply' ? construire(false) : apercu;
 
   const ok = await vscode.workspace.applyEdit(edit);
   void vscode.window.showInformationMessage(ok

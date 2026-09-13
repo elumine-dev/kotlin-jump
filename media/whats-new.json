@@ -1,27 +1,28 @@
 {
-  "version": "1.42.239",
+  "version": "1.42.240",
   "title": "What's New in Kotlin Jump",
-  "tagline": "One cut per line, not per mention",
-  "summary": "The plan that removes a declaration with its tests could return the same import range twice. Its only caller already guarded against it, so nothing visible changes.",
+  "tagline": "One click, not one per file",
+  "summary": "The bulk commands ask once now, up front: apply all, or review one by one. The Refactor Preview has no select all, so 171 changes over 43 files meant 43 clicks.",
   "highlights": [
     {
-      "title": "A plan that no longer contradicts itself",
+      "title": "Apply all, or review one by one",
       "kind": "fix",
-      "description": "One cut per import LINE rather than per mention. An island whose two dead members share a single `import com.x.Outer.Inner` produced the same range twice. The guard lived in the consumer; it belongs in the producer."
+      "description": "The flag that opens the Refactor Preview is the same one that leaves every box unticked. Asking once, before the edit is built, replaces a click per file with a single answer for the lot."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "The test co removal plan pushed one cut per mention rather than one per import line. No visible effect today, since the only caller deduplicates when it applies."
+        "Four bulk commands ask once instead of once per file: narrow every self only member, remove code used only by tests, clean dead code across the workspace, and remove unread Remote Config keys.",
+        "The cascade that trails a removal follows what the command decided rather than asking again on its own."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "Removing a declaration and its tests together was the last edit with no witness on a real project. It has one now, six invariants deep, and all six hold across 61 findings.",
-        "The strongest of them: a file deleted whole must declare nothing another surviving test still names. Loosen the rule and it catches a Dagger component naming a test class."
+        "The dialog counts the changes and the files before anything happens, and closing it applies nothing.",
+        "The VS Code test double threw away the metadata that carries this flag, so half the behaviour could not be asserted. It keeps it now, and both modes are pinned by a test."
       ]
     }
   ],

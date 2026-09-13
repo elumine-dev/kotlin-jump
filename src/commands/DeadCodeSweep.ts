@@ -10,6 +10,7 @@ import {
   sweepFile,
 } from '../providers/DeadCodeSweep';
 import { plural } from '../util/plural';
+import { askHowToApply, bulkDetail } from '../util/bulkEdit';
 
 /**
  * KJ-030: one command to see every dead thing at once, and one to remove them.
@@ -255,38 +256,50 @@ export async function cleanDeadCodeInWorkspaceCommand(): Promise<void> {
       const scan = await scanWorkspace(token);
       if (token.isCancellationRequested) return;
 
-      const edit = new vscode.WorkspaceEdit();
-      let count = 0;
-      let bouges = 0;
-      const decoder = new TextDecoder();
-      const ouverts = docsParChemin();
-      for (const file of scan.files) {
-        const plan = planFileEdits(file.findings);
-        if (plan.length === 0) continue;
-        // Le texte auquel l'edition va s'appliquer : le tampon quand le fichier
-        // est ouvert, le disque sinon. C'est celui la qu'il faut confronter au
-        // texte balaye, pas une seconde lecture du disque.
-        const ouvert = ouverts.get(file.uri.fsPath);
-        let vivant: string;
-        if (ouvert) {
-          vivant = ouvert.getText();
-        } else {
-          try {
-            vivant = decoder.decode(await vscode.workspace.fs.readFile(file.uri));
-          } catch {
-            continue;
+      // Le drapeau qui ouvre l apercu est celui qui laisse ses cases
+      // decochees, et cette vue n a pas de « tout selectionner ». La question
+      // se pose donc une fois, en amont. Construire deux fois ne coute rien :
+      // une WorkspaceEdit est une structure de donnees, pas un effet.
+      const construire = async (confirm: boolean) => {
+        const edit = new vscode.WorkspaceEdit();
+        let count = 0;
+        let bouges = 0;
+        const fichiers = new Set<string>();
+        const decoder = new TextDecoder();
+        const ouverts = docsParChemin();
+        for (const file of scan.files) {
+          const plan = planFileEdits(file.findings);
+          if (plan.length === 0) continue;
+          // Le texte auquel l'edition va s'appliquer : le tampon quand le fichier
+          // est ouvert, le disque sinon. C'est celui la qu'il faut confronter au
+          // texte balaye, pas une seconde lecture du disque.
+          const ouvert = ouverts.get(file.uri.fsPath);
+          let vivant: string;
+          if (ouvert) {
+            vivant = ouvert.getText();
+          } else {
+            try {
+              vivant = decoder.decode(await vscode.workspace.fs.readFile(file.uri));
+            } catch {
+              continue;
+            }
           }
-        }
-        const plages = sweptRanges(file.text, vivant, plan);
-        if (plages === undefined) { bouges++; continue; }
-        plan.forEach((e, i) => {
-          edit.replace(file.uri, new vscode.Range(plages[i].start, plages[i].end), e.text, {
-            needsConfirmation: true,
-            label: 'Remove dead code',
+          const plages = sweptRanges(file.text, vivant, plan);
+          if (plages === undefined) { bouges++; continue; }
+          plan.forEach((e, i) => {
+            edit.replace(file.uri, new vscode.Range(plages[i].start, plages[i].end), e.text, {
+              needsConfirmation: confirm,
+              label: 'Remove dead code',
+            });
+            count++;
+            fichiers.add(file.uri.fsPath);
           });
-          count++;
-        });
-      }
+        }
+        return { edit, count, bouges, fichiers: fichiers.size };
+      };
+
+      const apercu = await construire(true);
+      const { count, bouges } = apercu;
 
       // Dire « rien a retirer » alors que des fichiers ont bouge depuis le
       // balayage serait faux : la reponse est « je ne sais plus ou couper ».
@@ -297,6 +310,12 @@ export async function cleanDeadCodeInWorkspaceCommand(): Promise<void> {
         void vscode.window.showInformationMessage(`Nothing to remove automatically.${noteBouges}`);
         return;
       }
+      const choix = await askHowToApply(
+        `Remove ${plural(count, 'dead declaration')}?`,
+        bulkDetail(count, apercu.fichiers),
+      );
+      if (choix === 'cancel') return;
+      const { edit } = choix === 'apply' ? await construire(false) : apercu;
       if (bouges > 0) void vscode.window.showInformationMessage(noteBouges.trim());
       await vscode.workspace.applyEdit(edit);
     },

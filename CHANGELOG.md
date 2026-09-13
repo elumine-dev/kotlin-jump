@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.240
+
+One click for all of them, instead of one per file.
+
+### Fixes
+- The bulk commands asked for a click per file. The flag that opens the Refactor Preview is the same one that leaves every box in it unticked, and that view has no select all, so accepting 171 narrowings spread over 43 files meant 43 clicks before Apply, one per file, with no way to say yes to the lot. The question is asked once now, up front, where a single click answers for everything: apply all, or review one by one. Whoever wants to read the preview gets it exactly as before.
+- Four commands carry it: narrow every self only member, remove code used only by tests with its tests, clean dead code across the workspace, and remove unread Remote Config keys. The cascade that trails a removal follows whatever the command decided, rather than asking again on its own.
+
+### Notes
+- The dialog says how much is about to happen before it happens, counting both the changes and the files, and closing it applies nothing.
+- The test double for VS Code threw away the metadata carried by every edit, which is where that flag lives, so half the behaviour could not be asserted at all. It keeps it now, and both modes are pinned by a test.
+- Unrelated to the above, the witness for enum entry removals gained the rule that 1.42.232 was written for: two cuts of one file may not partially overlap. It was checked for dead islands only, while the rule itself came from `ASC, DESC` on one line, both dead, each claiming the same comma. Three families, zero crossings.
+
 ## 1.42.239
 
 Nothing you can see changed. The witness under it did.

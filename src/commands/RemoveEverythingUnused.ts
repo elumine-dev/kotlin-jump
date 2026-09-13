@@ -46,7 +46,11 @@ export function collecterUnePasse(
   const iles = findDeadIslands({ ...base, maxIslandSize: 8 } as any) as any[];
 
   const brut = new Map<string, Coupe[]>();
-  const tally: Tally = { symboles: 0, membres: 0, entrees: 0, ilots: 0, balayage: 0, imports: 0, fichiers: 0 };
+  // `renommages` a part : le balayage ne fait pas que supprimer, il remplace
+  // aussi un parametre de lambda inutilise par `_`, ce qui ne retire rien et
+  // n'est pas une declaration. Les compter ensemble faisait annoncer
+  // « Remove 320 unused declarations » pour 279 suppressions et 41 renommages.
+  const tally: Tally = { symboles: 0, membres: 0, entrees: 0, ilots: 0, balayage: 0, renommages: 0, imports: 0, fichiers: 0 };
   const ajoute = (p: string, start: number, end: number, texte: string, famille: string, quoi: string) => {
     if (start < 0 || end <= start) return;
     const l = brut.get(p) ?? [];
@@ -77,7 +81,7 @@ export function collecterUnePasse(
       if (c.start < fin) continue;
       fin = c.end;
       gardees.push(c);
-      tally[c.famille]++;
+      tally[c.famille === 'balayage' && c.texte !== '' ? 'renommages' : c.famille]++;
     }
     parFichier.set(p, gardees);
   }
@@ -170,14 +174,18 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
     void vscode.window.showInformationMessage('Nothing unused left to remove.');
     return;
   }
+  const renommages = premier.tally.renommages ?? 0;
   const choix = await askHowToApply(
-    `Remove ${plural(total, 'unused declaration')}?`,
+    `Remove ${plural(total - renommages, 'unused declaration, local or import')}?`,
     bulkDetail(total, premier.parFichier.size)
+      + (renommages > 0
+        ? ` ${plural(renommages, 'unused parameter')} renamed to \`_\` rather than removed.`
+        : '')
       + ' Apply all repeats until nothing is left, since each removal orphans the next.',
   );
   if (choix === 'cancel') return;
 
-  const cumul: Tally = { symboles: 0, membres: 0, entrees: 0, ilots: 0, balayage: 0, imports: 0, fichiers: 0, bouges: 0 };
+  const cumul: Tally = { symboles: 0, membres: 0, entrees: 0, ilots: 0, balayage: 0, renommages: 0, imports: 0, fichiers: 0, bouges: 0 };
   const ajouteTally = (t: Tally) => { for (const k of Object.keys(t)) cumul[k] = (cumul[k] ?? 0) + t[k]; };
 
   // Une seule passe en relecture : l'utilisateur choisit quoi accepter, et
@@ -255,7 +263,8 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
     cumul.membres > 0 ? plural(cumul.membres, 'class member') : '',
     cumul.entrees > 0 ? plural(cumul.entrees, 'enum entry', 'enum entries') : '',
     cumul.ilots > 0 ? `${plural(cumul.ilots, 'declaration')} of dead islands` : '',
-    cumul.balayage > 0 ? plural(cumul.balayage, 'local or parameter') : '',
+    cumul.balayage > 0 ? plural(cumul.balayage, 'local or import') : '',
+    cumul.renommages > 0 ? `${plural(cumul.renommages, 'unused parameter')} renamed to \`_\`` : '',
     cumul.imports > 0 ? plural(cumul.imports, 'orphaned import') : '',
     cumul.fichiers > 0 ? plural(cumul.fichiers, 'emptied file') : '',
   ].filter(Boolean);

@@ -1,27 +1,27 @@
 {
-  "version": "1.42.252",
+  "version": "1.42.253",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Seeing a cut that takes too much",
-  "summary": "Given one extra line at the end of every cut, the witness for unreferenced declarations reported zero on all 98, and 5 of those delete live code.",
+  "tagline": "Counting what it actually does",
+  "summary": "The dialog asked to remove 320 unused declarations when 41 of those were renames of a lambda parameter to `_`, and the rest included locals and imports.",
   "highlights": [
     {
-      "title": "The neighbour rule sees two lines now",
+      "title": "A rename is not a removal",
       "kind": "fix",
-      "description": "The invariant that counts declarations inside a cut anchored on `^` with no multiline flag, so it only ever matched at offset zero. It caught two declarations on ONE line, the shape it was built for, and was blind to two on two lines."
+      "description": "The per file sweep does not only delete: it replaces an unused lambda parameter with `_`. On a real project that is 41 of the 320 changes the dialog was calling declarations. The question counts what it deletes now, and states the renames separately."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "The invariant that catches a cut swallowing its neighbour now sees a neighbour on the next line, not only one after a semicolon.",
-        "Parentheses are blanked like braces before counting, so a constructor parameter is not mistaken for a neighbour of its class."
+        "Remove Everything Unused counts deletions and renames separately, in the question it asks and in the report it ends on."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "Precision, not just sensitivity: it reports the 5 damaging cases and none of the 93 harmless ones. On class members, 125 caught out of 320 instead of 47."
+        "The merge that folds five families into one edit drops 32 cuts, and every one of the 259 the families would produce alone is kept or contained in a kept one: nothing is lost.",
+        "A cut shrunk by one line is caught on all 87 cuts the shrinking actually changed; the other 11 are single line declarations the mutation left untouched."
       ]
     }
   ],

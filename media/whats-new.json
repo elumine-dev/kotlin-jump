@@ -1,12 +1,12 @@
 {
-  "version": "1.42.309",
+  "version": "1.42.310",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Counting where the work is done",
-  "summary": "No behaviour changed. The cascade now counts what it writes, and has tests of its own for the first time.",
+  "tagline": "Checking the closing sentence",
+  "summary": "No behaviour changed. A new check holds the report of a removal to the edit it actually sends, on a real codebase.",
   "highlights": [
     {
-      "title": "Counting Where The Work Is Done",
-      "description": "The imports and files a removal drags along are reported to you. One of the two counts came from the plan, not from the doing.",
+      "title": "Checking The Closing Sentence",
+      "description": "Seven checks look at where the cuts land. The eighth looks at whether the sentence you are shown adds up to them.",
       "kind": "improvement"
     }
   ],
@@ -14,10 +14,10 @@
     {
       "heading": "Notes",
       "bullets": [
-        "Nothing changed in what the extension does. The part that removes an import left with no user, and deletes a file left with nothing in it, had no test of its own at all, and two commands read its counts straight into the sentence they show you at the end.",
-        "Those counts are honest today. One of the two was taken from the plan rather than from the loop that carries it out: the same number by luck, since nothing in that loop is skipped, and a wrong number the day something is.",
-        "This editor has already paid for a count taken in one place and a list built in another, on a workspace where 133 types were described by two lenses that disagreed. So the count is taken where the work is done, and a test holds each count against what actually went into the edit.",
-        "Also held now: a file whose text is missing is skipped and not counted, and the flag that opens the preview reaches deletions as well as edits."
+        "Nothing changed in what the extension does. Eleven releases between 1.42.277 and 1.42.293 fixed reports that described the scan rather than the edit, and the seven checks this project runs against a real codebase all look at where the cuts land, none at what the closing sentence claims. There is an eighth now.",
+        "It runs a full pass over a real project and holds the sentence to the edit: the families add up to the ranges actually written plus the cuts inside files that go whole, every family with something in it is named, and the numbers in the sentence total exactly what was kept.",
+        "On a 6329 file project: 320 cuts kept, 260 ranges written, 60 inside the 59 files the cascade deletes, and the four checks at zero. The sentence reads 88 declarations, 99 class members, 25 enum entries, 15 declarations of dead islands, 52 locals and imports, 41 unused names renamed.",
+        "Confronted with the defect it exists for: drop one family from the sentence and it reports the missing name and the wrong total; stop counting the renames and it reports the gap between what was kept and what was written."
       ]
     }
   ],

@@ -179,6 +179,11 @@ export async function removeAllUnusedRemoteConfigKeysCommand(
               'Nothing to remove: the workspace changed while the question was open.');
             return;
           }
+          // The badges follow the new verdict. They were published before the
+          // question, and sparing a declaration that came back to life while
+          // leaving its `unreferenced` warning on it points the Problems panel
+          // at living code and keeps offering to delete it.
+          provider.setFindings(relu);
           // An INTERSECTION with what was announced, never a fresh list.
           const annonce = new Set(found.map(k => k.name));
           const retenues = relu.filter(k => annonce.has(k.name));

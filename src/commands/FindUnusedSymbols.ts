@@ -187,8 +187,14 @@ export async function removeAllUnusedSymbolsCommand(
           // something else makes the new list BIGGER, and `Remove 1
           // unreferenced declaration?` would then remove two. The reader
           // consented to a set, not to an intention.
+          const relu = trouverSur(frais);
+          // The badges follow the new verdict. They were published before the
+          // question, and sparing a declaration that came back to life while
+          // leaving its `unreferenced` warning on it points the Problems panel
+          // at living code and keeps offering to delete it.
+          provider.setFindings(relu);
           const annonce = new Set(removable.map(f => `${f.path}\u0000${f.kind}\u0000${f.name}`));
-          aRetirer = trouverSur(frais)
+          aRetirer = relu
             .filter(f => f.verdict === 'unreferenced' && f.removeStart !== -1)
             .filter(f => annonce.has(`${f.path}\u0000${f.kind}\u0000${f.name}`));
           if (aRetirer.length === 0) {

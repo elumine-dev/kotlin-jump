@@ -155,6 +155,11 @@ export async function removeAllUnusedResourceKeysCommand(
               'Nothing to remove: the workspace changed while the question was open.');
             return;
           }
+          // The badges follow the new verdict. They were published before the
+          // question, and sparing a declaration that came back to life while
+          // leaving its `unreferenced` warning on it points the Problems panel
+          // at living code and keeps offering to delete it.
+          provider.setFindings(relu.findings);
           // An INTERSECTION with what was announced, never a fresh list.
           const annonce = new Set(result.findings.map(f => `${f.kind}\u0000${f.name}`));
           aRetirer = relu.findings.filter(f => annonce.has(`${f.kind}\u0000${f.name}`));

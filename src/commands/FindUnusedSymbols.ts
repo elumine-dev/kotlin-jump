@@ -156,13 +156,25 @@ export async function removeAllUnusedSymbolsCommand(
         void vscode.window.showInformationMessage('Nothing to remove automatically.');
         return;
       }
+      // Effacer un fichier n'est pas « un changement » comme un autre. Deux
+      // declarations mortes dans un meme fichier le vident, l'edition devient
+      // une suppression, et le dialogue disait « 1 change in 1 file » sans
+      // jamais dire qu'un fichier partait.
+      const noteSuppression = (n: number) => n > 0 ? ` ${plural(n, 'file')} deleted outright.` : '';
       const choix = await askHowToApply(
         `Remove ${plural(removable.length, 'unreferenced declaration')}?`,
-        bulkDetail(apercu.edits, apercu.files),
+        bulkDetail(apercu.edits, apercu.files) + noteSuppression(apercu.supprimes),
       );
       if (choix === 'cancel') return;
       const choisi = choix === 'apply' ? await buildSymbolRemovalEdit(removable, undefined, false) : apercu;
       await vscode.workspace.applyEdit(choisi.edit);
+      // Apply all skips the preview, so nothing else would say what happened.
+      void vscode.window.showInformationMessage(
+        choix === 'review'
+          ? `Sent ${plural(removable.length, 'unreferenced declaration')} to the preview.`
+          : `Removed ${plural(removable.length, 'unreferenced declaration')} in ${plural(choisi.files, 'file')}.`
+            + noteSuppression(choisi.supprimes),
+      );
     },
   );
 }

@@ -158,8 +158,16 @@ export async function removeAllUnusedRemoteConfigKeysCommand(
         void vscode.window.showInformationMessage(`Nothing to remove.${noteDe(choisi.bouges)}`);
         return;
       }
-      if (choisi.bouges > 0) void vscode.window.showInformationMessage(noteDe(choisi.bouges).trim());
       await vscode.workspace.applyEdit(choisi.edit);
+      // Apply all skips the preview, so nothing else would say what happened.
+      // The note about files that moved rode alone before, without ever
+      // saying what had actually gone.
+      void vscode.window.showInformationMessage(
+        (choix === 'review'
+          ? `Sent ${plural(choisi.count, 'unread Remote Config key')} to the preview.`
+          : `Removed ${plural(choisi.count, 'unread Remote Config key')} in ${plural(choisi.fichiers, 'file')}.`)
+        + noteDe(choisi.bouges),
+      );
     },
   );
 }

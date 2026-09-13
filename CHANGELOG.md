@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.301
+
+The second look at the workspace now shows that it is happening.
+
+### Fixed
+- Two commands could sit there doing nothing visible for twenty seconds after you clicked Apply. Remove code kept alive only by its tests, and Make self only members private.
+- They learned three days ago to judge the workspace again when it changed while the question was open, which is right, but that second judgement is the slow part and it was put after the progress bar had already closed. Nothing on screen between the click and the edit.
+- This editor already learned that lesson once: the repeating rounds of Remove Everything Unused were given their own bar for exactly this reason, after looking frozen for two and a half minutes.
+- The second judgement has a bar of its own now, and only when the workspace actually moved, so the ordinary case does not make a notification flash for nothing.
+
 ## 1.42.300
 
 The last two stale verdicts, and the end of that family.

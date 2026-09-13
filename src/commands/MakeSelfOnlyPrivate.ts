@@ -129,7 +129,16 @@ export async function makeSelfOnlyPrivateCommand(corpus: ResourceCorpus): Promis
   if (choix === 'apply') {
     const frais = await corpus.get();
     if (frais !== found.data) {
-      const relu = await balayer();
+      // Under a progress bar: this second judgement is the LONG part, twenty
+      // seconds on six thousand files, and it sits after the question, when
+      // the first bar has already closed. Left bare, the editor showed nothing
+      // between the click and the edit. Only when the workspace actually
+      // moved, so an unchanged one does not make a notification flash for
+      // nothing.
+      const relu = await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: 'The workspace changed, checking again…' },
+        () => balayer(),
+      );
       if (!relu) {
         void vscode.window.showWarningMessage('The workspace is too large to prove where these members are used.');
         return;

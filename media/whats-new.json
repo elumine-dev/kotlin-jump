@@ -1,12 +1,12 @@
 {
-  "version": "1.42.300",
+  "version": "1.42.301",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A key that gained a reader",
-  "summary": "The last two commands judging before the question now read the workspace again after it.",
+  "tagline": "Twenty silent seconds",
+  "summary": "Two commands rejudged the workspace after the click with no progress shown, so they looked frozen.",
   "highlights": [
     {
-      "title": "A Key That Gained A Reader",
-      "description": "A resource or Remote Config key read for the first time while the question was open was removed anyway. Both commands reread now.",
+      "title": "Twenty Silent Seconds",
+      "description": "Rejudging the workspace after Apply is the slow part, and it was happening with nothing on screen. It has its own bar now.",
       "kind": "fix"
     }
   ],
@@ -14,10 +14,10 @@
     {
       "heading": "Fixed",
       "bullets": [
-        "The last two bulk commands with a stale verdict. Remove all unused resource keys and Remove all unread Remote Config keys both judged before asking you and never looked again, so a key that gained a reader while the question was on screen went anyway.",
-        "For a resource key that means the project stops compiling, since the code that just started saying R.string.x no longer has an x. For a Remote Config key it means a default value the app still asks for at runtime is gone.",
-        "Both read the workspace again after the click, and only then. Nothing moved and the index hands back the same snapshot, so the verdict stands and no second scan is paid for. Something moved and the judgement is made again on what is there now.",
-        "That closes it: five commands carried this, all five now reread. A sixth looked like it and does not, because it judges each file from that file alone, so the only thing that can overturn its verdict is a change it already catches."
+        "Two commands could sit there doing nothing visible for twenty seconds after you clicked Apply. Remove code kept alive only by its tests, and Make self only members private.",
+        "They learned three days ago to judge the workspace again when it changed while the question was open, which is right, but that second judgement is the slow part and it was put after the progress bar had already closed. Nothing on screen between the click and the edit.",
+        "This editor already learned that lesson once: the repeating rounds of Remove Everything Unused were given their own bar for exactly this reason, after looking frozen for two and a half minutes.",
+        "The second judgement has a bar of its own now, and only when the workspace actually moved, so the ordinary case does not make a notification flash for nothing."
       ]
     }
   ],

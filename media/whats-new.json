@@ -1,12 +1,12 @@
 {
-  "version": "1.42.272",
+  "version": "1.42.273",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A class delegating to an anonymous object",
-  "summary": "Removing a class that delegates to an anonymous object left a stray closing brace and a file that would not parse.",
+  "tagline": "Counts agree at zero too",
+  "summary": "The detail line under a bulk question read `0 change in 0 file.` It agrees like the rest of the extension now.",
   "highlights": [
     {
-      "title": "The Right Closing Brace",
-      "description": "`class A : I by object : I { ... } { ... }` opens a brace before its body does, and the removal stopped on the wrong one. The anonymous object is skipped whole now.",
+      "title": "Zero Takes The Plural",
+      "description": "Agreeing by hand against `greater than one` is right everywhere except at zero, and zero reaches this line when every range is refused because the files moved.",
       "kind": "fix"
     }
   ],
@@ -14,16 +14,16 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Deleting a class that delegates to an anonymous object cut the wrong closing brace. `class A : I by object : I { ... } { ... }` is the one header shape that opens a brace of its own before the body opens one, and the extent stopped on the object's brace. The file that was left behind did not parse.",
-        "Measured rather than argued: the removal was run for real on such a class and the Kotlin compiler answered `syntax error: Expecting a top level declaration` on a stray closing brace left at the top of the file. With the fix the same removal leaves a file that compiles with no diagnostic at all."
+        "The line under every bulk question, the one that says how much is about to happen, read `0 change in 0 file.` It agreed its plurals by hand against `greater than one`, which is right everywhere except at zero, where English goes plural. It uses the same helper as the rest of the extension now.",
+        "Zero reaches it. Five of the six commands that ask return before asking when they have nothing, but Remove Test Only Code does not, and its file count comes from what the edit actually touched: if every range is refused because the file moved since the scan, that count is zero."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "Not something that arrived recently. The character list this test replaced two weeks ago accepted the same header just as happily, so the shape has always been read wrong. What the rewrite did fix, and this keeps, is `: Base(count = 3)` and `: @Suppress(\"x\") Base()`, which the old list refused outright.",
-        "Zero occurrences across the 5110 sources of the reference project, so no witness would ever have raised it and nothing was silently broken in practice. It is fixed because a removal that produces a file the compiler rejects is the one outcome this feature must never have.",
-        "The rule reads the `object` keyword backwards from a brace, and needs no list of exceptions: on the second brace of that same header the object block sits in between, so the test fails and the brace is correctly taken as the body's."
+        "The guard that watches counts agree had waved this form through, calling it the long hand of the helper. It is not, and that is the whole of the difference: `greater than one` matches the helper only above zero, and it is the caller's business to know its count cannot be nought. Twenty nine places use that form and the other twenty eight count things that exist, so the note was corrected rather than the rule tightened.",
+        "Left alone deliberately, and written down here rather than changed on a hunch: in that same dialog the number of changes is read off the scan while the number of files is read off the edit that was just built. When a cut is refused the two drift apart. The file says three lines below, about the closing report, that what is applied is what must be reported. The counts do not add up in the same units, so correcting it needs a measurement rather than a guess.",
+        "Performance was the one kind of fault on the list never caught this week, so it was measured rather than assumed: ten alternating runs of the repository benchmark against the release before yesterday's parser change, then eight against last week's. Every distribution overlaps, nothing survives the interleaving, and the dead island scan lands within a tenth of a percent. `snapshot.save` came back at plus four percent with overlapping runs, which is exactly the noise that check exists to refuse."
       ]
     }
   ],

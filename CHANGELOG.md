@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.273
+
+`0 change in 0 file.`
+
+### Fixes
+- The line under every bulk question, the one that says how much is about to happen, read `0 change in 0 file.` It agreed its plurals by hand against `greater than one`, which is right everywhere except at zero, where English goes plural. It uses the same helper as the rest of the extension now.
+- Zero reaches it. Five of the six commands that ask return before asking when they have nothing, but Remove Test Only Code does not, and its file count comes from what the edit actually touched: if every range is refused because the file moved since the scan, that count is zero.
+
+### Notes
+- The guard that watches counts agree had waved this form through, calling it the long hand of the helper. It is not, and that is the whole of the difference: `greater than one` matches the helper only above zero, and it is the caller's business to know its count cannot be nought. Twenty nine places use that form and the other twenty eight count things that exist, so the note was corrected rather than the rule tightened.
+- Left alone deliberately, and written down here rather than changed on a hunch: in that same dialog the number of changes is read off the scan while the number of files is read off the edit that was just built. When a cut is refused the two drift apart. The file says three lines below, about the closing report, that what is applied is what must be reported. The counts do not add up in the same units, so correcting it needs a measurement rather than a guess.
+- Performance was the one kind of fault on the list never caught this week, so it was measured rather than assumed: ten alternating runs of the repository benchmark against the release before yesterday's parser change, then eight against last week's. Every distribution overlaps, nothing survives the interleaving, and the dead island scan lands within a tenth of a percent. `snapshot.save` came back at plus four percent with overlapping runs, which is exactly the noise that check exists to refuse.
+
 ## 1.42.272
 
 One header shape opens a brace before the body does.

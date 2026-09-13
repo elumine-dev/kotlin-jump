@@ -85,10 +85,13 @@ export function fautesDans(rel: string, texte: string): { fautes: string[]; util
   const fautes: string[] = [];
   const utilises: string[] = [];
   const lignes = texte.split('\n');
-  // Une ligne qui accorde deja en place, `${n > 1 ? 's' : ''}`, n est pas en
-  // faute : c est la forme longue de ce que `plural` fait. L accord peut etre
-  // sur l une des deux lignes du dessus, un ternaire s ecrivant couramment sur
-  // trois lignes, et c est la condition qui le porte.
+  // Une ligne qui accorde deja en place, `${n > 1 ? 's' : ''}`, n est pas
+  // signalee. Attention a ce que cela veut dire exactement : ce n est PAS la
+  // forme longue de `plural`, qui accorde au pluriel a zero. `> 1` ne
+  // coincide avec lui qu au dessus de zero, et c est a l appelant de savoir
+  // que son compte ne peut pas etre nul. `bulkDetail` ne le savait pas.
+  // L accord peut etre sur l une des deux lignes du dessus, un ternaire
+  // s ecrivant couramment sur trois lignes, et c est la condition qui le porte.
   const accord = /[><=!]==?\s*1\s*\?|>\s*1\s*\?|[><=!]==?\s*1$|>\s*1$/;
   lignes.forEach((l, i) => {
     if (LOG.test(l)) return;

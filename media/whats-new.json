@@ -1,12 +1,12 @@
 {
-  "version": "1.42.269",
+  "version": "1.42.270",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The stale text guard works on the web",
-  "summary": "On vscode.dev the check that stops an edit landing on text that moved never saw the open document, and said everything was fine.",
+  "tagline": "Both file linters work on vscode.dev again",
+  "summary": "The hardcoded string and lifecycle pairing lints had been silent on the web since 1.42.246, because a file there is not a `file:`.",
   "highlights": [
     {
-      "title": "A File Is Not Always A `file:`",
-      "description": "Recognising a document by requiring the `file` scheme keeps the diff view out, and keeps the web host out with it. The expected scheme is now the one the workspace scan read the file under.",
+      "title": "Can You Fix What I Report",
+      "description": "Asking for the `file` scheme kept Gradle source jars out and kept the whole web host out with them. The guard now asks whether the filesystem can be written to, which is what it wanted to know all along.",
       "kind": "fix"
     }
   ],
@@ -14,15 +14,15 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "On vscode.dev and github.dev the safety check that stops an edit from landing on text that moved was answering that nothing was open, every time. It recognised a document by requiring the `file` scheme, which rules out the diff view a `git:` document opens, and rules out `vscode-vfs://github/owner/repo/...` just as firmly. That is what a file IS on those hosts.",
-        "A guard that fails by staying silent is the wrong kind of failure. The offsets of a scan a minute old were applied to a document the reader had edited since, and the two places that prefer the editor text over the saved file read the saved file instead. The expected scheme is now the one the workspace scan actually read the file under, so a path the scan never saw still falls back to `file` and nothing changes off the web."
+        "The hardcoded string lint and the lifecycle pairing lint had gone quiet on vscode.dev and github.dev. Both ran there until 1.42.246, when the guard that keeps Gradle source jars out of the Problems panel started asking for the `file` scheme. On those hosts a file is a `vscode-vfs://github/owner/repo/...`, so it fell out with the jars, and nothing said so.",
+        "The scheme was never the question. What the guard wants to know is whether the reader can fix what it reports, and the editor answers that itself: a filesystem declared read only is left alone, an unsaved buffer is still the reader's own code, and the handful of schemes that show a copy of a file living elsewhere, the diff view first among them, are named one by one rather than guessed at."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "Found by turning yesterday's change on itself. Three bulk removal commands reached the web host for the first time, so the question was what else on that host assumes a desktop, and one of the five places behind this check is the safety net for all of them. Remove All Unused Resource Keys had been running there the whole time.",
-        "The check that watches for unguarded path comparisons had to be corrected too. It accepted a line only when the literal `file` appeared on it, which describes one mechanism rather than the rule, and it refused the fix. It asks for a scheme comparison now, whatever scheme. It was then given a violation to find, to make sure it still finds one."
+        "This one was named at the end of the previous release and left untreated on purpose, to be looked at with a clear head rather than at the end of a hunt. It is the third thing found by asking what else assumes a desktop, after three commands the web build offered without being able to run them and a stale text guard that never saw an open document there.",
+        "The jar entries, the dependency source trees and the workspace folder rule all keep working unchanged, on the web as well: a `sources/android-35` path is left alone whatever host it arrives from."
       ]
     }
   ],

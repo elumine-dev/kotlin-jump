@@ -19,6 +19,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { sweepFile, planFileEdits } from '../src/providers/DeadCodeSweep';
 import { sanitizeForUsageScan } from '../src/util/kotlinScan';
+import { couvreDesLignesEntieres, doitCouperDesLignesEntieres } from './invariants';
 
 const SKIP = new Set(['node_modules', 'build', '.git', '.gradle', 'out', 'dist', 'target', '.idea']);
 
@@ -96,17 +97,14 @@ function main(): void {
       // portent cette regle depuis le debut ; celui-ci ne l'avait pas parce
       // que le balayage fait AUSSI des remplacements en milieu de ligne, et
       // l'exception avait ete prise pour une dispense.
-      // Seule la famille `declarations` coupe des lignes entieres. La famille
-      // des ecritures sans lecture retire DELIBEREMENT le seul prefixe
-      // d'affectation, `var db = `, en gardant l'appel a droite pour son effet
-      // de bord : y exiger des lignes entieres reviendrait a signaler le
-      // comportement correct, ce qu'un oracle ne doit jamais faire.
-      if (e.text === '' && parDetecteur.get(`${e.start}:${e.end}`) === 'declarations') {
-        const debutLigne = e.start === 0 || texte[e.start - 1] === '\n';
-        const finLigne = e.end === texte.length || texte[e.end - 1] === '\n' || texte[e.end] === '\n';
-        if (!debutLigne || !finLigne) {
+      // Toutes les familles y sont tenues sauf celles qui coupent
+      // deliberement un morceau de ligne, ce que dit `invariants.ts`. Nommer
+      // ici une seule famille laissait 31 suppressions de lignes entieres sur
+      // 52 sans aucune verification.
+      if (doitCouperDesLignesEntieres(e.text, parDetecteur.get(`${e.start}:${e.end}`))) {
+        if (!couvreDesLignesEntieres(texte, e.start, e.end)) {
           compte.ligne++;
-          if (fautes.length < 10) fautes.push(`LIGNE ${rel} ${nom ?? ''} debut=${debutLigne} fin=${finLigne} ${JSON.stringify(coupe.slice(0, 40))}`);
+          if (fautes.length < 10) fautes.push(`LIGNE ${rel} ${nom ?? ''} ${JSON.stringify(coupe.slice(0, 40))}`);
         }
       }
       if (nom && !coupe.includes(nom)) {

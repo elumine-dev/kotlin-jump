@@ -1,28 +1,23 @@
 {
-  "version": "1.42.259",
+  "version": "1.42.260",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The dependency rule now reads layout, not spelling",
-  "summary": "Keeping dependency sources out of the Problems panel worked only for one spelling of one default install path. It now recognises them wherever they live.",
+  "tagline": "A verification check that was looking away",
+  "summary": "No behaviour changed. One of the checks that guards every dead code removal was examining 19 of 52 deletions while reporting on all of them.",
   "highlights": [
     {
-      "title": "Dependency Rule Reads The Layout",
-      "description": "Comparing path segments letter for letter missed `Android/Sdk` on Windows and Linux, and missed any SDK or Gradle home moved by an environment variable. The rule now looks for what is inside those trees, whatever they are called and wherever they sit.",
-      "kind": "fix"
+      "title": "The Oracle Now Watches All Of It",
+      "description": "The whole line rule behind the dead code removals was applied to one detector family out of four, because the exemption that justified narrowing it had been attributed to the wrong family. Coverage goes from 19 deletions to 50 out of 52.",
+      "kind": "improvement"
     }
   ],
   "sections": [
     {
-      "heading": "Fixes",
-      "bullets": [
-        "The rule that keeps dependency sources out of the Problems panel compared path segments letter for letter. The disk underneath does not: `~/Library/Android/SDK/...` and `~/Library/Android/sdk/...` are the same file on macOS, Windows behaves the same way, and the spelling that reaches us is whatever the user typed. One capital letter and the warnings came back.",
-        "It also assumed both trees sit where their installer put them. `ANDROID_HOME` and `GRADLE_USER_HOME` move them anywhere, and an SDK under `/opt` was read as ordinary code. The rule now reads the layout instead of the address: platform sources live under `sources/android` followed by an API level, Gradle downloads live under `caches/modules-2`."
-      ]
-    },
-    {
       "heading": "Notes",
       "bullets": [
-        "The API level has to be a number, so a folder of your own named `sources/android-utils` is still yours. A file inside the project is still yours whatever its path reads like.",
-        "Shipped one release ago and wrong on two of the three platforms it runs on. The Windows and Linux spellings are covered by test now, alongside a moved SDK and a moved Gradle home."
+        "Nothing changed in what the extension does. What changed is what the checks behind it are able to see, and one of them was seeing a fifth of what it claimed.",
+        "The rule that says a deletion has to take whole lines was written for one detector family out of four, on the grounds that another family removes only the left side of an assignment and keeps the call on the right. That family was named wrong. Measured on the reference project: declarations 19 deletions and 19 whole lines, write only 11 and 11, imports 20 and 20, and the family that really does cut part of a line accounts for 2.",
+        "So 31 of the 52 deletions were held to nothing. Shifting every import cut by one character left all seven counters at zero, the exact blindness the rule exists to remove, while the same shift on the declaration cuts was caught 19 times out of 19. It is now 20 out of 20 for imports and 11 out of 11 for write only, and the unshifted project still reports zero, so nothing real was hiding behind it.",
+        "The co removal check named a single kind of cut for the same rule. Every kind answers to it now, and an unrecognised one answers to it too: an oracle that stays quiet about what it does not know reads exactly like an oracle that is happy."
       ]
     }
   ],

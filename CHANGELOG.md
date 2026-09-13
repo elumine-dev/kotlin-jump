@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.307
+
+A speed promise that nothing was holding.
+
+### Notes
+- Nothing changed in what the extension does. A promise that six commands quietly depend on for their speed is now written down as a test.
+- Those commands read the workspace again after you answer, so that a declaration which came back to life in the meantime is spared. That second reading is free only because the index hands back the very same snapshot when nothing has changed, which is how the command knows it can keep the answer it already has.
+- Nothing guaranteed that. Made to hand back a copy instead, the whole suite of nearly eight thousand tests still passed, while every one of those commands would have started doing its twenty second pass twice on a six thousand file project.
+- The repository bench cannot catch this either: it measures parsing, folding and snapshots, and has no scenario for a command. So it is caught where it lives, next to the index.
+
 ## 1.42.306
 
 The warnings agree with the second reading.

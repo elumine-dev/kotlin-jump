@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.42.324
+
+This release has no functional changes for users; it continues refining the internal script that drafts these release notes.
+
+### Notes
+- Ships no changes to extension behavior: every command and setting works exactly as it did in 1.42.323.
+- The script that generates these release notes was refined and gained additional test coverage, aimed at more reliable notes in future releases.
+
 ## 1.42.323
 
 This release has no functional changes for users; it changes how the release notes themselves are written.

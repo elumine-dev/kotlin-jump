@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.249
+
+A sentence that answered its own question twice.
+
+### Fixes
+- Stopping Remove Everything Unused on its first round said `Nothing unused left to remove. Stopped on request: run it again to finish.` Two opposite answers to one question, glued together because the headline and the note were built separately and concatenated. When nothing was removed, the reason IS the answer and there is no headline to put in front of it. The same glue said `Nothing unused left to remove` when the removals had in fact been skipped because files moved, which was equally false.
+- The test written for that case yesterday passed on it, because it only looked for the second half of the sentence. It now also states what the sentence must NOT contain, and the whole sentence is a function of its own with six cases pinned.
+
+### Notes
+- A pass over the whole family was profiled rather than guessed: 2.4 s for the unreferenced symbols, 3.1 s for the class members, 2.0 s for the enum entries, 3.7 s for the per file sweep, and 8.7 s for the dead islands, which is 44 % of the twenty seconds a round costs on a six thousand file project.
+- Interleaved against the version from before the extent work, the dead islands detector measures 8.87 s against 8.82 s, distributions fully overlapping: that cost is not a regression. It comes from the detector re-running the symbol and member analyses inside itself, which the new command then pays once a round. Left alone deliberately: sharing that work means opening the two most delicate detectors for a quarter of one round.
+
 ## 1.42.248
 
 The long part of Remove Everything Unused ran with nothing on screen.

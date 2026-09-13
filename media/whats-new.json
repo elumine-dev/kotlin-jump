@@ -1,27 +1,28 @@
 {
-  "version": "1.42.248",
+  "version": "1.42.249",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A bar on the part that takes the time",
-  "summary": "The progress bar covered the first scan only, and the first scan is not the long part: up to two and a half minutes passed with nothing on screen.",
+  "tagline": "One question, one answer",
+  "summary": "Stopping the command on its first round produced two opposite answers in the same sentence, and the test written for that case passed on it.",
   "highlights": [
     {
-      "title": "The loop is visible, and can be stopped",
+      "title": "A report that no longer contradicts itself",
       "kind": "fix",
-      "description": "One round costs about twenty seconds on a six thousand file project and Apply all chains up to eight. The loop has its own bar now, and stops between two rounds, which is the only place where stopping is safe."
+      "description": "Stopping on the first round said `Nothing unused left to remove. Stopped on request: run it again to finish.` When nothing was removed, the reason IS the answer and there is no headline to put in front of it."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Remove Everything Unused shows a bar for its loop, saying which round it is on, and can be cancelled between rounds."
+        "The final sentence of Remove Everything Unused is built as one thing, with six cases pinned, instead of a headline glued to a note.",
+        "The test written for the cancelled case looked only for the second half of the sentence. It states what the sentence must not contain too."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "Moving the loop into a callback turned one `return` into a silent no operation. It is a flag now, which does not depend on where it is written.",
-        "Twenty seconds a round is the cost of rescanning, and rescanning is not optional: a removal can orphan something anywhere in the project."
+        "A round was profiled rather than guessed: dead islands take 8.7 s of the 20, because the detector re-runs the symbol and member analyses inside itself.",
+        "Interleaved against the version from before the extent work, that cost measures 8.87 s against 8.82 s: it is not a regression, and sharing the work would mean opening the two most delicate detectors for a quarter of one round."
       ]
     }
   ],

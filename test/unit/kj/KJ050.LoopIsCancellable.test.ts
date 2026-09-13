@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import * as vscodeMock from '../__mocks__/vscode';
-import { removeEverythingUnusedCommand } from '../../../src/commands/RemoveEverythingUnused';
+import { removeEverythingUnusedCommand, compteRendu } from '../../../src/commands/RemoveEverythingUnused';
 
 /**
  * La boucle est la partie LONGUE, et elle tournait sans barre ni bouton.
@@ -81,11 +81,59 @@ describe('Remove Everything Unused : la boucle a sa propre barre', () => {
     const { messages, editions } = await lancer(true);
     expect(editions.length).toBe(0);
     expect(messages.join(' ')).toContain('Stopped on request');
+    // Et le message ne doit pas se contredire : annoncer « rien ne restait a
+    // retirer » ET « relancez pour finir » dans la meme phrase, c'est deux
+    // reponses opposees a la meme question.
+    expect(messages.join(' ')).not.toContain('Nothing unused left to remove');
   });
 
   it('Cancel dans la boite : ni barre de boucle ni edition', async () => {
     const { titres, editions } = await lancer(false, 'Autre chose');
     expect(titres.length).toBe(1);
     expect(editions.length).toBe(0);
+  });
+});
+
+/**
+ * La phrase finale ne doit jamais donner deux reponses opposees.
+ *
+ * Coller un titre a une note produisait
+ *   « Nothing unused left to remove. Stopped on request: run it again. »
+ * et le test ecrit pour ce cas passait, parce qu'il ne cherchait que la
+ * seconde moitie. Quand rien n'a ete retire, la RAISON est la reponse : il n'y
+ * a pas de titre a mettre devant.
+ */
+describe('compteRendu', () => {
+  const e = { verbe: 'Removed', queue: '.', annule: false, restait: false, bouges: '' };
+
+  it('rien fait, annule : la raison suffit', () => {
+    const m = compteRendu('', { ...e, annule: true });
+    expect(m).toContain('Stopped on request');
+    expect(m).not.toContain('Nothing unused left to remove');
+  });
+
+  it('rien fait, des fichiers ont bouge : ce n est pas « rien a retirer »', () => {
+    const m = compteRendu('', { ...e, bouges: '2 files changed since the scan and were left alone.' });
+    expect(m).toContain('2 files changed');
+    expect(m).not.toContain('Nothing unused left to remove');
+  });
+
+  it('rien fait, rien trouve : la phrase d origine', () => {
+    expect(compteRendu('', e)).toBe('Nothing unused left to remove.');
+  });
+
+  it('du travail fait, puis annule : les deux, dans cet ordre', () => {
+    const m = compteRendu('3 declarations', { ...e, annule: true });
+    expect(m).toBe('Removed 3 declarations. Stopped on request: run it again to finish.');
+  });
+
+  it('du travail fait, plafond atteint', () => {
+    expect(compteRendu('3 declarations', { ...e, restait: true }))
+      .toContain('still work left after the last round');
+  });
+
+  it('en relecture, le verbe et la queue changent', () => {
+    expect(compteRendu('3 declarations', { ...e, verbe: 'Sent', queue: ' to the preview.' }))
+      .toBe('Sent 3 declarations to the preview.');
   });
 });

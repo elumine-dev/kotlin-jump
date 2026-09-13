@@ -1,23 +1,23 @@
 {
-  "version": "1.42.284",
+  "version": "1.42.285",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Two removal paths, one answer",
-  "summary": "No behaviour changed. The two commands that remove a declaration are now held to cutting it the same way.",
+  "tagline": "The comment leaves with the entry",
+  "summary": "Removing the last entry of an enum left its trailing comment behind, where it read as a note on the entry that survived.",
   "highlights": [
     {
-      "title": "Held To The Same Answer",
-      "description": "One command already took the blank line that followed a removed declaration and the other did not. They agree now, and a test keeps them agreeing.",
-      "kind": "improvement"
+      "title": "The Comment Leaves With The Entry",
+      "description": "A trailing `// legacy` on a removed enum entry stayed in the file and attached itself to the neighbour. It goes with the entry now.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Notes",
+      "heading": "Fixed",
       "bullets": [
-        "Nothing changed in what the extension does. Yesterday's blank line fix was checked from four angles, and what it left behind is now held in place by a test rather than by luck.",
-        "Two commands remove the same declaration by two different routes, and they used to disagree: the one dedicated to unreferenced declarations already took the blank line that followed, the one that removes everything did not, which is where yesterday's 66 gaps came from. They agree on all 88 findings of the reference project now, and a test confronts them on four shapes so two spellings of one policy cannot drift apart in silence.",
-        "Where they cannot agree is written down rather than left to be discovered in a diff: with no blank line above the declaration, the merged pass keeps the lone separator and the dedicated command takes it. Zero occurrences on the reference project, and of the 32 real cuts that do absorb a blank line, all 32 had one on either side.",
-        "The safety check that mattered most came back clean: an extended cut and a cascade import removal landing on the same range would make the editor reject the whole edit without a word. Across 199 files and 86 cascade imports, nothing overlaps."
+        "An enum entry that carried a trailing comment used to hand that comment to the entry that survived it. Remove the last entry of `enum class Sort { BY_DATE, BY_NAME // legacy }` and `// legacy` stayed behind, now reading as a note on BY_DATE.",
+        "The cause was a fix of mine from 1.42.282. It stepped back over the blanks that follow an entry so the closing brace of a one line list would keep its space, but a comment is blanked to spaces of the same length in the text the scan reads, so the walk stepped back over the comment too and returned it to the file. Trailing spaces came back the same way, on a line the cut used to leave clean.",
+        "One blank is kept, and only when the list closes on that same line, which is the only place the brace could end up glued. Everywhere else the entry leaves with what trailed it.",
+        "Measured on a 3578 file Kotlin and Java project: 283 enum lists, and 2 of them end on an entry with a trailing comment. None of the 33 entries the scan currently reports as dead is one of those, so nothing there changes today. The rule was wrong all the same."
       ]
     }
   ],

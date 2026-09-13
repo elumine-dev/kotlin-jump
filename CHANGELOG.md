@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.285
+
+A comment that belonged to a dead enum entry no longer stays with the living one.
+
+### Fixed
+- An enum entry that carried a trailing comment used to hand that comment to the entry that survived it. Remove the last entry of `enum class Sort { BY_DATE, BY_NAME // legacy }` and `// legacy` stayed behind, now reading as a note on BY_DATE.
+- The cause was a fix of mine from 1.42.282. It stepped back over the blanks that follow an entry so the closing brace of a one line list would keep its space, but a comment is blanked to spaces of the same length in the text the scan reads, so the walk stepped back over the comment too and returned it to the file. Trailing spaces came back the same way, on a line the cut used to leave clean.
+- One blank is kept, and only when the list closes on that same line, which is the only place the brace could end up glued. Everywhere else the entry leaves with what trailed it.
+- Measured on a 3578 file Kotlin and Java project: 283 enum lists, and 2 of them end on an entry with a trailing comment. None of the 33 entries the scan currently reports as dead is one of those, so nothing there changes today. The rule was wrong all the same.
+
 ## 1.42.284
 
 Two ways to cut the same line, held to the same answer.

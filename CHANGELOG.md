@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.42.244
+
+One command for the whole family, and it repeats until nothing is left.
+
+### Added
+- Remove Everything Unused. Five commands removed five kinds of dead code, and running them in the right order was your job. One pass was never enough either: a deletion orphans the next thing, so on a real project the removals only settled after FOUR rounds. This asks once, then does all of it, repeating until a pass finds nothing. What makes a pass safe to send as one edit is that every cut in it is measured on the same corpus text; overlaps inside a file are resolved the way each provider already resolves them, the first one wins. Reviewing one by one still gives a single preview, because repeating behind a reader without knowing what they accepted would be a guess.
+
+### Fixes
+- The sweep that reads one file at a time carried its own copy of the removal extent, and the copy stayed where it was while the original grew. The keyword list that decides whether the next line opens a declaration, the semicolon rule, the expression walk, the guard against splitting a raw string: not one of those reached it. So `private val x = listOf(` spread over four lines had no removal at all, while the very same shape had one two files away. It calls the original now. Measured on a real project: six declarations that offered nothing now offer a correct cut.
+- The watcher added in 1.42.243 to catch resource changes had no exclusion filter, so every file a build writes under `build/` invalidated the corpus. On a real project that is 5656 files against 1185 real ones: a single `gradlew assembleDebug` emptied the cache thousands of times and every command afterwards paid for a full rescan. It uses the same exclusion as the index now, which is why the index has one.
+
+### Notes
+- The sweep detector had no witness of any kind; the other four cover none of its cuts. It has one now, six invariants deep, clean across both projects it was run on.
+
 ## 1.42.243
 
 Twelve defects, found by turning the search on the families that had never been searched.

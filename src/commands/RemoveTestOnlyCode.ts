@@ -204,27 +204,46 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
     const rangeOf = makeRangeOf(scan.textByPath);
     const done = new Set<string>();
     let skipped = 0;
+    // What actually goes, declaration by declaration and test by test. The
+    // report read the SCAN's own totals, which are fixed before the question
+    // is even asked, while this loop runs after the click and drops whatever
+    // moved in between. It knows: it warns about those a few lines below, and
+    // still counted them as removed.
+    //
+    // One inside a doomed file counts too: it goes with the file rather than
+    // through an edit of its own.
+    let declarations = 0;
+    let tests = 0;
     for (const { group, plan } of scan.groups) {
       const key = `${group.path}:${group.removeStart}`;
-      if (!done.has(key) && !doomed.has(group.path)) {
+      if (!done.has(key)) {
         done.add(key);
-        const range = rangeOf(group.path, group.removeStart, group.removeEnd);
-        if (range) {
-          edit.replace(corpusUri(group.path), range, '', { needsConfirmation: confirm, label: `Remove ${group.label}` });
-          operations++;
-          touches.add(group.path);
-        } else { skipped++; }
+        if (doomed.has(group.path)) {
+          declarations++;
+        } else {
+          const range = rangeOf(group.path, group.removeStart, group.removeEnd);
+          if (range) {
+            edit.replace(corpusUri(group.path), range, '', { needsConfirmation: confirm, label: `Remove ${group.label}` });
+            operations++;
+            declarations++;
+            touches.add(group.path);
+          } else { skipped++; }
+        }
       }
       for (const cut of plan.cuts) {
-        if (doomed.has(cut.path)) continue;
         const cutKey = `${cut.path}:${cut.start}`;
         if (done.has(cutKey)) continue;
         done.add(cutKey);
+        if (doomed.has(cut.path)) {
+          if (cut.kind !== 'import') tests++;
+          continue;
+        }
         const range = rangeOf(cut.path, cut.start, cut.end);
         if (!range) { skipped++; continue; }
         edit.replace(corpusUri(cut.path), range, '',
           { needsConfirmation: confirm, label: cut.kind === 'import' ? `Remove the stale import of ${cut.name}` : `Remove the test ${cut.name}` });
         operations++;
+        if (cut.kind !== 'import') tests++;
         touches.add(cut.path);
       }
     }
@@ -236,6 +255,7 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
       edit, swept, skipped, fichiers: touches.size,
       supprimes: deletedFiles.size + swept.files,
       operations: operations + swept.imports + swept.files,
+      declarations, tests,
     };
   };
 
@@ -259,7 +279,7 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
 
   const ok = await vscode.workspace.applyEdit(edit);
   void vscode.window.showInformationMessage(ok
-    ? `Removed ${plural(scan.offered, 'declaration')} and ${plural(scan.testFunctions, 'test')}`
+    ? `Removed ${plural(choisi.declarations, 'declaration')} and ${plural(choisi.tests, 'test')}`
       + (swept.imports > 0 ? `, plus ${plural(swept.imports, 'import')} left with no user` : '')
       + (swept.files > 0 ? ` and ${plural(swept.files, 'emptied file')}` : '')
       + (scan.withheld > 0 ? `. ${plural(scan.withheld, 'other')} withheld: their tests cover more than the declaration.` : '.')

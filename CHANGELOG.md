@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.269
+
+On the web, a file is not a `file:`.
+
+### Fixes
+- On vscode.dev and github.dev the safety check that stops an edit from landing on text that moved was answering that nothing was open, every time. It recognised a document by requiring the `file` scheme, which rules out the diff view a `git:` document opens, and rules out `vscode-vfs://github/owner/repo/...` just as firmly. That is what a file IS on those hosts.
+- A guard that fails by staying silent is the wrong kind of failure. The offsets of a scan a minute old were applied to a document the reader had edited since, and the two places that prefer the editor text over the saved file read the saved file instead. The expected scheme is now the one the workspace scan actually read the file under, so a path the scan never saw still falls back to `file` and nothing changes off the web.
+
+### Notes
+- Found by turning yesterday's change on itself. Three bulk removal commands reached the web host for the first time, so the question was what else on that host assumes a desktop, and one of the five places behind this check is the safety net for all of them. Remove All Unused Resource Keys had been running there the whole time.
+- The check that watches for unguarded path comparisons had to be corrected too. It accepted a line only when the literal `file` appeared on it, which describes one mechanism rather than the rule, and it refused the fix. It asks for a scheme comparison now, whatever scheme. It was then given a violation to find, to make sure it still finds one.
+
 ## 1.42.268
 
 Three commands the web build offered and could not run.

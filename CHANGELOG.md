@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.253
+
+A rename counted as a removal.
+
+### Fixes
+- Remove Everything Unused asked `Remove 320 unused declarations?` when 320 was not the number of declarations and not all of them were removals. On a real project that number is 279 deletions and 41 renames: the per file sweep does not only delete, it also replaces an unused lambda parameter with `_`, which removes nothing and is not a declaration. The rest are locals and orphaned imports, which are not declarations either. The question now counts what it deletes and names what it deletes, and the renames are stated separately, in the dialog and in the report.
+
+### Notes
+- Two things were checked and found sound, which is worth writing down as much as a fix. The merge that folds five families into one edit drops 32 cuts on a real project, 23 of them from dead islands, and every one of the 259 cuts the families would produce on their own is either kept as is or contained inside a kept one: nothing is lost, the drops are duplicates. And a cut shrunk by one line is caught on all 87 cuts the shrinking actually changed, the other 11 being single line declarations the mutation left untouched.
+
 ## 1.42.252
 
 The invariant against over deletion could only see one shape of it.

@@ -76,3 +76,38 @@ describe('collecterUnePasse', () => {
     }
   });
 });
+
+/**
+ * Un renommage n'est pas une suppression, et ne doit pas se compter comme
+ * telle.
+ *
+ * Le balayage ne fait pas que supprimer : il remplace aussi un parametre de
+ * lambda inutilise par `_`, ce qui ne retire rien et n'est pas une
+ * declaration. Comptes ensemble, ils faisaient annoncer « Remove 320 unused
+ * declarations » pour 279 suppressions et 41 renommages, sur un vrai projet.
+ */
+describe('collecterUnePasse : suppressions et renommages', () => {
+  it('un parametre de lambda inutilise compte comme renommage', () => {
+    const sources = [
+      { path: `${MAIN}/A.kt`, text: 'package com.x\n\nfun go(f: (Int) -> Unit) = f(1)\n\nfun main() {\n    go { inutilise -> println(2) }\n}\n' },
+    ];
+    const { parFichier, tally } = collecterUnePasse(sources, SEGS);
+    const toutes = [...parFichier.values()].flat();
+    const remplacements = toutes.filter(c => c.texte !== '');
+    // Ce que la sonde a mesure sur le vrai projet : le balayage rend bien des
+    // remplacements, et ils sortent du compte des suppressions.
+    expect(tally.renommages).toBe(remplacements.length);
+    expect(tally.balayage).toBe(toutes.filter(c => c.famille === 'balayage' && c.texte === '').length);
+  });
+
+  it('aucune coupe a texte vide ne compte comme renommage', () => {
+    const sources = [
+      { path: `${MAIN}/A.kt`, text: 'package com.x\n\nclass MortA\n\nclass MortB\n' },
+      { path: `${MAIN}/R.kt`, text: 'package com.x\n\nfun r() = 1\n' },
+    ];
+    const { parFichier, tally } = collecterUnePasse(sources, SEGS);
+    const toutes = [...parFichier.values()].flat();
+    expect(toutes.every(c => c.texte === '')).toBe(true);
+    expect(tally.renommages).toBe(0);
+  });
+});

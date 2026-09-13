@@ -1,12 +1,12 @@
 {
-  "version": "1.42.292",
+  "version": "1.42.293",
   "title": "What's New in Kotlin Jump",
-  "tagline": "One file, counted once",
-  "summary": "A file left alone because it changed under the scan was reported once per round instead of once.",
+  "tagline": "Counting what actually left",
+  "summary": "Remove Everything Unused counted the findings of files it had skipped as though they had been removed.",
   "highlights": [
     {
-      "title": "One File, Counted Once",
-      "description": "Remove Everything Unused repeats until nothing is left, and it was naming the same skipped file on every round.",
+      "title": "Counting What Actually Left",
+      "description": "A file changed under the scan is left alone, and its dead code was still counted in the closing report.",
       "kind": "fix"
     }
   ],
@@ -14,10 +14,10 @@
     {
       "heading": "Fixed",
       "bullets": [
-        "Remove Everything Unused counted one skipped file several times. A file that changed between the scan and the click is left alone and named at the end, and the command repeats its round until nothing is left, so the same file was named again on every round: four rounds, one file, and a closing report saying four files.",
-        "The situation is the ordinary one this check exists for. A file open in the editor whose content changed on disk, from a branch switch or a formatter run in a terminal, stays out of step round after round, so the count grew with the number of rounds rather than with the number of files.",
-        "The rounds now collect the paths themselves rather than adding up counts, so a file skipped ten times is still one file. The count that goes into the report cannot drift from the list it describes.",
-        "Held by a test that runs the real command over four rounds with one file out of step, and by three mutations of the fix, each of which puts the old answer back and turns the suite red."
+        "Remove Everything Unused counted declarations it had not removed. A file that changed between the scan and the click is left alone, and its findings were still counted as gone.",
+        "The report contradicted itself inside one sentence. Two files with one dead class each, one of them touched in a terminal in between: \"Removed 2 declarations, 1 emptied file. 1 file changed since the scan and was left alone.\" The edit carried a single operation.",
+        "The count is now taken from the files the edit actually covers rather than from what the scan turned up, and both counts come from the same piece of code applied to two different sets, so the number in the question and the number in the report mean the same thing by construction. A file the cascade deletes still counts: its declarations go with the file.",
+        "Four commands of this family got this same fix between 1.42.277 and 1.42.280. The one that removes the most was not among them."
       ]
     }
   ],

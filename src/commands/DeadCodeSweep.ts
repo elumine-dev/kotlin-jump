@@ -325,8 +325,20 @@ export async function cleanDeadCodeInWorkspaceCommand(): Promise<void> {
         void vscode.window.showInformationMessage(`Nothing to remove automatically.${note}`);
         return;
       }
-      if (choisi.bouges > 0) void vscode.window.showInformationMessage(note.trim());
       await vscode.workspace.applyEdit(choisi.edit);
+      // Apply all skips the preview by construction: the flag that opens it is
+      // the one that leaves every box unticked. The edit therefore went out
+      // without a word, the only destructive command of the family to say
+      // nothing. The per file twin may stay quiet, since it always goes
+      // through the preview, and the preview IS the answer there.
+      //
+      // In review, the reader is looking at the preview and the count of what
+      // was PROPOSED would be a second, different number in front of them.
+      void vscode.window.showInformationMessage(
+        choix === 'review'
+          ? `Sent ${plural(choisi.count, 'dead declaration')} to the preview.${note}`
+          : `Removed ${plural(choisi.count, 'dead declaration')} in ${plural(choisi.fichiers, 'file')}.${note}`,
+      );
     },
   );
 }

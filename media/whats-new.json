@@ -1,23 +1,23 @@
 {
-  "version": "1.42.290",
+  "version": "1.42.291",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Both halves of the answer",
-  "summary": "A refused edit was reported without the warning about files that had moved since the scan.",
+  "tagline": "One list, held in one place",
+  "summary": "No behaviour changed. The report of Remove Everything Unused is now held to naming every kind of dead code the scan counts.",
   "highlights": [
     {
-      "title": "Both Halves Of The Answer",
-      "description": "Telling you the edit was refused should not hide that a file moved under the scan and the command needs running again.",
-      "kind": "fix"
+      "title": "Every Kind Gets Named",
+      "description": "Eight kinds of dead code, one list written by hand three times. A test now reads it off the scan and holds the report to it.",
+      "kind": "improvement"
     }
   ],
   "sections": [
     {
-      "heading": "Fixed",
+      "heading": "Notes",
       "bullets": [
-        "When the workspace dead code sweep or the Remote Config removal is refused by the editor, it says so, and it no longer swallows the other half of what it had to tell you.",
-        "Both commands warn you when a file changed between the scan and the click: that file was left alone and the command has to be run again. Three days ago they learned to say \"Nothing was applied.\" instead of claiming a removal that never happened, and that early exit took the warning with it.",
-        "The two things are unrelated. An edit the editor rejected and a file that moved under the scan have different causes and different answers, and the second one is the one that tells you what to do next. It rides along with the refusal now.",
-        "Both paths are held by tests that run the real commands: one file moves, the edit comes back refused, and the message has to carry both halves."
+        "Nothing changed in what the extension does. Remove Everything Unused counts eight kinds of dead code, and the same list of eight was written out by hand in three places in that one file. Nothing held them together.",
+        "A ninth kind added to the scan would have been counted in the total, counted in the running tally, and left out of the closing report without a sound. You would read \"Removed 12\" above a sentence naming eight of them. The command that deletes code is the last place for a report that quietly omits a category.",
+        "A test now reads the list of kinds off the scan itself rather than keeping a fourth copy, and holds the report to naming every one of them. Adding a kind and forgetting the report turns it red.",
+        "Two more agreements are held at the same time: the number in the question is exactly the sum of what the scan counted, and the line under the question says how far the change reaches rather than promising a number of edits it cannot know before you click."
       ]
     }
   ],

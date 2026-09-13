@@ -39,7 +39,11 @@ async function lancer(bougeOuvert: boolean) {
     (bougeOuvert ? [{ uri: vscodeMock.Uri.file(BOUGE.path), isDirty: false, getText: () => BOUGE_OUVERT }] : []) as any);
 
   // Le corpus se vide au fil des rondes, comme le ferait un vrai apres coup.
-  const rondes = bougeOuvert ? [[MORT, BOUGE], [BOUGE], [BOUGE]] : [[MORT, BOUGE], [], []];
+  // Un appel pour le balayage d avant la question, puis un par ronde : la
+  // ronde 0 relit elle aussi depuis la 1.42.296.
+  const rondes = bougeOuvert
+    ? [[MORT, BOUGE], [MORT, BOUGE], [BOUGE], [BOUGE]]
+    : [[MORT, BOUGE], [MORT, BOUGE], [], []];
   let n = 0;
   const corpus: any = {
     invalidate: () => {},

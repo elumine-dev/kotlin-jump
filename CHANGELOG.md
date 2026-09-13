@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.259
+
+One capital letter was enough to undo it.
+
+### Fixes
+- The rule that keeps dependency sources out of the Problems panel compared path segments letter for letter. The disk underneath does not: `~/Library/Android/SDK/...` and `~/Library/Android/sdk/...` are the same file on macOS, Windows behaves the same way, and the spelling that reaches us is whatever the user typed. One capital letter and the warnings came back.
+- It also assumed both trees sit where their installer put them. `ANDROID_HOME` and `GRADLE_USER_HOME` move them anywhere, and an SDK under `/opt` was read as ordinary code. The rule now reads the layout instead of the address: platform sources live under `sources/android` followed by an API level, Gradle downloads live under `caches/modules-2`.
+
+### Notes
+- The API level has to be a number, so a folder of your own named `sources/android-utils` is still yours. A file inside the project is still yours whatever its path reads like.
+- Shipped one release ago and wrong on two of the three platforms it runs on. The Windows and Linux spellings are covered by test now, alongside a moved SDK and a moved Gradle home.
+
 ## 1.42.258
 
 A warning on Android's own source code.

@@ -65,7 +65,7 @@ interface Coupe { quoi: string; nom: string; path: string; line: number; start: 
  * liste remplace l'invariant perdu.
  */
 function verifier(nom: string, coupes: Coupe[], parPath: Map<string, string>, lignesEntieres = true): void {
-  const compte = { nom: 0, bornes: 0, ligne: 0, solde: 0, depart: 0, voisine: 0, liste: 0 };
+  const compte = { nom: 0, bornes: 0, ligne: 0, solde: 0, depart: 0, voisine: 0, liste: 0, orphelin: 0 };
   const fautes: string[] = [];
   for (const c of coupes) {
     const texte = parPath.get(c.path);
@@ -118,6 +118,41 @@ function verifier(nom: string, coupes: Coupe[], parPath: Map<string, string>, li
     if (nouveaux > 0) {
       compte.liste++;
       if (fautes.length < 8) fautes.push(`LISTE ${c.nom} ${c.path}:${c.line + 1} ${nouveaux} separateur(s) orphelin(s) apres la coupe`);
+    }
+
+    // Le RESTE ne doit pas porter d orphelin. Les autres invariants regardent
+    // ce que la coupe CONTIENT ; celui ci regarde ce qu elle LAISSE. Une coupe
+    // qui s arrete une ligne trop tot laisse un reste equilibre et sans le
+    // nom, donc invisible partout ailleurs. Le signal est l indentation, choisi
+    // parce qu il ne rejoue pas la regle de production qu il juge.
+    // Dans la coupe une annotation appartient a la declaration ; apres la
+    // coupe elle ouvre la suivante et ne se saute pas.
+    const aSauterDansLaCoupe = (l: string) => {
+      const t = l.trim();
+      return t === '' || t.startsWith('//') || t.startsWith('*') || t.startsWith('/*') || t.startsWith('@');
+    };
+    const aSauterApres = (l: string) => {
+      const t = l.trim();
+      return t === '' || t.startsWith('//') || t.startsWith('*') || t.startsWith('/*');
+    };
+    const rentree = (l: string): number => {
+      let n = 0;
+      for (const ch of l) { if (ch === ' ') n++; else if (ch === '\t') n = n - (n % 4) + 4; else break; }
+      return n;
+    };
+    // Les bornes BRUTES : `debutLigne` et `finLigne` sont vraies d office pour
+    // une coupe partielle, et raisonner en lignes entieres sur le milieu d une
+    // liste d enum faisait crier l oracle sur `LAST_ACCESSED`.
+    const surLignesEntieres = (c.start === 0 || texte[c.start - 1] === '\n')
+      && (c.end === texte.length || texte[c.end] === '\n' || texte[c.end - 1] === '\n');
+    if (surLignesEntieres) {
+      const premiereCode = coupe.split('\n').find(l => !aSauterDansLaCoupe(l));
+      const suivante = texte.slice(c.end).split('\n').find(l => !aSauterApres(l));
+      if (premiereCode !== undefined && suivante !== undefined
+        && rentree(suivante) > rentree(premiereCode)) {
+        compte.orphelin++;
+        if (fautes.length < 12) fautes.push(`ORPHELIN ${c.nom} ${c.path}:${c.line + 1} laisse ${JSON.stringify(suivante.slice(0, 60))} plus rentree que ${JSON.stringify(premiereCode.trim().slice(0, 40))}`);
+      }
     }
 
     // `@JvmStatic fun x()` porte l annotation ET la declaration : ne sauter que

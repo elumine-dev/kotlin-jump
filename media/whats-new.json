@@ -1,27 +1,32 @@
 {
-  "version": "1.42.236",
+  "version": "1.42.237",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A modifier alone proves nothing",
-  "summary": "Every Kotlin modifier is a soft keyword, so `value` and `data` name variables every day. Matching them bare made a cut stop one line short and leave code that does not compile.",
+  "tagline": "A closing brace is not always the end",
+  "summary": "A member whose expression body carried on past a lambda lost that continuation: the cut took the first line and left `?: View.GONE` alone in the file.",
   "highlights": [
     {
-      "title": "Cuts that stopped one line short",
+      "title": "Expressions that continue past a lambda",
       "kind": "fix",
-      "description": "A continuation line starting with `value`, `data` or `open` read as a new declaration, so the line above was judged finished and cut alone. A modifier counts now when a hard keyword follows it, or, in Java, a type and a name."
+      "description": "The span stops on the lambda closing brace, so the end is not line based and the continuation test was gated on that. A positive test answers now where the span cannot: a line opening on `?:`, `.`, `::` or `else` can only continue what is above it."
+    },
+    {
+      "title": "The walk stopped allocating",
+      "kind": "fix",
+      "description": "It cut one substring per line it read. A single pass never got slower, but the workspace sweep fell into a slow mode 65 % of the time against 30 % before. Counting over indices puts both back at the same rate."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "A cut could stop one line short and leave code behind that does not compile. `open` was already matched bare; 1.42.233 added eleven more words and widened the hole.",
-        "The expression walk stops on a semicolon at bracket depth zero, so it can no longer read on into the Java method below."
+        "A member whose expression body carried on past a lambda lost that continuation, and the remainder no longer compiled. Three such members on a real 6329 source project, all live code.",
+        "The expression walk counts brackets over indices instead of cutting a substring per line."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "Not reachable on the 6329 source project this is measured against: the same 418 findings keep the same 418 cuts, byte for byte. The shape is ordinary Kotlin all the same."
+        "Found by a new invariant in the removal witness: the seven already there watch what a cut CONTAINS, not one watched what it LEAVES. It compares indentation, chosen because it does not replay the production rule it judges."
       ]
     }
   ],

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.246
+
+An error on a file you cannot open, and it was ours.
+
+### Fixes
+- A source jar from the Gradle cache was scanned as project code. It opens with `languageId` set to java, and three diagnostic providers gate on the language alone, so Kotlin Jump put an ERROR on
+  `databinding-runtime-9.3.1-sources.jar!androidx/databinding/ObservableField.java`: `Cannot resolve string resource 'name'`, in a file the reader can neither open nor fix. Two conditions are needed and both are checked now: the scheme rules out `jar:`, `git:`, `untitled:` and every virtual document, and the workspace folder rules out a real file on disk that simply is not part of this project, which is what the Gradle cache is.
+
+### Notes
+- The test doubles for a document URI carried only `toString()`, while a real one always carries its scheme and its path. Four regression tests were passing on a URI that could not exist. They carry both now.
+- The VS Code test double answered that no workspace folder contains anything, which would have made every file in every test read as outside the project. A folder is open by default now, which is the ordinary case; a test that wants the opposite says so.
+
 ## 1.42.245
 
 Four defects in yesterday's new command, three of them mine from the hour before.

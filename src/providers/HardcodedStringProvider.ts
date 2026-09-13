@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { estDansLEspaceDeTravail } from '../util/inWorkspace';
 
 /**
  * KJ-004: hardcoded string lint. Flags literals passed directly to a known
@@ -147,6 +148,9 @@ export class HardcodedStringProvider implements vscode.Disposable {
   }
 
   private _scan(doc: vscode.TextDocument): void {
+    // Same reason as elsewhere: a source jar from the Gradle cache carries
+    // the right `languageId` without being part of the project.
+    if (!estDansLEspaceDeTravail(doc)) { this._diag.delete(doc.uri); return; }
     if (doc.languageId !== 'kotlin' && doc.languageId !== 'java') return;
     const enabled = vscode.workspace
       .getConfiguration('kotlinJump')

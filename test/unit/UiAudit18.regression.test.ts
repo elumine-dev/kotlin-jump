@@ -72,7 +72,7 @@ describe('ResourceDiagnosticProvider', () => {
     vi.spyOn(vscodeMock.window, 'activeTextEditor', 'get').mockReturnValue(undefined as any);
     const collection = { set: vi.fn(), delete: vi.fn(), dispose: vi.fn() };
     vi.spyOn(vscodeMock.languages, 'createDiagnosticCollection').mockReturnValue(collection as any);
-    const doc = { languageId: 'kotlin', lineCount: lines.length, lineAt: (i: number) => ({ text: lines[i] }), uri: { toString: () => 'file:///Test.kt', path: '/Test.kt' } };
+    const doc = { languageId: 'kotlin', lineCount: lines.length, lineAt: (i: number) => ({ text: lines[i] }), uri: { toString: () => 'file:///Test.kt', path: '/Test.kt', scheme: 'file', path: '/Test.kt', fsPath: '/Test.kt' } };
     vi.spyOn(vscodeMock.window, 'visibleTextEditors', 'get').mockReturnValue([{ document: doc }] as any);
     new ResourceDiagnosticProvider(new StringResourceIndex(), new ColorResourceIndex());
     const calls = collection.set.mock.calls;

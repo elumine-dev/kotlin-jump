@@ -62,7 +62,7 @@ function diagsFor(
     languageId: lang,
     lineCount: lines.length,
     lineAt: (i: number) => ({ text: lines[i] }),
-    uri: { toString: () => 'file:///Test.kt' },
+    uri: { toString: () => 'file:///Test.kt', scheme: 'file', path: '/Test.kt', fsPath: '/Test.kt' },
   };
   vi.spyOn(vscodeMock.window, 'visibleTextEditors', 'get').mockReturnValue([{ document: doc }]);
   new ResourceDiagnosticProvider(strings, colors);
@@ -157,7 +157,7 @@ describe('SP2-RDP-9 — resourceDiagnostics: false → 0 diagnostics', () => {
       languageId: 'kotlin',
       lineCount: 1,
       lineAt: () => ({ text: 'R.string.unknown_key' }),
-      uri: { toString: () => 'file:///Test.kt' },
+      uri: { toString: () => 'file:///Test.kt', scheme: 'file', path: '/Test.kt', fsPath: '/Test.kt' },
     };
     vi.spyOn(vscodeMock.window, 'visibleTextEditors', 'get').mockReturnValue([{ document: doc }]);
     new ResourceDiagnosticProvider(makeStrings([]), makeColors([]));

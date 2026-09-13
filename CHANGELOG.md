@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.263
+
+Calling a caught exception a parameter, 38 times out of 41.
+
+### Fixes
+- Remove Everything Unused called every renaming an unused parameter. Two different things get renamed to `_`: a lambda parameter that is never read, and a caught exception that is never read. On the reference project, 5110 files, 38 of the 41 renamings are caught exceptions and 3 are lambda parameters, so the wording was wrong in the ordinary case rather than in an edge case. All three places say `unused name` now.
+
+### Notes
+- The closing report was composed inline, which meant no test could reach it. Putting the wrong word back into the dialog broke five assertions; putting it back into the report broke nothing at all. It is built by a function of its own now, with the count for each family under test, including the plural forms.
+- Found by asking the detector what it actually produces rather than reading the counter that sums it up. A caught exception with an unused binding is the most common shape in real Kotlin and Java, and nothing in the count said so.
+
 ## 1.42.262
 
 A dialog asking permission to remove nothing.

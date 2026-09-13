@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { estUnFichierReel } from '../util/inWorkspace';
 import { estDansLEspaceDeTravail } from '../util/inWorkspace';
 
 /**
@@ -252,6 +253,9 @@ export class LifecyclePairingProvider implements vscode.Disposable {
 
   private _scan(doc: vscode.TextDocument): void {
     if (doc.languageId !== 'kotlin' && doc.languageId !== 'java') return;
+    // A source jar from the Gradle cache carries the right `languageId`
+    // without being part of the project.
+    if (!estUnFichierReel(doc)) { this._diag.delete(doc.uri); return; }
     // A source jar from the Gradle cache carries the right `languageId`
     // without being part of the project.
     if (!estDansLEspaceDeTravail(doc)) { this._diag.delete(doc.uri); return; }

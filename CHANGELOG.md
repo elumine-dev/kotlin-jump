@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.247
+
+Yesterday's guard was too wide by one condition, then by one scheme.
+
+### Fixes
+- Two linters went quiet on a file opened on its own. The guard that stopped a source jar from being scanned as project code asked for a workspace FOLDER, and it was applied to all three diagnostic providers at once. Only one of them needs it: the resource diagnostics compare code against the project's resource index, so outside the project their answer has no meaning. The other two read nothing but the file in front of them, and requiring a folder for those turned them off the moment a file was opened without one. Two levels now, one per question.
+- The same guard also dropped untitled buffers. Kotlin pasted into a scratch buffer is code the reader is writing, and a linter that only reads the file in front of it belongs there. It passes now; the diagnostics that need the project index still do not, because an untitled buffer belongs to no folder.
+
+### Notes
+- Neither of these is reachable from a report; both came from rereading a guard written thirty minutes earlier and asking what it refuses that it should not.
+
 ## 1.42.246
 
 An error on a file you cannot open, and it was ours.

@@ -8,11 +8,17 @@
  * projet de reference, une ile morte pousse un groupe par membre et tous
  * portent le MEME libelle, donc deux des cinq groupes partagent leur cle.
  *
- * Une cle ambigue ne peut pas servir de consentement : elle ne dit pas lequel
- * des deux a ete annonce. La regle est donc le compte. Tant que le groupe
- * relu a exactement la taille du groupe annonce, il est intact et passe
- * entier. Des qu'elle differe, quelque chose a bouge la dedans et on refuse
- * de deviner : le groupe entier reste.
+ * Une cle ambigue ne dit pas lequel des deux a ete annonce, donc la regle est
+ * le compte. Tant que le groupe relu a exactement la taille du groupe annonce,
+ * il est intact et passe entier. Des qu'elle differe, quelque chose a bouge la
+ * dedans et on refuse de deviner : le groupe entier reste.
+ *
+ * Mesure honnete du seul cas ambigu connu : le libelle d'une ile est la liste
+ * de ses membres, donc perdre un membre change le libelle et fait DISPARAITRE
+ * la cle au lieu d'en changer le compte. Le compte et la simple appartenance
+ * y rendent le meme verdict. La regle du compte ne repose donc sur aucune
+ * mesure de defaut ; elle rend l'intersection independante de la facon dont
+ * les libelles sont fabriques, ce qui coute une ligne.
  *
  * Refuser est le seul cote sur. Retirer trop peu se rattrape en relancant la
  * commande ; retirer ce qui n'a pas ete annonce, non.

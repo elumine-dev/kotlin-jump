@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.305
+
+A correction: yesterday named a danger that cannot occur.
+
+### Notes
+- A correction to what the last release said. It described a guard against one subject of a removal slipping through on another subject sharing its name, and that cannot actually happen. The claim was published without having been demonstrated, and it is wrong.
+- Two subjects do share a name, which was measured and is true: a dead island produces one subject per member and each carries the island name. But that name is the member names joined together, so a name borne by several subjects always refers to one island, offered and read back as a whole. Lose a member and the name changes with it.
+- Measured both ways this time. Before: one island of two members, two subjects under one name. After a member gains a caller in production: that name is gone entirely rather than standing for one subject instead of two.
+- The guard stays, because it costs one line and it holds whatever names are made of, but the reason written next to it now says that rather than a danger that does not exist. A false reason in the code is worse than none: the next reader builds on it.
+
 ## 1.42.304
 
 A shared name cannot stand for consent.

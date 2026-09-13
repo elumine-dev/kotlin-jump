@@ -1,23 +1,23 @@
 {
-  "version": "1.42.304",
+  "version": "1.42.305",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A shared name is not consent",
-  "summary": "Two subjects of a dead island share one name, and the guard added this week matched on names alone.",
+  "tagline": "Correcting yesterday",
+  "summary": "The danger described in the last release cannot occur, and the reason written in the code now says so.",
   "highlights": [
     {
-      "title": "A Shared Name Is Not Consent",
-      "description": "Members of a dead island all carry the island name, so matching by name let one through on its twin. It goes by count now.",
-      "kind": "fix"
+      "title": "Correcting Yesterday",
+      "description": "The shared name that looked dangerous always refers to one island, offered and read back whole. The guard stays, the reason is fixed.",
+      "kind": "improvement"
     }
   ],
   "sections": [
     {
-      "heading": "Fixed",
+      "heading": "Notes",
       "bullets": [
-        "The check added two days ago, that a second reading of the workspace can only shorten the list and never lengthen it, identified each entry by its path and its name. On the reference project that pair is not unique: two of the five subjects Remove test only code finds share it, because a dead island produces one subject per member and they all carry the island name.",
-        "A shared name cannot stand for consent, since it does not say which of the two was named. Matching by membership would let a subject through on the strength of its twin having been named in the question.",
-        "So the rule is now the count. A group of entries sharing a name passes whole while it still has the size it had when the question was asked. The moment that changes, something moved inside it and nothing is guessed: the group stays. Removing too little is fixed by running the command again, removing what was never named is not.",
-        "The four other commands were measured rather than assumed: their keys are unique, and for the resource keys and the Remote Config keys they are unique by construction, since a key declared in more than one module is never reported at all."
+        "A correction to what the last release said. It described a guard against one subject of a removal slipping through on another subject sharing its name, and that cannot actually happen. The claim was published without having been demonstrated, and it is wrong.",
+        "Two subjects do share a name, which was measured and is true: a dead island produces one subject per member and each carries the island name. But that name is the member names joined together, so a name borne by several subjects always refers to one island, offered and read back as a whole. Lose a member and the name changes with it.",
+        "Measured both ways this time. Before: one island of two members, two subjects under one name. After a member gains a caller in production: that name is gone entirely rather than standing for one subject instead of two.",
+        "The guard stays, because it costs one line and it holds whatever names are made of, but the reason written next to it now says that rather than a danger that does not exist. A false reason in the code is worse than none: the next reader builds on it."
       ]
     }
   ],

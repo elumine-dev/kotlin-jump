@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.308
+
+The second promise, also held by nothing.
+
+### Notes
+- Nothing changed in what the extension does. The second promise the removal commands lean on is now written down, after the first one yesterday.
+- Every one of them refuses to work from a workspace it could not read whole, because a scan that missed files cannot prove that nothing uses a declaration. That refusal reads one flag, and the flag is raised by the index when a file cannot be read or when the scan is cut short.
+- The file cap was covered by the tests next to it. The read failure was covered by nothing, and it is the one that actually happens: a file the search still lists and which has just been deleted, which is how the removal commands set this off against themselves.
+- Made to swallow a read failure silently, the whole suite of nearly eight thousand tests still passed, while every guard built on that flag this week would have gone quiet, including the one that stopped live code being deleted.
+
 ## 1.42.307
 
 A speed promise that nothing was holding.

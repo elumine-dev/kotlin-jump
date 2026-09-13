@@ -72,4 +72,38 @@ describe('KJ-032 un operateur en commentaire ne prolonge rien', () => {
     expect(c).toBeDefined();
     expect(c).not.toContain('fun vivant');
   });
+
+  /**
+   * Et la meme question posee par la MARCHE, ligne par ligne.
+   *
+   * Le test de l operateur existe a deux endroits : celui qui decide s il faut
+   * descendre, et celui qui decide, a chaque ligne, s il faut continuer. Le
+   * second n etait atteint par aucun decor le jour du correctif, qui l a donc
+   * recu par coherence sans preuve. Une declaration qui s etale vraiment sur
+   * plusieurs lignes y mene, et le commentaire se pose sur la DERNIERE.
+   */
+  const multiligne = (commentaire: string) => [
+    'package com.x',
+    '',
+    'val fantome = listOf(',
+    '    1,',
+    '    2,',
+    `)${commentaire}`,
+    '',
+    'fun vivant() = 2',
+    '',
+  ].join('\n');
+
+  it('temoin : la declaration multiligne part en entier', () => {
+    const c = coupe(multiligne(' // fin'))!;
+    expect(c).toContain('listOf(');
+    expect(c).toContain(') // fin');
+    expect(c).not.toContain('fun vivant');
+  });
+
+  it('une virgule en fin de commentaire sur la DERNIERE ligne n emporte pas la suite', () => {
+    const c = coupe(multiligne(' // fin,'))!;
+    expect(c).toContain('listOf(');
+    expect(c).not.toContain('fun vivant');
+  });
 });

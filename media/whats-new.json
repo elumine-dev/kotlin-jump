@@ -1,27 +1,27 @@
 {
-  "version": "1.42.253",
+  "version": "1.42.254",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Counting what it actually does",
-  "summary": "The dialog asked to remove 320 unused declarations when 41 of those were renames of a lambda parameter to `_`, and the rest included locals and imports.",
+  "tagline": "Ten rounds measured, eight allowed",
+  "summary": "Remove Everything Unused stopped two rounds before it was done on the project it was built for, because its limit was written without measuring.",
   "highlights": [
     {
-      "title": "A rename is not a removal",
+      "title": "The loop runs long enough to finish",
       "kind": "fix",
-      "description": "The per file sweep does not only delete: it replaces an unused lambda parameter with `_`. On a real project that is 41 of the 320 changes the dialog was calling declarations. The question counts what it deletes now, and states the renames separately."
+      "description": "Applied to a fixed point on a 6329 source project it takes ten rounds: the tail is a chain of constants each alive only for the next. The limit was eight. It is sixteen now, and the loop shows its round and can be stopped between two."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Remove Everything Unused counts deletions and renames separately, in the question it asks and in the report it ends on."
+        "The round limit of Remove Everything Unused is a measured number with room above it, not a guess below the need."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "The merge that folds five families into one edit drops 32 cuts, and every one of the 259 the families would produce alone is kept or contained in a kept one: nothing is lost.",
-        "A cut shrunk by one line is caught on all 87 cuts the shrinking actually changed; the other 11 are single line declarations the mutation left untouched."
+        "The merged path had never been applied for real. It has now, to a fixed point: 62 files deleted, 138 modified, zero brace or parenthesis left unbalanced across the 5048 remaining.",
+        "Every one of the 259 cuts the five families would produce alone is kept by the merge or contained in a cut it keeps; the 32 it drops are duplicates."
       ]
     }
   ],

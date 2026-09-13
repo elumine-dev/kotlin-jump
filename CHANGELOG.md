@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.258
+
+A warning on Android's own source code.
+
+### Fixes
+- Kotlin Jump wrote diagnostics on files that belong to a dependency, not to the user. Go to Definition on a framework class opens something like `~/Library/Android/sdk/sources/android-35/android/webkit/FindActionModeCallback.java`, and the hardcoded string lint published a warning inside it. That file is one of 15138 on this machine alone, and no one can edit any of them.
+- The guard knew how to keep an archive entry out, by its `.jar!` segment, and it used to keep everything else out by asking for a workspace folder. Splitting it in two so a file opened on its own would still be linted dropped that second half, and the Android SDK sources, the Gradle cache and the local Maven repository walked back in. They are ruled out by name now.
+
+### Notes
+- The workspace folder became the way out rather than the rule. A file inside the project is the user's whatever its path reads like, and a file outside it counts as the user's unless it sits under one of those dependency roots. A lone file with an ordinary path is still linted, which is what the previous release was for.
+- Checked against the real thing rather than a fixture: the framework file above reported one finding before and reports none after, and the same content under an ordinary path still reports it.
+
 ## 1.42.257
 
 A linter switched off by the fix that was meant to save it.

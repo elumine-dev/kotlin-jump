@@ -1,12 +1,12 @@
 {
-  "version": "1.42.257",
+  "version": "1.42.258",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Lifecycle Pairing works on a file opened alone",
-  "summary": "Lifecycle Pairing needed a workspace folder to say anything. A single file open on its own belongs to no folder, so the linter stayed silent there.",
+  "tagline": "No more warnings on code you cannot edit",
+  "summary": "Opening a dependency's source through Go to Definition could put a Kotlin Jump warning inside it. Dependency source trees are left alone now.",
   "highlights": [
     {
-      "title": "Lifecycle Pairing Without A Folder",
-      "description": "Opening one Kotlin file on its own turned this linter off. The guard that keeps Gradle source jars out of the Problems panel was asking for a workspace folder that a lone file never has. It now asks only what it needs.",
+      "title": "Dependency Sources Left Alone",
+      "description": "The Android SDK sources, the Gradle cache and the local Maven repository are real files on disk that no user can edit. A lint warning published there is noise. They are ruled out by name, while a file opened on its own is still linted.",
       "kind": "fix"
     }
   ],
@@ -14,15 +14,15 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Lifecycle Pairing went quiet on a Kotlin or Java file opened on its own, with no folder open in the window. The check that keeps a Gradle source jar out of the Problems panel was asking for a workspace folder, and a single file belongs to none.",
-        "The split that was supposed to fix this shipped two releases ago and only went half way. It added the looser check to this linter without taking the strict one out, and since the strict one is the loose one plus the folder, it kept winning every time. The strict check is gone."
+        "Kotlin Jump wrote diagnostics on files that belong to a dependency, not to the user. Go to Definition on a framework class opens something like `~/Library/Android/sdk/sources/android-35/android/webkit/FindActionModeCallback.java`, and the hardcoded string lint published a warning inside it. That file is one of 15138 on this machine alone, and no one can edit any of them.",
+        "The guard knew how to keep an archive entry out, by its `.jar!` segment, and it used to keep everything else out by asking for a workspace folder. Splitting it in two so a file opened on its own would still be linted dropped that second half, and the Android SDK sources, the Gradle cache and the local Maven repository walked back in. They are ruled out by name now."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "The source jar is still kept out, folder or no folder, and so is a `git:` view of a file that lives elsewhere. What changed is only the folder requirement, on a linter that reads nothing but the document in front of it.",
-        "The test that covers this was checking the two guard functions on their own, never which of the two each linter calls, so it stayed green while the linter was off. It now drives the providers themselves, and it covers the hardcoded string linter in the same breath, since the two broke together and only one was put right."
+        "The workspace folder became the way out rather than the rule. A file inside the project is the user's whatever its path reads like, and a file outside it counts as the user's unless it sits under one of those dependency roots. A lone file with an ordinary path is still linted, which is what the previous release was for.",
+        "Checked against the real thing rather than a fixture: the framework file above reported one finding before and reports none after, and the same content under an ordinary path still reports it."
       ]
     }
   ],

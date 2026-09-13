@@ -15,13 +15,39 @@ import * as vscode from 'vscode';
  * lives somewhere else, and the `.jar!` segment rules out an archive entry
  * whatever scheme it arrives under.
  */
+const RACINES_DE_DEPENDANCE = [
+  '/.gradle/caches/',
+  '/.m2/repository/',
+  '/Android/sdk/sources/',
+  '/.konan/',
+];
+
+/**
+ * A dependency's source tree, unpacked on disk rather than read through an
+ * archive.
+ *
+ * `Go to Definition` on a framework class opens
+ * `~/Library/Android/sdk/sources/android-35/android/webkit/FindActionModeCallback.java`,
+ * one of 15138 java files that are as real as any other and that no user can
+ * edit. The `.jar!` segment says nothing about them, and a warning published
+ * there is the same noise as the one that started all of this.
+ */
+const estUneSourceDeDependance = (chemin: string): boolean =>
+  RACINES_DE_DEPENDANCE.some(r => chemin.includes(r));
+
 export function estUnFichierReel(doc: vscode.TextDocument): boolean {
   // `untitled:` passe : un tampon sans titre ou l'on colle du Kotlin est du
   // code que l'utilisateur ecrit, et un linter qui ne lit que le fichier sous
   // ses yeux y a toute sa place. L'exclure etait un exces de la premiere
   // version de cette garde.
   if (doc.uri.scheme !== 'file' && doc.uri.scheme !== 'untitled') return false;
-  return !doc.uri.path.includes('.jar!');
+  if (doc.uri.path.includes('.jar!')) return false;
+  // The folder is an escape hatch, not the rule. A file of the project is ours
+  // whatever its path reads like; a file outside it is ours only when it does
+  // not sit in a dependency root. Asking for the folder outright is what shut
+  // these linters off on a file opened on its own.
+  if (vscode.workspace.getWorkspaceFolder(doc.uri) !== undefined) return true;
+  return !estUneSourceDeDependance(doc.uri.path);
 }
 
 /**

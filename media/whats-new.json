@@ -1,29 +1,23 @@
 {
-  "version": "1.42.283",
+  "version": "1.42.284",
   "title": "What's New in Kotlin Jump",
-  "tagline": "No blank line gap left behind",
-  "summary": "Removing a declaration left the blank lines from both sides of it, in a third of the files the command touches.",
+  "tagline": "Two removal paths, one answer",
+  "summary": "No behaviour changed. The two commands that remove a declaration are now held to cutting it the same way.",
   "highlights": [
     {
-      "title": "One Blank Line, Not Two",
-      "description": "A declaration sits between two blank lines and taking it left both. One goes with it now, and a lone blank line is never touched.",
-      "kind": "fix"
+      "title": "Held To The Same Answer",
+      "description": "One command already took the blank line that followed a removed declaration and the other did not. They agree now, and a test keeps them agreeing.",
+      "kind": "improvement"
     }
   ],
   "sections": [
     {
-      "heading": "Fixes",
-      "bullets": [
-        "Remove Everything Unused left a gap of blank lines wherever it took something out. A declaration almost always has a blank line above and below it, and removing the declaration left both, side by side, where a single one used to separate two neighbours. On the reference project 66 of the 199 files it cuts came back with such a gap, a third of a diff that someone reads by hand.",
-        "One of the two now goes with the cut. Never a lone blank line: there has to be one on each side and only one leaves, so the spacing the author wrote is kept and never invented. The same 199 files now come back with two gaps instead of 66, and the two that remain are ones no rule can close without removing a blank line somebody meant to be there."
-      ]
-    },
-    {
       "heading": "Notes",
       "bullets": [
-        "Checked the way every cut change here is checked: the 140 Kotlin files this touches were put through the compiler before and after, and the result is what it was, no new diagnostic and no syntax error on either side.",
-        "Found while stress testing the cascade, which came out of it clean: an import shared by a removed and a surviving declaration stays, an aliased import stays, a star import stays, and an import used from nothing but a doc link stays. A file emptied of everything goes, including when it carries a file level annotation, and one that still holds a constant stays.",
-        "Two of the four mutations tried against the new rule survive and are left alone. Both guards they touch are there for shapes the detectors do not currently produce: a whole line replacement, and an extension long enough to reach the next cut. The second was measured rather than assumed, on the reference project, with and without the guard: 105 cuts grow, and nothing overlaps either way."
+        "Nothing changed in what the extension does. Yesterday's blank line fix was checked from four angles, and what it left behind is now held in place by a test rather than by luck.",
+        "Two commands remove the same declaration by two different routes, and they used to disagree: the one dedicated to unreferenced declarations already took the blank line that followed, the one that removes everything did not, which is where yesterday's 66 gaps came from. They agree on all 88 findings of the reference project now, and a test confronts them on four shapes so two spellings of one policy cannot drift apart in silence.",
+        "Where they cannot agree is written down rather than left to be discovered in a diff: with no blank line above the declaration, the merged pass keeps the lone separator and the dedicated command takes it. Zero occurrences on the reference project, and of the 32 real cuts that do absorb a blank line, all 32 had one on either side.",
+        "The safety check that mattered most came back clean: an extended cut and a cascade import removal landing on the same range would make the editor reject the whole edit without a word. Across 199 files and 86 cascade imports, nothing overlaps."
       ]
     }
   ],

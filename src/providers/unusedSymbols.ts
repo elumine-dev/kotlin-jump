@@ -377,7 +377,15 @@ function finDeLExpression(
     if (FINIT_SUR_UN_OPERATEUR_RE.test(fin)) continue;
     // Un `;` a profondeur zero clot la declaration, quelle que soit la ligne
     // suivante : sans cela la marche traversait la methode Java d en dessous.
-    if (fin.endsWith(';')) return lineEndOf(l);
+    //
+    // Lu sur la copie BLANCHIE, pas sur la ligne brute. Un commentaire de fin
+    // de ligne qui se termine par un point-virgule arretait la marche au
+    // milieu de l'expression, et `val fantome = 1 + // note;` suivi de sa
+    // continuation emportait la premiere ligne en laissant l'autre orpheline.
+    // Le test de l'OPERATEUR juste au dessus veut l'inverse, le brut, parce
+    // que le nettoyeur vide les chaines et que `val x = "done"` se lirait sur
+    // son `=`. Les deux questions ne se posent pas a la meme copie.
+    if (clean.slice(lineStarts[l], lineEndOf(l)).trimEnd().endsWith(';')) return lineEndOf(l);
     let suivante = l + 1;
     while (suivante <= lastLine && (lines[suivante] ?? '').trim() === '') suivante++;
     if (suivante <= lastLine && !OUVRE_UNE_DECLARATION_RE.test(lines[suivante] ?? '')) continue;
@@ -452,6 +460,8 @@ export function removalExtent(
   // Judge continuation on the RAW text: the sanitizer blanks string bodies, so
   // `val X = "done"` would read as ending on `=` and lose its quick fix.
   const trailing = text.slice(0, endOffset).trimEnd();
+  /** La meme fin, blanchie : pour les questions que le brut fausse. */
+  const trailingPropre = clean.slice(0, endOffset).trimEnd();
   const nextLineNum = offsetToPos(lineStarts as number[], Math.max(endOffset - 1, 0)).line + 1;
   let nextNonBlank = nextLineNum;
   while (nextNonBlank <= lastLine && (lines[nextNonBlank] ?? '').trim() === '') nextNonBlank++;
@@ -469,7 +479,14 @@ export function removalExtent(
   // freshness test decides, and its keyword list is Kotlin only: a Java field
   // starts with its TYPE (`int`, `String`), never with `val` or `fun`, so the
   // next line never read as fresh and no Java constant could be removed.
-  const termine = /;$/.test(trailing);
+  // Lu sur la copie BLANCHIE : un commentaire de fin de ligne qui se termine
+  // par un point-virgule faisait croire la declaration terminee, et
+  //   val fantome = 1 + // note;
+  //       2
+  // perdait sa continuation, laissee orpheline dans le fichier. Le test de
+  // l'OPERATEUR juste en dessous veut le brut, lui, parce que le nettoyeur
+  // vide les chaines et que `val x = "done"` se lirait sur son `=`.
+  const termine = /;$/.test(trailingPropre);
   const continues = span.lineBasedEnd && !termine
     && (FINIT_SUR_UN_OPERATEUR_RE.test(trailing) || !nextStartsFresh);
   // Une accolade de lambda n est pas forcement la fin de l expression, et la

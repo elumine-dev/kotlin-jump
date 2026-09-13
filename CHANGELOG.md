@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.264
+
+An annotation that stayed behind and changed owner.
+
+### Fixes
+- Removing an unused enum entry left a multi line annotation standing. The cut knew to take `@Deprecated("x")` written on one line, because it checked the line above and found nothing but an annotation on it. An annotation spread over several lines puts a lone `)` on that line, which is an annotation to nobody, so the walk stopped there.
+- What was left behind bound itself to the next entry, which is alive, so a deprecation could move from the entry that left onto a sibling that stayed. When the removed entry was the last one, the annotation was left with nothing after it but the closing brace and the file stopped parsing. The walk now reads the whole block up to the entry rather than each line on its own.
+
+### Notes
+- Five checks run over a real project before a release, one per removal family, and this family had none. It does now, and it holds the entry list to a reparse: after the cut the enum must carry exactly the entries it had, minus the one that left.
+- Two of its rules exist because of the bug above. One looks for an annotation left with nothing behind it, the other for a surviving entry that inherited an annotation it never had. The reference project carries neither shape, so the check was proved on a pair of files written for it: with the old code both rules fire, with the new one neither does.
+- A first draft of that second rule reported an enum that has no annotations at all. For the first entry of an enum it was counting the whole file above it. Reported here rather than quietly corrected, because a check that cries wolf gets ignored and then deleted.
+
 ## 1.42.263
 
 Calling a caught exception a parameter, 38 times out of 41.

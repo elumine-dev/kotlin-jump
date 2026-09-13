@@ -1,12 +1,12 @@
 {
-  "version": "1.42.263",
+  "version": "1.42.264",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The renaming count says what it renamed",
-  "summary": "Every renaming was reported as an unused parameter. On a real project most of them are caught exceptions.",
+  "tagline": "Enum entries leave with their annotations",
+  "summary": "Removing an unused enum entry could leave a multi line annotation behind, which then belonged to the next entry, or to nothing at all.",
   "highlights": [
     {
-      "title": "Not Every Renaming Is A Parameter",
-      "description": "A lambda parameter and a caught exception both get renamed to `_`, and the count called them all parameters. On the reference project that was wrong 38 times out of 41.",
+      "title": "The Annotation Leaves Too",
+      "description": "An annotation written across several lines stayed behind when its enum entry was removed. It then bound itself to the next entry, and on the last entry of an enum it left the file unable to parse.",
       "kind": "fix"
     }
   ],
@@ -14,14 +14,16 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Remove Everything Unused called every renaming an unused parameter. Two different things get renamed to `_`: a lambda parameter that is never read, and a caught exception that is never read. On the reference project, 5110 files, 38 of the 41 renamings are caught exceptions and 3 are lambda parameters, so the wording was wrong in the ordinary case rather than in an edge case. All three places say `unused name` now."
+        "Removing an unused enum entry left a multi line annotation standing. The cut knew to take `@Deprecated(\"x\")` written on one line, because it checked the line above and found nothing but an annotation on it. An annotation spread over several lines puts a lone `)` on that line, which is an annotation to nobody, so the walk stopped there.",
+        "What was left behind bound itself to the next entry, which is alive, so a deprecation could move from the entry that left onto a sibling that stayed. When the removed entry was the last one, the annotation was left with nothing after it but the closing brace and the file stopped parsing. The walk now reads the whole block up to the entry rather than each line on its own."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "The closing report was composed inline, which meant no test could reach it. Putting the wrong word back into the dialog broke five assertions; putting it back into the report broke nothing at all. It is built by a function of its own now, with the count for each family under test, including the plural forms.",
-        "Found by asking the detector what it actually produces rather than reading the counter that sums it up. A caught exception with an unused binding is the most common shape in real Kotlin and Java, and nothing in the count said so."
+        "Five checks run over a real project before a release, one per removal family, and this family had none. It does now, and it holds the entry list to a reparse: after the cut the enum must carry exactly the entries it had, minus the one that left.",
+        "Two of its rules exist because of the bug above. One looks for an annotation left with nothing behind it, the other for a surviving entry that inherited an annotation it never had. The reference project carries neither shape, so the check was proved on a pair of files written for it: with the old code both rules fire, with the new one neither does.",
+        "A first draft of that second rule reported an enum that has no annotations at all. For the first entry of an enum it was counting the whole file above it. Reported here rather than quietly corrected, because a check that cries wolf gets ignored and then deleted."
       ]
     }
   ],

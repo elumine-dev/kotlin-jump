@@ -1,12 +1,12 @@
 {
-  "version": "1.42.307",
+  "version": "1.42.308",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A promise nothing was holding",
-  "summary": "No behaviour changed. The index promise that makes the second reading free is now held by a test.",
+  "tagline": "An unreadable file says so",
+  "summary": "No behaviour changed. The flag every removal guard reads is now raised under test when a file cannot be read.",
   "highlights": [
     {
-      "title": "A Promise Nothing Was Holding",
-      "description": "Six commands stay fast because the index hands back the same snapshot when nothing changed. Nothing guaranteed it until now.",
+      "title": "An Unreadable File Says So",
+      "description": "Every removal refuses a workspace it could not read whole. Nothing checked that a failed read actually said so.",
       "kind": "improvement"
     }
   ],
@@ -14,10 +14,10 @@
     {
       "heading": "Notes",
       "bullets": [
-        "Nothing changed in what the extension does. A promise that six commands quietly depend on for their speed is now written down as a test.",
-        "Those commands read the workspace again after you answer, so that a declaration which came back to life in the meantime is spared. That second reading is free only because the index hands back the very same snapshot when nothing has changed, which is how the command knows it can keep the answer it already has.",
-        "Nothing guaranteed that. Made to hand back a copy instead, the whole suite of nearly eight thousand tests still passed, while every one of those commands would have started doing its twenty second pass twice on a six thousand file project.",
-        "The repository bench cannot catch this either: it measures parsing, folding and snapshots, and has no scenario for a command. So it is caught where it lives, next to the index."
+        "Nothing changed in what the extension does. The second promise the removal commands lean on is now written down, after the first one yesterday.",
+        "Every one of them refuses to work from a workspace it could not read whole, because a scan that missed files cannot prove that nothing uses a declaration. That refusal reads one flag, and the flag is raised by the index when a file cannot be read or when the scan is cut short.",
+        "The file cap was covered by the tests next to it. The read failure was covered by nothing, and it is the one that actually happens: a file the search still lists and which has just been deleted, which is how the removal commands set this off against themselves.",
+        "Made to swallow a read failure silently, the whole suite of nearly eight thousand tests still passed, while every guard built on that flag this week would have gone quiet, including the one that stopped live code being deleted."
       ]
     }
   ],

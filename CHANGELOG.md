@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.276
+
+Two numbers for one thing, in one dialog.
+
+### Fixes
+- Yesterday's wording for Remove Everything Unused put a second count in the dialog, and the two did not match. The title counts what will be removed, the new line counted what was found, and those part company the moment one name is renamed rather than removed: `Remove 7 unused declarations, locals and imports?` sat directly above `10 unused declarations, locals and imports found in 4 files.`
+- On a round made only of renamings it was plainly wrong rather than merely confusing. The title says `Rename 3 unused names to `_`?`, which is right, and the line under it called them declarations, locals and imports that had been found. A lambda parameter is none of those three, and nothing was being removed at all.
+
+### Notes
+- The count now appears once, in the title, and the line under it says the one thing the title cannot: how far the change reaches. Two releases ago the same fix was made to the title itself, and reintroducing the wrong wording one line lower is exactly the sort of thing these rounds exist to catch.
+- A test written yesterday had to be rewritten, because it asserted the wording rather than the rule. It now says where each number belongs: the count in the title, the reach in the detail.
+
 ## 1.42.275
 
 A number the edit was never going to match.

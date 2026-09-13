@@ -314,8 +314,14 @@ export function libelleDeLaDemande(
   // on three files where one import is orphaned: the line said four changes
   // and the edit carried three operations, all of them deletions. What was
   // really done is the closing report's job to say.
-  const echelle = `${plural(total, 'unused declaration, local or import',
-    'unused declarations, locals and imports')} found in ${plural(fichiers, 'file')}.`
+  // The count lives in the title, once. Repeating it here counted what was
+  // FOUND while the title counts what is REMOVED, and the two part company as
+  // soon as one name is renamed rather than removed: `Remove 7 ...?` sat above
+  // `10 ... found`. On a round made only of renamings it was worse, since the
+  // title rightly called them names while this line called them declarations,
+  // locals and imports, none of which a lambda parameter is. So this says what
+  // the title cannot: how far the change reaches.
+  const echelle = `Across ${plural(fichiers, 'file')}.`
     + ' Apply all skips the preview; review one by one opens it with nothing ticked.';
   if (aRetirer === 0) {
     return {

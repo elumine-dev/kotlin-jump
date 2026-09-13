@@ -83,10 +83,13 @@ describe('KJ-050 ce qui est annonce et ce qui est envoye', () => {
     expect((await lance()).detail).not.toContain('4 changes');
   });
 
-  it('elle dit toujours ce qui a ete trouve et dans combien de fichiers', async () => {
-    const d = libelleDeLaDemande(4, 0, 3).detail;
-    expect(d).toContain('4');
-    expect(d).toContain('3 files');
+  it('le compte trouve est au titre, la portee au detail', async () => {
+    // Le compte ne se dit qu'une fois. Le repeter dans le detail comptait ce
+    // qui a ete TROUVE pendant que le titre compte ce qui est RETIRE, et les
+    // deux different des qu'un nom est renomme au lieu d'etre retire.
+    const d = libelleDeLaDemande(4, 0, 3);
+    expect(d.titre).toContain('4');
+    expect(d.detail).toContain('3 files');
   });
 
   it('elle dit toujours ce que chaque bouton fait', async () => {

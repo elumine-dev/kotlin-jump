@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.275
+
+A number the edit was never going to match.
+
+### Fixes
+- Remove Everything Unused told you how many changes were coming, and the edit it sent carried a different number. Measured on three files where removing a class orphans an import: the question read `4 changes in 3 files` and the edit carried three operations, all of them whole file deletions and not one replacement.
+- The count came from the plan. A file emptied of everything goes whole, which turns several cuts into one deletion, and the cascade adds removals the plan never counted. On the reference project the cascade alone is 100 import cuts and 54 deleted files, so this is not a rounding difference.
+
+### Notes
+- The exact number cannot be known before the question, and that is deliberate. The edit is built after the click so that a file which moved since the scan is dropped then rather than earlier, which is the guard that stops an edit landing on text that has changed. Working the number out beforehand and reusing it would reopen exactly that hole. So the line says what it knows, what was found and where, and the closing report keeps its job of saying what was done.
+- Five other commands keep the stronger promise because they build their edit before they ask, and they were left alone. The rule the test states holds for all of them: if the line names a number of changes, that number is the one the edit carries.
+- Two more gaps in the test double had to be filled to measure any of this, after the two filled yesterday. Warning and error popups did not exist, so the path taken when an edit is refused could not be reached at all.
+
 ## 1.42.274
 
 Four changes announced, two operations sent.

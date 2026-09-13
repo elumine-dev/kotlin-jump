@@ -1,12 +1,12 @@
 {
-  "version": "1.42.296",
+  "version": "1.42.297",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The dialog is not a freeze frame",
-  "summary": "The first round of removals worked from the scan taken before the question, so a use that appeared in between was missed.",
+  "tagline": "The verdict is read again too",
+  "summary": "Remove all unreferenced declarations judged before the question and never looked again, so a class that gained a caller in between still went.",
   "highlights": [
     {
-      "title": "The Dialog Is Not A Freeze Frame",
-      "description": "A pull landing while you read the question used to be invisible to the first round of removals. It reads again now, for free when nothing moved.",
+      "title": "The Verdict Is Read Again Too",
+      "description": "Rereading the file about to be cut is not enough when the reason for cutting it lives in another file.",
       "kind": "fix"
     }
   ],
@@ -14,10 +14,10 @@
     {
       "heading": "Fixed",
       "bullets": [
-        "Remove Everything Unused could delete something that had come back to life while you were reading the dialog. The scan runs before the question, and the first round of removals was still working from that snapshot.",
-        "Between the two there is human time. A pull that lands, a colleague pushing, a file saved in another editor: a use that appears in that window does not exist in the snapshot, so the declaration is still dead there and it went.",
-        "The staleness check does not cover this. It compares the measured text to open documents, file by file, and the new use is somewhere else entirely while the declaring file has not moved, so its cut passes. The corpus says as much in its own code.",
-        "The first round reads again like every other round, and it costs nothing when nothing changed: the workspace index hands back the same snapshot untouched, and the round recognises it and reuses the plan it already has. A test measures exactly that, so the twenty second pass cannot quietly start running twice."
+        "Remove all unreferenced declarations kept the verdict it reached before asking you. A class that gained a caller while the question was on screen was still removed, and its file deleted if that emptied it.",
+        "The check that survives does not see this. It rereads the file that declares the class and refuses the cut if that file moved, but the new caller is in another file entirely and the declaring one has not changed, so the cut goes through.",
+        "It reads the workspace again after the click, and only then. When nothing moved the index hands back the same snapshot and the verdict already reached is kept, so the scan is not paid twice. When something moved, the whole judgement is made again on what is there now, and a class that came back to life stays.",
+        "The same fault was fixed in Remove Everything Unused yesterday. It is still open in four more commands of this family, which reread the text of the file they are about to cut but not the reason for cutting it. This one deletes files, which is why it went first."
       ]
     }
   ],

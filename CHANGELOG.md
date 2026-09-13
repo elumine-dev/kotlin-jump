@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.297
+
+A caller that appears while the question is open now saves its class.
+
+### Fixed
+- Remove all unreferenced declarations kept the verdict it reached before asking you. A class that gained a caller while the question was on screen was still removed, and its file deleted if that emptied it.
+- The check that survives does not see this. It rereads the file that declares the class and refuses the cut if that file moved, but the new caller is in another file entirely and the declaring one has not changed, so the cut goes through.
+- It reads the workspace again after the click, and only then. When nothing moved the index hands back the same snapshot and the verdict already reached is kept, so the scan is not paid twice. When something moved, the whole judgement is made again on what is there now, and a class that came back to life stays.
+- The same fault was fixed in Remove Everything Unused yesterday. It is still open in four more commands of this family, which reread the text of the file they are about to cut but not the reason for cutting it. This one deletes files, which is why it went first.
+
 ## 1.42.296
 
 A use that appears while the dialog is open now saves its declaration.

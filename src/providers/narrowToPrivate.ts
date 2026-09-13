@@ -30,7 +30,16 @@ const VISIBILITY_RE = /\b(public|internal|protected)\s+/;
  * an open member is an extension point for subclasses this workspace cannot
  * see, and the detector only ever proves that nothing HERE uses it.
  */
-const INCOMPATIBLE_RE = /\b(open|abstract|sealed)\b/;
+/**
+ * ... and `default`, which is not Kotlin at all and is fatal all the same.
+ *
+ * A `default` method IS a public interface method with a body. The two words
+ * exclude each other in every version of Java, and javac says so: `illegal
+ * combination of modifiers: private and default`. The word was already in the
+ * modifier run this reads, but not in the list that makes it give up, so the
+ * bulk command wrote `private default String x()` into a file nobody had open.
+ */
+const INCOMPATIBLE_RE = /\b(open|abstract|sealed|default)\b/;
 
 /** Modifiers Kotlin or Java may put between the annotations and the keyword. */
 const MODIFIER_RUN_RE = new RegExp(

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.238
+
+`private default` is not a thing, and the bulk narrowing wrote it.
+
+### Fixes
+- Make Every Self Only Member Private could write a line that does not compile. A `default` method IS a public interface method with a body, so the two words exclude each other in every version of Java: javac answers `illegal combination of modifiers: private and default`. The word was already in the modifier run the narrowing reads, but not in the short list that makes it give up, which held only `open`, `abstract` and `sealed`, all three Kotlin. The command edits files the user never opened, so the first sign of it would have been a broken build.
+
+### Notes
+- Not reachable on the 6329 source project this is measured against, where no `default` method is used only inside its own type. All 171 narrowings it offers there are unchanged, compared one by one before and after.
+- Two other suspicions on the same command came to nothing, which is worth writing down: an `override` cannot be narrowed because the detector rejects overrides outright, and a Kotlin interface member with a body may legally be private. Only the Java `default` case was real.
+- The cascade, which is the second pass that removes the imports a deletion orphans, had no witness of any kind. It has one now: 100 import cuts and 54 file deletions on that same project, and every one of them holds. An off the shelf mistake of one line in the mapping makes it report 41 imports cut while still in use, so the zero it prints is a measured zero.
+
 ## 1.42.237
 
 A lambda's closing brace is not always the end of the expression.

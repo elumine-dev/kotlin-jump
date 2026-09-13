@@ -83,14 +83,18 @@ export async function removeAllUnusedRemoteConfigKeysCommand(
 
       // Group by file and apply back to front, so an earlier removal never
       // shifts the offsets of a later one.
-      const byFile = new Map<string, UnusedRemoteConfigKey['declarations']>();
-      for (const key of found) {
-        for (const d of key.declarations) {
-          const list = byFile.get(d.path) ?? [];
-          list.push(d);
-          byFile.set(d.path, list);
+      const grouper = (cles: readonly UnusedRemoteConfigKey[]) => {
+        const par = new Map<string, UnusedRemoteConfigKey['declarations']>();
+        for (const key of cles) {
+          for (const d of key.declarations) {
+            const list = par.get(d.path) ?? [];
+            list.push(d);
+            par.set(d.path, list);
+          }
         }
-      }
+        return par;
+      };
+      let byFile = grouper(found);
 
       // Les offsets viennent du CORPUS. Ils ne valent que contre lui, et la
       // commande les confrontait au disque pour les verifier puis les
@@ -99,7 +103,7 @@ export async function removeAllUnusedRemoteConfigKeysCommand(
       // La boite modale posee en 1.42.240 entre la mesure et l'application a
       // elargi la fenetre sans la creer, donc on reconstruit apres la reponse,
       // comme les trois autres commandes de masse.
-      const mesures = new Map(data.sources.map(s => [s.path, s.text]));
+      let mesures = new Map(data.sources.map(s => [s.path, s.text]));
       const decoder = new TextDecoder();
       const construire = async (confirm: boolean) => {
         const edit = new vscode.WorkspaceEdit();
@@ -152,6 +156,33 @@ export async function removeAllUnusedRemoteConfigKeysCommand(
       );
       if (choix === 'cancel') return;
 
+      // The verdict is read again too. `nothing reads this key` is judged over
+      // the WHOLE workspace, so what overturns it is almost never the file
+      // holding the key: a read that appears while the question is on screen
+      // leaves the defaults file untouched and its cut goes through, taking a
+      // default value the app still asks for. Same fix as 1.42.296 through
+      // .300.
+      //
+      // Without paying for the scan twice: the corpus hands back its cached
+      // object untouched while nothing has invalidated it.
+      if (choix === 'apply') {
+        const frais = await corpus.get(token);
+        if (frais !== data) {
+          if (frais.sourcesTruncated) {
+            void vscode.window.showWarningMessage(
+              'Could not read the whole workspace, so nothing was removed.');
+            return;
+          }
+          const relu = findUnusedRemoteConfigKeys({ sources: frais.sources, ...remoteConfigSettings() });
+          if (relu.length === 0) {
+            void vscode.window.showInformationMessage(
+              'Nothing to remove: the workspace changed while the question was open.');
+            return;
+          }
+          byFile = grouper(relu);
+          mesures = new Map(frais.sources.map(s => [s.path, s.text]));
+        }
+      }
       // Ce qui est applique est ce qui est rapporte.
       const choisi = choix === 'apply' ? await construire(false) : apercu;
       if (choisi.count === 0) {

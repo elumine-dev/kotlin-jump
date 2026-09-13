@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.300
+
+The last two stale verdicts, and the end of that family.
+
+### Fixed
+- The last two bulk commands with a stale verdict. Remove all unused resource keys and Remove all unread Remote Config keys both judged before asking you and never looked again, so a key that gained a reader while the question was on screen went anyway.
+- For a resource key that means the project stops compiling, since the code that just started saying R.string.x no longer has an x. For a Remote Config key it means a default value the app still asks for at runtime is gone.
+- Both read the workspace again after the click, and only then. Nothing moved and the index hands back the same snapshot, so the verdict stands and no second scan is paid for. Something moved and the judgement is made again on what is there now.
+- That closes it: five commands carried this, all five now reread. A sixth looked like it and does not, because it judges each file from that file alone, so the only thing that can overturn its verdict is a change it already catches.
+
 ## 1.42.299
 
 A call arriving during the question no longer makes the member private anyway.

@@ -1,12 +1,12 @@
 {
-  "version": "1.42.299",
+  "version": "1.42.300",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A private that breaks the build",
-  "summary": "Making a member private used a verdict reached before the question, so a call arriving in between broke the caller.",
+  "tagline": "A key that gained a reader",
+  "summary": "The last two commands judging before the question now read the workspace again after it.",
   "highlights": [
     {
-      "title": "A Private That Breaks The Build",
-      "description": "A member called from elsewhere while the question was open was still narrowed, and the calling file stopped compiling.",
+      "title": "A Key That Gained A Reader",
+      "description": "A resource or Remote Config key read for the first time while the question was open was removed anyway. Both commands reread now.",
       "kind": "fix"
     }
   ],
@@ -14,10 +14,10 @@
     {
       "heading": "Fixed",
       "bullets": [
-        "Make self only members private judged before asking you and never looked again. A member that gained a call from elsewhere while the question was on screen was made private anyway, and the file doing the calling stopped compiling.",
-        "This verdict is reached across the whole workspace, so the thing that invalidates it is almost never in the file being edited. Rereading that file, which the command already did, cannot see it. Of the four commands with this fault, this is the one that breaks a build rather than removing something.",
-        "It reads the workspace again after the click. Nothing moved, the index hands back the same snapshot and the verdict stands, so no second scan is paid for. Something moved, and the judgement is made again on what is there now.",
-        "One command of the family was on the list and should not have been: the workspace dead code sweep judges each file from its own text alone, so the only thing that can overturn its verdict is a change to that same file, which it already catches. Two are left, both of which remove keys."
+        "The last two bulk commands with a stale verdict. Remove all unused resource keys and Remove all unread Remote Config keys both judged before asking you and never looked again, so a key that gained a reader while the question was on screen went anyway.",
+        "For a resource key that means the project stops compiling, since the code that just started saying R.string.x no longer has an x. For a Remote Config key it means a default value the app still asks for at runtime is gone.",
+        "Both read the workspace again after the click, and only then. Nothing moved and the index hands back the same snapshot, so the verdict stands and no second scan is paid for. Something moved and the judgement is made again on what is there now.",
+        "That closes it: five commands carried this, all five now reread. A sixth looked like it and does not, because it judges each file from that file alone, so the only thing that can overturn its verdict is a change it already catches."
       ]
     }
   ],

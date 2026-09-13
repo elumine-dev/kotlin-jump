@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import * as vscodeMock from '../__mocks__/vscode';
+import { readFileSync } from 'node:fs';
+import * as path from 'node:path';
 import { removeEverythingUnusedCommand, compteRendu } from '../../../src/commands/RemoveEverythingUnused';
 
 /**
@@ -135,5 +137,24 @@ describe('compteRendu', () => {
   it('en relecture, le verbe et la queue changent', () => {
     expect(compteRendu('3 declarations', { ...e, verbe: 'Sent', queue: ' to the preview.' }))
       .toBe('Sent 3 declarations to the preview.');
+  });
+});
+
+/**
+ * Le plafond de passes est un chiffre MESURE, pas une intuition.
+ *
+ * Applique pour de vrai jusqu'au point fixe sur le projet de reference, 6329
+ * sources, il faut DIX passes : la queue est une chaine de constantes dont
+ * chacune n'etait vivante que pour la suivante. Le plafond etait a huit, donc
+ * la commande s'arretait deux passes trop tot sur le projet meme pour lequel
+ * elle existe.
+ */
+describe('le plafond de passes', () => {
+  it('laisse de la marge au-dessus des dix passes mesurees', () => {
+    const src = readFileSync(
+      path.join(__dirname, '../../../src/commands/RemoveEverythingUnused.ts'), 'utf8');
+    const m = /const PASSES_MAX = (\d+);/.exec(src);
+    expect(m, 'le plafond doit etre une constante nommee').not.toBeNull();
+    expect(Number(m![1])).toBeGreaterThanOrEqual(10);
   });
 });

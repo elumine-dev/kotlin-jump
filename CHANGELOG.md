@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.254
+
+The pass limit was a guess, and it was two short.
+
+### Fixes
+- Remove Everything Unused stopped two rounds before it was done on the project it was built for. The limit was eight, written without measuring. Applied for real to a fixed point on the reference project, 6329 sources, it takes TEN: the tail is a chain of constants each of which was alive only for the next one, so rounds four through nine remove a handful of cuts each. At eight the command stopped and asked to be run again, on exactly the workload that motivated it. Sixteen now, which leaves room without being a magic number: the loop shows its round and can be stopped between two, so the limit bounds the worst case rather than deciding it.
+
+### Notes
+- The merged path had never been applied for real, only checked cut by cut. It has now, to a fixed point on a copy of the reference project: 62 files deleted, 138 modified, and zero brace or parenthesis left unbalanced across the 5048 that remain.
+- Also checked and sound: every one of the 259 cuts the five families would produce on their own is kept by the merge or contained inside a cut it keeps. The 32 it drops are duplicates, most of them dead island members already covered by the cut of the class they live in.
+
 ## 1.42.253
 
 A rename counted as a removal.

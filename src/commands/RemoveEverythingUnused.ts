@@ -190,7 +190,18 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
 
   // Une seule passe en relecture : l'utilisateur choisit quoi accepter, et
   // repasser derriere lui sans savoir ce qu'il a garde serait une devinette.
-  const passes = choix === 'apply' ? 8 : 1;
+  //
+  // Le plafond etait a 8, ecrit sans mesure. Applique pour de vrai jusqu'au
+  // point fixe sur le projet de reference, 6329 sources, il en faut DIX : la
+  // queue est une chaine de constantes dont chacune n'etait vivante que pour
+  // la suivante, et les passes 4 a 9 ne retirent qu'une poignee de coupes
+  // chacune. A huit, la commande s'arretait deux passes trop tot sur le projet
+  // meme pour lequel elle existe, en demandant de la relancer. Seize laisse de
+  // la marge sans etre un chiffre magique : la boucle affiche sa ronde et
+  // s'annule entre deux, donc le plafond borne le pire cas, il ne le decide
+  // pas.
+  const PASSES_MAX = 16;
+  const passes = choix === 'apply' ? PASSES_MAX : 1;
   let restait = false;
   let annule = false;
   // Le `return` d'avant sortait de la COMMANDE. Depuis que la boucle vit

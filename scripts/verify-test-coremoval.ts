@@ -20,7 +20,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { findUnusedSymbols } from '../src/providers/unusedSymbols';
-import { couvreDesLignesEntieres } from './invariants';
+import { coupeBienFormee } from './invariants';
 import { findUnusedMembers } from '../src/providers/unusedMembers';
 import { findDeadIslands } from '../src/providers/deadIslands';
 import { findUnusedEnumEntries } from '../src/providers/unusedEnumEntries';
@@ -134,7 +134,7 @@ function main(): void {
         // et un temoin muet se lit comme un temoin content. Aucun genre de ce
         // plan ne coupe un morceau de ligne, contrairement au balayage ou la
         // famille `locals` retire le seul prefixe d'affectation.
-        if (!couvreDesLignesEntieres(texte, c.start, c.end)) {
+        if (!coupeBienFormee(texte, c.start, c.end, '')) {
           compte.ligne++;
           if (fautes.length < 12) fautes.push(`LIGNE ${g.label} ${p} ${c.name} ${c.kind}`);
         }

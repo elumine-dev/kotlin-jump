@@ -4,22 +4,6 @@
  * zero and the zero is believed.
  */
 
-/**
- * Families whose deletions are NOT whole lines, by design.
- *
- * `locals` removes the assignment prefix alone, `var db = `, and keeps the
- * call on the right for its side effect. That is correct behaviour and an
- * oracle must never cry about correct behaviour.
- *
- * This exemption used to be written against `writeOnly`, which does not do
- * that at all, and the rule was then narrowed to `declarations` alone.
- * Measured on the reference project: declarations 19 deletions and 19 whole
- * lines, writeOnly 11 and 11, imports 20 and 20, locals 2 and 0. So 31
- * deletions that do take whole lines were checked by nothing, and a one
- * character shift applied to the import cuts left all seven counters at zero.
- */
-export const FAMILLES_A_COUPE_PARTIELLE = new Set(['locals']);
-
 /** A cut that starts at a line start and ends at a line end. */
 export function couvreDesLignesEntieres(texte: string, start: number, end: number): boolean {
   const debut = start === 0 || texte[start - 1] === '\n';
@@ -28,12 +12,38 @@ export function couvreDesLignesEntieres(texte: string, start: number, end: numbe
 }
 
 /**
- * Whether this edit is held to the whole line rule.
+ * A deletion is well formed when it takes WHOLE LINES, or when it stays
+ * INSIDE one line. What it must never be is both: starting in the middle of a
+ * line and running across a line boundary.
  *
- * An unknown family is held to it. An oracle that stays quiet about what it
- * does not recognise is the failure this whole file exists to prevent: a new
- * detector would arrive unchecked and nothing would say so.
+ * This is a rule about the shape of the cut, and it took two wrong versions to
+ * get there. The first named one detector family, `declarations`, and left 31
+ * of the 52 deletions on the reference project held to nothing: shifting every
+ * import cut by one character kept all seven counters at zero. The second held
+ * every family to whole lines, which is worse in the other direction, because
+ * the write only family deletes `var db = ` and `flag = ` on purpose and keeps
+ * the call on the right for its side effect. Measured from the detector's own
+ * output, not guessed: that version cried on two perfectly correct cuts, and
+ * the reference project simply never took those code paths.
+ *
+ * The shape settles both. A prefix removal stays inside its line and passes. A
+ * cut shifted by one character starts mid line and swallows a newline, so it
+ * fails, whatever family produced it and with no list to keep up to date.
+ *
+ * Known limit: a shift applied to a cut that was already contained in one line
+ * stays contained, so this rule cannot see it. Nothing else can either, and
+ * saying so is better than pretending otherwise.
  */
-export function doitCouperDesLignesEntieres(remplacement: string, famille: string | undefined): boolean {
-  return remplacement === '' && !FAMILLES_A_COUPE_PARTIELLE.has(famille ?? '');
+export function coupeBienFormee(
+  texte: string,
+  start: number,
+  end: number,
+  remplacement: string,
+): boolean {
+  // A replacement is not a deletion: `{ footerIcon ->` becoming `{ _ ->` is
+  // the Kotlin idiom for an unused lambda parameter, and it is mid line by
+  // nature.
+  if (remplacement !== '') return true;
+  if (couvreDesLignesEntieres(texte, start, end)) return true;
+  return !texte.slice(start, end).includes('\n');
 }

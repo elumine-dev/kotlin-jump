@@ -1,66 +1,97 @@
 import { describe, it, expect } from 'vitest';
-import {
-  couvreDesLignesEntieres,
-  doitCouperDesLignesEntieres,
-  FAMILLES_A_COUPE_PARTIELLE,
-} from '../../../scripts/invariants';
+import { couvreDesLignesEntieres, coupeBienFormee } from '../../../scripts/invariants';
+import { findWriteOnlyVariables } from '../../../src/providers/writeOnlyVariables';
 
 /**
- * The witnesses are the only thing standing between a one character offset
- * mistake and a shipped release, so the witnesses themselves need holding to
- * account. A rule that examines nothing reports zero just as loudly as a rule
- * that examines everything.
+ * The witnesses are the only thing between a one character offset mistake and
+ * a shipped release, so they need holding to account themselves. A rule that
+ * examines nothing reports zero just as loudly as a rule that examines
+ * everything, and a rule that examines too much reports faults that are not
+ * faults, which gets a witness ignored and then removed.
  *
- * Measured on the reference project, the whole line rule was applied to one
- * family out of four: 19 of the 52 deletions. Shifting every import cut by one
- * character left all seven counters at zero, while the same shift on the
- * declaration cuts was caught 19 times out of 19.
+ * Both mistakes were made here, in that order, and the numbers are in
+ * `scripts/invariants.ts`.
  */
 
 const TEXTE = 'import a.B\nimport c.D\nclass E\n';
 
-describe('la regle des lignes entieres', () => {
-  it('accepte une coupe qui prend une ligne complete', () => {
+describe('lignes entieres', () => {
+  it('une ligne complete', () => {
     expect(couvreDesLignesEntieres(TEXTE, 0, 11)).toBe(true);
   });
-
-  it('refuse la meme coupe decalee d un caractere', () => {
+  it('la meme decalee d un caractere', () => {
     expect(couvreDesLignesEntieres(TEXTE, 1, 12)).toBe(false);
   });
-
-  it('accepte une coupe qui va jusqu a la fin du texte', () => {
+  it('jusqu a la fin du texte', () => {
     expect(couvreDesLignesEntieres(TEXTE, 22, TEXTE.length)).toBe(true);
-  });
-
-  it('refuse une coupe qui commence en milieu de ligne', () => {
-    expect(couvreDesLignesEntieres(TEXTE, 7, 11)).toBe(false);
   });
 });
 
-describe('qui est tenu a la regle', () => {
-  for (const famille of ['declarations', 'imports', 'writeOnly']) {
-    it(`${famille} y est tenu`, () => {
-      expect(doitCouperDesLignesEntieres('', famille)).toBe(true);
-    });
-  }
+describe('la forme attendue d une coupe', () => {
+  it('accepte une suppression de lignes entieres', () => {
+    expect(coupeBienFormee(TEXTE, 0, 11, '')).toBe(true);
+  });
 
-  it('locals en est dispense : il retire le prefixe d affectation et garde l appel', () => {
-    expect(doitCouperDesLignesEntieres('', 'locals')).toBe(false);
+  it('accepte une suppression contenue dans une ligne', () => {
+    // `var db = ` retire, l appel a droite reste pour son effet de bord.
+    expect(coupeBienFormee(TEXTE, 7, 10, '')).toBe(true);
+  });
+
+  it('refuse une coupe qui commence en milieu de ligne ET franchit un retour', () => {
+    // La signature exacte d un decalage d un caractere.
+    expect(coupeBienFormee(TEXTE, 1, 12, '')).toBe(false);
   });
 
   it('un remplacement n est pas une suppression, donc pas concerne', () => {
     // `{ footerIcon ->` devient `{ _ ->`, une edition juste en milieu de ligne.
-    expect(doitCouperDesLignesEntieres('_', 'declarations')).toBe(false);
+    expect(coupeBienFormee(TEXTE, 1, 12, '_')).toBe(true);
+  });
+});
+
+/**
+ * Contre le vrai detecteur, pas contre une idee de ce qu il produit. La
+ * deuxieme version de cette regle tenait cette famille aux lignes entieres, et
+ * ces deux coupes la auraient ete comptees comme des fautes.
+ */
+describe('les coupes que writeOnly produit vraiment', () => {
+  const SOURCE = `fun f() {
+    var db = openDatabase()
+    db = openDatabase()
+}
+`;
+
+  it('sont toutes acceptees', () => {
+    const edits = findWriteOnlyVariables(SOURCE).flatMap(v => v.edits);
+    expect(edits.length).toBeGreaterThan(0);
+    const criees = edits
+      .filter(e => !coupeBienFormee(SOURCE, e.start, e.end, e.text))
+      .map(e => SOURCE.slice(e.start, e.end));
+    expect(criees).toEqual([]);
   });
 
-  it('une famille inconnue y est tenue, pas dispensee', () => {
-    // Le defaut d un oracle doit etre de parler, pas de se taire : un nouveau
-    // detecteur arriverait sinon sans verification et sans que rien le dise.
-    expect(doitCouperDesLignesEntieres('', 'une-famille-a-venir')).toBe(true);
-    expect(doitCouperDesLignesEntieres('', undefined)).toBe(true);
+  it('temoin : ce sont bien des coupes partielles, pas des lignes entieres', () => {
+    const edits = findWriteOnlyVariables(SOURCE).flatMap(v => v.edits);
+    const partielles = edits
+      .filter(e => !couvreDesLignesEntieres(SOURCE, e.start, e.end))
+      .map(e => SOURCE.slice(e.start, e.end));
+    expect(partielles).toEqual(['var db = ', 'db = ']);
   });
 
-  it('une seule famille est dispensee', () => {
-    expect([...FAMILLES_A_COUPE_PARTIELLE]).toEqual(['locals']);
+  it('mais un decalage sur une de ses suppressions de lignes est bien vu', () => {
+    const avecLigne = `class A {
+    private var flag = false
+    fun f() {
+        flag = compute()
+    }
+}
+`;
+    const entieres = findWriteOnlyVariables(avecLigne)
+      .flatMap(v => v.edits)
+      .filter(e => couvreDesLignesEntieres(avecLigne, e.start, e.end));
+    expect(entieres.length).toBeGreaterThan(0);
+    for (const e of entieres) {
+      expect(coupeBienFormee(avecLigne, e.start, e.end, e.text)).toBe(true);
+      expect(coupeBienFormee(avecLigne, e.start + 1, e.end + 1, e.text)).toBe(false);
+    }
   });
 });

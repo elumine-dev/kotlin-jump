@@ -319,7 +319,13 @@ export async function cleanDeadCodeInWorkspaceCommand(): Promise<void> {
       // laisse a l espace de travail tout le temps de bouger, et lire les
       // comptes du premier tirage annoncait « rien a signaler » en appliquant
       // une edition vide, sans un mot.
-      const choisi = choix === 'apply' ? await construire(false) : apercu;
+      // Rebuilt for BOTH answers. Only the flag that opens the preview differs.
+      // The preview used to receive the ranges measured BEFORE the question: two
+      // lines added at the top of a file during the modal and it showed a cut two
+      // lines too high, which the reader can accept in one click. An offset is
+      // only worth anything against the text it was measured on, and that holds
+      // whether the edit goes out silently or through the preview.
+      const choisi = await construire(choix === 'review');
       const note = noteDe(choisi.bouges);
       if (choisi.count === 0) {
         void vscode.window.showInformationMessage(`Nothing to remove automatically.${note}`);

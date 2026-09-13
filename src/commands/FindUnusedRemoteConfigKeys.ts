@@ -165,7 +165,7 @@ export async function removeAllUnusedRemoteConfigKeysCommand(
       //
       // Without paying for the scan twice: the corpus hands back its cached
       // object untouched while nothing has invalidated it.
-      if (choix === 'apply') {
+      {
         const frais = await corpus.get(token);
         if (frais !== data) {
           if (frais.sourcesTruncated) {
@@ -192,7 +192,13 @@ export async function removeAllUnusedRemoteConfigKeysCommand(
         }
       }
       // Ce qui est applique est ce qui est rapporte.
-      const choisi = choix === 'apply' ? await construire(false) : apercu;
+      // Rebuilt for BOTH answers. Only the flag that opens the preview differs.
+      // The preview used to receive the ranges measured BEFORE the question: two
+      // lines added at the top of a file during the modal and it showed a cut two
+      // lines too high, which the reader can accept in one click. An offset is
+      // only worth anything against the text it was measured on, and that holds
+      // whether the edit goes out silently or through the preview.
+      const choisi = await construire(choix === 'review');
       if (choisi.count === 0) {
         void vscode.window.showInformationMessage(`Nothing to remove.${noteDe(choisi.bouges)}`);
         return;

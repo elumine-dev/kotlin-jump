@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.248
+
+The long part of Remove Everything Unused ran with nothing on screen.
+
+### Fixes
+- The progress bar covered the first scan only, and the first scan is not the long part. One round costs about twenty seconds on a six thousand file project, and Apply all chains up to eight of them, so after the initial bar disappeared nothing moved for as much as two and a half minutes and the command read as hung. The loop has its own bar now, saying which round it is on.
+- It can be stopped. Between two rounds the workspace is in a coherent state, every edit of the previous round applied and the next one not yet built, which is the only place where stopping is safe. It says it stopped on request rather than pretending it finished.
+
+### Notes
+- Moving the loop into a callback turned one `return` into a silent no operation: it used to leave the command, and would now leave only the callback. It is a flag, which does not depend on where it is written.
+- Twenty seconds per round is the cost of rescanning, and rescanning is not optional: removing a declaration can orphan another anywhere in the project, so the next round has to look everywhere again.
+
 ## 1.42.247
 
 Yesterday's guard was too wide by one condition, then by one scheme.

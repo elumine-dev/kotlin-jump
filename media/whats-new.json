@@ -1,26 +1,27 @@
 {
-  "version": "1.42.247",
+  "version": "1.42.248",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A guard that refused too much",
-  "summary": "Yesterday's guard against scanning a source jar asked for a workspace folder, and two of the three linters it was applied to do not need one.",
+  "tagline": "A bar on the part that takes the time",
+  "summary": "The progress bar covered the first scan only, and the first scan is not the long part: up to two and a half minutes passed with nothing on screen.",
   "highlights": [
     {
-      "title": "Linters that work on a lone file again",
+      "title": "The loop is visible, and can be stopped",
       "kind": "fix",
-      "description": "Only the resource diagnostics compare code against the project index and need a workspace folder. The other two read nothing but the file in front of them, and requiring a folder turned them off the moment a file was opened without one."
+      "description": "One round costs about twenty seconds on a six thousand file project and Apply all chains up to eight. The loop has its own bar now, and stops between two rounds, which is the only place where stopping is safe."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Two per file linters went quiet on a file opened on its own, and on an untitled buffer. Two levels of guard now, one per question."
+        "Remove Everything Unused shows a bar for its loop, saying which round it is on, and can be cancelled between rounds."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "Neither came from a report; both came from rereading a guard written thirty minutes earlier and asking what it refuses that it should not."
+        "Moving the loop into a callback turned one `return` into a silent no operation. It is a flag now, which does not depend on where it is written.",
+        "Twenty seconds a round is the cost of rescanning, and rescanning is not optional: a removal can orphan something anywhere in the project."
       ]
     }
   ],

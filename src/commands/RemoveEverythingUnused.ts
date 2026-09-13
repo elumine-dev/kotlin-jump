@@ -184,51 +184,71 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
   // repasser derriere lui sans savoir ce qu'il a garde serait une devinette.
   const passes = choix === 'apply' ? 8 : 1;
   let restait = false;
-  for (let n = 0; n < passes; n++) {
-    const data = n === 0 ? premier.data : await corpus.get();
-    const { parFichier, tally } = n === 0
-      ? { parFichier: premier.parFichier, tally: premier.tally }
-      : collecterUnePasse(data.sources, segs);
-    const combien = [...parFichier.values()].reduce((a, l) => a + l.length, 0);
-    if (combien === 0) break;
+  let annule = false;
+  // Le `return` d'avant sortait de la COMMANDE. Depuis que la boucle vit
+  // dans un callback, il n'en sortirait plus : un drapeau dit la meme chose
+  // sans dependre de l'endroit ou il est ecrit.
+  let refuse = false;
+  // La boucle est la partie LONGUE : une passe coute une vingtaine de
+  // secondes sur un projet de six mille fichiers, et Apply all en enchaine
+  // jusqu'a huit. Sans barre, l'interface ne montrait plus rien apres le
+  // premier scan et la commande avait l'air bloquee deux minutes et demie.
+  // Annulable aussi : entre deux passes l'espace de travail est dans un
+  // etat coherent, c'est le seul endroit ou s'arreter est sans danger.
+  await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: 'Removing everything unused…', cancellable: true },
+    async (progress, jeton) => {
+    for (let n = 0; n < passes; n++) {
+        if (jeton.isCancellationRequested) { annule = true; break; }
+        if (passes > 1) progress.report({ message: `round ${n + 1}…` });
+      const data = n === 0 ? premier.data : await corpus.get();
+      const { parFichier, tally } = n === 0
+        ? { parFichier: premier.parFichier, tally: premier.tally }
+        : collecterUnePasse(data.sources, segs);
+      const combien = [...parFichier.values()].reduce((a, l) => a + l.length, 0);
+      if (combien === 0) break;
 
-    const textes = new Map(data.sources.map(s => [s.path, s.text]));
+      const textes = new Map(data.sources.map(s => [s.path, s.text]));
 
-    // Les fichiers qui ont bouge sont ecartes AVANT de planifier la cascade.
-    // La calculer sur toutes les coupes puis n'en appliquer qu'une partie
-    // reviendrait a retirer l'import d'un symbole qui, lui, est reste : la
-    // cascade croit qu'une declaration est partie parce qu'on la lui a
-    // annoncee, elle ne verifie rien.
-    const { retenu, bouges } = coupesRetenues(parFichier, textes);
-    if (bouges > 0) cumul.bouges = (cumul.bouges ?? 0) + bouges;
-    if (retenu.size === 0) break;
+      // Les fichiers qui ont bouge sont ecartes AVANT de planifier la cascade.
+      // La calculer sur toutes les coupes puis n'en appliquer qu'une partie
+      // reviendrait a retirer l'import d'un symbole qui, lui, est reste : la
+      // cascade croit qu'une declaration est partie parce qu'on la lui a
+      // annoncee, elle ne verifie rien.
+      const { retenu, bouges } = coupesRetenues(parFichier, textes);
+      if (bouges > 0) cumul.bouges = (cumul.bouges ?? 0) + bouges;
+      if (retenu.size === 0) break;
 
-    const cascade = planCascade(
-      new Map([...retenu].map(([p, l]) => [p, l.map(c => ({ start: c.start, end: c.end }))])),
-      textes,
-    );
-    const edit = new vscode.WorkspaceEdit();
-    for (const [p, l] of retenu) {
-      if (cascade.deleteFiles.has(p)) continue;
-      const plages = plagesDuFichier(p, textes.get(p)!, l);
-      if (plages === undefined) continue;
-      for (const r of plages) {
-        edit.replace(corpusUri(p), new vscode.Range(r.start, r.end), r.texte,
-          { needsConfirmation: choix === 'review', label: r.quoi ? `Remove ${r.quoi}` : 'Remove dead code' });
+      const cascade = planCascade(
+        new Map([...retenu].map(([p, l]) => [p, l.map(c => ({ start: c.start, end: c.end }))])),
+        textes,
+      );
+      const edit = new vscode.WorkspaceEdit();
+      for (const [p, l] of retenu) {
+        if (cascade.deleteFiles.has(p)) continue;
+        const plages = plagesDuFichier(p, textes.get(p)!, l);
+        if (plages === undefined) continue;
+        for (const r of plages) {
+          edit.replace(corpusUri(p), new vscode.Range(r.start, r.end), r.texte,
+            { needsConfirmation: choix === 'review', label: r.quoi ? `Remove ${r.quoi}` : 'Remove dead code' });
+        }
       }
-    }
-    const swept = addCascadePlan(edit, cascade, textes, choix === 'review');
-    tally.imports += swept.imports;
-    tally.fichiers += swept.files;
-    ajouteTally(tally);
+      const swept = addCascadePlan(edit, cascade, textes, choix === 'review');
+      tally.imports += swept.imports;
+      tally.fichiers += swept.files;
+      ajouteTally(tally);
 
-    const ok = await vscode.workspace.applyEdit(edit);
-    if (!ok) { void vscode.window.showWarningMessage('Nothing was applied.'); return; }
-    corpus.invalidate();
-    // La derniere passe autorisee a quand meme trouve du travail : il en
-    // reste. Le taire laisserait croire que le nettoyage est fini.
-    if (n === passes - 1 && choix === 'apply') restait = true;
-  }
+      const ok = await vscode.workspace.applyEdit(edit);
+      if (!ok) { refuse = true; break; }
+      corpus.invalidate();
+      // La derniere passe autorisee a quand meme trouve du travail : il en
+      // reste. Le taire laisserait croire que le nettoyage est fini.
+      if (n === passes - 1 && choix === 'apply') restait = true;
+      }
+    },
+  );
+
+  if (refuse) { void vscode.window.showWarningMessage('Nothing was applied.'); return; }
 
   const morceaux = [
     cumul.symboles > 0 ? plural(cumul.symboles, 'declaration') : '',
@@ -242,7 +262,8 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
   const note = (cumul.bouges > 0
     ? ` ${plural(cumul.bouges, 'file')} changed since the scan and ${cumul.bouges > 1 ? 'were' : 'was'} left alone.`
     : '')
-    + (restait ? ' There was still work left after the last round: run it again.' : '');
+    + (annule ? ' Stopped on request: run it again to finish.'
+      : restait ? ' There was still work left after the last round: run it again.' : '');
   // En relecture, le compte decrit ce qui a ete PROPOSE. Ce que le lecteur a
   // coche dans l'apercu ne revient pas jusqu'ici, et annoncer « Removed » sur
   // une base qu'on n'a pas serait un chiffre invente.

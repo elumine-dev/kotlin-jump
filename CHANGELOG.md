@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.281
+
+A doc comment left to describe the wrong function.
+
+### Fixes
+- Removing a starved event handler left its doc comment behind. The cut started at the `@Subscribe` line, so the comment above it stayed and glued itself to whatever declaration came next, which then read as being documented by it. A reader finds `what this handler did` sitting above a function that never was one.
+- The comment goes with the handler now, the whole block or none of it, and only when every line of it is comment. A line of code that happens to end a trailing block comment does not count, which is the trap that once made a similar walk climb from working code up to the nearest comment opener anywhere above it.
+
+### Notes
+- Every other family has taken the doc comment with the cut for a long time, the unused declarations first among them. This one had not, and the same mistake was fixed for enum entries three weeks ago and for the suppress annotation before that.
+- Found by driving the detector over five ways of writing the same handler and reading what each cut leaves behind. The other four are right: the annotation goes, including when it carries arguments across several lines, and the function that follows survives untouched.
+- Two of the three mutations tried against the new walk survive, and stay that way. Its two guards cover each other: on well formed Kotlin a line that ends a comment without opening one only ever appears inside a block whose opener is directly above. Redundant on purpose, in a walk whose earlier versions did real damage.
+
 ## 1.42.280
 
 Warning that two were skipped, claiming all five.

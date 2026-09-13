@@ -1,26 +1,27 @@
 {
-  "version": "1.42.255",
+  "version": "1.42.256",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Saying what is known",
-  "summary": "On reaching its round limit the command asserted that work remained. The next round never ran, so it could not know.",
+  "tagline": "One quick fix, two different places",
+  "summary": "The Suppress quick fix on an unused declaration wrote its annotation above the doc comment in one case and under it in the other. It now writes it on the declaration.",
   "highlights": [
     {
-      "title": "The limit message states the limit, not a guess",
-      "kind": "fix",
-      "description": "On the reference project the round following the last productive one found nothing at all. What the command knows is that it stopped on the limit, so that is what it says."
+      "title": "Suppress Lands On The Declaration",
+      "description": "An annotation written above a KDoc pushes that comment inside the declaration, where it documents nothing. The Suppress quick fix now writes it on the declaration's own line, under the doc comment, like the four other unused code families.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Reaching the round limit is reported as reaching the limit, with the reason to run it again left as a question rather than an assertion."
+        "The Suppress quick fix on an unused declaration put `@Suppress(\"unused\")` above the declaration's doc comment whenever a removal was available, and on the declaration itself whenever the removal was withheld. One shape, two answers. An annotation above a KDoc pushes that comment inside the declaration, where it is no longer the doc comment of anything, so the annotation now lands on the declaration's own line in both cases.",
+        "That is where the four other unused code families have always put it: unused symbols, unused members, and write only variables twice. This one reused the first line of the cut, which is a different question: a cut has to swallow the doc comment, an annotation has to sit under it."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "A collision between the sweep removing an already unused import and the cascade removing a freshly orphaned one would make VS Code reject the whole edit in silence. The cascade excludes the already dead ones by construction, and on the reference project not one of the 26 files carrying cascade imports has a range touching a family cut."
+        "The removal itself did not move. It still takes the doc comment away with the declaration, and the check over the reference project confirms it: 93 cuts across 5110 sources, every invariant at zero."
       ]
     }
   ],

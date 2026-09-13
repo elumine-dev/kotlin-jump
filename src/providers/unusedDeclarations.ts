@@ -206,9 +206,6 @@ export function findUnusedDeclarations(text: string, lang: 'kotlin' | 'java' = '
     const removeStart = extent.removeStart;
     const removeEnd = extent.removeEnd;
 
-    let firstLine = sym.line;
-    if (removeStart >= 0) firstLine = offsetToPos(lineStarts, removeStart).line;
-
     const pos = offsetToPos(lineStarts, nameOffset);
     result.push({
       line: pos.line,
@@ -217,7 +214,12 @@ export function findUnusedDeclarations(text: string, lang: 'kotlin' | 'java' = '
       kind: outputKind(sym.kind),
       removeStart,
       removeEnd,
-      suppressLine: firstLine,
+      // The declaration's own line, never the cut's first line. A cut has to
+      // swallow the doc comment above the declaration; the annotation has to
+      // sit under it, or the KDoc ends up inside the declaration and stops
+      // being the doc comment of anything. The four other families that offer
+      // this same quick fix all answer with the declaration's line.
+      suppressLine: sym.line,
       suppressIndent: /^[ \t]*/.exec(declLine)?.[0] ?? '',
     });
   }

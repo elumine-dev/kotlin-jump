@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.256
+
+One quick fix, two different places.
+
+### Fixes
+- The Suppress quick fix on an unused declaration put `@Suppress("unused")` above the declaration's doc comment whenever a removal was available, and on the declaration itself whenever the removal was withheld. One shape, two answers. An annotation above a KDoc pushes that comment inside the declaration, where it is no longer the doc comment of anything, so the annotation now lands on the declaration's own line in both cases.
+- That is where the four other unused code families have always put it: unused symbols, unused members, and write only variables twice. This one reused the first line of the cut, which is a different question: a cut has to swallow the doc comment, an annotation has to sit under it.
+
+### Notes
+- The removal itself did not move. It still takes the doc comment away with the declaration, and the check over the reference project confirms it: 93 cuts across 5110 sources, every invariant at zero.
+
 ## 1.42.255
 
 A sentence that stated a fact it did not have.

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.284
+
+Two ways to cut the same line, held to the same answer.
+
+### Notes
+- Nothing changed in what the extension does. Yesterday's blank line fix was checked from four angles, and what it left behind is now held in place by a test rather than by luck.
+- Two commands remove the same declaration by two different routes, and they used to disagree: the one dedicated to unreferenced declarations already took the blank line that followed, the one that removes everything did not, which is where yesterday's 66 gaps came from. They agree on all 88 findings of the reference project now, and a test confronts them on four shapes so two spellings of one policy cannot drift apart in silence.
+- Where they cannot agree is written down rather than left to be discovered in a diff: with no blank line above the declaration, the merged pass keeps the lone separator and the dedicated command takes it. Zero occurrences on the reference project, and of the 32 real cuts that do absorb a blank line, all 32 had one on either side.
+- The safety check that mattered most came back clean: an extended cut and a cascade import removal landing on the same range would make the editor reject the whole edit without a word. Across 199 files and 86 cascade imports, nothing overlaps.
+
 ## 1.42.283
 
 A hole of blank lines in a third of the files.

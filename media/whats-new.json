@@ -1,23 +1,23 @@
 {
-  "version": "1.42.306",
+  "version": "1.42.307",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Warnings that agree",
-  "summary": "A declaration spared because it came back to life kept its unreferenced warning.",
+  "tagline": "A promise nothing was holding",
+  "summary": "No behaviour changed. The index promise that makes the second reading free is now held by a test.",
   "highlights": [
     {
-      "title": "Warnings That Agree",
-      "description": "The panel kept marking a declaration the command had just decided to spare, and the quick fix still offered to delete it.",
-      "kind": "fix"
+      "title": "A Promise Nothing Was Holding",
+      "description": "Six commands stay fast because the index hands back the same snapshot when nothing changed. Nothing guaranteed it until now.",
+      "kind": "improvement"
     }
   ],
   "sections": [
     {
-      "heading": "Fixed",
+      "heading": "Notes",
       "bullets": [
-        "The warnings in the Problems panel now agree with what the command actually decided. Three commands publish their findings before asking you, then read the workspace again after the click, and a declaration spared because it had come back to life kept its warning.",
-        "So the panel pointed at living code, the gutter still marked it, and the quick fix on it still offered to delete it. Nothing bad happened if you left it alone, but the editor was telling you something it had itself just decided was untrue.",
-        "Before the second reading existed, the two could not disagree: the command removed exactly what it had published. Adding the second reading broke that agreement without saying so, which is the sort of debt a fix leaves behind when it changes one half of a pair.",
-        "The whole new verdict is published, not the part about to be removed. A declaration covered by a test is never removed and must keep its mark, so publishing only what leaves would have made those disappear instead."
+        "Nothing changed in what the extension does. A promise that six commands quietly depend on for their speed is now written down as a test.",
+        "Those commands read the workspace again after you answer, so that a declaration which came back to life in the meantime is spared. That second reading is free only because the index hands back the very same snapshot when nothing has changed, which is how the command knows it can keep the answer it already has.",
+        "Nothing guaranteed that. Made to hand back a copy instead, the whole suite of nearly eight thousand tests still passed, while every one of those commands would have started doing its twenty second pass twice on a six thousand file project.",
+        "The repository bench cannot catch this either: it measures parsing, folding and snapshots, and has no scenario for a command. So it is caught where it lives, next to the index."
       ]
     }
   ],

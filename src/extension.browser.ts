@@ -105,6 +105,14 @@ import {
   findUnheardEventsCommand,
 } from './commands/FindUnheardEvents';
 import { findEverythingUnusedCommand } from './commands/FindEverythingUnused';
+// Les trois commandes de suppression en masse. Elles ne tirent que sur
+// `vscode`, comme `removeAllUnusedResourceKeys` qui tourne ici depuis
+// toujours, et package.json les propose dans la palette sans clause `when` :
+// les laisser hors de cet hote, c'est les offrir sur vscode.dev et repondre
+// « command not found ».
+import { removeTestOnlyCodeCommand } from './commands/RemoveTestOnlyCode';
+import { makeSelfOnlyPrivateCommand } from './commands/MakeSelfOnlyPrivate';
+import { removeEverythingUnusedCommand } from './commands/RemoveEverythingUnused';
 import {
   findUnusedSymbolsCommand,
   removeAllUnusedSymbolsCommand,
@@ -1045,6 +1053,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand('kotlin-jump.removeAllUnusedResourceKeys', () =>
       removeAllUnusedResourceKeysCommand(resourceCorpusWeb, unusedResourceKeyProviderWeb),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.removeTestOnlyCode', () =>
+      removeTestOnlyCodeCommand(resourceCorpusWeb),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.makeSelfOnlyPrivate', () =>
+      makeSelfOnlyPrivateCommand(resourceCorpusWeb),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.removeEverythingUnused', () =>
+      removeEverythingUnusedCommand(resourceCorpusWeb),
     ),
     unusedSymbolProviderWeb,
     vscode.languages.registerCodeActionsProvider(

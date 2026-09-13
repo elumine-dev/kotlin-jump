@@ -182,7 +182,15 @@ export async function removeAllUnusedSymbolsCommand(
               'Could not read the whole workspace, so nothing was removed.');
             return;
           }
-          aRetirer = trouverSur(frais).filter(f => f.verdict === 'unreferenced' && f.removeStart !== -1);
+          // An INTERSECTION with what was announced, never a fresh list. Judging
+          // again cuts both ways: a change that kills the last caller of
+          // something else makes the new list BIGGER, and `Remove 1
+          // unreferenced declaration?` would then remove two. The reader
+          // consented to a set, not to an intention.
+          const annonce = new Set(removable.map(f => `${f.path}\u0000${f.kind}\u0000${f.name}`));
+          aRetirer = trouverSur(frais)
+            .filter(f => f.verdict === 'unreferenced' && f.removeStart !== -1)
+            .filter(f => annonce.has(`${f.path}\u0000${f.kind}\u0000${f.name}`));
           if (aRetirer.length === 0) {
             void vscode.window.showInformationMessage(
               'Nothing to remove: the workspace changed while the question was open.');

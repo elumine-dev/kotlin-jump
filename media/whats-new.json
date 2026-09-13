@@ -1,12 +1,12 @@
 {
-  "version": "1.42.301",
+  "version": "1.42.302",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Twenty silent seconds",
-  "summary": "Two commands rejudged the workspace after the click with no progress shown, so they looked frozen.",
+  "tagline": "Only what was asked about",
+  "summary": "Rereading the workspace after the click could lengthen the list, so more was removed than the question named.",
   "highlights": [
     {
-      "title": "Twenty Silent Seconds",
-      "description": "Rejudging the workspace after Apply is the slow part, and it was happening with nothing on screen. It has its own bar now.",
+      "title": "Only What Was Asked About",
+      "description": "A change during the question can kill something new. That something is no longer removed without having been named.",
       "kind": "fix"
     }
   ],
@@ -14,10 +14,10 @@
     {
       "heading": "Fixed",
       "bullets": [
-        "Two commands could sit there doing nothing visible for twenty seconds after you clicked Apply. Remove code kept alive only by its tests, and Make self only members private.",
-        "They learned three days ago to judge the workspace again when it changed while the question was open, which is right, but that second judgement is the slow part and it was put after the progress bar had already closed. Nothing on screen between the click and the edit.",
-        "This editor already learned that lesson once: the repeating rounds of Remove Everything Unused were given their own bar for exactly this reason, after looking frozen for two and a half minutes.",
-        "The second judgement has a bar of its own now, and only when the workspace actually moved, so the ordinary case does not make a notification flash for nothing."
+        "Four bulk commands could remove more than the question had asked about. Reading the workspace again after the click, which they learned to do this week, cuts both ways: a change that kills the last user of something else makes the new list longer than the old one.",
+        "So \"Remove 1 unreferenced declaration?\" removed two, the second one never named. The reader agreed to a set, not to an intention, and this editor has spent four earlier releases making the count it announces match the count it applies.",
+        "The second reading is now an intersection with what was announced. It can drop an entry that came back to life, which is the whole point, and it can no longer add one.",
+        "One of the four narrowed the list of subjects but not the list of test files derived from it, so a test file belonging to a dropped subject was still deleted outright. Found by the test written for the intersection, not by rereading the change."
       ]
     }
   ],

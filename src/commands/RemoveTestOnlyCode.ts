@@ -310,7 +310,28 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
           'Nothing to remove: the workspace changed while the question was open.');
         return;
       }
-      courant = relu;
+      // An INTERSECTION with what was announced, never a fresh list. Judging
+      // again cuts both ways: a change that kills the last user of something
+      // else makes the new list BIGGER, and the question asked about the old
+      // one. The reader consented to a set, not to an intention.
+      const annonce = new Set(scan.groups.map(g => `${g.group.path}\u0000${g.group.label}`));
+      const retenus = relu.groups.filter(g => annonce.has(`${g.group.path}\u0000${g.group.label}`));
+      if (retenus.length === 0) {
+        void vscode.window.showInformationMessage(
+          'Nothing to remove: the workspace changed while the question was open.');
+        return;
+      }
+      // The sets DERIVED from the groups have to be narrowed with them. Left
+      // whole, `testFiles` still named the test files of a subject the
+      // intersection had just dropped, and `construire` deletes every file in
+      // that set outright.
+      const testFiles = new Set<string>();
+      let testFunctions = 0;
+      for (const g of retenus) {
+        for (const f of g.plan.files) testFiles.add(f);
+        testFunctions += g.plan.functions;
+      }
+      courant = { ...relu, groups: retenus, testFiles, testFunctions };
     }
   }
   const choisi = choix === 'apply' ? construire(false, courant) : apercu;

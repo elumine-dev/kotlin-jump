@@ -1,12 +1,12 @@
 {
-  "version": "1.42.293",
+  "version": "1.42.294",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Counting what actually left",
-  "summary": "Remove Everything Unused counted the findings of files it had skipped as though they had been removed.",
+  "tagline": "No verdict from a partial read",
+  "summary": "Only the first round of Remove Everything Unused refused an incomplete scan. The later rounds could delete live code.",
   "highlights": [
     {
-      "title": "Counting What Actually Left",
-      "description": "A file changed under the scan is left alone, and its dead code was still counted in the closing report.",
+      "title": "No Verdict From A Partial Read",
+      "description": "A scan that missed files cannot prove nothing uses a declaration. Every round holds to that now, not just the first.",
       "kind": "fix"
     }
   ],
@@ -14,10 +14,10 @@
     {
       "heading": "Fixed",
       "bullets": [
-        "Remove Everything Unused counted declarations it had not removed. A file that changed between the scan and the click is left alone, and its findings were still counted as gone.",
-        "The report contradicted itself inside one sentence. Two files with one dead class each, one of them touched in a terminal in between: \"Removed 2 declarations, 1 emptied file. 1 file changed since the scan and was left alone.\" The edit carried a single operation.",
-        "The count is now taken from the files the edit actually covers rather than from what the scan turned up, and both counts come from the same piece of code applied to two different sets, so the number in the question and the number in the report mean the same thing by construction. A file the cascade deletes still counts: its declarations go with the file.",
-        "Four commands of this family got this same fix between 1.42.277 and 1.42.280. The one that removes the most was not among them."
+        "Remove Everything Unused could delete live code. It repeats its round until nothing is left, and only the first round refused to work from a workspace it had not managed to read whole. Every later round took one without looking.",
+        "A scan that missed files cannot prove that nothing uses a declaration. Reasoning from one, the round calls a symbol unreferenced when the only file using it is a file that was not read, and this command applies that verdict rather than reporting it.",
+        "The command sets this off by itself: it deletes files on every round, and a file the search still lists but which has just gone makes the next read fail, which is exactly what marks a scan incomplete. Reproduced on a class kept alive by a single caller: round two dropped the caller from the sources and the class went, reported as an ordinary removal.",
+        "Later rounds now hold to the rule the first one already followed. The loop stops there and says why, so a run cut short for that reason cannot be read as a finished cleanup."
       ]
     }
   ],

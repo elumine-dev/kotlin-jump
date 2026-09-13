@@ -271,6 +271,8 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
   // dans un callback, il n'en sortirait plus : un drapeau dit la meme chose
   // sans dependre de l'endroit ou il est ecrit.
   let refuse = false;
+  /** Une ronde a recu un corpus que le balayage n'a pas pu lire en entier. */
+  let incomplet = false;
   // La boucle est la partie LONGUE : une passe coute une vingtaine de
   // secondes sur un projet de six mille fichiers, et Apply all en enchaine
   // jusqu'a huit. Sans barre, l'interface ne montrait plus rien apres le
@@ -284,6 +286,18 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
         if (jeton.isCancellationRequested) { annule = true; break; }
         if (passes > 1) progress.report({ message: `round ${n + 1}…` });
       const data = n === 0 ? premier.data : await corpus.get();
+      // Le premier balayage refuse un corpus tronque et rend la main. Les
+      // rondes suivantes le prenaient sans regarder, alors qu'une passe qui
+      // raisonne sur une liste de sources amputee juge « non reference » un
+      // symbole que seul un fichier non lu utilise, et que cette commande
+      // APPLIQUE ce verdict.
+      //
+      // Elle se le declenche a elle meme : elle supprime des fichiers a chaque
+      // ronde, et un fichier que `findFiles` liste encore mais qui vient de
+      // partir fait echouer sa lecture, ce qui marque le corpus tronque. Le
+      // contrat du corpus est ecrit dans sa propre classe : un balayage
+      // incomplet ne peut pas prouver une absence.
+      if (data.sourcesTruncated) { incomplet = true; break; }
       const { parFichier } = n === 0
         ? { parFichier: premier.parFichier }
         : collecterUnePasse(data.sources, segs);
@@ -355,7 +369,7 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
   const verbe = choix === 'review' ? 'Sent' : 'Removed';
   const queue = choix === 'review' ? ' to the preview.' : '.';
   void vscode.window.showInformationMessage(
-    compteRendu(fait, { verbe, queue, annule, restait, bouges }),
+    compteRendu(fait, { verbe, queue, annule, restait, bouges, incomplet }),
   );
 }
 
@@ -452,17 +466,27 @@ export function resumeDesFamilles(cumul: Tally): string {
  */
 export function compteRendu(
   fait: string,
-  e: { verbe: string; queue: string; annule: boolean; restait: boolean; bouges: string },
+  e: {
+    verbe: string; queue: string; annule: boolean; restait: boolean; bouges: string;
+    /** Une ronde a recu un corpus incomplet, et la boucle s'est arretee la. */
+    incomplet?: boolean;
+  },
 ): string {
   const suite = e.bouges ? ` ${e.bouges}` : '';
+  // Arrete faute d'avoir pu tout lire : c'est la raison la plus grave des
+  // trois, parce que c'est la seule qui dise que la suite du nettoyage aurait
+  // pu porter sur du code vivant. Elle passe donc devant.
+  const lecture = ' Stopped: the workspace could not be read whole, so the rest was left alone. Run it again.';
   if (fait === '') {
     // Rien n'a ete retire : la raison EST la reponse, il n'y a pas de titre a
     // mettre devant.
+    if (e.incomplet) return `Nothing was removed: the workspace could not be read whole. Run it again.${suite}`;
     if (e.annule) return `Stopped on request. Nothing was removed.${suite}`;
     if (e.bouges) return `Nothing was removed: ${e.bouges} Run it again.`;
     return 'Nothing unused left to remove.';
   }
-  const fin = e.annule ? ' Stopped on request: run it again to finish.'
+  const fin = e.incomplet ? lecture
+    : e.annule ? ' Stopped on request: run it again to finish.'
     : e.restait ? ' Stopped after the last allowed round: run it again to see whether anything is left.'
       : '';
   return `${e.verbe} ${fait}${e.queue}${suite}${fin}`;

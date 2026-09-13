@@ -179,13 +179,18 @@ export function plagesDuFichier(
 export function coupesRetenues(
   parFichier: ReadonlyMap<string, Coupe[]>,
   textes: ReadonlyMap<string, string>,
-): { retenu: Map<string, Coupe[]>; bouges: number } {
+): { retenu: Map<string, Coupe[]>; bouges: string[] } {
   const retenu = new Map<string, Coupe[]>();
-  let bouges = 0;
+  // Les CHEMINS, pas leur nombre. L'appelant boucle jusqu'au point fixe et
+  // additionnait ce compte a chaque ronde, alors qu'un fichier qui diverge de
+  // son document ouvert diverge encore a la ronde suivante : le meme fichier
+  // etait annonce quatre fois. Un ensemble de chemins ne peut pas se tromper
+  // la dessus.
+  const bouges: string[] = [];
   for (const [p, l] of parFichier) {
     const texte = textes.get(p);
     if (texte === undefined) continue;
-    if (plagesDuFichier(p, texte, l) === undefined) { bouges++; continue; }
+    if (plagesDuFichier(p, texte, l) === undefined) { bouges.push(p); continue; }
     retenu.set(p, l);
   }
   return { retenu, bouges };
@@ -227,6 +232,8 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
 
   const cumul: Tally = { symboles: 0, membres: 0, entrees: 0, ilots: 0, balayage: 0, renommages: 0, imports: 0, fichiers: 0, bouges: 0 };
   const ajouteTally = (t: Tally) => { for (const k of Object.keys(t)) cumul[k] = (cumul[k] ?? 0) + t[k]; };
+  /** Les fichiers ecartes, par chemin : la boucle repasse sur les memes. */
+  const ecartes = new Set<string>();
 
   // Une seule passe en relecture : l'utilisateur choisit quoi accepter, et
   // repasser derriere lui sans savoir ce qu'il a garde serait une devinette.
@@ -275,7 +282,7 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
       // cascade croit qu'une declaration est partie parce qu'on la lui a
       // annoncee, elle ne verifie rien.
       const { retenu, bouges } = coupesRetenues(parFichier, textes);
-      if (bouges > 0) cumul.bouges = (cumul.bouges ?? 0) + bouges;
+      for (const p of bouges) ecartes.add(p);
       if (retenu.size === 0) break;
 
       const cascade = planCascade(
@@ -311,6 +318,7 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
 
   if (refuse) { void vscode.window.showWarningMessage('Nothing was applied.'); return; }
 
+  cumul.bouges = ecartes.size;
   const fait = resumeDesFamilles(cumul);
   const bouges = cumul.bouges > 0
     ? `${plural(cumul.bouges, 'file')} changed since the scan and ${cumul.bouges > 1 ? 'were' : 'was'} left alone.`

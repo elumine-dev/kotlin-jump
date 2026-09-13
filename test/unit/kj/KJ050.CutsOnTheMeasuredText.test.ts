@@ -80,7 +80,9 @@ describe('coupesRetenues', () => {
       new Map([[CHEMIN, coupes], [AUTRE, coupesB]]),
       new Map([[CHEMIN, MESURE], [AUTRE, TEXTE_B]]),
     );
-    expect(bouges).toBe(1);
+    // Les CHEMINS ecartes, pas leur nombre : l'appelant boucle et doit pouvoir
+    // reconnaitre le meme fichier d'une ronde a l'autre.
+    expect(bouges).toEqual([CHEMIN]);
     expect(retenu.has(CHEMIN)).toBe(false);
     expect(retenu.has(AUTRE)).toBe(true);
   });
@@ -91,14 +93,14 @@ describe('coupesRetenues', () => {
       new Map([[CHEMIN, coupes], [AUTRE, coupesB]]),
       new Map([[CHEMIN, MESURE], [AUTRE, TEXTE_B]]),
     );
-    expect(bouges).toBe(0);
+    expect(bouges).toEqual([]);
     expect(retenu.size).toBe(2);
   });
 
   it('un fichier sans texte mesure n est ni retenu ni compte comme bouge', () => {
     ouvre([]);
     const { retenu, bouges } = coupesRetenues(new Map([[CHEMIN, coupes]]), new Map());
-    expect(bouges).toBe(0);
+    expect(bouges).toEqual([]);
     expect(retenu.size).toBe(0);
   });
 });

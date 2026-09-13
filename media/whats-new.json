@@ -1,23 +1,23 @@
 {
-  "version": "1.42.291",
+  "version": "1.42.292",
   "title": "What's New in Kotlin Jump",
-  "tagline": "One list, held in one place",
-  "summary": "No behaviour changed. The report of Remove Everything Unused is now held to naming every kind of dead code the scan counts.",
+  "tagline": "One file, counted once",
+  "summary": "A file left alone because it changed under the scan was reported once per round instead of once.",
   "highlights": [
     {
-      "title": "Every Kind Gets Named",
-      "description": "Eight kinds of dead code, one list written by hand three times. A test now reads it off the scan and holds the report to it.",
-      "kind": "improvement"
+      "title": "One File, Counted Once",
+      "description": "Remove Everything Unused repeats until nothing is left, and it was naming the same skipped file on every round.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Notes",
+      "heading": "Fixed",
       "bullets": [
-        "Nothing changed in what the extension does. Remove Everything Unused counts eight kinds of dead code, and the same list of eight was written out by hand in three places in that one file. Nothing held them together.",
-        "A ninth kind added to the scan would have been counted in the total, counted in the running tally, and left out of the closing report without a sound. You would read \"Removed 12\" above a sentence naming eight of them. The command that deletes code is the last place for a report that quietly omits a category.",
-        "A test now reads the list of kinds off the scan itself rather than keeping a fourth copy, and holds the report to naming every one of them. Adding a kind and forgetting the report turns it red.",
-        "Two more agreements are held at the same time: the number in the question is exactly the sum of what the scan counted, and the line under the question says how far the change reaches rather than promising a number of edits it cannot know before you click."
+        "Remove Everything Unused counted one skipped file several times. A file that changed between the scan and the click is left alone and named at the end, and the command repeats its round until nothing is left, so the same file was named again on every round: four rounds, one file, and a closing report saying four files.",
+        "The situation is the ordinary one this check exists for. A file open in the editor whose content changed on disk, from a branch switch or a formatter run in a terminal, stays out of step round after round, so the count grew with the number of rounds rather than with the number of files.",
+        "The rounds now collect the paths themselves rather than adding up counts, so a file skipped ten times is still one file. The count that goes into the report cannot drift from the list it describes.",
+        "Held by a test that runs the real command over four rounds with one file out of step, and by three mutations of the fix, each of which puts the old answer back and turns the suite red."
       ]
     }
   ],

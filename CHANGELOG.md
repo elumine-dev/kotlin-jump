@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.283
+
+A hole of blank lines in a third of the files.
+
+### Fixes
+- Remove Everything Unused left a gap of blank lines wherever it took something out. A declaration almost always has a blank line above and below it, and removing the declaration left both, side by side, where a single one used to separate two neighbours. On the reference project 66 of the 199 files it cuts came back with such a gap, a third of a diff that someone reads by hand.
+- One of the two now goes with the cut. Never a lone blank line: there has to be one on each side and only one leaves, so the spacing the author wrote is kept and never invented. The same 199 files now come back with two gaps instead of 66, and the two that remain are ones no rule can close without removing a blank line somebody meant to be there.
+
+### Notes
+- Checked the way every cut change here is checked: the 140 Kotlin files this touches were put through the compiler before and after, and the result is what it was, no new diagnostic and no syntax error on either side.
+- Found while stress testing the cascade, which came out of it clean: an import shared by a removed and a surviving declaration stays, an aliased import stays, a star import stays, and an import used from nothing but a doc link stays. A file emptied of everything goes, including when it carries a file level annotation, and one that still holds a constant stays.
+- Two of the four mutations tried against the new rule survive and are left alone. Both guards they touch are there for shapes the detectors do not currently produce: a whole line replacement, and an extension long enough to reach the next cut. The second was measured rather than assumed, on the reference project, with and without the guard: 105 cuts grow, and nothing overlaps either way.
+
 ## 1.42.282
 
 A closing brace left with no room to breathe.

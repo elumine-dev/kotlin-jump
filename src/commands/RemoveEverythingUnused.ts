@@ -118,6 +118,44 @@ function posAt(starts: readonly number[], offset: number): vscode.Position {
  * different content, and the offsets then aim at the wrong lines. That is the
  * exact distinction `stillTheMeasuredText` was written for.
  */
+/**
+ * The cuts, each grown by the blank line it would otherwise strand.
+ *
+ * A declaration almost always has a blank line on either side of it. Take the
+ * declaration and both blanks stay, side by side, where a single one used to
+ * separate two neighbours. Measured on the reference project: 66 of the 199
+ * files this command cuts come back with such a hole, a third of the diff
+ * someone has to read.
+ *
+ * A lone blank line is never taken. There must be one on EACH side and only
+ * one goes, so the separation the author wrote is preserved and never
+ * invented. A cut that does not take whole lines is left alone, and so is a
+ * replacement, which removes nothing.
+ *
+ * Exported for the witness.
+ */
+export function sansTrouDeLignesVides(texte: string, coupes: readonly Coupe[]): Coupe[] {
+  const triees = [...coupes].sort((a, b) => a.start - b.start);
+  const suivante = (i: number): number => triees[i + 1]?.start ?? texte.length;
+  const ligneVide = (debut: number, fin: number): boolean => texte.slice(debut, fin).trim() === '';
+  return triees.map((c, i) => {
+    if (c.texte !== '') return c;
+    const debutDeLigne = c.start === 0 || texte[c.start - 1] === '\n';
+    const finDeLigne = c.end === texte.length || texte[c.end - 1] === '\n';
+    if (!debutDeLigne || !finDeLigne) return c;
+    // La ligne juste avant la coupe.
+    const avantFin = c.start - 1;
+    if (avantFin < 0) return c;
+    const avantDebut = texte.lastIndexOf('\n', avantFin - 1) + 1;
+    if (!ligneVide(avantDebut, avantFin)) return c;
+    // La ligne juste apres.
+    const apresFin = texte.indexOf('\n', c.end);
+    if (apresFin === -1 || !ligneVide(c.end, apresFin)) return c;
+    const etendu = apresFin + 1;
+    return etendu <= suivante(i) ? { ...c, end: etendu } : c;
+  });
+}
+
 export function plagesDuFichier(
   path: string,
   mesure: string,
@@ -125,7 +163,7 @@ export function plagesDuFichier(
 ): { start: vscode.Position; end: vscode.Position; texte: string; quoi: string }[] | undefined {
   if (stillTheMeasuredText(path, mesure) === undefined) return undefined;
   const starts = debutsDeLigne(mesure);
-  return coupes.map(c => ({
+  return sansTrouDeLignesVides(mesure, coupes).map(c => ({
     start: posAt(starts, c.start), end: posAt(starts, c.end), texte: c.texte, quoi: c.quoi,
   }));
 }

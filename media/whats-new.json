@@ -1,12 +1,12 @@
 {
-  "version": "1.42.282",
+  "version": "1.42.283",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Spacing kept when an enum entry goes",
-  "summary": "Removing the last entry of a one line enum left the closing brace glued to the entry that stayed.",
+  "tagline": "No blank line gap left behind",
+  "summary": "Removing a declaration left the blank lines from both sides of it, in a third of the files the command touches.",
   "highlights": [
     {
-      "title": "Room To Breathe",
-      "description": "The cut that carries off the comma before the last entry was swallowing the blank after it as well. Every position of the list now leaves the same spacing.",
+      "title": "One Blank Line, Not Two",
+      "description": "A declaration sits between two blank lines and taking it left both. One goes with it now, and a lone blank line is never touched.",
       "kind": "fix"
     }
   ],
@@ -14,16 +14,16 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Removing the last entry of an enum written on one line glued the closing brace to the entry that stayed: `enum class E { VIVANT, MORT }` came back as `enum class E { VIVANT}`. Valid Kotlin, written by us into the reader's file, and unlike what the same cut does at every other position in the list.",
-        "The two halves of that cut treated the blank differently. The one that carries off the comma that follows keeps the spacing on purpose, and says so. The one for the last entry, which carries off the comma before it, swallowed the blank after. It leaves it now. The multi line shape never had the problem, since what follows there is a newline the cut already left alone."
+        "Remove Everything Unused left a gap of blank lines wherever it took something out. A declaration almost always has a blank line above and below it, and removing the declaration left both, side by side, where a single one used to separate two neighbours. On the reference project 66 of the 199 files it cuts came back with such a gap, a third of a diff that someone reads by hand.",
+        "One of the two now goes with the cut. Never a lone blank line: there has to be one on each side and only one leaves, so the spacing the author wrote is kept and never invented. The same 199 files now come back with two gaps instead of 66, and the two that remain are ones no rule can close without removing a blank line somebody meant to be there."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "Carried as an open observation for two rounds rather than fixed at the end of one to justify a release, and closed once a second shape showed it. Nothing else was found today.",
-        "What was looked at and found sound: the resource key removals were put through the SDK's aapt2 on the twelve real modules they touch, before and after, and no module gains an error. The three that already fail keep failing on the same messages, one of them a directory the project itself misspells.",
-        "Also checked and clean: every dead key takes all of its translations, none is left with a value in one language and no default; and two dead entries sharing a line produce cuts that sit next to each other rather than overlapping, in all four arrangements of dead and live."
+        "Checked the way every cut change here is checked: the 140 Kotlin files this touches were put through the compiler before and after, and the result is what it was, no new diagnostic and no syntax error on either side.",
+        "Found while stress testing the cascade, which came out of it clean: an import shared by a removed and a surviving declaration stays, an aliased import stays, a star import stays, and an import used from nothing but a doc link stays. A file emptied of everything goes, including when it carries a file level annotation, and one that still holds a constant stays.",
+        "Two of the four mutations tried against the new rule survive and are left alone. Both guards they touch are there for shapes the detectors do not currently produce: a whole line replacement, and an extension long enough to reach the next cut. The second was measured rather than assumed, on the reference project, with and without the guard: 105 cuts grow, and nothing overlaps either way."
       ]
     }
   ],

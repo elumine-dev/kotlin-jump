@@ -360,36 +360,36 @@ export function dernierNonBlanc(s: string, jusqu: number): number {
 }
 
 /**
- * La fin d'une ligne, son commentaire de fin retire.
+ * Les deux derniers caracteres de CODE avant `jusqu`, commentaires effaces.
  *
- * Le test de l'OPERATEUR se fait sur le BRUT, et pour une bonne raison : le
- * nettoyeur vide les chaines, donc `val x = "done"` se lirait comme finissant
- * sur son `=`. Mais un commentaire de fin de ligne se termine par ce qu'il
- * veut, et une virgule dans `// etape 1,` faisait croire a une suite : la
- * marche descendait et la coupe emportait la declaration SUIVANTE, vivante.
+ * Trois copies du fichier, trois questions. La profondeur et le point virgule
+ * veulent le blanchi. L operateur veut le brut prive de ses commentaires mais
+ * pas de ses chaines : sur le blanchi, `val x = "done"` se lirait sur son `=`,
+ * et sur le brut une virgule dans `// etape 1,` se lirait comme une suite.
  *
- * Ni le brut ni le blanchi ne repondent a cette question la. Il faut la
- * TROISIEME copie, celle qui retire les commentaires en gardant les chaines.
  * Reconnaitre le commentaire sur le blanchi ne marche pas : les guillemets y
  * sont vides eux aussi, donc `"https://…"` y ressemble trait pour trait a un
  * commentaire, et la premiere version de ce correctif coupait la ligne apres
  * `"https:` puis, la voyant finir sur un `:`, emportait les deux declarations
- * suivantes. Deux cas reels sur le projet de reference, dits par le temoin des
- * membres avant publication.
+ * suivantes.
+ *
+ * Cette copie se prend sur le FICHIER. La version qui strippait chaque ligne
+ * isolement perdait le contexte : privee de son ouverture, une ligne
+ * interieure de commentaire de bloc n a rien a effacer, et sa fermeture se
+ * lisait comme une division.
+ *
+ * `depuis` borne la remontee : la marche pose la question a UNE ligne, la fin
+ * de declaration la pose a tout ce qui precede.
  */
-export function finSansCommentaire(text: string, jusqu: number): string {
-  const dernier = dernierNonBlanc(text, jusqu);
-  if (dernier < 0) return '';
-  const debutDeLigne = text.lastIndexOf('\n', dernier) + 1;
-  const propre = stripKotlinComments(text.slice(debutDeLigne, dernier + 1)).trimEnd();
-  // Une derniere ligne qui n est QUE du commentaire disparait au blanchiment.
-  // La question se reporte alors sur ce qui precede, brut, comme le faisait la
-  // version qui recopiait tout le prefixe pour le laisser au trimEnd.
-  return propre !== '' ? propre : text.slice(0, debutDeLigne).trimEnd();
+export function finDuCode(sc: string, jusqu: number, depuis = 0): string {
+  const d = dernierNonBlanc(sc, jusqu);
+  if (d < depuis) return '';
+  return sc.slice(Math.max(depuis, d - 1), d + 1);
 }
 
 function finDeLExpression(
   clean: string,
+  sc: string,
   lines: readonly string[],
   lineStarts: readonly number[],
   lineEndOf: (l: number) => number,
@@ -422,9 +422,13 @@ function finDeLExpression(
     if (profondeur < 0) return -1;
     if (profondeur > 0 || brute.trim() === '') continue;
 
-    // Juge la continuation sur le texte BRUT, comme le test d origine : le
-    // nettoyeur vide les chaines et `val X = "done"` se lirait sur `=`.
-    if (FINIT_SUR_UN_OPERATEUR_RE.test(finSansCommentaire(brute, brute.length))) continue;
+    // La question de l operateur se pose a la copie du FICHIER sans ses
+    // commentaires, jamais a la ligne strippee toute seule : isolee, une ligne
+    // interieure de commentaire de bloc n a pas son ouverture, donc rien n y
+    // est efface et sa fermeture se lisait comme une division. La marche
+    // continuait a travers le commentaire et emportait la declaration vivante
+    // posee dessous.
+    if (FINIT_SUR_UN_OPERATEUR_RE.test(finDuCode(sc, lineEndOf(l), lineStarts[l]))) continue;
     // Un `;` a profondeur zero clot la declaration, quelle que soit la ligne
     // suivante : sans cela la marche traversait la methode Java d en dessous.
     //
@@ -459,7 +463,21 @@ export function removalExtent(
   lastLine: number,
   sym: RawSymbol,
   span: { scanEnd: number; lineBasedEnd: boolean },
+  /**
+   * La copie du fichier sans ses commentaires.
+   *
+   * Obligatoire, et paresseuse, pour deux raisons. La copie ne sert qu aux
+   * declarations qui posent une question de fin, donc la calculer d office
+   * serait la payer pour tout un projet. Et un parametre optionnel a repli
+   * silencieux se paie sans se voir : quatre appelants sur cinq l auraient
+   * oublie, chacun refaisant la copie entiere du fichier PAR declaration
+   * morte. Mesure sur le projet de reference avant de fermer ce trou :
+   * 311 Mo strippes au lieu de 91, et la passe qui prend 35 % de plus.
+   */
+  sansCommentaires: () => string,
 ): { removeStart: number; removeEnd: number } {
+  let copieSc: string | undefined;
+  const sc = (): string => (copieSc ??= sansCommentaires());
   const lines = text.split('\n');
   const lineEndOf = (l: number) => (l + 1 < lineStarts.length ? lineStarts[l + 1] : text.length);
 
@@ -507,8 +525,8 @@ export function removalExtent(
     }
   }
 
-  /** La fin, sans son commentaire : pour la question de l'operateur. */
-  const trailingSansCommentaire = finSansCommentaire(text, endOffset);
+  /** La fin, commentaires effaces : pour la question de l'operateur. */
+  const trailingSansCommentaire = (): string => finDuCode(sc(), endOffset);
   /** Le dernier caractere utile de la copie blanchie, pour le point virgule. */
   const finBlanchie = dernierNonBlanc(clean, endOffset);
   const nextLineNum = offsetToPos(lineStarts as number[], Math.max(endOffset - 1, 0)).line + 1;
@@ -521,9 +539,21 @@ export function removalExtent(
   // sans correctif. 58 des 66 declarations sans coupe sur lapresse tenaient a
   // `const`. Ajouter un mot ne peut qu ouvrir une coupe, jamais l elargir :
   // l etendue vient de la portee, ce test decide seulement de la rendre.
-  const nextStartsFresh =
+  // Une ligne INTERIEURE d un commentaire de bloc ne commence par aucun des
+  // signes de la liste : elle se lisait donc comme la suite de la declaration,
+  // et la marche partait. Sans cela `val fantome = 1 /* on garde` suivi de
+  // `   as is pour l instant */` emportait la fonction vivante d en dessous.
+  //
+  // Lu sur la copie sans commentaires, PAS sur la blanchie : celle-ci vide
+  // aussi les chaines, guillemets compris, donc la ligne `    "off"` d un
+  // `if else` a accolades y paraissait vide elle aussi et la coupe s arretait
+  // sur `} else {`.
+  const suivanteEstDuCommentaire = (): boolean => nextNonBlank <= lastLine
+    && sc().slice(lineStarts[nextNonBlank], lineEndOf(nextNonBlank)).trim() === '';
+  const nextStartsFresh = (): boolean =>
     nextNonBlank > lastLine ||
-    OUVRE_UNE_DECLARATION_RE.test(lines[nextNonBlank] ?? '');
+    OUVRE_UNE_DECLARATION_RE.test(lines[nextNonBlank] ?? '') ||
+    suivanteEstDuCommentaire();
   // A trailing `;` closes the statement, in Java as in Kotlin. Without this the
   // freshness test decides, and its keyword list is Kotlin only: a Java field
   // starts with its TYPE (`int`, `String`), never with `val` or `fun`, so the
@@ -537,22 +567,51 @@ export function removalExtent(
   // vide les chaines et que `val x = "done"` se lirait sur son `=`.
   const termine = finBlanchie >= 0 && clean[finBlanchie] === ';';
   const continues = span.lineBasedEnd && !termine
-    && (FINIT_SUR_UN_OPERATEUR_RE.test(trailingSansCommentaire) || !nextStartsFresh);
+    && (FINIT_SUR_UN_OPERATEUR_RE.test(trailingSansCommentaire()) || !nextStartsFresh());
   // Une accolade de lambda n est pas forcement la fin de l expression, et la
   // portee s y arrete quand meme. La suite evidente repond la ou `lineBasedEnd`
   // se tait, sans jamais elargir les cas que la garde couvrait deja.
   const suiteEvidente = !continues && !termine
-    && COMMENCE_UNE_SUITE_RE.test(lines[nextNonBlank] ?? '');
+    && COMMENCE_UNE_SUITE_RE.test(clean.slice(lineStarts[nextNonBlank] ?? 0, lineEndOf(nextNonBlank)));
   if (continues || suiteEvidente) {
     const vraieFin = finDeLExpression(
-      clean, lines, lineStarts, lineEndOf, sym.line,
+      clean, sc(), lines, lineStarts, lineEndOf, sym.line,
       offsetToPos(lineStarts as number[], Math.max(endOffset - 1, 0)).line, lastLine);
     if (vraieFin === -1) return { removeStart: -1, removeEnd: -1 };
     endOffset = vraieFin;
   }
 
   const removeStart = lineStarts[firstLine];
-  const removeEnd = lineEndOf(offsetToPos(lineStarts as number[], Math.max(endOffset - 1, removeStart)).line);
+  let removeEnd = lineEndOf(offsetToPos(lineStarts as number[], Math.max(endOffset - 1, removeStart)).line);
+
+  // Une coupe ne doit jamais trancher un commentaire de bloc : sa fermeture
+  // reste seule derriere et le fichier ne compile plus. Meme garde que celle
+  // des chaines brutes plus bas, et meme facon de la reparer. Les marqueurs
+  // sont comptes la ou la copie sans commentaires differe du brut, donc une
+  // ouverture ecrite dans une chaine ne compte pas.
+  // La coupe s arrete-t-elle a l INTERIEUR d un commentaire de bloc ? Sa
+  // fermeture resterait seule derriere et le fichier ne compilerait plus.
+  // Meme garde que celle des chaines brutes plus bas, et meme reparation.
+  //
+  // La coupe finit en debut de ligne : il suffit de regarder le premier
+  // caractere qui la suit. S il differe de la copie sans commentaires, il est
+  // dans un commentaire ; et si ce commentaire COMMENCE la, il n enjambe
+  // rien. Compter les ouvertures et les fermetures de la coupe serait plus
+  // long et moins juste : `// voir /* ceci` passerait pour une ouverture.
+  const trancheUnBloc = (): boolean => {
+    let j = removeEnd;
+    while (j < text.length && BLANC_RE.test(text[j])) j++;
+    if (j >= text.length) return false;
+    const t = text.charCodeAt(j);
+    if (t === 47 && (text.charCodeAt(j + 1) === 47 || text.charCodeAt(j + 1) === 42)) return false;
+    return t !== sc().charCodeAt(j);
+  };
+  if (trancheUnBloc()) {
+    const fin = text.indexOf('*/', removeEnd);
+    if (fin === -1) return { removeStart: -1, removeEnd: -1 };
+    removeEnd = lineEndOf(offsetToPos(lineStarts as number[], fin).line);
+  }
+
 
   // A line-based extent takes WHOLE LINES, so a second declaration sharing the
   // line would go with the first. `val mort = 1; val vivant = 2` and the Java
@@ -630,7 +689,9 @@ export function currentRemovalExtent(
     lastLine,
   });
   if (!span) return undefined;
-  return removalExtent(text, clean, lineStarts, lastLine, sym, span);
+  // Une seule declaration par appel : la copie n a personne avec qui se
+  // partager.
+  return removalExtent(text, clean, lineStarts, lastLine, sym, span, () => stripKotlinComments(text));
 }
 
 export function collectTopLevelCandidates(
@@ -657,7 +718,7 @@ export function collectTopLevelCandidates(
   // that framework. A sealed class whose variants carry @SerializedName is
   // instantiated by the JSON library, never by name.
   const parentsOfAnnotatedSubtypes = new Set<string>();
-  const perFile: { path: string; clean: string; syms: RawSymbol[]; text: string }[] = [];
+  const perFile: { path: string; clean: string; syms: RawSymbol[]; text: string; sc?: string }[] = [];
 
   for (const src of sources) {
     // The mention harvest already read Java; only candidate discovery skipped
@@ -752,7 +813,10 @@ export function collectTopLevelCandidates(
         path: file.path,
         selfInSpan: countWord(file.clean.slice(span.scanStart, span.scanEnd), sym.name),
         selfInFile: countWord(keptText, sym.name),
-        ...removalExtent(file.text, file.clean, lineStarts, lastLine, sym, span),
+        // Une seule copie sans commentaires par FICHIER, et seulement si un
+        // symbole mort y demande son etendue.
+        ...removalExtent(file.text, file.clean, lineStarts, lastLine, sym, span,
+          () => (file.sc ??= stripKotlinComments(file.text))),
         annoNames,
       });
     }

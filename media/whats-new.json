@@ -1,29 +1,29 @@
 {
-  "version": "1.42.317",
+  "version": "1.42.318",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Three copies to read two characters",
-  "summary": "Three copies of the file to read two characters, and one of them had no reader left.",
+  "tagline": "A comment spoke for the code",
+  "summary": "A comment could speak for the code, and the removal took the live function underneath.",
   "highlights": [
     {
-      "title": "One Allocation With No Reader",
-      "kind": "note",
-      "description": "Two earlier fixes moved the last two questions about a declaration's end onto other copies of the file and left the original copy behind, still built on every call. On the reference project that was 177 MB copied per pass for nobody to read."
+      "title": "A Block Comment No Longer Speaks For The Code",
+      "kind": "fix",
+      "description": "A dead declaration whose line opened a block comment had its removal run past the comment and delete the live declaration below it. Four reproduced shapes, four deletions of working code."
     },
     {
-      "title": "The Old Answer Kept As The Reference",
-      "kind": "note",
-      "description": "The previous formula is frozen in a test and the rewritten one must agree with it on every prefix of seventeen sources. Four deliberate breakages of the new code are each caught."
+      "title": "A Cut Never Splits A Comment",
+      "kind": "fix",
+      "description": "A removal that would leave a closing comment marker behind now takes the whole comment, and a comment belonging to the next declaration is left where it is."
     }
   ],
   "sections": [
     {
-      "heading": "Notes",
+      "heading": "Fixed",
       "bullets": [
-        "Nothing you run behaves differently. Deciding where a removed declaration ends asks three questions of its last two characters: does it end on an operator, on a semicolon, on a comment. Each was answered on a fresh copy of the whole file up to that point, which on the reference project is 36,329 calls per pass and 177 MB copied per question.",
-        "One of those copies had lost both its readers: 1.42.314 took the semicolon question away from it and 1.42.316 took the operator question, and neither removed the allocation. It was still being made on every call, for nobody.",
-        "The clock does not move, and this release does not claim it does. Seven interleaved A then B passes on the reference project give a median of 9819 ms against 9928 ms, with the two spreads overlapping. The copies go because they serve no purpose, not because anything got faster.",
-        "The old formula is now frozen in a test as the reference answer, and the new one has to agree with it on every prefix of seventeen sources, blank lines, tabs and a non breaking space included. Four deliberate breakages of the new code are each caught by that test.",
-        "1.42.316 changed the operator test in two places and could only prove one of them. The second one now has its own case: a value spread over several lines whose closing line carries a comment ending in a comma. Without the fix the cut runs on and takes the live function underneath."
+        "Removing an unreferenced declaration whose line opened a block comment took whatever followed the comment with it. Written out: `val ghost = 1 /* keep`, then `   as is for now */`, then `fun alive() = 2`. All three went. Four shapes of the same thing were reproduced, four times the live function was deleted.",
+        "A line INSIDE a block comment starts with none of the signs the walk looks for, so it read as the declaration carrying on. And asked in isolation, that line has no opening marker to erase, so nothing was erased and its closing slash read as a division. Two ways of reading a comment as code, on the same two lines.",
+        "The question of where code really ends now goes to a copy of the whole FILE with comments erased and strings kept, taken once per file. Read line by line, that copy is blind to anything a block comment spreads over more than one line.",
+        "A cut may never split a block comment in two: the closing marker would stay behind and the file would stop compiling. A comment that STARTS after the cut is a different matter and belongs to the neighbour. Without that distinction, a dead declaration followed by a plain comment offered no fix at all, and one followed by a KDoc had the neighbour's documentation deleted with it.",
+        "Faster, not slower: seven interleaved passes on the reference project give a median of 9978 ms against 10929 ms, and the two spreads do not touch. The first version of this fix ran 41 percent SLOWER and the same measurement is what caught it, before any of it shipped."
       ]
     }
   ],

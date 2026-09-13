@@ -25,6 +25,7 @@ import { parseJava } from '../indexer/JavaParser';
 import { rangeEndLine } from '../util/symbolRanges';
 import { declarationSpan } from '../util/declarationSpan';
 import { removalExtent } from './unusedSymbols';
+import { stripKotlinComments } from '../util/xmlRefs';
 import {
   buildLineStarts,
   offsetToPos,
@@ -115,6 +116,9 @@ export function findUnusedDeclarations(text: string, lang: 'kotlin' | 'java' = '
   // constructor is neutralised by rule 6 for free: its name is the class's,
   // which the class declaration itself already counts.
   const symbols = (lang === 'java' ? parseJava('inline', text) : parse('inline', text)).symbols;
+  /** Une seule copie sans commentaires par fichier, et seulement si un symbole mort la demande. */
+  let copieSc: string | undefined;
+  const sansCommentaires = (): string => (copieSc ??= stripKotlinComments(text));
   const clean = sanitizeForUsageScan(text);
   const lines = text.split('\n');
   const lineStarts = buildLineStarts(text);
@@ -202,7 +206,7 @@ export function findUnusedDeclarations(text: string, lang: 'kotlin' | 'java' = '
     // against splitting a raw string. Every one of those fixes was missing
     // from this detector, so `private val x = listOf(` over several lines had
     // no removal at all while the very same shape had one two files away.
-    const extent = removalExtent(text, clean, lineStarts, lastLine, sym, span);
+    const extent = removalExtent(text, clean, lineStarts, lastLine, sym, span, sansCommentaires);
     const removeStart = extent.removeStart;
     const removeEnd = extent.removeEnd;
 

@@ -1,4 +1,5 @@
 import { parse, RawSymbol } from '../indexer/KotlinParser';
+import { stripKotlinComments } from '../util/xmlRefs';
 import { parseJava } from '../indexer/JavaParser';
 import {
   fileOptsOut,
@@ -392,10 +393,55 @@ function debutAvecAnnotations(
   return debut;
 }
 
+/**
+ * La meme fin, ramenee avant l ouverture d un commentaire de bloc qu elle
+ * couperait en deux.
+ *
+ * Les blancs de la copie blanchie ne sont pas tous des blancs : un commentaire
+ * y est efface a la meme longueur. La marche qui prend les espaces apres la
+ * virgule traversait donc `/* on garde` et s arretait au retour a la ligne, en
+ * laissant `as is *​/` seul derriere. Le fichier ne compilait plus.
+ *
+ * Reculer, et non etendre jusqu a la fermeture : l entree suivante peut
+ * partager la ligne de cette fermeture, et elle est vivante.
+ *
+ * Le commentaire ferme sur la meme ligne ne bouge pas, lui : il parle de
+ * l entree qui part, et il part avec elle comme avant.
+ */
+function sansTrancherUnBloc(
+  text: string, sansCommentaires: () => string, depuis: number, fin: number,
+): number {
+  let j = fin;
+  while (j < text.length && /\s/.test(text[j])) j++;
+  if (j >= text.length) return fin;
+  const t = text.charCodeAt(j);
+  // Un commentaire qui COMMENCE la appartient a ce qui suit.
+  if (t === 47 && (text.charCodeAt(j + 1) === 47 || text.charCodeAt(j + 1) === 42)) return fin;
+  const sc = sansCommentaires();
+  if (text[j] === sc[j]) return fin;
+  // Revenir a l ouverture, qui est sur la ligne de la coupe. Remonter en
+  // comparant caractere a caractere ne marche pas : un espace du commentaire
+  // est efface en espace, donc il se lit comme identique et la remontee
+  // s arrete au premier mot, en plein milieu du commentaire.
+  //
+  // Le `text[i] !== sc[i]` ecarte une ouverture ecrite dans une chaine. Aucun
+  // decor ne l atteint : entre la virgule et la fin de la ligne, la copie
+  // blanchie n a que du vide, donc du blanc ou du commentaire, jamais une
+  // chaine. Il est ecrit ici parce que la comparaison est deja faite et ne
+  // coute rien, pas parce qu un cas l a demande. La derniere fois que ce
+  // fichier a affirme qu une forme etait hors d atteinte, elle ne l etait pas.
+  for (let i = fin; i > depuis; i--) {
+    if (text.charCodeAt(i) === 47 && text.charCodeAt(i + 1) === 42 && text[i] !== sc[i]) return i;
+  }
+  return fin;
+}
+
 function entryExtent(
   text: string,
   lineStarts: readonly number[],
   entry: RawSymbol,
+  /** La copie du fichier sans ses commentaires, calculee au plus une fois. */
+  sansCommentaires: () => string,
 ): { removeStart: number; removeEnd: number } {
   const debutLigne = lineStarts[entry.line];
   const finLigne = entry.line + 1 < lineStarts.length ? lineStarts[entry.line + 1] : text.length;
@@ -423,7 +469,7 @@ function entryExtent(
   if (clean[apres] === ',') {
     let coupeFin = apres + 1;
     while (coupeFin < clean.length && (clean[coupeFin] === ' ' || clean[coupeFin] === '\t')) coupeFin++;
-    return { removeStart: nameStart, removeEnd: coupeFin };
+    return { removeStart: nameStart, removeEnd: sansTrancherUnBloc(text, sansCommentaires, apres, coupeFin) };
   }
 
   // No comma after: this is the last entry, so the comma BEFORE it goes with
@@ -446,10 +492,13 @@ function entryExtent(
   // spaces came back the same way, on a line the cut used to leave clean.
   //
   // The blank is read from the raw text, never from `clean`: a space there is
-  // a space, not the tail of a comment we are supposed to be taking. No shape
-  // tells the two readings apart today, because an entry carrying a block
-  // comment on its line is not detected at all, so this one is a guard against
-  // a gap being closed, not a cure for something measured.
+  // a space, not the tail of a comment we are supposed to be taking.
+  //
+  // This paragraph used to end by saying no shape could tell the two readings
+  // apart, because an entry carrying a block comment on its line was not
+  // detected at all. It is detected. The same confusion, one branch below,
+  // walked forward over `/* keep` and stopped at the newline, leaving `as is
+  // */` behind and the file no longer compiling.
   let finPropre = fin;
   if (clean[fin] === '}' && finPropre > nameStart
       && (text[finPropre - 1] === ' ' || text[finPropre - 1] === '\t')) finPropre--;
@@ -490,6 +539,9 @@ export function findUnusedEnumEntries(input: UnusedEnumEntryScanInput): UnusedEn
     const text = textByPath.get(e.path);
     if (text === undefined) continue;
     const lineStarts = buildLineStarts(text);
+    /** Une seule copie sans commentaires par fichier, et seulement si besoin. */
+    let copieSc: string | undefined;
+    const sansCommentaires = (): string => (copieSc ??= stripKotlinComments(text));
 
     for (const entry of e.entries) {
       if (ignored.has(`${e.name}.${entry.name}`)) continue;
@@ -509,7 +561,7 @@ export function findUnusedEnumEntries(input: UnusedEnumEntryScanInput): UnusedEn
         line: entry.line,
         character: entry.character,
         testMentions,
-        ...avecAnnotations(text, lineStarts, entryExtent(text, lineStarts, entry)),
+        ...avecAnnotations(text, lineStarts, entryExtent(text, lineStarts, entry, sansCommentaires)),
       });
     }
   }

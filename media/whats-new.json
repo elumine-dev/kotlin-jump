@@ -1,29 +1,29 @@
 {
-  "version": "1.42.318",
+  "version": "1.42.319",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A comment spoke for the code",
-  "summary": "A comment could speak for the code, and the removal took the live function underneath.",
+  "tagline": "A comment cut in half",
+  "summary": "Removing an enum entry could cut a block comment in half.",
   "highlights": [
     {
-      "title": "A Block Comment No Longer Speaks For The Code",
+      "title": "An Enum Entry Removal Keeps Comments Whole",
       "kind": "fix",
-      "description": "A dead declaration whose line opened a block comment had its removal run past the comment and delete the live declaration below it. Four reproduced shapes, four deletions of working code."
+      "description": "Removing an entry whose line opened a multiline block comment split that comment in two and left the file unable to compile. The cut now stops before the opening."
     },
     {
-      "title": "A Cut Never Splits A Comment",
-      "kind": "fix",
-      "description": "A removal that would leave a closing comment marker behind now takes the whole comment, and a comment belonging to the next declaration is left where it is."
+      "title": "The Witness Now Counts Comment Markers",
+      "kind": "note",
+      "description": "Seven invariants stayed green on a file that no longer compiled. An eighth one, comment openings against closings, reports the defect on the old code."
     }
   ],
   "sections": [
     {
       "heading": "Fixed",
       "bullets": [
-        "Removing an unreferenced declaration whose line opened a block comment took whatever followed the comment with it. Written out: `val ghost = 1 /* keep`, then `   as is for now */`, then `fun alive() = 2`. All three went. Four shapes of the same thing were reproduced, four times the live function was deleted.",
-        "A line INSIDE a block comment starts with none of the signs the walk looks for, so it read as the declaration carrying on. And asked in isolation, that line has no opening marker to erase, so nothing was erased and its closing slash read as a division. Two ways of reading a comment as code, on the same two lines.",
-        "The question of where code really ends now goes to a copy of the whole FILE with comments erased and strings kept, taken once per file. Read line by line, that copy is blind to anything a block comment spreads over more than one line.",
-        "A cut may never split a block comment in two: the closing marker would stay behind and the file would stop compiling. A comment that STARTS after the cut is a different matter and belongs to the neighbour. Without that distinction, a dead declaration followed by a plain comment offered no fix at all, and one followed by a KDoc had the neighbour's documentation deleted with it.",
-        "Faster, not slower: seven interleaved passes on the reference project give a median of 9978 ms against 10929 ms, and the two spreads do not touch. The first version of this fix ran 41 percent SLOWER and the same measurement is what caught it, before any of it shipped."
+        "An entry whose line opened a block comment lost the opening and kept the closing. Written out: `MORT, /* keep`, then `   as is */` on the line below. The removal took `MORT, /* keep` and left `as is */` alone in the file, which then no longer compiles.",
+        "The walk that takes the spaces after the comma, so neighbours do not end up glued together, read them on the copy with comments blanked. A comment is blanked to spaces of the same length, so it walked straight through one and stopped at the newline.",
+        "The cut now stops before the opening and leaves the comment where it is. Extending to the closing instead would be worse: the next entry can share that line, and it is alive. A comment that closes on the entry's own line still goes with it, as before.",
+        "The code said in writing that an entry carrying a block comment on its line was not detected at all, and used that to leave the case alone. It is detected. That sentence has been replaced by what actually happens.",
+        "The corpus witness gained the invariant that was missing: no cut may leave a file with more comment closings than openings. Run against the old code it reports one, while the seven invariants it already had all stayed green. Timing is unchanged, 2.64 s against 2.59 s with the two spreads overlapping."
       ]
     }
   ],

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.319
+
+Removing an enum entry could cut a block comment in half.
+
+### Fixed
+- An entry whose line opened a block comment lost the opening and kept the closing. Written out: `MORT, /* keep`, then `   as is */` on the line below. The removal took `MORT, /* keep` and left `as is */` alone in the file, which then no longer compiles.
+- The walk that takes the spaces after the comma, so neighbours do not end up glued together, read them on the copy with comments blanked. A comment is blanked to spaces of the same length, so it walked straight through one and stopped at the newline.
+- The cut now stops before the opening and leaves the comment where it is. Extending to the closing instead would be worse: the next entry can share that line, and it is alive. A comment that closes on the entry's own line still goes with it, as before.
+- The code said in writing that an entry carrying a block comment on its line was not detected at all, and used that to leave the case alone. It is detected. That sentence has been replaced by what actually happens.
+- The corpus witness gained the invariant that was missing: no cut may leave a file with more comment closings than openings. Run against the old code it reports one, while the seven invariants it already had all stayed green. Timing is unchanged, 2.64 s against 2.59 s with the two spreads overlapping.
+
 ## 1.42.318
 
 A comment could speak for the code, and the removal took the live function underneath.

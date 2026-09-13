@@ -21,6 +21,7 @@
  * sur le projet de reference : 3 des 33 coupes ont cette forme.
  *   solde      accolades et parentheses du fichier restent equilibrees
  *   orpheline  aucune annotation ne reste sans declaration derriere elle
+ *   bloc       aucun commentaire de bloc n est coupe en deux
  *   croise     deux coupes du meme fichier ne se chevauchent pas
  *   liste      l enum RELU apres la coupe porte exactement les memes entrees
  *              qu avant, moins celle qui part. C est l invariant qui compte :
@@ -138,7 +139,7 @@ function main(): void {
   const sources: { path: string; text: string }[] = [];
   walk(racine, f => { try { sources.push({ path: f, text: fs.readFileSync(f, 'utf8') }); } catch { /* illisible */ } });
 
-  const compte = { nom: 0, bornes: 0, solde: 0, orpheline: 0, croise: 0, virgule: 0, liste: 0, deplacee: 0 };
+  const compte = { nom: 0, bornes: 0, solde: 0, orpheline: 0, bloc: 0, croise: 0, virgule: 0, liste: 0, deplacee: 0 };
   const fautes: string[] = [];
   const trouvailles = findUnusedEnumEntries({ sources: sources as any, testSourceSets: [] }) as any[];
 
@@ -198,6 +199,17 @@ function main(): void {
           break;
         }
       }
+      // Le solde ne compte que les accolades et les parentheses : une coupe
+      // pouvait emporter l ouverture d un commentaire de bloc en laissant sa
+      // fermeture, et les sept invariants restaient verts sur un fichier qui
+      // ne compile plus. Les marqueurs sont comptes sur le brut, comme ceux
+      // des chaines brutes ailleurs.
+      const marqueurs = (t: string): number => (t.split('/*').length - 1) - (t.split('*/').length - 1);
+      if (marqueurs(reste) !== marqueurs(texte)) {
+        compte.bloc++;
+        if (fautes.length < 12) fautes.push(`BLOC ${rel} ${e.name} ${marqueurs(texte)} -> ${marqueurs(reste)}`);
+      }
+
       const orpheline = annotationOrpheline(reste);
       if (orpheline !== undefined && annotationOrpheline(texte) === undefined) {
         compte.orpheline++;

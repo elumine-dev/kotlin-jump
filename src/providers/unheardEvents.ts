@@ -657,6 +657,37 @@ export function collectSubscriptions(
  * subscriber leaves no orphan `@Subscribe` behind. -1 when not delimitable:
  * the verdict stands, the fix gives up, as everywhere in the family.
  */
+/**
+ * The doc comment glued above, taken with the handler it describes.
+ *
+ * Left behind, it attaches itself to whatever declaration comes next and
+ * documents that one instead: the reader finds "what this handler did" above a
+ * function that never was one. Every other family has taken the doc comment
+ * with the cut for a long time.
+ *
+ * The whole block or nothing, line by line, and only lines that are comment.
+ * A line of code carrying a trailing block comment ends on the same two
+ * characters, and a walk that trusted that alone would climb from it to the
+ * nearest comment opener anywhere above.
+ */
+function debutAvecDoc(raw: string, start: number): number {
+  const lignes = raw.split('\n');
+  const numero = raw.slice(0, start).split('\n').length - 1;
+  const t = (i: number): string => (lignes[i] ?? '').trim();
+  const l = numero - 1;
+  if (l < 0 || !t(l).endsWith('*/') || !(t(l).startsWith('/*') || t(l).startsWith('*'))) return start;
+  let k = l;
+  while (k >= 0) {
+    if (t(k).startsWith('/*')) break;
+    if (!t(k).startsWith('*')) return start;
+    k--;
+  }
+  if (k < 0) return start;
+  let offset = 0;
+  for (let i = 0; i < k; i++) offset += lignes[i].length + 1;
+  return offset;
+}
+
 function handlerExtent(
   raw: string,
   clean: string,
@@ -676,6 +707,7 @@ function handlerExtent(
     if (annoLineStart === -1) start = -1;
   }
   start = start + 1;
+  start = debutAvecDoc(raw, start);
 
   const bodyOpen = clean.indexOf('{', target);
   if (bodyOpen === -1) return { removeStart: -1, removeEnd: -1 };

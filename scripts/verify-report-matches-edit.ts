@@ -19,6 +19,8 @@
  *   phrase     mettre une famille a zero change la phrase (donc elle y est)
  *   somme      la phrase totalise exactement les coupes retenues
  *   perdu      aucun fichier retenu ne se retrouve sans plages ni suppression
+ *   plageLigne une suppression porte sur des lignes entieres
+ *   plageOrdre deux plages d'un meme fichier ne se recouvrent pas
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -39,6 +41,9 @@ function walk(d: string, hit: (f: string) => void): void {
     else if (GARDE.test(x.name)) hit(f);
   }
 }
+
+/** Celles dont une suppression porte sur des lignes entieres. */
+const LIGNES_ENTIERES = new Set(['symboles', 'membres', 'ilots']);
 
 const FAMILLES_DE_PASSE = ['symboles', 'membres', 'entrees', 'ilots', 'balayage', 'renommages'];
 
@@ -64,7 +69,7 @@ function main(): void {
 
   let plages = 0;
   let dansFichiersEffaces = 0;
-  const compte = { ecart: 0, phrase: 0, somme: 0, perdu: 0 };
+  const compte = { ecart: 0, phrase: 0, somme: 0, perdu: 0, plageLigne: 0, plageOrdre: 0 };
   const fautes: string[] = [];
 
   for (const [p, l] of retenu) {
@@ -76,6 +81,34 @@ function main(): void {
       continue;
     }
     plages += r.length;
+
+    // La FORME des plages, pas seulement leur nombre. Ce sont elles que la
+    // commande envoie, apres `plagesDuFichier` et `sansTrouDeLignesVides`, et
+    // rien ne les regardait : decaler l'elargissement d'un caractere faisait
+    // bouger les comptes descriptifs sans lever un seul invariant.
+    const triees = [...r].sort((a, b) =>
+      a.start.line - b.start.line || a.start.character - b.start.character);
+    let precedente: { line: number; character: number } | undefined;
+    for (const plage of triees) {
+      // Seules les familles dont le contrat EST la ligne entiere. Une entree
+      // d'enum se coupe `[virgule, fin du nom)`, en plein milieu d'une ligne,
+      // et c'est voulu : mesure, 11 des 260 plages sont dans ce cas et toutes
+      // sont des entrees d'enum.
+      if (plage.texte === '' && LIGNES_ENTIERES.has(plage.famille)) {
+        const entiere = plage.start.character === 0 && plage.end.character === 0;
+        if (!entiere) {
+          compte.plageLigne++;
+          if (fautes.length < 10) fautes.push(`PLAGE ${path.relative(racine, p)} ${plage.quoi} [${plage.start.line}:${plage.start.character}, ${plage.end.line}:${plage.end.character})`);
+        }
+      }
+      if (precedente !== undefined
+        && (plage.start.line < precedente.line
+          || (plage.start.line === precedente.line && plage.start.character < precedente.character))) {
+        compte.plageOrdre++;
+        if (fautes.length < 10) fautes.push(`ORDRE ${path.relative(racine, p)} ${plage.quoi} recouvre la precedente`);
+      }
+      precedente = { line: plage.end.line, character: plage.end.character };
+    }
   }
 
   if (sommeFamilles !== plages + dansFichiersEffaces) {

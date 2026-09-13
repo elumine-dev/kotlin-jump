@@ -179,8 +179,12 @@ export function plagesDuFichier(
 ): { start: vscode.Position; end: vscode.Position; texte: string; quoi: string }[] | undefined {
   if (stillTheMeasuredText(path, mesure) === undefined) return undefined;
   const starts = debutsDeLigne(mesure);
+  // `famille` voyage avec la plage : le temoin ne peut pas exiger des lignes
+  // entieres d'une coupe d'entree d'enum, qui est partielle par contrat, et
+  // sans ce champ il ne peut pas faire la difference.
   return sansTrouDeLignesVides(mesure, coupes).map(c => ({
     start: posAt(starts, c.start), end: posAt(starts, c.end), texte: c.texte, quoi: c.quoi,
+    famille: c.famille,
   }));
 }
 

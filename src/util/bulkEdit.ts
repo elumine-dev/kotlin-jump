@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { plural } from './plural';
 
 /** What the user chose to do with a workspace wide edit. */
 export type BulkChoice = 'apply' | 'review' | 'cancel';
@@ -34,6 +35,10 @@ export async function askHowToApply(resume: string, detail: string): Promise<Bul
  * than no count at all.
  */
 export function bulkDetail(edits: number, files: number): string {
-  return `${edits} change${edits > 1 ? 's' : ''} in ${files} file${files > 1 ? 's' : ''}.`
+  // `plural`, et pas un ternaire sur `> 1`. Les deux disent la meme chose
+  // partout sauf a zero, ou l'accord se fait au pluriel : « 0 files », pas
+  // « 0 file ». Et zero arrive ici, `RemoveTestOnlyCode` etant le seul
+  // appelant a ne pas rendre la main sur un compte nul.
+  return `${plural(edits, 'change')} in ${plural(files, 'file')}.`
     + ' Apply all skips the preview; review one by one opens it with nothing ticked.';
 }

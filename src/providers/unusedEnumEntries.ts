@@ -434,7 +434,15 @@ function entryExtent(
   let avant = nameStart - 1;
   while (avant >= 0 && /\s/.test(clean[avant])) avant--;
   if (clean[avant] !== ',') return { removeStart: -1, removeEnd: -1 };
-  return { removeStart: avant, removeEnd: fin };
+  // Leave the blank that followed the entry, the way the branch above leaves
+  // the one that followed the comma. `finDeLEntree` stops after the spaces of
+  // the line but before its newline, so taking it whole glued the closing
+  // brace to the neighbour on a single line list, `enum class E { VIVANT}`,
+  // while the multi line shape was already right. Spaces and tabs only: the
+  // newline is not ours to take either.
+  let finPropre = fin;
+  while (finPropre > nameStart && (clean[finPropre - 1] === ' ' || clean[finPropre - 1] === '\t')) finPropre--;
+  return { removeStart: avant, removeEnd: finPropre };
 }
 
 export function findUnusedEnumEntries(input: UnusedEnumEntryScanInput): UnusedEnumEntry[] {

@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.282
+
+A closing brace left with no room to breathe.
+
+### Fixes
+- Removing the last entry of an enum written on one line glued the closing brace to the entry that stayed: `enum class E { VIVANT, MORT }` came back as `enum class E { VIVANT}`. Valid Kotlin, written by us into the reader's file, and unlike what the same cut does at every other position in the list.
+- The two halves of that cut treated the blank differently. The one that carries off the comma that follows keeps the spacing on purpose, and says so. The one for the last entry, which carries off the comma before it, swallowed the blank after. It leaves it now. The multi line shape never had the problem, since what follows there is a newline the cut already left alone.
+
+### Notes
+- Carried as an open observation for two rounds rather than fixed at the end of one to justify a release, and closed once a second shape showed it. Nothing else was found today.
+- What was looked at and found sound: the resource key removals were put through the SDK's aapt2 on the twelve real modules they touch, before and after, and no module gains an error. The three that already fail keep failing on the same messages, one of them a directory the project itself misspells.
+- Also checked and clean: every dead key takes all of its translations, none is left with a value in one language and no default; and two dead entries sharing a line produce cuts that sit next to each other rather than overlapping, in all four arrangements of dead and live.
+
 ## 1.42.281
 
 A doc comment left to describe the wrong function.

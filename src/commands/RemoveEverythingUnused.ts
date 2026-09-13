@@ -175,13 +175,10 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
     return;
   }
   const renommages = premier.tally.renommages ?? 0;
+  const demande = libelleDeLaDemande(total, renommages, premier.parFichier.size);
   const choix = await askHowToApply(
-    `Remove ${plural(total - renommages, 'unused declaration, local or import')}?`,
-    bulkDetail(total, premier.parFichier.size)
-      + (renommages > 0
-        ? ` ${plural(renommages, 'unused parameter')} renamed to \`_\` rather than removed.`
-        : '')
-      + ' Apply all repeats until nothing is left, since each removal orphans the next.',
+    demande.titre,
+    demande.detail,
   );
   if (choix === 'cancel') return;
 
@@ -276,7 +273,7 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
     cumul.membres > 0 ? plural(cumul.membres, 'class member') : '',
     cumul.entrees > 0 ? plural(cumul.entrees, 'enum entry', 'enum entries') : '',
     cumul.ilots > 0 ? `${plural(cumul.ilots, 'declaration')} of dead islands` : '',
-    cumul.balayage > 0 ? plural(cumul.balayage, 'local or import') : '',
+    cumul.balayage > 0 ? plural(cumul.balayage, 'local or import', 'locals and imports') : '',
     cumul.renommages > 0 ? `${plural(cumul.renommages, 'unused parameter')} renamed to \`_\`` : '',
     cumul.imports > 0 ? plural(cumul.imports, 'orphaned import') : '',
     cumul.fichiers > 0 ? plural(cumul.fichiers, 'emptied file') : '',
@@ -292,6 +289,42 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
   void vscode.window.showInformationMessage(
     compteRendu(morceaux.join(', '), { verbe, queue, annule, restait, bouges }),
   );
+}
+
+/**
+ * The question this command opens with.
+ *
+ * A pass can be renamings and nothing else, and it takes very little: one
+ * `forEachIndexed { index, value ->` whose index is unused is enough. Asking
+ * `Remove 0 unused declarations, locals and imports?` in that case is a
+ * dialog asking permission to remove nothing, so the renaming becomes the
+ * question instead of a footnote to it.
+ *
+ * Exported for the witness, like `compteRendu`.
+ */
+export function libelleDeLaDemande(
+  total: number,
+  renommages: number,
+  fichiers: number,
+): { titre: string; detail: string } {
+  const aRetirer = total - renommages;
+  if (aRetirer === 0) {
+    return {
+      titre: `Rename ${plural(renommages, 'unused parameter')} to \`_\`?`,
+      detail: bulkDetail(total, fichiers),
+    };
+  }
+  const note = renommages > 0
+    ? ` ${plural(renommages, 'unused parameter')} renamed to \`_\` rather than removed.`
+    : '';
+  return {
+    titre: `Remove ${plural(aRetirer, 'unused declaration, local or import',
+      'unused declarations, locals and imports')}?`,
+    // La relance ne se justifie que si quelque chose est RETIRE : un
+    // renommage n'orpheline rien.
+    detail: `${bulkDetail(total, fichiers)}${note}`
+      + ' Apply all repeats until nothing is left, since each removal orphans the next.',
+  };
 }
 
 /**

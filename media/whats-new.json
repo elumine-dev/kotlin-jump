@@ -1,23 +1,28 @@
 {
-  "version": "1.42.261",
+  "version": "1.42.262",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The verification rule, corrected again",
-  "summary": "No behaviour changed. Yesterday's widening of an internal check went one step too far and would have reported correct deletions as faults.",
+  "tagline": "Remove Everything Unused says what it means",
+  "summary": "Two wrong sentences in the same dialog: a plural that agreed with the last word of a list, and a question about removing zero things.",
   "highlights": [
     {
-      "title": "A Rule About Shape, Not Families",
-      "description": "Naming detector families in a verification rule got it wrong twice, once too narrow and once too wide. The rule now reads the shape of the cut: whole lines, or inside one line, never both.",
-      "kind": "improvement"
+      "title": "The Question It Asks",
+      "description": "`Remove 41 unused declaration, local or imports?` agreed its plural with the last word of a list, and a round made only of renamings opened with `Remove 0`. Both sentences say what is actually about to happen now.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
+      "heading": "Fixes",
+      "bullets": [
+        "Remove Everything Unused asked `Remove 41 unused declaration, local or imports?`. The helper that agrees a count with its noun adds the `s` at the end of whatever it is given, which is right for a plain noun and wrong for a list. Both spots that name a list now spell their plural out: `41 unused declarations, locals and imports`, and `41 locals and imports` in the closing report.",
+        "The same dialog could open with `Remove 0 unused declarations, locals and imports?`. A round can be renamings and nothing else, and one `forEachIndexed { index, value ->` whose index is never read is enough for it. When nothing is being removed the renaming is the question now, not a footnote to a question about zero: `Rename 3 unused parameters to `_`?`."
+      ]
+    },
+    {
       "heading": "Notes",
       "bullets": [
-        "Yesterday's release widened a verification rule that had been looking at a fifth of the work. It widened it too far. The write only detector deletes `var db = ` and `flag = ` on purpose, keeping the call on the right for its side effect, and the widened rule counted both as faults.",
-        "The reference project never took those code paths, so the measurement that justified widening showed 11 deletions out of 11 taking whole lines and said nothing was at risk. Asking the detector directly instead of the project answers in one line: `var db = ` and `db = `.",
-        "The rule is about the shape of a cut now, with no list of detector families to name correctly or keep up to date. A deletion either takes whole lines or stays inside one line. What it may never be is both, starting mid line and running across a line boundary, which is exactly what an offset mistake looks like.",
-        "Same catch rate as yesterday and no false alarm: shifting every cut of a family by one character is caught 20 times out of 20 on imports, 11 out of 11 on write only, 19 out of 19 on declarations, and 13 out of 13 in the test co removal check. The unshifted project reports zero on all five checks."
+        "That second one also dropped a sentence that was not true there. Repeating the round because each removal orphans the next makes no sense when nothing is removed.",
+        "The guard that watches counts agree could not see either of these: it looks for plurals written by hand next to a number, and here the number went through the helper properly. It was the argument that was wrong. It now also reads what is handed to the helper, and a list has to carry its own plural form. Two spots in the codebase out of sixty eight calls, both of them the ones above."
       ]
     }
   ],

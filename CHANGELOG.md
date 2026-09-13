@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.315
+
+An annotation named in a comment stole the walk.
+
+### Fixed
+- Removing an event handler that nothing sends to could leave its annotation behind. The extension walks up from the function to the line carrying the annotation, and it was looking for that annotation in the raw file rather than in the code.
+- So a mention of the same annotation sitting between the real one and the function, in a comment or a string, is nearer the function and wins. The walk stops on the comment, the real annotation stays in the file, and what is left does not compile.
+- It reads the sanitised copy now, where comments and string bodies are blanked while every position stays put, so only a real annotation counts. Three of the 298 mentions on a real project are outside code, all in error messages, in a file that declares no handler at all.
+- Same shape as yesterday, one layer along: the question was asked of the wrong copy of the file. Found by going through every function that holds both copies and checking each test one at a time.
+
 ## 1.42.314
 
 A semicolon inside a comment ended the declaration early.

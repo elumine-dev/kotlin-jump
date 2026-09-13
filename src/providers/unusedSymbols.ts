@@ -1,4 +1,5 @@
 import { matchesGlob } from '../util/glob';
+import { coupeUnBloc } from '../util/blocDeCommentaire';
 import { parse, RawSymbol, SymbolKind } from '../indexer/KotlinParser';
 import { parseJava } from '../indexer/JavaParser';
 import {
@@ -589,24 +590,12 @@ export function removalExtent(
   // des chaines brutes plus bas, et meme facon de la reparer. Les marqueurs
   // sont comptes la ou la copie sans commentaires differe du brut, donc une
   // ouverture ecrite dans une chaine ne compte pas.
-  // La coupe s arrete-t-elle a l INTERIEUR d un commentaire de bloc ? Sa
-  // fermeture resterait seule derriere et le fichier ne compilerait plus.
+  // Une coupe ne doit jamais partager un commentaire de bloc avec ce qui
+  // reste : la fermeture se retrouve seule et le fichier ne compile plus.
   // Meme garde que celle des chaines brutes plus bas, et meme reparation.
-  //
-  // La coupe finit en debut de ligne : il suffit de regarder le premier
-  // caractere qui la suit. S il differe de la copie sans commentaires, il est
-  // dans un commentaire ; et si ce commentaire COMMENCE la, il n enjambe
-  // rien. Compter les ouvertures et les fermetures de la coupe serait plus
-  // long et moins juste : `// voir /* ceci` passerait pour une ouverture.
-  const trancheUnBloc = (): boolean => {
-    let j = removeEnd;
-    while (j < text.length && BLANC_RE.test(text[j])) j++;
-    if (j >= text.length) return false;
-    const t = text.charCodeAt(j);
-    if (t === 47 && (text.charCodeAt(j + 1) === 47 || text.charCodeAt(j + 1) === 42)) return false;
-    return t !== sc().charCodeAt(j);
-  };
-  if (trancheUnBloc()) {
+  // Ici on ETEND jusqu a la fermeture, parce que le commentaire commence sur
+  // la ligne de la declaration qui part et parle d elle.
+  if (coupeUnBloc(text, sc, removeEnd)) {
     const fin = text.indexOf('*/', removeEnd);
     if (fin === -1) return { removeStart: -1, removeEnd: -1 };
     removeEnd = lineEndOf(offsetToPos(lineStarts as number[], fin).line);

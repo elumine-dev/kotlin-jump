@@ -1,23 +1,23 @@
 {
-  "version": "1.42.289",
+  "version": "1.42.290",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Same test, the rest of the checks",
-  "summary": "No behaviour changed. Two more static checks read whole expressions now, one that missed a real fault and one that invented one.",
+  "tagline": "Both halves of the answer",
+  "summary": "A refused edit was reported without the warning about files that had moved since the scan.",
   "highlights": [
     {
-      "title": "Whole Expressions, Not Lines",
-      "description": "A check that keeps diagnostics off invented paths missed the wrapped form, and another accused correct code of the same thing.",
-      "kind": "improvement"
+      "title": "Both Halves Of The Answer",
+      "description": "Telling you the edit was refused should not hide that a file moved under the scan and the command needs running again.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Notes",
+      "heading": "Fixed",
       "bullets": [
-        "Nothing changed in what the extension does. Yesterday one safety check turned out to be defeated by a line break; the rest of them were put through the same test, and a second one fell the same way.",
-        "That one keeps diagnostics off invented file paths. On vscode.dev a file is not on disk, so rebuilding its address from the path alone points the Problems panel at somewhere that does not exist and the quick fix reads nothing. Written on one line the mistake was caught. Written with the argument on the next line, the shape this code already uses elsewhere, it was not.",
-        "A third one, added three days ago, had the opposite fault: it accused a perfectly correct call of throwing its result away, because the call was spread over two lines. A check that cries wolf at good code teaches the next reader the wrong rule.",
-        "All three now read whole expressions instead of single lines, from one shared piece rather than three copies, and each was confronted with the shapes a formatter actually produces rather than only the tidy one."
+        "When the workspace dead code sweep or the Remote Config removal is refused by the editor, it says so, and it no longer swallows the other half of what it had to tell you.",
+        "Both commands warn you when a file changed between the scan and the click: that file was left alone and the command has to be run again. Three days ago they learned to say \"Nothing was applied.\" instead of claiming a removal that never happened, and that early exit took the warning with it.",
+        "The two things are unrelated. An edit the editor rejected and a file that moved under the scan have different causes and different answers, and the second one is the one that tells you what to do next. It rides along with the refusal now.",
+        "Both paths are held by tests that run the real commands: one file moves, the edit comes back refused, and the message has to carry both halves."
       ]
     }
   ],

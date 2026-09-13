@@ -165,7 +165,11 @@ export async function removeAllUnusedRemoteConfigKeysCommand(
       // fausse nouvelle sur un fichier intact, ce qui est pire que le silence
       // d avant : le lecteur cesse de chercher. Meme mot que le reste de la
       // famille.
-      if (!applique) { void vscode.window.showWarningMessage('Nothing was applied.'); return; }
+      // La note sur ce qui a BOUGE ne parle pas de la meme chose et reste vraie :
+      // elle dit au lecteur de relancer. Le retour anticipe l'emportait avec le
+      // reste, et « Nothing was applied. » tout seul cache que trois fichiers
+      // avaient ete laisses de cote pour une autre raison, reparable celle la.
+      if (!applique) { void vscode.window.showWarningMessage(`Nothing was applied.${noteDe(choisi.bouges)}`); return; }
       // Apply all skips the preview, so nothing else would say what happened.
       // The note about files that moved rode alone before, without ever
       // saying what had actually gone.

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.290
+
+A refused edit no longer swallows the warning that came with it.
+
+### Fixed
+- When the workspace dead code sweep or the Remote Config removal is refused by the editor, it says so, and it no longer swallows the other half of what it had to tell you.
+- Both commands warn you when a file changed between the scan and the click: that file was left alone and the command has to be run again. Three days ago they learned to say "Nothing was applied." instead of claiming a removal that never happened, and that early exit took the warning with it.
+- The two things are unrelated. An edit the editor rejected and a file that moved under the scan have different causes and different answers, and the second one is the one that tells you what to do next. It rides along with the refusal now.
+- Both paths are held by tests that run the real commands: one file moves, the edit comes back refused, and the message has to carry both halves.
+
 ## 1.42.289
 
 The rest of the safety checks, put through the same test.

@@ -306,6 +306,16 @@ export function fileOptsOut(text: string, diagnostics: readonly string[]): boole
 
 /** Opts out of "nothing references this declaration" everywhere in the family. */
 export const UNUSED_DECLARATION = ['unused'] as const;
+/**
+ * …plus the detekt rules that say the same thing about PRIVATE declarations.
+ *
+ * A detector of private declarations is their exact counterpart, and a project
+ * that runs detekt writes `@Suppress("UnusedPrivateMember")` far more often
+ * than `"unused"`. The whole name is matched, so `UnusedParameter` stays out.
+ */
+export const UNUSED_PRIVATE_DECLARATION = [
+  'unused', 'UnusedPrivateMember', 'UnusedPrivateProperty', 'UnusedPrivateFunction', 'UnusedPrivateClass',
+] as const;
 /** …plus the compiler warning a parameter detector is the counterpart of. */
 export const UNUSED_PARAMETER = ['unused', 'UNUSED_PARAMETER'] as const;
 /** …plus the ones a local-variable detector is the counterpart of. */

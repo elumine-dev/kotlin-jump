@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.322
+
+Removing a post or a starved handler now takes its imports too, and a class that asks for silence under detekt is left alone.
+
+### Fixed
+- The "Remove post" fix for an event nobody subscribes to, and the fix that removes a handler nothing posts to, deleted the one statement and stopped. Every other removal fix goes through the import cascade; these two did not. The import of the event type, and the `Subscribe` annotation once the last handler went, stayed behind, and a project running detekt fails its build on `NoUnusedImports`. Both now remove the imports that nothing else in the file uses, and keep the ones something still needs. Java files are not covered yet: their imports are left in place, as before.
+- 1.42.321 respected `@Suppress("unused")` on a class, but only that exact word. A project that runs detekt writes `@Suppress("UnusedPrivateMember")` or `@Suppress("UnusedPrivateProperty")`, and the reference project carries those on three classes. Since 1.42.320 their dead private properties were reported again. The detekt rules for private declarations now count, whole names only, so `UnusedParameter` does not.
+- The protection itself was narrower than the 1.42.321 notes said. It went through the reflection rule, which only ever covers properties, so the private functions of a class under `@Suppress("unused")` were still reported, in every version. A request for silence now covers the whole class body, nested classes included, and stops at its closing brace.
+- A file level `@file:Suppress` naming one of those detekt rules is honoured the same way, so the class and the file say the same thing.
+- On the reference project no finding appears or disappears, all five corpus witnesses give identical results before and after, and timing is unchanged.
+
 ## 1.42.321
 
 A class marked @Suppress("unused") had its members offered for deletion again.

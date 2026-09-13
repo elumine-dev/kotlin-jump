@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.314
+
+A semicolon inside a comment ended the declaration early.
+
+### Fixed
+- Removing an unreferenced declaration could leave half of it behind. A line comment ending in a semicolon made the extension think the declaration was finished, so a value spread over two lines lost its second one.
+- Written out: `val ghost = 1 + // note;` followed by an indented `2`. The cut took the first line and left the `2` alone in the file, where it does not compile. Without the semicolon in that comment, both lines go, which is what makes it hard to see coming.
+- The rule itself is right and was added for Java, where a trailing semicolon really does end a field. It was reading the raw line. It reads the sanitised copy now, where comments and string bodies are blanked, so only a real semicolon counts. The neighbouring test on whether a line ends on an operator still reads the raw line on purpose, because blanking a string would make an assignment look unfinished.
+- Two questions, two copies, one line apart, and the reason is written next to each. Nothing changes on a 6329 file project, where the shape does not occur; the guard against the Java case it exists for is still held by its own test.
+
 ## 1.42.313
 
 Looking at the ranges, not just counting them.

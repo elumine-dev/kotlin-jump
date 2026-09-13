@@ -1,27 +1,27 @@
 {
-  "version": "1.42.251",
+  "version": "1.42.252",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The same question, asked of the other four",
-  "summary": "Shift every cut by one character and see which counters notice. The witness guarding the deletion of test files noticed nothing.",
+  "tagline": "Seeing a cut that takes too much",
+  "summary": "Given one extra line at the end of every cut, the witness for unreferenced declarations reported zero on all 98, and 5 of those delete live code.",
   "highlights": [
     {
-      "title": "The test removal witness catches an offset shift",
+      "title": "The neighbour rule sees two lines now",
       "kind": "fix",
-      "description": "It guards the only edit that deletes whole test files, and it was missing the rule that a cut of a test function takes whole lines. The same one character shift now reports thirteen violations out of thirteen cuts."
+      "description": "The invariant that counts declarations inside a cut anchored on `^` with no multiline flag, so it only ever matched at offset zero. It caught two declarations on ONE line, the shape it was built for, and was blind to two on two lines."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "The witness for removing a declaration together with its tests checks that a cut of a test function takes whole lines."
+        "The invariant that catches a cut swallowing its neighbour now sees a neighbour on the next line, not only one after a semicolon.",
+        "Parentheses are blanked like braces before counting, so a constructor parameter is not mistaken for a neighbour of its class."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "The other three hold: 98 of 98 symbol cuts, 320 of 320 member cuts, 100 of 100 orphaned imports.",
-        "The enum family allows a partial cut by design. Of its 33 cuts, a shift leaves whitespace in 20 and a legal trailing comma in 6; the 7 that eat a letter of the name are all caught."
+        "Precision, not just sensitivity: it reports the 5 damaging cases and none of the 93 harmless ones. On class members, 125 caught out of 320 instead of 47."
       ]
     }
   ],

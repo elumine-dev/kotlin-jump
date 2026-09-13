@@ -79,13 +79,13 @@ function verifier(nom: string, coupes: Coupe[], parPath: Map<string, string>, li
     const sansCorps = (t: string): string => {
       let p = 0, out = '';
       for (const ch of t) {
-        if (ch === '{') { p++; out += ch; continue; }
-        if (ch === '}') { p = Math.max(0, p - 1); out += ch; continue; }
+        if (ch === '{' || ch === '(') { p++; out += ch; continue; }
+        if (ch === '}' || ch === ')') { p = Math.max(0, p - 1); out += ch; continue; }
         out += p > 0 ? (ch === '\n' ? '\n' : ' ') : ch;
       }
       return out;
     };
-    const DECLS = /(?:^|[;{])\s*(?:(?:public|private|internal|protected|open|abstract|final|sealed|data|enum|annotation|value|inline|suspend|external|expect|actual|operator|infix|lateinit|const|override|companion|static|synchronized|native|transient|volatile)\s+)*(?:val|var|fun|class|object|interface|typealias)\s+[A-Za-z_`]/g;
+    const DECLS = /(?:^|[;{\n])\s*(?:(?:public|private|internal|protected|open|abstract|final|sealed|data|enum|annotation|value|inline|suspend|external|expect|actual|operator|infix|lateinit|const|override|companion|static|synchronized|native|transient|volatile)\s+)*(?:val|var|fun|class|object|interface|typealias)\s+[A-Za-z_`]/g;
     const combien = (sansCorps(stripKotlinComments(coupe)).match(DECLS) ?? []).length;
     if (combien > 1) {
       compte.voisine++;

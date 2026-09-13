@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.252
+
+The invariant against over deletion could only see one shape of it.
+
+### Fixes
+- Nothing in the extension changed. The mutation that proved the five witnesses over the last two days was a cut in the wrong PLACE; this one is a cut that takes too MUCH, which is the more damaging failure. Given one extra line at the end of every cut, the witness for unreferenced declarations reported zero on all 98 of them. Measured rather than assumed: 93 of those extra lines are blank and swallowing one is harmless, but 5 carry a real declaration, `const val FEED_ITEM_VISUAL_VIDEO_TYPE = "video"` among them, and those 5 delete live code. The invariant written to catch exactly that, the one that counts declarations inside a cut, anchored its pattern on `^` with no multiline flag: it only ever matched at offset zero, so it saw the FIRST declaration of a cut and nothing else. It caught `val mort = 1; val vivant = 2`, the shape it was built for, and was blind to two declarations on two lines, which is how code is normally written.
+- Accepting a newline as a separator then counted constructor parameters as neighbours, `class X(\n    private val prefs: SharedPreferences)`, and cried on eleven healthy cuts. A parameter is not a neighbour of its class, it is inside it, so parentheses are blanked like braces before counting.
+
+### Notes
+- Precision, not just sensitivity: the repaired invariant reports the 5 damaging cases and none of the 93 harmless ones. On the class members it goes from 47 caught out of 320 to 125.
+
 ## 1.42.251
 
 The same blindness, in the witness that guards the deletion of test files.

@@ -1,23 +1,29 @@
 {
-  "version": "1.42.267",
+  "version": "1.42.268",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A check for the resource keys, and it passes",
-  "summary": "No behaviour changed. The one kind of removal with no verification of its own now has one, and it reports the family sound on a real project.",
+  "tagline": "The web build runs what it offers",
+  "summary": "Three bulk removal commands appeared in the Command Palette on vscode.dev and answered `command not found`. They run there now.",
   "highlights": [
     {
-      "title": "Resource Keys Under Watch",
-      "description": "A new check reads every key reported dead and hunts its name through all 6329 sources of a real project. Nothing came back, and the check was proved able to catch both a missed reference form and a one character offset.",
-      "kind": "improvement"
+      "title": "Three Commands Come To The Web",
+      "description": "Remove Everything Unused, Remove Test Only Code and Make Self Only Private were wired into the desktop host only, while the palette offered them everywhere. Nothing in them needed a desktop.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
+      "heading": "Fixes",
+      "bullets": [
+        "Three commands were listed in the Command Palette on vscode.dev and github.dev and answered `command not found` when picked: Remove Everything Unused, Remove Test Only Code and Make Self Only Private. They were wired into the desktop host only, while nothing in their declaration said they were desktop only. Two of them had been in that state since 1.42.222.",
+        "Not a policy, an oversight. Remove All Unused Resource Keys deletes just as much and has run in the web build the whole time, and none of the three reaches for anything outside the editor API. They are registered in the web host now."
+      ]
+    },
+    {
       "heading": "Notes",
       "bullets": [
-        "Nothing changed in what the extension does. Six checks ran over a real project before every release, one per kind of removal, and the resource keys had none. They have one now, and it found the family sound: 3186 declarations, 66 reported dead, every rule at zero.",
-        "This one judges the VERDICT rather than the cut, because that is where a resource key is lost. A reference written in a form the harvester does not know leaves no trace at all, the key reads as dead, and nothing recompiles to warn anyone. So it looks for the name of every dead key in the raw text of all 6329 sources, outside its own declarations.",
-        "Three colors came back on that first run, all referenced from nothing but `tools:` attributes. That those keep nothing alive had been asserted in a comment for a long time without being checked, so it was checked with the aapt2 of the Android SDK: a layout with `tools:background=\"@color/x\"` and no `x` anywhere compiles and links silently, while the same reference as `android:background` fails the link outright. The comment now carries the evidence instead of the claim.",
-        "It was then made to earn its zero. Blinding the harvester to one XML reference form takes the dead count from 66 to 316 and fires the rule 250 times. Shifting every cut by one character is caught 82 times out of 82, by a rule about element boundaries rather than the whole line rule the other checks use: not one of these 82 cuts takes whole lines, 63 sit inside a line and 19 start at the `<` of a style block."
+        "A check reads every command declared in the manifest and follows the imports from each host to see who registers it. The families the web genuinely cannot serve, Android Run and ADB, Logcat, local Gradle detection and jar source scanning, are listed with their reason, and an entry in that list that stops matching any command fails the check rather than sitting there.",
+        "Its first version accused twelve perfectly wired toggles. Their ids are assembled at run time as `kotlinJump` plus a name, so the whole id appears nowhere in the source. It reads the bare name too now.",
+        "The shipped web bundle grows by 16 Ko, from 646 to 663, measured on the minified build both ways rather than guessed."
       ]
     }
   ],

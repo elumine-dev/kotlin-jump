@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.268
+
+Three commands the web build offered and could not run.
+
+### Fixes
+- Three commands were listed in the Command Palette on vscode.dev and github.dev and answered `command not found` when picked: Remove Everything Unused, Remove Test Only Code and Make Self Only Private. They were wired into the desktop host only, while nothing in their declaration said they were desktop only. Two of them had been in that state since 1.42.222.
+- Not a policy, an oversight. Remove All Unused Resource Keys deletes just as much and has run in the web build the whole time, and none of the three reaches for anything outside the editor API. They are registered in the web host now.
+
+### Notes
+- A check reads every command declared in the manifest and follows the imports from each host to see who registers it. The families the web genuinely cannot serve, Android Run and ADB, Logcat, local Gradle detection and jar source scanning, are listed with their reason, and an entry in that list that stops matching any command fails the check rather than sitting there.
+- Its first version accused twelve perfectly wired toggles. Their ids are assembled at run time as `kotlinJump` plus a name, so the whole id appears nowhere in the source. It reads the bare name too now.
+- The shipped web bundle grows by 16 Ko, from 646 to 663, measured on the minified build both ways rather than guessed.
+
 ## 1.42.267
 
 The last removal family without a check of its own.

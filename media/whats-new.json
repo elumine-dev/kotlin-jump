@@ -1,23 +1,23 @@
 {
-  "version": "1.42.305",
+  "version": "1.42.306",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Correcting yesterday",
-  "summary": "The danger described in the last release cannot occur, and the reason written in the code now says so.",
+  "tagline": "Warnings that agree",
+  "summary": "A declaration spared because it came back to life kept its unreferenced warning.",
   "highlights": [
     {
-      "title": "Correcting Yesterday",
-      "description": "The shared name that looked dangerous always refers to one island, offered and read back whole. The guard stays, the reason is fixed.",
-      "kind": "improvement"
+      "title": "Warnings That Agree",
+      "description": "The panel kept marking a declaration the command had just decided to spare, and the quick fix still offered to delete it.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Notes",
+      "heading": "Fixed",
       "bullets": [
-        "A correction to what the last release said. It described a guard against one subject of a removal slipping through on another subject sharing its name, and that cannot actually happen. The claim was published without having been demonstrated, and it is wrong.",
-        "Two subjects do share a name, which was measured and is true: a dead island produces one subject per member and each carries the island name. But that name is the member names joined together, so a name borne by several subjects always refers to one island, offered and read back as a whole. Lose a member and the name changes with it.",
-        "Measured both ways this time. Before: one island of two members, two subjects under one name. After a member gains a caller in production: that name is gone entirely rather than standing for one subject instead of two.",
-        "The guard stays, because it costs one line and it holds whatever names are made of, but the reason written next to it now says that rather than a danger that does not exist. A false reason in the code is worse than none: the next reader builds on it."
+        "The warnings in the Problems panel now agree with what the command actually decided. Three commands publish their findings before asking you, then read the workspace again after the click, and a declaration spared because it had come back to life kept its warning.",
+        "So the panel pointed at living code, the gutter still marked it, and the quick fix on it still offered to delete it. Nothing bad happened if you left it alone, but the editor was telling you something it had itself just decided was untrue.",
+        "Before the second reading existed, the two could not disagree: the command removed exactly what it had published. Adding the second reading broke that agreement without saying so, which is the sort of debt a fix leaves behind when it changes one half of a pair.",
+        "The whole new verdict is published, not the part about to be removed. A declaration covered by a test is never removed and must keep its mark, so publishing only what leaves would have made those disappear instead."
       ]
     }
   ],

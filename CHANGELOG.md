@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.306
+
+The warnings agree with the second reading.
+
+### Fixed
+- The warnings in the Problems panel now agree with what the command actually decided. Three commands publish their findings before asking you, then read the workspace again after the click, and a declaration spared because it had come back to life kept its warning.
+- So the panel pointed at living code, the gutter still marked it, and the quick fix on it still offered to delete it. Nothing bad happened if you left it alone, but the editor was telling you something it had itself just decided was untrue.
+- Before the second reading existed, the two could not disagree: the command removed exactly what it had published. Adding the second reading broke that agreement without saying so, which is the sort of debt a fix leaves behind when it changes one half of a pair.
+- The whole new verdict is published, not the part about to be removed. A declaration covered by a test is never removed and must keep its mark, so publishing only what leaves would have made those disappear instead.
+
 ## 1.42.305
 
 A correction: yesterday named a danger that cannot occur.

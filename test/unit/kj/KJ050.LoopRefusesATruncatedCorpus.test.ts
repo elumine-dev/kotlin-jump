@@ -36,19 +36,17 @@ async function lancer(tronqueALaRonde2: boolean) {
   vi.spyOn(w, 'getConfiguration').mockReturnValue({ get: (_k: string, d: any) => d } as any);
   vi.spyOn(vscodeMock.workspace, 'textDocuments', 'get').mockReturnValue([] as any);
 
-  // Ronde 1 : tout est la, `Mort` part. Ronde 2 : selon le cas, un corpus
-  // complet ou un corpus tronque d ou le seul lecteur de `Garde` a disparu.
+  // Un appel pour le balayage d avant la question, puis un par ronde : la
+  // ronde 0 relit elle aussi depuis la 1.42.296.
+  //   appel 0 : le balayage, appel 1 : ronde 0, appel 2 : ronde 1.
+  // `Mort` part a la ronde 0 ; c est la ronde 1 qui recoit, selon le cas, un
+  // corpus complet ou un corpus tronque d ou le seul lecteur de `Garde` a
+  // disparu.
+  const complet = { sources: [MORT, GARDE, USAGE], sourcesTruncated: false };
+  const apres = { sources: [GARDE, USAGE], sourcesTruncated: false };
   const rondes = tronqueALaRonde2
-    ? [
-      { sources: [MORT, GARDE, USAGE], sourcesTruncated: false },
-      { sources: [GARDE], sourcesTruncated: true },
-      { sources: [GARDE, USAGE], sourcesTruncated: false },
-    ]
-    : [
-      { sources: [MORT, GARDE, USAGE], sourcesTruncated: false },
-      { sources: [GARDE, USAGE], sourcesTruncated: false },
-      { sources: [GARDE, USAGE], sourcesTruncated: false },
-    ];
+    ? [complet, complet, { sources: [GARDE], sourcesTruncated: true }, apres]
+    : [complet, complet, apres, apres];
   let n = 0;
   const corpus: any = {
     invalidate: () => {},

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.296
+
+A use that appears while the dialog is open now saves its declaration.
+
+### Fixed
+- Remove Everything Unused could delete something that had come back to life while you were reading the dialog. The scan runs before the question, and the first round of removals was still working from that snapshot.
+- Between the two there is human time. A pull that lands, a colleague pushing, a file saved in another editor: a use that appears in that window does not exist in the snapshot, so the declaration is still dead there and it went.
+- The staleness check does not cover this. It compares the measured text to open documents, file by file, and the new use is somewhere else entirely while the declaring file has not moved, so its cut passes. The corpus says as much in its own code.
+- The first round reads again like every other round, and it costs nothing when nothing changed: the workspace index hands back the same snapshot untouched, and the round recognises it and reuses the plan it already has. A test measures exactly that, so the twenty second pass cannot quietly start running twice.
+
 ## 1.42.295
 
 The rule that was broken yesterday, written down.

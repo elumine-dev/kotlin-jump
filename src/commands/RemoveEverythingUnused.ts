@@ -285,7 +285,20 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
     for (let n = 0; n < passes; n++) {
         if (jeton.isCancellationRequested) { annule = true; break; }
         if (passes > 1) progress.report({ message: `round ${n + 1}…` });
-      const data = n === 0 ? premier.data : await corpus.get();
+      // La premiere ronde relit, elle aussi. Le balayage a lieu AVANT la boite
+      // modale, et reutiliser son instantane laissait passer ce qui est arrive
+      // pendant le temps de reflexion : une utilisation apparue ailleurs par un
+      // `git pull` ou une sauvegarde dans un autre editeur n'existe pas dans
+      // l'instantane, la declaration y est toujours morte, et elle partait.
+      // Le controle d'obsolescence ne rattrape pas ce cas, il confronte le
+      // texte mesure aux documents OUVERTS fichier par fichier, et le fichier
+      // declarant, lui, n'a pas bouge.
+      //
+      // Sans le payer : le corpus rend l'objet de son cache tel quel tant que
+      // rien ne l'a invalide, donc l'identite suffit a savoir s'il faut
+      // recompter. Un `git pull` passe par le veilleur, qui invalide, donc
+      // l'objet change et la passe est refaite.
+      const data = await corpus.get();
       // Le premier balayage refuse un corpus tronque et rend la main. Les
       // rondes suivantes le prenaient sans regarder, alors qu'une passe qui
       // raisonne sur une liste de sources amputee juge « non reference » un
@@ -298,7 +311,7 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
       // contrat du corpus est ecrit dans sa propre classe : un balayage
       // incomplet ne peut pas prouver une absence.
       if (data.sourcesTruncated) { incomplet = true; break; }
-      const { parFichier } = n === 0
+      const { parFichier } = n === 0 && data === premier.data
         ? { parFichier: premier.parFichier }
         : collecterUnePasse(data.sources, segs);
       const combien = [...parFichier.values()].reduce((a, l) => a + l.length, 0);

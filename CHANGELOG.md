@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.312
+
+The last step before the edit had no check.
+
+### Notes
+- Nothing changed in what the extension does. The checks this project runs against a real codebase all stopped one step short of the edit, and that step is now checked too.
+- Each of them reads the bounds the detector produces. What the removal actually sends is those bounds widened to whole lines afterwards, and that widening had no check at all. Shifting it by one character moved not a single number in any of the seven.
+- Two questions are now asked of the widened bounds on a real project: that they still cover whole lines, and that widening has not swallowed a neighbouring declaration sharing the line. Thirty three of the ninety eight removals are widened, so the check has something to look at.
+- Confronted with the two ways it can go wrong. Take away the rule that refuses to widen over a line with something else on it, and five real removals swallow their neighbour. Shift the widening by one character, and fifty six stop covering whole lines. Before, both were silent.
+
 ## 1.42.311
 
 The new check was matching a number, not the thing.

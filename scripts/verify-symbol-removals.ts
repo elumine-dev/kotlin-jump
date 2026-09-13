@@ -12,7 +12,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { findUnusedSymbols } from '../src/providers/unusedSymbols';
+import { findUnusedSymbols, wholeLineExtent } from '../src/providers/unusedSymbols';
 import { stripKotlinComments } from '../src/util/xmlRefs';
 
 const SOURCE_RE = /\.(kt|kts|java|xml|gradle|pro|properties|toml)$/;
@@ -85,6 +85,8 @@ function sansCorps(texte: string): string {
   return out;
 }
 
+const DECLS = /(?:^|[;{\n])\s*(?:(?:public|private|internal|protected|open|abstract|final|sealed|data|enum|annotation|value|inline|suspend|external|expect|actual|operator|infix|lateinit|const|override|companion|static|synchronized|native|transient|volatile)\s+)*(?:val|var|fun|class|object|interface|typealias)\s+[A-Za-z_`]/g;
+
 function main(): void {
   const root = process.argv[2];
   const sources: { path: string; text: string }[] = [];
@@ -111,7 +113,11 @@ function main(): void {
 
   let removables = 0;
   const fautes: string[] = [];
-  const compte = { nom: 0, bornes: 0, solde: 0, ligne: 0, voisin: 0, voisine: 0, orphelin: 0 };
+  const compte = {
+    nom: 0, bornes: 0, solde: 0, ligne: 0, voisin: 0, voisine: 0, orphelin: 0,
+    // Sur les bornes ELARGIES, celles que la commande envoie vraiment.
+    elargies: 0, nomElargi: 0, voisineElargie: 0, ligneElargie: 0,
+  };
 
   for (const f of findings as any[]) {
     const start = f.removeStart, end = f.removeEnd;
@@ -159,7 +165,8 @@ function main(): void {
     // ligne est bien la declaration : tout est vrai, et du code vivant part
     // quand meme. Elargir une extraction expose ce que l etroitesse cachait,
     // donc l oracle doit compter ce qu il coupe.
-    const DECLS = /(?:^|[;{\n])\s*(?:(?:public|private|internal|protected|open|abstract|final|sealed|data|enum|annotation|value|inline|suspend|external|expect|actual|operator|infix|lateinit|const|override|companion|static|synchronized|native|transient|volatile)\s+)*(?:val|var|fun|class|object|interface|typealias)\s+[A-Za-z_`]/g;
+    // Le motif vit au niveau du module : les deux etapes, bornes du detecteur
+    // et bornes elargies, doivent compter avec le MEME.
     // Seulement le MEME niveau : les membres de la classe coupee sont dedans a
     // juste titre, ce sont ses voisins de ligne qui ne le sont pas. Les corps
     // sont blanchis avant de compter.
@@ -175,6 +182,43 @@ function main(): void {
     if (combien > 1) {
       compte.voisine++;
       if (fautes.length < 12) fautes.push(`VOISINE ${f.name} ${f.path}:${f.line + 1} ${combien} declarations dans la coupe = ${JSON.stringify(coupePropre.trim().slice(0, 70))}`);
+    }
+
+    // 8. les memes questions sur les bornes ELARGIES.
+    //
+    // Ce que la commande envoie n est pas `[removeStart, removeEnd)` : le
+    // fournisseur passe encore par `wholeLineExtent`, qui etend la coupe aux
+    // lignes entieres quand ce qui reste autour est blanc. Les sept invariants
+    // ci dessus s arretent au detecteur, donc la DERNIERE transformation avant
+    // l edition n etait regardee par aucun temoin. Verifie : decaler
+    // `wholeLineExtent` d un caractere ne fait bouger aucun des sept.
+    //
+    // Le vrai risque de l elargissement est d avaler une declaration voisine
+    // qui partage la ligne, ce que la fonction refuse justement de faire quand
+    // le reste de la ligne n est pas blanc. C est ce refus qu on eprouve ici.
+    const w = wholeLineExtent(texte, start, end);
+    if (w.start !== start || w.end !== end) {
+      compte.elargies++;
+      const coupeElargie = texte.slice(w.start, w.end);
+      if (!coupeElargie.includes(f.name)) {
+        compte.nomElargi++;
+        if (fautes.length < 12) fautes.push(`NOM ELARGI absent ${f.name} ${f.path}:${f.line + 1}`);
+      }
+      // Elargir aux lignes ENTIERES, c est la promesse du nom de la fonction :
+      // un decalage d un caractere la rompt sans rien desequilibrer, et aucun
+      // des sept invariants du detecteur ne le voit.
+      const debutElargi = w.start === 0 || texte[w.start - 1] === '\n';
+      const finElargie = w.end === texte.length || texte[w.end - 1] === '\n';
+      if (!debutElargi || !finElargie) {
+        compte.ligneElargie++;
+        if (fautes.length < 12) fautes.push(`LIGNE ELARGIE ${f.name} ${f.path}:${f.line + 1} debut=${debutElargi} fin=${finElargie}`);
+      }
+      const propreElargie = sansCorps(stripKotlinComments(coupeElargie));
+      const combienElargi = (propreElargie.match(DECLS) ?? []).length;
+      if (combienElargi > 1) {
+        compte.voisineElargie++;
+        if (fautes.length < 12) fautes.push(`VOISINE ELARGIE ${f.name} ${f.path}:${f.line + 1} ${combienElargi} declarations = ${JSON.stringify(propreElargie.trim().slice(0, 70))}`);
+      }
     }
 
     // 7. le RESTE ne doit pas porter d orphelin.

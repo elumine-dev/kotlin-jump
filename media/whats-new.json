@@ -1,12 +1,12 @@
 {
-  "version": "1.42.311",
+  "version": "1.42.312",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A check that proves it can see",
-  "summary": "Yesterday's check looked for a count in the sentence, which another kind could supply. It asks the sentence builder now.",
+  "tagline": "The last step before the edit",
+  "summary": "No behaviour changed. The widening that turns a detector bound into the range actually sent is now checked on a real project.",
   "highlights": [
     {
-      "title": "A Check That Proves It Can See",
-      "description": "Two kinds with the same count made the check blind to one going missing. It now demonstrates it can see before reporting a zero.",
+      "title": "The Last Step Before The Edit",
+      "description": "Every check stopped at the detector. The widening applied afterwards, which decides the real lines, had none.",
       "kind": "improvement"
     }
   ],
@@ -14,10 +14,10 @@
     {
       "heading": "Notes",
       "bullets": [
-        "Nothing changed in what the extension does. The check added yesterday, on whether the closing sentence of a removal names every kind of thing it removed, was itself matching on a number rather than on the thing.",
-        "It looked for the count of each kind somewhere in the sentence. Two kinds with the same count, one of them dropped, and the number is still there thanks to the other: the sentence has lost a whole kind and the check reports nothing. Reproduced on two kinds at fifteen.",
-        "It now asks the sentence builder itself: set one kind to zero, and the sentence has to change. That depends on neither the wording nor the numbers, so nothing can stand in for the missing part.",
-        "And the check now proves it can see before it reports a zero. Put the old matching back and it says so on its own line rather than quietly reporting nothing wrong, which is what a check that cannot see should do."
+        "Nothing changed in what the extension does. The checks this project runs against a real codebase all stopped one step short of the edit, and that step is now checked too.",
+        "Each of them reads the bounds the detector produces. What the removal actually sends is those bounds widened to whole lines afterwards, and that widening had no check at all. Shifting it by one character moved not a single number in any of the seven.",
+        "Two questions are now asked of the widened bounds on a real project: that they still cover whole lines, and that widening has not swallowed a neighbouring declaration sharing the line. Thirty three of the ninety eight removals are widened, so the check has something to look at.",
+        "Confronted with the two ways it can go wrong. Take away the rule that refuses to widen over a line with something else on it, and five real removals swallow their neighbour. Shift the widening by one character, and fifty six stop covering whole lines. Before, both were silent."
       ]
     }
   ],

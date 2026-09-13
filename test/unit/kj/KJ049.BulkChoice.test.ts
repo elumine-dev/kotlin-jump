@@ -50,6 +50,12 @@ describe('askHowToApply', () => {
 });
 
 describe('bulkDetail', () => {
+  it('la phrase se laisse completer sans coller ses mots', () => {
+    const d = bulkDetail(3, 2) + ' 1 file deleted outright.';
+    expect(d).toContain('files. Apply all');
+    expect(d).toContain('ticked. 1 file deleted outright.');
+  });
+
   it('accorde ses comptes', () => {
     expect(bulkDetail(171, 43)).toContain('171 changes in 43 files.');
     expect(bulkDetail(1, 1)).toContain('1 change in 1 file.');

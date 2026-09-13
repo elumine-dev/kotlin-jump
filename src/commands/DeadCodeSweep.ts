@@ -298,26 +298,35 @@ export async function cleanDeadCodeInWorkspaceCommand(): Promise<void> {
         return { edit, count, bouges, fichiers: fichiers.size };
       };
 
-      const apercu = await construire(true);
-      const { count, bouges } = apercu;
-
       // Dire « rien a retirer » alors que des fichiers ont bouge depuis le
       // balayage serait faux : la reponse est « je ne sais plus ou couper ».
-      const noteBouges = bouges > 0
+      const noteDe = (bouges: number) => bouges > 0
         ? ` ${plural(bouges, 'file')} changed since the scan and ${bouges > 1 ? 'were' : 'was'} left alone: run the sweep again.`
         : '';
-      if (count === 0) {
-        void vscode.window.showInformationMessage(`Nothing to remove automatically.${noteBouges}`);
+
+      const apercu = await construire(true);
+      if (apercu.count === 0) {
+        void vscode.window.showInformationMessage(`Nothing to remove automatically.${noteDe(apercu.bouges)}`);
         return;
       }
       const choix = await askHowToApply(
-        `Remove ${plural(count, 'dead declaration')}?`,
-        bulkDetail(count, apercu.fichiers),
+        `Remove ${plural(apercu.count, 'dead declaration')}?`,
+        bulkDetail(apercu.count, apercu.fichiers),
       );
       if (choix === 'cancel') return;
-      const { edit } = choix === 'apply' ? await construire(false) : apercu;
-      if (bouges > 0) void vscode.window.showInformationMessage(noteBouges.trim());
-      await vscode.workspace.applyEdit(edit);
+
+      // Ce qui est APPLIQUE est ce qui doit etre RAPPORTE. La boite modale
+      // laisse a l espace de travail tout le temps de bouger, et lire les
+      // comptes du premier tirage annoncait « rien a signaler » en appliquant
+      // une edition vide, sans un mot.
+      const choisi = choix === 'apply' ? await construire(false) : apercu;
+      const note = noteDe(choisi.bouges);
+      if (choisi.count === 0) {
+        void vscode.window.showInformationMessage(`Nothing to remove automatically.${note}`);
+        return;
+      }
+      if (choisi.bouges > 0) void vscode.window.showInformationMessage(note.trim());
+      await vscode.workspace.applyEdit(choisi.edit);
     },
   );
 }

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.299
+
+A call arriving during the question no longer makes the member private anyway.
+
+### Fixed
+- Make self only members private judged before asking you and never looked again. A member that gained a call from elsewhere while the question was on screen was made private anyway, and the file doing the calling stopped compiling.
+- This verdict is reached across the whole workspace, so the thing that invalidates it is almost never in the file being edited. Rereading that file, which the command already did, cannot see it. Of the four commands with this fault, this is the one that breaks a build rather than removing something.
+- It reads the workspace again after the click. Nothing moved, the index hands back the same snapshot and the verdict stands, so no second scan is paid for. Something moved, and the judgement is made again on what is there now.
+- One command of the family was on the list and should not have been: the workspace dead code sweep judges each file from its own text alone, so the only thing that can overturn its verdict is a change to that same file, which it already catches. Two are left, both of which remove keys.
+
 ## 1.42.298
 
 A production caller appearing during the question saves the class and its test.

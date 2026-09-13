@@ -120,7 +120,7 @@ export class UnusedSymbolProvider implements vscode.CodeActionProvider, vscode.D
           ? `${deleteTitleFor(hit)} (and ${hit.staleImports.length} stale import${hit.staleImports.length > 1 ? 's' : ''})`
           : deleteTitleFor(hit);
       const action = new vscode.CodeAction(title, vscode.CodeActionKind.QuickFix);
-      action.edit = await buildSymbolRemovalEdit([hit], document);
+      action.edit = (await buildSymbolRemovalEdit([hit], document)).edit;
       // Removing a declaration is never the default lightbulb pick.
       action.isPreferred = false;
       actions.push(action);
@@ -183,8 +183,16 @@ function basename(p: string): string {
 export async function buildSymbolRemovalEdit(
   findings: readonly UnusedSymbol[],
   openDocument?: vscode.TextDocument,
-): Promise<vscode.WorkspaceEdit> {
+  /**
+   * False when the caller already asked, once, for the whole edit. The flag
+   * that opens the Refactor Preview is the same one that leaves every box in
+   * it unticked, and that view has no "select all".
+   */
+  confirm = true,
+): Promise<{ edit: vscode.WorkspaceEdit; edits: number; files: number }> {
   const edit = new vscode.WorkspaceEdit();
+  let edits = 0;
+  const touches = new Set<string>();
   const decoder = new TextDecoder();
   // Memoized, and that is a correctness property before it is a speed one.
   // The range pass and the writing pass both ask for the same file, and a
@@ -200,7 +208,9 @@ export async function buildSymbolRemovalEdit(
     return lu;
   };
   const lire = async (p: string): Promise<string | undefined> => {
-    if (openDocument && openDocument.uri.fsPath === p) return openDocument.getText();
+    // Same guard as the lookup below: a `git:` document of a diff view carries
+    // the real file's fsPath and HEAD's content.
+    if (openDocument && estLeFichier(p)(openDocument)) return openDocument.getText();
     try {
       // The corpus computed its offsets on open editors' text (1.42.11); the
       // disk copy of a dirty file would put the deletion lines off again.
@@ -271,8 +281,10 @@ export async function buildSymbolRemovalEdit(
         edit.deleteFile(
           corpusUri(p),
           { ignoreIfNotExists: true },
-          { needsConfirmation: true, label: `Delete ${basename(p)}` },
+          { needsConfirmation: confirm, label: `Delete ${basename(p)}` },
         );
+        edits++;
+        touches.add(p);
       }
     } else {
       const starts = lineStartsOf(text);
@@ -281,8 +293,10 @@ export async function buildSymbolRemovalEdit(
           corpusUri(p),
           new vscode.Range(posAt(starts, r.start), posAt(starts, r.end)),
           '',
-          { needsConfirmation: true, label: `Remove unreferenced declaration` },
+          { needsConfirmation: confirm, label: `Remove unreferenced declaration` },
         );
+        edits++;
+        touches.add(p);
       }
     }
 
@@ -300,14 +314,18 @@ export async function buildSymbolRemovalEdit(
         edit.delete(
           corpusUri(stale.path),
           new vscode.Range(stale.line, 0, stale.line + 1, 0),
-          { needsConfirmation: true, label: `Remove stale import of ${f.name}` },
+          { needsConfirmation: confirm, label: `Remove stale import of ${f.name}` },
         );
+        edits++;
+        touches.add(stale.path);
       }
     }
   }
 
-  addCascadePlan(edit, cascade, textForCascade);
-  return edit;
+  const swept = addCascadePlan(edit, cascade, textForCascade, confirm);
+  for (const p of cascade.imports.keys()) touches.add(p);
+  for (const p of cascade.deleteFiles) touches.add(p);
+  return { edit, edits: edits + swept.imports + swept.files, files: touches.size };
 }
 
 function lineStartsOf(text: string): number[] {

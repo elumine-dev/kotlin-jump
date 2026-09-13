@@ -1,27 +1,41 @@
 {
-  "version": "1.42.242",
+  "version": "1.42.243",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Cutting where it measured",
-  "summary": "Removing unread Remote Config keys checked its offsets against the disk and turned them into positions through the buffer. One line added above and the deletion landed an entry lower.",
+  "tagline": "Twelve defects in the places never searched",
+  "summary": "Six families that had never been audited were searched at once, each finding handed to a separate reader whose job was to refute it. Nine survived, and a sweep over every declaration of a real project found two more.",
   "highlights": [
     {
-      "title": "Remote Config keys deleted at the right place",
+      "title": "Cuts that stopped inside the declaration",
       "kind": "fix",
-      "description": "The offsets were checked against a fresh disk read, then converted through `openTextDocument`, which returns the buffer when the file is open and unsaved. Both now use the text the edit will land in, and a file that moved is left alone."
+      "description": "A supertype list holding a `+` or an `=` collapsed the span to the header line. An expression body carrying on past `} else {` lost the rest. A cut could stop inside a raw string. Twenty three JSON fixtures on a real project were in that last case."
+    },
+    {
+      "title": "A dead enum entry takes its annotations",
+      "kind": "fix",
+      "description": "A leading annotation binds to the declaration that follows, so a deleted `@Deprecated OLD,` moved its deprecation onto the live sibling. On a last entry with a trailing comma, the file stopped parsing outright."
+    },
+    {
+      "title": "A stale corpus deleted live resource keys",
+      "kind": "fix",
+      "description": "Resource files never invalidated the corpus, and invalidating it during a scan was undone by that scan. Either way the pre change corpus was served for a minute, and the deletion followed the wrong verdict."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Removing unread Remote Config keys could delete the wrong entry when the file was open with unsaved changes. The fault is older than the dialog, which only widened the window.",
-        "The edit is rebuilt after the answer, like the other three bulk commands, so what is applied is what is reported."
+        "Three ways for a removal to stop inside the declaration it is cutting: a supertype list with a `+` or an `=`, an expression body continuing past its closing brace, and a raw string.",
+        "A dead enum entry now leaves with its own annotations, which otherwise moved onto the live entry below or broke the parse.",
+        "A resource key referenced through a member call, and every key of a module whose package ends in `android`, are no longer reported unused.",
+        "Resource, gradle and toml changes invalidate the corpus, and an invalidation during a scan is no longer undone by it.",
+        "Remove All Unreferenced Symbols and Remove Unused Resource Keys ask once instead of once per file, and the fix for a starved `@Subscribe` handler is offered in the shape handlers are actually written in."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "All four bulk commands now hold the same two rules: an offset is only valid against the text the edit will land in, and what is applied is what is reported."
+        "Every finding was handed to a separate reader whose job was to refute it, from scratch. Nine survived out of fourteen reported.",
+        "Two more came from sweeping the removal rule over all 8370 top level declarations of a real project rather than only the 501 currently reported dead."
       ]
     }
   ],

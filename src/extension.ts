@@ -902,6 +902,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // up to a minute. A squiggle on the wrong line is cosmetic; a REMOVAL on the
   // wrong line is not.
   const resourceCorpus = new ResourceCorpus();
+  // Le veilleur ci-dessous ne suit que `kt`, `kts` et `java` : c'est son
+  // metier, il fait analyser ce qu'il voit. Or le corpus contient aussi les
+  // `xml`, `gradle`, `pro`, `properties` et `toml`, soit 18,5 % de ses
+  // fichiers sur un vrai projet, dont tout `res/`. Un checkout, un stash pop,
+  // un formateur ou Android Studio qui ecrit `values-fr/strings.xml` ne
+  // declenchent aucun evenement de sauvegarde et n'atteignaient donc AUCUNE
+  // invalidation : pendant une minute, « Remove unused resource keys »
+  // supprimait une cle qu'une mise en page fraichement arrivee reference.
+  // Celui-ci ne fait qu'invalider, il ne fait rien analyser.
+  const corpusWatcher = vscode.workspace.createFileSystemWatcher(
+    '**/*.{xml,gradle,pro,properties,toml}',
+  );
+  corpusWatcher.onDidCreate(() => resourceCorpus.invalidate());
+  corpusWatcher.onDidChange(() => resourceCorpus.invalidate());
+  corpusWatcher.onDidDelete(() => resourceCorpus.invalidate());
   const watcher = new FileWatcher(scanner, index, uri => {
     _semanticTokens?.invalidate(uri.toString());
     codeLens.evictFile(uri.toString());     // surgical: only evict symbols in the changed file
@@ -1528,6 +1543,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('kotlin-jump.makeSelfOnlyPrivate', () =>
       makeSelfOnlyPrivateCommand(resourceCorpus),
     ),
+    corpusWatcher,
     vscode.workspace.onDidCreateFiles(() => resourceCorpus.invalidate()),
     // The explorer reports a deleted or renamed folder as one event for the
     // folder: the files inside never reached the per-file watchers.

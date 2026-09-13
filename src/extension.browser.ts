@@ -722,6 +722,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // when a file changes on disk, and this one was not. Fixing one entry point
   // and leaving the other is how a fix ships half applied.
   const resourceCorpusWeb = new ResourceCorpus();
+  // Meme raison que dans l'hote Node : le veilleur ne suit que le code, et le
+  // corpus contient aussi les xml, gradle, pro, properties et toml.
+  const corpusWatcherWeb = vscode.workspace.createFileSystemWatcher(
+    '**/*.{xml,gradle,pro,properties,toml}',
+  );
+  corpusWatcherWeb.onDidCreate(() => resourceCorpusWeb.invalidate());
+  corpusWatcherWeb.onDidChange(() => resourceCorpusWeb.invalidate());
+  corpusWatcherWeb.onDidDelete(() => resourceCorpusWeb.invalidate());
+  context.subscriptions.push(corpusWatcherWeb);
   const watcher = new FileWatcher(scanner, index, uri => {
     _semanticTokens?.invalidate(uri.toString());
     codeLens.evictFile(uri.toString());

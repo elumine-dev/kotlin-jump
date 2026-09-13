@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { estLeFichier } from '../util/measuredText';
 import { corpusUri } from '../util/corpusUri';
 import {
   ValueKeyDeclaration,
@@ -109,7 +110,7 @@ export class UnusedResourceKeyProvider implements vscode.CodeActionProvider, vsc
     if (!hit) return [];
 
     const action = new vscode.CodeAction(deleteTitleFor(hit), vscode.CodeActionKind.QuickFix);
-    action.edit = await buildRemovalEdit([hit], document);
+    action.edit = (await buildRemovalEdit([hit], document)).edit;
     // Removing a resource is never the default lightbulb pick.
     action.isPreferred = false;
     return [action];
@@ -137,17 +138,26 @@ export class UnusedResourceKeyProvider implements vscode.CodeActionProvider, vsc
 export async function buildRemovalEdit(
   findings: readonly UnusedResourceKey[],
   openDocument?: vscode.TextDocument,
-): Promise<vscode.WorkspaceEdit> {
+  /** False when the caller already asked, once, for the whole edit. */
+  confirm = true,
+): Promise<{ edit: vscode.WorkspaceEdit; edits: number; files: number }> {
   const edit = new vscode.WorkspaceEdit();
+  let edits = 0;
+  const touches = new Set<string>();
   const decoder = new TextDecoder();
   const textByPath = new Map<string, string>();
 
   const readText = async (p: string): Promise<string | undefined> => {
     if (textByPath.has(p)) return textByPath.get(p);
     let text: string | undefined;
-    const open = openDocument && openDocument.uri.fsPath === p
+    // A diff view opens a `git:` document whose fsPath IS the real file's and
+    // whose content is HEAD's. Recognising a document by its path alone read
+    // HEAD and wrote the working tree, which is the same defect 1.42.238 fixed
+    // in three other places; this site and the one in UnusedSymbolProvider
+    // were missed then.
+    const open = openDocument && estLeFichier(p)(openDocument)
       ? openDocument
-      : vscode.workspace.textDocuments.find(d => d.uri.fsPath === p);
+      : vscode.workspace.textDocuments.find(estLeFichier(p));
     if (open) {
       text = open.getText();
     } else {
@@ -197,12 +207,14 @@ export async function buildRemovalEdit(
         corpusUri(p),
         new vscode.Range(offsetToPosition(lineStarts, r.start), offsetToPosition(lineStarts, r.end)),
         '',
-        { needsConfirmation: true, label: r.label },
+        { needsConfirmation: confirm, label: r.label },
       );
+      edits++;
+      touches.add(p);
     }
   }
 
-  return edit;
+  return { edit, edits, files: touches.size };
 }
 
 function buildLineStarts(text: string): number[] {

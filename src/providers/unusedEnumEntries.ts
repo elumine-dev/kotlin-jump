@@ -315,6 +315,74 @@ function finDeLEntree(clean: string, nameEnd: number): number {
  * Anything the scan cannot close, an argument list or an entry body, yields -1
  * rather than a guess.
  */
+/**
+ * True when `avant` holds nothing but whitespace and complete annotations.
+ *
+ * `@Deprecated`, `@RequiresApi(26)`, `@Suppress("x", Y::class)`: the argument
+ * list can nest, so the parens are counted rather than matched by a regex.
+ */
+function annotationsSeules(avant: string): boolean {
+  let i = 0;
+  while (i < avant.length) {
+    while (i < avant.length && /\s/.test(avant[i])) i++;
+    if (i >= avant.length) return true;
+    if (avant[i] !== '@') return false;
+    i++;
+    while (i < avant.length && /[\w.]/.test(avant[i])) i++;
+    while (i < avant.length && /\s/.test(avant[i])) i++;
+    if (avant[i] === '(') {
+      let p = 0;
+      for (; i < avant.length; i++) {
+        if (avant[i] === '(') p++;
+        else if (avant[i] === ')' && --p === 0) { i++; break; }
+      }
+      if (p !== 0) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * The offset an entry's removal must start at: its OWN annotations included.
+ *
+ * The cut began at the entry's name, so a dead `@Deprecated OLD,` left its
+ * `@Deprecated` standing. Kotlin and Java both bind a leading annotation to
+ * the declaration that follows, which is the next entry: javac proves it, the
+ * deprecation silently moves from the entry that left onto a live sibling.
+ * When the dead entry is the LAST one and the list carries a trailing comma,
+ * the annotation is left with nothing after it but `}` and the file stops
+ * parsing outright.
+ *
+ * Only annotations are swallowed, and only while every character between them
+ * and the name belongs to them: `ASC, @Deprecated DESC` backs up to the `@`,
+ * never past the comma.
+ */
+function debutAvecAnnotations(
+  clean: string,
+  lineStarts: readonly number[],
+  nameStart: number,
+): number {
+  const ligneDe = (o: number): number => {
+    let bas = 0, haut = lineStarts.length - 1;
+    while (bas < haut) {
+      const m = Math.ceil((bas + haut) / 2);
+      if (lineStarts[m] <= o) bas = m; else haut = m - 1;
+    }
+    return bas;
+  };
+  let ligne = ligneDe(nameStart);
+  if (!annotationsSeules(clean.slice(lineStarts[ligne], nameStart))) return nameStart;
+  let debut = lineStarts[ligne];
+  // Puis les lignes AU DESSUS qui ne portent que des annotations.
+  while (ligne > 0) {
+    const precedente = clean.slice(lineStarts[ligne - 1], lineStarts[ligne]);
+    if (precedente.trim() === '' || !annotationsSeules(precedente)) break;
+    ligne--;
+    debut = lineStarts[ligne];
+  }
+  return debut;
+}
+
 function entryExtent(
   text: string,
   lineStarts: readonly number[],
@@ -413,7 +481,7 @@ export function findUnusedEnumEntries(input: UnusedEnumEntryScanInput): UnusedEn
         line: entry.line,
         character: entry.character,
         testMentions,
-        ...entryExtent(text, lineStarts, entry),
+        ...avecAnnotations(text, lineStarts, entryExtent(text, lineStarts, entry)),
       });
     }
   }
@@ -491,3 +559,14 @@ export function deleteTitleFor(entry: UnusedEnumEntry): string {
 
 /** Offsets used by `offsetToPos` in the provider shell. */
 export { offsetToPos };
+
+/** `entryExtent` widened so the entry's own annotations leave with it. */
+function avecAnnotations(
+  text: string,
+  lineStarts: readonly number[],
+  extent: { removeStart: number; removeEnd: number },
+): { removeStart: number; removeEnd: number } {
+  if (extent.removeStart < 0) return extent;
+  const clean = sanitizeForUsageScan(text);
+  return { ...extent, removeStart: debutAvecAnnotations(clean, lineStarts, extent.removeStart) };
+}

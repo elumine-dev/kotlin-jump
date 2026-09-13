@@ -126,13 +126,18 @@ export function importedResourcePrefixes(code: string): { prefix: string; kind?:
   const out: { prefix: string; kind?: string }[] = [];
   const nested = /^[ \t]*import[ \t]+(?:static[ \t]+)?([\w.]*?)\bR2?\.([a-z]\w*)(?:[ \t]+as[ \t]+([A-Za-z_]\w*))?[ \t]*;?[ \t]*$/gm;
   const whole = /^[ \t]*import[ \t]+([\w.]*?)\bR2?[ \t]+as[ \t]+([A-Za-z_]\w*)[ \t]*;?[ \t]*$/gm;
+  // Seule la plateforme, ancree. `(^|\.)` acceptait aussi
+  // `com.mycompany.android.`, `ca.lapresse.android.`, n'importe quel paquet
+  // dont le dernier segment est `android`, ce qui est une convention tres
+  // repandue : tout `import <ns>.R.color` y devenait invisible et les cles du
+  // module partaient a la suppression.
   let m: RegExpExecArray | null;
   while ((m = nested.exec(code)) !== null) {
-    if (/(^|\.)android\.$/.test(m[1])) continue;
+    if (/^android\.$/.test(m[1])) continue;
     out.push({ prefix: m[3] ?? m[2], kind: m[2] });
   }
   while ((m = whole.exec(code)) !== null) {
-    if (/(^|\.)android\.$/.test(m[1])) continue;
+    if (/^android\.$/.test(m[1])) continue;
     out.push({ prefix: m[2] });
   }
   return out;
@@ -232,9 +237,16 @@ export function collectValueResourceRefs(
 
   if (/\.(kt|kts|java)$/.test(path)) {
     const clean = stripKotlinComments(text);
-    const re = new RegExp(`\\bR2?\\.(${group})\\.([A-Za-z_][\\w.]*)\\b`, 'g');
+    // Le nom d'un champ R ne porte JAMAIS de point : aapt reecrit `.` en `_`.
+    // Dans du code, un point apres la cle ne peut donc etre qu'un acces
+    // membre, et une classe gourmande l'avalait :
+    // `R.color.imagePlaceholderColor.toDrawable()` etait enregistre sous
+    // `imagePlaceholderColor.toDrawable`, la vraie reference disparaissait, et
+    // la couleur vivante partait dans « Find unused resource keys ».
+    // La branche XML plus bas garde les points : un nom de style en contient.
+    const re = new RegExp(`\\bR2?\\.(${group})\\.([A-Za-z_]\\w*)\\b`, 'g');
     while ((m = re.exec(clean)) !== null) out.push({ kind: m[1], name: m[2] });
-    out.push(...importedRRefs(clean, kinds, '[A-Za-z_][\\w.]*'));
+    out.push(...importedRRefs(clean, kinds, '[A-Za-z_]\\w*'));
     return out;
   }
 

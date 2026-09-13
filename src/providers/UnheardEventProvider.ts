@@ -164,8 +164,18 @@ export class UnheardEventProvider implements vscode.CodeActionProvider, vscode.D
     if (!UnheardEventProvider.isEnabled()) return [];
 
     const deadHit = this.deadByPath.get(document.uri.fsPath)?.find(d => d.line === range.start.line);
+    // Re-verify on the EXTENT, not on the finding's line. `deadHit.line` is
+    // the `fun` / `public void` line, and the annotation sits above it in the
+    // conventional style, so `includes('Subscribe')` on that line was false
+    // for every handler written normally: the diagnostic appeared with a
+    // perfectly good removal computed and the lightbulb offered nothing.
+    // Nine of them on a real project. The span is what the fix deletes, and
+    // it holds both the annotation and the event type.
+    const portee = deadHit && deadHit.removeStart !== -1
+      ? document.getText().slice(deadHit.removeStart, deadHit.removeEnd)
+      : '';
     if (deadHit && deadHit.removeStart !== -1
-      && document.lineAt(deadHit.line).text.includes('Subscribe')) {
+      && portee.includes('Subscribe') && portee.includes(deadHit.name)) {
       const title = `Remove this starved @Subscribe handler for ${deadHit.name}`;
       const action = new vscode.CodeAction(title, vscode.CodeActionKind.QuickFix);
       const edit = new vscode.WorkspaceEdit();

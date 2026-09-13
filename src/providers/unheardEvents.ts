@@ -955,6 +955,20 @@ function statementExtent(
     return { start: -1, end: -1 };
   }
 
+  // Et la meme branche SANS accolades, ou l'instruction EST le corps. Le test
+  // ci-dessus ne peut se declencher que sur un `{`, donc
+  //   if (flag)
+  //       bus.post(Event())
+  // passait tout droit. Retirer le post laisse `if (flag)` suivi de
+  // l'instruction SUIVANTE, qui devient le corps de l'if : cela compile et
+  // change le comportement, ce que rien ne rattrape. Pour `else`, une branche
+  // de `when` ou un `for`, c'est une erreur de syntaxe franche.
+  // `ouvreUneBranche` lit deja vers l'arriere depuis l'index qu'on lui donne,
+  // et sait reconnaitre `)`, `->` et `else` aussi bien qu'une accolade.
+  if (ouvreUneBranche(clean, avant + 1)) {
+    return { start: -1, end: -1 };
+  }
+
   return {
     start: lineStart,
     end,

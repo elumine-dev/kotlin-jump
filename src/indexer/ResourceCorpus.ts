@@ -61,9 +61,24 @@ export interface Corpus {
 export class ResourceCorpus {
   private cache: { at: number; corpus: Corpus } | undefined;
   private refreshing = false;
+  /**
+   * Bumped by every invalidation, captured by every scan.
+   *
+   * Emptying the cache was not enough: a scan already in flight writes its
+   * result when it resolves, and that result was read BEFORE the change. The
+   * write undid the invalidation and re-stamped a fresh `at`, so the
+   * pre-change corpus was served for a further CACHE_MS with no disk read at
+   * all. The window is the whole scan, which on a real project is half a
+   * second of reads for 6340 files, and every dead code command opens it.
+   * A verdict computed there says a live key is unused, and "Remove All"
+   * applies the deletion: the offsets are re-checked before writing, the
+   * VERDICT never is.
+   */
+  private generation = 0;
 
   invalidate(): void {
     this.cache = undefined;
+    this.generation++;
   }
 
   /**
@@ -85,16 +100,25 @@ export class ResourceCorpus {
     if (this.cache && Date.now() - this.cache.at < CACHE_MS) return this.cache.corpus;
     if (this.cache && !this.refreshing) {
       this.refreshing = true;
+      const nee = this.generation;
       void this.scan()
-        .then(c => { this.cache = { at: Date.now(), corpus: c }; })
+        .then(c => { if (nee === this.generation) this.cache = { at: Date.now(), corpus: c }; })
         .finally(() => { this.refreshing = false; });
       return this.cache.corpus;
     }
+    const nee = this.generation;
     const corpus = await this.scan(token);
     // A scan cut short by Cancel skipped files without marking anything:
     // cached, it served "unreferenced" verdicts for symbols the unread files
     // use, and "Remove All" deleted live code on the next click.
-    if (!token?.isCancellationRequested) this.cache = { at: Date.now(), corpus };
+    //
+    // And a scan whose generation has moved on read the disk BEFORE the
+    // change: its result is returned to the caller that asked for it, but it
+    // must not be cached, or the next caller gets the pre-change corpus for a
+    // full minute.
+    if (!token?.isCancellationRequested && nee === this.generation) {
+      this.cache = { at: Date.now(), corpus };
+    }
     return corpus;
   }
 

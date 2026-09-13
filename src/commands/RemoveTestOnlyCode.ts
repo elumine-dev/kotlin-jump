@@ -189,8 +189,16 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
 
     // Never a deleteFile AND range edits on the same URI: VS Code rejects the
     // whole WorkspaceEdit, silently.
+    // The OPERATIONS this edit really carries. The plan's own numbers, the
+    // declarations offered and the test functions, do not stand in for them:
+    // when a file goes whole its functions produce no edit of their own, and
+    // the plan counts them all the same. Measured on the plainest case there
+    // is, a class and the two tests that are its only users: the plan said
+    // four, the edit carried two.
+    let operations = 0;
     for (const p of deletedFiles) {
       edit.deleteFile(corpusUri(p), { ignoreIfNotExists: true }, { needsConfirmation: confirm, label: `Delete ${p.split(/[\\/]/).pop()}` });
+      operations++;
       touches.add(p);
     }
     const rangeOf = makeRangeOf(scan.textByPath);
@@ -203,6 +211,7 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
         const range = rangeOf(group.path, group.removeStart, group.removeEnd);
         if (range) {
           edit.replace(corpusUri(group.path), range, '', { needsConfirmation: confirm, label: `Remove ${group.label}` });
+          operations++;
           touches.add(group.path);
         } else { skipped++; }
       }
@@ -215,6 +224,7 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
         if (!range) { skipped++; continue; }
         edit.replace(corpusUri(cut.path), range, '',
           { needsConfirmation: confirm, label: cut.kind === 'import' ? `Remove the stale import of ${cut.name}` : `Remove the test ${cut.name}` });
+        operations++;
         touches.add(cut.path);
       }
     }
@@ -222,11 +232,15 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
     const swept = addCascadePlan(edit, cascade, scan.textByPath, confirm);
     for (const p of cascade.imports.keys()) touches.add(p);
     for (const p of cascade.deleteFiles) touches.add(p);
-    return { edit, swept, skipped, fichiers: touches.size, supprimes: deletedFiles.size + swept.files };
+    return {
+      edit, swept, skipped, fichiers: touches.size,
+      supprimes: deletedFiles.size + swept.files,
+      operations: operations + swept.imports + swept.files,
+    };
   };
 
   const apercu = construire(true);
-  const combien = scan.offered + scan.testFunctions + apercu.swept.imports + apercu.swept.files;
+  const combien = apercu.operations;
   // Files are DELETED here, not just edited, and Apply all skips the preview
   // that would have shown it. Saying how many, before the click, is the least
   // this owes the reader.

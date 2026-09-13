@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.274
+
+Four changes announced, two operations sent.
+
+### Fixes
+- Remove Test Only Code asked for permission with a number that was not the number of things it was about to do. On the plainest case there is, a class and the two tests that are its only users, the question read `4 changes in 2 files` while the edit it would send carried two operations, both of them whole file deletions, and not a single replacement.
+- It was adding up two different things: the declarations and test functions counted by the plan, plus the imports and files counted by the edit. When a test file goes whole, its functions produce no edit of their own, and the plan counted them anyway. The number is read off the edit now, so what is announced is what is sent.
+
+### Notes
+- This was written down in the previous release as needing a measurement rather than a guess, and left alone until one could be made. The measurement needed the command to be reachable from a test at all, which it was not: neither the progress bar every bulk command runs inside nor the call that applies an edit existed in the test double. They do now, so the whole family can be held to the same rule end to end.
+- The rule the test states is the one the file already sets for its closing report three lines further down: what is applied is what must be reported. Putting the plan's numbers back breaks it, and so does forgetting either the deletions or the cascade.
+
 ## 1.42.273
 
 `0 change in 0 file.`

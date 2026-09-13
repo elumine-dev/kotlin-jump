@@ -1,12 +1,12 @@
 {
-  "version": "1.42.268",
+  "version": "1.42.269",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The web build runs what it offers",
-  "summary": "Three bulk removal commands appeared in the Command Palette on vscode.dev and answered `command not found`. They run there now.",
+  "tagline": "The stale text guard works on the web",
+  "summary": "On vscode.dev the check that stops an edit landing on text that moved never saw the open document, and said everything was fine.",
   "highlights": [
     {
-      "title": "Three Commands Come To The Web",
-      "description": "Remove Everything Unused, Remove Test Only Code and Make Self Only Private were wired into the desktop host only, while the palette offered them everywhere. Nothing in them needed a desktop.",
+      "title": "A File Is Not Always A `file:`",
+      "description": "Recognising a document by requiring the `file` scheme keeps the diff view out, and keeps the web host out with it. The expected scheme is now the one the workspace scan read the file under.",
       "kind": "fix"
     }
   ],
@@ -14,16 +14,15 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Three commands were listed in the Command Palette on vscode.dev and github.dev and answered `command not found` when picked: Remove Everything Unused, Remove Test Only Code and Make Self Only Private. They were wired into the desktop host only, while nothing in their declaration said they were desktop only. Two of them had been in that state since 1.42.222.",
-        "Not a policy, an oversight. Remove All Unused Resource Keys deletes just as much and has run in the web build the whole time, and none of the three reaches for anything outside the editor API. They are registered in the web host now."
+        "On vscode.dev and github.dev the safety check that stops an edit from landing on text that moved was answering that nothing was open, every time. It recognised a document by requiring the `file` scheme, which rules out the diff view a `git:` document opens, and rules out `vscode-vfs://github/owner/repo/...` just as firmly. That is what a file IS on those hosts.",
+        "A guard that fails by staying silent is the wrong kind of failure. The offsets of a scan a minute old were applied to a document the reader had edited since, and the two places that prefer the editor text over the saved file read the saved file instead. The expected scheme is now the one the workspace scan actually read the file under, so a path the scan never saw still falls back to `file` and nothing changes off the web."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "A check reads every command declared in the manifest and follows the imports from each host to see who registers it. The families the web genuinely cannot serve, Android Run and ADB, Logcat, local Gradle detection and jar source scanning, are listed with their reason, and an entry in that list that stops matching any command fails the check rather than sitting there.",
-        "Its first version accused twelve perfectly wired toggles. Their ids are assembled at run time as `kotlinJump` plus a name, so the whole id appears nowhere in the source. It reads the bare name too now.",
-        "The shipped web bundle grows by 16 Ko, from 646 to 663, measured on the minified build both ways rather than guessed."
+        "Found by turning yesterday's change on itself. Three bulk removal commands reached the web host for the first time, so the question was what else on that host assumes a desktop, and one of the five places behind this check is the safety net for all of them. Remove All Unused Resource Keys had been running there the whole time.",
+        "The check that watches for unguarded path comparisons had to be corrected too. It accepted a line only when the literal `file` appeared on it, which describes one mechanism rather than the rule, and it refused the fix. It asks for a scheme comparison now, whatever scheme. It was then given a violation to find, to make sure it still finds one."
       ]
     }
   ],

@@ -72,7 +72,11 @@ describe('aucun `uri.fsPath ===` nu dans src', () => {
       const lignes = readFileSync(f, 'utf8').split('\n');
       lignes.forEach((l, i) => {
         if (!/uri\.fsPath\s*===/.test(l)) return;
-        if (/scheme\s*===\s*'file'/.test(l)) return;      // la garde est sur la ligne
+        // Une garde de SCHEMA sur la ligne, quel que soit le schema compare.
+        // Exiger le litteral `'file'` decrivait le mecanisme et non la regle :
+        // sur vscode.dev le fichier est un `vscode-vfs:`, et le schema attendu
+        // devient celui sous lequel le corpus a lu ce fichier.
+        if (/scheme\s*===/.test(l)) return;
         if (/estLeFichier/.test(l)) return;                  // ou deleguee
         coupables.push(`${path.relative(RACINE, f)}:${i + 1} ${l.trim().slice(0, 70)}`);
       });

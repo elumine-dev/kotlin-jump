@@ -11,6 +11,7 @@ import { findDeadIslands } from '../providers/deadIslands';
 import { sweepFile, planFileEdits } from '../providers/DeadCodeSweep';
 import { planCascade } from '../providers/removalCascade';
 import { addCascadePlan } from '../providers/applyCascade';
+import { stillTheMeasuredText } from '../util/measuredText';
 
 /**
  * One command for the whole family.
@@ -26,7 +27,7 @@ import { addCascadePlan } from '../providers/applyCascade';
  * resolved the way every provider resolves them: the first one wins.
  */
 
-interface Coupe { start: number; end: number; texte: string; famille: string; quoi: string }
+export interface Coupe { start: number; end: number; texte: string; famille: string; quoi: string }
 
 export type Tally = Record<string, number>;
 
@@ -98,6 +99,51 @@ function posAt(starts: readonly number[], offset: number): vscode.Position {
   return new vscode.Position(bas, offset - starts[bas]);
 }
 
+/**
+ * The ranges of one file, or undefined when its text moved since the scan.
+ *
+ * Exported for the witness. Every other bulk command holds this rule and the
+ * newest one did not: the corpus snapshot lives for a minute, and its own
+ * staleness check only looks at DIRTY documents. A file open and CLEAN but
+ * reloaded underneath, by a checkout or another tool, passes that check with
+ * different content, and the offsets then aim at the wrong lines. That is the
+ * exact distinction `stillTheMeasuredText` was written for.
+ */
+export function plagesDuFichier(
+  path: string,
+  mesure: string,
+  coupes: readonly Coupe[],
+): { start: vscode.Position; end: vscode.Position; texte: string; quoi: string }[] | undefined {
+  if (stillTheMeasuredText(path, mesure) === undefined) return undefined;
+  const starts = debutsDeLigne(mesure);
+  return coupes.map(c => ({
+    start: posAt(starts, c.start), end: posAt(starts, c.end), texte: c.texte, quoi: c.quoi,
+  }));
+}
+
+/**
+ * The files whose cuts will actually be sent, and how many were left alone.
+ *
+ * Exported for the witness, because the ORDER matters: planning the cascade on
+ * every cut and then sending only some of them would remove the import of a
+ * symbol that stayed. The cascade takes the caller's word for what is being
+ * removed, it verifies nothing, so it must only ever be told the truth.
+ */
+export function coupesRetenues(
+  parFichier: ReadonlyMap<string, Coupe[]>,
+  textes: ReadonlyMap<string, string>,
+): { retenu: Map<string, Coupe[]>; bouges: number } {
+  const retenu = new Map<string, Coupe[]>();
+  let bouges = 0;
+  for (const [p, l] of parFichier) {
+    const texte = textes.get(p);
+    if (texte === undefined) continue;
+    if (plagesDuFichier(p, texte, l) === undefined) { bouges++; continue; }
+    retenu.set(p, l);
+  }
+  return { retenu, bouges };
+}
+
 export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Promise<void> {
   if (!vscode.workspace.workspaceFolders?.length) {
     void vscode.window.showWarningMessage('Open a folder before scanning.');
@@ -131,12 +177,13 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
   );
   if (choix === 'cancel') return;
 
-  const cumul: Tally = { symboles: 0, membres: 0, entrees: 0, ilots: 0, balayage: 0, imports: 0, fichiers: 0 };
+  const cumul: Tally = { symboles: 0, membres: 0, entrees: 0, ilots: 0, balayage: 0, imports: 0, fichiers: 0, bouges: 0 };
   const ajouteTally = (t: Tally) => { for (const k of Object.keys(t)) cumul[k] = (cumul[k] ?? 0) + t[k]; };
 
   // Une seule passe en relecture : l'utilisateur choisit quoi accepter, et
   // repasser derriere lui sans savoir ce qu'il a garde serait une devinette.
   const passes = choix === 'apply' ? 8 : 1;
+  let restait = false;
   for (let n = 0; n < passes; n++) {
     const data = n === 0 ? premier.data : await corpus.get();
     const { parFichier, tally } = n === 0
@@ -146,19 +193,28 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
     if (combien === 0) break;
 
     const textes = new Map(data.sources.map(s => [s.path, s.text]));
+
+    // Les fichiers qui ont bouge sont ecartes AVANT de planifier la cascade.
+    // La calculer sur toutes les coupes puis n'en appliquer qu'une partie
+    // reviendrait a retirer l'import d'un symbole qui, lui, est reste : la
+    // cascade croit qu'une declaration est partie parce qu'on la lui a
+    // annoncee, elle ne verifie rien.
+    const { retenu, bouges } = coupesRetenues(parFichier, textes);
+    if (bouges > 0) cumul.bouges = (cumul.bouges ?? 0) + bouges;
+    if (retenu.size === 0) break;
+
     const cascade = planCascade(
-      new Map([...parFichier].map(([p, l]) => [p, l.map(c => ({ start: c.start, end: c.end }))])),
+      new Map([...retenu].map(([p, l]) => [p, l.map(c => ({ start: c.start, end: c.end }))])),
       textes,
     );
     const edit = new vscode.WorkspaceEdit();
-    for (const [p, l] of parFichier) {
+    for (const [p, l] of retenu) {
       if (cascade.deleteFiles.has(p)) continue;
-      const texte = textes.get(p);
-      if (texte === undefined) continue;
-      const starts = debutsDeLigne(texte);
-      for (const c of l) {
-        edit.replace(corpusUri(p), new vscode.Range(posAt(starts, c.start), posAt(starts, c.end)), c.texte,
-          { needsConfirmation: choix === 'review', label: c.quoi ? `Remove ${c.quoi}` : 'Remove dead code' });
+      const plages = plagesDuFichier(p, textes.get(p)!, l);
+      if (plages === undefined) continue;
+      for (const r of plages) {
+        edit.replace(corpusUri(p), new vscode.Range(r.start, r.end), r.texte,
+          { needsConfirmation: choix === 'review', label: r.quoi ? `Remove ${r.quoi}` : 'Remove dead code' });
       }
     }
     const swept = addCascadePlan(edit, cascade, textes, choix === 'review');
@@ -169,6 +225,9 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
     const ok = await vscode.workspace.applyEdit(edit);
     if (!ok) { void vscode.window.showWarningMessage('Nothing was applied.'); return; }
     corpus.invalidate();
+    // La derniere passe autorisee a quand meme trouve du travail : il en
+    // reste. Le taire laisserait croire que le nettoyage est fini.
+    if (n === passes - 1 && choix === 'apply') restait = true;
   }
 
   const morceaux = [
@@ -180,7 +239,16 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
     cumul.imports > 0 ? plural(cumul.imports, 'orphaned import') : '',
     cumul.fichiers > 0 ? plural(cumul.fichiers, 'emptied file') : '',
   ].filter(Boolean);
+  const note = (cumul.bouges > 0
+    ? ` ${plural(cumul.bouges, 'file')} changed since the scan and ${cumul.bouges > 1 ? 'were' : 'was'} left alone.`
+    : '')
+    + (restait ? ' There was still work left after the last round: run it again.' : '');
+  // En relecture, le compte decrit ce qui a ete PROPOSE. Ce que le lecteur a
+  // coche dans l'apercu ne revient pas jusqu'ici, et annoncer « Removed » sur
+  // une base qu'on n'a pas serait un chiffre invente.
+  const verbe = choix === 'review' ? 'Sent' : 'Removed';
+  const queue = choix === 'review' ? ' to the preview.' : '.';
   void vscode.window.showInformationMessage(
-    morceaux.length > 0 ? `Removed ${morceaux.join(', ')}.` : 'Nothing unused left to remove.',
+    (morceaux.length > 0 ? `${verbe} ${morceaux.join(', ')}${queue}` : 'Nothing unused left to remove.') + note,
   );
 }

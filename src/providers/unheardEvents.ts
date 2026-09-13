@@ -700,7 +700,14 @@ function handlerExtent(
   let annoLine = -1;
   const annoRe = /@(?:[\w.]+\.)?Subscribe\b/g;
   let am: RegExpExecArray | null;
-  while ((am = annoRe.exec(raw)) !== null && am.index < target) annoLine = am.index;
+  // Cherchee dans le CODE, pas dans le brut. Une mention de `@Subscribe` posee
+  // ENTRE l'annotation et la fonction, dans un commentaire ou une chaine, est
+  // plus proche de la cible que la vraie : la remontee s'arretait sur elle et
+  // laissait l'annotation dans le fichier, ce que cette fonction existe
+  // precisement pour eviter. La copie blanchie garde les offsets et perd les
+  // fausses. Mesure sur le projet de reference : 3 des 298 occurrences de
+  // `@Subscribe` sont hors code.
+  while ((am = annoRe.exec(clean)) !== null && am.index < target) annoLine = am.index;
   if (annoLine !== -1) {
     const annoLineStart = raw.lastIndexOf('\n', annoLine);
     if (annoLineStart !== -1 && annoLineStart < start) start = annoLineStart;

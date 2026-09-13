@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.250
+
+The witness for the per file sweep was blind to an offset shift.
+
+### Fixes
+- Nothing in the extension changed. What changed is the confidence behind a number it has been reporting for two days. The witness that checks what the per file sweep cuts on a real project reported zero on every invariant, and a deliberate shift of ONE character in the cut kept it at zero: the name is still inside the cut, the braces still balance, the indentation does not move, and all six counters stay silent while the first character of the declaration is left behind. It was missing the rule the four other witnesses have had from the start, that a deletion takes whole lines, and the exception that justified leaving it out had been taken for a dispensation: the sweep also replaces mid line, and a write only variable has its `var db = ` prefix removed on purpose so the call on the right keeps running. The rule applies to the family that cuts whole lines and to that family only. The same one character shift now reports nineteen violations.
+
+### Notes
+- Every test added since 1.42.232 was run against the code from before its fix. Sixteen of them fail there, which is what a test for a fix is supposed to do; the other five cover files that did not exist then, and three of those were rerun against their own first version, where two fail and one characterises behaviour that never changed. No test in that batch passes for a wrong reason.
+
 ## 1.42.249
 
 A sentence that answered its own question twice.

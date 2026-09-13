@@ -39,7 +39,28 @@ const VISIBILITY_RE = /\b(public|internal|protected)\s+/;
  * modifier run this reads, but not in the list that makes it give up, so the
  * bulk command wrote `private default String x()` into a file nobody had open.
  */
-const INCOMPATIBLE_RE = /\b(open|abstract|sealed|default)\b/;
+/**
+ * ... and `override`, for the same reason one step removed.
+ *
+ * A member that redefines another cannot be less visible than what it
+ * redefines. Both compilers were asked rather than remembered:
+ *
+ *   error: cannot weaken access privilege private for 'f' in 'A'.
+ *   error: modifier 'private' is incompatible with 'override'.
+ *
+ * and javac on the Java equivalent:
+ *
+ *   error: name() in B cannot override name() in A
+ *     attempting to assign weaker access privileges; was public
+ *
+ * The Kotlin form is a modifier and belongs in the list below. The Java form
+ * is the `@Override` ANNOTATION, and the annotation run is skipped before the
+ * modifiers are read, so it has to be looked for separately.
+ */
+const INCOMPATIBLE_RE = /\b(open|abstract|sealed|default|override)\b/;
+
+/** `@Override` in the annotation run, which is how Java spells the same thing. */
+const OVERRIDE_ANNOTATION_RE = /@Override\b/;
 
 /** Modifiers Kotlin or Java may put between the annotations and the keyword. */
 const MODIFIER_RUN_RE = new RegExp(
@@ -100,6 +121,7 @@ export function narrowToPrivate(lineText: string): PrivateEdit | undefined {
   if (lineText.trim() === '') return undefined;
   const afterAnnotations = annotationRunLength(lineText);
   if (afterAnnotations < 0) return undefined;
+  if (OVERRIDE_ANNOTATION_RE.test(lineText.slice(0, afterAnnotations))) return undefined;
 
   const reste = lineText.slice(afterAnnotations);
   const modifiers = MODIFIER_RUN_RE.exec(reste)?.[0] ?? '';

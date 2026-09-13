@@ -24,12 +24,18 @@ export function addCascadePlan(
    */
   confirm = true,
 ): { imports: number; files: number } {
+  // Counted in the loop that EMITS them, not from the plan's size. The two
+  // agree today because nothing is skipped here, and that is exactly the kind
+  // of agreement this repository has already paid for: a count taken from one
+  // place and a list built in another drift the day a `continue` appears.
+  let files = 0;
   for (const path of plan.deleteFiles) {
     edit.deleteFile(
       corpusUri(path),
       { ignoreIfNotExists: true },
       { needsConfirmation: confirm, label: `Delete ${path.split(/[\\/]/).pop()}, nothing is left in it` },
     );
+    files++;
   }
 
   let imports = 0;
@@ -47,7 +53,7 @@ export function addCascadePlan(
       imports++;
     }
   }
-  return { imports, files: plan.deleteFiles.size };
+  return { imports, files };
 }
 
 /**

@@ -1,23 +1,23 @@
 {
-  "version": "1.42.286",
+  "version": "1.42.287",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A refused edit says so",
-  "summary": "Four bulk commands reported a removal without checking that the editor had accepted the edit.",
+  "tagline": "The guard gets its teeth back",
+  "summary": "No behaviour changed. The test that keeps every command wired in both hosts was blind to 18 of them.",
   "highlights": [
     {
-      "title": "A Refused Edit Says So",
-      "description": "The editor can reject a whole edit without a word. Four commands announced the removal anyway. They read the answer now.",
-      "kind": "fix"
+      "title": "Watching All 88 Again",
+      "description": "The check that stops a command going missing on vscode.dev matched a name anywhere in the host. It reads the registration call now.",
+      "kind": "improvement"
     }
   ],
   "sections": [
     {
-      "heading": "Fixed",
+      "heading": "Notes",
       "bullets": [
-        "Four bulk removal commands announced a removal that had not happened. Remove all unused resource keys, Remove all unreferenced declarations, Remove all unread Remote Config keys and the workspace dead code sweep all sent their edit and then said \"Removed 320 declarations in 74 files\" without ever asking whether the editor had accepted it.",
-        "The editor refuses a whole edit in silence. Two ranges that touch is enough, and closing the refactor preview on Discard comes back the same way. So the file was untouched and the notification said otherwise, which is worse than the silence these four had a week ago: a reader who is told it worked stops looking.",
-        "They now read the answer and say \"Nothing was applied.\" when the edit is refused, the same words the two commands that already checked have been using.",
-        "The guard that caught the earlier silence only checked that a message followed the edit, never what the message claimed, which is how all four walked past it. It now requires the result to be named and to actually decide something."
+        "Nothing changed in what the extension does. A test that was standing watch over all 88 commands was only really watching 70 of them, and it now watches all 88.",
+        "The extension runs in two hosts, the desktop one and the browser one on vscode.dev, and each registers its own commands. A command declared but not registered by the host you are in is offered by the palette and answers \"command not found\" when you pick it. A test added in 1.42.268 exists to stop exactly that.",
+        "It looked for the command name quoted anywhere in the host, which is loose: a name like surroundWith is also a settings key and a constant elsewhere, so the test kept saying the command was wired after its registration was deleted. Removing the browser registration of Surround With left the test green, and 18 of the 88 commands were in that position.",
+        "The test now reads the registration call itself, and the twelve toggles whose command name is assembled at runtime are read from the table their loop walks rather than from anywhere in the host. A new check confronts it with each of the 88 in turn: erase one registration and the test must notice. All 88 are genuinely wired in both hosts today."
       ]
     }
   ],

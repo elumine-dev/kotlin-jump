@@ -1,12 +1,12 @@
 {
-  "version": "1.42.265",
+  "version": "1.42.266",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Narrow to private leaves overrides alone",
-  "summary": "Narrowing an overriding member to private produces code that does not compile. The offer no longer appears on one.",
+  "tagline": "A scan interrupted by a save reads again",
+  "summary": "Saving a file while a dead code scan was running could leave that scan working from the state before the save.",
   "highlights": [
     {
-      "title": "Overrides Stay As They Are",
-      "description": "A member that redefines another cannot be less visible than it. The quick fix now refuses both the Kotlin `override` modifier and Java's `@Override` annotation, alongside `open`, `abstract`, `sealed` and `default`.",
+      "title": "The Scan Reads Again",
+      "description": "A save during a scan made its result unfit to keep, and it was correctly thrown away for later commands. The command waiting on it still received it. That one is the one about to delete, so it now reads again.",
       "kind": "fix"
     }
   ],
@@ -14,15 +14,16 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Narrow to private offered itself on a member that overrides another, and the result does not compile. A member cannot be less visible than the one it redefines. The guard already refused `open`, `abstract`, `sealed` and Java's `default` for the same kind of reason, each one added after it broke a build. `override` was missing from the list.",
-        "Java spells it as the `@Override` annotation rather than a keyword, and the annotations on a line are skipped before the modifiers are read, so that form needed its own check. `@Override public String toString()` became `@Override private String toString()`, which javac rejects outright."
+        "A file saved while a scan is running left the command that asked for the scan holding the picture from before the save. Saving, creating, deleting or renaming a source marks the workspace picture out of date, and a scan of a real project is a few thousand files, so the window is wide enough to walk into.",
+        "The result was already refused for the cache, so the NEXT command got a fresh read. The one waiting on the scan was handed it anyway, and that one is the command about to delete. Each file is checked again before anything is written, so a file that moved is left alone, but the verdict is not rechecked: a save that adds a use of a symbol somewhere else leaves the file that declares it untouched, so its removal passes the file check and something live goes. It reads again now."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "Both compilers were asked rather than remembered. Kotlin: `cannot weaken access privilege private for f in A`, followed by `modifier private is incompatible with override`. Javac: `attempting to assign weaker access privileges; was public`.",
-        "The question was then turned around: every shape the narrowing still accepts was run through the Kotlin compiler after the change was applied to it. Seventeen of them, from `operator fun` to `lateinit var` to `companion object`, all compile. What it refuses would not compile, and what it accepts does."
+        "Bounded at three reads. A build writing files can keep marking the picture out of date with no pause, and looping until it stops would never return. After three the freshest read is returned, still without being cached.",
+        "Cancelling still returns immediately, and returns what was actually read rather than the empty result of an attempt the cancel cut short. An empty workspace reads as a workspace with no sources, and that is exactly where verdicts about absence come from.",
+        "The test that covered this looked only at what the next caller receives, which was already correct. It said nothing about what the scan hands back to its own caller. A first version of the new test passed for the same kind of reason: it changed the file before the scan had read anything, so there was no stale read to catch."
       ]
     }
   ],

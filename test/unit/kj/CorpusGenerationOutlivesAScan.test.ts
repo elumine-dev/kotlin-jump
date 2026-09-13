@@ -58,10 +58,13 @@ describe('ResourceCorpus et l invalidation pendant un scan', () => {
     relacher();
     await enVol;
 
-    const lecturesAvant = d.lectures;
-    const suivant = await corpus.get();
-    expect(texteDe(suivant)).toBe('val v = 2\n');
-    expect(d.lectures).toBeGreaterThan(lecturesAvant);
+    // Ce qui compte est que PERSONNE ne recoive la version d'avant : ni
+    // l'appelant du scan en vol, ni le suivant. Compter les lectures disait
+    // COMMENT la fraicheur etait obtenue, en vidant le cache pour forcer une
+    // relecture. Depuis que le scan en vol relit lui-meme quand sa generation
+    // a bouge, le cache contient la version d'apres et le servir est juste.
+    expect(texteDe(await corpus.get())).toBe('val v = 2\n');
+    expect(d.lectures).toBeGreaterThan(1);
   });
 
   it('temoin : sans invalidation, le cache sert et ne relit pas', async () => {

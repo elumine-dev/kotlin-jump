@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.262
+
+A dialog asking permission to remove nothing.
+
+### Fixes
+- Remove Everything Unused asked `Remove 41 unused declaration, local or imports?`. The helper that agrees a count with its noun adds the `s` at the end of whatever it is given, which is right for a plain noun and wrong for a list. Both spots that name a list now spell their plural out: `41 unused declarations, locals and imports`, and `41 locals and imports` in the closing report.
+- The same dialog could open with `Remove 0 unused declarations, locals and imports?`. A round can be renamings and nothing else, and one `forEachIndexed { index, value ->` whose index is never read is enough for it. When nothing is being removed the renaming is the question now, not a footnote to a question about zero: `Rename 3 unused parameters to `_`?`.
+
+### Notes
+- That second one also dropped a sentence that was not true there. Repeating the round because each removal orphans the next makes no sense when nothing is removed.
+- The guard that watches counts agree could not see either of these: it looks for plurals written by hand next to a number, and here the number went through the helper properly. It was the argument that was wrong. It now also reads what is handed to the helper, and a list has to carry its own plural form. Two spots in the codebase out of sixty eight calls, both of them the ones above.
+
 ## 1.42.261
 
 The fix to the check needed a fix of its own.

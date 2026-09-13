@@ -170,3 +170,67 @@ describe('les messages qui comptent', () => {
     expect(perimes, 'entree de tolerance devenue inutile, la retirer').toEqual([]);
   });
 });
+
+/**
+ * `plural()` colle son `s` a la FIN du libelle qu on lui donne.
+ *
+ * Sur un nom simple c est ce qu il faut. Sur un libelle compose, le `s`
+ * atterrit sur le dernier mot de l enumeration et accorde de travers :
+ * `plural(41, 'unused declaration, local or import')` rend
+ * « 41 unused declaration, local or imports », lu par tout utilisateur qui
+ * lance la commande sur plus d un element.
+ *
+ * Le gardien du dessus ne pouvait pas le voir : il cherche les pluriels ecrits
+ * en dur a cote d un compte, et ici le compte passe bien par `plural()`. C est
+ * l argument qui est mauvais, pas l appel.
+ *
+ * La regle : un libelle qui enumere doit donner sa forme plurielle en clair.
+ */
+describe('les libelles composes donnent leur pluriel', () => {
+  const APPEL = /plural\(\s*[^,()]*(?:\([^()]*\))?[^,()]*,\s*(['"`])((?:[^'"`\\]|\\.)*)\1\s*(,\s*(['"`]))?/g;
+  const COMPOSE = /,| or | and |\//;
+
+  const fautesDe = (texte: string): string[] => {
+    const out: string[] = [];
+    for (const m of texte.matchAll(APPEL)) {
+      const libelle = m[2];
+      const aUnPluriel = m[3] !== undefined;
+      if (COMPOSE.test(libelle) && !aUnPluriel) out.push(libelle);
+    }
+    return out;
+  };
+
+  it('temoin : un nom simple n a rien a declarer', () => {
+    expect(fautesDe("plural(n, 'file')")).toEqual([]);
+    expect(fautesDe("plural(xs.length, 'unused parameter')")).toEqual([]);
+  });
+
+  it('temoin : une enumeration sans pluriel explicite est signalee', () => {
+    expect(fautesDe("plural(n, 'local or import')")).toEqual(['local or import']);
+    expect(fautesDe("plural(n, 'unused declaration, local or import')"))
+      .toEqual(['unused declaration, local or import']);
+  });
+
+  it('temoin : la meme enumeration avec son pluriel passe', () => {
+    expect(fautesDe("plural(n, 'local or import', 'locals and imports')")).toEqual([]);
+  });
+
+  it('aucun libelle compose de src ne s en remet au `s` final', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const depot = path.resolve(__dirname, '..', '..');
+    const fautes: string[] = [];
+    const walk = (dir: string): void => {
+      for (const nom of fs.readdirSync(dir)) {
+        const complet = path.join(dir, nom);
+        if (fs.statSync(complet).isDirectory()) { walk(complet); continue; }
+        if (!nom.endsWith('.ts')) continue;
+        const rel = path.relative(depot, complet).split(path.sep).join('/');
+        for (const f of fautesDe(fs.readFileSync(complet, 'utf8'))) fautes.push(`${rel}: ${f}`);
+      }
+    };
+    walk(path.join(depot, 'src'));
+    expect(fautes, 'donner la forme plurielle en clair a plural()').toEqual([]);
+  });
+});
+

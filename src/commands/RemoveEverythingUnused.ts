@@ -55,7 +55,6 @@ export function collecterUnePasse(
   // exception attrapee, et sur le projet de reference 38 des 41 sont des
   // exceptions. Les appeler des parametres etait faux dans le cas ordinaire,
   // pas dans un cas de bord.
-  const tally: Tally = { symboles: 0, membres: 0, entrees: 0, ilots: 0, balayage: 0, renommages: 0, imports: 0, fichiers: 0 };
   const ajoute = (p: string, start: number, end: number, texte: string, famille: string, quoi: string) => {
     if (start < 0 || end <= start) return;
     const l = brut.get(p) ?? [];
@@ -86,11 +85,28 @@ export function collecterUnePasse(
       if (c.start < fin) continue;
       fin = c.end;
       gardees.push(c);
-      tally[c.famille === 'balayage' && c.texte !== '' ? 'renommages' : c.famille]++;
     }
     parFichier.set(p, gardees);
   }
-  return { parFichier, tally };
+  return { parFichier, tally: compteLesFamilles(parFichier) };
+}
+
+/**
+ * Combien de coupes, famille par famille.
+ *
+ * Une seule ecriture de la liste des familles et de la regle du renommage,
+ * parce que l'appelant en a besoin DEUX fois et sur deux ensembles differents :
+ * ce que le balayage a trouve, pour la question, et ce que l'edition emporte
+ * vraiment, pour le compte rendu. Les compter au meme endroit sur deux
+ * ensembles est la seule facon que les deux nombres veuillent dire la meme
+ * chose.
+ */
+export function compteLesFamilles(parFichier: ReadonlyMap<string, Coupe[]>): Tally {
+  const tally: Tally = { symboles: 0, membres: 0, entrees: 0, ilots: 0, balayage: 0, renommages: 0, imports: 0, fichiers: 0 };
+  for (const l of parFichier.values()) {
+    for (const c of l) tally[c.famille === 'balayage' && c.texte !== '' ? 'renommages' : c.famille]++;
+  }
+  return tally;
 }
 
 function debutsDeLigne(text: string): number[] {
@@ -268,8 +284,8 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
         if (jeton.isCancellationRequested) { annule = true; break; }
         if (passes > 1) progress.report({ message: `round ${n + 1}…` });
       const data = n === 0 ? premier.data : await corpus.get();
-      const { parFichier, tally } = n === 0
-        ? { parFichier: premier.parFichier, tally: premier.tally }
+      const { parFichier } = n === 0
+        ? { parFichier: premier.parFichier }
         : collecterUnePasse(data.sources, segs);
       const combien = [...parFichier.values()].reduce((a, l) => a + l.length, 0);
       if (combien === 0) break;
@@ -300,9 +316,19 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
         }
       }
       const swept = addCascadePlan(edit, cascade, textes, choix === 'review');
-      tally.imports += swept.imports;
-      tally.fichiers += swept.files;
-      ajouteTally(tally);
+      // Ce qui est RETENU, jamais ce que la passe a trouve. Un fichier ecarte
+      // parce qu'il a bouge garde ses coupes dans `parFichier`, et les compter
+      // faisait annoncer « Removed 2 declarations » sur une edition d'une seule
+      // operation, une ligne avant de dire qu'un des deux fichiers avait ete
+      // laisse de cote. Les quatre autres commandes de la famille ont recu ce
+      // correctif entre la 1.42.277 et la 1.42.280.
+      //
+      // Les fichiers que la CASCADE supprime comptent, eux : leurs declarations
+      // partent avec le fichier, elles ne sont simplement pas coupees une a une.
+      const applique = compteLesFamilles(retenu);
+      applique.imports += swept.imports;
+      applique.fichiers += swept.files;
+      ajouteTally(applique);
 
       const ok = await vscode.workspace.applyEdit(edit);
       if (!ok) { refuse = true; break; }

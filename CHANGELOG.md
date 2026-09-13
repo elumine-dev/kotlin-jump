@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.293
+
+The closing report counts what left, not what was found.
+
+### Fixed
+- Remove Everything Unused counted declarations it had not removed. A file that changed between the scan and the click is left alone, and its findings were still counted as gone.
+- The report contradicted itself inside one sentence. Two files with one dead class each, one of them touched in a terminal in between: "Removed 2 declarations, 1 emptied file. 1 file changed since the scan and was left alone." The edit carried a single operation.
+- The count is now taken from the files the edit actually covers rather than from what the scan turned up, and both counts come from the same piece of code applied to two different sets, so the number in the question and the number in the report mean the same thing by construction. A file the cascade deletes still counts: its declarations go with the file.
+- Four commands of this family got this same fix between 1.42.277 and 1.42.280. The one that removes the most was not among them.
+
 ## 1.42.292
 
 One skipped file counted once, not once per round.

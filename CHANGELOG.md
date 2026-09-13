@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.239
+
+Nothing you can see changed. The witness under it did.
+
+### Fixes
+- The plan that removes a declaration and its tests together pushed one cut per MENTION rather than one per import LINE. An island whose two dead members are named by a single `import com.x.Outer.Inner` therefore produced the very same range twice. The cascade had this exact defect and was fixed there; here it survived because the only caller deduplicates when it applies, on the key path plus start. A plan that contradicts itself is still a wrong plan: `cuts.length` is a number the code reasons about, and the guard lived in the consumer rather than the producer. No visible effect today, and that is the honest size of it.
+
+### Notes
+- Removing a declaration and its tests in one go was the last edit with no witness on a real project. It has one now, six invariants deep: a cut carries the name of the function it claims, it stays inside the text, two cuts of one file never overlap, the braces still balance, a file kept keeps at least one test, and a file deleted whole declares nothing another surviving test still names. Sixty one findings, four plans offered, thirteen cuts, one file deleted, and all six hold.
+- The last invariant earns its place. Loosen the rule so a file goes whole as soon as one of its tests is touched, and it names a Dagger component that still refers to a test class by name.
+- Three suspicions on that same code came to nothing and are worth recording. A setup method is not counted as a test, so cutting cannot take a fixture with it. An annotation type member is never reported. And the key the caller deduplicates on is shared across every group, not rebuilt per group.
+
 ## 1.42.238
 
 `private default` is not a thing, and the bulk narrowing wrote it.

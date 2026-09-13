@@ -156,6 +156,12 @@ export function planTestCoRemoval(
     const funs = testFunctionsOf(src.path, src.text);
     const hit = new Set<TestFunction>();
     const imports: TestCut[] = [];
+    // One cut per import LINE, not per mention. `import com.x.Outer.Inner`
+    // names two members of the same dead island, so the loop below pushed the
+    // very same range twice. The cascade had this defect and was fixed there;
+    // here the only caller deduplicates on apply, which makes a wrong plan
+    // harmless rather than right.
+    const lignesImportees = new Set<number>();
     let unresolved = false;
 
     mention.lastIndex = 0;
@@ -164,6 +170,8 @@ export function planTestCoRemoval(
       const at = m.index;
       const line = offsetToPos(lineStarts as number[], at).line;
       if (IMPORT_RE.test(lines[line] ?? '')) {
+        if (lignesImportees.has(line)) continue;
+        lignesImportees.add(line);
         const w = wholeLines(src.text, lineStarts[line], lineStarts[line] + (lines[line] ?? '').length + 1);
         imports.push({ path: src.path, start: w.start, end: w.end, name: m[0], kind: 'import' });
         continue;

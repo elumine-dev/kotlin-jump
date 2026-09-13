@@ -1,27 +1,27 @@
 {
-  "version": "1.42.238",
+  "version": "1.42.239",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A combination Java never allowed",
-  "summary": "The bulk narrowing could write `private default`, which no version of Java accepts, into a file the user never opened.",
+  "tagline": "One cut per line, not per mention",
+  "summary": "The plan that removes a declaration with its tests could return the same import range twice. Its only caller already guarded against it, so nothing visible changes.",
   "highlights": [
     {
-      "title": "Narrowing no longer breaks a Java interface",
+      "title": "A plan that no longer contradicts itself",
       "kind": "fix",
-      "description": "A `default` method is a public interface method with a body, so `private default` is refused by javac. The list that makes the narrowing give up held only `open`, `abstract` and `sealed`, all three Kotlin."
+      "description": "One cut per import LINE rather than per mention. An island whose two dead members share a single `import com.x.Outer.Inner` produced the same range twice. The guard lived in the consumer; it belongs in the producer."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Make Every Self Only Member Private could write `private default String x()`. The command edits files the user never opened, so the first sign of it would have been a broken build."
+        "The test co removal plan pushed one cut per mention rather than one per import line. No visible effect today, since the only caller deduplicates when it applies."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "All 171 narrowings offered on the 6329 source project are unchanged, compared one by one before and after.",
-        "The cascade that removes the imports a deletion orphans had no witness of any kind. It has one now: 100 import cuts and 54 file deletions, every one of them holding."
+        "Removing a declaration and its tests together was the last edit with no witness on a real project. It has one now, six invariants deep, and all six hold across 61 findings.",
+        "The strongest of them: a file deleted whole must declare nothing another surviving test still names. Loosen the rule and it catches a Dagger component naming a test class."
       ]
     }
   ],

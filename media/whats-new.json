@@ -1,12 +1,12 @@
 {
-  "version": "1.42.277",
+  "version": "1.42.278",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The workspace sweep speaks up",
-  "summary": "Clean Dead Code in Workspace applied its changes without a word. It now says how much went, and from how many files.",
+  "tagline": "Every bulk command reports now",
+  "summary": "Three commands applied their changes in silence, and one of them could delete a source file without saying so.",
   "highlights": [
     {
-      "title": "It Says What It Removed",
-      "description": "Apply all skips the preview, so nothing told you what had happened. The count is read off the edit that was actually applied, so a file that moved in the meantime lowers it.",
+      "title": "Silence Is Over",
+      "description": "Apply all skips the preview, so a command that says nothing afterwards leaves you with no idea what happened. All of them speak now, and the one that can delete a file warns you before you agree.",
       "kind": "fix"
     }
   ],
@@ -14,16 +14,16 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Clean Dead Code in Workspace removed declarations across the project and said nothing at all. Choosing Apply all skips the preview by design, since the flag that opens it is the same one that leaves every box unticked, so the edit went out with no word of how much had gone. It was the only command of its family to stay quiet.",
-        "It reports now, and reports what was applied rather than what was offered: if a file moved between the question and the click its cut is dropped, and the number said out loud follows the smaller edit. Choosing to review says how much went to the preview instead, since the reader is looking at it."
+        "Three more commands applied their changes without a word: removing unreferenced declarations, removing unused resource keys, and removing unread Remote Config keys. Apply all skips the preview by design, so nothing at all told you what had happened. The fourth of the family was fixed yesterday; these are the rest of it.",
+        "Removing unreferenced declarations could also delete a source file without saying so. Two dead declarations in one file empty it, the edit becomes a deletion, and the question read `1 change in 1 file` with no mention that the file itself was going. It says `1 file deleted outright.` now, the same words the test removal command has always used."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "The per file twin stays quiet and should: it always goes through the preview, and the preview is the answer there. This one skips it.",
-        "The release that made this command's reporting truthful is the one that wrote the rule into the file, that what is applied is what must be reported. It covered the round that finds nothing and the round where files moved, and left the ordinary round mute. Nothing was lost along the way, the report was simply never there.",
-        "Five other commands of the family were driven end to end to check a claim made in the last release without measuring it, that they announce what they send. Narrow to private announces one change and sends one. The workspace sweep announces three and sends three. The claim holds where it was made."
+        "A rule now watches the whole family, and only that family: a command that asks its question up front, and therefore skips the preview, must say something after it applies. The per file sweep is the one exception and it is named with its reason, since it always goes through the preview and the preview is the answer there.",
+        "Scoping that rule took two passes. Read across every command it accused six places, three of them wrongly: a quick fix that inserts a branch in front of you, a removal that always opens the preview, and a loop that reports well below where it applies. It reads the enclosing function now, and only files that ask the question up front.",
+        "The claim made two releases ago that the other commands announce what they send was checked rather than repeated. Narrow to private announces one change and sends one, and the workspace sweep three and three."
       ]
     }
   ],

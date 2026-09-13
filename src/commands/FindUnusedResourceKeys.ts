@@ -134,6 +134,12 @@ export async function removeAllUnusedResourceKeysCommand(
       if (choix === 'cancel') return;
       const choisi = choix === 'apply' ? await buildRemovalEdit(result.findings, undefined, false) : apercu;
       await vscode.workspace.applyEdit(choisi.edit);
+      // Apply all skips the preview, so nothing else would say what happened.
+      void vscode.window.showInformationMessage(
+        choix === 'review'
+          ? `Sent ${plural(result.findings.length, 'unused resource key')} to the preview.`
+          : `Removed ${plural(result.findings.length, 'unused resource key')} in ${plural(choisi.files, 'file')}.`,
+      );
     },
   );
 }

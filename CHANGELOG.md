@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.278
+
+Three more commands that removed code and said nothing.
+
+### Fixes
+- Three more commands applied their changes without a word: removing unreferenced declarations, removing unused resource keys, and removing unread Remote Config keys. Apply all skips the preview by design, so nothing at all told you what had happened. The fourth of the family was fixed yesterday; these are the rest of it.
+- Removing unreferenced declarations could also delete a source file without saying so. Two dead declarations in one file empty it, the edit becomes a deletion, and the question read `1 change in 1 file` with no mention that the file itself was going. It says `1 file deleted outright.` now, the same words the test removal command has always used.
+
+### Notes
+- A rule now watches the whole family, and only that family: a command that asks its question up front, and therefore skips the preview, must say something after it applies. The per file sweep is the one exception and it is named with its reason, since it always goes through the preview and the preview is the answer there.
+- Scoping that rule took two passes. Read across every command it accused six places, three of them wrongly: a quick fix that inserts a branch in front of you, a removal that always opens the preview, and a loop that reports well below where it applies. It reads the enclosing function now, and only files that ask the question up front.
+- The claim made two releases ago that the other commands announce what they send was checked rather than repeated. Narrow to private announces one change and sends one, and the workspace sweep three and three.
+
 ## 1.42.277
 
 A sweep that removed code and said nothing.

@@ -189,7 +189,7 @@ export async function buildSymbolRemovalEdit(
    * it unticked, and that view has no "select all".
    */
   confirm = true,
-): Promise<{ edit: vscode.WorkspaceEdit; edits: number; files: number }> {
+): Promise<{ edit: vscode.WorkspaceEdit; edits: number; files: number; supprimes: number }> {
   const edit = new vscode.WorkspaceEdit();
   let edits = 0;
   const touches = new Set<string>();
@@ -325,7 +325,9 @@ export async function buildSymbolRemovalEdit(
   const swept = addCascadePlan(edit, cascade, textForCascade, confirm);
   for (const p of cascade.imports.keys()) touches.add(p);
   for (const p of cascade.deleteFiles) touches.add(p);
-  return { edit, edits: edits + swept.imports + swept.files, files: touches.size };
+  // `supprimes` a part : effacer un fichier n'est pas une edition comme une
+  // autre, et le dialogue doit pouvoir le dire avant qu'on y consente.
+  return { edit, edits: edits + swept.imports + swept.files, files: touches.size, supprimes: doomed.size };
 }
 
 function lineStartsOf(text: string): number[] {

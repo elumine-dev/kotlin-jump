@@ -3,6 +3,7 @@ import * as vscodeMock from '../__mocks__/vscode';
 import { stillTheMeasuredText, estLeFichier } from '../../../src/util/measuredText';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import * as path from 'node:path';
+import { aplatirSource, ligneDe } from './harness';
 
 /**
  * Une vue de comparaison ouvre un document dont l'URI est `git:` et dont le
@@ -66,40 +67,11 @@ describe('aucun `uri.fsPath ===` nu dans src', () => {
     return out;
   };
 
-  /**
-   * Le texte, blancs et retours a la ligne reduits a une espace, avec de quoi
-   * remonter a la ligne d origine.
-   *
-   * Le balayage se faisait ligne par ligne, et une comparaison coupee en deux
-   * passait entiere : un formateur qui va a la ligne avant l operateur ecrit
-   *
-   *     const meme = d.uri.fsPath
-   *       === chemin;
-   *
-   * et aucune des deux lignes ne porte le motif. La regle vaut pour
-   * l EXPRESSION, pas pour la ligne.
-   */
-  const aplati = (texte: string): { plat: string; ou: number[] } => {
-    let plat = '';
-    const ou: number[] = [];
-    for (let i = 0; i < texte.length; i++) {
-      const c = texte[i];
-      if (/\s/.test(c)) {
-        if (plat.endsWith(' ')) continue;
-        plat += ' ';
-      } else {
-        plat += c;
-      }
-      ou.push(i);
-    }
-    return { plat, ou };
-  };
-
   it('chaque comparaison passe par estLeFichier ou porte sa garde de schema', () => {
     const coupables: string[] = [];
     for (const f of fichiers(RACINE)) {
       const texte = readFileSync(f, 'utf8');
-      const { plat, ou } = aplati(texte);
+      const { plat, ou } = aplatirSource(texte);
       for (const m of plat.matchAll(/uri\s*\.\s*fsPath\s*===/g)) {
         const i = m.index!;
         // La garde se lit autour de l expression, pas sur sa ligne : elle tient
@@ -108,7 +80,7 @@ describe('aucun `uri.fsPath ===` nu dans src', () => {
         const fenetre = plat.slice(Math.max(0, i - 140), i + 140);
         if (/scheme\s*===/.test(fenetre)) continue;
         if (/estLeFichier/.test(fenetre)) continue;          // ou deleguee
-        const ligne = texte.slice(0, ou[i]).split('\n').length;
+        const ligne = ligneDe(texte, ou, i);
         coupables.push(`${path.relative(RACINE, f)}:${ligne} ${plat.slice(i - 30 < 0 ? 0 : i - 30, i + 40).trim()}`);
       }
     }

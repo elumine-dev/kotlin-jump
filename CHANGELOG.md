@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.313
+
+Looking at the ranges, not just counting them.
+
+### Notes
+- Nothing changed in what the extension does. Yesterday closed the gap for one family of removals; this closes it for the command that removes everything, where the ranges are assembled differently.
+- Two checks were counting those ranges without ever looking at them. Shifting the widening by one character moved the descriptive numbers around and raised nothing, which asks the reader to notice a change in a line of output rather than being told something is wrong.
+- Now the shape is checked: a deletion covers whole lines, and two ranges in one file never overlap. The first version of that check was too strict and the real project said so, eleven ranges flagged, all of them enum entries, whose cut runs from the comma to the end of the name and is meant to sit inside a line. The kind of cut now travels with the range so the check can tell them apart.
+- Confronted with both failures: shift the widening and four ranges stop covering whole lines; take away the rule that stops a range running into the next one and thirty of them overlap.
+
 ## 1.42.312
 
 The last step before the edit had no check.

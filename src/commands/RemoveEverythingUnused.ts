@@ -259,17 +259,42 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
     cumul.imports > 0 ? plural(cumul.imports, 'orphaned import') : '',
     cumul.fichiers > 0 ? plural(cumul.fichiers, 'emptied file') : '',
   ].filter(Boolean);
-  const note = (cumul.bouges > 0
-    ? ` ${plural(cumul.bouges, 'file')} changed since the scan and ${cumul.bouges > 1 ? 'were' : 'was'} left alone.`
-    : '')
-    + (annule ? ' Stopped on request: run it again to finish.'
-      : restait ? ' There was still work left after the last round: run it again.' : '');
+  const bouges = cumul.bouges > 0
+    ? `${plural(cumul.bouges, 'file')} changed since the scan and ${cumul.bouges > 1 ? 'were' : 'was'} left alone.`
+    : '';
   // En relecture, le compte decrit ce qui a ete PROPOSE. Ce que le lecteur a
   // coche dans l'apercu ne revient pas jusqu'ici, et annoncer « Removed » sur
   // une base qu'on n'a pas serait un chiffre invente.
   const verbe = choix === 'review' ? 'Sent' : 'Removed';
   const queue = choix === 'review' ? ' to the preview.' : '.';
   void vscode.window.showInformationMessage(
-    (morceaux.length > 0 ? `${verbe} ${morceaux.join(', ')}${queue}` : 'Nothing unused left to remove.') + note,
+    compteRendu(morceaux.join(', '), { verbe, queue, annule, restait, bouges }),
   );
+}
+
+/**
+ * The one sentence this command ends on.
+ *
+ * Exported for the witness. Glueing a headline to a note produced answers that
+ * contradicted each other in the same breath: stopping on the first round said
+ * `Nothing unused left to remove. Stopped on request: run it again to finish.`
+ * which is two opposite answers to one question, and the test written for it
+ * passed because it only looked for the second half.
+ */
+export function compteRendu(
+  fait: string,
+  e: { verbe: string; queue: string; annule: boolean; restait: boolean; bouges: string },
+): string {
+  const suite = e.bouges ? ` ${e.bouges}` : '';
+  if (fait === '') {
+    // Rien n'a ete retire : la raison EST la reponse, il n'y a pas de titre a
+    // mettre devant.
+    if (e.annule) return `Stopped on request. Nothing was removed.${suite}`;
+    if (e.bouges) return `Nothing was removed: ${e.bouges} Run it again.`;
+    return 'Nothing unused left to remove.';
+  }
+  const fin = e.annule ? ' Stopped on request: run it again to finish.'
+    : e.restait ? ' There was still work left after the last round: run it again.'
+      : '';
+  return `${e.verbe} ${fait}${e.queue}${suite}${fin}`;
 }

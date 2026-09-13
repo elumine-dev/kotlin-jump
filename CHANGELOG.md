@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.237
+
+A lambda's closing brace is not always the end of the expression.
+
+### Fixes
+- A member whose expression body carried on past a lambda lost that continuation. Take `fun getTagVisibility() = tag.text.takeIf { it.isNotBlank() }?.let { View.VISIBLE }` with `?: View.GONE` on the line below: the span stops on the lambda's closing brace, so the end is not line based, and both the continuation test and the expression walk were gated on that. The cut took the first line and left `?: View.GONE` alone in the file, which no longer compiles. Three such members on a real 6329 source project, all of them live code. A positive test answers now where the span cannot: a line opening on `?:`, `.`, `::`, `,`, `else`, `in`, `is` or `as` can only continue what is above it, and saying so is proof rather than an absence of proof.
+- The expression walk cut one substring per line it read. The cost of a single pass never moved, but the workspace sweep landed in a slow mode 65 % of the time against 30 % for the version before it, measured by running both 23 times each, alternating which one went first. Counting brackets over indices rather than substrings puts the two back at 7 passes out of 12 each.
+
+### Notes
+- Found by a new invariant in the removal witness. The seven already there watch what a cut CONTAINS; not one watched what it LEAVES. A cut that stops one line short leaves a remainder with balanced braces and no trace of the name, so all seven stayed silent. The new one compares indentation, chosen because it does not replay the production rule it judges, and it named three real cuts on its first run.
+- Its first three reports were its own fault and are worth naming. Annotation lines skipped after the cut landed inside the arguments of an `@IntDef(` spread over several lines. A tab counted as four columns whatever its position condemned a Java file with mixed indentation. And the relaxed line bounds of a partial enum cut had whole line reasoning applied to them.
+
 ## 1.42.236
 
 A modifier alone proves nothing, and 1.42.233 had taken it as proof.

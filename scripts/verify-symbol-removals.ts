@@ -105,7 +105,7 @@ function main(): void {
 
   let removables = 0;
   const fautes: string[] = [];
-  const compte = { nom: 0, bornes: 0, solde: 0, ligne: 0, voisin: 0, voisine: 0 };
+  const compte = { nom: 0, bornes: 0, solde: 0, ligne: 0, voisin: 0, voisine: 0, orphelin: 0 };
 
   for (const f of findings as any[]) {
     const start = f.removeStart, end = f.removeEnd;
@@ -162,6 +162,53 @@ function main(): void {
     if (combien > 1) {
       compte.voisine++;
       if (fautes.length < 12) fautes.push(`VOISINE ${f.name} ${f.path}:${f.line + 1} ${combien} declarations dans la coupe = ${JSON.stringify(coupePropre.trim().slice(0, 70))}`);
+    }
+
+    // 7. le RESTE ne doit pas porter d orphelin.
+    //
+    // Les six invariants precedents regardent ce que la coupe CONTIENT. Aucun
+    // ne regarde ce qu elle LAISSE. Une coupe qui s arrete une ligne trop tot
+    // laisse un reste aux accolades equilibrees, sans le nom, partant d un
+    // debut de ligne et ne portant qu une declaration : les six sont vrais et
+    //   val ghostly = if (a)
+    //       value
+    //   else
+    //       other
+    // perd sa premiere ligne seule. Livre en 1.42.233, trouve a la main.
+    //
+    // Le signal doit etre INDEPENDANT de la regle de production, sinon
+    // l oracle repete l erreur qu il juge. L indentation en est un : la ligne
+    // qui suit la coupe ne peut pas etre plus rentree que la declaration
+    // partie, sauf a etre le reste de son corps.
+    // Dans la COUPE, une annotation fait partie de la declaration et se saute.
+    // APRES la coupe, une annotation OUVRE la declaration suivante : la sauter
+    // menait droit dans les arguments d un `@IntDef(` multiligne, plus rentres
+    // que tout, et l oracle criait sur une coupe juste.
+    const aSauterDansLaCoupe = (l: string) => {
+      const t = l.trim();
+      return t === '' || t.startsWith('//') || t.startsWith('*') || t.startsWith('/*') || t.startsWith('@');
+    };
+    const aSauterApres = (l: string) => {
+      const t = l.trim();
+      return t === '' || t.startsWith('//') || t.startsWith('*') || t.startsWith('/*');
+    };
+    // Une tabulation avance jusqu au prochain cran, elle ne vaut pas quatre
+    // colonnes en toute position : `  \t` vaut 4, pas 6. Compter a plat
+    // faisait passer un fichier Java a indentation mixte pour casse.
+    const rentree = (l: string): number => {
+      let n = 0;
+      for (const ch of l) { if (ch === ' ') n++; else if (ch === '\t') n = n - (n % 4) + 4; else break; }
+      return n;
+    };
+    const coupeEntiere = debutLigne && finLigne;
+    if (coupeEntiere) {
+      const premiereCode = coupe.split('\n').find(l => !aSauterDansLaCoupe(l));
+      const suivante = texte.slice(end).split('\n').find(l => !aSauterApres(l));
+      if (premiereCode !== undefined && suivante !== undefined
+        && rentree(suivante) > rentree(premiereCode)) {
+        compte.orphelin++;
+        if (fautes.length < 12) fautes.push(`ORPHELIN ${f.name} ${f.path}:${f.line + 1} la coupe laisse ${JSON.stringify(suivante.slice(0, 60))} plus rentree que ${JSON.stringify(premiereCode.trim().slice(0, 40))}`);
+      }
     }
 
     // 4. le fichier reste equilibre apres la coupe

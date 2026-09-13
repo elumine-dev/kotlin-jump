@@ -297,6 +297,28 @@ const OUVRE_UNE_DECLARATION_RE = new RegExp(
   + ')',
 );
 
+/**
+ * A line that can only CONTINUE what is above it.
+ *
+ * The mirror of the freshness test, and deliberately not its negation: this
+ * one lists tokens that no statement can begin with, so a yes here is proof
+ * rather than an absence of proof. It answers where `lineBasedEnd` cannot:
+ *
+ *   fun getTagVisibility() = tag.text.takeIf { it.isNotBlank() }?.let { View.VISIBLE }
+ *       ?: View.GONE
+ *
+ * The span stops on the lambda's closing brace, so the end is NOT line based
+ * and the continuation test, gated on that, never ran. The cut took the first
+ * line and left `?: View.GONE` alone in the file. Three such members on a real
+ * project, all live code.
+ *
+ * `/` and `*` are left out on purpose: a KDoc block opening the NEXT
+ * declaration starts with them, and reading that as a continuation would
+ * swallow the declaration it documents.
+ */
+const COMMENCE_UNE_SUITE_RE =
+  /^\s*(?:\?:|\?\.|\.(?!\.)|::|\+|&&|\|\||==|!=|<=|>=|->|,|\)|\]|else\b|in\b|is\b|as\b)/;
+
 /** Une ligne qui se termine sur un operateur appelle une suite. */
 const FINIT_SUR_UN_OPERATEUR_RE = /(?:[+\-*/,.&|?:=(]|->)$/;
 
@@ -324,20 +346,27 @@ function finDeLExpression(
   depuis: number,
   lastLine: number,
 ): number {
-  const compte = (t: string): number => {
+  // Compte sur des INDEX, sans decouper : une tranche par ligne allouait une
+  // chaine a chaque pas et faisait basculer le balayage dans un mode lent une
+  // fois sur deux. Mesure A/B entrelacee sur deadIslands.workspace : le
+  // plancher de bruit ne bougeait pas, mais le mode haut passait de 30 % a
+  // 65 % des passes. Les crochets sont tous en ASCII, donc l unite de code
+  // suffit, et elle s aligne sur les offsets.
+  const compte = (de: number, a: number): number => {
     let d = 0;
-    for (const c of t) {
-      if (c === '(' || c === '[' || c === '{') d++;
-      else if (c === ')' || c === ']' || c === '}') d--;
+    for (let i = de; i < a; i++) {
+      const c = clean.charCodeAt(i);
+      if (c === 40 || c === 91 || c === 123) d++;
+      else if (c === 41 || c === 93 || c === 125) d--;
     }
     return d;
   };
-  let profondeur = compte(clean.slice(lineStarts[premiereLigne], lineEndOf(depuis)));
+  let profondeur = compte(lineStarts[premiereLigne], lineEndOf(depuis));
   if (profondeur < 0) return -1;
 
   for (let l = depuis + 1; l <= lastLine && l <= depuis + 80; l++) {
     const brute = lines[l] ?? '';
-    profondeur += compte(clean.slice(lineStarts[l], lineEndOf(l)));
+    profondeur += compte(lineStarts[l], lineEndOf(l));
     // Sortir du bloc qui contient la declaration : la marche est perdue.
     if (profondeur < 0) return -1;
     if (profondeur > 0 || brute.trim() === '') continue;
@@ -443,7 +472,12 @@ export function removalExtent(
   const termine = /;$/.test(trailing);
   const continues = span.lineBasedEnd && !termine
     && (FINIT_SUR_UN_OPERATEUR_RE.test(trailing) || !nextStartsFresh);
-  if (continues) {
+  // Une accolade de lambda n est pas forcement la fin de l expression, et la
+  // portee s y arrete quand meme. La suite evidente repond la ou `lineBasedEnd`
+  // se tait, sans jamais elargir les cas que la garde couvrait deja.
+  const suiteEvidente = !continues && !termine
+    && COMMENCE_UNE_SUITE_RE.test(lines[nextNonBlank] ?? '');
+  if (continues || suiteEvidente) {
     const vraieFin = finDeLExpression(
       clean, lines, lineStarts, lineEndOf, sym.line,
       offsetToPos(lineStarts as number[], Math.max(endOffset - 1, 0)).line, lastLine);

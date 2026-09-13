@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.288
+
+A safety check that a line break was enough to slip past.
+
+### Notes
+- Nothing changed in what the extension does. A check that keeps a whole class of wrong file edits out of the code was reading one line at a time, and a comparison split across two lines walked straight past it.
+- The rule it enforces: never decide that an open document is a given file by comparing paths alone. A diff view opens a document that carries the real file path and the content of the last commit, so a path match there means reading the commit and writing the working tree. That defect has been fixed three separate times in this code, which is why the check exists.
+- Written on one line the comparison was caught. Written the way a formatter writes it, with the operator moved to the next line, neither half carried the pattern and the check stayed quiet. Proven by putting each shape back into a real source file.
+- It now reads the expression rather than the line, and looks for the guard around the comparison instead of beside it. All three shapes are caught, and the code as it stands has no such comparison left anywhere.
+
 ## 1.42.287
 
 A guard that was watching 70 of the 88 commands it claimed to watch.

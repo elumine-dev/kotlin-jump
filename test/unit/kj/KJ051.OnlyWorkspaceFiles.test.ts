@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import * as vscodeMock from '../__mocks__/vscode';
-import { estDansLEspaceDeTravail } from '../../../src/util/inWorkspace';
+import { estDansLEspaceDeTravail, estUnFichierReel } from '../../../src/util/inWorkspace';
 
 /**
  * Un source jar du cache Gradle n'est pas du code du projet.
@@ -60,5 +60,44 @@ describe('estDansLEspaceDeTravail', () => {
   it('sans dossier ouvert, rien ne passe', () => {
     vi.spyOn(vscodeMock.workspace, 'getWorkspaceFolder').mockReturnValue(undefined as any);
     expect(estDansLEspaceDeTravail(doc(vscodeMock.Uri.file(DANS)))).toBe(false);
+  });
+});
+
+/**
+ * Deux niveaux, parce que les fournisseurs ne demandent pas la meme chose.
+ *
+ * `ResourceDiagnosticProvider` confronte le code a l'index des ressources du
+ * PROJET : hors du projet, sa reponse n'a aucun sens, il lui faut le dossier.
+ * `HardcodedStringProvider` et `LifecyclePairingProvider` ne lisent que le
+ * fichier sous leurs yeux et n'ont besoin de rien d'autre.
+ *
+ * Exiger le dossier pour les trois eteint ces deux linters des qu'un fichier
+ * est ouvert seul, sans dossier : une regression posee en meme temps que le
+ * correctif du source jar.
+ */
+describe('estUnFichierReel', () => {
+  it('un fichier ouvert SEUL, sans dossier, reste analysable', () => {
+    vi.spyOn(vscodeMock.workspace, 'getWorkspaceFolder').mockReturnValue(undefined as any);
+    expect(estUnFichierReel(doc(vscodeMock.Uri.file(DANS)))).toBe(true);
+    expect(estDansLEspaceDeTravail(doc(vscodeMock.Uri.file(DANS)))).toBe(false);
+  });
+
+  it('le source jar reste ecarte des deux cotes', () => {
+    dansUnDossier(['/w']);
+    expect(estUnFichierReel(doc(vscodeMock.Uri.file(CACHE)))).toBe(false);
+    expect(estDansLEspaceDeTravail(doc(vscodeMock.Uri.file(CACHE)))).toBe(false);
+  });
+
+  it('une vue git: d un fichier qui vit ailleurs ne passe pas', () => {
+    dansUnDossier(['/w']);
+    expect(estUnFichierReel(doc(vscodeMock.Uri.parse('git:' + DANS)))).toBe(false);
+  });
+
+  it('un tampon SANS TITRE passe : c est du code que l utilisateur ecrit', () => {
+    dansUnDossier(['/w']);
+    expect(estUnFichierReel(doc(vscodeMock.Uri.parse('untitled:Untitled-1')))).toBe(true);
+    // Mais il n'appartient a aucun dossier, donc les diagnostics qui ont
+    // besoin de l'index du projet ne s'y appliquent pas.
+    expect(estDansLEspaceDeTravail(doc(vscodeMock.Uri.parse('untitled:Untitled-1')))).toBe(false);
   });
 });

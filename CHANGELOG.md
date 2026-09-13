@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.287
+
+A guard that was watching 70 of the 88 commands it claimed to watch.
+
+### Notes
+- Nothing changed in what the extension does. A test that was standing watch over all 88 commands was only really watching 70 of them, and it now watches all 88.
+- The extension runs in two hosts, the desktop one and the browser one on vscode.dev, and each registers its own commands. A command declared but not registered by the host you are in is offered by the palette and answers "command not found" when you pick it. A test added in 1.42.268 exists to stop exactly that.
+- It looked for the command name quoted anywhere in the host, which is loose: a name like surroundWith is also a settings key and a constant elsewhere, so the test kept saying the command was wired after its registration was deleted. Removing the browser registration of Surround With left the test green, and 18 of the 88 commands were in that position.
+- The test now reads the registration call itself, and the twelve toggles whose command name is assembled at runtime are read from the table their loop walks rather than from anywhere in the host. A new check confronts it with each of the 88 in turn: erase one registration and the test must notice. All 88 are genuinely wired in both hosts today.
+
 ## 1.42.286
 
 A refused edit no longer reports itself as done.

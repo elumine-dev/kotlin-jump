@@ -9,6 +9,7 @@
  * constante partagee, et c est la compilation des tests voisins qui tombe.
  *
  * Invariants :
+ *   ligne          une coupe de fonction porte des lignes entieres
  *   nom            une coupe de fonction porte le nom de cette fonction
  *   bornes         la coupe tient dans le texte
  *   chevauchement  deux coupes d un meme fichier ne se recouvrent pas
@@ -88,7 +89,7 @@ function main(): void {
     for (const n of declaresDe(s.path, s.text)) live.add(n);
   }
 
-  const compte = { nom: 0, bornes: 0, chevauchement: 0, solde: 0, coquille: 0, dependance: 0 };
+  const compte = { ligne: 0, nom: 0, bornes: 0, chevauchement: 0, solde: 0, coquille: 0, dependance: 0 };
   const fautes: string[] = [];
   const vus = new Set<string>();
   let plans = 0, fichiers = 0, coupes = 0;
@@ -120,6 +121,20 @@ function main(): void {
           compte.bornes++;
           if (fautes.length < 12) fautes.push(`BORNES ${g.label} ${p} ${c.start}..${c.end} len=${texte.length}`);
           continue;
+        }
+        // Une coupe de fonction de test porte des lignes ENTIERES. Sans cet
+        // invariant le temoin etait aveugle a un decalage d'un caractere : le
+        // nom reste dans la coupe, les accolades restent equilibrees, et les
+        // six compteurs annoncent zero pendant que le premier caractere de
+        // l'annotation reste sur place. Meme omission que celle trouvee la
+        // veille dans le temoin du balayage.
+        if (c.kind === 'function') {
+          const debutLigne = c.start === 0 || texte[c.start - 1] === '\n';
+          const finLigne = c.end === texte.length || texte[c.end - 1] === '\n' || texte[c.end] === '\n';
+          if (!debutLigne || !finLigne) {
+            compte.ligne++;
+            if (fautes.length < 12) fautes.push(`LIGNE ${g.label} ${p} ${c.name} debut=${debutLigne} fin=${finLigne}`);
+          }
         }
         if (c.kind === 'function' && !texte.slice(c.start, c.end).includes(c.name)) {
           compte.nom++;

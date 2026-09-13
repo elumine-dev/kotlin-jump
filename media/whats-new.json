@@ -1,26 +1,27 @@
 {
-  "version": "1.42.250",
+  "version": "1.42.251",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A zero that had not been earned",
-  "summary": "Nothing in the extension changed. The witness that checks what the per file sweep cuts stayed at zero even when the cut was shifted by one character.",
+  "tagline": "The same question, asked of the other four",
+  "summary": "Shift every cut by one character and see which counters notice. The witness guarding the deletion of test files noticed nothing.",
   "highlights": [
     {
-      "title": "The sweep witness now catches an offset shift",
+      "title": "The test removal witness catches an offset shift",
       "kind": "fix",
-      "description": "Shift a cut by one character and all six counters stayed silent: the name is still inside, the braces still balance, the indentation does not move. It was missing the whole line rule the four other witnesses have. The same shift now reports nineteen violations."
+      "description": "It guards the only edit that deletes whole test files, and it was missing the rule that a cut of a test function takes whole lines. The same one character shift now reports thirteen violations out of thirteen cuts."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "The witness for the per file sweep checks that a deletion takes whole lines, for the family that cuts whole lines and that family only."
+        "The witness for removing a declaration together with its tests checks that a cut of a test function takes whole lines."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "Every test added since 1.42.232 was run against the code from before its fix. Sixteen fail there, which is what a test for a fix is supposed to do, and none of the batch passes for a wrong reason."
+        "The other three hold: 98 of 98 symbol cuts, 320 of 320 member cuts, 100 of 100 orphaned imports.",
+        "The enum family allows a partial cut by design. Of its 33 cuts, a shift leaves whitespace in 20 and a legal trailing comma in 6; the 7 that eat a letter of the name are all caught."
       ]
     }
   ],

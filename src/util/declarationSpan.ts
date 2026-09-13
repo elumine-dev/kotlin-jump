@@ -154,7 +154,7 @@ export function declarationSpan(
   // whole declaration because its first line ends on `(`.
   const ligneCtor = offsetToPos(lineStarts as number[], Math.max(i - 1, 0)).line;
   let headerEnd = lineEndOf(Math.max(line, ligneCtor));
-  let brace = accoladeDuCorps(clean, i, headerEnd);
+  let brace = accoladeDuCorps(clean, i, headerEnd, o => lineEndOf(offsetToPos(lineStarts as number[], o).line));
   while (brace === -1) {
     const headerText = clean.slice(i, headerEnd).trimEnd();
     const nextLine = offsetToPos(lineStarts as number[], headerEnd - 1).line + 1;
@@ -168,7 +168,7 @@ export function declarationSpan(
       || /^(?:extends|implements|,)\b/.test(nextText);
     if (!continues) break;
     headerEnd = lineEndOf(nextLine);
-    brace = accoladeDuCorps(clean, i, headerEnd);
+    brace = accoladeDuCorps(clean, i, headerEnd, o => lineEndOf(offsetToPos(lineStarts as number[], o).line));
   }
   if (brace !== -1) {
     const close = matchBrace(clean, i + brace);
@@ -198,13 +198,44 @@ export function declarationSpan(
  * (`: Base(onClick = { })`) instead of giving up on it. Strings and comments
  * are already blanked in `clean`.
  */
-function accoladeDuCorps(clean: string, from: number, to: number): number {
+function accoladeDuCorps(
+  clean: string,
+  from: number,
+  to: number,
+  finDeLigne: (offset: number) => number,
+): number {
   let profondeur = 0;
-  for (let k = from; k < to; k++) {
+  let borne = to;
+  for (let k = from; k < borne; k++) {
     const c = clean[k];
     if (c === '(' || c === '[') profondeur++;
     else if (c === ')' || c === ']') profondeur--;
-    else if (c === '{' && profondeur <= 0) return k - from;
+    else if (c === '{' && profondeur <= 0) {
+      if (!ouvreUnObjetAnonyme(clean, from, k)) return k - from;
+      // Un objet anonyme delegue : sauter son bloc entier. Il s'etale sur
+      // plusieurs lignes, donc la borne du balayage le suit, sinon l'accolade
+      // du corps tombe hors de portee et l'etendue se replie sur l'en-tete.
+      const close = matchBrace(clean, k);
+      if (close === -1) return -1;
+      k = close;
+      borne = Math.max(borne, finDeLigne(close));
+    }
   }
   return -1;
+}
+
+/**
+ * Cette accolade ouvre-t-elle un objet anonyme plutot que le corps ?
+ *
+ * `class A : I by object : I { ... } { ... }` est le seul en-tete qui pose une
+ * accolade a profondeur zero avant celle du corps. Le mot-cle se lit en
+ * arriere, et l'absence d'accolade entre lui et celle-ci suffit a le
+ * distinguer : sur la SECONDE accolade de cet en-tete, le bloc de l'objet est
+ * dans l'intervalle, donc le test echoue et c'est bien le corps.
+ *
+ * `from` commence apres le nom de la declaration, donc un `object Morte : I {`
+ * ordinaire n'a aucun `object` dans l'intervalle et n'est pas concerne.
+ */
+function ouvreUnObjetAnonyme(clean: string, from: number, brace: number): boolean {
+  return /\bobject\b[^{}]*$/.test(clean.slice(from, brace));
 }

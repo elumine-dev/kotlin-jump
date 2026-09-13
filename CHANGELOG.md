@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.272
+
+One header shape opens a brace before the body does.
+
+### Fixes
+- Deleting a class that delegates to an anonymous object cut the wrong closing brace. `class A : I by object : I { ... } { ... }` is the one header shape that opens a brace of its own before the body opens one, and the extent stopped on the object's brace. The file that was left behind did not parse.
+- Measured rather than argued: the removal was run for real on such a class and the Kotlin compiler answered `syntax error: Expecting a top level declaration` on a stray closing brace left at the top of the file. With the fix the same removal leaves a file that compiles with no diagnostic at all.
+
+### Notes
+- Not something that arrived recently. The character list this test replaced two weeks ago accepted the same header just as happily, so the shape has always been read wrong. What the rewrite did fix, and this keeps, is `: Base(count = 3)` and `: @Suppress("x") Base()`, which the old list refused outright.
+- Zero occurrences across the 5110 sources of the reference project, so no witness would ever have raised it and nothing was silently broken in practice. It is fixed because a removal that produces a file the compiler rejects is the one outcome this feature must never have.
+- The rule reads the `object` keyword backwards from a brace, and needs no list of exceptions: on the second brace of that same header the object block sits in between, so the test fails and the brace is correctly taken as the body's.
+
 ## 1.42.271
 
 A warning pointing at a file that is not there.

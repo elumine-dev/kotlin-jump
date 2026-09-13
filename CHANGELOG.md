@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.265
+
+A member cannot hide from the one it overrides.
+
+### Fixes
+- Narrow to private offered itself on a member that overrides another, and the result does not compile. A member cannot be less visible than the one it redefines. The guard already refused `open`, `abstract`, `sealed` and Java's `default` for the same kind of reason, each one added after it broke a build. `override` was missing from the list.
+- Java spells it as the `@Override` annotation rather than a keyword, and the annotations on a line are skipped before the modifiers are read, so that form needed its own check. `@Override public String toString()` became `@Override private String toString()`, which javac rejects outright.
+
+### Notes
+- Both compilers were asked rather than remembered. Kotlin: `cannot weaken access privilege private for f in A`, followed by `modifier private is incompatible with override`. Javac: `attempting to assign weaker access privileges; was public`.
+- The question was then turned around: every shape the narrowing still accepts was run through the Kotlin compiler after the change was applied to it. Seventeen of them, from `operator fun` to `lateinit var` to `companion object`, all compile. What it refuses would not compile, and what it accepts does.
+
 ## 1.42.264
 
 An annotation that stayed behind and changed owner.

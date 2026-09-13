@@ -1,12 +1,12 @@
 {
-  "version": "1.42.258",
+  "version": "1.42.259",
   "title": "What's New in Kotlin Jump",
-  "tagline": "No more warnings on code you cannot edit",
-  "summary": "Opening a dependency's source through Go to Definition could put a Kotlin Jump warning inside it. Dependency source trees are left alone now.",
+  "tagline": "The dependency rule now reads layout, not spelling",
+  "summary": "Keeping dependency sources out of the Problems panel worked only for one spelling of one default install path. It now recognises them wherever they live.",
   "highlights": [
     {
-      "title": "Dependency Sources Left Alone",
-      "description": "The Android SDK sources, the Gradle cache and the local Maven repository are real files on disk that no user can edit. A lint warning published there is noise. They are ruled out by name, while a file opened on its own is still linted.",
+      "title": "Dependency Rule Reads The Layout",
+      "description": "Comparing path segments letter for letter missed `Android/Sdk` on Windows and Linux, and missed any SDK or Gradle home moved by an environment variable. The rule now looks for what is inside those trees, whatever they are called and wherever they sit.",
       "kind": "fix"
     }
   ],
@@ -14,15 +14,15 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Kotlin Jump wrote diagnostics on files that belong to a dependency, not to the user. Go to Definition on a framework class opens something like `~/Library/Android/sdk/sources/android-35/android/webkit/FindActionModeCallback.java`, and the hardcoded string lint published a warning inside it. That file is one of 15138 on this machine alone, and no one can edit any of them.",
-        "The guard knew how to keep an archive entry out, by its `.jar!` segment, and it used to keep everything else out by asking for a workspace folder. Splitting it in two so a file opened on its own would still be linted dropped that second half, and the Android SDK sources, the Gradle cache and the local Maven repository walked back in. They are ruled out by name now."
+        "The rule that keeps dependency sources out of the Problems panel compared path segments letter for letter. The disk underneath does not: `~/Library/Android/SDK/...` and `~/Library/Android/sdk/...` are the same file on macOS, Windows behaves the same way, and the spelling that reaches us is whatever the user typed. One capital letter and the warnings came back.",
+        "It also assumed both trees sit where their installer put them. `ANDROID_HOME` and `GRADLE_USER_HOME` move them anywhere, and an SDK under `/opt` was read as ordinary code. The rule now reads the layout instead of the address: platform sources live under `sources/android` followed by an API level, Gradle downloads live under `caches/modules-2`."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "The workspace folder became the way out rather than the rule. A file inside the project is the user's whatever its path reads like, and a file outside it counts as the user's unless it sits under one of those dependency roots. A lone file with an ordinary path is still linted, which is what the previous release was for.",
-        "Checked against the real thing rather than a fixture: the framework file above reported one finding before and reports none after, and the same content under an ordinary path still reports it."
+        "The API level has to be a number, so a folder of your own named `sources/android-utils` is still yours. A file inside the project is still yours whatever its path reads like.",
+        "Shipped one release ago and wrong on two of the three platforms it runs on. The Windows and Linux spellings are covered by test now, alongside a moved SDK and a moved Gradle home."
       ]
     }
   ],

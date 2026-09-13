@@ -105,3 +105,46 @@ describe('le linter ne diagnostique pas la source du SDK', () => {
     expect(diagnostics(doc(SDK.replace(/\.java$/, '.kt'), UI))).toHaveLength(0);
   });
 });
+
+/**
+ * Same trees, written the way other machines write them.
+ *
+ * The first version of this rule compared path segments literally. Two things
+ * break that. The filesystem under it does not care about case: on this very
+ * machine `~/Library/Android/SDK/...` and `~/Library/Android/sdk/...` are the
+ * same inode, and Windows behaves the same way, so the case that reaches us is
+ * whatever the user happened to type. And the SDK does not have to live where
+ * the installer put it: `ANDROID_HOME` and `GRADLE_USER_HOME` move both trees
+ * wherever their owner wants.
+ *
+ * What does not move is the layout inside them: an SDK keeps its platform
+ * sources under `sources/android-<api level>`, and Gradle keeps its downloads
+ * under `caches/modules-2`. Those are what the rule reads now.
+ */
+describe('les memes arbres, ecrits autrement', () => {
+  const cas: [string, string][] = [
+    ['la casse du SDK sur un disque insensible a la casse',
+     '/Users/k/Library/Android/SDK/sources/android-35/android/webkit/A.java'],
+    ['la casse par defaut de Windows et Linux',
+     '/c:/Users/k/AppData/Local/Android/Sdk/sources/android-35/android/webkit/A.java'],
+    ['un SDK deplace par ANDROID_HOME',
+     '/opt/android-sdk/sources/android-35/android/webkit/A.java'],
+    ['un cache Gradle deplace par GRADLE_USER_HOME',
+     '/opt/gradle-home/caches/modules-2/files-2.1/com/x/lib/A.kt'],
+    ['la casse du dossier Gradle',
+     '/Users/k/.GRADLE/caches/9.4.1/kotlin-dsl/sources/org/gradle/A.kt'],
+  ];
+
+  for (const [nom, chemin] of cas) {
+    it(nom, () => {
+      aucunDossier();
+      expect(estUnFichierReel(doc(chemin))).toBe(false);
+    });
+  }
+
+  it('mais un dossier nomme sources reste au projet quand il ne porte pas de niveau d API', () => {
+    aucunDossier();
+    expect(estUnFichierReel(doc('/ailleurs/sources/android-utils/A.kt'))).toBe(true);
+  });
+});
+

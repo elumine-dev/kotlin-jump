@@ -15,11 +15,28 @@ import * as vscode from 'vscode';
  * lives somewhere else, and the `.jar!` segment rules out an archive entry
  * whatever scheme it arrives under.
  */
+/**
+ * Read case insensitively, and on the layout rather than the address.
+ *
+ * Comparing segments literally failed twice. The filesystem underneath does
+ * not care about case: `~/Library/Android/SDK/...` and
+ * `~/Library/Android/sdk/...` are the same inode on macOS, Windows behaves the
+ * same way, and the case that reaches us is whatever the user typed. And
+ * neither tree has to sit where its installer put it, since `ANDROID_HOME` and
+ * `GRADLE_USER_HOME` move them.
+ *
+ * What does not move is what is inside: an SDK keeps its platform sources
+ * under `sources/android-<api level>`, and Gradle keeps its downloads under
+ * `caches/modules-2`. The API level has to be a number, so a folder of one's
+ * own named `sources/android-utils` stays the user's.
+ */
 const RACINES_DE_DEPENDANCE = [
-  '/.gradle/caches/',
-  '/.m2/repository/',
-  '/Android/sdk/sources/',
-  '/.konan/',
+  /\/\.gradle\/caches\//i,
+  /\/caches\/modules-2\//i,
+  /\/\.m2\/repository\//i,
+  /\/android\/sdk\/sources\//i,
+  /\/sources\/android-\d+\//i,
+  /\/\.konan\//i,
 ];
 
 /**
@@ -33,7 +50,7 @@ const RACINES_DE_DEPENDANCE = [
  * there is the same noise as the one that started all of this.
  */
 const estUneSourceDeDependance = (chemin: string): boolean =>
-  RACINES_DE_DEPENDANCE.some(r => chemin.includes(r));
+  RACINES_DE_DEPENDANCE.some(r => r.test(chemin));
 
 export function estUnFichierReel(doc: vscode.TextDocument): boolean {
   // `untitled:` passe : un tampon sans titre ou l'on colle du Kotlin est du

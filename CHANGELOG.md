@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.294
+
+A round that cannot read the whole workspace no longer removes anything.
+
+### Fixed
+- Remove Everything Unused could delete live code. It repeats its round until nothing is left, and only the first round refused to work from a workspace it had not managed to read whole. Every later round took one without looking.
+- A scan that missed files cannot prove that nothing uses a declaration. Reasoning from one, the round calls a symbol unreferenced when the only file using it is a file that was not read, and this command applies that verdict rather than reporting it.
+- The command sets this off by itself: it deletes files on every round, and a file the search still lists but which has just gone makes the next read fail, which is exactly what marks a scan incomplete. Reproduced on a class kept alive by a single caller: round two dropped the caller from the sources and the class went, reported as an ordinary removal.
+- Later rounds now hold to the rule the first one already followed. The loop stops there and says why, so a run cut short for that reason cannot be read as a finished cleanup.
+
 ## 1.42.293
 
 The closing report counts what left, not what was found.

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.289
+
+The rest of the safety checks, put through the same test.
+
+### Notes
+- Nothing changed in what the extension does. Yesterday one safety check turned out to be defeated by a line break; the rest of them were put through the same test, and a second one fell the same way.
+- That one keeps diagnostics off invented file paths. On vscode.dev a file is not on disk, so rebuilding its address from the path alone points the Problems panel at somewhere that does not exist and the quick fix reads nothing. Written on one line the mistake was caught. Written with the argument on the next line, the shape this code already uses elsewhere, it was not.
+- A third one, added three days ago, had the opposite fault: it accused a perfectly correct call of throwing its result away, because the call was spread over two lines. A check that cries wolf at good code teaches the next reader the wrong rule.
+- All three now read whole expressions instead of single lines, from one shared piece rather than three copies, and each was confronted with the shapes a formatter actually produces rather than only the tidy one.
+
 ## 1.42.288
 
 A safety check that a line break was enough to slip past.

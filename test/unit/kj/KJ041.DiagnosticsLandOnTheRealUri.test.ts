@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as vscodeMock from '../__mocks__/vscode';
 import { UnusedGradleDependencyProvider } from '../../../src/providers/UnusedGradleDependencyProvider';
 import { rememberCorpusUri } from '../../../src/util/corpusUri';
+import { aplatirSource, ligneDe } from './harness';
 
 /**
  * Un diagnostic se pose sur l URI du fichier, pas sur un `file:` refabrique.
@@ -81,10 +82,15 @@ describe('aucune collection de diagnostics ne refabrique son URI', () => {
         const complet = path.join(dir, nom);
         if (fs.statSync(complet).isDirectory()) { walk(complet); continue; }
         if (!nom.endsWith('.ts')) continue;
-        fs.readFileSync(complet, 'utf8').split('\n').forEach((l, i) => {
-          if (!/\.(set|delete)\s*\(\s*vscode\.Uri\.file\(/.test(l)) return;
-          coupables.push(`${path.relative(depot, complet)}:${i + 1} ${l.trim().slice(0, 70)}`);
-        });
+        // Sur l EXPRESSION, pas sur la ligne : `this.collection.set(` suivi de
+        // son argument a la ligne ne porte le motif sur aucune des deux, et
+        // c est la coupure qu un formateur produit tout seul.
+        const texte = fs.readFileSync(complet, 'utf8');
+        const { plat, ou } = aplatirSource(texte);
+        for (const m of plat.matchAll(/\.(?:set|delete)\s*\(\s*vscode\s*\.\s*Uri\s*\.\s*file\s*\(/g)) {
+          const i = m.index!;
+          coupables.push(`${path.relative(depot, complet)}:${ligneDe(texte, ou, i)} ${plat.slice(i, i + 60).trim()}`);
+        }
       }
     };
     walk(path.join(depot, 'src'));

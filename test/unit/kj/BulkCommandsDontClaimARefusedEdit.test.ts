@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscodeMock from '../__mocks__/vscode';
+import { aplatirSource, ligneDe } from './harness';
 import { removeAllUnusedResourceKeysCommand } from '../../../src/commands/FindUnusedResourceKeys';
 import { UnusedResourceKeyProvider } from '../../../src/providers/UnusedResourceKeyProvider';
 import { removeAllUnusedSymbolsCommand } from '../../../src/commands/FindUnusedSymbols';
@@ -116,21 +117,30 @@ describe('la famille lit le resultat de son edition', () => {
       if (!texte.includes('askHowToApply')) continue;
       const rel = `src/commands/${nom}`;
       const lignes = texte.split('\n');
-      lignes.forEach((l, i) => {
-        if (!/\bapplyEdit\s*\(/.test(l)) return;
-        const cle = `${rel}:${i + 1}`;
-        if (EXEMPTES.has(cle)) { servies.add(cle); return; }
-        const nomme = /\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*await\s+[\w.]*applyEdit\s*\(/.exec(l);
-        if (!nomme) { aveugles.push(`${cle} (resultat jete)`); return; }
-        let fin = i + 1;
+      // La liaison se lit sur l EXPRESSION. Ecrite
+      //     const applique = await vscode.workspace
+      //       .applyEdit(choisi.edit);
+      // elle est parfaitement correcte, et la version ligne a ligne de ce
+      // gardien la denoncait comme un resultat jete : un faux positif qui
+      // apprend au lecteur suivant que la regle serait de tenir sur une ligne.
+      const { plat, ou } = aplatirSource(texte);
+      for (const m of plat.matchAll(/\bapplyEdit\s*\(/g)) {
+        const i = m.index!;
+        const ligne = ligneDe(texte, ou, i);
+        const cle = `${rel}:${ligne}`;
+        if (EXEMPTES.has(cle)) { servies.add(cle); continue; }
+        const avant = plat.slice(Math.max(0, i - 120), i);
+        const nomme = /\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*await\s+[\w.\s]*$/.exec(avant);
+        if (!nomme) { aveugles.push(`${cle} (resultat jete)`); continue; }
+        let fin = ligne;
         while (fin < lignes.length && !/^(?:export )?(?:async )?function /.test(lignes[fin])) fin++;
-        const portee = lignes.slice(i + 1, fin).join('\n');
+        const portee = lignes.slice(ligne, fin).join('\n');
         // Mentionner le nom ne suffit pas : `void applique;` le mentionne. Il
         // faut qu il COMMANDE quelque chose, les deux tournures de la maison
         // etant `if (!ok)` et `ok ? … : …`.
         const garde = new RegExp(`if\\s*\\(\\s*!?\\s*${nomme[1]}\\b|\\b${nomme[1]}\\s*\\?`);
         if (!garde.test(portee)) aveugles.push(`${cle} (resultat nomme puis ignore)`);
-      });
+      }
     }
     expect(aveugles, 'une edition dont le refus passerait inapercu').toEqual([]);
     const perimees = [...EXEMPTES.keys()].filter(k => !servies.has(k));

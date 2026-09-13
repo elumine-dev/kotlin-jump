@@ -1,12 +1,12 @@
 {
-  "version": "1.42.288",
+  "version": "1.42.289",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A line break was enough",
-  "summary": "No behaviour changed. The check that stops a diff view being mistaken for the real file now reads the expression, not the line.",
+  "tagline": "Same test, the rest of the checks",
+  "summary": "No behaviour changed. Two more static checks read whole expressions now, one that missed a real fault and one that invented one.",
   "highlights": [
     {
-      "title": "Reading The Expression",
-      "description": "A path comparison split across two lines walked past the check written to catch it. It reads whole expressions now.",
+      "title": "Whole Expressions, Not Lines",
+      "description": "A check that keeps diagnostics off invented paths missed the wrapped form, and another accused correct code of the same thing.",
       "kind": "improvement"
     }
   ],
@@ -14,10 +14,10 @@
     {
       "heading": "Notes",
       "bullets": [
-        "Nothing changed in what the extension does. A check that keeps a whole class of wrong file edits out of the code was reading one line at a time, and a comparison split across two lines walked straight past it.",
-        "The rule it enforces: never decide that an open document is a given file by comparing paths alone. A diff view opens a document that carries the real file path and the content of the last commit, so a path match there means reading the commit and writing the working tree. That defect has been fixed three separate times in this code, which is why the check exists.",
-        "Written on one line the comparison was caught. Written the way a formatter writes it, with the operator moved to the next line, neither half carried the pattern and the check stayed quiet. Proven by putting each shape back into a real source file.",
-        "It now reads the expression rather than the line, and looks for the guard around the comparison instead of beside it. All three shapes are caught, and the code as it stands has no such comparison left anywhere."
+        "Nothing changed in what the extension does. Yesterday one safety check turned out to be defeated by a line break; the rest of them were put through the same test, and a second one fell the same way.",
+        "That one keeps diagnostics off invented file paths. On vscode.dev a file is not on disk, so rebuilding its address from the path alone points the Problems panel at somewhere that does not exist and the quick fix reads nothing. Written on one line the mistake was caught. Written with the argument on the next line, the shape this code already uses elsewhere, it was not.",
+        "A third one, added three days ago, had the opposite fault: it accused a perfectly correct call of throwing its result away, because the call was spread over two lines. A check that cries wolf at good code teaches the next reader the wrong rule.",
+        "All three now read whole expressions instead of single lines, from one shared piece rather than three copies, and each was confronted with the shapes a formatter actually produces rather than only the tidy one."
       ]
     }
   ],

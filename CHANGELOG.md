@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.255
+
+A sentence that stated a fact it did not have.
+
+### Fixes
+- When Remove Everything Unused reached its round limit it said `There was still work left after the last round: run it again.` It does not know that. The next round never ran, and on the reference project the round following the last productive one found nothing at all. What it knows is that it stopped on the limit, so that is what it says now, with the reason to run it again left as a question rather than an assertion.
+
+### Notes
+- One collision was looked for and found impossible rather than merely absent. The per file sweep removes imports that are already unused; the cascade removes imports that the cuts have just orphaned, and it excludes by construction the ones that were dead beforehand. Two edits on the same range in one WorkspaceEdit would make VS Code reject the whole thing in silence, so the disjointness matters: measured on the reference project, 26 files carry cascade imports and not one of their ranges touches a range the families cut.
+
 ## 1.42.254
 
 The pass limit was a guess, and it was two short.

@@ -129,9 +129,13 @@ describe('compteRendu', () => {
     expect(m).toBe('Removed 3 declarations. Stopped on request: run it again to finish.');
   });
 
-  it('du travail fait, plafond atteint', () => {
-    expect(compteRendu('3 declarations', { ...e, restait: true }))
-      .toContain('still work left after the last round');
+  it('plafond atteint : dit qu on s est arrete, pas qu il reste du travail', () => {
+    // La passe suivante n'a jamais eu lieu. Sur le projet de reference, celle
+    // qui suit la derniere productive ne trouvait rien : affirmer qu'il reste
+    // du travail serait un fait qu'on n'a pas.
+    const m = compteRendu('3 declarations', { ...e, restait: true });
+    expect(m).toContain('Stopped after the last allowed round');
+    expect(m).not.toContain('There was still work left');
   });
 
   it('en relecture, le verbe et la queue changent', () => {

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.280
+
+Warning that two were skipped, claiming all five.
+
+### Fixes
+- Remove Test Only Code told you it had removed everything it had found, even when it had not. The closing sentence read the totals fixed at scan time, while the edit is built after the click and drops whatever moved in between. The command already knew: it warns about those a few lines below, so it could warn that two cuts were skipped and claim all five in the same breath.
+- It counts what left now, declaration by declaration and test by test. One inside a file that goes whole still counts, since it leaves with the file rather than through an edit of its own, and a stale import that goes with it is not counted as a test.
+
+### Notes
+- Found by asking one question of every command in the family at once, rather than one command a day: for each sentence that names a number, which side of the click was it worked out on. Only this one was still reading from before. The dialog above it was put right five releases ago and the sentence below was left as it was.
+- Two mutations survived the first round of checking and were worth more than the fix. Neither of the two paths they touched was covered by any test: a declaration whose whole file is deleted, and an import left with no user. Both have their own case now, and both mutations die.
+
 ## 1.42.279
 
 Yesterday's reports counted what was found, not what went.

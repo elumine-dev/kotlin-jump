@@ -1,12 +1,12 @@
 {
-  "version": "1.42.302",
+  "version": "1.42.303",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Only what was asked about",
-  "summary": "Rereading the workspace after the click could lengthen the list, so more was removed than the question named.",
+  "tagline": "The preview gets fresh ranges",
+  "summary": "Review one by one was offered cuts measured before the question, so a file edited meanwhile showed the wrong lines.",
   "highlights": [
     {
-      "title": "Only What Was Asked About",
-      "description": "A change during the question can kill something new. That something is no longer removed without having been named.",
+      "title": "The Preview Gets Fresh Ranges",
+      "description": "Apply rebuilt its edit after the click and the preview did not, so it could offer a cut two lines off.",
       "kind": "fix"
     }
   ],
@@ -14,10 +14,10 @@
     {
       "heading": "Fixed",
       "bullets": [
-        "Four bulk commands could remove more than the question had asked about. Reading the workspace again after the click, which they learned to do this week, cuts both ways: a change that kills the last user of something else makes the new list longer than the old one.",
-        "So \"Remove 1 unreferenced declaration?\" removed two, the second one never named. The reader agreed to a set, not to an intention, and this editor has spent four earlier releases making the count it announces match the count it applies.",
-        "The second reading is now an intersection with what was announced. It can drop an entry that came back to life, which is the whole point, and it can no longer add one.",
-        "One of the four narrowed the list of subjects but not the list of test files derived from it, so a test file belonging to a dropped subject was still deleted outright. Found by the test written for the intersection, not by rereading the change."
+        "Review one by one showed the wrong lines. Six bulk commands rebuilt their edit after you clicked Apply, so its ranges matched the files as they were at that moment, but the preview was handed the ranges measured before the question was even asked.",
+        "Two lines added at the top of a file while the modal was open, and the preview offered to cut two lines too high, one click away from being accepted. An offset is only worth anything against the text it was measured on, and that holds whether the edit goes out silently or through the preview.",
+        "Both answers now rebuild, and both reread the workspace. The only thing left that separates them is the flag that opens the preview, which is what it should have been all along.",
+        "That flag turned out to be held by nothing at the command level: the check that exists tests the builder with a flag handed to it, never which flag the command chooses. Inverting it, so that Apply opens the preview and Review edits silently, passed the whole suite. It does not now."
       ]
     }
   ],

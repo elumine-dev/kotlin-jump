@@ -287,7 +287,7 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
   // untouched while nothing has invalidated it, so identity says whether the
   // judgement has to be made again.
   let courant = scan;
-  if (choix === 'apply') {
+  {
     const frais = await corpus.get();
     if (frais !== scan.data) {
       // Under a progress bar: this second judgement is the LONG part, twenty
@@ -334,7 +334,13 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
       courant = { ...relu, groups: retenus, testFiles, testFunctions };
     }
   }
-  const choisi = choix === 'apply' ? construire(false, courant) : apercu;
+  // Rebuilt for BOTH answers. Only the flag that opens the preview differs.
+  // The preview used to receive the ranges measured BEFORE the question: two
+  // lines added at the top of a file during the modal and it showed a cut two
+  // lines too high, which the reader can accept in one click. An offset is
+  // only worth anything against the text it was measured on, and that holds
+  // whether the edit goes out silently or through the preview.
+  const choisi = construire(choix === 'review', courant);
   const { edit, swept, skipped } = choisi;
 
   const ok = await vscode.workspace.applyEdit(edit);

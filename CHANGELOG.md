@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.303
+
+The preview was being shown ranges measured before the question.
+
+### Fixed
+- Review one by one showed the wrong lines. Six bulk commands rebuilt their edit after you clicked Apply, so its ranges matched the files as they were at that moment, but the preview was handed the ranges measured before the question was even asked.
+- Two lines added at the top of a file while the modal was open, and the preview offered to cut two lines too high, one click away from being accepted. An offset is only worth anything against the text it was measured on, and that holds whether the edit goes out silently or through the preview.
+- Both answers now rebuild, and both reread the workspace. The only thing left that separates them is the flag that opens the preview, which is what it should have been all along.
+- That flag turned out to be held by nothing at the command level: the check that exists tests the builder with a flag handed to it, never which flag the command chooses. Inverting it, so that Apply opens the preview and Review edits silently, passed the whole suite. It does not now.
+
 ## 1.42.302
 
 The second look can shorten the list, never lengthen it.

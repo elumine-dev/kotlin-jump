@@ -33,6 +33,7 @@ import {
   collectAnnotationTargets,
   fileOptsOut,
   UNUSED_DECLARATION,
+  suppressesDiagnostic,
   CONVENTION_FUN_NAMES,
   REFLECTIVE_SUPERTYPES,
   sanitizeForUsageScan,
@@ -85,11 +86,46 @@ const BENIGN_DECL_ANNOTATIONS = new Set(['Composable']);
  */
 const DIRECTIVES_DE_COMPILATION = new Set(['Suppress', 'SuppressWarnings', 'OptIn']);
 
+/**
+ * Sauf quand la directive dit justement de se taire.
+ *
+ * `@Suppress("unused")` sur une classe ne fait lire personne par reflexion,
+ * mais l auteur y ecrit en toutes lettres que ce qui s y trouve peut sembler
+ * inutilise. La version qui ecartait toutes les directives d un bloc s est
+ * remise a signaler, et donc a proposer de supprimer, ce que l auteur avait
+ * explicitement garde. Chaque detecteur passe la liste qu il honore deja pour
+ * `@file:Suppress`, pour que la classe et le fichier disent la meme chose.
+ */
+function protege(a: { name: string; args: string }, diagnostics: readonly string[]): boolean {
+  if (!DIRECTIVES_DE_COMPILATION.has(a.name)) return true;
+  return a.name !== 'OptIn' && suppressesDiagnostic(a.args, diagnostics);
+}
+
 
 const MODIFIER_GUARD_RE = /\b(?:override|operator|expect|actual|external|abstract|native|default)\b/;
 const CANDIDATE_KINDS = new Set(['fun', 'composable', 'val', 'var', 'class', 'sealedClass', 'object', 'interface']);
 const CLASS_LIKE = new Set(['class', 'sealedClass', 'dataClass', 'object', 'interface', 'enum', 'annotation']);
 /** Characters legal inside a class header between name and body brace. */
+
+/**
+ * Les annotations d un symbole avec leurs arguments, lus sur le texte BRUT : la
+ * copie blanchie vide les chaines, donc `@Suppress("unused")` y devient
+ * `@Suppress(        )`. Les offsets s alignent, le nettoyeur garde les
+ * longueurs.
+ */
+export function annotationsAvecArguments(
+  text: string,
+  annoTargets: readonly { target: number; name: string; argStart: number; argEnd: number }[],
+  lineStarts: readonly number[],
+): (sym: RawSymbol) => { name: string; args: string }[] {
+  return sym => {
+    const lo = lineStarts[sym.line];
+    const hi = lo + sym.character;
+    return annoTargets
+      .filter(a => a.target >= lo && a.target <= hi)
+      .map(a => ({ name: a.name, args: a.argStart >= 0 ? text.slice(a.argStart, a.argEnd) : '' }));
+  };
+}
 
 function outputKind(kind: string): UnusedDeclKind {
   if (kind === 'composable') return 'fun';
@@ -108,14 +144,16 @@ export function reflectiveOrAnnotatedClassRanges(
   symbols: readonly RawSymbol[],
   lineStarts: number[],
   lastLine: number,
-  annotationsFor: (sym: RawSymbol) => string[],
+  annotationsFor: (sym: RawSymbol) => readonly { name: string; args: string }[],
+  /** Les diagnostics que ce detecteur honore dans un `@file:Suppress`. */
+  diagnostics: readonly string[],
 ): { from: number; to: number }[] {
   const ranges: { from: number; to: number }[] = [];
   for (let i = 0; i < symbols.length; i++) {
     const s = symbols[i];
     if (!CLASS_LIKE.has(s.kind)) continue;
     const reflective = (s.supertypes ?? []).some(t => REFLECTIVE_SUPERTYPES.has(t.replace(/<.*/, '')));
-    const annotations = annotationsFor(s).filter(a => !DIRECTIVES_DE_COMPILATION.has(a));
+    const annotations = annotationsFor(s).filter(a => protege(a, diagnostics));
     if (annotations.length === 0 && !reflective) continue;
     let to = rangeEndLine(symbols, i, lastLine);
     const brace = clean.indexOf('{', lineStarts[s.line] + s.character);
@@ -163,7 +201,7 @@ export function findUnusedDeclarations(text: string, lang: 'kotlin' | 'java' = '
   // Their val/var members are skipped; functions stay flaggable.
   const annotatedClassRanges: { from: number; to: number }[] = [];
   annotatedClassRanges.push(
-    ...reflectiveOrAnnotatedClassRanges(clean, symbols, lineStarts, lastLine, annosFor),
+    ...reflectiveOrAnnotatedClassRanges(clean, symbols, lineStarts, lastLine, annotationsAvecArguments(text, annoTargets, lineStarts), UNUSED_DECLARATION),
   );
   const inAnnotatedClass = (line: number): boolean =>
     annotatedClassRanges.some(r => line > r.from && line <= r.to);

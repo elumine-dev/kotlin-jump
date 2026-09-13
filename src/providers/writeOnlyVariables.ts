@@ -30,7 +30,7 @@ import {
   UNUSED_VARIABLE,
   sanitizeForUsageScan,
 } from '../util/kotlinScan';
-import { reflectiveOrAnnotatedClassRanges } from './unusedDeclarations';
+import { reflectiveOrAnnotatedClassRanges, annotationsAvecArguments } from './unusedDeclarations';
 import {
   Block,
   blank,
@@ -234,7 +234,7 @@ export function findWriteOnlyVariables(text: string): WriteOnlyVar[] {
     const hi = lo + sym.character;
     return annoTargets.filter(a => a.target >= lo && a.target <= hi).map(a => a.name);
   };
-  const reflectiveRanges = reflectiveOrAnnotatedClassRanges(clean, symbols, lineStarts, lastLine, annosFor);
+  const reflectiveRanges = reflectiveOrAnnotatedClassRanges(clean, symbols, lineStarts, lastLine, annotationsAvecArguments(text, annoTargets, lineStarts), UNUSED_VARIABLE);
   const inReflectiveClass = (line: number) => reflectiveRanges.some(r => line > r.from && line <= r.to);
 
   const nameCounts = new Map<string, number>();

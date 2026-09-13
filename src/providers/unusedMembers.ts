@@ -233,6 +233,9 @@ export function collectMemberCandidates(
     if (fileOptsOut(src.text, UNUSED_DECLARATION)) continue;
     if (src.text.includes(IGNORE_MARKER)) continue;
 
+    /** Une seule copie sans commentaires par fichier, et seulement si un symbole mort la demande. */
+    let copieSc: string | undefined;
+    const sansCommentaires = (): string => (copieSc ??= stripKotlinComments(src.text));
     const clean = sanitizeForUsageScan(src.text);
     const lineStarts = buildLineStarts(clean);
     const lastLine = lineStarts.length - 1;
@@ -384,7 +387,7 @@ export function collectMemberCandidates(
         // A string mention anywhere in the file (reflection by name, a log
         // that spells it) disqualifies selfOnly and keeps the member alive.
         stringMentions: selfInFile - cleanTotal,
-        ...removalExtent(src.text, clean, lineStarts, lastLine, sym, span),
+        ...removalExtent(src.text, clean, lineStarts, lastLine, sym, span, sansCommentaires),
         memberOffset: nameOffset,
         // The inline-body parse path can drop flags, so the raw line is the
         // belt, exactly as KJ-026 does with its MODIFIER_GUARD_RE.

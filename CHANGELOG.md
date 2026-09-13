@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.318
+
+A comment could speak for the code, and the removal took the live function underneath.
+
+### Fixed
+- Removing an unreferenced declaration whose line opened a block comment took whatever followed the comment with it. Written out: `val ghost = 1 /* keep`, then `   as is for now */`, then `fun alive() = 2`. All three went. Four shapes of the same thing were reproduced, four times the live function was deleted.
+- A line INSIDE a block comment starts with none of the signs the walk looks for, so it read as the declaration carrying on. And asked in isolation, that line has no opening marker to erase, so nothing was erased and its closing slash read as a division. Two ways of reading a comment as code, on the same two lines.
+- The question of where code really ends now goes to a copy of the whole FILE with comments erased and strings kept, taken once per file. Read line by line, that copy is blind to anything a block comment spreads over more than one line.
+- A cut may never split a block comment in two: the closing marker would stay behind and the file would stop compiling. A comment that STARTS after the cut is a different matter and belongs to the neighbour. Without that distinction, a dead declaration followed by a plain comment offered no fix at all, and one followed by a KDoc had the neighbour's documentation deleted with it.
+- Faster, not slower: seven interleaved passes on the reference project give a median of 9978 ms against 10929 ms, and the two spreads do not touch. The first version of this fix ran 41 percent SLOWER and the same measurement is what caught it, before any of it shipped.
+
 ## 1.42.317
 
 Three copies of the file to read two characters, and one of them had no reader left.

@@ -221,6 +221,9 @@ function analyze(input: DeadIslandScanInput): Analysis {
     if (isTestSourceSet(src.path, input.testSourceSets)) continue;
     const ignoreMarked = src.text.includes(IGNORE_MARKER);
 
+    /** Une seule copie sans commentaires par fichier, et seulement si un symbole mort la demande. */
+    let copieSc: string | undefined;
+    const sansCommentaires = (): string => (copieSc ??= stripKotlinComments(src.text));
     const clean = sanitizeForUsageScan(src.text);
     const lineStarts = buildLineStarts(clean);
     const lastLine = lineStarts.length - 1;
@@ -271,7 +274,7 @@ function analyze(input: DeadIslandScanInput): Analysis {
       let removeStart = -1;
       let removeEnd = -1;
       try {
-        const extent = removalExtent(src.text, clean, lineStarts, lastLine, sym as RawSymbol, span);
+        const extent = removalExtent(src.text, clean, lineStarts, lastLine, sym as RawSymbol, span, sansCommentaires);
         removeStart = extent.removeStart;
         removeEnd = extent.removeEnd;
       } catch { /* the verdict does not depend on the fix */ }

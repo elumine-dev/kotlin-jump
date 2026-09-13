@@ -16,7 +16,7 @@
  * eux, et le plan en compte pourtant les declarations.
  *
  *   ecart      somme des familles = plages emises + coupes des fichiers effaces
- *   phrase     chaque famille non nulle est nommee dans la phrase finale
+ *   phrase     mettre une famille a zero change la phrase (donc elle y est)
  *   somme      la phrase totalise exactement les coupes retenues
  *   perdu      aucun fichier retenu ne se retrouve sans plages ni suppression
  */
@@ -84,10 +84,16 @@ function main(): void {
   }
 
   const phrase = resumeDesFamilles(applique);
+  // Par CONSTRUCTION, pas par sous-chaine. Chercher la valeur du compte dans la
+  // phrase se laisse satisfaire par le compte d'une AUTRE famille : deux
+  // familles a 15 et l'une retiree, « 15 » est toujours la et l'invariant se
+  // tait. Mettre la famille a zero doit changer la phrase, c'est la seule
+  // formulation qui ne depende ni des libelles ni des valeurs.
   for (const f of FAMILLES_DE_PASSE) {
-    if ((applique[f] ?? 0) > 0 && !phrase.includes(String(applique[f]))) {
+    if ((applique[f] ?? 0) === 0) continue;
+    if (resumeDesFamilles({ ...applique, [f]: 0 }) === phrase) {
       compte.phrase++;
-      fautes.push(`PHRASE ${f}=${applique[f]} absente de ${JSON.stringify(phrase)}`);
+      fautes.push(`PHRASE ${f}=${applique[f]} ne change rien a ${JSON.stringify(phrase)}`);
     }
   }
   const totalDansLaPhrase = [...phrase.matchAll(/(\d+)/g)].reduce((n, m) => n + Number(m[1]), 0);
@@ -96,9 +102,18 @@ function main(): void {
     fautes.push(`SOMME phrase=${totalDansLaPhrase} retenues=${sommeFamilles}`);
   }
 
+  // Temoin : l'invariant `phrase` sait-il voir une famille manquante quand une
+  // AUTRE porte le meme compte ? Un zero qui ne sait pas voir ne vaut rien.
+  const truque: Record<string, number> = {
+    symboles: 15, membres: 0, entrees: 15, ilots: 0, balayage: 0, renommages: 0, imports: 0, fichiers: 0,
+  };
+  const ampute = resumeDesFamilles({ ...truque, entrees: 0 } as never);
+  const temoinVoit = ampute !== resumeDesFamilles(truque as never)
+    && !ampute.includes('enum');
+
   console.log(JSON.stringify({
     sources: sources.length, coupesRetenues: sommeFamilles, plages, dansFichiersEffaces,
-    fichiersEffaces: cascade.deleteFiles.size, ...compte,
+    fichiersEffaces: cascade.deleteFiles.size, ...compte, temoinVoit,
   }));
   console.log('  ' + phrase);
   for (const x of fautes) console.log('  ' + x);

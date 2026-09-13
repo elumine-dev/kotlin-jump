@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.311
+
+The new check was matching a number, not the thing.
+
+### Notes
+- Nothing changed in what the extension does. The check added yesterday, on whether the closing sentence of a removal names every kind of thing it removed, was itself matching on a number rather than on the thing.
+- It looked for the count of each kind somewhere in the sentence. Two kinds with the same count, one of them dropped, and the number is still there thanks to the other: the sentence has lost a whole kind and the check reports nothing. Reproduced on two kinds at fifteen.
+- It now asks the sentence builder itself: set one kind to zero, and the sentence has to change. That depends on neither the wording nor the numbers, so nothing can stand in for the missing part.
+- And the check now proves it can see before it reports a zero. Put the old matching back and it says so on its own line rather than quietly reporting nothing wrong, which is what a check that cannot see should do.
+
 ## 1.42.310
 
 An eighth check, on what the closing sentence claims.

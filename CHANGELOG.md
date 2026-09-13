@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.292
+
+One skipped file counted once, not once per round.
+
+### Fixed
+- Remove Everything Unused counted one skipped file several times. A file that changed between the scan and the click is left alone and named at the end, and the command repeats its round until nothing is left, so the same file was named again on every round: four rounds, one file, and a closing report saying four files.
+- The situation is the ordinary one this check exists for. A file open in the editor whose content changed on disk, from a branch switch or a formatter run in a terminal, stays out of step round after round, so the count grew with the number of rounds rather than with the number of files.
+- The rounds now collect the paths themselves rather than adding up counts, so a file skipped ten times is still one file. The count that goes into the report cannot drift from the list it describes.
+- Held by a test that runs the real command over four rounds with one file out of step, and by three mutations of the fix, each of which puts the old answer back and turns the suite red.
+
 ## 1.42.291
 
 One list of eight, written by hand in three places.

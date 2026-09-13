@@ -418,10 +418,18 @@ export const languages = {
     // Backed by a real map: a provider that publishes to the Problems panel
     // can only be tested if the panel remembers what it was given.
     const entries = new Map<string, any[]>();
+    // L'URI COMPLETE en plus du chemin. Deux documents peuvent porter le meme
+    // `fsPath` sous des schemas differents, `file:` et `vscode-vfs:`, et une
+    // cle par chemin seul ne saurait pas les distinguer.
+    const uris = new Map<string, any>();
     return {
       _entries: entries,
-      set:    (uri: any, diagnostics: any[]) => { entries.set(uri?.fsPath ?? String(uri), diagnostics); },
-      delete: (uri: any) => { entries.delete(uri?.fsPath ?? String(uri)); },
+      _uris: uris,
+      set:    (uri: any, diagnostics: any[]) => {
+        entries.set(uri?.fsPath ?? String(uri), diagnostics);
+        uris.set(uri?.fsPath ?? String(uri), uri);
+      },
+      delete: (uri: any) => { entries.delete(uri?.fsPath ?? String(uri)); uris.delete(uri?.fsPath ?? String(uri)); },
       clear:  () => { entries.clear(); },
       dispose: () => { entries.clear(); },
     };

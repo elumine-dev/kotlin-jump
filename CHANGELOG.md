@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.271
+
+A warning pointing at a file that is not there.
+
+### Fixes
+- Unreferenced catalog aliases were reported against a path that does not exist on vscode.dev and github.dev. The workspace index keys its sources by file path, and this one detector rebuilt a `file:` address from that path. On those hosts a file is a `vscode-vfs://github/owner/repo/...`, so the Problems panel listed entries no editor could open and the removal fix read a file that was not there.
+- The address the index actually read the file under is kept for exactly this, and eleven detectors have used it since 1.42.12. This one was missed. It uses it now, on both the entry it adds and the one it removes.
+
+### Notes
+- Found by sweeping the same question across the codebase rather than waiting for it to turn up: which places build a desktop address out of a path. Thirteen do, and the other twelve are right to, since a local icon cache only exists on a desktop in the first place.
+- A rule now watches that narrow case, and only that one: a diagnostic list may not be keyed by a rebuilt address. It says nothing about the other uses, which is why it needs no list of exceptions. Putting the old code back is caught twice on the entry that is added and once on the one that is removed.
+
 ## 1.42.270
 
 Two linters that had gone quiet on the web.

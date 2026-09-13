@@ -1,12 +1,12 @@
 {
-  "version": "1.42.270",
+  "version": "1.42.271",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Both file linters work on vscode.dev again",
-  "summary": "The hardcoded string and lifecycle pairing lints had been silent on the web since 1.42.246, because a file there is not a `file:`.",
+  "tagline": "Catalog warnings point at the real file",
+  "summary": "On vscode.dev the unreferenced catalog alias warnings landed on a path no editor could open.",
   "highlights": [
     {
-      "title": "Can You Fix What I Report",
-      "description": "Asking for the `file` scheme kept Gradle source jars out and kept the whole web host out with them. The guard now asks whether the filesystem can be written to, which is what it wanted to know all along.",
+      "title": "The Warning Finds Its File",
+      "description": "One detector rebuilt a desktop address from a file path, which is a path that does not exist on the web. It now uses the address the workspace index actually read the file under, like the eleven others.",
       "kind": "fix"
     }
   ],
@@ -14,15 +14,15 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "The hardcoded string lint and the lifecycle pairing lint had gone quiet on vscode.dev and github.dev. Both ran there until 1.42.246, when the guard that keeps Gradle source jars out of the Problems panel started asking for the `file` scheme. On those hosts a file is a `vscode-vfs://github/owner/repo/...`, so it fell out with the jars, and nothing said so.",
-        "The scheme was never the question. What the guard wants to know is whether the reader can fix what it reports, and the editor answers that itself: a filesystem declared read only is left alone, an unsaved buffer is still the reader's own code, and the handful of schemes that show a copy of a file living elsewhere, the diff view first among them, are named one by one rather than guessed at."
+        "Unreferenced catalog aliases were reported against a path that does not exist on vscode.dev and github.dev. The workspace index keys its sources by file path, and this one detector rebuilt a `file:` address from that path. On those hosts a file is a `vscode-vfs://github/owner/repo/...`, so the Problems panel listed entries no editor could open and the removal fix read a file that was not there.",
+        "The address the index actually read the file under is kept for exactly this, and eleven detectors have used it since 1.42.12. This one was missed. It uses it now, on both the entry it adds and the one it removes."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "This one was named at the end of the previous release and left untreated on purpose, to be looked at with a clear head rather than at the end of a hunt. It is the third thing found by asking what else assumes a desktop, after three commands the web build offered without being able to run them and a stale text guard that never saw an open document there.",
-        "The jar entries, the dependency source trees and the workspace folder rule all keep working unchanged, on the web as well: a `sources/android-35` path is left alone whatever host it arrives from."
+        "Found by sweeping the same question across the codebase rather than waiting for it to turn up: which places build a desktop address out of a path. Thirteen do, and the other twelve are right to, since a local icon cache only exists on a desktop in the first place.",
+        "A rule now watches that narrow case, and only that one: a diagnostic list may not be keyed by a rebuilt address. It says nothing about the other uses, which is why it needs no list of exceptions. Putting the old code back is caught twice on the entry that is added and once on the one that is removed."
       ]
     }
   ],

@@ -434,14 +434,25 @@ function entryExtent(
   let avant = nameStart - 1;
   while (avant >= 0 && /\s/.test(clean[avant])) avant--;
   if (clean[avant] !== ',') return { removeStart: -1, removeEnd: -1 };
-  // Leave the blank that followed the entry, the way the branch above leaves
-  // the one that followed the comma. `finDeLEntree` stops after the spaces of
-  // the line but before its newline, so taking it whole glued the closing
-  // brace to the neighbour on a single line list, `enum class E { VIVANT}`,
-  // while the multi line shape was already right. Spaces and tabs only: the
-  // newline is not ours to take either.
+  // `finDeLEntree` stops after the blanks of the line but before its newline,
+  // so taking it whole glued the closing brace to the neighbour on a single
+  // line list: `enum class E { VIVANT}`. Only that brace needs a blank kept,
+  // and one is enough.
+  //
+  // Giving the whole run back instead was worse than the glue it cured. A
+  // comment is blanked to spaces of the SAME LENGTH in `clean`, so the walk
+  // climbed back over the entry's own `// no longer used` and returned it to
+  // the file, where it reads as a note on the neighbour that survives. Trailing
+  // spaces came back the same way, on a line the cut used to leave clean.
+  //
+  // The blank is read from the raw text, never from `clean`: a space there is
+  // a space, not the tail of a comment we are supposed to be taking. No shape
+  // tells the two readings apart today, because an entry carrying a block
+  // comment on its line is not detected at all, so this one is a guard against
+  // a gap being closed, not a cure for something measured.
   let finPropre = fin;
-  while (finPropre > nameStart && (clean[finPropre - 1] === ' ' || clean[finPropre - 1] === '\t')) finPropre--;
+  if (clean[fin] === '}' && finPropre > nameStart
+      && (text[finPropre - 1] === ' ' || text[finPropre - 1] === '\t')) finPropre--;
   return { removeStart: avant, removeEnd: finPropre };
 }
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.257
+
+A linter switched off by the fix that was meant to save it.
+
+### Fixes
+- Lifecycle Pairing went quiet on a Kotlin or Java file opened on its own, with no folder open in the window. The check that keeps a Gradle source jar out of the Problems panel was asking for a workspace folder, and a single file belongs to none.
+- The split that was supposed to fix this shipped two releases ago and only went half way. It added the looser check to this linter without taking the strict one out, and since the strict one is the loose one plus the folder, it kept winning every time. The strict check is gone.
+
+### Notes
+- The source jar is still kept out, folder or no folder, and so is a `git:` view of a file that lives elsewhere. What changed is only the folder requirement, on a linter that reads nothing but the document in front of it.
+- The test that covers this was checking the two guard functions on their own, never which of the two each linter calls, so it stayed green while the linter was off. It now drives the providers themselves, and it covers the hardcoded string linter in the same breath, since the two broke together and only one was put right.
+
 ## 1.42.256
 
 One quick fix, two different places.

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.309
+
+Counting where the work is done.
+
+### Notes
+- Nothing changed in what the extension does. The part that removes an import left with no user, and deletes a file left with nothing in it, had no test of its own at all, and two commands read its counts straight into the sentence they show you at the end.
+- Those counts are honest today. One of the two was taken from the plan rather than from the loop that carries it out: the same number by luck, since nothing in that loop is skipped, and a wrong number the day something is.
+- This editor has already paid for a count taken in one place and a list built in another, on a workspace where 133 types were described by two lenses that disagreed. So the count is taken where the work is done, and a test holds each count against what actually went into the edit.
+- Also held now: a file whose text is missing is skipped and not counted, and the flag that opens the preview reaches deletions as well as edits.
+
 ## 1.42.308
 
 The second promise, also held by nothing.

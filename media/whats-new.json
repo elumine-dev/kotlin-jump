@@ -1,12 +1,12 @@
 {
-  "version": "1.42.308",
+  "version": "1.42.309",
   "title": "What's New in Kotlin Jump",
-  "tagline": "An unreadable file says so",
-  "summary": "No behaviour changed. The flag every removal guard reads is now raised under test when a file cannot be read.",
+  "tagline": "Counting where the work is done",
+  "summary": "No behaviour changed. The cascade now counts what it writes, and has tests of its own for the first time.",
   "highlights": [
     {
-      "title": "An Unreadable File Says So",
-      "description": "Every removal refuses a workspace it could not read whole. Nothing checked that a failed read actually said so.",
+      "title": "Counting Where The Work Is Done",
+      "description": "The imports and files a removal drags along are reported to you. One of the two counts came from the plan, not from the doing.",
       "kind": "improvement"
     }
   ],
@@ -14,10 +14,10 @@
     {
       "heading": "Notes",
       "bullets": [
-        "Nothing changed in what the extension does. The second promise the removal commands lean on is now written down, after the first one yesterday.",
-        "Every one of them refuses to work from a workspace it could not read whole, because a scan that missed files cannot prove that nothing uses a declaration. That refusal reads one flag, and the flag is raised by the index when a file cannot be read or when the scan is cut short.",
-        "The file cap was covered by the tests next to it. The read failure was covered by nothing, and it is the one that actually happens: a file the search still lists and which has just been deleted, which is how the removal commands set this off against themselves.",
-        "Made to swallow a read failure silently, the whole suite of nearly eight thousand tests still passed, while every guard built on that flag this week would have gone quiet, including the one that stopped live code being deleted."
+        "Nothing changed in what the extension does. The part that removes an import left with no user, and deletes a file left with nothing in it, had no test of its own at all, and two commands read its counts straight into the sentence they show you at the end.",
+        "Those counts are honest today. One of the two was taken from the plan rather than from the loop that carries it out: the same number by luck, since nothing in that loop is skipped, and a wrong number the day something is.",
+        "This editor has already paid for a count taken in one place and a list built in another, on a workspace where 133 types were described by two lenses that disagreed. So the count is taken where the work is done, and a test holds each count against what actually went into the edit.",
+        "Also held now: a file whose text is missing is skipped and not counted, and the flag that opens the preview reaches deletions as well as edits."
       ]
     }
   ],

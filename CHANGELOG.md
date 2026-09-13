@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.260
+
+A check that reported zero while looking at a fifth of the work.
+
+### Notes
+- Nothing changed in what the extension does. What changed is what the checks behind it are able to see, and one of them was seeing a fifth of what it claimed.
+- The rule that says a deletion has to take whole lines was written for one detector family out of four, on the grounds that another family removes only the left side of an assignment and keeps the call on the right. That family was named wrong. Measured on the reference project: declarations 19 deletions and 19 whole lines, write only 11 and 11, imports 20 and 20, and the family that really does cut part of a line accounts for 2.
+- So 31 of the 52 deletions were held to nothing. Shifting every import cut by one character left all seven counters at zero, the exact blindness the rule exists to remove, while the same shift on the declaration cuts was caught 19 times out of 19. It is now 20 out of 20 for imports and 11 out of 11 for write only, and the unshifted project still reports zero, so nothing real was hiding behind it.
+- The co removal check named a single kind of cut for the same rule. Every kind answers to it now, and an unrecognised one answers to it too: an oracle that stays quiet about what it does not know reads exactly like an oracle that is happy.
+
 ## 1.42.259
 
 One capital letter was enough to undo it.

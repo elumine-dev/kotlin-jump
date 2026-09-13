@@ -20,6 +20,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { findUnusedSymbols } from '../src/providers/unusedSymbols';
+import { couvreDesLignesEntieres } from './invariants';
 import { findUnusedMembers } from '../src/providers/unusedMembers';
 import { findDeadIslands } from '../src/providers/deadIslands';
 import { findUnusedEnumEntries } from '../src/providers/unusedEnumEntries';
@@ -128,13 +129,14 @@ function main(): void {
         // six compteurs annoncent zero pendant que le premier caractere de
         // l'annotation reste sur place. Meme omission que celle trouvee la
         // veille dans le temoin du balayage.
-        if (c.kind === 'function') {
-          const debutLigne = c.start === 0 || texte[c.start - 1] === '\n';
-          const finLigne = c.end === texte.length || texte[c.end - 1] === '\n' || texte[c.end] === '\n';
-          if (!debutLigne || !finLigne) {
-            compte.ligne++;
-            if (fautes.length < 12) fautes.push(`LIGNE ${g.label} ${p} ${c.name} debut=${debutLigne} fin=${finLigne}`);
-          }
+        // Toute coupe, quel que soit son `kind`. Nommer un seul genre ici
+        // laissait la porte ouverte au genre suivant : rien ne l'aurait dit,
+        // et un temoin muet se lit comme un temoin content. Aucun genre de ce
+        // plan ne coupe un morceau de ligne, contrairement au balayage ou la
+        // famille `locals` retire le seul prefixe d'affectation.
+        if (!couvreDesLignesEntieres(texte, c.start, c.end)) {
+          compte.ligne++;
+          if (fautes.length < 12) fautes.push(`LIGNE ${g.label} ${p} ${c.name} ${c.kind}`);
         }
         if (c.kind === 'function' && !texte.slice(c.start, c.end).includes(c.name)) {
           compte.nom++;

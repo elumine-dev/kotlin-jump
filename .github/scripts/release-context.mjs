@@ -13,35 +13,64 @@
 //    lives in the comment blocks ADDED to the file, and those were never read.
 //
 // Git is read here without any pipe, and truncation happens on strings.
+//
+// 3. Nothing of the maintainer's demo tooling may reach the prompt. The rest of
+//    `.publish` excludes `scripts/**` and the demo assets from every part of
+//    the context, and refuses to write notes that name the recorder, ffmpeg or
+//    the demo pipeline. This collection read the header of EVERY test, the
+//    demo ones included, and the patch of `src/` without the line filter the
+//    old context applied, although `src/logcat/index.ts` carries KJ_DEMO_MODE.
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const git = (cwd, args) =>
   execFileSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
 
-/** Comment blocks opening with `/**`, in order, each capped, until `maxLines` are taken. */
-function commentBlocks(lines, maxLines) {
-  const out = [];
-  let inBlock = false;
+/**
+ * Every term the `.publish` safety net refuses, plus the identifiers its old
+ * diff filter dropped. Matched case insensitively, as the net does. A test in
+ * ReleaseContext.adversarial reads the net's list out of `.publish` and checks
+ * each term against this one, so the two cannot drift apart.
+ */
+export const DEV_ONLY_RE = new RegExp([
+  'demo:record', 'demo:workspace', 'predemo:', 'scripts/demo', 'recorder-ext',
+  'kotlin-jump-demo-recorder', 'kotlinJumpDemo', 'KJ_DEMO', '\\.kotlin-jump-dev-mode',
+  'demo recording', 'demo recorder', 'demo pipeline', 'screencapture', 'ffmpeg',
+  'webp demo', 'record demo',
+].join('|'), 'i');
+
+/** A test of maintainer tooling: it imports from `scripts/`, which the whole context excludes. */
+const testsDevTooling = text => /(?:from\s+|require\()\s*['"](?:\.\.\/)+scripts\//.test(text);
+
+/** The `/**` comment blocks of `lines`, in order, each one a list of lines. */
+function commentBlocks(lines) {
+  const blocks = [];
+  let current = null;
   for (const line of lines) {
-    if (!inBlock && /^\s*\/\*\*/.test(line)) inBlock = true;
-    if (inBlock) {
+    if (current === null && /^\s*\/\*\*/.test(line)) current = [];
+    if (current !== null) {
+      current.push(line);
+      if (/\*\//.test(line)) { blocks.push(current); current = null; }
+    }
+  }
+  if (current !== null) blocks.push(current);
+  return blocks;
+}
+
+/** Blocks free of dev only material, flattened, until `maxLines` are taken. */
+function keep(blocks, maxLines) {
+  const out = [];
+  for (const block of blocks) {
+    if (block.some(l => DEV_ONLY_RE.test(l))) continue;
+    for (const line of block) {
+      if (out.length >= maxLines) return out;
       out.push(line);
-      if (out.length >= maxLines) break;
-      if (/\*\//.test(line)) inBlock = false;
     }
   }
   return out;
-}
-
-/** The first `/**` block of a file: the reason a NEW test was written. */
-function firstBlock(text, maxLines) {
-  const blocks = commentBlocks(text.split('\n'), maxLines);
-  const end = blocks.findIndex(l => /\*\//.test(l));
-  return end === -1 ? blocks : blocks.slice(0, end + 1);
 }
 
 export function releaseContext({ cwd, base, maxSrcLines = 600, maxCommentLines = 80 }) {
@@ -66,14 +95,18 @@ export function releaseContext({ cwd, base, maxSrcLines = 600, maxCommentLines =
   for (const [path, status] of [...entries].sort((a, b) => a[0].localeCompare(b[0]))) {
     const abs = join(cwd, path);
     if (status === 'D' || !existsSync(abs)) continue;
+    const text = readFileSync(abs, 'utf8');
+    if (testsDevTooling(text)) continue;
     if (status === 'A') {
+      const header = keep(commentBlocks(text.split('\n')).slice(0, 1), maxCommentLines);
+      if (header.length === 0) continue;
       out.push(`--- new test ${path}`);
-      out.push(...firstBlock(readFileSync(abs, 'utf8'), maxCommentLines));
+      out.push(...header);
     } else {
       const added = git(cwd, ['diff', base, '--', path]).split('\n')
         .filter(l => l.startsWith('+') && !l.startsWith('+++ '))
         .map(l => l.slice(1));
-      const blocks = commentBlocks(added, maxCommentLines);
+      const blocks = keep(commentBlocks(added), maxCommentLines);
       if (blocks.length === 0) continue;
       out.push(`--- comment blocks added to ${path}`);
       out.push(...blocks);
@@ -81,14 +114,22 @@ export function releaseContext({ cwd, base, maxSrcLines = 600, maxCommentLines =
   }
 
   out.push('');
-  const patch = git(cwd, ['diff', base, '--', 'src']).split('\n');
+  const patch = git(cwd, ['diff', base, '--', 'src']).split('\n').filter(l => !DEV_ONLY_RE.test(l));
   if (patch.length > 0 && patch[patch.length - 1] === '') patch.pop();
   out.push(`Shipped source changes (patch of src/${patch.length > maxSrcLines ? `, first ${maxSrcLines} of ${patch.length} lines` : ''}):`);
   out.push(...patch.slice(0, maxSrcLines));
   return out.join('\n') + '\n';
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+// Run as a command, not imported. Compared on REAL paths: `import.meta.url` is
+// resolved through symlinks and `process.argv[1]` is the path as typed, so a
+// script reached through a link (macOS puts /tmp behind one) skipped this
+// block, printed nothing and exited 0, and the notes lost every reason.
+const invoked = (() => {
+  try { return process.argv[1] !== undefined && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href; }
+  catch { return false; }
+})();
+if (invoked) {
   const i = process.argv.indexOf('--base');
   const base = i === -1 ? 'HEAD' : process.argv[i + 1];
   process.stdout.write(releaseContext({ cwd: process.cwd(), base }));

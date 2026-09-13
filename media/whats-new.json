@@ -1,28 +1,26 @@
 {
-  "version": "1.42.249",
+  "version": "1.42.250",
   "title": "What's New in Kotlin Jump",
-  "tagline": "One question, one answer",
-  "summary": "Stopping the command on its first round produced two opposite answers in the same sentence, and the test written for that case passed on it.",
+  "tagline": "A zero that had not been earned",
+  "summary": "Nothing in the extension changed. The witness that checks what the per file sweep cuts stayed at zero even when the cut was shifted by one character.",
   "highlights": [
     {
-      "title": "A report that no longer contradicts itself",
+      "title": "The sweep witness now catches an offset shift",
       "kind": "fix",
-      "description": "Stopping on the first round said `Nothing unused left to remove. Stopped on request: run it again to finish.` When nothing was removed, the reason IS the answer and there is no headline to put in front of it."
+      "description": "Shift a cut by one character and all six counters stayed silent: the name is still inside, the braces still balance, the indentation does not move. It was missing the whole line rule the four other witnesses have. The same shift now reports nineteen violations."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "The final sentence of Remove Everything Unused is built as one thing, with six cases pinned, instead of a headline glued to a note.",
-        "The test written for the cancelled case looked only for the second half of the sentence. It states what the sentence must not contain too."
+        "The witness for the per file sweep checks that a deletion takes whole lines, for the family that cuts whole lines and that family only."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "A round was profiled rather than guessed: dead islands take 8.7 s of the 20, because the detector re-runs the symbol and member analyses inside itself.",
-        "Interleaved against the version from before the extent work, that cost measures 8.87 s against 8.82 s: it is not a regression, and sharing the work would mean opening the two most delicate detectors for a quarter of one round."
+        "Every test added since 1.42.232 was run against the code from before its fix. Sixteen fail there, which is what a test for a fix is supposed to do, and none of the batch passes for a wrong reason."
       ]
     }
   ],

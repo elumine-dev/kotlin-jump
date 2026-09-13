@@ -7,6 +7,7 @@
  * niveau d'avant 1.42.233 pendant que l'originale grandissait. Il n'avait
  * aucun temoin ; les quatre autres n'en couvrent pas une seule coupe.
  *
+ *   ligne     une SUPPRESSION porte sur des lignes entieres
  *   nom       la coupe contient le nom de la declaration
  *   bornes    la coupe tient dans le texte
  *   solde     les accolades restent equilibrees
@@ -60,7 +61,7 @@ function main(): void {
   const root = process.argv[2];
   const fichiers: string[] = [];
   walk(root, f => fichiers.push(f));
-  const compte = { nom: 0, bornes: 0, solde: 0, brute: 0, orphelin: 0, croise: 0 };
+  const compte = { ligne: 0, nom: 0, bornes: 0, solde: 0, brute: 0, orphelin: 0, croise: 0 };
   const fautes: string[] = [];
   let trouvailles = 0, coupes = 0;
 
@@ -74,6 +75,7 @@ function main(): void {
 
     const rel = path.relative(root, f);
     const parNom = new Map(findings.flatMap(x => x.edits.map(e => [`${e.start}:${e.end}`, x.name])));
+    const parDetecteur = new Map(findings.flatMap(x => x.edits.map(e => [`${e.start}:${e.end}`, x.detector])));
     const triees = [...plan].sort((a, b) => a.start - b.start);
     let finPrec = -1;
     for (const e of triees) {
@@ -85,6 +87,28 @@ function main(): void {
       }
       const coupe = texte.slice(e.start, e.end);
       const nom = parNom.get(`${e.start}:${e.end}`);
+
+      // Une SUPPRESSION porte sur des lignes entieres. Sans cet invariant, le
+      // temoin etait aveugle a un decalage d'UN caractere : le nom reste dans
+      // la coupe, les accolades restent equilibrees, l'indentation ne bouge
+      // pas, et les six autres compteurs annoncent zero pendant que le premier
+      // caractere de la declaration reste sur place. Les quatre autres temoins
+      // portent cette regle depuis le debut ; celui-ci ne l'avait pas parce
+      // que le balayage fait AUSSI des remplacements en milieu de ligne, et
+      // l'exception avait ete prise pour une dispense.
+      // Seule la famille `declarations` coupe des lignes entieres. La famille
+      // des ecritures sans lecture retire DELIBEREMENT le seul prefixe
+      // d'affectation, `var db = `, en gardant l'appel a droite pour son effet
+      // de bord : y exiger des lignes entieres reviendrait a signaler le
+      // comportement correct, ce qu'un oracle ne doit jamais faire.
+      if (e.text === '' && parDetecteur.get(`${e.start}:${e.end}`) === 'declarations') {
+        const debutLigne = e.start === 0 || texte[e.start - 1] === '\n';
+        const finLigne = e.end === texte.length || texte[e.end - 1] === '\n' || texte[e.end] === '\n';
+        if (!debutLigne || !finLigne) {
+          compte.ligne++;
+          if (fautes.length < 10) fautes.push(`LIGNE ${rel} ${nom ?? ''} debut=${debutLigne} fin=${finLigne} ${JSON.stringify(coupe.slice(0, 40))}`);
+        }
+      }
       if (nom && !coupe.includes(nom)) {
         compte.nom++;
         if (fautes.length < 10) fautes.push(`NOM ${rel} ${nom} absent de sa coupe`);

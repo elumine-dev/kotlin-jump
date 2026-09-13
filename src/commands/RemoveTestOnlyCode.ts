@@ -222,18 +222,26 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
     const swept = addCascadePlan(edit, cascade, scan.textByPath, confirm);
     for (const p of cascade.imports.keys()) touches.add(p);
     for (const p of cascade.deleteFiles) touches.add(p);
-    return { edit, swept, skipped, fichiers: touches.size };
+    return { edit, swept, skipped, fichiers: touches.size, supprimes: deletedFiles.size + swept.files };
   };
 
   const apercu = construire(true);
-  const { swept, skipped } = apercu;
-  const combien = scan.offered + scan.testFunctions + swept.imports + swept.files;
+  const combien = scan.offered + scan.testFunctions + apercu.swept.imports + apercu.swept.files;
+  // Files are DELETED here, not just edited, and Apply all skips the preview
+  // that would have shown it. Saying how many, before the click, is the least
+  // this owes the reader.
   const choix = await askHowToApply(
     `Remove ${plural(scan.offered, 'declaration')} and ${plural(scan.testFunctions, 'test')}?`,
-    bulkDetail(combien, apercu.fichiers),
+    bulkDetail(combien, apercu.fichiers)
+      + (apercu.supprimes > 0 ? ` ${plural(apercu.supprimes, 'file')} deleted outright.` : ''),
   );
   if (choix === 'cancel') return;
-  const { edit } = choix === 'apply' ? construire(false) : apercu;
+
+  // What is APPLIED is what must be REPORTED. The dialog gives the workspace
+  // all the time it needs to move, and reading the counts off the first build
+  // described an edit that was never the one sent.
+  const choisi = choix === 'apply' ? construire(false) : apercu;
+  const { edit, swept, skipped } = choisi;
 
   const ok = await vscode.workspace.applyEdit(edit);
   void vscode.window.showInformationMessage(ok

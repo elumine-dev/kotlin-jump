@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.241
+
+Yesterday's fix described an edit it was not sending.
+
+### Fixes
+- The workspace sweep could apply nothing, and say nothing. Asking once instead of once per file, which 1.42.240 introduced, means the edit is built twice: once to count and ask, once with the flag flipped after the answer. The report read the FIRST build. A dialog gives the workspace all the time it needs to move, and a file that moved while it was open is skipped by the second build, so the command sent an empty edit while its message still described the first draw: no removal, no explanation, nothing on screen. What is applied is what is reported now, in the sweep and in the removal of code kept alive by its tests, where the count of skipped edits had the same fault.
+- Apply all deletes files outright, and the dialog did not say so. That path skips the preview which is the only place the deletions were visible, so the count of files deleted is written into the question, before the click.
+
+### Notes
+- The failure is written down as a test that drives the command end to end with a document whose text changes the moment the dialog is answered. Reading the counts off the first build again makes it fail on the silence, which is the part a user would have seen.
+
 ## 1.42.240
 
 One click for all of them, instead of one per file.

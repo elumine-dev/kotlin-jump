@@ -1,28 +1,32 @@
 {
-  "version": "1.42.240",
+  "version": "1.42.241",
   "title": "What's New in Kotlin Jump",
-  "tagline": "One click, not one per file",
-  "summary": "The bulk commands ask once now, up front: apply all, or review one by one. The Refactor Preview has no select all, so 171 changes over 43 files meant 43 clicks.",
+  "tagline": "What is applied is what is reported",
+  "summary": "Asking once means building the edit twice, and the report was reading the first build. A file that moved while the dialog was open produced an empty edit and no message at all.",
   "highlights": [
     {
-      "title": "Apply all, or review one by one",
+      "title": "No more silent empty edit",
       "kind": "fix",
-      "description": "The flag that opens the Refactor Preview is the same one that leaves every box unticked. Asking once, before the edit is built, replaces a click per file with a single answer for the lot."
+      "description": "The dialog gives the workspace time to move. A file that moved is skipped by the second build, so the command sent an empty edit while its message described the first draw. Counts and edit come from the same build now."
+    },
+    {
+      "title": "Apply all says what it deletes",
+      "kind": "fix",
+      "description": "That path skips the preview, which was the only place file deletions were visible. The number of files deleted outright is written into the question, before the click."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Four bulk commands ask once instead of once per file: narrow every self only member, remove code used only by tests, clean dead code across the workspace, and remove unread Remote Config keys.",
-        "The cascade that trails a removal follows what the command decided rather than asking again on its own."
+        "The workspace sweep and the removal of code kept alive by its tests report the build they actually send, not the one used to ask the question.",
+        "The dialog names how many files Apply all deletes outright."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "The dialog counts the changes and the files before anything happens, and closing it applies nothing.",
-        "The VS Code test double threw away the metadata that carries this flag, so half the behaviour could not be asserted. It keeps it now, and both modes are pinned by a test."
+        "Written down as a test that drives the command end to end with a document whose text changes the moment the dialog is answered."
       ]
     }
   ],

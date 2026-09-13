@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.316
+
+A comma in a comment made a removal swallow the next declaration.
+
+### Fixed
+- Removing an unreferenced declaration could take the next one with it. A line comment ending in a comma or a plus made the extension think the value continued on the following lines, so the cut ran on and swallowed whatever came next, live or not.
+- Written out: `val ghost = 1 // step 1,` followed by a blank line and `fun alive() = 2`. The cut took all three lines. Remove the comma from the comment and it takes one, which is what makes it hard to see coming.
+- The test asking whether a line ends on an operator has to read the file with comments removed and strings intact. Reading it raw lets a comment speak for the code. Reading it with strings blanked is worse: quotes are blanked too, so a URL like "https://host/x" looks exactly like a comment, and the first attempt at this fix cut the line after "https: and then swallowed two real declarations. Two live cases on the reference project, caught before release.
+- Three questions on the same two lines, three different copies of the file, and each now says in place which one it needs and why. Yesterday the same line was cutting too short for the mirror reason.
+
 ## 1.42.315
 
 An annotation named in a comment stole the walk.

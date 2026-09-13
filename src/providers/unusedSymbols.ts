@@ -337,6 +337,30 @@ const FINIT_SUR_UN_OPERATEUR_RE = /(?:[+\-*/,.&|?:=(]|->)$/;
  * the enclosing block, past the file, or past 80 lines, which leaves the
  * caller refusing the extent exactly as it did before.
  */
+/**
+ * La fin d'une ligne, son commentaire de fin retire.
+ *
+ * Le test de l'OPERATEUR se fait sur le BRUT, et pour une bonne raison : le
+ * nettoyeur vide les chaines, donc `val x = "done"` se lirait comme finissant
+ * sur son `=`. Mais un commentaire de fin de ligne se termine par ce qu'il
+ * veut, et une virgule dans `// etape 1,` faisait croire a une suite : la
+ * marche descendait et la coupe emportait la declaration SUIVANTE, vivante.
+ *
+ * Ni le brut ni le blanchi ne repondent a cette question la. Il faut la
+ * TROISIEME copie, celle qui retire les commentaires en gardant les chaines.
+ * Reconnaitre le commentaire sur le blanchi ne marche pas : les guillemets y
+ * sont vides eux aussi, donc `"https://…"` y ressemble trait pour trait a un
+ * commentaire, et la premiere version de ce correctif coupait la ligne apres
+ * `"https:` puis, la voyant finir sur un `:`, emportait les deux declarations
+ * suivantes. Deux cas reels sur le projet de reference, dits par le temoin des
+ * membres avant publication.
+ */
+function finSansCommentaire(text: string, jusqu: number): string {
+  const brut = text.slice(0, jusqu).trimEnd();
+  const debutDeLigne = brut.lastIndexOf('\n') + 1;
+  return (brut.slice(0, debutDeLigne) + stripKotlinComments(brut.slice(debutDeLigne))).trimEnd();
+}
+
 function finDeLExpression(
   clean: string,
   lines: readonly string[],
@@ -373,8 +397,7 @@ function finDeLExpression(
 
     // Juge la continuation sur le texte BRUT, comme le test d origine : le
     // nettoyeur vide les chaines et `val X = "done"` se lirait sur `=`.
-    const fin = brute.trimEnd();
-    if (FINIT_SUR_UN_OPERATEUR_RE.test(fin)) continue;
+    if (FINIT_SUR_UN_OPERATEUR_RE.test(finSansCommentaire(brute, brute.length))) continue;
     // Un `;` a profondeur zero clot la declaration, quelle que soit la ligne
     // suivante : sans cela la marche traversait la methode Java d en dessous.
     //
@@ -460,6 +483,8 @@ export function removalExtent(
   // Judge continuation on the RAW text: the sanitizer blanks string bodies, so
   // `val X = "done"` would read as ending on `=` and lose its quick fix.
   const trailing = text.slice(0, endOffset).trimEnd();
+  /** La meme fin, sans son commentaire : pour la question de l'operateur. */
+  const trailingSansCommentaire = finSansCommentaire(text, endOffset);
   /** La meme fin, blanchie : pour les questions que le brut fausse. */
   const trailingPropre = clean.slice(0, endOffset).trimEnd();
   const nextLineNum = offsetToPos(lineStarts as number[], Math.max(endOffset - 1, 0)).line + 1;
@@ -488,7 +513,7 @@ export function removalExtent(
   // vide les chaines et que `val x = "done"` se lirait sur son `=`.
   const termine = /;$/.test(trailingPropre);
   const continues = span.lineBasedEnd && !termine
-    && (FINIT_SUR_UN_OPERATEUR_RE.test(trailing) || !nextStartsFresh);
+    && (FINIT_SUR_UN_OPERATEUR_RE.test(trailingSansCommentaire) || !nextStartsFresh);
   // Une accolade de lambda n est pas forcement la fin de l expression, et la
   // portee s y arrete quand meme. La suite evidente repond la ou `lineBasedEnd`
   // se tait, sans jamais elargir les cas que la garde couvrait deja.

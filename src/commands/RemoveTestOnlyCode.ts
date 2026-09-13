@@ -11,6 +11,7 @@ import { findUnusedEnumEntries } from '../providers/unusedEnumEntries';
 import { isOfferable, planTestCoRemoval, TestCoRemovalPlan } from '../providers/testCoRemoval';
 import { addCascadePlan, planCascade } from '../providers/applyCascade';
 import { plural } from '../util/plural';
+import { intersectionParCle } from '../util/intersectionParCle';
 import { stillTheMeasuredText, estLeFichier } from '../util/measuredText';
 import { askHowToApply, bulkDetail } from '../util/bulkEdit';
 
@@ -314,8 +315,14 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
       // again cuts both ways: a change that kills the last user of something
       // else makes the new list BIGGER, and the question asked about the old
       // one. The reader consented to a set, not to an intention.
-      const annonce = new Set(scan.groups.map(g => `${g.group.path}\u0000${g.group.label}`));
-      const retenus = relu.groups.filter(g => annonce.has(`${g.group.path}\u0000${g.group.label}`));
+      // Counted, not just matched. The key is textual, path and label, because
+      // an offset does not survive the edit that happened in between, and it
+      // is NOT unique: a dead island pushes one group per member and they all
+      // carry the same label. Measured on the reference project, two of the
+      // five groups share a key. A set membership test would then let a group
+      // through on the strength of its homonym having been announced.
+      const cleDuGroupe = (g: { group: Group }) => `${g.group.path}\u0000${g.group.label}`;
+      const retenus = intersectionParCle(scan.groups, relu.groups, cleDuGroupe);
       if (retenus.length === 0) {
         void vscode.window.showInformationMessage(
           'Nothing to remove: the workspace changed while the question was open.');

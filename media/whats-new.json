@@ -1,12 +1,12 @@
 {
-  "version": "1.42.303",
+  "version": "1.42.304",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The preview gets fresh ranges",
-  "summary": "Review one by one was offered cuts measured before the question, so a file edited meanwhile showed the wrong lines.",
+  "tagline": "A shared name is not consent",
+  "summary": "Two subjects of a dead island share one name, and the guard added this week matched on names alone.",
   "highlights": [
     {
-      "title": "The Preview Gets Fresh Ranges",
-      "description": "Apply rebuilt its edit after the click and the preview did not, so it could offer a cut two lines off.",
+      "title": "A Shared Name Is Not Consent",
+      "description": "Members of a dead island all carry the island name, so matching by name let one through on its twin. It goes by count now.",
       "kind": "fix"
     }
   ],
@@ -14,10 +14,10 @@
     {
       "heading": "Fixed",
       "bullets": [
-        "Review one by one showed the wrong lines. Six bulk commands rebuilt their edit after you clicked Apply, so its ranges matched the files as they were at that moment, but the preview was handed the ranges measured before the question was even asked.",
-        "Two lines added at the top of a file while the modal was open, and the preview offered to cut two lines too high, one click away from being accepted. An offset is only worth anything against the text it was measured on, and that holds whether the edit goes out silently or through the preview.",
-        "Both answers now rebuild, and both reread the workspace. The only thing left that separates them is the flag that opens the preview, which is what it should have been all along.",
-        "That flag turned out to be held by nothing at the command level: the check that exists tests the builder with a flag handed to it, never which flag the command chooses. Inverting it, so that Apply opens the preview and Review edits silently, passed the whole suite. It does not now."
+        "The check added two days ago, that a second reading of the workspace can only shorten the list and never lengthen it, identified each entry by its path and its name. On the reference project that pair is not unique: two of the five subjects Remove test only code finds share it, because a dead island produces one subject per member and they all carry the island name.",
+        "A shared name cannot stand for consent, since it does not say which of the two was named. Matching by membership would let a subject through on the strength of its twin having been named in the question.",
+        "So the rule is now the count. A group of entries sharing a name passes whole while it still has the size it had when the question was asked. The moment that changes, something moved inside it and nothing is guessed: the group stays. Removing too little is fixed by running the command again, removing what was never named is not.",
+        "The four other commands were measured rather than assumed: their keys are unique, and for the resource keys and the Remote Config keys they are unique by construction, since a key declared in more than one module is never reported at all."
       ]
     }
   ],

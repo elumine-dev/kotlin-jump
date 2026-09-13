@@ -410,6 +410,8 @@ export const window = {
   registerWebviewViewProvider: (_id: string, _provider: any, _options?: any) => ({ dispose: () => {} }),
   registerTreeDataProvider:    (_id: string, _provider: any) => ({ dispose: () => {} }),
   showInformationMessage: async (_message: string, ..._items: string[]): Promise<string | undefined> => undefined,
+  showWarningMessage: async (_message: string, ..._items: string[]): Promise<string | undefined> => undefined,
+  showErrorMessage: async (_message: string, ..._items: string[]): Promise<string | undefined> => undefined,
   /**
    * Forme reelle : la barre de progression n'est qu'un decor, le corps est
    * execute et son resultat rendu. Sans elle, aucune commande de la famille

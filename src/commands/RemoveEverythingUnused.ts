@@ -3,7 +3,7 @@ import { DEFAULT_TEST_SEGMENTS } from '../util/testPaths';
 import { ResourceCorpus } from '../indexer/ResourceCorpus';
 import { corpusUri } from '../util/corpusUri';
 import { plural } from '../util/plural';
-import { askHowToApply, bulkDetail } from '../util/bulkEdit';
+import { askHowToApply } from '../util/bulkEdit';
 import { findUnusedSymbols } from '../providers/unusedSymbols';
 import { findUnusedMembers } from '../providers/unusedMembers';
 import { findUnusedEnumEntries } from '../providers/unusedEnumEntries';
@@ -304,10 +304,23 @@ export function libelleDeLaDemande(
   fichiers: number,
 ): { titre: string; detail: string } {
   const aRetirer = total - renommages;
+  // What was FOUND, not a count of edit operations. `bulkDetail` promises the
+  // latter, and its five other callers can keep that promise because they
+  // build their edit before they ask. This one cannot: the edit is built after
+  // the click, on purpose, so that a file which moved since the scan is
+  // dropped then rather than now. Between the question and the edit, a file
+  // emptied of everything goes whole, which replaces its cuts with one
+  // deletion, and the cascade adds removals the plan never counted. Measured
+  // on three files where one import is orphaned: the line said four changes
+  // and the edit carried three operations, all of them deletions. What was
+  // really done is the closing report's job to say.
+  const echelle = `${plural(total, 'unused declaration, local or import',
+    'unused declarations, locals and imports')} found in ${plural(fichiers, 'file')}.`
+    + ' Apply all skips the preview; review one by one opens it with nothing ticked.';
   if (aRetirer === 0) {
     return {
       titre: `Rename ${plural(renommages, 'unused name')} to \`_\`?`,
-      detail: bulkDetail(total, fichiers),
+      detail: echelle,
     };
   }
   const note = renommages > 0
@@ -318,7 +331,7 @@ export function libelleDeLaDemande(
       'unused declarations, locals and imports')}?`,
     // La relance ne se justifie que si quelque chose est RETIRE : un
     // renommage n'orpheline rien.
-    detail: `${bulkDetail(total, fichiers)}${note}`
+    detail: `${echelle}${note}`
       + ' Apply all repeats until nothing is left, since each removal orphans the next.',
   };
 }

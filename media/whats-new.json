@@ -1,12 +1,12 @@
 {
-  "version": "1.42.298",
+  "version": "1.42.299",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The test goes with a wrong verdict",
-  "summary": "Remove code kept alive only by its tests could delete a class that had just gained a real caller, and its test file with it.",
+  "tagline": "A private that breaks the build",
+  "summary": "Making a member private used a verdict reached before the question, so a call arriving in between broke the caller.",
   "highlights": [
     {
-      "title": "The Test Goes With A Wrong Verdict",
-      "description": "A class judged test only before the question, given a real caller during it, was removed anyway along with its test file.",
+      "title": "A Private That Breaks The Build",
+      "description": "A member called from elsewhere while the question was open was still narrowed, and the calling file stopped compiling.",
       "kind": "fix"
     }
   ],
@@ -14,10 +14,10 @@
     {
       "heading": "Fixed",
       "bullets": [
-        "Remove code kept alive only by its tests judged before asking you and never looked again. A class that gained a caller in production while the question was on screen was still removed, and the test file covering it deleted along with it.",
-        "The check that survives rereads the file about to be cut and refuses if it moved. The new caller is in another file, the declaring one has not changed, so the cut goes through. This is the third command of the family with the same fault, after the two fixed on the last two days.",
-        "It reads the workspace again after the click. When nothing moved, the index hands back the same snapshot and the verdict already reached is kept, so nothing is paid twice. When something moved, the whole judgement is made again, and only what is still kept alive by tests alone goes.",
-        "Two commands of the family still have this to fix, both of which edit rather than delete files. The ones that delete came first."
+        "Make self only members private judged before asking you and never looked again. A member that gained a call from elsewhere while the question was on screen was made private anyway, and the file doing the calling stopped compiling.",
+        "This verdict is reached across the whole workspace, so the thing that invalidates it is almost never in the file being edited. Rereading that file, which the command already did, cannot see it. Of the four commands with this fault, this is the one that breaks a build rather than removing something.",
+        "It reads the workspace again after the click. Nothing moved, the index hands back the same snapshot and the verdict stands, so no second scan is paid for. Something moved, and the judgement is made again on what is there now.",
+        "One command of the family was on the list and should not have been: the workspace dead code sweep judges each file from its own text alone, so the only thing that can overturn its verdict is a change to that same file, which it already catches. Two are left, both of which remove keys."
       ]
     }
   ],

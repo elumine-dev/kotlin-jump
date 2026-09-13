@@ -27,11 +27,9 @@ export async function makeSelfOnlyPrivateCommand(corpus: ResourceCorpus): Promis
     return;
   }
 
-  const found = await vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: 'Scanning for members that could be private…', cancellable: true },
-    async (_p, token) => {
+  const balayer = async (token?: vscode.CancellationToken) => {
       const data = await corpus.get(token);
-      if (token.isCancellationRequested || data.sourcesTruncated) return undefined;
+      if (token?.isCancellationRequested || data.sourcesTruncated) return undefined;
       const cfg = vscode.workspace.getConfiguration('kotlinJump');
       const segs = cfg.get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS);
       const ignorePaths = cfg.get<string[]>('unusedSymbolsIgnorePaths', ['**/buildSrc/**', '**/build-logic/**']);
@@ -49,8 +47,13 @@ export async function makeSelfOnlyPrivateCommand(corpus: ResourceCorpus): Promis
       return {
         members: members.filter(m => m.verdict === 'selfOnly'),
         textByPath: new Map(data.sources.map(s => [s.path, s.text])),
+        data,
       };
-    },
+  };
+
+  const found = await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: 'Scanning for members that could be private…', cancellable: true },
+    (_p, token) => balayer(token),
   );
 
   if (!found) {
@@ -66,7 +69,7 @@ export async function makeSelfOnlyPrivateCommand(corpus: ResourceCorpus): Promis
   // counts are known, and a WorkspaceEdit is a data structure, not an effect.
   // The only thing that differs between the two is the flag that decides
   // whether the preview opens and whether its boxes start ticked.
-  const construire = (confirm: boolean) => {
+  const construire = (confirm: boolean, found: NonNullable<Awaited<ReturnType<typeof balayer>>>) => {
     const edit = new vscode.WorkspaceEdit();
     let applied = 0;
     let skipped = 0;
@@ -102,7 +105,7 @@ export async function makeSelfOnlyPrivateCommand(corpus: ResourceCorpus): Promis
     return { edit, applied, skipped, files: takenLines.size > 0 ? new Set([...takenLines].map(k => k.slice(0, k.lastIndexOf(':')))).size : 0 };
   };
 
-  const apercu = construire(true);
+  const apercu = construire(true, found);
   if (apercu.applied === 0) {
     void vscode.window.showInformationMessage('Nothing left to narrow: every finding was already private or had moved.');
     return;
@@ -113,7 +116,33 @@ export async function makeSelfOnlyPrivateCommand(corpus: ResourceCorpus): Promis
     bulkDetail(apercu.applied, apercu.files),
   );
   if (choix === 'cancel') return;
-  const { edit, applied, skipped } = choix === 'apply' ? construire(false) : apercu;
+  // The verdict is read again too. This one is judged across the WHOLE
+  // workspace: a call that appears from elsewhere while the question is on
+  // screen does not touch the declaring file, so rereading its text lets the
+  // edit through and the `private` written there stops the caller compiling.
+  // Same fix as 1.42.296, .297 and .298.
+  //
+  // Without paying for the scan twice: the corpus hands back its cached object
+  // untouched while nothing has invalidated it, so identity says whether the
+  // judgement has to be made again.
+  let courant = found;
+  if (choix === 'apply') {
+    const frais = await corpus.get();
+    if (frais !== found.data) {
+      const relu = await balayer();
+      if (!relu) {
+        void vscode.window.showWarningMessage('The workspace is too large to prove where these members are used.');
+        return;
+      }
+      if (relu.members.length === 0) {
+        void vscode.window.showInformationMessage(
+          'Nothing to narrow: the workspace changed while the question was open.');
+        return;
+      }
+      courant = relu;
+    }
+  }
+  const { edit, applied, skipped } = choix === 'apply' ? construire(false, courant) : apercu;
 
   const ok = await vscode.workspace.applyEdit(edit);
   void vscode.window.showInformationMessage(ok

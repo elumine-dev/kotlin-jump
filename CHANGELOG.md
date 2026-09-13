@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.267
+
+The last removal family without a check of its own.
+
+### Notes
+- Nothing changed in what the extension does. Six checks ran over a real project before every release, one per kind of removal, and the resource keys had none. They have one now, and it found the family sound: 3186 declarations, 66 reported dead, every rule at zero.
+- This one judges the VERDICT rather than the cut, because that is where a resource key is lost. A reference written in a form the harvester does not know leaves no trace at all, the key reads as dead, and nothing recompiles to warn anyone. So it looks for the name of every dead key in the raw text of all 6329 sources, outside its own declarations.
+- Three colors came back on that first run, all referenced from nothing but `tools:` attributes. That those keep nothing alive had been asserted in a comment for a long time without being checked, so it was checked with the aapt2 of the Android SDK: a layout with `tools:background="@color/x"` and no `x` anywhere compiles and links silently, while the same reference as `android:background` fails the link outright. The comment now carries the evidence instead of the claim.
+- It was then made to earn its zero. Blinding the harvester to one XML reference form takes the dead count from 66 to 316 and fires the rule 250 times. Shifting every cut by one character is caught 82 times out of 82, by a rule about element boundaries rather than the whole line rule the other checks use: not one of these 82 cuts takes whole lines, 63 sit inside a line and 19 start at the `<` of a style block.
+
 ## 1.42.266
 
 A save during a scan, and the command kept reading the old picture.

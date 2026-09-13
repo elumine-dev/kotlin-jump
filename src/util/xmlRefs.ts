@@ -63,6 +63,15 @@ export const ATTR_RE = /([A-Za-z_][\w]*)(?::([A-Za-z_][\w.]*))?\s*=\s*"([^"]*)"/
  * Blanks the VALUE of every `tools:` attribute, with one exception:
  * `tools:keep` is the shrinker keep-list, so its contents are real references.
  * Length-preserving, so offsets computed on the result stay valid.
+ *
+ * That a `tools:` value keeps nothing alive was asserted here for a long time
+ * without being checked. It was checked with the aapt2 of the SDK: a layout
+ * carrying `tools:background="@color/x"` with no `x` declared anywhere both
+ * compiles and links with no diagnostic, while the same reference written as
+ * `android:background` fails the link with
+ * `error: resource color/x (aka p:color/x) not found`. Three colors of the
+ * reference project are referenced from nothing but `tools:` attributes, so
+ * the distinction decides whether they are reported.
  */
 export function blankToolsAttributes(xml: string): string {
   const chars = [...xml];

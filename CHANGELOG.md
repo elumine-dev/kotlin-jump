@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.302
+
+The second look can shorten the list, never lengthen it.
+
+### Fixed
+- Four bulk commands could remove more than the question had asked about. Reading the workspace again after the click, which they learned to do this week, cuts both ways: a change that kills the last user of something else makes the new list longer than the old one.
+- So "Remove 1 unreferenced declaration?" removed two, the second one never named. The reader agreed to a set, not to an intention, and this editor has spent four earlier releases making the count it announces match the count it applies.
+- The second reading is now an intersection with what was announced. It can drop an entry that came back to life, which is the whole point, and it can no longer add one.
+- One of the four narrowed the list of subjects but not the list of test files derived from it, so a test file belonging to a dropped subject was still deleted outright. Found by the test written for the intersection, not by rereading the change.
+
 ## 1.42.301
 
 The second look at the workspace now shows that it is happening.

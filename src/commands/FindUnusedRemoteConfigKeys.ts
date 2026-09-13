@@ -179,7 +179,15 @@ export async function removeAllUnusedRemoteConfigKeysCommand(
               'Nothing to remove: the workspace changed while the question was open.');
             return;
           }
-          byFile = grouper(relu);
+          // An INTERSECTION with what was announced, never a fresh list.
+          const annonce = new Set(found.map(k => k.name));
+          const retenues = relu.filter(k => annonce.has(k.name));
+          if (retenues.length === 0) {
+            void vscode.window.showInformationMessage(
+              'Nothing to remove: the workspace changed while the question was open.');
+            return;
+          }
+          byFile = grouper(retenues);
           mesures = new Map(frais.sources.map(s => [s.path, s.text]));
         }
       }

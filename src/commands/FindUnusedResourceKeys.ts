@@ -155,7 +155,14 @@ export async function removeAllUnusedResourceKeysCommand(
               'Nothing to remove: the workspace changed while the question was open.');
             return;
           }
-          aRetirer = relu.findings;
+          // An INTERSECTION with what was announced, never a fresh list.
+          const annonce = new Set(result.findings.map(f => `${f.kind}\u0000${f.name}`));
+          aRetirer = relu.findings.filter(f => annonce.has(`${f.kind}\u0000${f.name}`));
+          if (aRetirer.length === 0) {
+            void vscode.window.showInformationMessage(
+              'Nothing to remove: the workspace changed while the question was open.');
+            return;
+          }
         }
       }
       const choisi = choix === 'apply' ? await buildRemovalEdit(aRetirer, undefined, false) : apercu;

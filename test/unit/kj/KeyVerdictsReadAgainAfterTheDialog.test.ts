@@ -59,7 +59,12 @@ function poser(avant: { path: string; text: string }[], apres: { path: string; t
   w.applyEdit = async (e: any) => { editions.push(e); return true; };
   /** Le texte que les coupes emportent, lu sur le fichier d origine. */
   const emporte = (source: string) => editions.flatMap((e: any) => e.entries()
-    .map((x: any) => source.split('\n').slice(x.range.start.line, x.range.end.line + 1).join('\n'))).join('\n');
+    // Borne EXCLUSIVE : `expandToWholeLines` termine au debut de la ligne
+    // suivante, donc `end.line + 1` emportait une ligne de trop et le test
+    // aurait pu passer, ou echouer, pour une raison qui n est pas la sienne.
+    .map((x: any) => source.split('\n')
+      .slice(x.range.start.line, x.range.end.character === 0 ? x.range.end.line : x.range.end.line + 1)
+      .join('\n'))).join('\n');
   return { corpus, messages, editions, emporte };
 }
 

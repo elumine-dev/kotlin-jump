@@ -148,7 +148,20 @@ export async function makeSelfOnlyPrivateCommand(corpus: ResourceCorpus): Promis
           'Nothing to narrow: the workspace changed while the question was open.');
         return;
       }
-      courant = relu;
+      // An INTERSECTION with what was announced, never a fresh list. Judging
+      // again cuts both ways: a change that kills the last user of something
+      // else makes the new list BIGGER, and the question asked about the old
+      // one. The reader consented to a set, not to an intention.
+      const cle = (m: { path: string; container: string; name: string }) =>
+        `${m.path}\u0000${m.container}\u0000${m.name}`;
+      const annonce = new Set(found.members.map(cle));
+      const retenus = relu.members.filter(m => annonce.has(cle(m)));
+      if (retenus.length === 0) {
+        void vscode.window.showInformationMessage(
+          'Nothing to narrow: the workspace changed while the question was open.');
+        return;
+      }
+      courant = { ...relu, members: retenus };
     }
   }
   const { edit, applied, skipped } = choix === 'apply' ? construire(false, courant) : apercu;

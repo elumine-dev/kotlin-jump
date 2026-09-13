@@ -1,12 +1,12 @@
 {
-  "version": "1.42.271",
+  "version": "1.42.272",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Catalog warnings point at the real file",
-  "summary": "On vscode.dev the unreferenced catalog alias warnings landed on a path no editor could open.",
+  "tagline": "A class delegating to an anonymous object",
+  "summary": "Removing a class that delegates to an anonymous object left a stray closing brace and a file that would not parse.",
   "highlights": [
     {
-      "title": "The Warning Finds Its File",
-      "description": "One detector rebuilt a desktop address from a file path, which is a path that does not exist on the web. It now uses the address the workspace index actually read the file under, like the eleven others.",
+      "title": "The Right Closing Brace",
+      "description": "`class A : I by object : I { ... } { ... }` opens a brace before its body does, and the removal stopped on the wrong one. The anonymous object is skipped whole now.",
       "kind": "fix"
     }
   ],
@@ -14,15 +14,16 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Unreferenced catalog aliases were reported against a path that does not exist on vscode.dev and github.dev. The workspace index keys its sources by file path, and this one detector rebuilt a `file:` address from that path. On those hosts a file is a `vscode-vfs://github/owner/repo/...`, so the Problems panel listed entries no editor could open and the removal fix read a file that was not there.",
-        "The address the index actually read the file under is kept for exactly this, and eleven detectors have used it since 1.42.12. This one was missed. It uses it now, on both the entry it adds and the one it removes."
+        "Deleting a class that delegates to an anonymous object cut the wrong closing brace. `class A : I by object : I { ... } { ... }` is the one header shape that opens a brace of its own before the body opens one, and the extent stopped on the object's brace. The file that was left behind did not parse.",
+        "Measured rather than argued: the removal was run for real on such a class and the Kotlin compiler answered `syntax error: Expecting a top level declaration` on a stray closing brace left at the top of the file. With the fix the same removal leaves a file that compiles with no diagnostic at all."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "Found by sweeping the same question across the codebase rather than waiting for it to turn up: which places build a desktop address out of a path. Thirteen do, and the other twelve are right to, since a local icon cache only exists on a desktop in the first place.",
-        "A rule now watches that narrow case, and only that one: a diagnostic list may not be keyed by a rebuilt address. It says nothing about the other uses, which is why it needs no list of exceptions. Putting the old code back is caught twice on the entry that is added and once on the one that is removed."
+        "Not something that arrived recently. The character list this test replaced two weeks ago accepted the same header just as happily, so the shape has always been read wrong. What the rewrite did fix, and this keeps, is `: Base(count = 3)` and `: @Suppress(\"x\") Base()`, which the old list refused outright.",
+        "Zero occurrences across the 5110 sources of the reference project, so no witness would ever have raised it and nothing was silently broken in practice. It is fixed because a removal that produces a file the compiler rejects is the one outcome this feature must never have.",
+        "The rule reads the `object` keyword backwards from a brace, and needs no list of exceptions: on the second brace of that same header the object block sits in between, so the test fails and the brace is correctly taken as the body's."
       ]
     }
   ],

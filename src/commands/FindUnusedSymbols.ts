@@ -1,10 +1,7 @@
 import * as vscode from 'vscode';
 import { askHowToApply, bulkDetail } from '../util/bulkEdit';
 import { DEFAULT_TEST_SEGMENTS } from '../util/testPaths';
-import {
-  ResourceCorpus,
-  declaresPublishing,
-} from '../indexer/ResourceCorpus';
+import { Corpus, ResourceCorpus, declaresPublishing } from '../indexer/ResourceCorpus';
 import {
   UnusedSymbol,
   UnusedSymbolProvider,
@@ -36,26 +33,28 @@ function settings() {
   };
 }
 
-async function scan(
-  corpus: ResourceCorpus,
-  token?: vscode.CancellationToken,
-): Promise<{ findings: UnusedSymbol[]; truncated: boolean; files: number } | undefined> {
-  const data = await corpus.get(token);
-  if (token?.isCancellationRequested) return undefined;
-
+/** Les trouvailles d'un corpus donne, sans le relire. */
+function trouverSur(data: Corpus): UnusedSymbol[] {
   const publishedModules = data.moduleDirs.filter(dir =>
     data.sources.some(s => s.path.startsWith(`${dir}/build.gradle`)
       && declaresPublishing(s.text)));
 
-  const findings = findUnusedSymbols({
+  return findUnusedSymbols({
     sources: data.sources,
     publishedModules,
     libraryModules: data.libraryModules,
     truncated: data.sourcesTruncated,
     ...settings(),
   });
+}
 
-  return { findings, truncated: data.sourcesTruncated, files: data.sources.length };
+async function scan(
+  corpus: ResourceCorpus,
+  token?: vscode.CancellationToken,
+): Promise<{ findings: UnusedSymbol[]; truncated: boolean; files: number; data: Corpus } | undefined> {
+  const data = await corpus.get(token);
+  if (token?.isCancellationRequested) return undefined;
+  return { findings: trouverSur(data), truncated: data.sourcesTruncated, files: data.sources.length, data };
 }
 
 function summarize(findings: readonly UnusedSymbol[]): string {
@@ -166,7 +165,32 @@ export async function removeAllUnusedSymbolsCommand(
         bulkDetail(apercu.edits, apercu.files) + noteSuppression(apercu.supprimes),
       );
       if (choix === 'cancel') return;
-      const choisi = choix === 'apply' ? await buildSymbolRemovalEdit(removable, undefined, false) : apercu;
+      // Le verdict aussi se relit. La boite modale laisse a l'espace de travail
+      // tout le temps de bouger, et une utilisation apparue pendant, un
+      // `git pull` ou une sauvegarde ailleurs, ne change pas le fichier qui
+      // DECLARE : sa coupe passe le controle du texte et la declaration part.
+      // Corrige de la meme facon dans « Remove Everything Unused » en 1.42.296.
+      //
+      // Sans repayer le balayage : le corpus rend l'objet de son cache tel quel
+      // tant que rien ne l'a invalide, donc l'identite dit s'il faut recompter.
+      let aRetirer = removable;
+      if (choix === 'apply') {
+        const frais = await corpus.get(token);
+        if (frais !== result.data) {
+          if (frais.sourcesTruncated) {
+            void vscode.window.showWarningMessage(
+              'Could not read the whole workspace, so nothing was removed.');
+            return;
+          }
+          aRetirer = trouverSur(frais).filter(f => f.verdict === 'unreferenced' && f.removeStart !== -1);
+          if (aRetirer.length === 0) {
+            void vscode.window.showInformationMessage(
+              'Nothing to remove: the workspace changed while the question was open.');
+            return;
+          }
+        }
+      }
+      const choisi = choix === 'apply' ? await buildSymbolRemovalEdit(aRetirer, undefined, false) : apercu;
       const applique = await vscode.workspace.applyEdit(choisi.edit);
       // L editeur refuse une edition entiere sans un bruit, deux plages qui se
       // chevauchent suffisent, et l apercu ferme sur Discard revient ici de la

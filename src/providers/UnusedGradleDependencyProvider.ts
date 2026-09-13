@@ -1,5 +1,11 @@
 import * as vscode from 'vscode';
 import { UnusedCatalogAlias, deleteTitleFor, messageFor } from './unusedGradleDependencies';
+// Le corpus indexe par `fsPath`. Refabriquer un `file:` a partir de la pose
+// le diagnostic sur un chemin fantome des que l'hote n'est pas le disque :
+// sur vscode.dev un fichier est un `vscode-vfs://github/owner/repo/...`.
+// Onze fournisseurs passent par `corpusUri` depuis la 1.42.12, celui-ci
+// avait ete oublie.
+import { corpusUri } from '../util/corpusUri';
 
 /** KJ-041 VS Code shell: diagnostics and the removal quick fix. */
 
@@ -48,7 +54,7 @@ export class UnusedGradleDependencyProvider implements vscode.CodeActionProvider
       byFile.set(alias.path, diags);
     }
 
-    for (const [p, diags] of byFile) this.collection.set(vscode.Uri.file(p), diags);
+    for (const [p, diags] of byFile) this.collection.set(corpusUri(p), diags);
   }
 
   clear(): void {
@@ -88,7 +94,7 @@ export class UnusedGradleDependencyProvider implements vscode.CodeActionProvider
   }
 
   private forget(path: string): void {
-    this.collection.delete(vscode.Uri.file(path));
+    this.collection.delete(corpusUri(path));
     this.byPath.delete(path);
   }
 

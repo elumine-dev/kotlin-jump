@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.304
+
+A shared name cannot stand for consent.
+
+### Fixed
+- The check added two days ago, that a second reading of the workspace can only shorten the list and never lengthen it, identified each entry by its path and its name. On the reference project that pair is not unique: two of the five subjects Remove test only code finds share it, because a dead island produces one subject per member and they all carry the island name.
+- A shared name cannot stand for consent, since it does not say which of the two was named. Matching by membership would let a subject through on the strength of its twin having been named in the question.
+- So the rule is now the count. A group of entries sharing a name passes whole while it still has the size it had when the question was asked. The moment that changes, something moved inside it and nothing is guessed: the group stays. Removing too little is fixed by running the command again, removing what was never named is not.
+- The four other commands were measured rather than assumed: their keys are unique, and for the resource keys and the Remote Config keys they are unique by construction, since a key declared in more than one module is never reported at all.
+
 ## 1.42.303
 
 The preview was being shown ranges measured before the question.

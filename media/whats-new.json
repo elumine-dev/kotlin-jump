@@ -1,12 +1,12 @@
 {
-  "version": "1.42.276",
+  "version": "1.42.277",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The count is said once",
-  "summary": "The dialog carried two counts of the same thing, and called renamed names declarations and imports.",
+  "tagline": "The workspace sweep speaks up",
+  "summary": "Clean Dead Code in Workspace applied its changes without a word. It now says how much went, and from how many files.",
   "highlights": [
     {
-      "title": "Title Counts, Detail Reaches",
-      "description": "The title counts what will be removed and the line under it says across how many files. Counting again underneath meant counting something else, and the two numbers disagreed as soon as one name was renamed.",
+      "title": "It Says What It Removed",
+      "description": "Apply all skips the preview, so nothing told you what had happened. The count is read off the edit that was actually applied, so a file that moved in the meantime lowers it.",
       "kind": "fix"
     }
   ],
@@ -14,15 +14,16 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Yesterday's wording for Remove Everything Unused put a second count in the dialog, and the two did not match. The title counts what will be removed, the new line counted what was found, and those part company the moment one name is renamed rather than removed: `Remove 7 unused declarations, locals and imports?` sat directly above `10 unused declarations, locals and imports found in 4 files.`",
-        "On a round made only of renamings it was plainly wrong rather than merely confusing. The title says `Rename 3 unused names to `_`?`, which is right, and the line under it called them declarations, locals and imports that had been found. A lambda parameter is none of those three, and nothing was being removed at all."
+        "Clean Dead Code in Workspace removed declarations across the project and said nothing at all. Choosing Apply all skips the preview by design, since the flag that opens it is the same one that leaves every box unticked, so the edit went out with no word of how much had gone. It was the only command of its family to stay quiet.",
+        "It reports now, and reports what was applied rather than what was offered: if a file moved between the question and the click its cut is dropped, and the number said out loud follows the smaller edit. Choosing to review says how much went to the preview instead, since the reader is looking at it."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "The count now appears once, in the title, and the line under it says the one thing the title cannot: how far the change reaches. Two releases ago the same fix was made to the title itself, and reintroducing the wrong wording one line lower is exactly the sort of thing these rounds exist to catch.",
-        "A test written yesterday had to be rewritten, because it asserted the wording rather than the rule. It now says where each number belongs: the count in the title, the reach in the detail."
+        "The per file twin stays quiet and should: it always goes through the preview, and the preview is the answer there. This one skips it.",
+        "The release that made this command's reporting truthful is the one that wrote the rule into the file, that what is applied is what must be reported. It covered the round that finds nothing and the round where files moved, and left the ordinary round mute. Nothing was lost along the way, the report was simply never there.",
+        "Five other commands of the family were driven end to end to check a claim made in the last release without measuring it, that they announce what they send. Narrow to private announces one change and sends one. The workspace sweep announces three and sends three. The claim holds where it was made."
       ]
     }
   ],

@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.277
+
+A sweep that removed code and said nothing.
+
+### Fixes
+- Clean Dead Code in Workspace removed declarations across the project and said nothing at all. Choosing Apply all skips the preview by design, since the flag that opens it is the same one that leaves every box unticked, so the edit went out with no word of how much had gone. It was the only command of its family to stay quiet.
+- It reports now, and reports what was applied rather than what was offered: if a file moved between the question and the click its cut is dropped, and the number said out loud follows the smaller edit. Choosing to review says how much went to the preview instead, since the reader is looking at it.
+
+### Notes
+- The per file twin stays quiet and should: it always goes through the preview, and the preview is the answer there. This one skips it.
+- The release that made this command's reporting truthful is the one that wrote the rule into the file, that what is applied is what must be reported. It covered the round that finds nothing and the round where files moved, and left the ordinary round mute. Nothing was lost along the way, the report was simply never there.
+- Five other commands of the family were driven end to end to check a claim made in the last release without measuring it, that they announce what they send. Narrow to private announces one change and sends one. The workspace sweep announces three and sends three. The claim holds where it was made.
+
 ## 1.42.276
 
 Two numbers for one thing, in one dialog.

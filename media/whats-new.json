@@ -1,12 +1,12 @@
 {
-  "version": "1.42.256",
+  "version": "1.42.257",
   "title": "What's New in Kotlin Jump",
-  "tagline": "One quick fix, two different places",
-  "summary": "The Suppress quick fix on an unused declaration wrote its annotation above the doc comment in one case and under it in the other. It now writes it on the declaration.",
+  "tagline": "Lifecycle Pairing works on a file opened alone",
+  "summary": "Lifecycle Pairing needed a workspace folder to say anything. A single file open on its own belongs to no folder, so the linter stayed silent there.",
   "highlights": [
     {
-      "title": "Suppress Lands On The Declaration",
-      "description": "An annotation written above a KDoc pushes that comment inside the declaration, where it documents nothing. The Suppress quick fix now writes it on the declaration's own line, under the doc comment, like the four other unused code families.",
+      "title": "Lifecycle Pairing Without A Folder",
+      "description": "Opening one Kotlin file on its own turned this linter off. The guard that keeps Gradle source jars out of the Problems panel was asking for a workspace folder that a lone file never has. It now asks only what it needs.",
       "kind": "fix"
     }
   ],
@@ -14,14 +14,15 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "The Suppress quick fix on an unused declaration put `@Suppress(\"unused\")` above the declaration's doc comment whenever a removal was available, and on the declaration itself whenever the removal was withheld. One shape, two answers. An annotation above a KDoc pushes that comment inside the declaration, where it is no longer the doc comment of anything, so the annotation now lands on the declaration's own line in both cases.",
-        "That is where the four other unused code families have always put it: unused symbols, unused members, and write only variables twice. This one reused the first line of the cut, which is a different question: a cut has to swallow the doc comment, an annotation has to sit under it."
+        "Lifecycle Pairing went quiet on a Kotlin or Java file opened on its own, with no folder open in the window. The check that keeps a Gradle source jar out of the Problems panel was asking for a workspace folder, and a single file belongs to none.",
+        "The split that was supposed to fix this shipped two releases ago and only went half way. It added the looser check to this linter without taking the strict one out, and since the strict one is the loose one plus the folder, it kept winning every time. The strict check is gone."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "The removal itself did not move. It still takes the doc comment away with the declaration, and the check over the reference project confirms it: 93 cuts across 5110 sources, every invariant at zero."
+        "The source jar is still kept out, folder or no folder, and so is a `git:` view of a file that lives elsewhere. What changed is only the folder requirement, on a linter that reads nothing but the document in front of it.",
+        "The test that covers this was checking the two guard functions on their own, never which of the two each linter calls, so it stayed green while the linter was off. It now drives the providers themselves, and it covers the hardcoded string linter in the same breath, since the two broke together and only one was put right."
       ]
     }
   ],

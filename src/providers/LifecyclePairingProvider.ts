@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import { estUnFichierReel } from '../util/inWorkspace';
-import { estDansLEspaceDeTravail } from '../util/inWorkspace';
 
 /**
  * KJ-016: Lifecycle Pairing, detects acquisitions made in a lifecycle method
@@ -254,11 +253,11 @@ export class LifecyclePairingProvider implements vscode.Disposable {
   private _scan(doc: vscode.TextDocument): void {
     if (doc.languageId !== 'kotlin' && doc.languageId !== 'java') return;
     // A source jar from the Gradle cache carries the right `languageId`
-    // without being part of the project.
+    // without being part of the project. The scheme and the `.jar!` segment
+    // are enough here: this check reads nothing but the document in front of
+    // it, so asking for a workspace folder on top would turn it off for a
+    // file opened on its own, which is still code the user is writing.
     if (!estUnFichierReel(doc)) { this._diag.delete(doc.uri); return; }
-    // A source jar from the Gradle cache carries the right `languageId`
-    // without being part of the project.
-    if (!estDansLEspaceDeTravail(doc)) { this._diag.delete(doc.uri); return; }
     const enabled = vscode.workspace
       .getConfiguration('kotlinJump')
       .get<boolean>('lifecyclePairing', true);

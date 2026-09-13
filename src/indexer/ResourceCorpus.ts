@@ -106,18 +106,34 @@ export class ResourceCorpus {
         .finally(() => { this.refreshing = false; });
       return this.cache.corpus;
     }
-    const nee = this.generation;
-    const corpus = await this.scan(token);
     // A scan cut short by Cancel skipped files without marking anything:
     // cached, it served "unreferenced" verdicts for symbols the unread files
     // use, and "Remove All" deleted live code on the next click.
     //
-    // And a scan whose generation has moved on read the disk BEFORE the
-    // change: its result is returned to the caller that asked for it, but it
-    // must not be cached, or the next caller gets the pre-change corpus for a
-    // full minute.
-    if (!token?.isCancellationRequested && nee === this.generation) {
-      this.cache = { at: Date.now(), corpus };
+    // And a scan whose generation moved read the disk BEFORE the change.
+    // Refusing to cache that one is only half the answer: the caller waiting
+    // on this very scan is the command about to delete, and handing it a
+    // corpus this class has just judged unfit to keep is the dangerous half.
+    // The text of each file is checked again before writing, so a file that
+    // moved is skipped; the VERDICT never is. A save that adds a use of the
+    // symbol SOMEWHERE ELSE leaves the declaring file untouched, its cut
+    // passes the text check, and something live goes.
+    //
+    // So it reads again. Bounded, because a build writing files can keep
+    // invalidating with no pause: after three tries the freshest read we have
+    // is returned, still without caching it. A scan is half a second of disk
+    // on a real project, and this only happens when a change lands inside
+    // that window.
+    const ESSAIS_MAX = 3;
+    let corpus!: Corpus;
+    for (let essai = 0; essai < ESSAIS_MAX; essai++) {
+      const nee = this.generation;
+      corpus = await this.scan(token);
+      if (token?.isCancellationRequested) return corpus;
+      if (nee === this.generation) {
+        this.cache = { at: Date.now(), corpus };
+        return corpus;
+      }
     }
     return corpus;
   }

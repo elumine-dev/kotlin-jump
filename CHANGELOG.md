@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.266
+
+A save during a scan, and the command kept reading the old picture.
+
+### Fixes
+- A file saved while a scan is running left the command that asked for the scan holding the picture from before the save. Saving, creating, deleting or renaming a source marks the workspace picture out of date, and a scan of a real project is a few thousand files, so the window is wide enough to walk into.
+- The result was already refused for the cache, so the NEXT command got a fresh read. The one waiting on the scan was handed it anyway, and that one is the command about to delete. Each file is checked again before anything is written, so a file that moved is left alone, but the verdict is not rechecked: a save that adds a use of a symbol somewhere else leaves the file that declares it untouched, so its removal passes the file check and something live goes. It reads again now.
+
+### Notes
+- Bounded at three reads. A build writing files can keep marking the picture out of date with no pause, and looping until it stops would never return. After three the freshest read is returned, still without being cached.
+- Cancelling still returns immediately, and returns what was actually read rather than the empty result of an attempt the cancel cut short. An empty workspace reads as a workspace with no sources, and that is exactly where verdicts about absence come from.
+- The test that covered this looked only at what the next caller receives, which was already correct. It said nothing about what the scan hands back to its own caller. A first version of the new test passed for the same kind of reason: it changed the file before the scan had read anything, so there was no stale read to catch.
+
 ## 1.42.265
 
 A member cannot hide from the one it overrides.

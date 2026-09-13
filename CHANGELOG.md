@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.310
+
+An eighth check, on what the closing sentence claims.
+
+### Notes
+- Nothing changed in what the extension does. Eleven releases between 1.42.277 and 1.42.293 fixed reports that described the scan rather than the edit, and the seven checks this project runs against a real codebase all look at where the cuts land, none at what the closing sentence claims. There is an eighth now.
+- It runs a full pass over a real project and holds the sentence to the edit: the families add up to the ranges actually written plus the cuts inside files that go whole, every family with something in it is named, and the numbers in the sentence total exactly what was kept.
+- On a 6329 file project: 320 cuts kept, 260 ranges written, 60 inside the 59 files the cascade deletes, and the four checks at zero. The sentence reads 88 declarations, 99 class members, 25 enum entries, 15 declarations of dead islands, 52 locals and imports, 41 unused names renamed.
+- Confronted with the defect it exists for: drop one family from the sentence and it reports the missing name and the wrong total; stop counting the renames and it reports the gap between what was kept and what was written.
+
 ## 1.42.309
 
 Counting where the work is done.

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.286
+
+A refused edit no longer reports itself as done.
+
+### Fixed
+- Four bulk removal commands announced a removal that had not happened. Remove all unused resource keys, Remove all unreferenced declarations, Remove all unread Remote Config keys and the workspace dead code sweep all sent their edit and then said "Removed 320 declarations in 74 files" without ever asking whether the editor had accepted it.
+- The editor refuses a whole edit in silence. Two ranges that touch is enough, and closing the refactor preview on Discard comes back the same way. So the file was untouched and the notification said otherwise, which is worse than the silence these four had a week ago: a reader who is told it worked stops looking.
+- They now read the answer and say "Nothing was applied." when the edit is refused, the same words the two commands that already checked have been using.
+- The guard that caught the earlier silence only checked that a message followed the edit, never what the message claimed, which is how all four walked past it. It now requires the result to be named and to actually decide something.
+
 ## 1.42.285
 
 A comment that belonged to a dead enum entry no longer stays with the living one.

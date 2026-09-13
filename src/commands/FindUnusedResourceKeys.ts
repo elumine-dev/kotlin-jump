@@ -133,7 +133,14 @@ export async function removeAllUnusedResourceKeysCommand(
       );
       if (choix === 'cancel') return;
       const choisi = choix === 'apply' ? await buildRemovalEdit(result.findings, undefined, false) : apercu;
-      await vscode.workspace.applyEdit(choisi.edit);
+      const applique = await vscode.workspace.applyEdit(choisi.edit);
+      // L editeur refuse une edition entiere sans un bruit, deux plages qui se
+      // chevauchent suffisent, et l apercu ferme sur Discard revient ici de la
+      // meme facon. Annoncer la suppression sans lire ce retour donnait une
+      // fausse nouvelle sur un fichier intact, ce qui est pire que le silence
+      // d avant : le lecteur cesse de chercher. Meme mot que le reste de la
+      // famille.
+      if (!applique) { void vscode.window.showWarningMessage('Nothing was applied.'); return; }
       // Apply all skips the preview, so nothing else would say what happened.
       void vscode.window.showInformationMessage(
         choix === 'review'

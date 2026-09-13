@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { askHowToApply, bulkDetail } from '../util/bulkEdit';
 import { plural } from '../util/plural';
-import { ResourceCorpus } from '../indexer/ResourceCorpus';
+import { Corpus, ResourceCorpus } from '../indexer/ResourceCorpus';
 import {
   collectValueKeyDeclarations,
   parseValuesPath,
@@ -23,7 +23,7 @@ const KIND_ORDER = ['string', 'color', 'dimen', 'style', 'attr', 'integer', 'boo
 async function scan(
   corpus: ResourceCorpus,
   token?: vscode.CancellationToken,
-): Promise<{ findings: UnusedResourceKey[]; truncated: boolean } | undefined> {
+): Promise<{ findings: UnusedResourceKey[]; truncated: boolean; data: Corpus } | undefined> {
   const corpusData = await corpus.get(token);
   if (token?.isCancellationRequested) return undefined;
 
@@ -43,7 +43,7 @@ async function scan(
       .get<string[]>('unusedResourceKeysIgnorePrefixes', []),
   });
 
-  return { findings, truncated: corpusData.truncated };
+  return { findings, truncated: corpusData.truncated, data: corpusData };
 }
 
 function summarize(findings: readonly UnusedResourceKey[]): string {
@@ -132,7 +132,33 @@ export async function removeAllUnusedResourceKeysCommand(
         bulkDetail(apercu.edits, apercu.files),
       );
       if (choix === 'cancel') return;
-      const choisi = choix === 'apply' ? await buildRemovalEdit(result.findings, undefined, false) : apercu;
+      // The verdict is read again too. `nothing reads this key` is judged over
+      // the WHOLE workspace, so what overturns it is almost never the file
+      // holding the key: a `R.string.x` that appears while the question is on
+      // screen leaves the values file untouched and its cut goes through, and
+      // the project stops compiling. Same fix as 1.42.296 through .299.
+      //
+      // Without paying for the scan twice: the corpus hands back its cached
+      // object untouched while nothing has invalidated it.
+      let aRetirer = result.findings;
+      if (choix === 'apply') {
+        const frais = await corpus.get(token);
+        if (frais !== result.data) {
+          const relu = await scan(corpus, token);
+          if (!relu || relu.truncated) {
+            void vscode.window.showWarningMessage(
+              'Could not read the whole workspace, so nothing was removed.');
+            return;
+          }
+          if (relu.findings.length === 0) {
+            void vscode.window.showInformationMessage(
+              'Nothing to remove: the workspace changed while the question was open.');
+            return;
+          }
+          aRetirer = relu.findings;
+        }
+      }
+      const choisi = choix === 'apply' ? await buildRemovalEdit(aRetirer, undefined, false) : apercu;
       const applique = await vscode.workspace.applyEdit(choisi.edit);
       // L editeur refuse une edition entiere sans un bruit, deux plages qui se
       // chevauchent suffisent, et l apercu ferme sur Discard revient ici de la

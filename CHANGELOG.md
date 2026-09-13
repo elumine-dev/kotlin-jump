@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.295
+
+The rule that was broken yesterday, written down.
+
+### Notes
+- Nothing changed in what the extension does. Yesterday a round of Remove Everything Unused was found working from a workspace it had not read whole, which is how it came to delete live code. This release writes down the rule that was broken, so it cannot break again unnoticed.
+- The rule: a scan that missed files cannot prove that nothing uses a declaration, so every place that reads the workspace has to face that possibility. There are three honest ways to do it, and a test now holds all fourteen reading points to one of them: refuse and hand back, pass the fact along to the detector, or return it to whoever asked.
+- It was written by first putting yesterday's defect back: the check fires on it. It also fires when the fact is merely mentioned and nothing is done with it, which is the way a check of this kind usually rots.
+- Fourteen reading points, all in order today. The one that was not is the one that shipped a deletion of live code, so the rule is worth a test rather than a habit.
+
 ## 1.42.294
 
 A round that cannot read the whole workspace no longer removes anything.

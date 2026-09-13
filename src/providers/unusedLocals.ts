@@ -25,6 +25,8 @@ import {
   SUPPRESS_NAMES,
   sanitizeForUsageScan,
 } from '../util/kotlinScan';
+import { coupeUnBloc, debutDuBloc } from '../util/blocDeCommentaire';
+import { stripKotlinComments } from '../util/xmlRefs';
 
 export type UnusedLocalKind = 'local' | 'lambdaParam' | 'catchBinding';
 export type LocalFixKind = 'deleteLine' | 'keepCall' | 'renameUnderscore' | 'none';
@@ -291,6 +293,9 @@ function splitLambdaParams(header: string, headerStart: number): { name: string;
 }
 
 export function findUnusedLocals(text: string): UnusedLocal[] {
+  /** Une seule copie sans commentaires par appel, et seulement si besoin. */
+  let copieSc: string | undefined;
+  const sansCommentaires = (): string => (copieSc ??= stripKotlinComments(text));
   if (!/\b(?:val|var|catch)\b|->/.test(text)) return [];
   if (fileOptsOut(text, UNUSED_VARIABLE)) return [];
 
@@ -405,7 +410,7 @@ export function findUnusedLocals(text: string): UnusedLocal[] {
     const region = blank(clean, declStart, extentEnd).slice(body.open, body.close);
     if (isUsedIn(region, name)) continue;
 
-    const { fix, fixStart, fixEnd, fixText } = computeLocalFix(text, clean, declStart, nameOffset, name, extentEnd, lineStarts, declLine);
+    const { fix, fixStart, fixEnd, fixText } = computeLocalFix(text, clean, declStart, nameOffset, name, extentEnd, lineStarts, declLine, sansCommentaires);
     pushFinding('local', name, nameOffset, fix, fixStart, fixEnd, fixText);
   }
 
@@ -422,6 +427,8 @@ function computeLocalFix(
   extentEnd: number,
   lineStarts: number[],
   declLine: number,
+  /** La copie du fichier sans ses commentaires, calculee au plus une fois. */
+  sansCommentaires: () => string,
 ): { fix: LocalFixKind; fixStart: number; fixEnd: number; fixText: string } {
   const none = { fix: 'none' as LocalFixKind, fixStart: -1, fixEnd: -1, fixText: '' };
   const afterName = nameOffset + name.length;
@@ -459,7 +466,15 @@ function computeLocalFix(
   const initText = text.slice(initStart, initEnd);
 
   if (isPureInitializer(initText) && initEnd <= lineEnd) {
-    return { fix: 'deleteLine', fixStart: lineStarts[declLine], fixEnd: lineEnd, fixText: '' };
+    // La ligne entiere part, mais elle peut ouvrir un commentaire de bloc qui
+    // se ferme plus bas : l ouverture s en allait, la fermeture restait, et le
+    // fichier ne compilait plus. On s arrete alors avant l ouverture et le
+    // commentaire reste entier a sa place.
+    const debut = coupeUnBloc(text, sansCommentaires, lineEnd)
+      ? debutDuBloc(text, sansCommentaires(), lineStarts[declLine], lineEnd)
+      : -1;
+    const fin = debut === -1 ? lineEnd : debut;
+    return { fix: 'deleteLine', fixStart: lineStarts[declLine], fixEnd: fin, fixText: '' };
   }
   // keep whatever the initializer does, drop only `val name =`
   return { fix: 'keepCall', fixStart: declStart, fixEnd: initStart, fixText: '' };

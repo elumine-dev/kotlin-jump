@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.320
+
+A private constant stayed hidden behind a lint directive, and removing a local could cut a comment in half.
+
+### Fixed
+- Private properties of a class or object carrying `@Suppress`, `@SuppressWarnings` or `@OptIn` were never reported as unused. The guard that protects annotated classes exists because a serializer or an injector can read a property without the source ever naming it. Those three annotations only speak to the compiler and the linter, they are gone after compilation, and counting them switched detection off for the whole class body.
+- Seen on a real project: an object marked `@SuppressWarnings("TooManyFunctions")` hid its ten private constants, one of which detekt was reporting as unused at the same moment. It is now reported. Annotations that can drive reflection, such as `@Serializable` or `@Parcelize`, still protect the class exactly as before.
+- Across the 3578 Kotlin files of the reference project this finds nothing new that was wrongly kept, and adds one write only variable: a `private var` assigned twice and never read, inside a class marked `@OptIn`.
+- Removing an unused local whose line opened a multiline block comment took the opening and left the closing alone, and the file stopped compiling. The cut now stops before the opening. Third removal path with this defect after declarations and enum entries, so the check now lives in one shared place instead of being written a third time.
+- A test meant to cover qualified names such as `@kotlin.Suppress` was passing for the wrong reason: the annotation collector already shortens those names, so the extra shortening in the filter did nothing. That dead line is gone and the test now checks the collector itself. Timing is unchanged.
+
 ## 1.42.319
 
 Removing an enum entry could cut a block comment in half.

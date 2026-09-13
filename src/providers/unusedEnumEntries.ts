@@ -1,5 +1,6 @@
 import { parse, RawSymbol } from '../indexer/KotlinParser';
 import { stripKotlinComments } from '../util/xmlRefs';
+import { coupeUnBloc, debutDuBloc } from '../util/blocDeCommentaire';
 import { parseJava } from '../indexer/JavaParser';
 import {
   fileOptsOut,
@@ -411,29 +412,9 @@ function debutAvecAnnotations(
 function sansTrancherUnBloc(
   text: string, sansCommentaires: () => string, depuis: number, fin: number,
 ): number {
-  let j = fin;
-  while (j < text.length && /\s/.test(text[j])) j++;
-  if (j >= text.length) return fin;
-  const t = text.charCodeAt(j);
-  // Un commentaire qui COMMENCE la appartient a ce qui suit.
-  if (t === 47 && (text.charCodeAt(j + 1) === 47 || text.charCodeAt(j + 1) === 42)) return fin;
-  const sc = sansCommentaires();
-  if (text[j] === sc[j]) return fin;
-  // Revenir a l ouverture, qui est sur la ligne de la coupe. Remonter en
-  // comparant caractere a caractere ne marche pas : un espace du commentaire
-  // est efface en espace, donc il se lit comme identique et la remontee
-  // s arrete au premier mot, en plein milieu du commentaire.
-  //
-  // Le `text[i] !== sc[i]` ecarte une ouverture ecrite dans une chaine. Aucun
-  // decor ne l atteint : entre la virgule et la fin de la ligne, la copie
-  // blanchie n a que du vide, donc du blanc ou du commentaire, jamais une
-  // chaine. Il est ecrit ici parce que la comparaison est deja faite et ne
-  // coute rien, pas parce qu un cas l a demande. La derniere fois que ce
-  // fichier a affirme qu une forme etait hors d atteinte, elle ne l etait pas.
-  for (let i = fin; i > depuis; i--) {
-    if (text.charCodeAt(i) === 47 && text.charCodeAt(i + 1) === 42 && text[i] !== sc[i]) return i;
-  }
-  return fin;
+  if (!coupeUnBloc(text, sansCommentaires, fin)) return fin;
+  const i = debutDuBloc(text, sansCommentaires(), depuis, fin);
+  return i === -1 ? fin : i;
 }
 
 function entryExtent(

@@ -64,6 +64,27 @@ export interface UnusedDecl {
  */
 const BENIGN_DECL_ANNOTATIONS = new Set(['Composable']);
 
+/**
+ * Annotations qui ne font lire personne par reflexion.
+ *
+ * La garde des classes annotees existe parce qu un generateur, une injection
+ * ou un serialiseur peut lire une propriete sans que la source la nomme
+ * jamais. Ces trois la ne s adressent qu au compilateur et au linter : elles
+ * ne survivent pas a la compilation, donc rien ne peut les suivre a
+ * l execution.
+ *
+ * Les compter eteignait la detection sur tout le corps de la classe. Sur le
+ * projet de reference, un simple `@SuppressWarnings("TooManyFunctions")` sur
+ * un objet cachait ses dix constantes privees, dont une que detekt signalait
+ * comme morte au meme moment.
+ *
+ * Les noms arrivent deja SIMPLES : `collectAnnotationTargets` reduit
+ * `@kotlin.Suppress` a `Suppress`. Une reduction de plus ici serait du code
+ * qui ne sert a rien, et le test qui croyait l eprouver passait en realite
+ * grace au collecteur.
+ */
+const DIRECTIVES_DE_COMPILATION = new Set(['Suppress', 'SuppressWarnings', 'OptIn']);
+
 
 const MODIFIER_GUARD_RE = /\b(?:override|operator|expect|actual|external|abstract|native|default)\b/;
 const CANDIDATE_KINDS = new Set(['fun', 'composable', 'val', 'var', 'class', 'sealedClass', 'object', 'interface']);
@@ -94,7 +115,8 @@ export function reflectiveOrAnnotatedClassRanges(
     const s = symbols[i];
     if (!CLASS_LIKE.has(s.kind)) continue;
     const reflective = (s.supertypes ?? []).some(t => REFLECTIVE_SUPERTYPES.has(t.replace(/<.*/, '')));
-    if (annotationsFor(s).length === 0 && !reflective) continue;
+    const annotations = annotationsFor(s).filter(a => !DIRECTIVES_DE_COMPILATION.has(a));
+    if (annotations.length === 0 && !reflective) continue;
     let to = rangeEndLine(symbols, i, lastLine);
     const brace = clean.indexOf('{', lineStarts[s.line] + s.character);
     if (brace !== -1) {

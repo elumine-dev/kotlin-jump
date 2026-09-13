@@ -1,29 +1,29 @@
 {
-  "version": "1.42.319",
+  "version": "1.42.320",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A comment cut in half",
-  "summary": "Removing an enum entry could cut a block comment in half.",
+  "tagline": "Lint directives no longer hide dead code",
+  "summary": "A private constant stayed hidden behind a lint directive, and removing a local could cut a comment in half.",
   "highlights": [
     {
-      "title": "An Enum Entry Removal Keeps Comments Whole",
+      "title": "Lint Directives No Longer Hide Dead Properties",
       "kind": "fix",
-      "description": "Removing an entry whose line opened a multiline block comment split that comment in two and left the file unable to compile. The cut now stops before the opening."
+      "description": "A class or object marked @Suppress, @SuppressWarnings or @OptIn had all its private properties skipped by unused detection. Only annotations that can drive reflection protect a class now."
     },
     {
-      "title": "The Witness Now Counts Comment Markers",
-      "kind": "note",
-      "description": "Seven invariants stayed green on a file that no longer compiled. An eighth one, comment openings against closings, reports the defect on the old code."
+      "title": "A Local Removal Keeps Comments Whole",
+      "kind": "fix",
+      "description": "Removing an unused local whose line opened a multiline block comment no longer leaves the closing marker behind."
     }
   ],
   "sections": [
     {
       "heading": "Fixed",
       "bullets": [
-        "An entry whose line opened a block comment lost the opening and kept the closing. Written out: `MORT, /* keep`, then `   as is */` on the line below. The removal took `MORT, /* keep` and left `as is */` alone in the file, which then no longer compiles.",
-        "The walk that takes the spaces after the comma, so neighbours do not end up glued together, read them on the copy with comments blanked. A comment is blanked to spaces of the same length, so it walked straight through one and stopped at the newline.",
-        "The cut now stops before the opening and leaves the comment where it is. Extending to the closing instead would be worse: the next entry can share that line, and it is alive. A comment that closes on the entry's own line still goes with it, as before.",
-        "The code said in writing that an entry carrying a block comment on its line was not detected at all, and used that to leave the case alone. It is detected. That sentence has been replaced by what actually happens.",
-        "The corpus witness gained the invariant that was missing: no cut may leave a file with more comment closings than openings. Run against the old code it reports one, while the seven invariants it already had all stayed green. Timing is unchanged, 2.64 s against 2.59 s with the two spreads overlapping."
+        "Private properties of a class or object carrying `@Suppress`, `@SuppressWarnings` or `@OptIn` were never reported as unused. The guard that protects annotated classes exists because a serializer or an injector can read a property without the source ever naming it. Those three annotations only speak to the compiler and the linter, they are gone after compilation, and counting them switched detection off for the whole class body.",
+        "Seen on a real project: an object marked `@SuppressWarnings(\"TooManyFunctions\")` hid its ten private constants, one of which detekt was reporting as unused at the same moment. It is now reported. Annotations that can drive reflection, such as `@Serializable` or `@Parcelize`, still protect the class exactly as before.",
+        "Across the 3578 Kotlin files of the reference project this finds nothing new that was wrongly kept, and adds one write only variable: a `private var` assigned twice and never read, inside a class marked `@OptIn`.",
+        "Removing an unused local whose line opened a multiline block comment took the opening and left the closing alone, and the file stopped compiling. The cut now stops before the opening. Third removal path with this defect after declarations and enum entries, so the check now lives in one shared place instead of being written a third time.",
+        "A test meant to cover qualified names such as `@kotlin.Suppress` was passing for the wrong reason: the annotation collector already shortens those names, so the extra shortening in the filter did nothing. That dead line is gone and the test now checks the collector itself. Timing is unchanged."
       ]
     }
   ],

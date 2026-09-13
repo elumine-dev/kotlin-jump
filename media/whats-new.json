@@ -1,12 +1,12 @@
 {
-  "version": "1.42.278",
+  "version": "1.42.279",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Every bulk command reports now",
-  "summary": "Three commands applied their changes in silence, and one of them could delete a source file without saying so.",
+  "tagline": "Reports count what actually went",
+  "summary": "Two reports added yesterday counted the scan rather than the edit, and overstated whenever a file changed while the question was on screen.",
   "highlights": [
     {
-      "title": "Silence Is Over",
-      "description": "Apply all skips the preview, so a command that says nothing afterwards leaves you with no idea what happened. All of them speak now, and the one that can delete a file warns you before you agree.",
+      "title": "Counted At The Door",
+      "description": "Both commands read each file again before writing and skip whatever moved. The tally follows that now, so what is reported is what left.",
       "kind": "fix"
     }
   ],
@@ -14,16 +14,15 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Three more commands applied their changes without a word: removing unreferenced declarations, removing unused resource keys, and removing unread Remote Config keys. Apply all skips the preview by design, so nothing at all told you what had happened. The fourth of the family was fixed yesterday; these are the rest of it.",
-        "Removing unreferenced declarations could also delete a source file without saying so. Two dead declarations in one file empty it, the edit becomes a deletion, and the question read `1 change in 1 file` with no mention that the file itself was going. It says `1 file deleted outright.` now, the same words the test removal command has always used."
+        "The reports added to two commands yesterday counted the wrong thing. They read the number found by the scan and the number of files touched by the edit in the same sentence, and those part company the moment a file changes between the question and the click, because both commands read the file again before writing and skip whatever moved.",
+        "Measured on two dead string keys in two files, one of which changes after the question is answered: the edit carried a single removal and the report said `Removed 2 unused resource keys in 1 file.` Both reports now count what the edit actually carries, so a key or a declaration left behind is left out of the tally too."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "A rule now watches the whole family, and only that family: a command that asks its question up front, and therefore skips the preview, must say something after it applies. The per file sweep is the one exception and it is named with its reason, since it always goes through the preview and the preview is the answer there.",
-        "Scoping that rule took two passes. Read across every command it accused six places, three of them wrongly: a quick fix that inserts a branch in front of you, a removal that always opens the preview, and a loop that reports well below where it applies. It reads the enclosing function now, and only files that ask the question up front.",
-        "The claim made two releases ago that the other commands announce what they send was checked rather than repeated. Narrow to private announces one change and sends one, and the workspace sweep three and three."
+        "Third time this week for the same confusion between what was planned and what was done, and the first time it was written while fixing something else. The commands that had it before were corrected one by one; this one arrived with the correction.",
+        "One mutation survived and stays that way, deliberately. Counting a key when its range is prepared rather than when it is written differs only if two ranges in one file overlap, and they cannot: they come from distinct elements, and the widening to whole lines refuses to widen when anything else shares the line. The later placement is kept because it is the one that cannot drift."
       ]
     }
   ],

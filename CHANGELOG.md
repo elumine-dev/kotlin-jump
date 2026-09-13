@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.298
+
+A production caller appearing during the question saves the class and its test.
+
+### Fixed
+- Remove code kept alive only by its tests judged before asking you and never looked again. A class that gained a caller in production while the question was on screen was still removed, and the test file covering it deleted along with it.
+- The check that survives rereads the file about to be cut and refuses if it moved. The new caller is in another file, the declaring one has not changed, so the cut goes through. This is the third command of the family with the same fault, after the two fixed on the last two days.
+- It reads the workspace again after the click. When nothing moved, the index hands back the same snapshot and the verdict already reached is kept, so nothing is paid twice. When something moved, the whole judgement is made again, and only what is still kept alive by tests alone goes.
+- Two commands of the family still have this to fix, both of which edit rather than delete files. The ones that delete came first.
+
 ## 1.42.297
 
 A caller that appears while the question is open now saves its class.

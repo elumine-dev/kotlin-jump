@@ -59,6 +59,12 @@ describe('tout corpus lu est confronte a sa troncature', () => {
 
   it('chacun garde la main ou passe le drapeau au detecteur', () => {
     const aveugles = lus.filter(l => {
+      // Un corpus qu'on ne CONSOMME pas ne doit rien : la commande qui compare
+      // seulement l'identite de l'objet, pour savoir si son verdict a vieilli,
+      // ne lit ni ses sources ni son index. C'est la lecture qui cree la dette,
+      // pas l'appel.
+      const consomme = new RegExp(`\\b${l.nom}\\.(?:sources|index|moduleDirs|modulesWithCode|libraryModules)\\b`);
+      if (!consomme.test(l.portee)) return false;
       const drapeau = `${l.nom}\\.(?:sourcesTruncated|truncated)`;
       // Trois facons legitimes de s'en acquitter, et trois seulement : une
       // garde qui rend la main, le drapeau passe au detecteur qui a sa propre

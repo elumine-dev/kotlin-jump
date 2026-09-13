@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.261
+
+The fix to the check needed a fix of its own.
+
+### Notes
+- Yesterday's release widened a verification rule that had been looking at a fifth of the work. It widened it too far. The write only detector deletes `var db = ` and `flag = ` on purpose, keeping the call on the right for its side effect, and the widened rule counted both as faults.
+- The reference project never took those code paths, so the measurement that justified widening showed 11 deletions out of 11 taking whole lines and said nothing was at risk. Asking the detector directly instead of the project answers in one line: `var db = ` and `db = `.
+- The rule is about the shape of a cut now, with no list of detector families to name correctly or keep up to date. A deletion either takes whole lines or stays inside one line. What it may never be is both, starting mid line and running across a line boundary, which is exactly what an offset mistake looks like.
+- Same catch rate as yesterday and no false alarm: shifting every cut of a family by one character is caught 20 times out of 20 on imports, 11 out of 11 on write only, 19 out of 19 on declarations, and 13 out of 13 in the test co removal check. The unshifted project reports zero on all five checks.
+
 ## 1.42.260
 
 A check that reported zero while looking at a fifth of the work.

@@ -1,29 +1,29 @@
 {
-  "version": "1.42.322",
+  "version": "1.42.323",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Removals take their imports",
-  "summary": "Removing a post or a starved handler now takes its imports too, and a class that asks for silence under detekt is left alone.",
+  "tagline": "Release notes built from the fixes",
+  "summary": "This release has no functional changes for users; it changes how the release notes themselves are written.",
   "highlights": [
     {
-      "title": "Removal Fixes Take Their Imports",
-      "kind": "fix",
-      "description": "Removing an unheard post or a starved handler no longer leaves an unused import behind in Kotlin files, which a detekt build rejects."
+      "title": "No Functional Changes",
+      "kind": "note",
+      "description": "Extension behavior is unchanged from 1.42.322; every command and setting works exactly as before."
     },
     {
-      "title": "Detekt Suppressions Are Honoured",
-      "kind": "fix",
-      "description": "A class or file marked @Suppress(\"UnusedPrivateMember\") or a similar detekt rule is left alone, functions included, not just properties."
+      "title": "Notes Built From Each Fix",
+      "kind": "note",
+      "description": "Release notes are now drafted from the reason written down with each fix, so they name the actual defect instead of a vague category."
     }
   ],
   "sections": [
     {
-      "heading": "Fixed",
+      "heading": "Notes",
       "bullets": [
-        "The \"Remove post\" fix for an event nobody subscribes to, and the fix that removes a handler nothing posts to, deleted the one statement and stopped. Every other removal fix goes through the import cascade; these two did not. The import of the event type, and the `Subscribe` annotation once the last handler went, stayed behind, and a project running detekt fails its build on `NoUnusedImports`. Both now remove the imports that nothing else in the file uses, and keep the ones something still needs. Java files are not covered yet: their imports are left in place, as before.",
-        "1.42.321 respected `@Suppress(\"unused\")` on a class, but only that exact word. A project that runs detekt writes `@Suppress(\"UnusedPrivateMember\")` or `@Suppress(\"UnusedPrivateProperty\")`, and the reference project carries those on three classes. Since 1.42.320 their dead private properties were reported again. The detekt rules for private declarations now count, whole names only, so `UnusedParameter` does not.",
-        "The protection itself was narrower than the 1.42.321 notes said. It went through the reflection rule, which only ever covers properties, so the private functions of a class under `@Suppress(\"unused\")` were still reported, in every version. A request for silence now covers the whole class body, nested classes included, and stops at its closing brace.",
-        "A file level `@file:Suppress` naming one of those detekt rules is honoured the same way, so the class and the file say the same thing.",
-        "On the reference project no finding appears or disappears, all five corpus witnesses give identical results before and after, and timing is unchanged."
+        "Ships no changes to extension behavior: all commands and settings work exactly as they did in 1.42.322.",
+        "The release notes are now drafted from the reason recorded with each fix, the failure a user hit and what was measured, together with the patch of the shipped code. Until now the drafting step only saw file names and line counts, which is why earlier notes sometimes read as a vague cleanup.",
+        "For a test that already existed, only the explanation added in the current release is used, so a fix shipped in an earlier version is not announced again.",
+        "Two defects in this new drafting step were caught before any release relied on it: a large diff stopped it without a word, and an older fix could be credited to the current version. Both are covered by tests.",
+        "Notes written separately can now be applied with the same rendering and validation as drafted ones."
       ]
     }
   ],

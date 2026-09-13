@@ -319,8 +319,18 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
       // an offset does not survive the edit that happened in between, and it
       // is NOT unique: a dead island pushes one group per member and they all
       // carry the same label. Measured on the reference project, two of the
-      // five groups share a key. A set membership test would then let a group
-      // through on the strength of its homonym having been announced.
+      // five groups share a key.
+      //
+      // Today that ambiguity cannot be exploited, and the honest reason is
+      // worth writing down rather than a scarier one: the label is the member
+      // names joined, so a key borne by several groups always names ONE
+      // island, announced and read back as a unit. Lose a member and the label
+      // changes with it, so the key disappears instead of changing count.
+      // Measured both ways.
+      //
+      // The count is used all the same, because that reasoning holds only
+      // while the label happens to encode the membership. It costs nothing and
+      // it does not depend on how labels are built.
       const cleDuGroupe = (g: { group: Group }) => `${g.group.path}\u0000${g.group.label}`;
       const retenus = intersectionParCle(scan.groups, relu.groups, cleDuGroupe);
       if (retenus.length === 0) {

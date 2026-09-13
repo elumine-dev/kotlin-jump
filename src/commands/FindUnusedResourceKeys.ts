@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import { askHowToApply, bulkDetail } from '../util/bulkEdit';
+import { plural } from '../util/plural';
 import { ResourceCorpus } from '../indexer/ResourceCorpus';
 import {
   collectValueKeyDeclarations,
@@ -119,8 +121,19 @@ export async function removeAllUnusedResourceKeysCommand(
       }
 
       provider.setFindings(result.findings);
-      const edit = await buildRemovalEdit(result.findings);
-      await vscode.workspace.applyEdit(edit);
+      // Une question, pas une case par fichier.
+      const apercu = await buildRemovalEdit(result.findings);
+      if (apercu.edits === 0) {
+        void vscode.window.showInformationMessage('No unused resource keys to remove.');
+        return;
+      }
+      const choix = await askHowToApply(
+        `Remove ${plural(result.findings.length, 'unused resource key')}?`,
+        bulkDetail(apercu.edits, apercu.files),
+      );
+      if (choix === 'cancel') return;
+      const choisi = choix === 'apply' ? await buildRemovalEdit(result.findings, undefined, false) : apercu;
+      await vscode.workspace.applyEdit(choisi.edit);
     },
   );
 }

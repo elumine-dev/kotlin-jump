@@ -48,7 +48,7 @@ const trouvaille = {
 describe('KJ-048 — jamais une suppression et une edition sur la meme URI', () => {
   it('la cascade prend le fichier, et aucune plage n est ecrite dedans', async () => {
     const doc = document(TEXTE);
-    const edit: any = await buildSymbolRemovalEdit([trouvaille], doc);
+    const edit: any = (await buildSymbolRemovalEdit([trouvaille], doc)).edit;
     const supprimes = edit._fileDeletes.map((d: any) => d.uri.fsPath);
     const edites = edit._entries.map((e: any) => e.uri.fsPath);
     expect(supprimes).toContain(CHEMIN);
@@ -64,7 +64,7 @@ describe('KJ-048 — jamais une suppression et une edition sur la meme URI', () 
       removeStart: texte.indexOf('class Widget'),
       removeEnd: texte.indexOf('class Vivant'),
     };
-    const edit: any = await buildSymbolRemovalEdit([t], document(texte));
+    const edit: any = (await buildSymbolRemovalEdit([t], document(texte))).edit;
     expect(edit._fileDeletes.map((d: any) => d.uri.fsPath)).not.toContain(CHEMIN);
     expect(edit._entries.map((e: any) => e.uri.fsPath)).toContain(CHEMIN);
   });

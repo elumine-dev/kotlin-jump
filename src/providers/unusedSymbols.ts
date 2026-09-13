@@ -501,6 +501,25 @@ export function removalExtent(
     }
   }
 
+  // A cut must never split a raw string. The sanitizer blanks the `"""`
+  // markers themselves, so `clean` holds no trace of them and the walk above
+  // reads the body as a run of empty lines: on a real project it stopped in
+  // the middle of twenty three JSON fixtures, leaving a dangling `"""`.
+  // Counted on the RAW text, which is the only place those markers survive.
+  const marqueurs = (t: string): number => {
+    let n = 0;
+    for (let i = 0; i + 2 < t.length; i++) {
+      if (t[i] === '"' && t[i + 1] === '"' && t[i + 2] === '"') { n++; i += 2; }
+    }
+    return n;
+  };
+  if (marqueurs(text.slice(removeStart, removeEnd)) % 2 === 1) {
+    const fin = text.indexOf('"""', removeEnd);
+    if (fin === -1) return { removeStart: -1, removeEnd: -1 };
+    const ligneFin = offsetToPos(lineStarts as number[], fin).line;
+    return { removeStart, removeEnd: lineEndOf(ligneFin) };
+  }
+
   return { removeStart, removeEnd };
 }
 

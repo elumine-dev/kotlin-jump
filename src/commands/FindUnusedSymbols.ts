@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { askHowToApply, bulkDetail } from '../util/bulkEdit';
 import { DEFAULT_TEST_SEGMENTS } from '../util/testPaths';
 import {
   ResourceCorpus,
@@ -147,7 +148,21 @@ export async function removeAllUnusedSymbolsCommand(
         void vscode.window.showInformationMessage('Nothing to remove automatically.');
         return;
       }
-      await vscode.workspace.applyEdit(await buildSymbolRemovalEdit(removable));
+      // Meme regle que les autres commandes de masse : le drapeau qui ouvre
+      // l'apercu laisse ses cases decochees, et cette vue n'a pas de « tout
+      // selectionner ». La question se pose une fois, avec les comptes vrais.
+      const apercu = await buildSymbolRemovalEdit(removable);
+      if (apercu.edits === 0) {
+        void vscode.window.showInformationMessage('Nothing to remove automatically.');
+        return;
+      }
+      const choix = await askHowToApply(
+        `Remove ${plural(removable.length, 'unreferenced declaration')}?`,
+        bulkDetail(apercu.edits, apercu.files),
+      );
+      if (choix === 'cancel') return;
+      const choisi = choix === 'apply' ? await buildSymbolRemovalEdit(removable, undefined, false) : apercu;
+      await vscode.workspace.applyEdit(choisi.edit);
     },
   );
 }

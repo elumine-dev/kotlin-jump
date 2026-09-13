@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import * as vscodeMock from '../__mocks__/vscode';
 import { stillTheMeasuredText, estLeFichier } from '../../../src/util/measuredText';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import * as path from 'node:path';
 
 /**
  * Une vue de comparaison ouvre un document dont l'URI est `git:` et dont le
@@ -41,5 +43,40 @@ describe('un document git: n est pas le fichier', () => {
   it('le vrai document ouvert et different fait toujours sauter le fichier', () => {
     ouvre([doc(vscodeMock.Uri.file(CHEMIN), TETE)]);
     expect(stillTheMeasuredText(CHEMIN, TRAVAIL)).toBeUndefined();
+  });
+});
+
+/**
+ * Gardien : plus aucune comparaison de chemin nue dans src/.
+ *
+ * Ce defaut a ete corrige TROIS fois, en 1.42.238 pour trois sites puis a
+ * nouveau pour les deux qui avaient ete oublies dans le meme fichier. Une
+ * regle qu'on reapplique a la main se reouvre ; celle ci se defend seule.
+ */
+describe('aucun `uri.fsPath ===` nu dans src', () => {
+  const RACINE = path.resolve(__dirname, '../../../src');
+
+  const fichiers = (dir: string): string[] => {
+    const out: string[] = [];
+    for (const e of readdirSync(dir)) {
+      const p = path.join(dir, e);
+      if (statSync(p).isDirectory()) out.push(...fichiers(p));
+      else if (p.endsWith('.ts')) out.push(p);
+    }
+    return out;
+  };
+
+  it('chaque comparaison passe par estLeFichier ou porte sa garde de schema', () => {
+    const coupables: string[] = [];
+    for (const f of fichiers(RACINE)) {
+      const lignes = readFileSync(f, 'utf8').split('\n');
+      lignes.forEach((l, i) => {
+        if (!/uri\.fsPath\s*===/.test(l)) return;
+        if (/scheme\s*===\s*'file'/.test(l)) return;      // la garde est sur la ligne
+        if (/estLeFichier/.test(l)) return;                  // ou deleguee
+        coupables.push(`${path.relative(RACINE, f)}:${i + 1} ${l.trim().slice(0, 70)}`);
+      });
+    }
+    expect(coupables, 'un document git: porte le fsPath du vrai fichier').toEqual([]);
   });
 });

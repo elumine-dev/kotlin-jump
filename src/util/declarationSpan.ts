@@ -102,10 +102,18 @@ export function declarationSpan(
     if (rel !== -1) {
       const close = matchBrace(clean, bodyAbs + rel);
       if (close === -1) return undefined;
+      // A matched brace is not always the end of the expression. `= if (c) {`
+      // closes on `} else {` and `= scope.launch { }` on `}.also {`: code
+      // follows the brace ON THE SAME LINE, and the expression runs on.
+      // Claiming lineBasedEnd:false there asserts the end is certain, which
+      // switches off the rescue in removalExtent, and the cut stopped at
+      // `} else {` leaving the else branch and one `}` too many behind.
+      const finDeLaLigneDuClose = lineEndOf(offsetToPos(lineStarts as number[], close).line);
+      const suiteSurLaMemeLigne = clean.slice(close + 1, finDeLaLigneDuClose).trim() !== '';
       return {
         scanStart: nameOffset,
         scanEnd: Math.max(close + 1, exprLineEnd),
-        lineBasedEnd: false,
+        lineBasedEnd: suiteSurLaMemeLigne,
       };
     }
     return { scanStart: nameOffset, scanEnd: exprLineEnd, lineBasedEnd: true };
@@ -146,7 +154,7 @@ export function declarationSpan(
   // whole declaration because its first line ends on `(`.
   const ligneCtor = offsetToPos(lineStarts as number[], Math.max(i - 1, 0)).line;
   let headerEnd = lineEndOf(Math.max(line, ligneCtor));
-  let brace = clean.slice(i, headerEnd).indexOf('{');
+  let brace = accoladeDuCorps(clean, i, headerEnd);
   while (brace === -1) {
     const headerText = clean.slice(i, headerEnd).trimEnd();
     const nextLine = offsetToPos(lineStarts as number[], headerEnd - 1).line + 1;
@@ -160,9 +168,9 @@ export function declarationSpan(
       || /^(?:extends|implements|,)\b/.test(nextText);
     if (!continues) break;
     headerEnd = lineEndOf(nextLine);
-    brace = clean.slice(i, headerEnd).indexOf('{');
+    brace = accoladeDuCorps(clean, i, headerEnd);
   }
-  if (brace !== -1 && HEADER_CHARS_RE.test(clean.slice(i, i + brace))) {
+  if (brace !== -1) {
     const close = matchBrace(clean, i + brace);
     if (close === -1) return undefined;
     return { scanStart: nameOffset, scanEnd: close + 1, lineBasedEnd: false };
@@ -171,7 +179,32 @@ export function declarationSpan(
 }
 
 /**
- * Characters allowed between a class name and its body brace. Anything else
- * means the brace belongs to something other than this header.
+ * The body brace of a class header, or -1, as an offset RELATIVE to `from`.
+ *
+ * This used to be `indexOf('{')` gated by a whitelist of characters allowed in
+ * a supertype list. The whitelist did not admit `+`, `@`, `!` or `=`, so
+ * ordinary Kotlin fell through it and the span collapsed to the header line:
+ *
+ *   ) : CoroutineScope by CoroutineScope(SupervisorJob() + dispatcher) {
+ *   ) : Base(count = 3) {
+ *   ) : @Suppress("x") Base() {
+ *
+ * and the delete quick fix then cut the header alone, leaving the whole body
+ * and a dangling brace behind.
+ *
+ * The real question is not which characters appear but WHICH BRACE this is.
+ * The body's is the first one that is not nested inside a parenthesis or a
+ * bracket, which also skips a lambda passed to a supertype constructor
+ * (`: Base(onClick = { })`) instead of giving up on it. Strings and comments
+ * are already blanked in `clean`.
  */
-export const HEADER_CHARS_RE = /^[\s\w:,<>()?.[\]"'&*-]*$/;
+function accoladeDuCorps(clean: string, from: number, to: number): number {
+  let profondeur = 0;
+  for (let k = from; k < to; k++) {
+    const c = clean[k];
+    if (c === '(' || c === '[') profondeur++;
+    else if (c === ')' || c === ']') profondeur--;
+    else if (c === '{' && profondeur <= 0) return k - from;
+  }
+  return -1;
+}

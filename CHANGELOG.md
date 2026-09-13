@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.42.243
+
+Twelve defects, found by turning the search on the families that had never been searched.
+
+### Fixes
+- A class whose supertype list holds a `+`, an `@`, a `!` or an `=` had its span collapse to the header line, and Delete class X cut the header alone, leaving the whole body and a dangling brace. The list of characters allowed between the name and the body brace did not admit ordinary Kotlin: `) : CoroutineScope by CoroutineScope(SupervisorJob() + dispatcher) {`, `) : Base(count = 3) {`. The question is not which characters appear but which brace this is, so the body's is now the first one that is not nested inside a parenthesis, which also handles a lambda passed to a supertype constructor instead of giving up on it. This one is a regression of the constructor anchor added in 1.42.232.
+- An expression body that carries on past its closing brace lost the rest. `= if (c) { … } else { … }` closes on `} else {` and `= scope.launch { … }.also { … }` on `}.also {`: the end was declared certain, which switched off the walk that would have finished the job, and the cut stopped mid expression.
+- A cut could split a raw string. The sanitizer blanks the `"""` markers themselves, so the walk read a JSON fixture as a run of empty lines and stopped inside it. Twenty three declarations on a real project, every one a test fixture, each left with a dangling `"""`.
+- A dead enum entry left its own annotations behind. Kotlin and Java both bind a leading annotation to the declaration that follows, so a deleted `@Deprecated OLD,` moved its deprecation onto the live sibling; javac says so in as many words. When the dead entry is the last one and the list carries a trailing comma, the annotation is left alone before the closing brace and the file stops parsing outright.
+- A resource key whose only reference goes through a member call was reported unused and offered for deletion. An R field name never carries a dot, aapt rewrites it, so in code a dot after the key can only be member access; the name pattern swallowed it and `R.color.x.toDrawable()` was recorded under `x.toDrawable`. The reference to `x` never existed.
+- Any package whose last segment is `android` was discarded as the platform's R. The intent was `android.R` alone; the guard admitted `com.mycompany.android.` too, and in such a module every key went invisible.
+- The removal of a starved `@Subscribe` handler was never offered when the annotation sits on its own line, which is how handlers are written. The check read the `fun` line, where the word Subscribe does not appear. Nine handlers on a real project showed a warning with no fix behind it.
+- Removing a post that is the sole body of a BRACELESS branch is refused now. `if (flag)` with the post below it left the next statement as the branch body, which compiles and changes behaviour; for `else`, a `when` arm or a `for` it is a plain syntax error.
+- Resource files did not invalidate the corpus. The watcher the 1.42.232 fix was hung on follows `kt`, `kts` and `java`, which is its job, and the corpus also holds xml, gradle, pro, properties and toml: 18.5 % of its files on a real project, all of `res/` among them. A checkout, a stash pop or a formatter therefore left the corpus stale for a minute, and Remove unused resource keys deleted a key a freshly arrived layout references.
+- Invalidating the corpus while a scan was in flight was undone by that scan. The result it wrote had been read BEFORE the change, and it re-stamped a fresh timestamp, so the pre change corpus was served for a further minute with no disk read. A generation counter now outlives the scan.
+- Two more bulk commands ask once instead of once per file: Remove All Unreferenced Symbols, which produces 98 findings on a real project, and Remove Unused Resource Keys. 1.42.240 did four and missed these two.
+- Two places still recognised a document by its path alone, so a diff view's `git:` document, which carries the real file's path and HEAD's content, was taken for the file. Fixed three times now, so a guard refuses any new one.
+
+### Notes
+- Six families that had never been audited were searched in parallel, and every finding was handed to a separate reader whose job was to refute it, from scratch. Nine survived; a tenth and an eleventh came from sweeping the removal rule over all 8370 top level declarations of a real project rather than only the 501 currently reported dead, which is what the witnesses had been looking at.
+- All four witnesses report zero violations on those 6329 sources, with the counts unchanged.
+
 ## 1.42.242
 
 The last of the four bulk commands now cuts where it measured.

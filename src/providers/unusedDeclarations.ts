@@ -32,7 +32,7 @@ import {
   matchBrace,
   collectAnnotationTargets,
   fileOptsOut,
-  UNUSED_DECLARATION,
+  UNUSED_PRIVATE_DECLARATION,
   suppressesDiagnostic,
   CONVENTION_FUN_NAMES,
   REFLECTIVE_SUPERTYPES,
@@ -139,6 +139,50 @@ function outputKind(kind: string): UnusedDeclKind {
  * carrying a reflective supertype. Shared with KJ-028, which needs the same
  * exclusion — duplicating it would let the two copies drift.
  */
+/** La derniere ligne d une declaration de classe, accolade fermante comprise. */
+function derniereLigneDeClasse(
+  clean: string, symbols: readonly RawSymbol[], i: number, lineStarts: number[], lastLine: number,
+): number {
+  const s = symbols[i];
+  let to = rangeEndLine(symbols, i, lastLine);
+  const brace = clean.indexOf('{', lineStarts[s.line] + s.character);
+  if (brace !== -1) {
+    const close = matchBrace(clean, brace);
+    if (close !== -1) to = Math.max(to, offsetToPos(lineStarts, close).line);
+  }
+  return to;
+}
+
+/**
+ * Les classes dont l auteur a demande le silence sur ce que ce detecteur
+ * signale : `@Suppress` ou `@SuppressWarnings` dont les arguments nomment
+ * l un de `diagnostics`.
+ *
+ * Distinct de la regle de reflexion, qui ne protege que les proprietes et
+ * pour une autre raison. Avant 1.42.320 ces classes ne gardaient leurs
+ * proprietes que par accident, parce que toute annotation comptait comme de
+ * la reflexion ; leurs fonctions privees, elles, sont toujours sorties. Une
+ * demande de silence porte sur tout le corps.
+ */
+export function classesSousSilence(
+  clean: string,
+  symbols: readonly RawSymbol[],
+  lineStarts: number[],
+  lastLine: number,
+  annotationsFor: (sym: RawSymbol) => readonly { name: string; args: string }[],
+  diagnostics: readonly string[],
+): { from: number; to: number }[] {
+  const out: { from: number; to: number }[] = [];
+  for (let i = 0; i < symbols.length; i++) {
+    const s = symbols[i];
+    if (!CLASS_LIKE.has(s.kind)) continue;
+    const silence = annotationsFor(s).some(a =>
+      (a.name === 'Suppress' || a.name === 'SuppressWarnings') && suppressesDiagnostic(a.args, diagnostics));
+    if (silence) out.push({ from: s.line, to: derniereLigneDeClasse(clean, symbols, i, lineStarts, lastLine) });
+  }
+  return out;
+}
+
 export function reflectiveOrAnnotatedClassRanges(
   clean: string,
   symbols: readonly RawSymbol[],
@@ -155,20 +199,14 @@ export function reflectiveOrAnnotatedClassRanges(
     const reflective = (s.supertypes ?? []).some(t => REFLECTIVE_SUPERTYPES.has(t.replace(/<.*/, '')));
     const annotations = annotationsFor(s).filter(a => protege(a, diagnostics));
     if (annotations.length === 0 && !reflective) continue;
-    let to = rangeEndLine(symbols, i, lastLine);
-    const brace = clean.indexOf('{', lineStarts[s.line] + s.character);
-    if (brace !== -1) {
-      const close = matchBrace(clean, brace);
-      if (close !== -1) to = Math.max(to, offsetToPos(lineStarts, close).line);
-    }
-    ranges.push({ from: s.line, to });
+    ranges.push({ from: s.line, to: derniereLigneDeClasse(clean, symbols, i, lineStarts, lastLine) });
   }
   return ranges;
 }
 
 export function findUnusedDeclarations(text: string, lang: 'kotlin' | 'java' = 'kotlin'): UnusedDecl[] {
   if (!/\bprivate\b/.test(text)) return [];
-  if (fileOptsOut(text, UNUSED_DECLARATION)) return [];
+  if (fileOptsOut(text, UNUSED_PRIVATE_DECLARATION)) return [];
 
   // Java is the same question with the same answer: a private member no word
   // of its own file names. The guards translate directly, and the ones that
@@ -201,10 +239,13 @@ export function findUnusedDeclarations(text: string, lang: 'kotlin' | 'java' = '
   // Their val/var members are skipped; functions stay flaggable.
   const annotatedClassRanges: { from: number; to: number }[] = [];
   annotatedClassRanges.push(
-    ...reflectiveOrAnnotatedClassRanges(clean, symbols, lineStarts, lastLine, annotationsAvecArguments(text, annoTargets, lineStarts), UNUSED_DECLARATION),
+    ...reflectiveOrAnnotatedClassRanges(clean, symbols, lineStarts, lastLine, annotationsAvecArguments(text, annoTargets, lineStarts), UNUSED_PRIVATE_DECLARATION),
   );
   const inAnnotatedClass = (line: number): boolean =>
     annotatedClassRanges.some(r => line > r.from && line <= r.to);
+  const silences = classesSousSilence(
+    clean, symbols, lineStarts, lastLine, annotationsAvecArguments(text, annoTargets, lineStarts), UNUSED_PRIVATE_DECLARATION);
+  const sousSilence = (line: number): boolean => silences.some(r => line > r.from && line <= r.to);
 
   const lineEndOf = (line: number): number =>
     line + 1 < lineStarts.length ? lineStarts[line + 1] : text.length;
@@ -231,6 +272,7 @@ export function findUnusedDeclarations(text: string, lang: 'kotlin' | 'java' = '
     const annoNames = annosFor(sym);
     if (isFun ? annoNames.some(a => !BENIGN_DECL_ANNOTATIONS.has(a)) : annoNames.length > 0) continue;
     if (isProp && inAnnotatedClass(sym.line)) continue;
+    if (sousSilence(sym.line)) continue;
     if ((nameCounts.get(sym.name) ?? 0) > 1) continue;
     if (sym.kind === 'object' && /\bcompanion\b/.test(declLine)) continue;
     const cleanDeclLine = clean.slice(lineStarts[sym.line], lineEndOf(sym.line));

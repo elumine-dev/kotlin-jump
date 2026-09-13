@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { addCascadePlan, planOneFile } from './applyCascade';
 import { corpusUri } from '../util/corpusUri';
 import {
   DeadSubscription,
@@ -179,9 +180,7 @@ export class UnheardEventProvider implements vscode.CodeActionProvider, vscode.D
       const title = `Remove this starved @Subscribe handler for ${deadHit.name}`;
       const action = new vscode.CodeAction(title, vscode.CodeActionKind.QuickFix);
       const edit = new vscode.WorkspaceEdit();
-      edit.delete(document.uri, new vscode.Range(
-        document.positionAt(deadHit.removeStart), document.positionAt(deadHit.removeEnd)),
-        { needsConfirmation: true, label: title });
+      supprimeAvecSesImports(edit, document, deadHit.removeStart, deadHit.removeEnd, title);
       action.edit = edit;
       return [action];
     }
@@ -202,13 +201,9 @@ export class UnheardEventProvider implements vscode.CodeActionProvider, vscode.D
     if (hit.removeStart !== -1) {
       const action = new vscode.CodeAction(removePostTitleFor(hit), vscode.CodeActionKind.QuickFix);
       const edit = new vscode.WorkspaceEdit();
-      edit.delete(
-        document.uri,
-        new vscode.Range(document.positionAt(hit.removeStart), document.positionAt(hit.removeEnd)),
-        // Rule 3 of the family contract, and it matters more here than
-        // anywhere else: nothing catches a deleted post at compile time.
-        { needsConfirmation: true, label: removePostTitleFor(hit) },
-      );
+      // Rule 3 of the family contract, and it matters more here than
+      // anywhere else: nothing catches a deleted post at compile time.
+      supprimeAvecSesImports(edit, document, hit.removeStart, hit.removeEnd, removePostTitleFor(hit));
       action.edit = edit;
       action.isPreferred = false;
       actions.push(action);
@@ -255,4 +250,33 @@ export class UnheardEventProvider implements vscode.CodeActionProvider, vscode.D
     for (const s of this.subs) s.dispose();
     this.collection.dispose();
   }
+}
+
+/**
+ * The deletion, plus the imports it leaves with nothing to import.
+ *
+ * Every other removal fix in the family goes through the import cascade; these
+ * two deleted the one statement and stopped. The import of the event type, and
+ * the `Subscribe` annotation's when the last handler went, stayed behind, and a
+ * project running detekt fails its build on `NoUnusedImports`.
+ *
+ * The cascade is asked BEFORE the range edit is added, as in the member fix:
+ * a WorkspaceEdit that both deletes a file and edits a range in it is rejected
+ * whole, and in silence.
+ */
+function supprimeAvecSesImports(
+  edit: vscode.WorkspaceEdit,
+  document: vscode.TextDocument,
+  start: number,
+  end: number,
+  label: string,
+): void {
+  const path = document.uri.fsPath;
+  const text = document.getText();
+  const plan = planOneFile(path, text, { start, end });
+  if (!plan.deleteFiles.has(path)) {
+    edit.delete(document.uri, new vscode.Range(document.positionAt(start), document.positionAt(end)),
+      { needsConfirmation: true, label });
+  }
+  addCascadePlan(edit, plan, new Map([[path, text]]));
 }

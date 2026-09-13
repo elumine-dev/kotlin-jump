@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.321
+
+A class marked @Suppress("unused") had its members offered for deletion again.
+
+### Fixed
+- 1.42.320 stopped counting `@Suppress`, `@SuppressWarnings` and `@OptIn` as a reason to protect a class body, so that a lint directive such as `TooManyFunctions` no longer hides dead private properties. It went one step too far. `@Suppress("unused")` on a class is the author saying in writing that what is inside may look unused, and 1.42.320 started reporting those members again, delete fix included. 1.42.319 respected it.
+- The directive now protects the class when its arguments name the diagnostic the detector already honours in a `@file:Suppress`: `unused` for declarations, the unused variable family for variables that are written and never read. `@Suppress("MagicNumber")` and `@SuppressWarnings("TooManyFunctions")` still hide nothing, and `@OptIn` is never a request for silence.
+- The arguments are read on the raw text. The copy used for scanning blanks string contents, so `"unused"` would read as an empty string there and nothing would ever match.
+- The test added in 1.42.320 asserted the faulty behaviour: it checked that `@Suppress("unused")` did not hide the constant. It now checks the opposite, with `@kotlin.Suppress`, a list naming several diagnostics and an argument split over lines. A second test that would only have passed thanks to another guard, and so proved nothing, was removed.
+- Nothing changes on the reference project, which has no class level opt out sitting over a dead private member: all five corpus witnesses give identical results before and after, and timing is unchanged.
+
 ## 1.42.320
 
 A private constant stayed hidden behind a lint directive, and removing a local could cut a comment in half.

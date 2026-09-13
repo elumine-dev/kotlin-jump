@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { findUnusedLocals } from '../../../src/providers/unusedLocals';
 import { findUnusedDeclarations } from '../../../src/providers/unusedDeclarations';
 import { collectAnnotationTargets } from '../../../src/util/kotlinScan';
+import { findWriteOnlyVariables } from '../../../src/providers/writeOnlyVariables';
 
 /**
  * Deux trous de la meme journee, sur deux detecteurs.
@@ -60,7 +61,7 @@ describe('une directive de compilation ne protege pas le corps de la classe', ()
     `package x\n\n${anno}object U {\n    private const val MORT = "a.txt"\n    fun vivant() = 1\n}\n`;
   const noms = (src: string) => (findUnusedDeclarations(src) as any[]).map(d => d.name);
 
-  for (const anno of ['@Suppress("unused")\n', '@SuppressWarnings("TooManyFunctions")\n', '@OptIn(X::class)\n']) {
+  for (const anno of ['@Suppress("MagicNumber")\n', '@SuppressWarnings("TooManyFunctions")\n', '@OptIn(X::class)\n']) {
     it(`${anno.trim()} ne cache pas la constante morte`, () => {
       expect(noms(objet(anno))).toContain('MORT');
     });
@@ -78,9 +79,56 @@ describe('une directive de compilation ne protege pas le corps de la classe', ()
 
   it('le nom qualifie arrive deja reduit, et le filtre le reconnait', () => {
     // Le collecteur rend `Suppress` pour `@kotlin.Suppress`. Ce test le
-    // verifie A LA SOURCE : sans cela il passait quoi que fasse le filtre,
-    // et c est exactement ce qu il faisait avant.
+    // verifie A LA SOURCE : sans cela il passait quoi que fasse le filtre.
     expect(collectAnnotationTargets('@kotlin.Suppress("x")\nobject U {}\n').map(a => a.name)).toEqual(['Suppress']);
-    expect(noms(objet('@kotlin.Suppress("unused")\n'))).toContain('MORT');
+    expect(noms(objet('@kotlin.Suppress("MagicNumber")\n'))).toContain('MORT');
+  });
+});
+
+/**
+ * Sauf quand la directive dit justement de se taire.
+ *
+ * La version precedente de ce fichier affirmait qu un `@Suppress("unused")`
+ * sur la classe ne cachait pas la constante. Elle decrivait le defaut : en
+ * ecartant TOUTES les directives, le correctif avait fait signaler, et donc
+ * proposer de supprimer, ce que l auteur avait marque comme volontairement
+ * inutilise. En 1.42.319 cette classe etait respectee.
+ */
+describe('une directive qui demande le silence est respectee', () => {
+  const objet = (anno: string) =>
+    `package x\n\n${anno}object U {\n    private const val MORT = "a.txt"\n    fun vivant() = 1\n}\n`;
+  const noms = (src: string) => (findUnusedDeclarations(src) as any[]).map(d => d.name);
+
+  for (const anno of [
+    '@Suppress("unused")\n',
+    '@SuppressWarnings("unused")\n',
+    '@kotlin.Suppress("unused")\n',
+    '@Suppress("MagicNumber", "unused")\n',
+    '@Suppress(\n    "unused",\n)\n',
+  ]) {
+    it(`${JSON.stringify(anno.trim())} garde la constante`, () => {
+      expect(noms(objet(anno))).not.toContain('MORT');
+    });
+  }
+
+  it('un avertissement voisin ne vaut pas silence sur les declarations', () => {
+    // `UNUSED_PARAMETER` parle des parametres, pas de ce qui est atteignable :
+    // la meme regle que pour `@file:Suppress`.
+    expect(noms(objet('@Suppress("UNUSED_PARAMETER")\n'))).toContain('MORT');
+  });
+
+  it('OptIn ne demande jamais le silence, meme avec un argument qui ressemble', () => {
+    expect(noms(objet('@OptIn(unused::class)\n'))).toContain('MORT');
+  });
+
+  it('la variable ecrite jamais lue ne garde pas une classe sous OptIn', () => {
+    // Seul OptIn est observable ici. Ce detecteur a une seconde garde,
+    // `suppressedRegions`, qui se tait sous N IMPORTE QUEL `@Suppress`, quels
+    // qu en soient les arguments : un test avec `@Suppress("unused")` y
+    // passerait grace a elle et ne prouverait rien de ce fichier.
+    const classe = (anno: string) =>
+      `package x\n\n${anno}class C {\n    private var ecrite: Int = 0\n    fun f() { ecrite = 2 }\n}\n`;
+    const w = (src: string) => (findWriteOnlyVariables(src) as any[]).map(d => d.name);
+    expect(w(classe('@OptIn(X::class)\n'))).toContain('ecrite');
   });
 });

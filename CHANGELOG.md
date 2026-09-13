@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.270
+
+Two linters that had gone quiet on the web.
+
+### Fixes
+- The hardcoded string lint and the lifecycle pairing lint had gone quiet on vscode.dev and github.dev. Both ran there until 1.42.246, when the guard that keeps Gradle source jars out of the Problems panel started asking for the `file` scheme. On those hosts a file is a `vscode-vfs://github/owner/repo/...`, so it fell out with the jars, and nothing said so.
+- The scheme was never the question. What the guard wants to know is whether the reader can fix what it reports, and the editor answers that itself: a filesystem declared read only is left alone, an unsaved buffer is still the reader's own code, and the handful of schemes that show a copy of a file living elsewhere, the diff view first among them, are named one by one rather than guessed at.
+
+### Notes
+- This one was named at the end of the previous release and left untreated on purpose, to be looked at with a clear head rather than at the end of a hunt. It is the third thing found by asking what else assumes a desktop, after three commands the web build offered without being able to run them and a stale text guard that never saw an open document there.
+- The jar entries, the dependency source trees and the workspace folder rule all keep working unchanged, on the web as well: a `sources/android-35` path is left alone whatever host it arrives from.
+
 ## 1.42.269
 
 On the web, a file is not a `file:`.

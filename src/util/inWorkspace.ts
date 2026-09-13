@@ -52,12 +52,35 @@ const RACINES_DE_DEPENDANCE = [
 const estUneSourceDeDependance = (chemin: string): boolean =>
   RACINES_DE_DEPENDANCE.some(r => r.test(chemin));
 
+/**
+ * Vues en lecture seule d'un fichier qui vit ailleurs.
+ *
+ * `git:` est celle qui a motive la garde : la vue de comparaison porte le
+ * `fsPath` du vrai fichier et le contenu de HEAD. Nommees une par une plutot
+ * que devinees, parce qu'un schema inconnu est plus souvent un vrai fichier
+ * qu'une vue.
+ */
+const SCHEMAS_DE_VUE = new Set(['git', 'gitlens', 'jar', 'review', 'pr', 'vscode-userdata']);
+
 export function estUnFichierReel(doc: vscode.TextDocument): boolean {
+  const schema = doc.uri.scheme;
   // `untitled:` passe : un tampon sans titre ou l'on colle du Kotlin est du
   // code que l'utilisateur ecrit, et un linter qui ne lit que le fichier sous
   // ses yeux y a toute sa place. L'exclure etait un exces de la premiere
   // version de cette garde.
-  if (doc.uri.scheme !== 'file' && doc.uri.scheme !== 'untitled') return false;
+  //
+  // Le reste ne se juge plus sur une liste blanche `file`. Sur vscode.dev un
+  // fichier est un `vscode-vfs://github/owner/repo/...`, qui tombait avec les
+  // source jars : ces deux linters, qui tournaient sur cet hote avant la
+  // 1.42.246, y etaient muets depuis, sans que rien le dise. La vraie question
+  // n'est pas le schema mais « l'utilisateur peut-il corriger ce que je
+  // signale », et VS Code y repond avec `isWritableFileSystem`, qui rend
+  // `false` sur un systeme en lecture seule et `undefined` quand aucun
+  // fournisseur n'est enregistre, ce qui est le cas de `untitled:`.
+  if (schema !== 'untitled') {
+    if (SCHEMAS_DE_VUE.has(schema)) return false;
+    if (vscode.workspace.fs.isWritableFileSystem?.(schema) === false) return false;
+  }
   if (doc.uri.path.includes('.jar!')) return false;
   // The folder is an escape hatch, not the rule. A file of the project is ours
   // whatever its path reads like; a file outside it is ours only when it does

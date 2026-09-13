@@ -365,6 +365,12 @@ export const workspace = {
   }),
   fs: {
     readFile: async () => Buffer.from(''),
+    /**
+     * Forme reelle de l'API : `true`, `false`, ou `undefined` quand aucun
+     * fournisseur n'est enregistre pour ce schema. Le defaut rend `undefined`,
+     * qui est ce que repond un hote pour un schema qu'il ne connait pas.
+     */
+    isWritableFileSystem: (_scheme: string): boolean | undefined => undefined,
   },
 };
 

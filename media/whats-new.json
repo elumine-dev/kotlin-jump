@@ -1,41 +1,27 @@
 {
-  "version": "1.42.243",
+  "version": "1.42.244",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Twelve defects in the places never searched",
-  "summary": "Six families that had never been audited were searched at once, each finding handed to a separate reader whose job was to refute it. Nine survived, and a sweep over every declaration of a real project found two more.",
+  "tagline": "Remove everything unused, in one go",
+  "summary": "One command instead of five, repeating until a pass finds nothing, because each removal orphans the next.",
   "highlights": [
     {
-      "title": "Cuts that stopped inside the declaration",
-      "kind": "fix",
-      "description": "A supertype list holding a `+` or an `=` collapsed the span to the header line. An expression body carrying on past `} else {` lost the rest. A cut could stop inside a raw string. Twenty three JSON fixtures on a real project were in that last case."
-    },
-    {
-      "title": "A dead enum entry takes its annotations",
-      "kind": "fix",
-      "description": "A leading annotation binds to the declaration that follows, so a deleted `@Deprecated OLD,` moved its deprecation onto the live sibling. On a last entry with a trailing comma, the file stopped parsing outright."
-    },
-    {
-      "title": "A stale corpus deleted live resource keys",
-      "kind": "fix",
-      "description": "Resource files never invalidated the corpus, and invalidating it during a scan was undone by that scan. Either way the pre change corpus was served for a minute, and the deletion followed the wrong verdict."
+      "title": "Remove Everything Unused",
+      "kind": "feature",
+      "description": "Five commands removed five kinds of dead code, and one pass was never enough: on a real project the removals only settled after four rounds. This asks once, then does all of it, repeating until a pass finds nothing."
     }
   ],
   "sections": [
     {
-      "heading": "Fixes",
+      "heading": "Added",
       "bullets": [
-        "Three ways for a removal to stop inside the declaration it is cutting: a supertype list with a `+` or an `=`, an expression body continuing past its closing brace, and a raw string.",
-        "A dead enum entry now leaves with its own annotations, which otherwise moved onto the live entry below or broke the parse.",
-        "A resource key referenced through a member call, and every key of a module whose package ends in `android`, are no longer reported unused.",
-        "Resource, gradle and toml changes invalidate the corpus, and an invalidation during a scan is no longer undone by it.",
-        "Remove All Unreferenced Symbols and Remove Unused Resource Keys ask once instead of once per file, and the fix for a starved `@Subscribe` handler is offered in the shape handlers are actually written in."
+        "Remove Everything Unused: declarations, class members, enum entries, dead islands, locals and parameters, plus the imports and files they orphan, in one command that repeats until a pass finds nothing."
       ]
     },
     {
-      "heading": "Notes",
+      "heading": "Fixes",
       "bullets": [
-        "Every finding was handed to a separate reader whose job was to refute it, from scratch. Nine survived out of fourteen reported.",
-        "Two more came from sweeping the removal rule over all 8370 top level declarations of a real project rather than only the 501 currently reported dead."
+        "The per file sweep carried its own copy of the removal extent, left behind while the original grew. A multi line initializer had no removal there while the same shape had one elsewhere.",
+        "The watcher added in 1.42.243 had no exclusion filter, so the thousands of files a build writes under `build/` emptied the corpus cache over and over."
       ]
     }
   ],

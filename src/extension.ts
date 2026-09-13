@@ -64,6 +64,7 @@ import { findUnusedEnumEntriesCommand } from './commands/FindUnusedEnumEntries';
 import { findEverythingUnusedCommand } from './commands/FindEverythingUnused';
 import { removeTestOnlyCodeCommand } from './commands/RemoveTestOnlyCode';
 import { makeSelfOnlyPrivateCommand } from './commands/MakeSelfOnlyPrivate';
+import { removeEverythingUnusedCommand } from './commands/RemoveEverythingUnused';
 import {
   createEventSubscriberCommand,
   findUnheardEventsCommand,
@@ -914,9 +915,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const corpusWatcher = vscode.workspace.createFileSystemWatcher(
     '**/*.{xml,gradle,pro,properties,toml}',
   );
-  corpusWatcher.onDidCreate(() => resourceCorpus.invalidate());
-  corpusWatcher.onDidChange(() => resourceCorpus.invalidate());
-  corpusWatcher.onDidDelete(() => resourceCorpus.invalidate());
+  // Filtre par la MEME exclusion que l'index, pour la meme raison qu'elle y
+  // est : un `gradlew assembleDebug` ecrit des milliers de xml sous `build/`,
+  // manifestes fusionnes, ressources fusionnees, rapports de lint. Mesure sur
+  // /Users/kevin/Desktop/work/lapresse : 5656 fichiers de sortie de build
+  // repondent a ce glob contre 1185 vrais. Sans filtre, chaque build invalide
+  // le corpus des milliers de fois et son cache d'une minute ne tient plus
+  // jamais : chaque commande repart pour un balayage complet des 6340
+  // fichiers. Le corpus ne lit de toute facon jamais ces fichiers la.
+  const toucheLeCorpus = (uri: vscode.Uri) => {
+    if (!isExcludedPath(uri.path)) resourceCorpus.invalidate();
+  };
+  corpusWatcher.onDidCreate(toucheLeCorpus);
+  corpusWatcher.onDidChange(toucheLeCorpus);
+  corpusWatcher.onDidDelete(toucheLeCorpus);
   const watcher = new FileWatcher(scanner, index, uri => {
     _semanticTokens?.invalidate(uri.toString());
     codeLens.evictFile(uri.toString());     // surgical: only evict symbols in the changed file
@@ -1542,6 +1554,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand('kotlin-jump.makeSelfOnlyPrivate', () =>
       makeSelfOnlyPrivateCommand(resourceCorpus),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.removeEverythingUnused', () =>
+      removeEverythingUnusedCommand(resourceCorpus),
     ),
     corpusWatcher,
     vscode.workspace.onDidCreateFiles(() => resourceCorpus.invalidate()),

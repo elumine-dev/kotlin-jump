@@ -74,11 +74,29 @@ describe('KJ-026 adversarial — removal extents', () => {
     expect(removeFirst(text, 'GONE')).toBe('fun main() { println(1) }\n');
   });
 
-  it('corps-expression multi-lignes SANS accolades : removeStart = -1, diagnostic gardé', () => {
+  // Ce detecteur portait sa PROPRE copie de l'etendue de suppression, restee au
+  // niveau d'avant 1.42.233 pendant que l'originale de KJ-032 grandissait : la
+  // marche d'expression, la regle du point-virgule, la garde contre la coupe
+  // d'une chaine brute, rien de tout cela ne lui etait parvenu. Les trois cas
+  // ci-dessous n'avaient donc aucun correctif ici alors que la meme forme en
+  // avait un deux fichiers plus loin. Ils en ont un maintenant, et c'est la
+  // meme fonction qui repond des deux cotes.
+  it('corps-expression multi-lignes SANS accolades : la coupe va jusqu au bout', () => {
     const text = 'class A {\n  private fun gone() = 1 +\n    2 +\n    3\n  fun keep() = 4\n}\n';
     const dead = findUnusedDeclarations(text).find(u => u.name === 'gone');
     expect(dead).toBeDefined();
-    expect(dead!.removeStart).toBe(-1);
+    expect(text.slice(dead!.removeStart, dead!.removeEnd)).toBe('  private fun gone() = 1 +\n    2 +\n    3\n');
+    expect(removeFirst(text, 'gone')).toBe('class A {\n  fun keep() = 4\n}\n');
+  });
+
+  it('initialiseur multi-lignes : idem', () => {
+    const text = 'class A {\n  private val gone = listOf(\n    1,\n    2,\n  )\n  fun keep() = 4\n}\n';
+    expect(removeFirst(text, 'gone')).toBe('class A {\n  fun keep() = 4\n}\n');
+  });
+
+  it('chaine brute : la coupe ne la scinde pas', () => {
+    const text = 'class A {\n  private val gone = """\n  { "a": 1 }\n  """\n  fun keep() = 4\n}\n';
+    expect(removeFirst(text, 'gone')).toBe('class A {\n  fun keep() = 4\n}\n');
   });
 
   it('membre indenté vs top-level : indentation respectée, pas de ligne vide résiduelle double', () => {

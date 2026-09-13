@@ -24,6 +24,7 @@ import { parse, RawSymbol } from '../indexer/KotlinParser';
 import { parseJava } from '../indexer/JavaParser';
 import { rangeEndLine } from '../util/symbolRanges';
 import { declarationSpan } from '../util/declarationSpan';
+import { removalExtent } from './unusedSymbols';
 import {
   buildLineStarts,
   offsetToPos,
@@ -193,66 +194,20 @@ export function findUnusedDeclarations(text: string, lang: 'kotlin' | 'java' = '
     if (new RegExp(`\\b${sym.name}\\b`).test(scanStr)) continue;
 
     // ── Removal extent (full lines, KDoc + annotations included) ───────────
-    let removeStart = -1;
-    let removeEnd = -1;
+    //
+    // Delegated to KJ-032's `removalExtent`, which is the same rule, and was
+    // copied here rather than called. The copy then stayed where it was while
+    // the original grew: the keyword list that decides whether the next line
+    // opens a declaration, the semicolon rule, the expression walk, the guard
+    // against splitting a raw string. Every one of those fixes was missing
+    // from this detector, so `private val x = listOf(` over several lines had
+    // no removal at all while the very same shape had one two files away.
+    const extent = removalExtent(text, clean, lineStarts, lastLine, sym, span);
+    const removeStart = extent.removeStart;
+    const removeEnd = extent.removeEnd;
+
     let firstLine = sym.line;
-    for (let l = sym.line - 1; l >= 0; l--) {
-      const trimmed = lines[l].trim();
-      if (trimmed.startsWith('@') && !/\b(?:val|var|fun|class|object|interface|typealias|const|enum|companion)\b/.test(afterAnnotations(trimmed))) { firstLine = l; continue; }
-      const annoStart = multiLineAnnotationStart(lines, l);
-      if (annoStart !== -1) { firstLine = annoStart; l = annoStart; continue; }
-      // A doc comment right above: walk up through lines that are comment
-      // only. `fun keep() = 1 /* px */` also ends with `*/`, and the walk used
-      // to climb from there to the nearest `/*` in the file, then delete
-      // everything in between.
-      if (trimmed.endsWith('*/') && (trimmed.startsWith('/*') || trimmed.startsWith('*'))) {
-        let k = l;
-        while (k >= 0) {
-          const t = lines[k].trim();
-          if (t.startsWith('/*')) break;
-          if (!t.startsWith('*')) { k = -1; break; }
-          k--;
-        }
-        if (k >= 0) { firstLine = k; l = k; continue; }
-      }
-      break;
-    }
-    let endOffset = scanEnd;
-    if (isProp) {
-      // absorb accessor lines below (`get() = …`, `private set`, block accessors)
-      let nextLine = offsetToPos(lineStarts, endOffset - 1).line + 1;
-      while (nextLine <= lastLine && /^\s*(?:private\s+|protected\s+)?(?:get|set)\b/.test(lines[nextLine])) {
-        const lineStart = lineStarts[nextLine];
-        const braceIdx = clean.slice(lineStart, lineEndOf(nextLine)).indexOf('{');
-        if (braceIdx !== -1) {
-          const close = matchBrace(clean, lineStart + braceIdx);
-          if (close === -1) break;
-          endOffset = close + 1;
-        } else {
-          endOffset = lineEndOf(nextLine);
-        }
-        nextLine = offsetToPos(lineStarts, endOffset - 1).line + 1;
-      }
-    }
-    // A line-based extent is uncertain when the statement visibly continues:
-    // trailing operator on the decl line, OR a continuation-style next line
-    // (Kotlin allows `foo()\n  .bar()` — leading-dot chains).
-    // Judge continuation on the RAW text: the sanitizer blanks string bodies,
-    // so `val X = "done"` would read as ending on `=` and lose its quick fix.
-    const trailing = text.slice(0, endOffset).trimEnd();
-    const nextLineNum = offsetToPos(lineStarts, Math.max(endOffset - 1, 0)).line + 1;
-    let nextNonBlank = nextLineNum;
-    while (nextNonBlank <= lastLine && lines[nextNonBlank].trim() === '') nextNonBlank++;
-    const nextStartsFresh =
-      nextNonBlank > lastLine ||
-      /^\s*(?:\}|\/\/|\/\*|@|va[lr]\b|fun\b|class\b|object\b|interface\b|companion\b|init\b|constructor\b|private\b|protected\b|internal\b|public\b|override\b|abstract\b|open\b|enum\b|sealed\b|data\b|suspend\b|inline\b|typealias\b)/.test(
-        lines[nextNonBlank] ?? '',
-      );
-    const continues = lineBasedEnd && (/(?:[+\-*/,.&|?:=(]|->)$/.test(trailing) || !nextStartsFresh);
-    if (!continues) {
-      removeStart = lineStarts[firstLine];
-      removeEnd = lineEndOf(offsetToPos(lineStarts, Math.max(endOffset - 1, removeStart)).line);
-    }
+    if (removeStart >= 0) firstLine = offsetToPos(lineStarts, removeStart).line;
 
     const pos = offsetToPos(lineStarts, nameOffset);
     result.push({

@@ -727,9 +727,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const corpusWatcherWeb = vscode.workspace.createFileSystemWatcher(
     '**/*.{xml,gradle,pro,properties,toml}',
   );
-  corpusWatcherWeb.onDidCreate(() => resourceCorpusWeb.invalidate());
-  corpusWatcherWeb.onDidChange(() => resourceCorpusWeb.invalidate());
-  corpusWatcherWeb.onDidDelete(() => resourceCorpusWeb.invalidate());
+  // Meme filtre que l'index : sans lui, les milliers de xml qu'un build ecrit
+  // sous `build/` invalident le corpus en rafale et son cache ne tient plus.
+  const toucheLeCorpusWeb = (uri: vscode.Uri) => {
+    if (!isExcludedPath(uri.path)) resourceCorpusWeb.invalidate();
+  };
+  corpusWatcherWeb.onDidCreate(toucheLeCorpusWeb);
+  corpusWatcherWeb.onDidChange(toucheLeCorpusWeb);
+  corpusWatcherWeb.onDidDelete(toucheLeCorpusWeb);
   context.subscriptions.push(corpusWatcherWeb);
   const watcher = new FileWatcher(scanner, index, uri => {
     _semanticTokens?.invalidate(uri.toString());

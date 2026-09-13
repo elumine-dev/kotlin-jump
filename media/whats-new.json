@@ -1,27 +1,26 @@
 {
-  "version": "1.42.254",
+  "version": "1.42.255",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Ten rounds measured, eight allowed",
-  "summary": "Remove Everything Unused stopped two rounds before it was done on the project it was built for, because its limit was written without measuring.",
+  "tagline": "Saying what is known",
+  "summary": "On reaching its round limit the command asserted that work remained. The next round never ran, so it could not know.",
   "highlights": [
     {
-      "title": "The loop runs long enough to finish",
+      "title": "The limit message states the limit, not a guess",
       "kind": "fix",
-      "description": "Applied to a fixed point on a 6329 source project it takes ten rounds: the tail is a chain of constants each alive only for the next. The limit was eight. It is sixteen now, and the loop shows its round and can be stopped between two."
+      "description": "On the reference project the round following the last productive one found nothing at all. What the command knows is that it stopped on the limit, so that is what it says."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "The round limit of Remove Everything Unused is a measured number with room above it, not a guess below the need."
+        "Reaching the round limit is reported as reaching the limit, with the reason to run it again left as a question rather than an assertion."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "The merged path had never been applied for real. It has now, to a fixed point: 62 files deleted, 138 modified, zero brace or parenthesis left unbalanced across the 5048 remaining.",
-        "Every one of the 259 cuts the five families would produce alone is kept by the merge or contained in a cut it keeps; the 32 it drops are duplicates."
+        "A collision between the sweep removing an already unused import and the cascade removing a freshly orphaned one would make VS Code reject the whole edit in silence. The cascade excludes the already dead ones by construction, and on the reference project not one of the 26 files carrying cascade imports has a range touching a family cut."
       ]
     }
   ],

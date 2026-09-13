@@ -260,8 +260,10 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
       const ok = await vscode.workspace.applyEdit(edit);
       if (!ok) { refuse = true; break; }
       corpus.invalidate();
-      // La derniere passe autorisee a quand meme trouve du travail : il en
-      // reste. Le taire laisserait croire que le nettoyage est fini.
+      // La derniere passe autorisee a quand meme travaille. On ne sait PAS
+      // s'il reste quelque chose : la passe suivante n'a pas eu lieu, et sur
+      // le projet de reference celle qui suit la derniere productive ne
+      // trouvait rien. Ce qu'on sait, c'est qu'on s'est arrete sur le plafond.
       if (n === passes - 1 && choix === 'apply') restait = true;
       }
     },
@@ -295,6 +297,10 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
 /**
  * The one sentence this command ends on.
  *
+ * `restait` says the loop hit its limit, NOT that work remains: the next round
+ * never ran. Claiming otherwise was a fact not in evidence, and on the
+ * reference project the round after the last productive one found nothing.
+ *
  * Exported for the witness. Glueing a headline to a note produced answers that
  * contradicted each other in the same breath: stopping on the first round said
  * `Nothing unused left to remove. Stopped on request: run it again to finish.`
@@ -314,7 +320,7 @@ export function compteRendu(
     return 'Nothing unused left to remove.';
   }
   const fin = e.annule ? ' Stopped on request: run it again to finish.'
-    : e.restait ? ' There was still work left after the last round: run it again.'
+    : e.restait ? ' Stopped after the last allowed round: run it again to see whether anything is left.'
       : '';
   return `${e.verbe} ${fait}${e.queue}${suite}${fin}`;
 }

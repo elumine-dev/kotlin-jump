@@ -1,32 +1,27 @@
 {
-  "version": "1.42.241",
+  "version": "1.42.242",
   "title": "What's New in Kotlin Jump",
-  "tagline": "What is applied is what is reported",
-  "summary": "Asking once means building the edit twice, and the report was reading the first build. A file that moved while the dialog was open produced an empty edit and no message at all.",
+  "tagline": "Cutting where it measured",
+  "summary": "Removing unread Remote Config keys checked its offsets against the disk and turned them into positions through the buffer. One line added above and the deletion landed an entry lower.",
   "highlights": [
     {
-      "title": "No more silent empty edit",
+      "title": "Remote Config keys deleted at the right place",
       "kind": "fix",
-      "description": "The dialog gives the workspace time to move. A file that moved is skipped by the second build, so the command sent an empty edit while its message described the first draw. Counts and edit come from the same build now."
-    },
-    {
-      "title": "Apply all says what it deletes",
-      "kind": "fix",
-      "description": "That path skips the preview, which was the only place file deletions were visible. The number of files deleted outright is written into the question, before the click."
+      "description": "The offsets were checked against a fresh disk read, then converted through `openTextDocument`, which returns the buffer when the file is open and unsaved. Both now use the text the edit will land in, and a file that moved is left alone."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "The workspace sweep and the removal of code kept alive by its tests report the build they actually send, not the one used to ask the question.",
-        "The dialog names how many files Apply all deletes outright."
+        "Removing unread Remote Config keys could delete the wrong entry when the file was open with unsaved changes. The fault is older than the dialog, which only widened the window.",
+        "The edit is rebuilt after the answer, like the other three bulk commands, so what is applied is what is reported."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "Written down as a test that drives the command end to end with a document whose text changes the moment the dialog is answered."
+        "All four bulk commands now hold the same two rules: an offset is only valid against the text the edit will land in, and what is applied is what is reported."
       ]
     }
   ],

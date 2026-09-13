@@ -92,44 +92,90 @@ export async function removeAllUnusedRemoteConfigKeysCommand(
         }
       }
 
-      // Les plages d'abord, l'edition ensuite : la question du mode ne peut se
-      // poser qu'une fois le compte connu, et relire tous les fichiers une
-      // seconde fois pour la reposer serait du gaspillage.
-      const plages: { uri: vscode.Uri; range: vscode.Range }[] = [];
+      // Les offsets viennent du CORPUS. Ils ne valent que contre lui, et la
+      // commande les confrontait au disque pour les verifier puis les
+      // convertissait en positions via `openTextDocument`, qui rend le TAMPON
+      // quand le fichier est ouvert : deux textes pour un seul jeu de bornes.
+      // La boite modale posee en 1.42.240 entre la mesure et l'application a
+      // elargi la fenetre sans la creer, donc on reconstruit apres la reponse,
+      // comme les trois autres commandes de masse.
+      const mesures = new Map(data.sources.map(s => [s.path, s.text]));
       const decoder = new TextDecoder();
-      for (const [path, declarations] of byFile) {
-        const uri = corpusUri(path);
-        let text: string;
-        try {
-          text = decoder.decode(await vscode.workspace.fs.readFile(uri));
-        } catch {
-          continue;
+      const construire = async (confirm: boolean) => {
+        const edit = new vscode.WorkspaceEdit();
+        let count = 0;
+        let bouges = 0;
+        const fichiers = new Set<string>();
+        const ouverts = new Map(vscode.workspace.textDocuments
+          .filter(d => d.uri.scheme === 'file')
+          .map(d => [d.uri.fsPath, d]));
+        for (const [path, declarations] of byFile) {
+          const uri = corpusUri(path);
+          const ouvert = ouverts.get(uri.fsPath);
+          let vivant: string;
+          if (ouvert) {
+            vivant = ouvert.getText();
+          } else {
+            try {
+              vivant = decoder.decode(await vscode.workspace.fs.readFile(uri));
+            } catch {
+              continue;
+            }
+          }
+          if (vivant !== mesures.get(path)) { bouges++; continue; }
+          const starts = debutsDeLigne(vivant);
+          for (const d of [...declarations].sort((a, b) => b.removeStart - a.removeStart)) {
+            // Ceinture : meme sur le bon texte, une borne qui ne couvre pas une
+            // cle ne vise pas ce qu'on croit.
+            if (!vivant.slice(d.removeStart, d.removeEnd).includes('<key>')) continue;
+            edit.delete(uri, new vscode.Range(posAt(starts, d.removeStart), posAt(starts, d.removeEnd)),
+              { needsConfirmation: confirm, label: 'Remove unread Remote Config keys' });
+            count++;
+            fichiers.add(path);
+          }
         }
-        const doc = await vscode.workspace.openTextDocument(uri);
-        for (const d of [...declarations].sort((a, b) => b.removeStart - a.removeStart)) {
-          // Re-verify against the text we just read: a stale offset must never
-          // aim a deletion at something else.
-          if (!text.slice(d.removeStart, d.removeEnd).includes('<key>')) continue;
-          plages.push({ uri, range: new vscode.Range(doc.positionAt(d.removeStart), doc.positionAt(d.removeEnd)) });
-        }
-      }
-      if (plages.length === 0) {
-        void vscode.window.showInformationMessage('Nothing to remove.');
+        return { edit, count, bouges, fichiers: fichiers.size };
+      };
+
+      const noteDe = (bouges: number) => bouges > 0
+        ? ` ${plural(bouges, 'file')} changed since the scan and ${bouges > 1 ? 'were' : 'was'} left alone: run the command again.`
+        : '';
+
+      const apercu = await construire(true);
+      if (apercu.count === 0) {
+        void vscode.window.showInformationMessage(`Nothing to remove.${noteDe(apercu.bouges)}`);
         return;
       }
-      // Le drapeau qui ouvre l'apercu laisse aussi ses cases decochees, et
-      // cette vue n'a pas de « tout selectionner ».
       const choix = await askHowToApply(
-        `Remove ${plural(plages.length, 'unread Remote Config key')}?`,
-        bulkDetail(plages.length, new Set(plages.map(p => p.uri.toString())).size),
+        `Remove ${plural(apercu.count, 'unread Remote Config key')}?`,
+        bulkDetail(apercu.count, apercu.fichiers),
       );
       if (choix === 'cancel') return;
-      const edit = new vscode.WorkspaceEdit();
-      for (const p of plages) {
-        edit.delete(p.uri, p.range,
-          { needsConfirmation: choix === 'review', label: 'Remove unread Remote Config keys' });
+
+      // Ce qui est applique est ce qui est rapporte.
+      const choisi = choix === 'apply' ? await construire(false) : apercu;
+      if (choisi.count === 0) {
+        void vscode.window.showInformationMessage(`Nothing to remove.${noteDe(choisi.bouges)}`);
+        return;
       }
-      await vscode.workspace.applyEdit(edit);
+      if (choisi.bouges > 0) void vscode.window.showInformationMessage(noteDe(choisi.bouges).trim());
+      await vscode.workspace.applyEdit(choisi.edit);
     },
   );
+}
+
+/** Les offsets de debut de chaque ligne, pour convertir sans passer par un document. */
+function debutsDeLigne(text: string): number[] {
+  const starts = [0];
+  for (let i = 0; i < text.length; i++) if (text[i] === '\n') starts.push(i + 1);
+  return starts;
+}
+
+function posAt(starts: readonly number[], offset: number): vscode.Position {
+  let bas = 0, haut = starts.length - 1;
+  while (bas < haut) {
+    const milieu = Math.ceil((bas + haut) / 2);
+    if (starts[milieu] <= offset) bas = milieu; else haut = milieu - 1;
+  }
+  return new vscode.Position(bas, offset - starts[bas]);
 }

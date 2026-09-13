@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.242
+
+The last of the four bulk commands now cuts where it measured.
+
+### Fixes
+- Removing unread Remote Config keys could delete the wrong entry. The offsets come from the corpus, and the command checked them against a fresh read of the DISK, then turned those same offsets into positions through `openTextDocument`, which hands back the BUFFER when the file is open and unsaved. Two texts, one set of bounds: one line added at the top of that file and the deletion lands an entry lower. The fault is older than the dialog, but asking before applying, which 1.42.240 introduced, turned a window of milliseconds into human thinking time. The live text is now the one the offsets are checked against and the one the positions are computed from, a file that moved since the scan is left alone and says so, and the edit is rebuilt after the answer like the other three.
+
+### Notes
+- Written down as a test that drives the command end to end against a buffer holding one extra line. Drop either half of the fix and it emits a deletion again, at the wrong place.
+- That makes all four bulk commands hold the same two rules: an offset is only valid against the text the edit will land in, and what is applied is what is reported.
+
 ## 1.42.241
 
 Yesterday's fix described an edit it was not sending.

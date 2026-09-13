@@ -363,6 +363,17 @@ export const workspace = {
     onDidDelete: (_l: any) => ({ dispose: () => {} }),
     dispose: () => {},
   }),
+  /**
+   * Applique une edition. Le mock ne touche a rien, il enregistre : ce qui
+   * compte pour un test est COMBIEN d'operations l'edition portait, et le
+   * dialogue en annonce un nombre qui doit s'y accorder.
+   */
+  _editsAppliquees: [] as any[],
+  applyEdit: async (edit: any): Promise<boolean> => {
+    (workspace as any)._editsAppliquees.push(edit);
+    return true;
+  },
+
   fs: {
     readFile: async () => Buffer.from(''),
     /**
@@ -399,6 +410,13 @@ export const window = {
   registerWebviewViewProvider: (_id: string, _provider: any, _options?: any) => ({ dispose: () => {} }),
   registerTreeDataProvider:    (_id: string, _provider: any) => ({ dispose: () => {} }),
   showInformationMessage: async (_message: string, ..._items: string[]): Promise<string | undefined> => undefined,
+  /**
+   * Forme reelle : la barre de progression n'est qu'un decor, le corps est
+   * execute et son resultat rendu. Sans elle, aucune commande de la famille
+   * « en masse » n'etait joignable par un test, puisque toutes passent par la.
+   */
+  withProgress: async <T>(_options: any, body: (p: any, token: any) => Promise<T> | T): Promise<T> =>
+    body({ report: (_v: any) => {} }, { isCancellationRequested: false, onCancellationRequested: () => ({ dispose: () => {} }) }),
 };
 
 export const env = {

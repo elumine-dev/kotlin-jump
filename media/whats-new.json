@@ -1,12 +1,12 @@
 {
-  "version": "1.42.273",
+  "version": "1.42.274",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Counts agree at zero too",
-  "summary": "The detail line under a bulk question read `0 change in 0 file.` It agrees like the rest of the extension now.",
+  "tagline": "The question counts what the edit carries",
+  "summary": "Remove Test Only Code announced four changes for an edit that carried two operations.",
   "highlights": [
     {
-      "title": "Zero Takes The Plural",
-      "description": "Agreeing by hand against `greater than one` is right everywhere except at zero, and zero reaches this line when every range is refused because the files moved.",
+      "title": "What Is Announced Is What Is Sent",
+      "description": "The count under the question added the plan's declarations and tests to the edit's imports and files. A test file that goes whole makes those two disagree. The number comes off the edit now.",
       "kind": "fix"
     }
   ],
@@ -14,16 +14,15 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "The line under every bulk question, the one that says how much is about to happen, read `0 change in 0 file.` It agreed its plurals by hand against `greater than one`, which is right everywhere except at zero, where English goes plural. It uses the same helper as the rest of the extension now.",
-        "Zero reaches it. Five of the six commands that ask return before asking when they have nothing, but Remove Test Only Code does not, and its file count comes from what the edit actually touched: if every range is refused because the file moved since the scan, that count is zero."
+        "Remove Test Only Code asked for permission with a number that was not the number of things it was about to do. On the plainest case there is, a class and the two tests that are its only users, the question read `4 changes in 2 files` while the edit it would send carried two operations, both of them whole file deletions, and not a single replacement.",
+        "It was adding up two different things: the declarations and test functions counted by the plan, plus the imports and files counted by the edit. When a test file goes whole, its functions produce no edit of their own, and the plan counted them anyway. The number is read off the edit now, so what is announced is what is sent."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "The guard that watches counts agree had waved this form through, calling it the long hand of the helper. It is not, and that is the whole of the difference: `greater than one` matches the helper only above zero, and it is the caller's business to know its count cannot be nought. Twenty nine places use that form and the other twenty eight count things that exist, so the note was corrected rather than the rule tightened.",
-        "Left alone deliberately, and written down here rather than changed on a hunch: in that same dialog the number of changes is read off the scan while the number of files is read off the edit that was just built. When a cut is refused the two drift apart. The file says three lines below, about the closing report, that what is applied is what must be reported. The counts do not add up in the same units, so correcting it needs a measurement rather than a guess.",
-        "Performance was the one kind of fault on the list never caught this week, so it was measured rather than assumed: ten alternating runs of the repository benchmark against the release before yesterday's parser change, then eight against last week's. Every distribution overlaps, nothing survives the interleaving, and the dead island scan lands within a tenth of a percent. `snapshot.save` came back at plus four percent with overlapping runs, which is exactly the noise that check exists to refuse."
+        "This was written down in the previous release as needing a measurement rather than a guess, and left alone until one could be made. The measurement needed the command to be reachable from a test at all, which it was not: neither the progress bar every bulk command runs inside nor the call that applies an edit existed in the test double. They do now, so the whole family can be held to the same rule end to end.",
+        "The rule the test states is the one the file already sets for its closing report three lines further down: what is applied is what must be reported. Putting the plan's numbers back breaks it, and so does forgetting either the deletions or the cascade."
       ]
     }
   ],

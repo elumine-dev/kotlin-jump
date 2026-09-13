@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.291
+
+One list of eight, written by hand in three places.
+
+### Notes
+- Nothing changed in what the extension does. Remove Everything Unused counts eight kinds of dead code, and the same list of eight was written out by hand in three places in that one file. Nothing held them together.
+- A ninth kind added to the scan would have been counted in the total, counted in the running tally, and left out of the closing report without a sound. You would read "Removed 12" above a sentence naming eight of them. The command that deletes code is the last place for a report that quietly omits a category.
+- A test now reads the list of kinds off the scan itself rather than keeping a fourth copy, and holds the report to naming every one of them. Adding a kind and forgetting the report turns it red.
+- Two more agreements are held at the same time: the number in the question is exactly the sum of what the scan counted, and the line under the question says how far the change reaches rather than promising a number of edits it cannot know before you click.
+
 ## 1.42.290
 
 A refused edit no longer swallows the warning that came with it.

@@ -66,20 +66,51 @@ describe('aucun `uri.fsPath ===` nu dans src', () => {
     return out;
   };
 
+  /**
+   * Le texte, blancs et retours a la ligne reduits a une espace, avec de quoi
+   * remonter a la ligne d origine.
+   *
+   * Le balayage se faisait ligne par ligne, et une comparaison coupee en deux
+   * passait entiere : un formateur qui va a la ligne avant l operateur ecrit
+   *
+   *     const meme = d.uri.fsPath
+   *       === chemin;
+   *
+   * et aucune des deux lignes ne porte le motif. La regle vaut pour
+   * l EXPRESSION, pas pour la ligne.
+   */
+  const aplati = (texte: string): { plat: string; ou: number[] } => {
+    let plat = '';
+    const ou: number[] = [];
+    for (let i = 0; i < texte.length; i++) {
+      const c = texte[i];
+      if (/\s/.test(c)) {
+        if (plat.endsWith(' ')) continue;
+        plat += ' ';
+      } else {
+        plat += c;
+      }
+      ou.push(i);
+    }
+    return { plat, ou };
+  };
+
   it('chaque comparaison passe par estLeFichier ou porte sa garde de schema', () => {
     const coupables: string[] = [];
     for (const f of fichiers(RACINE)) {
-      const lignes = readFileSync(f, 'utf8').split('\n');
-      lignes.forEach((l, i) => {
-        if (!/uri\.fsPath\s*===/.test(l)) return;
-        // Une garde de SCHEMA sur la ligne, quel que soit le schema compare.
-        // Exiger le litteral `'file'` decrivait le mecanisme et non la regle :
-        // sur vscode.dev le fichier est un `vscode-vfs:`, et le schema attendu
-        // devient celui sous lequel le corpus a lu ce fichier.
-        if (/scheme\s*===/.test(l)) return;
-        if (/estLeFichier/.test(l)) return;                  // ou deleguee
-        coupables.push(`${path.relative(RACINE, f)}:${i + 1} ${l.trim().slice(0, 70)}`);
-      });
+      const texte = readFileSync(f, 'utf8');
+      const { plat, ou } = aplati(texte);
+      for (const m of plat.matchAll(/uri\s*\.\s*fsPath\s*===/g)) {
+        const i = m.index!;
+        // La garde se lit autour de l expression, pas sur sa ligne : elle tient
+        // aussi bien juste au dessus, et une expression coupee en deux n a plus
+        // de ligne a elle.
+        const fenetre = plat.slice(Math.max(0, i - 140), i + 140);
+        if (/scheme\s*===/.test(fenetre)) continue;
+        if (/estLeFichier/.test(fenetre)) continue;          // ou deleguee
+        const ligne = texte.slice(0, ou[i]).split('\n').length;
+        coupables.push(`${path.relative(RACINE, f)}:${ligne} ${plat.slice(i - 30 < 0 ? 0 : i - 30, i + 40).trim()}`);
+      }
     }
     expect(coupables, 'un document git: porte le fsPath du vrai fichier').toEqual([]);
   });

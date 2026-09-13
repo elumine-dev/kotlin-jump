@@ -1,12 +1,12 @@
 {
-  "version": "1.42.287",
+  "version": "1.42.288",
   "title": "What's New in Kotlin Jump",
-  "tagline": "The guard gets its teeth back",
-  "summary": "No behaviour changed. The test that keeps every command wired in both hosts was blind to 18 of them.",
+  "tagline": "A line break was enough",
+  "summary": "No behaviour changed. The check that stops a diff view being mistaken for the real file now reads the expression, not the line.",
   "highlights": [
     {
-      "title": "Watching All 88 Again",
-      "description": "The check that stops a command going missing on vscode.dev matched a name anywhere in the host. It reads the registration call now.",
+      "title": "Reading The Expression",
+      "description": "A path comparison split across two lines walked past the check written to catch it. It reads whole expressions now.",
       "kind": "improvement"
     }
   ],
@@ -14,10 +14,10 @@
     {
       "heading": "Notes",
       "bullets": [
-        "Nothing changed in what the extension does. A test that was standing watch over all 88 commands was only really watching 70 of them, and it now watches all 88.",
-        "The extension runs in two hosts, the desktop one and the browser one on vscode.dev, and each registers its own commands. A command declared but not registered by the host you are in is offered by the palette and answers \"command not found\" when you pick it. A test added in 1.42.268 exists to stop exactly that.",
-        "It looked for the command name quoted anywhere in the host, which is loose: a name like surroundWith is also a settings key and a constant elsewhere, so the test kept saying the command was wired after its registration was deleted. Removing the browser registration of Surround With left the test green, and 18 of the 88 commands were in that position.",
-        "The test now reads the registration call itself, and the twelve toggles whose command name is assembled at runtime are read from the table their loop walks rather than from anywhere in the host. A new check confronts it with each of the 88 in turn: erase one registration and the test must notice. All 88 are genuinely wired in both hosts today."
+        "Nothing changed in what the extension does. A check that keeps a whole class of wrong file edits out of the code was reading one line at a time, and a comparison split across two lines walked straight past it.",
+        "The rule it enforces: never decide that an open document is a given file by comparing paths alone. A diff view opens a document that carries the real file path and the content of the last commit, so a path match there means reading the commit and writing the working tree. That defect has been fixed three separate times in this code, which is why the check exists.",
+        "Written on one line the comparison was caught. Written the way a formatter writes it, with the operator moved to the next line, neither half carried the pattern and the check stayed quiet. Proven by putting each shape back into a real source file.",
+        "It now reads the expression rather than the line, and looks for the guard around the comparison instead of beside it. All three shapes are caught, and the code as it stands has no such comparison left anywhere."
       ]
     }
   ],

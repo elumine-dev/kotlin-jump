@@ -177,20 +177,24 @@ export class DocumentHighlight {
 }
 
 export class WorkspaceEdit {
-  private _entries: Array<{ uri: any; range: Range; newText: string }> = [];
+  // La metadonnee etait jetee. C'est pourtant elle qui porte
+  // `needsConfirmation`, le drapeau qui decide si l'apercu de refactoring
+  // s'ouvre et si ses cases partent cochees : un mock qui l'oublie rend cette
+  // moitie du comportement intestable.
+  private _entries: Array<{ uri: any; range: Range; newText: string; metadata?: any }> = [];
   public _fileRenames: Array<{ oldUri: any; newUri: any; options?: any; metadata?: any }> = [];
   public _fileDeletes: Array<{ uri: any; options?: any; metadata?: any }> = [];
 
-  replace(uri: any, range: Range, newText: string, _metadata?: any): void {
-    this._entries.push({ uri, range, newText });
+  replace(uri: any, range: Range, newText: string, metadata?: any): void {
+    this._entries.push({ uri, range, newText, metadata });
   }
 
-  delete(uri: any, range: Range, _metadata?: any): void {
-    this._entries.push({ uri, range, newText: '' });
+  delete(uri: any, range: Range, metadata?: any): void {
+    this._entries.push({ uri, range, newText: '', metadata });
   }
 
-  insert(uri: any, position: Position, newText: string, _metadata?: any): void {
-    this._entries.push({ uri, range: new Range(position.line, position.character, position.line, position.character), newText });
+  insert(uri: any, position: Position, newText: string, metadata?: any): void {
+    this._entries.push({ uri, range: new Range(position.line, position.character, position.line, position.character), newText, metadata });
   }
 
   set(uri: any, edits: ReadonlyArray<TextEdit | [TextEdit, any]>): void {

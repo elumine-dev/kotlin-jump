@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import { askHowToApply, bulkDetail } from '../util/bulkEdit';
+import { plural } from '../util/plural';
 import { corpusUri } from '../util/corpusUri';
 import { ResourceCorpus } from '../indexer/ResourceCorpus';
 import {
@@ -90,7 +92,10 @@ export async function removeAllUnusedRemoteConfigKeysCommand(
         }
       }
 
-      const edit = new vscode.WorkspaceEdit();
+      // Les plages d'abord, l'edition ensuite : la question du mode ne peut se
+      // poser qu'une fois le compte connu, et relire tous les fichiers une
+      // seconde fois pour la reposer serait du gaspillage.
+      const plages: { uri: vscode.Uri; range: vscode.Range }[] = [];
       const decoder = new TextDecoder();
       for (const [path, declarations] of byFile) {
         const uri = corpusUri(path);
@@ -105,9 +110,24 @@ export async function removeAllUnusedRemoteConfigKeysCommand(
           // Re-verify against the text we just read: a stale offset must never
           // aim a deletion at something else.
           if (!text.slice(d.removeStart, d.removeEnd).includes('<key>')) continue;
-          edit.delete(uri, new vscode.Range(doc.positionAt(d.removeStart), doc.positionAt(d.removeEnd)),
-            { needsConfirmation: true, label: 'Remove unread Remote Config keys' });
+          plages.push({ uri, range: new vscode.Range(doc.positionAt(d.removeStart), doc.positionAt(d.removeEnd)) });
         }
+      }
+      if (plages.length === 0) {
+        void vscode.window.showInformationMessage('Nothing to remove.');
+        return;
+      }
+      // Le drapeau qui ouvre l'apercu laisse aussi ses cases decochees, et
+      // cette vue n'a pas de « tout selectionner ».
+      const choix = await askHowToApply(
+        `Remove ${plural(plages.length, 'unread Remote Config key')}?`,
+        bulkDetail(plages.length, new Set(plages.map(p => p.uri.toString())).size),
+      );
+      if (choix === 'cancel') return;
+      const edit = new vscode.WorkspaceEdit();
+      for (const p of plages) {
+        edit.delete(p.uri, p.range,
+          { needsConfirmation: choix === 'review', label: 'Remove unread Remote Config keys' });
       }
       await vscode.workspace.applyEdit(edit);
     },

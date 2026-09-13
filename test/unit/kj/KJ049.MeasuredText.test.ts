@@ -69,13 +69,19 @@ describe('makeSelfOnlyPrivateCommand — n ecrit pas dans un fichier qui a bouge
     }),
   };
 
-  async function lancer(docsOuverts: any[]) {
+  // `null` veut dire « boite fermee ». Passer `undefined` declencherait la
+  // valeur par defaut du parametre, et le test aurait repondu « Apply all »
+  // en croyant ne rien repondre.
+  async function lancer(docsOuverts: any[], reponse: string | null = 'Apply all') {
     const w = vscodeMock.workspace as any;
     const win = vscodeMock.window as any;
     w.workspaceFolders = [{ uri: vscodeMock.Uri.file('/w') }];
     vi.spyOn(vscodeMock.workspace, 'getConfiguration').mockReturnValue({ get: (_k: string, d: any) => d } as any);
     win.withProgress = (_o: any, t: any) => t({ report: () => {} }, { isCancellationRequested: false });
-    win.showInformationMessage = async () => undefined;
+    // La commande demande MAINTENANT, une fois, comment appliquer. Seule la
+    // boite modale porte des options ; le compte rendu final n'en a pas.
+    win.showInformationMessage = async (_m: string, ...rest: any[]) =>
+      (rest.length > 0 && typeof rest[0] === 'object' && rest[0]?.modal) ? (reponse ?? undefined) : undefined;
     win.showWarningMessage = async () => undefined;
     ouvre(docsOuverts);
     const vues: any[] = [];
@@ -97,5 +103,24 @@ describe('makeSelfOnlyPrivateCommand — n ecrit pas dans un fichier qui a bouge
     const vues = await lancer([]);
     const edits = vues.flatMap((e: any) => e._entries ?? []);
     expect(edits.length).toBeGreaterThan(0);
+  });
+
+  it('Apply all : les cases partent COCHEES, donc pas de confirmation par entree', async () => {
+    const vues = await lancer([], 'Apply all');
+    const edits = vues.flatMap((e: any) => e._entries ?? []);
+    expect(edits.length).toBeGreaterThan(0);
+    expect(edits.every((e: any) => e.metadata?.needsConfirmation === false)).toBe(true);
+  });
+
+  it('Review one by one : l apercu s ouvre, chaque entree attend son clic', async () => {
+    const vues = await lancer([], 'Review one by one');
+    const edits = vues.flatMap((e: any) => e._entries ?? []);
+    expect(edits.length).toBeGreaterThan(0);
+    expect(edits.every((e: any) => e.metadata?.needsConfirmation === true)).toBe(true);
+  });
+
+  it('boite fermee : rien n est applique', async () => {
+    const vues = await lancer([], null);
+    expect(vues.flatMap((e: any) => e._entries ?? []).length).toBe(0);
   });
 });

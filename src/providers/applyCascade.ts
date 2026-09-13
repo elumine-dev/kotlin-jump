@@ -17,12 +17,18 @@ export function addCascadePlan(
   edit: vscode.WorkspaceEdit,
   plan: CascadePlan,
   textByPath: ReadonlyMap<string, string>,
+  /**
+   * False when the caller already asked, once, for the whole edit. The flag
+   * that opens the Refactor Preview is the same one that leaves every box in
+   * it unticked, and that view has no "select all".
+   */
+  confirm = true,
 ): { imports: number; files: number } {
   for (const path of plan.deleteFiles) {
     edit.deleteFile(
       corpusUri(path),
       { ignoreIfNotExists: true },
-      { needsConfirmation: true, label: `Delete ${path.split(/[\\/]/).pop()}, nothing is left in it` },
+      { needsConfirmation: confirm, label: `Delete ${path.split(/[\\/]/).pop()}, nothing is left in it` },
     );
   }
 
@@ -36,7 +42,7 @@ export function addCascadePlan(
         corpusUri(path),
         new vscode.Range(posAt(starts, e.start), posAt(starts, e.end)),
         '',
-        { needsConfirmation: true, label: 'Remove the import it was the last user of' },
+        { needsConfirmation: confirm, label: 'Remove the import it was the last user of' },
       );
       imports++;
     }

@@ -200,14 +200,16 @@ function main(): void {
     ...base,
     deadDeclarations: kj032.map(f => ({ path: f.path, removeStart: f.removeStart, removeEnd: f.removeEnd })),
   } as any) as any[];
-  verifier('membres', membres
+  const coupesMembres: Coupe[] = membres
     .filter(m => m.removeStart >= 0 && m.removeEnd > m.removeStart)
-    .map(m => ({ quoi: 'membre', nom: m.name, path: m.path, line: m.line, start: m.removeStart, end: m.removeEnd })), parPath);
+    .map(m => ({ quoi: 'membre', nom: m.name, path: m.path, line: m.line, start: m.removeStart, end: m.removeEnd }));
+  verifier('membres', coupesMembres, parPath);
 
   const entrees = findUnusedEnumEntries(base as any) as any[];
-  verifier('enum', entrees
+  const coupesEnum: Coupe[] = entrees
     .filter(e => e.removeStart >= 0 && e.removeEnd > e.removeStart)
-    .map(e => ({ quoi: 'enum', nom: e.name, path: e.path, line: e.line, start: e.removeStart, end: e.removeEnd })), parPath, false);
+    .map(e => ({ quoi: 'enum', nom: e.name, path: e.path, line: e.line, start: e.removeStart, end: e.removeEnd }));
+  verifier('enum', coupesEnum, parPath, false);
 
   const iles = findDeadIslands(base as any) as any[];
   const coupesIles: Coupe[] = [];
@@ -218,6 +220,48 @@ function main(): void {
     }
   }
   verifier('ilots', coupesIles, parPath);
+
+  /**
+   * Deux coupes d un meme fichier ne se croisent pas.
+   *
+   * Verifie pour les ilots depuis le debut, et pour personne d autre. Or la
+   * regle vient d une entree d enum : `ASC, DESC` sur une ligne, les deux
+   * mortes, chacune reclamant la meme virgule. Appliquer les deux mangeait le
+   * `}` de LogDatabaseCriteria.java. Le correctif de 1.42.232 resout le
+   * conflit dans le detecteur, et la propriete qu il etablit n avait aucun
+   * temoin. Un invariant qui ne couvre qu une famille sur trois n en est pas
+   * un.
+   */
+  function croisements(nom: string, coupes: Coupe[]): number {
+    const parFichier = new Map<string, Coupe[]>();
+    for (const c of coupes) {
+      const l = parFichier.get(c.path) ?? [];
+      l.push(c);
+      parFichier.set(c.path, l);
+    }
+    let n = 0;
+    for (const [p, l] of parFichier) {
+      for (let i = 0; i < l.length; i++) {
+        for (let j = i + 1; j < l.length; j++) {
+          const a = l[i], b = l[j];
+          const croise = a.start < b.end && b.start < a.end;
+          // Une etendue qui en CONTIENT une autre est legitime : l ilot liste
+          // la classe et ses membres, et la regle du plus englobant tranche.
+          // Seul un recouvrement PARTIEL casse une edition.
+          const imbrique = (a.start <= b.start && a.end >= b.end) || (b.start <= a.start && b.end >= a.end);
+          if (croise && !imbrique) {
+            n++;
+            if (n <= 6) console.log(`    CROISE ${nom} ${p} ${a.nom}[${a.start},${a.end}) et ${b.nom}[${b.start},${b.end})`);
+          }
+        }
+      }
+    }
+    console.log(`croisements ${nom.padEnd(10)} : ${n}`);
+    return n;
+  }
+  croisements('membres', coupesMembres);
+  croisements('enum', coupesEnum);
+  croisements('ilots', coupesIles);
 
   // Propre aux ilots : plusieurs coupes d un meme fichier dans UNE edition.
   // Deux etendues qui se chevauchent partiellement, sans que l une contienne

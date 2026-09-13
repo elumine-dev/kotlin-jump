@@ -7,6 +7,7 @@ import { findUnusedMembers } from '../providers/unusedMembers';
 import { plural } from '../util/plural';
 import { narrowToPrivate } from '../providers/narrowToPrivate';
 import { stillTheMeasuredText } from '../util/measuredText';
+import { askHowToApply, bulkDetail } from '../util/bulkEdit';
 
 /**
  * KJ-049: narrow every member that is only ever used inside its own class.
@@ -61,43 +62,58 @@ export async function makeSelfOnlyPrivateCommand(corpus: ResourceCorpus): Promis
     return;
   }
 
-  const edit = new vscode.WorkspaceEdit();
-  let applied = 0;
-  let skipped = 0;
-  // One member per line at most: two findings on one line would compute their
-  // columns on the same pre-edit text and the second would land shifted.
-  const takenLines = new Set<string>();
+  // Built twice rather than once: the question cannot be asked before the
+  // counts are known, and a WorkspaceEdit is a data structure, not an effect.
+  // The only thing that differs between the two is the flag that decides
+  // whether the preview opens and whether its boxes start ticked.
+  const construire = (confirm: boolean) => {
+    const edit = new vscode.WorkspaceEdit();
+    let applied = 0;
+    let skipped = 0;
+    // One member per line at most: two findings on one line would compute their
+    // columns on the same pre-edit text and the second would land shifted.
+    const takenLines = new Set<string>();
 
-  for (const m of found.members) {
-    // Same rule as the removal command: an offset is only valid against the
-    // text it was measured on, and an open document that has moved on is
-    // skipped rather than edited at a guessed position.
-    const text = stillTheMeasuredText(m.path, found.textByPath.get(m.path));
-    if (text === undefined) { skipped++; continue; }
-    const lineText = text.split('\n')[m.line];
-    // Re-verify against the text the scan measured: a line that no longer
-    // holds the name is a line we must not touch.
-    if (lineText === undefined || !lineText.includes(m.name)) { skipped++; continue; }
-    const narrow = narrowToPrivate(lineText);
-    if (!narrow) { skipped++; continue; }
-    const key = `${m.path}:${m.line}`;
-    if (takenLines.has(key)) { skipped++; continue; }
-    takenLines.add(key);
+    for (const m of found.members) {
+      // Same rule as the removal command: an offset is only valid against the
+      // text it was measured on, and an open document that has moved on is
+      // skipped rather than edited at a guessed position.
+      const text = stillTheMeasuredText(m.path, found.textByPath.get(m.path));
+      if (text === undefined) { skipped++; continue; }
+      const lineText = text.split('\n')[m.line];
+      // Re-verify against the text the scan measured: a line that no longer
+      // holds the name is a line we must not touch.
+      if (lineText === undefined || !lineText.includes(m.name)) { skipped++; continue; }
+      const narrow = narrowToPrivate(lineText);
+      if (!narrow) { skipped++; continue; }
+      const key = `${m.path}:${m.line}`;
+      if (takenLines.has(key)) { skipped++; continue; }
+      takenLines.add(key);
 
-    const label = `Make ${m.container}.${m.name} private`;
-    edit.replace(
-      corpusUri(m.path),
-      new vscode.Range(m.line, narrow.column, m.line, narrow.column + narrow.length),
-      narrow.text,
-      { needsConfirmation: true, label },
-    );
-    applied++;
-  }
+      const label = `Make ${m.container}.${m.name} private`;
+      edit.replace(
+        corpusUri(m.path),
+        new vscode.Range(m.line, narrow.column, m.line, narrow.column + narrow.length),
+        narrow.text,
+        { needsConfirmation: confirm, label },
+      );
+      applied++;
+    }
+    return { edit, applied, skipped, files: takenLines.size > 0 ? new Set([...takenLines].map(k => k.slice(0, k.lastIndexOf(':')))).size : 0 };
+  };
 
-  if (applied === 0) {
+  const apercu = construire(true);
+  if (apercu.applied === 0) {
     void vscode.window.showInformationMessage('Nothing left to narrow: every finding was already private or had moved.');
     return;
   }
+
+  const choix = await askHowToApply(
+    `Narrow ${plural(apercu.applied, 'member')} to private?`,
+    bulkDetail(apercu.applied, apercu.files),
+  );
+  if (choix === 'cancel') return;
+  const { edit, applied, skipped } = choix === 'apply' ? construire(false) : apercu;
 
   const ok = await vscode.workspace.applyEdit(edit);
   void vscode.window.showInformationMessage(ok

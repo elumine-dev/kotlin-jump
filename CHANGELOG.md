@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.251
+
+The same blindness, in the witness that guards the deletion of test files.
+
+### Fixes
+- Nothing in the extension changed. The audit that found a hole in one witness yesterday was run against the other four, with the mutation that found it: shift every cut by ONE character and see which counters notice. The witness for removing a declaration together with its tests noticed nothing. It was missing the same rule, that a cut of a test function takes whole lines, and it guards the only edit in the extension that deletes whole test files. The same shift now reports thirteen violations out of thirteen cuts.
+
+### Notes
+- The other three hold. Shifting every declaration cut trips the whole line rule on all 98 symbol cuts and all 320 member cuts; shifting every orphaned import trips the import rule on all 100.
+- The enum family was the one worth looking at twice, since it deliberately allows a partial cut and cannot use the whole line rule. Of its 33 cuts, a one character shift leaves only whitespace behind in 20 and a trailing comma, legal in both languages, in 6. The remaining 7 eat a letter of the entry name, and the name rule catches all 7. No hole, verified rather than assumed.
+
 ## 1.42.250
 
 The witness for the per file sweep was blind to an offset shift.

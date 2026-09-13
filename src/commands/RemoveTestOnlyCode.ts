@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { DEFAULT_TEST_SEGMENTS, isTestSourceSet } from '../util/testPaths';
-import { ResourceCorpus } from '../indexer/ResourceCorpus';
+import { Corpus, ResourceCorpus } from '../indexer/ResourceCorpus';
 import { corpusUri } from '../util/corpusUri';
 import { parse } from '../indexer/KotlinParser';
 import { parseJava } from '../indexer/JavaParser';
@@ -58,6 +58,8 @@ export interface TestOnlyScan {
   withheld: number;
   testFiles: Set<string>;
   testFunctions: number;
+  /** The exact corpus this verdict came from, to tell whether it has aged. */
+  data: Corpus;
 }
 
 export async function scanTestOnly(
@@ -111,6 +113,7 @@ export async function scanTestOnly(
   const result: TestOnlyScan = {
     groups: [], textByPath: new Map(data.sources.map(s => [s.path, s.text])),
     offered: 0, withheld: 0, testFiles: new Set(), testFunctions: 0,
+    data,
   };
   const planByLabel = new Map<string, TestCoRemovalPlan>();
   for (const group of groups) {
@@ -159,7 +162,7 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
   // one that leaves every box in it unticked, and that view has no "select
   // all", so a hundred cuts meant a hundred clicks. Building the edit twice
   // costs nothing: a WorkspaceEdit is a data structure, not an effect.
-  const construire = (confirm: boolean) => {
+  const construire = (confirm: boolean, scan: TestOnlyScan) => {
     const edit = new vscode.WorkspaceEdit();
     const touches = new Set<string>();
     const deletedFiles = new Set<string>([...scan.testFiles]);
@@ -259,7 +262,7 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
     };
   };
 
-  const apercu = construire(true);
+  const apercu = construire(true, scan);
   const combien = apercu.operations;
   // Files are DELETED here, not just edited, and Apply all skips the preview
   // that would have shown it. Saying how many, before the click, is the least
@@ -274,7 +277,34 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
   // What is APPLIED is what must be REPORTED. The dialog gives the workspace
   // all the time it needs to move, and reading the counts off the first build
   // described an edit that was never the one sent.
-  const choisi = choix === 'apply' ? construire(false) : apercu;
+  // The verdict is read again too. The modal leaves the workspace all the time
+  // it needs to move, and a PRODUCTION use that appears meanwhile does not
+  // touch the declaring file: its cut passes the text check and the
+  // declaration goes, taking the test that covered it. Same fix as 1.42.296
+  // and 1.42.297.
+  //
+  // Without paying for the scan twice: the corpus hands back its cached object
+  // untouched while nothing has invalidated it, so identity says whether the
+  // judgement has to be made again.
+  let courant = scan;
+  if (choix === 'apply') {
+    const frais = await corpus.get();
+    if (frais !== scan.data) {
+      const relu = await scanTestOnly(corpus);
+      if (!relu) {
+        void vscode.window.showWarningMessage(
+          'Could not read the whole workspace, so nothing was removed.');
+        return;
+      }
+      if (relu.groups.length === 0) {
+        void vscode.window.showInformationMessage(
+          'Nothing to remove: the workspace changed while the question was open.');
+        return;
+      }
+      courant = relu;
+    }
+  }
+  const choisi = choix === 'apply' ? construire(false, courant) : apercu;
   const { edit, swept, skipped } = choisi;
 
   const ok = await vscode.workspace.applyEdit(edit);
@@ -282,7 +312,7 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
     ? `Removed ${plural(choisi.declarations, 'declaration')} and ${plural(choisi.tests, 'test')}`
       + (swept.imports > 0 ? `, plus ${plural(swept.imports, 'import')} left with no user` : '')
       + (swept.files > 0 ? ` and ${plural(swept.files, 'emptied file')}` : '')
-      + (scan.withheld > 0 ? `. ${plural(scan.withheld, 'other')} withheld: their tests cover more than the declaration.` : '.')
+      + (courant.withheld > 0 ? `. ${plural(courant.withheld, 'other')} withheld: their tests cover more than the declaration.` : '.')
     : 'Nothing was applied.');
   if (skipped > 0) {
     void vscode.window.showWarningMessage(

@@ -370,15 +370,24 @@ function debutAvecAnnotations(
     }
     return bas;
   };
-  let ligne = ligneDe(nameStart);
+  const ligne = ligneDe(nameStart);
   if (!annotationsSeules(clean.slice(lineStarts[ligne], nameStart))) return nameStart;
   let debut = lineStarts[ligne];
-  // Puis les lignes AU DESSUS qui ne portent que des annotations.
-  while (ligne > 0) {
-    const precedente = clean.slice(lineStarts[ligne - 1], lineStarts[ligne]);
-    if (precedente.trim() === '' || !annotationsSeules(precedente)) break;
-    ligne--;
-    debut = lineStarts[ligne];
+  // Puis les lignes AU DESSUS. C'est le BLOC entier jusqu'au nom qui doit ne
+  // porter que des annotations, pas chaque ligne prise isolement : une
+  // annotation etalee sur plusieurs lignes met un `)` seul juste au dessus de
+  // l'entree, et `)` n'est une annotation pour personne. Tester ligne a ligne
+  // arretait donc la remontee la, et l'annotation restait collee a l'entree
+  // suivante, vivante. Sur la DERNIERE entree il ne restait apres elle qu'une
+  // accolade fermante et le fichier cessait de parser.
+  //
+  // On continue donc a monter au dessus d'une ligne qui echoue seule, puisque
+  // c'est une ligne plus haut qui ouvre l'annotation. Borne a vingt lignes :
+  // au dela ce n'est plus un en-tete de declaration, et le bloc teste grandit
+  // a chaque pas.
+  for (let l = ligne - 1; l >= 0 && ligne - l <= 20; l--) {
+    if (clean.slice(lineStarts[l], lineStarts[l + 1]).trim() === '') break;
+    if (annotationsSeules(clean.slice(lineStarts[l], nameStart))) debut = lineStarts[l];
   }
   return debut;
 }

@@ -46,10 +46,15 @@ export function collecterUnePasse(
   const iles = findDeadIslands({ ...base, maxIslandSize: 8 } as any) as any[];
 
   const brut = new Map<string, Coupe[]>();
-  // `renommages` a part : le balayage ne fait pas que supprimer, il remplace
-  // aussi un parametre de lambda inutilise par `_`, ce qui ne retire rien et
-  // n'est pas une declaration. Les compter ensemble faisait annoncer
+  // `renommages` a part : le balayage ne fait pas que supprimer, il rebaptise
+  // aussi `_` ce qui est declare et jamais lu, ce qui ne retire rien et n'est
+  // pas une declaration. Les compter ensemble faisait annoncer
   // « Remove 320 unused declarations » pour 279 suppressions et 41 renommages.
+  //
+  // Deux choses recoivent ce traitement, un parametre de lambda et une
+  // exception attrapee, et sur le projet de reference 38 des 41 sont des
+  // exceptions. Les appeler des parametres etait faux dans le cas ordinaire,
+  // pas dans un cas de bord.
   const tally: Tally = { symboles: 0, membres: 0, entrees: 0, ilots: 0, balayage: 0, renommages: 0, imports: 0, fichiers: 0 };
   const ajoute = (p: string, start: number, end: number, texte: string, famille: string, quoi: string) => {
     if (start < 0 || end <= start) return;
@@ -268,16 +273,7 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
 
   if (refuse) { void vscode.window.showWarningMessage('Nothing was applied.'); return; }
 
-  const morceaux = [
-    cumul.symboles > 0 ? plural(cumul.symboles, 'declaration') : '',
-    cumul.membres > 0 ? plural(cumul.membres, 'class member') : '',
-    cumul.entrees > 0 ? plural(cumul.entrees, 'enum entry', 'enum entries') : '',
-    cumul.ilots > 0 ? `${plural(cumul.ilots, 'declaration')} of dead islands` : '',
-    cumul.balayage > 0 ? plural(cumul.balayage, 'local or import', 'locals and imports') : '',
-    cumul.renommages > 0 ? `${plural(cumul.renommages, 'unused parameter')} renamed to \`_\`` : '',
-    cumul.imports > 0 ? plural(cumul.imports, 'orphaned import') : '',
-    cumul.fichiers > 0 ? plural(cumul.fichiers, 'emptied file') : '',
-  ].filter(Boolean);
+  const fait = resumeDesFamilles(cumul);
   const bouges = cumul.bouges > 0
     ? `${plural(cumul.bouges, 'file')} changed since the scan and ${cumul.bouges > 1 ? 'were' : 'was'} left alone.`
     : '';
@@ -287,7 +283,7 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
   const verbe = choix === 'review' ? 'Sent' : 'Removed';
   const queue = choix === 'review' ? ' to the preview.' : '.';
   void vscode.window.showInformationMessage(
-    compteRendu(morceaux.join(', '), { verbe, queue, annule, restait, bouges }),
+    compteRendu(fait, { verbe, queue, annule, restait, bouges }),
   );
 }
 
@@ -310,12 +306,12 @@ export function libelleDeLaDemande(
   const aRetirer = total - renommages;
   if (aRetirer === 0) {
     return {
-      titre: `Rename ${plural(renommages, 'unused parameter')} to \`_\`?`,
+      titre: `Rename ${plural(renommages, 'unused name')} to \`_\`?`,
       detail: bulkDetail(total, fichiers),
     };
   }
   const note = renommages > 0
-    ? ` ${plural(renommages, 'unused parameter')} renamed to \`_\` rather than removed.`
+    ? ` ${plural(renommages, 'unused name')} renamed to \`_\` rather than removed.`
     : '';
   return {
     titre: `Remove ${plural(aRetirer, 'unused declaration, local or import',
@@ -325,6 +321,29 @@ export function libelleDeLaDemande(
     detail: `${bulkDetail(total, fichiers)}${note}`
       + ' Apply all repeats until nothing is left, since each removal orphans the next.',
   };
+}
+
+/**
+ * What was done, family by family, in one clause.
+ *
+ * Exported for the witness, like `compteRendu` and `libelleDeLaDemande`. It
+ * was built inline, so a wrong word here was invisible to every test: putting
+ * `unused parameter` back in this list broke nothing at all, while the same
+ * word in the dialog broke five tests.
+ */
+export function resumeDesFamilles(cumul: Tally): string {
+  return [
+    cumul.symboles > 0 ? plural(cumul.symboles, 'declaration') : '',
+    cumul.membres > 0 ? plural(cumul.membres, 'class member') : '',
+    cumul.entrees > 0 ? plural(cumul.entrees, 'enum entry', 'enum entries') : '',
+    cumul.ilots > 0 ? `${plural(cumul.ilots, 'declaration')} of dead islands` : '',
+    cumul.balayage > 0 ? plural(cumul.balayage, 'local or import', 'locals and imports') : '',
+    // Un parametre de lambda ET une exception attrapee recoivent ce
+    // traitement, et sur le projet de reference 38 des 41 sont des exceptions.
+    cumul.renommages > 0 ? `${plural(cumul.renommages, 'unused name')} renamed to \`_\`` : '',
+    cumul.imports > 0 ? plural(cumul.imports, 'orphaned import') : '',
+    cumul.fichiers > 0 ? plural(cumul.fichiers, 'emptied file') : '',
+  ].filter(Boolean).join(', ');
 }
 
 /**

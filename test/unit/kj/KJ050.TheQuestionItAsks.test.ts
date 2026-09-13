@@ -16,7 +16,7 @@ describe('KJ-050 la question posee', () => {
   it('un melange annonce les suppressions et note les renommages', () => {
     const d = libelleDeLaDemande(10, 3, 4);
     expect(d.titre).toBe('Remove 7 unused declarations, locals and imports?');
-    expect(d.detail).toContain('3 unused parameters renamed to `_` rather than removed.');
+    expect(d.detail).toContain('3 unused names renamed to `_` rather than removed.');
     expect(d.detail).toContain('Apply all repeats');
   });
 
@@ -30,7 +30,7 @@ describe('KJ-050 la question posee', () => {
 
   it('une passe faite QUE de renommages pose la vraie question', () => {
     const d = libelleDeLaDemande(3, 3, 1);
-    expect(d.titre).toBe('Rename 3 unused parameters to `_`?');
+    expect(d.titre).toBe('Rename 3 unused names to `_`?');
     expect(d.titre).not.toContain('Remove 0');
   });
 
@@ -39,7 +39,7 @@ describe('KJ-050 la question posee', () => {
   });
 
   it('un seul renommage garde le singulier', () => {
-    expect(libelleDeLaDemande(1, 1, 1).titre).toBe('Rename 1 unused parameter to `_`?');
+    expect(libelleDeLaDemande(1, 1, 1).titre).toBe('Rename 1 unused name to `_`?');
   });
 });
 
@@ -61,6 +61,6 @@ describe('KJ-050 le cas qui ne retire rien vient du detecteur', () => {
     const renommages = plan.filter(e => e.text !== '').length;
     expect(renommages).toBe(plan.length);
     expect(libelleDeLaDemande(plan.length, renommages, 1).titre)
-      .toBe(`Rename ${renommages === 1 ? '1 unused parameter' : `${renommages} unused parameters`} to \`_\`?`);
+      .toBe(`Rename ${renommages === 1 ? '1 unused name' : `${renommages} unused names`} to \`_\`?`);
   });
 });

@@ -1,12 +1,12 @@
 {
-  "version": "1.42.262",
+  "version": "1.42.263",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Remove Everything Unused says what it means",
-  "summary": "Two wrong sentences in the same dialog: a plural that agreed with the last word of a list, and a question about removing zero things.",
+  "tagline": "The renaming count says what it renamed",
+  "summary": "Every renaming was reported as an unused parameter. On a real project most of them are caught exceptions.",
   "highlights": [
     {
-      "title": "The Question It Asks",
-      "description": "`Remove 41 unused declaration, local or imports?` agreed its plural with the last word of a list, and a round made only of renamings opened with `Remove 0`. Both sentences say what is actually about to happen now.",
+      "title": "Not Every Renaming Is A Parameter",
+      "description": "A lambda parameter and a caught exception both get renamed to `_`, and the count called them all parameters. On the reference project that was wrong 38 times out of 41.",
       "kind": "fix"
     }
   ],
@@ -14,15 +14,14 @@
     {
       "heading": "Fixes",
       "bullets": [
-        "Remove Everything Unused asked `Remove 41 unused declaration, local or imports?`. The helper that agrees a count with its noun adds the `s` at the end of whatever it is given, which is right for a plain noun and wrong for a list. Both spots that name a list now spell their plural out: `41 unused declarations, locals and imports`, and `41 locals and imports` in the closing report.",
-        "The same dialog could open with `Remove 0 unused declarations, locals and imports?`. A round can be renamings and nothing else, and one `forEachIndexed { index, value ->` whose index is never read is enough for it. When nothing is being removed the renaming is the question now, not a footnote to a question about zero: `Rename 3 unused parameters to `_`?`."
+        "Remove Everything Unused called every renaming an unused parameter. Two different things get renamed to `_`: a lambda parameter that is never read, and a caught exception that is never read. On the reference project, 5110 files, 38 of the 41 renamings are caught exceptions and 3 are lambda parameters, so the wording was wrong in the ordinary case rather than in an edge case. All three places say `unused name` now."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "That second one also dropped a sentence that was not true there. Repeating the round because each removal orphans the next makes no sense when nothing is removed.",
-        "The guard that watches counts agree could not see either of these: it looks for plurals written by hand next to a number, and here the number went through the helper properly. It was the argument that was wrong. It now also reads what is handed to the helper, and a list has to carry its own plural form. Two spots in the codebase out of sixty eight calls, both of them the ones above."
+        "The closing report was composed inline, which meant no test could reach it. Putting the wrong word back into the dialog broke five assertions; putting it back into the report broke nothing at all. It is built by a function of its own now, with the count for each family under test, including the plural forms.",
+        "Found by asking the detector what it actually produces rather than reading the counter that sums it up. A caught exception with an unused binding is the most common shape in real Kotlin and Java, and nothing in the count said so."
       ]
     }
   ],

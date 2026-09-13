@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { estDansLEspaceDeTravail } from '../util/inWorkspace';
 
 /**
  * KJ-016: Lifecycle Pairing, detects acquisitions made in a lifecycle method
@@ -251,6 +252,9 @@ export class LifecyclePairingProvider implements vscode.Disposable {
 
   private _scan(doc: vscode.TextDocument): void {
     if (doc.languageId !== 'kotlin' && doc.languageId !== 'java') return;
+    // A source jar from the Gradle cache carries the right `languageId`
+    // without being part of the project.
+    if (!estDansLEspaceDeTravail(doc)) { this._diag.delete(doc.uri); return; }
     const enabled = vscode.workspace
       .getConfiguration('kotlinJump')
       .get<boolean>('lifecyclePairing', true);

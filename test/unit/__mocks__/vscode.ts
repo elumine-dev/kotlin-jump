@@ -338,6 +338,15 @@ export const workspace = {
   }),
   openTextDocument: async () => null,
   findFiles: async () => [] as any[],
+  /**
+   * Le dossier de l'espace de travail qui contient cette URI, ou undefined.
+   *
+   * Par defaut un dossier EST ouvert, ce qui est le cas normal : rendre
+   * undefined partout ferait passer pour « hors projet » tout fichier de tout
+   * test. Un test qui veut le contraire le dit explicitement.
+   */
+  getWorkspaceFolder: (uri: any): any =>
+    (uri?.scheme ?? 'file') === 'file' ? { uri, name: 'w', index: 0 } : undefined,
   registerFileSystemProvider: () => ({ dispose: () => {} }),
   registerTextDocumentContentProvider: () => ({ dispose: () => {} }),
   onDidChangeTextDocument: (_listener: any) => ({ dispose: () => {} }),

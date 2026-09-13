@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { estDansLEspaceDeTravail } from '../util/inWorkspace';
 import { StringResourceIndex } from '../indexer/StringResourceIndex';
 import { ColorResourceIndex } from '../indexer/ColorResourceIndex';
 import { isInsideCommentOrString } from '../util/textUtils';
@@ -65,6 +66,11 @@ export class ResourceDiagnosticProvider implements vscode.Disposable {
   private _scan(doc: vscode.TextDocument): void {
     const lang = doc.languageId;
     if (lang !== 'kotlin' && lang !== 'java') { this._diag.delete(doc.uri); return; }
+    // Un source jar du cache Gradle s'ouvre avec `languageId === 'java'` : le
+    // filtrer par la langue seule revient a l'analyser comme du code du
+    // projet, et l'extension y a pose une ERREUR que l'utilisateur ne peut
+    // meme pas corriger.
+    if (!estDansLEspaceDeTravail(doc)) { this._diag.delete(doc.uri); return; }
     const enabled = vscode.workspace.getConfiguration('kotlinJump')
       .get<boolean>('resourceDiagnostics', true);
     if (!enabled) { this._diag.delete(doc.uri); return; }

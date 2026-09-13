@@ -1,34 +1,27 @@
 {
-  "version": "1.42.245",
+  "version": "1.42.246",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Cutting where it checked",
-  "summary": "The new command wrote at offsets it had not checked, and the guard that fixed it introduced a worse one in the cascade.",
+  "tagline": "No more errors on files you cannot open",
+  "summary": "A source jar from the Gradle cache opens with languageId java, and three diagnostic providers gated on the language alone.",
   "highlights": [
     {
-      "title": "Offsets checked before the cut",
+      "title": "A source jar is not project code",
       "kind": "fix",
-      "description": "The corpus snapshot lives for a minute and its staleness test only looks at dirty documents. A file open and clean but reloaded underneath passed it with different content, and the cuts aimed at the wrong lines."
-    },
-    {
-      "title": "The cascade is only ever told the truth",
-      "kind": "fix",
-      "description": "It was planned on every cut while only some were sent, so it removed the import of a symbol that had stayed. It takes the caller at its word and verifies nothing, so the files that moved are dropped before the plan is made."
+      "description": "Kotlin Jump put an ERROR inside `databinding-runtime-9.3.1-sources.jar`, in a file the reader can neither open nor fix. The scheme and the workspace folder are both checked now."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Remove Everything Unused checks that a file is still what it measured before cutting it, and leaves the others alone.",
-        "The cascade is planned only on the cuts that will actually be sent.",
-        "The loop says so when it stops with work still left, instead of reading as finished.",
-        "In review mode the report says what was sent to the preview, not what was removed, because what a reader ticks never comes back to the command."
+        "Three diagnostic providers scanned any document whose language looked right, including a source jar from the Gradle cache."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "Three of the four were introduced in the hour before, two of them by the fix for the first one."
+        "The test doubles for a document URI carried only `toString()`, so four regression tests were passing on a URI that could not exist.",
+        "The VS Code test double answered that no workspace folder contains anything. A folder is open by default now, which is the ordinary case."
       ]
     }
   ],

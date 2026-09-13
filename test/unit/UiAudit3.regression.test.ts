@@ -101,7 +101,7 @@ describe('ResourceDiagnosticProvider — follows typing and the setting (was: op
     const collection = { set: vi.fn(), delete: vi.fn(), dispose: vi.fn() };
     vi.spyOn(vscodeMock.languages, 'createDiagnosticCollection').mockReturnValue(collection as any);
     let lines = ['R.string.titel'];
-    const doc = { languageId: 'kotlin', get lineCount() { return lines.length; }, lineAt: (i: number) => ({ text: lines[i] }), uri: { toString: () => 'file:///T.kt' } };
+    const doc = { languageId: 'kotlin', get lineCount() { return lines.length; }, lineAt: (i: number) => ({ text: lines[i] }), uri: { toString: () => 'file:///T.kt', scheme: 'file', path: '/Test.kt', fsPath: '/Test.kt' } };
     vi.spyOn(vscodeMock.window, 'visibleTextEditors', 'get').mockReturnValue([{ document: doc }] as any);
     const strings = new StringResourceIndex();
     strings.reindexFile({ toString: () => 'file:///res/values/strings.xml' }, '<resources><string name="title">t</string></resources>');

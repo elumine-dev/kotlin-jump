@@ -29,7 +29,7 @@ describe('Resource diagnostics — qualified R (was: android.R.string.ok flagged
     const collection = { set: vi.fn(), delete: vi.fn(), dispose: vi.fn() };
     vi.spyOn(vscodeMock.languages, 'createDiagnosticCollection').mockReturnValue(collection as any);
     const lines = ['getString(android.R.string.ok)', 'val c = com.google.android.material.R.color.abc', 'val mine = R.string.nope'];
-    const doc = { languageId: 'kotlin', lineCount: lines.length, lineAt: (i: number) => ({ text: lines[i] }), uri: { toString: () => 'file:///T.kt' } };
+    const doc = { languageId: 'kotlin', lineCount: lines.length, lineAt: (i: number) => ({ text: lines[i] }), uri: { toString: () => 'file:///T.kt', scheme: 'file', path: '/Test.kt', fsPath: '/Test.kt' } };
     vi.spyOn(vscodeMock.window, 'visibleTextEditors', 'get').mockReturnValue([{ document: doc }] as any);
     new ResourceDiagnosticProvider(new StringResourceIndex(), new ColorResourceIndex()).dispose();
     const diags = collection.set.mock.calls.at(-1)![1] as any[];

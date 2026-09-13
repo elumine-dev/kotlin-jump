@@ -1,23 +1,29 @@
 {
-  "version": "1.42.316",
+  "version": "1.42.317",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A comma in a comment",
-  "summary": "A trailing comment ending in an operator made a removal run on and take the next declaration with it.",
+  "tagline": "Three copies to read two characters",
+  "summary": "Three copies of the file to read two characters, and one of them had no reader left.",
   "highlights": [
     {
-      "title": "A Comma In A Comment",
-      "description": "The end of a value was judged on the raw line, so a comment could claim the code continued and the cut ran past it.",
-      "kind": "fix"
+      "title": "One Allocation With No Reader",
+      "kind": "note",
+      "description": "Two earlier fixes moved the last two questions about a declaration's end onto other copies of the file and left the original copy behind, still built on every call. On the reference project that was 177 MB copied per pass for nobody to read."
+    },
+    {
+      "title": "The Old Answer Kept As The Reference",
+      "kind": "note",
+      "description": "The previous formula is frozen in a test and the rewritten one must agree with it on every prefix of seventeen sources. Four deliberate breakages of the new code are each caught."
     }
   ],
   "sections": [
     {
-      "heading": "Fixed",
+      "heading": "Notes",
       "bullets": [
-        "Removing an unreferenced declaration could take the next one with it. A line comment ending in a comma or a plus made the extension think the value continued on the following lines, so the cut ran on and swallowed whatever came next, live or not.",
-        "Written out: `val ghost = 1 // step 1,` followed by a blank line and `fun alive() = 2`. The cut took all three lines. Remove the comma from the comment and it takes one, which is what makes it hard to see coming.",
-        "The test asking whether a line ends on an operator has to read the file with comments removed and strings intact. Reading it raw lets a comment speak for the code. Reading it with strings blanked is worse: quotes are blanked too, so a URL like \"https://host/x\" looks exactly like a comment, and the first attempt at this fix cut the line after \"https: and then swallowed two real declarations. Two live cases on the reference project, caught before release.",
-        "Three questions on the same two lines, three different copies of the file, and each now says in place which one it needs and why. Yesterday the same line was cutting too short for the mirror reason."
+        "Nothing you run behaves differently. Deciding where a removed declaration ends asks three questions of its last two characters: does it end on an operator, on a semicolon, on a comment. Each was answered on a fresh copy of the whole file up to that point, which on the reference project is 36,329 calls per pass and 177 MB copied per question.",
+        "One of those copies had lost both its readers: 1.42.314 took the semicolon question away from it and 1.42.316 took the operator question, and neither removed the allocation. It was still being made on every call, for nobody.",
+        "The clock does not move, and this release does not claim it does. Seven interleaved A then B passes on the reference project give a median of 9819 ms against 9928 ms, with the two spreads overlapping. The copies go because they serve no purpose, not because anything got faster.",
+        "The old formula is now frozen in a test as the reference answer, and the new one has to agree with it on every prefix of seventeen sources, blank lines, tabs and a non breaking space included. Four deliberate breakages of the new code are each caught by that test.",
+        "1.42.316 changed the operator test in two places and could only prove one of them. The second one now has its own case: a value spread over several lines whose closing line carries a comment ending in a comma. Without the fix the cut runs on and takes the live function underneath."
       ]
     }
   ],

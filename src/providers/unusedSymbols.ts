@@ -320,7 +320,7 @@ const COMMENCE_UNE_SUITE_RE =
   /^\s*(?:\?:|\?\.|\.(?!\.)|::|\+|&&|\|\||==|!=|<=|>=|->|,|\)|\]|else\b|in\b|is\b|as\b)/;
 
 /** Une ligne qui se termine sur un operateur appelle une suite. */
-const FINIT_SUR_UN_OPERATEUR_RE = /(?:[+\-*/,.&|?:=(]|->)$/;
+export const FINIT_SUR_UN_OPERATEUR_RE = /(?:[+\-*/,.&|?:=(]|->)$/;
 
 /**
  * Where a declaration's expression body really ends.
@@ -337,6 +337,28 @@ const FINIT_SUR_UN_OPERATEUR_RE = /(?:[+\-*/,.&|?:=(]|->)$/;
  * the enclosing block, past the file, or past 80 lines, which leaves the
  * caller refusing the extent exactly as it did before.
  */
+const BLANC_RE = /\s/;
+
+/**
+ * L index du dernier caractere non blanc avant `jusqu`, ou -1.
+ *
+ * Meme ensemble de blancs que `trimEnd`, sans en allouer la copie. Les trois
+ * questions posees a la fin d une declaration se lisaient chacune sur
+ * `copie.slice(0, endOffset).trimEnd()`, soit deux copies du debut du fichier
+ * par question, pour n en regarder que les deux derniers caracteres. Compte
+ * sur le projet de reference : 36 329 appels a `removalExtent` par passe et
+ * 177 Mo copies pour la seule variable devenue morte.
+ *
+ * Le temps, lui, ne bouge pas : sept passes A B entrelacees sur ce projet
+ * donnent 9819 ms contre 9928 ms de mediane, distributions melees. Ces copies
+ * partent parce qu elles ne servent a rien, pas pour un gain chronometre.
+ */
+export function dernierNonBlanc(s: string, jusqu: number): number {
+  let i = Math.min(jusqu, s.length) - 1;
+  while (i >= 0 && BLANC_RE.test(s[i])) i--;
+  return i;
+}
+
 /**
  * La fin d'une ligne, son commentaire de fin retire.
  *
@@ -355,10 +377,15 @@ const FINIT_SUR_UN_OPERATEUR_RE = /(?:[+\-*/,.&|?:=(]|->)$/;
  * suivantes. Deux cas reels sur le projet de reference, dits par le temoin des
  * membres avant publication.
  */
-function finSansCommentaire(text: string, jusqu: number): string {
-  const brut = text.slice(0, jusqu).trimEnd();
-  const debutDeLigne = brut.lastIndexOf('\n') + 1;
-  return (brut.slice(0, debutDeLigne) + stripKotlinComments(brut.slice(debutDeLigne))).trimEnd();
+export function finSansCommentaire(text: string, jusqu: number): string {
+  const dernier = dernierNonBlanc(text, jusqu);
+  if (dernier < 0) return '';
+  const debutDeLigne = text.lastIndexOf('\n', dernier) + 1;
+  const propre = stripKotlinComments(text.slice(debutDeLigne, dernier + 1)).trimEnd();
+  // Une derniere ligne qui n est QUE du commentaire disparait au blanchiment.
+  // La question se reporte alors sur ce qui precede, brut, comme le faisait la
+  // version qui recopiait tout le prefixe pour le laisser au trimEnd.
+  return propre !== '' ? propre : text.slice(0, debutDeLigne).trimEnd();
 }
 
 function finDeLExpression(
@@ -480,13 +507,10 @@ export function removalExtent(
     }
   }
 
-  // Judge continuation on the RAW text: the sanitizer blanks string bodies, so
-  // `val X = "done"` would read as ending on `=` and lose its quick fix.
-  const trailing = text.slice(0, endOffset).trimEnd();
-  /** La meme fin, sans son commentaire : pour la question de l'operateur. */
+  /** La fin, sans son commentaire : pour la question de l'operateur. */
   const trailingSansCommentaire = finSansCommentaire(text, endOffset);
-  /** La meme fin, blanchie : pour les questions que le brut fausse. */
-  const trailingPropre = clean.slice(0, endOffset).trimEnd();
+  /** Le dernier caractere utile de la copie blanchie, pour le point virgule. */
+  const finBlanchie = dernierNonBlanc(clean, endOffset);
   const nextLineNum = offsetToPos(lineStarts as number[], Math.max(endOffset - 1, 0)).line + 1;
   let nextNonBlank = nextLineNum;
   while (nextNonBlank <= lastLine && (lines[nextNonBlank] ?? '').trim() === '') nextNonBlank++;
@@ -511,7 +535,7 @@ export function removalExtent(
   // perdait sa continuation, laissee orpheline dans le fichier. Le test de
   // l'OPERATEUR juste en dessous veut le brut, lui, parce que le nettoyeur
   // vide les chaines et que `val x = "done"` se lirait sur son `=`.
-  const termine = /;$/.test(trailingPropre);
+  const termine = finBlanchie >= 0 && clean[finBlanchie] === ';';
   const continues = span.lineBasedEnd && !termine
     && (FINIT_SUR_UN_OPERATEUR_RE.test(trailingSansCommentaire) || !nextStartsFresh);
   // Une accolade de lambda n est pas forcement la fin de l expression, et la

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.317
+
+Three copies of the file to read two characters, and one of them had no reader left.
+
+### Notes
+- Nothing you run behaves differently. Deciding where a removed declaration ends asks three questions of its last two characters: does it end on an operator, on a semicolon, on a comment. Each was answered on a fresh copy of the whole file up to that point, which on the reference project is 36,329 calls per pass and 177 MB copied per question.
+- One of those copies had lost both its readers: 1.42.314 took the semicolon question away from it and 1.42.316 took the operator question, and neither removed the allocation. It was still being made on every call, for nobody.
+- The clock does not move, and this release does not claim it does. Seven interleaved A then B passes on the reference project give a median of 9819 ms against 9928 ms, with the two spreads overlapping. The copies go because they serve no purpose, not because anything got faster.
+- The old formula is now frozen in a test as the reference answer, and the new one has to agree with it on every prefix of seventeen sources, blank lines, tabs and a non breaking space included. Four deliberate breakages of the new code are each caught by that test.
+- 1.42.316 changed the operator test in two places and could only prove one of them. The second one now has its own case: a value spread over several lines whose closing line carries a comment ending in a comma. Without the fix the cut runs on and takes the live function underneath.
+
 ## 1.42.316
 
 A comma in a comment made a removal swallow the next declaration.

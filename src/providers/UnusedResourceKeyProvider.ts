@@ -140,12 +140,13 @@ export async function buildRemovalEdit(
   openDocument?: vscode.TextDocument,
   /** False when the caller already asked, once, for the whole edit. */
   confirm = true,
-): Promise<{ edit: vscode.WorkspaceEdit; edits: number; files: number }> {
+): Promise<{ edit: vscode.WorkspaceEdit; edits: number; files: number; cles: number }> {
   const edit = new vscode.WorkspaceEdit();
   let edits = 0;
   const touches = new Set<string>();
   const decoder = new TextDecoder();
   const textByPath = new Map<string, string>();
+  const cles = new Set<string>();
 
   const readText = async (p: string): Promise<string | undefined> => {
     if (textByPath.has(p)) return textByPath.get(p);
@@ -186,7 +187,7 @@ export async function buildRemovalEdit(
     if (text === undefined) continue;
     const fresh = collectValueKeyDeclarations(p, text);
 
-    const ranges: { start: number; end: number; label: string }[] = [];
+    const ranges: { start: number; end: number; label: string; cle: string }[] = [];
     for (const { finding, variant } of items) {
       const match = fresh.find(d => d.kind === finding.kind && d.name === finding.name);
       if (!match) continue; // the key moved or went away since the scan
@@ -194,6 +195,7 @@ export async function buildRemovalEdit(
       ranges.push({
         ...widened,
         label: `Delete ${finding.kind} ${finding.name} (${variant.qualifier})`,
+        cle: `${finding.kind}/${finding.name}`,
       });
     }
 
@@ -210,11 +212,15 @@ export async function buildRemovalEdit(
         { needsConfirmation: confirm, label: r.label },
       );
       edits++;
+      // The key is only counted once it has a range in the edit. A key whose
+      // file moved is skipped just above, and a report that still names it
+      // says more went than went.
+      cles.add(r.cle);
       touches.add(p);
     }
   }
 
-  return { edit, edits, files: touches.size };
+  return { edit, edits, files: touches.size, cles: cles.size };
 }
 
 function buildLineStarts(text: string): number[] {

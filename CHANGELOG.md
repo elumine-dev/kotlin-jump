@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.42.279
+
+Yesterday's reports counted what was found, not what went.
+
+### Fixes
+- The reports added to two commands yesterday counted the wrong thing. They read the number found by the scan and the number of files touched by the edit in the same sentence, and those part company the moment a file changes between the question and the click, because both commands read the file again before writing and skip whatever moved.
+- Measured on two dead string keys in two files, one of which changes after the question is answered: the edit carried a single removal and the report said `Removed 2 unused resource keys in 1 file.` Both reports now count what the edit actually carries, so a key or a declaration left behind is left out of the tally too.
+
+### Notes
+- Third time this week for the same confusion between what was planned and what was done, and the first time it was written while fixing something else. The commands that had it before were corrected one by one; this one arrived with the correction.
+- One mutation survived and stays that way, deliberately. Counting a key when its range is prepared rather than when it is written differs only if two ranges in one file overlap, and they cannot: they come from distinct elements, and the widening to whole lines refuses to widen when anything else shares the line. The later placement is kept because it is the one that cannot drift.
+
 ## 1.42.278
 
 Three more commands that removed code and said nothing.

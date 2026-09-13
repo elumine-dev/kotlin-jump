@@ -189,7 +189,7 @@ export async function buildSymbolRemovalEdit(
    * it unticked, and that view has no "select all".
    */
   confirm = true,
-): Promise<{ edit: vscode.WorkspaceEdit; edits: number; files: number; supprimes: number }> {
+): Promise<{ edit: vscode.WorkspaceEdit; edits: number; files: number; supprimes: number; declarations: number }> {
   const edit = new vscode.WorkspaceEdit();
   let edits = 0;
   const touches = new Set<string>();
@@ -267,6 +267,14 @@ export async function buildSymbolRemovalEdit(
   // must receive no range edit. Merging them would emit two deleteFile ops for
   // the same URI, since `addCascadePlan` writes the cascade's own.
   const doomed = new Set([...deleted, ...cascade.deleteFiles]);
+  // Combien de DECLARATIONS partent vraiment. Celles d'un fichier condamne
+  // partent avec lui ; ailleurs, seules celles dont l'etendue s'est retrouvee
+  // dans le texte d'aujourd'hui comptent. Le rapport lisait jusqu'ici le
+  // compte du scan, qui ignore ce qui a bouge depuis.
+  let declarations = 0;
+  for (const [p2, group] of perFile) {
+    declarations += doomed.has(p2) ? group.length : (rangesByPath.get(p2)?.length ?? 0);
+  }
 
   for (const [p, group] of perFile) {
     const text = await textOf(p);
@@ -327,7 +335,7 @@ export async function buildSymbolRemovalEdit(
   for (const p of cascade.deleteFiles) touches.add(p);
   // `supprimes` a part : effacer un fichier n'est pas une edition comme une
   // autre, et le dialogue doit pouvoir le dire avant qu'on y consente.
-  return { edit, edits: edits + swept.imports + swept.files, files: touches.size, supprimes: doomed.size };
+  return { edit, edits: edits + swept.imports + swept.files, files: touches.size, supprimes: doomed.size, declarations };
 }
 
 function lineStartsOf(text: string): number[] {

@@ -171,8 +171,8 @@ export async function removeAllUnusedSymbolsCommand(
       // Apply all skips the preview, so nothing else would say what happened.
       void vscode.window.showInformationMessage(
         choix === 'review'
-          ? `Sent ${plural(removable.length, 'unreferenced declaration')} to the preview.`
-          : `Removed ${plural(removable.length, 'unreferenced declaration')} in ${plural(choisi.files, 'file')}.`
+          ? `Sent ${plural(choisi.declarations, 'unreferenced declaration')} to the preview.`
+          : `Removed ${plural(choisi.declarations, 'unreferenced declaration')} in ${plural(choisi.files, 'file')}.`
             + noteSuppression(choisi.supprimes),
       );
     },

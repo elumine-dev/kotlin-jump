@@ -6,6 +6,7 @@ cd "$ROOT_DIR"
 
 VERSION="$(node -p "require('./package.json').version")"
 MODEL="${CLAUDE_PUBLISH_MODEL:-sonnet}"
+NOTES_FILE=""
 MAX_BUDGET_USD="${CLAUDE_PUBLISH_MAX_BUDGET_USD:-1}"
 LOCKFILE_NPM="${CLAUDE_PUBLISH_LOCKFILE_NPM:-npx -y npm@10}"
 BASE_REF=""
@@ -30,6 +31,9 @@ Options:
   --dry-run          Print the generated changelog section without writing it
   --notes-only       Update CHANGELOG.md only; skip tests/build/package
   --skip-notes       Skip Claude changelog drafting and only run verification/package
+  --notes-file <json> Use these release notes instead of asking Claude. Same shape as
+                     Claude's structured output (summary, tagline, highlights, sections);
+                     rendered, checked and validated exactly like a drafted one
   --stage            Stage current changes with git add -A
   --commit           Stage current changes if needed, then create the release commit
   --tag              Create git tag v<version>; implies --commit
@@ -101,6 +105,16 @@ while [[ $# -gt 0 ]]; do
     --notes-only)
       NOTES_ONLY=1
       shift
+      ;;
+    --notes-file)
+      NOTES_FILE="${2:-}"
+      # The script has already moved to the repository root, so a relative
+      # path would be read from there instead of from where it was typed.
+      # `cd` left the invocation directory in OLDPWD.
+      if [[ -n "$NOTES_FILE" && "$NOTES_FILE" != /* ]]; then
+        NOTES_FILE="${OLDPWD:-$PWD}/$NOTES_FILE"
+      fi
+      shift 2
       ;;
     --skip-notes)
       SKIP_NOTES=1
@@ -436,6 +450,12 @@ NODE
     echo "Current worktree status (dev-only paths filtered):"
     git status --short --untracked-files=all -- . "${dev_only_excludes[@]}" || true
     echo
+    # The reason for each change, from the comment blocks of the tests, and the
+    # patch of shipped code. Built in Node: the bash version piped `git diff`
+    # into `head` under pipefail and stopped the script with SIGPIPE, silently,
+    # as soon as a release's patch outgrew the pipe buffer.
+    node "$ROOT_DIR/.github/scripts/release-context.mjs" --base "$BASE_REF"
+    echo
     echo "Current staged diff stat:"
     git diff --cached --stat -- . "${dev_only_excludes[@]}" || true
     echo
@@ -483,6 +503,10 @@ Rules:
 - Each bullet must stand on its own, mention impact, and start with a verb in past tense or present tense.
 - Mention only changes that are actually evidenced by the supplied git/context data.
 - Before finalizing each bullet, ask yourself: "Would a user care?" If not, rewrite it or omit it.
+- The comment blocks under "Why each change was made" explain each fix: the defect a user hit, often with a two or three line example, and the numbers measured on a real project. Build the notes from them, in English. Name the concrete failure ("the removal deleted the live function below it") rather than a category ("improved reliability"). A block listed for a test that already existed describes a change of THIS release; do not describe anything that only the rest of that file mentions.
+- Never claim a speed, memory or performance gain unless the context states a measured result that supports it. When a header says the timing did not change, say that or say nothing.
+- Never call a release "internal cleanup with no behavior change" when a test header describes a defect a user could hit.
+- No hyphens in compound words either: write "write only", "multiline", "file level". The style rule bans them even though the pre-commit hook cannot check them reliably.
 
 HARD EXCLUSIONS (must never appear in the output, even tangentially):
 - Anything under \`scripts/demo/\`, \`scripts/demo/recorder-ext/\`, \`dist/demo/\`, or \`doc/demo-recording.md\`.
@@ -1050,6 +1074,17 @@ PREVIEW
 }
 
 draft_notes() {
+  if [[ -n "$NOTES_FILE" ]]; then
+    # Hand-written notes go through the SAME path as drafted ones: wrapped as
+    # structured output so the leak safety net, both renderers and the
+    # whats-new validator all run. Only the drafting step is skipped.
+    if [[ ! -f "$NOTES_FILE" ]]; then
+      echo "--notes-file: $NOTES_FILE does not exist." >&2
+      exit 1
+    fi
+    node -e 'const fs=require("fs");const n=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));for(const k of ["summary","tagline","highlights","sections"]){if(!(k in n)){console.error("--notes-file: missing "+k);process.exit(1)}}fs.writeFileSync(process.argv[2],JSON.stringify({structured_output:n}))' "$NOTES_FILE" "$RAW_AI_FILE"
+    MODEL="notes file"
+  else
   need_cmd claude
 
   build_context
@@ -1061,6 +1096,7 @@ draft_notes() {
     --output-format json \
     --json-schema '{"type":"object","properties":{"summary":{"type":"string"},"tagline":{"type":"string"},"highlights":{"type":"array","items":{"type":"object","properties":{"title":{"type":"string"},"description":{"type":"string"},"kind":{"type":"string","enum":["feature","improvement","fix","note"]},"media":{"type":"string"},"mediaAlt":{"type":"string"}},"required":["title","kind"],"additionalProperties":false},"minItems":1,"maxItems":3},"sections":{"type":"array","items":{"type":"object","properties":{"heading":{"type":"string"},"bullets":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":5}},"required":["heading","bullets"],"additionalProperties":false},"minItems":1,"maxItems":4}},"required":["summary","tagline","highlights","sections"],"additionalProperties":false}' \
     < "$PROMPT_FILE" > "$RAW_AI_FILE"
+  fi
 
   extract_structured_output
 
@@ -1100,7 +1136,7 @@ draft_notes() {
     exit 1
   fi
 
-  echo "Updated CHANGELOG.md and media/whats-new.json for $VERSION using Claude ($MODEL)."
+  echo "Updated CHANGELOG.md and media/whats-new.json for $VERSION using $([[ -n "$NOTES_FILE" ]] && echo "$NOTES_FILE" || echo "Claude ($MODEL)")."
   if [[ "$BASE_REF" == "HEAD" ]]; then
     echo "No prior semver tag was found, so the draft used worktree changes only."
     echo "Use ./.publish --base <git-ref> if you want release notes over a wider range."

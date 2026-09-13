@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.323
+
+This release has no functional changes for users; it changes how the release notes themselves are written.
+
+### Notes
+- Ships no changes to extension behavior: all commands and settings work exactly as they did in 1.42.322.
+- The release notes are now drafted from the reason recorded with each fix, the failure a user hit and what was measured, together with the patch of the shipped code. Until now the drafting step only saw file names and line counts, which is why earlier notes sometimes read as a vague cleanup.
+- For a test that already existed, only the explanation added in the current release is used, so a fix shipped in an earlier version is not announced again.
+- Two defects in this new drafting step were caught before any release relied on it: a large diff stopped it without a word, and an older fix could be credited to the current version. Both are covered by tests.
+- Notes written separately can now be applied with the same rendering and validation as drafted ones.
+
 ## 1.42.322
 
 Removing a post or a starved handler now takes its imports too, and a class that asks for silence under detekt is left alone.

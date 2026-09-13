@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.245
+
+Four defects in yesterday's new command, three of them mine from the hour before.
+
+### Fixes
+- Remove Everything Unused wrote at offsets it had not checked. The corpus snapshot lives for a minute and its own staleness test only looks at DIRTY documents, so a file open and CLEAN but reloaded underneath, by a checkout or another tool, passed it with different content and the cuts aimed at the wrong lines. Every other bulk command holds that rule; the newest one was written without it. A file whose text moved is left alone now and says so.
+- Adding that guard introduced a worse one, caught on the next read. The cascade was planned on EVERY cut and only some were then sent, so it removed the import of a symbol that had in fact stayed. It takes the caller's word for what is being removed and verifies nothing, so it must only ever be told the truth: the files that moved are dropped BEFORE the plan is made.
+- The loop gave up silently after its eighth round. On a real project the removals settle after four, but a bigger one can need more, and stopping without a word reads as "finished". It says there is work left.
+- In review mode the report counted what was OFFERED as though it had been removed. What a reader ticks in the preview never comes back to the command, so the number was invented. It says what was sent to the preview instead.
+
+### Notes
+- The rule about which cuts reach the cascade is now a function of its own, because the ORDER is the whole point of it and an order is not something a comment can enforce.
+
 ## 1.42.244
 
 One command for the whole family, and it repeats until nothing is left.

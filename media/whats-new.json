@@ -1,27 +1,34 @@
 {
-  "version": "1.42.244",
+  "version": "1.42.245",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Remove everything unused, in one go",
-  "summary": "One command instead of five, repeating until a pass finds nothing, because each removal orphans the next.",
+  "tagline": "Cutting where it checked",
+  "summary": "The new command wrote at offsets it had not checked, and the guard that fixed it introduced a worse one in the cascade.",
   "highlights": [
     {
-      "title": "Remove Everything Unused",
-      "kind": "feature",
-      "description": "Five commands removed five kinds of dead code, and one pass was never enough: on a real project the removals only settled after four rounds. This asks once, then does all of it, repeating until a pass finds nothing."
+      "title": "Offsets checked before the cut",
+      "kind": "fix",
+      "description": "The corpus snapshot lives for a minute and its staleness test only looks at dirty documents. A file open and clean but reloaded underneath passed it with different content, and the cuts aimed at the wrong lines."
+    },
+    {
+      "title": "The cascade is only ever told the truth",
+      "kind": "fix",
+      "description": "It was planned on every cut while only some were sent, so it removed the import of a symbol that had stayed. It takes the caller at its word and verifies nothing, so the files that moved are dropped before the plan is made."
     }
   ],
   "sections": [
     {
-      "heading": "Added",
+      "heading": "Fixes",
       "bullets": [
-        "Remove Everything Unused: declarations, class members, enum entries, dead islands, locals and parameters, plus the imports and files they orphan, in one command that repeats until a pass finds nothing."
+        "Remove Everything Unused checks that a file is still what it measured before cutting it, and leaves the others alone.",
+        "The cascade is planned only on the cuts that will actually be sent.",
+        "The loop says so when it stops with work still left, instead of reading as finished.",
+        "In review mode the report says what was sent to the preview, not what was removed, because what a reader ticks never comes back to the command."
       ]
     },
     {
-      "heading": "Fixes",
+      "heading": "Notes",
       "bullets": [
-        "The per file sweep carried its own copy of the removal extent, left behind while the original grew. A multi line initializer had no removal there while the same shape had one elsewhere.",
-        "The watcher added in 1.42.243 had no exclusion filter, so the thousands of files a build writes under `build/` emptied the corpus cache over and over."
+        "Three of the four were introduced in the hour before, two of them by the fix for the first one."
       ]
     }
   ],

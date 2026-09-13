@@ -332,7 +332,11 @@ export async function cleanDeadCodeInWorkspaceCommand(): Promise<void> {
       // fausse nouvelle sur un fichier intact, ce qui est pire que le silence
       // d avant : le lecteur cesse de chercher. Meme mot que le reste de la
       // famille.
-      if (!applique) { void vscode.window.showWarningMessage('Nothing was applied.'); return; }
+      // La note sur ce qui a BOUGE ne parle pas de la meme chose et reste vraie :
+      // elle dit au lecteur de relancer. Le retour anticipe l'emportait avec le
+      // reste, et « Nothing was applied. » tout seul cache que trois fichiers
+      // avaient ete laisses de cote pour une autre raison, reparable celle la.
+      if (!applique) { void vscode.window.showWarningMessage(`Nothing was applied.${note}`); return; }
       // Apply all skips the preview by construction: the flag that opens it is
       // the one that leaves every box unticked. The edit therefore went out
       // without a word, the only destructive command of the family to say

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.42.341
+
+This release fixes Remove Test Only Code leaving a Java static import behind after removing a class member or an enum entry that only tests used.
+
+### Fixes
+- Fixed Remove Test Only Code leaving `import static p.Cles.MORTE;` in a main Java file after removing MORTE and its tests, and the same for an enum entry: javac stopped on the import. Remove Everything Unused already removed these imports; both commands now share one rule, which matches the import on the member's own class or enum so an entry of the same name in another enum keeps its import.
+
 ## 1.42.340
 
 This release fixes Remove Everything Unused leaving a Java static import behind after deleting the class member or enum entry it named, which stopped javac with "cannot find symbol".

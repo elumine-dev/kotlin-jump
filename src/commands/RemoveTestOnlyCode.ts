@@ -9,6 +9,7 @@ import { findUnusedEnumEntries } from '../providers/unusedEnumEntries';
 import { isOfferable, liveOutside, planTestCoRemoval, productionDeclarations, TestCoRemovalPlan, testFunctionsOf } from '../providers/testCoRemoval';
 import { addCascadePlan, planCascade } from '../providers/applyCascade';
 import { plural } from '../util/plural';
+import { findMemberImports, memberKey } from '../util/memberImports';
 import { intersectionParCle } from '../util/intersectionParCle';
 import { stillTheMeasuredText, estLeFichier } from '../util/measuredText';
 import { askHowToApply, bulkDetail } from '../util/bulkEdit';
@@ -107,14 +108,24 @@ export async function scanTestOnly(
     if (s.verdict !== 'testOnly' || s.removeStart < 0) continue;
     groups.push({ label: s.name, names: [s.name], allowed: [], path: s.path, removeStart: s.removeStart, removeEnd: s.removeEnd, fileBecomesEmpty: s.fileBecomesEmpty, staleImports: s.staleImports.map(i => ({ ...i, name: s.name })) });
   }
+  // Java static imports of the members and entries that go, in any file: the
+  // plan reads test sources only (src/util/memberImports.ts).
+  const clesMembres = new Set<string>();
+  for (const m of members) if (m.verdict === 'testOnly' && m.removeStart >= 0) clesMembres.add(memberKey(m.container ?? '', m.name));
+  for (const e of entries) if (e.verdict === 'testOnly' && e.removeStart >= 0) clesMembres.add(`${e.enumName}.${e.name}`);
+  const importsParCle = new Map<string, { path: string; line: number; name: string }[]>();
+  for (const imp of findMemberImports(data.sources, clesMembres)) {
+    (importsParCle.get(imp.key) ?? importsParCle.set(imp.key, []).get(imp.key)!).push({ path: imp.path, line: imp.line, name: imp.name });
+  }
   for (const m of members) {
     if (m.verdict !== 'testOnly' || m.removeStart < 0) continue;
-    groups.push({ label: `${m.container}.${m.name}`, names: [m.name], allowed: (m.container ?? '').split('.'), path: m.path, removeStart: m.removeStart, removeEnd: m.removeEnd, fileBecomesEmpty: false });
+    groups.push({ label: `${m.container}.${m.name}`, names: [m.name], allowed: (m.container ?? '').split('.'), path: m.path, removeStart: m.removeStart, removeEnd: m.removeEnd, fileBecomesEmpty: false, staleImports: importsParCle.get(memberKey(m.container ?? '', m.name)) });
   }
   for (const e of entries) {
     if (e.verdict !== 'testOnly' || e.removeStart < 0) continue;
     groups.push({
       label: `${e.enumName}.${e.name}`, names: [e.name], allowed: [e.enumName], path: e.path, removeStart: e.removeStart, removeEnd: e.removeEnd, fileBecomesEmpty: false,
+      staleImports: importsParCle.get(`${e.enumName}.${e.name}`),
       // The plan looks for the NAME in test files. When another enum declares
       // it, a test importing that enum's entry writes only `FEED`, touches no
       // other production name, and went with this entry: live code lost its test.

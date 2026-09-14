@@ -101,4 +101,18 @@ describe('KJ-048 la classe supprimee emporte ses imports dans les autres fichier
     const main = f(`${J}/Main.java`, 'package com.x;\n\nimport com.x.b.Ecran;\n\npublic class Main {\n    public static void main(String[] a) { new Ecran().v(); }\n}\n');
     expect(apres([cles, ecran, main, GRADLE], ecran.path)).toContain('import static com.x.a.Cles.VIVANTE;');
   });
+
+  it('entree homonyme : l import de l entree VIVANTE du meme nom reste', () => {
+    // MediaSource.FEED part (1.42.328 rattache les mentions a leur enum), alors
+    // que `FEED` est ecrit ailleurs pour EventSource. Chercher l import par le
+    // nom seul retirait `import com.e.EventSource.FEED`, et Use.kt ne
+    // compilait plus. Le conteneur de l import doit etre celui de l entree.
+    const K = '/w/app/src/main/kotlin/com';
+    const media = f(`${K}/m/MediaSource.kt`, 'package com.m\n\nenum class MediaSource {\n    FEED,\n    CARD,\n}\n');
+    const event = f(`${K}/e/EventSource.kt`, 'package com.e\n\nenum class EventSource {\n    FEED,\n}\n');
+    const use = f(`${K}/u/Use.kt`, 'package com.u\n\nimport com.e.EventSource.FEED\nimport com.m.MediaSource\n\nfun main() { println(FEED); println(MediaSource.CARD) }\n');
+    const sources = [media, event, use, GRADLE];
+    expect(apres(sources, media.path)).not.toContain('FEED');
+    expect(apres(sources, use.path)).toContain('import com.e.EventSource.FEED');
+  });
 });

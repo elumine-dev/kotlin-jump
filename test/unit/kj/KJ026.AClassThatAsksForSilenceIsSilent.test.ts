@@ -68,3 +68,31 @@ describe('une demande de silence porte sur tout le corps de la classe', () => {
     expect((findUnusedDeclarations(src, 'java') as any[]).map(d => d.name)).toEqual([]);
   });
 });
+
+describe('le silence s arrete a la classe qui le demande', () => {
+  // L etendue de la classe etait prise a la premiere accolade apres son nom.
+  // Une classe sans corps n en a pas : c etait celle de la classe SUIVANTE, et
+  // la demande de silence couvrait ses membres prives morts.
+  it('une classe sans corps ne fait pas taire la classe d apres', () => {
+    const src = 'package x\n\n@Suppress("unused")\nclass A(private val injecte: Int)\n\nclass B {\n    private fun morte() = 1\n    fun vivant() = 2\n}\n';
+    expect(noms(src)).toEqual(['morte']);
+  });
+
+  it('meme chose avec un constructeur sur plusieurs lignes', () => {
+    const src = 'package x\n\n@Suppress("unused")\nclass A(\n    private val injecte: Int,\n)\n\nclass B {\n    private fun morte() = 1\n}\n';
+    expect(noms(src)).toEqual(['morte']);
+  });
+
+  it('un constructeur sur plusieurs lignes PUIS un corps : le corps reste couvert', () => {
+    // Les parametres du constructeur sont a la profondeur de la classe : les
+    // prendre pour la declaration voisine laissait le corps hors du silence.
+    const src = 'package x\n\n@Suppress("unused")\nclass A(\n    private val injecte: Int,\n) {\n    private fun garde() = 1\n}\n\nclass B {\n    private fun morte() = 1\n}\n';
+    expect(noms(src)).toEqual(['morte']);
+  });
+
+  it('temoin : une classe avec corps reste couverte jusqu a son accolade', () => {
+    const src = 'package x\n\n@Suppress("unused")\nclass A {\n    private fun garde() = 1\n}\n\nclass B {\n    private fun morte() = 1\n}\n';
+    expect(noms(src)).toEqual(['morte']);
+  });
+});
+

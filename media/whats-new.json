@@ -1,26 +1,32 @@
 {
-  "version": "1.42.325",
+  "version": "1.42.326",
   "title": "What's New in Kotlin Jump",
-  "tagline": "More reliable Suppress handling",
-  "summary": "Fixes two cases where a @Suppress(\"unused\") annotation was ignored and the code it protected got deleted anyway.",
+  "tagline": "Anonymous companion suppression, fixed",
+  "summary": "Fixes a gap where @Suppress(\"unused\") on an anonymous companion object was ignored and its members got deleted anyway.",
   "highlights": [
     {
-      "title": "Suppress Protects Class Members",
+      "title": "Companion Object Suppress Fix",
       "kind": "fix",
-      "description": "A member marked @Suppress(\"unused\"), or one inside a class carrying that annotation, is no longer flagged and deleted by Remove Everything Unused."
+      "description": "A @Suppress(\"unused\") annotation written on an anonymous companion object is now respected, so Remove Everything Unused no longer deletes its members."
     },
     {
-      "title": "Suppress Protects Enum Entries",
-      "kind": "fix",
-      "description": "An enum entry marked @Suppress(\"unused\"), or one inside an enum carrying that annotation, is no longer flagged and deleted by Remove Everything Unused."
+      "title": "Release Notes Script Refined",
+      "kind": "note",
+      "description": "The internal script that drafts these release notes gained more test coverage, aimed at keeping future notes accurate."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Stops removing a class member written as @Suppress(\"unused\") fun keep(), or any member of a class carrying that annotation: it was reported as dead and deleted by Remove Everything Unused even though the author asked to keep it, while the same annotation on a top level function was already respected.",
-        "Stops removing an enum entry marked @Suppress(\"unused\"), or any entry of an enum carrying that annotation, for the same reason: the detector treated @Suppress as harmless instead of checking which diagnostic it names."
+        "Stops deleting members of an anonymous companion object marked @Suppress(\"unused\"): the 1.42.325 fix checked the member and its enclosing declarations for the suppress request, but an anonymous companion object is never emitted as a symbol, so it was never part of that chain and its members were still removed by Remove Everything Unused. A named companion object was already covered, which is why the gap went unnoticed."
+      ]
+    },
+    {
+      "heading": "Notes",
+      "bullets": [
+        "Ships no other changes to extension behavior: every command and setting works exactly as it did in 1.42.325.",
+        "Release notes no longer show a stray backslash in front of quotes. The 1.42.325 summary displayed one around \"unused\"; the drafting step now removes them and the release check refuses any that remain."
       ]
     }
   ],

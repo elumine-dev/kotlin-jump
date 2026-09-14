@@ -472,3 +472,44 @@ describe('ADV-validate-whats-new — malformed file', () => {
     expect(r.stderr).toMatch(/must be a JSON object/);
   });
 });
+
+// ── Escaped quotes leaking into prose ─────────────────────────────────────
+//
+// Two releases in a row, 1.42.325 and 1.42.326, the drafted summary read
+// `@Suppress(\"unused\")` with the backslashes visible in CHANGELOG.md and in
+// the What's New panel. A backslash in front of a quote never belongs in
+// release prose: it is a JSON escape that survived one decoding too few.
+
+describe('ADV-validate-whats-new — escaped quotes in prose', () => {
+  const avec = (champ: 'summary' | 'description' | 'bullet', texte: string) => runValidator(fixture({
+    version: '1.16.0',
+    summary: champ === 'summary' ? texte : 'A release.',
+    highlights: [{ title: 'Fix', kind: 'fix', description: champ === 'description' ? texte : 'Fixed.' }],
+    sections: [{ heading: 'Fixes', bullets: [champ === 'bullet' ? texte : 'Fixed.'] }],
+  }));
+
+  for (const champ of ['summary', 'description', 'bullet'] as const) {
+    it(`rejects a literal \\" in the ${champ}`, () => {
+      const r = avec(champ, 'Fixes @Suppress(\\"unused\\") on a class.');
+      expect(r.exit).not.toBe(0);
+      expect(r.stderr + r.stdout).toMatch(/escaped quote/i);
+    });
+  }
+
+  it('accepts plain quotes', () => {
+    expect(avec('summary', 'Fixes @Suppress("unused") on a class.').exit).toBe(0);
+  });
+});
+
+describe('.publish unescapes quotes before rendering the notes', () => {
+  it('the extraction step turns \\" back into a quote', () => {
+    const publish = require('node:fs').readFileSync(path.join(__dirname, '../../.publish'), 'utf8') as string;
+    const extraction = publish.slice(publish.indexOf('extract_structured_output() {'), publish.indexOf('render_markdown_section() {'));
+    expect(extraction).toContain(String.raw`v.replace(/\\"/g, '"')`);
+    // Applied, and before the write. `indexOf` alone would let a removed line
+    // pass: -1 is smaller than any position.
+    const applique = extraction.indexOf('structured = unescapeQuotes(structured);');
+    expect(applique).toBeGreaterThan(-1);
+    expect(applique).toBeLessThan(extraction.indexOf('fs.writeFileSync(outPath'));
+  });
+});

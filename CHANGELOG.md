@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.42.326
+
+Fixes a gap where @Suppress("unused") on an anonymous companion object was ignored and its members got deleted anyway.
+
+### Fixes
+- Stops deleting members of an anonymous companion object marked @Suppress("unused"): the 1.42.325 fix checked the member and its enclosing declarations for the suppress request, but an anonymous companion object is never emitted as a symbol, so it was never part of that chain and its members were still removed by Remove Everything Unused. A named companion object was already covered, which is why the gap went unnoticed.
+
+### Notes
+- Ships no other changes to extension behavior: every command and setting works exactly as it did in 1.42.325.
+- Release notes no longer show a stray backslash in front of quotes. The 1.42.325 summary displayed one around "unused"; the drafting step now removes them and the release check refuses any that remain.
+
 ## 1.42.325
 
 Fixes two cases where a @Suppress("unused") annotation was ignored and the code it protected got deleted anyway.

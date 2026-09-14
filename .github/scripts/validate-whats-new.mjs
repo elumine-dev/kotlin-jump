@@ -94,6 +94,21 @@ if (typeof data !== 'object' || data === null || Array.isArray(data)) {
   fatal(`media/whats-new.json must be a JSON object`);
 }
 
+// ── Escaped quotes in prose ───────────────────────────────────────────────
+// A backslash in front of a quote is a JSON escape that survived one decoding
+// too few. Two drafted releases in a row showed `@Suppress(\"unused\")` with
+// the backslashes visible to users.
+
+(function walk(value, where) {
+  if (typeof value === 'string') {
+    if (value.includes('\\"')) err(`\`${where}\` contains an escaped quote (\\") that would be shown as is`);
+  } else if (Array.isArray(value)) {
+    value.forEach((v, i) => walk(v, `${where}[${i}]`));
+  } else if (value && typeof value === 'object') {
+    for (const [k, v] of Object.entries(value)) walk(v, where ? `${where}.${k}` : k);
+  }
+})(data, '');
+
 // ── Top-level structural fields ───────────────────────────────────────────
 
 for (const field of ['version', 'summary']) {

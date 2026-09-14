@@ -570,6 +570,16 @@ const forbiddenTerms = [
   'demo recording', 'demo recorder', 'demo pipeline',
   'screencapture', 'ffmpeg', 'webp demo', 'record demo',
 ];
+// A backslash before a quote is a JSON escape the model left in its prose:
+// twice in a row the summary read `@Suppress(\"unused\")` in CHANGELOG.md.
+// It never belongs in release notes, so it is undone here, and the whats-new
+// validator refuses any that slips through.
+const unescapeQuotes = v => typeof v === 'string' ? v.replace(/\\"/g, '"')
+  : Array.isArray(v) ? v.map(unescapeQuotes)
+  : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, unescapeQuotes(x)]))
+  : v;
+structured = unescapeQuotes(structured);
+
 const flat = JSON.stringify(structured).toLowerCase();
 const hits = forbiddenTerms.filter(t => flat.includes(t.toLowerCase()));
 if (hits.length > 0) {

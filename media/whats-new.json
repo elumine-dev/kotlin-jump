@@ -1,20 +1,20 @@
 {
-  "version": "1.42.336",
+  "version": "1.42.337",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Safer test only code removal",
-  "summary": "This release fixes Remove Test Only Code leaving a broken import behind in a main source file when the removed declaration was used only by its own tests.",
+  "tagline": "Tests of live code stay",
+  "summary": "This release stops Remove Test Only Code from deleting tests that also cover live code through class members.",
   "highlights": [
     {
-      "title": "Safer Test Only Code Removal",
-      "description": "Removing code kept alive only by its tests no longer leaves a broken import behind in a main source file, so the module keeps compiling.",
-      "kind": "fix"
+      "title": "Tests of live members kept",
+      "kind": "fix",
+      "description": "Remove Test Only Code no longer offers to delete a test that calls live class members, even when the test also checks the member being removed."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Fixed Remove Test Only Code leaving a stale import in a main source file. When a declaration was removed because only its tests used it, a main file that imported it without using it kept that import, and the module failed to compile in Kotlin or Java. The command now clears these imports too, once the removal itself is already decided from the tests alone: an import can never be the reason a withheld removal gets offered."
+        "Fixed Remove Test Only Code offering to delete tests of live code. Seven tests of EditionDatabaseHelperTest save and read back editions through live members, and each also asserts isDownloadingZip, a member only tests used: all seven were planned for removal with it, because the guard only looked for top level names and a member call never tripped it. A test is now kept when it names a class member declared outside what the removal takes; the members of a removed class still go with it, and the words of a test's own name are not counted."
       ]
     }
   ],

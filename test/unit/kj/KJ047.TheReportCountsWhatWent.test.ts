@@ -15,13 +15,16 @@ import { removeTestOnlyCodeCommand } from '../../../src/commands/RemoveTestOnlyC
  * d accord avec elle il y a cinq versions, la phrase du dessous non.
  */
 
+// Deux noms de methode distincts : un meme nom declare dans les deux sujets
+// retiendrait chaque plan (KJ047.LiveMembersKeepTheirTests), et ce test ne
+// porte pas sur les homonymes.
 const SUJET1 = '/w/app/src/main/java/p/Sujet1.kt';
 const SUJET2 = '/w/app/src/main/java/p/Sujet2.kt';
 const SOURCES = [
   // Chaque fichier garde une classe vivante, sinon il serait vide et parti en
   // entier : la coupe par plage, celle qui peut etre refusee, n aurait pas lieu.
   { path: SUJET1, text: 'package p\n\nclass Sujet1 {\n    fun utilise() = 1\n}\n\nclass Garde1 {\n    fun g() = 1\n}\n' },
-  { path: SUJET2, text: 'package p\n\nclass Sujet2 {\n    fun utilise() = 2\n}\n\nclass Garde2 {\n    fun g() = 2\n}\n' },
+  { path: SUJET2, text: 'package p\n\nclass Sujet2 {\n    fun utiliseDeux() = 2\n}\n\nclass Garde2 {\n    fun g() = 2\n}\n' },
   { path: '/w/app/src/main/java/p/Main.kt', text: 'package p\n\nfun main() {\n    println(Garde1().g() + Garde2().g())\n}\n' },
   { path: '/w/app/build.gradle', text: "plugins { id 'com.android.application' }\n" },
   {
@@ -30,7 +33,7 @@ const SOURCES = [
   },
   {
     path: '/w/app/src/test/java/p/Sujet2Test.kt',
-    text: 'package p\n\nimport org.junit.Test\n\nclass Sujet2Test {\n    @Test\n    fun second() {\n        Sujet2().utilise()\n    }\n}\n',
+    text: 'package p\n\nimport org.junit.Test\n\nclass Sujet2Test {\n    @Test\n    fun second() {\n        Sujet2().utiliseDeux()\n    }\n}\n',
   },
 ];
 

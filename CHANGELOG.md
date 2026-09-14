@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.42.337
+
+This release stops Remove Test Only Code from deleting tests that also cover live code through class members.
+
+### Fixes
+- Fixed Remove Test Only Code offering to delete tests of live code. Seven tests of EditionDatabaseHelperTest save and read back editions through live members, and each also asserts isDownloadingZip, a member only tests used: all seven were planned for removal with it, because the guard only looked for top level names and a member call never tripped it. A test is now kept when it names a class member declared outside what the removal takes; the members of a removed class still go with it, and the words of a test's own name are not counted.
+
 ## 1.42.336
 
 This release fixes Remove Test Only Code leaving a broken import behind in a main source file when the removed declaration was used only by its own tests.

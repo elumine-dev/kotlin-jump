@@ -129,7 +129,7 @@ export function planTestCoRemoval(
    * live `ReplicaConst` ones. Without this set the file went whole, and live
    * code silently lost its only test.
    */
-  liveNames?: ReadonlySet<string>,
+  liveNames?: ReadonlySet<string> | ((name: string) => boolean),
   /**
    * Names allowed to appear without disqualifying the test: the declaration's
    * own container above all. A test for `EditionModel.hasBrandIcon` names
@@ -186,12 +186,17 @@ export function planTestCoRemoval(
     if (hit.size === 0 && imports.length === 0) continue;
 
     if (liveNames !== undefined) {
+      const estVivant = typeof liveNames === 'function' ? liveNames : (n: string) => liveNames.has(n);
       const wantedSet = new Set([...wanted, ...allowed]);
       let coversSomethingElse = false;
       for (const f of hit) {
-        const corps = clean.slice(f.start, f.end);
+        // From after the function's own name: the words of a backtick test name
+        // (`initial case - ...`) describe the test, they call nothing, and a
+        // member named `initial` elsewhere withheld it.
+        const nom = clean.indexOf(f.name, f.start);
+        const corps = clean.slice(nom === -1 || nom >= f.end ? f.start : nom + f.name.length, f.end);
         for (const jeton of corps.match(/\b[A-Za-z_]\w*\b/g) ?? []) {
-          if (wantedSet.has(jeton) || !liveNames.has(jeton)) continue;
+          if (wantedSet.has(jeton) || !estVivant(jeton)) continue;
           plan.unresolved.push({
             path: src.path,
             line: offsetToPos(lineStarts as number[], f.start).line,
@@ -223,6 +228,53 @@ export function planTestCoRemoval(
 
   plan.cuts.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : a.start - b.start));
   return plan;
+}
+
+const CLASS_LIKE_KINDS = new Set(['class', 'dataClass', 'sealedClass', 'object', 'interface', 'enum', 'annotation']);
+
+/** Where production declares every top level name and class member: file and offset of each declaration. */
+export function productionDeclarations(
+  sources: readonly { path: string; text: string }[],
+  testSourceSets: readonly string[],
+): Map<string, { path: string; offset: number }[]> {
+  const out = new Map<string, { path: string; offset: number }[]>();
+  for (const src of sources) {
+    if (!/\.(kt|java)$/.test(src.path) || isTestSourceSet(src.path, testSourceSets)) continue;
+    const parsed = src.path.endsWith('.java') ? parseJava(src.path, src.text) : parse(src.path, src.text);
+    const lineStarts = buildLineStarts(src.text);
+    // Top level declarations and class members only. Locals and parameters
+    // share common names with everything, and counting them withheld nearly
+    // every test.
+    const pile: { kind: string }[] = [];
+    for (const sym of parsed.symbols) {
+      pile.length = sym.depth;
+      pile[sym.depth] = sym;
+      const parent = sym.depth > 0 ? pile[sym.depth - 1] : undefined;
+      if (parent !== undefined && !CLASS_LIKE_KINDS.has(parent.kind)) continue;
+      const list = out.get(sym.name) ?? [];
+      list.push({ path: src.path, offset: lineStarts[sym.line] + sym.character });
+      out.set(sym.name, list);
+    }
+  }
+  return out;
+}
+
+/**
+ * The names a test may not touch while going with this removal: those production
+ * declares somewhere the removal does not take.
+ *
+ * Top level names alone were checked. A member call never tripped the guard,
+ * and seven tests of `EditionDatabaseHelperTest` went with
+ * `EditionState.isDownloadingZip` while they persisted and read back editions
+ * through live members. Declarations INSIDE the removed extents go with it: the
+ * members of a removed class do not hold its test back, a live homonym does.
+ */
+export function liveOutside(
+  declarations: ReadonlyMap<string, readonly { path: string; offset: number }[]>,
+  extents: readonly { path: string; start: number; end: number }[],
+): (name: string) => boolean {
+  return name => (declarations.get(name) ?? []).some(d =>
+    !extents.some(e => e.path === d.path && d.offset >= e.start && d.offset < e.end));
 }
 
 /** True when the plan is safe to offer: something to do, nothing unexplained. */

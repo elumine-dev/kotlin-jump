@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.42.334
+
+This release fixes dead code removal leaving two blank lines in a row when the removed lines came from separate cuts next to each other.
+
+### Fixes
+- Fixed Remove Everything Unused leaving two consecutive blank lines when the removed lines were split across separate cuts: two dead declarations stacked without a blank line between them, or an import block whose first imports were already unused and whose last ones lost their only user. The blank line rule now looks at the whole run of removed lines, and only one edit ever takes the blank line.
+
 ## 1.42.333
 
 This release fixes four dead code detection and removal bugs. Removing an enum's first entry from a shared line no longer strips its neighbor's indentation. Removing a dead island now also clears the imports its code left behind and deletes the file when nothing living remains. Removing a whole block of imports no longer leaves two blank lines in a row. A dead private function no longer stays hidden behind an unrelated suppress annotation.

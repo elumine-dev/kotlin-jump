@@ -138,18 +138,18 @@ function avecUneLigneVide(text: string, extents: Cut[], cuts: readonly Cut[]): C
   const triees = [...extents].sort((a, b) => a.start - b.start);
   const reclamees = cuts.filter(c => c.start >= 0 && c.end >= c.start).map(c => wholeLineExtent(text, c.start, c.end));
   const vide = (debut: number, fin: number) => text.slice(debut, fin).trim() === '';
-  for (let i = 0; i < triees.length; i++) {
-    let j = i;
-    while (j + 1 < triees.length && triees[j + 1].start === triees[j].end) j++;
-    const debut = triees[i].start;
-    const fin = triees[j].end;
+  const entieres = (d: number, f: number) =>
+    d < f && (d === 0 || text[d - 1] === '\n') && (f === text.length || text[f - 1] === '\n');
+  // The run of removed lines, the caller's whole line cuts included: an import
+  // block may go partly with the sweep and partly here.
+  const retirees: Cut[] = [...triees, ...cuts.filter(c => entieres(c.start, c.end))];
+  return triees.map(e => {
+    let debut = e.start;
+    for (let r = retirees.find(x => x.end === debut); r; r = retirees.find(x => x.end === debut)) debut = r.start;
     const avantVide = debut === 0 || vide(text.lastIndexOf('\n', debut - 2) + 1, debut);
-    const finLigneApres = text.indexOf('\n', fin);
-    if (avantVide && finLigneApres !== -1 && vide(fin, finLigneApres)) {
-      const etendue = { start: fin, end: finLigneApres + 1 };
-      if (!reclamees.some(r => r.start < etendue.end && r.end > etendue.start)) triees[j] = { ...triees[j], end: etendue.end };
-    }
-    i = j;
-  }
-  return triees;
+    const finLigneApres = text.indexOf('\n', e.end);
+    if (!avantVide || finLigneApres === -1 || !vide(e.end, finLigneApres)) return e;
+    const etendue = { start: e.end, end: finLigneApres + 1 };
+    return reclamees.some(r => r.start < etendue.end && r.end > etendue.start) ? e : { ...e, end: etendue.end };
+  });
 }

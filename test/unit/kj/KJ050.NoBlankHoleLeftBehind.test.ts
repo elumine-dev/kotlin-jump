@@ -90,3 +90,52 @@ describe('KJ-050 pas de trou de lignes vides', () => {
     expect(plages[0].end.line).toBe(t.slice(0, t.indexOf('const val')).split('\n').length - 1);
   });
 });
+
+describe('KJ-050 un trou fait de plusieurs coupes collees', () => {
+  // Chaque coupe etait jugee seule : deux declarations mortes ecrites l une
+  // sous l autre, encadrees de lignes vides, n avaient ni l une ni l autre une
+  // ligne vide de chaque cote, et le fichier gardait deux lignes vides de suite
+  // (detekt : NoConsecutiveBlankLines). Meme chose quand la cascade retire une
+  // partie d un bloc d imports et le balayage l autre.
+  const appliqueAvec = (texte: string, coupes: Coupe[], autres: { start: number; end: number }[]) => {
+    const toutes = [...sansTrouDeLignesVides(texte, coupes, autres), ...autres.map(a => ({ ...a, texte: '' }))]
+      .sort((a, b) => b.start - a.start);
+    let out = texte;
+    let borne = Infinity;
+    for (const x of toutes) {
+      expect(x.end <= borne, 'deux editions se chevauchent').toBe(true);
+      out = out.slice(0, x.start) + x.texte + out.slice(x.end);
+      borne = x.start;
+    }
+    return out;
+  };
+  const ligne = (t: string, debut: string) => { const s = t.indexOf(debut); return { start: s, end: t.indexOf('\n', s) + 1 }; };
+
+  it('deux declarations collees : une seule ligne vide reste', () => {
+    const t = 'package p\n\nprivate fun mortA() = 1\nprivate fun mortB() = 2\n\nconst val GARDE = 1\n';
+    const a = ligne(t, 'private fun mortA'); const b = ligne(t, 'private fun mortB');
+    expect(appliqueAvec(t, [c(a.start, a.end), c(b.start, b.end)], [])).toBe('package p\n\nconst val GARDE = 1\n');
+  });
+
+  it('une coupe precedee d une ligne que la cascade retire : le trou est vu en entier', () => {
+    const t = 'package p\n\nimport a.Orpheline\nimport a.DejaMorte\n\nconst val GARDE = 1\n';
+    const cascade = ligne(t, 'import a.Orpheline'); const balayage = ligne(t, 'import a.DejaMorte');
+    expect(appliqueAvec(t, [c(balayage.start, balayage.end)], [cascade])).toBe('package p\n\nconst val GARDE = 1\n');
+  });
+
+  it('temoin : une coupe suivie d une ligne que la cascade retire ne prend pas la ligne vide', () => {
+    const t = 'package p\n\nimport a.DejaMorte\nimport a.Orpheline\n\nconst val GARDE = 1\n';
+    const balayage = ligne(t, 'import a.DejaMorte'); const cascade = ligne(t, 'import a.Orpheline');
+    const r = sansTrouDeLignesVides(t, [c(balayage.start, balayage.end)], [cascade]);
+    expect(r[0].end).toBe(balayage.end);
+  });
+});
+
+describe('KJ-050 la commande donne a la regle les lignes de la cascade', () => {
+  it('plagesDuFichier recoit les imports que la cascade retire', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const src = readFileSync(resolve(__dirname, '../../../src/commands/RemoveEverythingUnused.ts'), 'utf8');
+    expect(src).toMatch(/plagesDuFichier\(p, textes\.get\(p\)!, l, cascade\.imports\.get\(p\)\)/);
+  });
+});

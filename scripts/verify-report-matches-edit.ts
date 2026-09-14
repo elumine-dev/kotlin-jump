@@ -74,7 +74,8 @@ function main(): void {
 
   for (const [p, l] of retenu) {
     if (cascade.deleteFiles.has(p)) { dansFichiersEffaces += l.length; continue; }
-    const r = plagesDuFichier(p, textes.get(p)!, l);
+    // What the command sends: the hole rule counts the cascade's import lines.
+    const r = plagesDuFichier(p, textes.get(p)!, l, cascade.imports.get(p));
     if (r === undefined) {
       compte.perdu++;
       if (fautes.length < 10) fautes.push(`PERDU ${path.relative(racine, p)} ${l.length} coupes sans plages`);

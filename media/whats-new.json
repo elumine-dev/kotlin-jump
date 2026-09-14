@@ -1,33 +1,20 @@
 {
-  "version": "1.42.333",
+  "version": "1.42.334",
   "title": "What's New in Kotlin Jump",
-  "tagline": "More complete, more accurate dead code removal",
-  "summary": "This release fixes four dead code detection and removal bugs. Removing an enum's first entry from a shared line no longer strips its neighbor's indentation. Removing a dead island now also clears the imports its code left behind and deletes the file when nothing living remains. Removing a whole block of imports no longer leaves two blank lines in a row. A dead private function no longer stays hidden behind an unrelated suppress annotation.",
+  "tagline": "No double blank lines after cleanup",
+  "summary": "This release fixes dead code removal leaving two blank lines in a row when the removed lines came from separate cuts next to each other.",
   "highlights": [
     {
-      "title": "Complete cleanup on Dead Islands",
+      "title": "Adjacent cuts leave one blank line",
       "kind": "fix",
-      "description": "Removing a dead island now also deletes the imports its code left with no other user and removes the file itself when nothing living remains, so the result no longer fails lint checks like NoUnusedImports."
-    },
-    {
-      "title": "Enum entry removal keeps indentation",
-      "kind": "fix",
-      "description": "Deleting the first entry of an enum written on one shared line no longer strips the indentation from the entry that stays behind, so the file no longer fails an Indentation lint check."
-    },
-    {
-      "title": "Suppress annotations no longer mask dead code",
-      "kind": "fix",
-      "description": "A suppress annotation aimed at an unrelated warning, such as MagicNumber, no longer stops a genuinely unused private function from being flagged and offered for removal."
+      "description": "Removing two dead declarations written one under the other, or an import block cleared partly by the sweep and partly by the import cascade, now leaves a single blank line, so detekt no longer rejects the file for consecutive blank lines."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Fixed removing the first entry of an enum declared on one shared indented line, for example NewIndicatorPulseState { NEVER_PULSE, PULSING }, taking the indentation of the entry left behind instead of only its own.",
-        "Fixed dead island removal leaving behind imports that only the removed code used, and not deleting a file once it held nothing living. An import like androidx.compose.runtime.Composable could remain after its only user was removed.",
-        "Fixed the import cascade leaving two consecutive blank lines when it removed an entire block of imports along with the class that used them. One of the two blank lines that framed the block now goes with it.",
-        "Fixed a dead private function staying unreported when it carried a suppress annotation meant for a different warning, for example Suppress(MagicNumber). It is now flagged and offered for removal like any other unused code."
+        "Fixed Remove Everything Unused leaving two consecutive blank lines when the removed lines were split across separate cuts: two dead declarations stacked without a blank line between them, or an import block whose first imports were already unused and whose last ones lost their only user. The blank line rule now looks at the whole run of removed lines, and only one edit ever takes the blank line."
       ]
     }
   ],

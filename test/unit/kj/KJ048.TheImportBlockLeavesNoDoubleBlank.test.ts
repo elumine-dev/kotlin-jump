@@ -63,6 +63,19 @@ describe('KJ-048 un bloc d imports retire ne laisse pas deux lignes vides', () =
     for (const e of extents) expect(e.end <= start || e.start >= end, 'la cascade chevauche la coupe').toBe(true);
   });
 
+  it('le bloc part en deux : la ligne du dessus par une autre coupe, la derniere par la cascade', () => {
+    // Le balayage retire l import deja mort, la cascade celui que la coupe rend
+    // orphelin. Chacun seul ne voit pas le bloc entier.
+    const texte = 'package com.x\n\nimport java.util.UUID\nimport java.io.File\n\nclass Mort {\n    val f: File? = null\n}\n\nenum class Vivant { X }\n';
+    const balayage = { start: texte.indexOf('import java.util.UUID'), end: texte.indexOf('import java.io.File') };
+    const classe = { start: texte.indexOf('class Mort'), end: texte.indexOf('}\n\nenum') + 3 };
+    const extents = cascadeAfterRemoval(new Map([[P, [balayage, classe]]]), new Map([[P, texte]])).imports.get(P) ?? [];
+    const toutes = [balayage, classe, ...extents].sort((a, b) => b.start - a.start);
+    let out = texte;
+    for (const x of toutes) out = out.slice(0, x.start) + out.slice(x.end);
+    expect(out).toBe('package com.x\n\nenum class Vivant { X }\n');
+  });
+
   it('l etendue ajoutee commence toujours par la ligne d import', () => {
     const texte = 'package com.x\n\nimport java.io.File\n\nclass Mort {\n    val f: File? = null\n}\n\nenum class Vivant { X }\n';
     const start = texte.indexOf('class Mort');

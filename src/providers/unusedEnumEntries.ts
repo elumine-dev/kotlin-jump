@@ -175,9 +175,14 @@ export function collectEnums(
     // asked: `@Suppress("unused")` on the enum or on the entry itself left the
     // entry reported, and Remove Everything Unused deleted it. Arguments are
     // read on the raw text, the sanitizer blanks strings.
-    const silenceAt = (sym: RawSymbol): boolean => {
-      const slo = lineStarts[sym.line];
-      const shi = slo + sym.character;
+    const silenceAt = (sym: RawSymbol, before?: RawSymbol): boolean => {
+      // From the end of the declaration that shares the line, not from the
+      // line start: on `enum class E { A, @Suppress("unused") B, C }` the
+      // annotation of B fell in the window of C, and C was never reported.
+      const slo = before && before.line === sym.line
+        ? lineStarts[before.line] + before.character + before.name.length
+        : lineStarts[sym.line];
+      const shi = lineStarts[sym.line] + sym.character;
       return annotations.some(a => a.target >= slo && a.target <= shi
         && (a.name === 'Suppress' || a.name === 'SuppressWarnings') && a.argStart >= 0
         && suppressesDiagnostic(src.text.slice(a.argStart, a.argEnd), UNUSED_DECLARATION));
@@ -207,7 +212,7 @@ export function collectEnums(
         entries,
         rejection: silenceAt(enumSym) ? 'F12:suppress-unused'
           : foreign ? `E3:@${foreign}` : annotatedEntry ? 'E5:annotated-entry' : null,
-        silenced: new Set(entries.filter(silenceAt)),
+        silenced: new Set(entries.filter((entry, k) => silenceAt(entry, entries[k - 1]))),
         isTest: isTestSourceSet(src.path, testSourceSets),
       });
     }

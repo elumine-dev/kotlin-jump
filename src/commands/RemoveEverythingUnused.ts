@@ -62,12 +62,37 @@ export function collecterUnePasse(
     brut.set(p, l);
   };
 
-  for (const s of syms) if (s.verdict === 'unreferenced') { ajoute(s.path, s.removeStart, s.removeEnd, '', 'symboles', s.name); }
+  // The imports that name a removed declaration in OTHER files go with it, as
+  // in the lightbulb. The sweep only reads imports in Kotlin, so a Java file
+  // kept `import ...LiveListViewScrollingEvent;` once the class was gone, and
+  // javac stopped on it. The Kotlin duplicate of the sweep's own cut collapses
+  // in the overlap pass below.
+  const textes = new Map(sources.map(src => [src.path, src.text]));
+  const importPerime = (imp: { path: string; line: number }, nom: string) => {
+    const texte = textes.get(imp.path);
+    if (texte === undefined) return;
+    let debut = 0;
+    for (let l = 0; l < imp.line; l++) {
+      const nl = texte.indexOf('\n', debut);
+      if (nl === -1) return;
+      debut = nl + 1;
+    }
+    const nl = texte.indexOf('\n', debut);
+    const fin = nl === -1 ? texte.length : nl + 1;
+    if (!new RegExp(`^\\s*import\\s+(?:static\\s+)?[\\w.]*\\b${nom}\\b`).test(texte.slice(debut, fin))) return;
+    ajoute(imp.path, debut, fin, '', 'balayage', '');
+  };
+  for (const s of syms) {
+    if (s.verdict !== 'unreferenced') continue;
+    ajoute(s.path, s.removeStart, s.removeEnd, '', 'symboles', s.name);
+    if (s.removeStart >= 0) for (const imp of s.staleImports ?? []) importPerime(imp, s.name);
+  }
   for (const m of membres) if (m.verdict === 'unreferenced') { ajoute(m.path, m.removeStart, m.removeEnd, '', 'membres', m.name); }
   for (const e of entrees) if (e.verdict === 'unreferenced') { ajoute(e.path, e.removeStart, e.removeEnd, '', 'entrees', e.name); }
   for (const i of iles) {
     if (i.verdict !== 'unreferenced' || !i.fixable) continue;
     for (const m of i.members) ajoute(m.path, m.removeStart, m.removeEnd, '', 'ilots', m.name);
+    for (const imp of i.staleImports ?? []) importPerime(imp, imp.name);
   }
   for (const src of sources) {
     if (!/\.(kt|java)$/.test(src.path)) continue;

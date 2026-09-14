@@ -1,20 +1,21 @@
 {
-  "version": "1.42.334",
+  "version": "1.42.335",
   "title": "What's New in Kotlin Jump",
-  "tagline": "No double blank lines after cleanup",
-  "summary": "This release fixes dead code removal leaving two blank lines in a row when the removed lines came from separate cuts next to each other.",
+  "tagline": "Cross file import cleanup",
+  "summary": "This release fixes Remove Everything Unused leaving behind imports, including in Java files, that pointed at a class or dead island it had just deleted, which could break compilation.",
   "highlights": [
     {
-      "title": "Adjacent cuts leave one blank line",
+      "title": "Stale import cleanup",
       "kind": "fix",
-      "description": "Removing two dead declarations written one under the other, or an import block cleared partly by the sweep and partly by the import cascade, now leaves a single blank line, so detekt no longer rejects the file for consecutive blank lines."
+      "description": "Remove Everything Unused now deletes the imports in other files, including Java, that named a class it just removed, so the removal no longer leaves code that fails to compile."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Fixed Remove Everything Unused leaving two consecutive blank lines when the removed lines were split across separate cuts: two dead declarations stacked without a blank line between them, or an import block whose first imports were already unused and whose last ones lost their only user. The blank line rule now looks at the whole run of removed lines, and only one edit ever takes the blank line."
+        "Fixed Remove Everything Unused leaving a Java import pointing at a class it had just deleted. Removing LiveListViewScrollingEvent left LiveDetailFragment.java with import ...LiveListViewScrollingEvent still in place, and javac failed with cannot find symbol, because the workspace wide sweep only reads imports in Kotlin. The command now clears these imports for every removed symbol, the way the single symbol quick fix already did.",
+        "Extended the same cleanup to dead island removal, so imports left behind by a removed group of mutually referencing declarations are cleared too instead of staying orphaned in the file."
       ]
     }
   ],

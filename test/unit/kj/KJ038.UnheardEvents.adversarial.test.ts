@@ -640,6 +640,42 @@ describe('l’étendue de suppression', () => {
     expect(scan(sources).events[0].removeStart).toBeGreaterThanOrEqual(0);
   });
 
+  for (const [bloc, avant, apres] of [
+    ['finally', '        try {\n            println("a")\n        } finally {\n', '        }\n'],
+    ['try', '        try {\n', '        } catch (e: Exception) {\n            println("a")\n        }\n'],
+    ['catch', '        try {\n            println("a")\n        } catch (e: Exception) {\n', '        }\n'],
+  ] as Array<[string, string, string]>) {
+    it(`un post seul dans un bloc ${bloc} ne l’est pas`, () => {
+      // Vu sur /Users/kevin/Desktop/work/lapresse, LiveNewsServiceImpl : un
+      // `bus.post` seul dans son `finally`, retire avec l en-tete du bloc. Il
+      // restait un `try` sans `catch` ni `finally`, que javac refuse. La regle
+      // existait depuis 1.42.223, aucun test ne la tenait.
+      const sources = [
+        ...base,
+        f(`${MAIN}/Orphan.kt`, 'package com.x\n\nclass Orphan\n'),
+        f(`${MAIN}/Poster.kt`,
+          'package com.x\n\nclass Poster {\n    fun go() {\n' + avant +
+          '            EventBus.getDefault().post(Orphan())\n' + apres + '    }\n}\n'),
+      ];
+      const found = scan(sources).events;
+      expect(found.map(e => e.name)).toEqual(['Orphan']);
+      expect(found[0].removeStart).toBe(-1);
+    });
+  }
+
+  it('Java, la forme du projet de reference : post seul dans son finally', () => {
+    const sources = [
+      ...base,
+      f('/w/app/src/main/java/com/x/Orphan.java', 'package com.x;\n\npublic class Orphan {}\n'),
+      f('/w/app/src/main/java/com/x/Poster.java',
+        'package com.x;\n\nclass Poster {\n    Object get() {\n        Object data;\n        try {\n            data = load();\n' +
+        '        } finally {\n            EventBus.getDefault().post(new Orphan());\n        }\n        return data;\n    }\n}\n'),
+    ];
+    const found = scan(sources).events;
+    expect(found.map(e => e.name)).toEqual(['Orphan']);
+    expect(found[0].removeStart).toBe(-1);
+  });
+
   it('un post sous condition ne l’est pas', () => {
     // Supprimer laisserait `if (ready)` orphelin. Le verdict tient, le
     // correctif abandonne (X1).

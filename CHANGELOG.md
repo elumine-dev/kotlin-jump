@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.42.335
+
+This release fixes Remove Everything Unused leaving behind imports, including in Java files, that pointed at a class or dead island it had just deleted, which could break compilation.
+
+### Fixes
+- Fixed Remove Everything Unused leaving a Java import pointing at a class it had just deleted. Removing LiveListViewScrollingEvent left LiveDetailFragment.java with import ...LiveListViewScrollingEvent still in place, and javac failed with cannot find symbol, because the workspace wide sweep only reads imports in Kotlin. The command now clears these imports for every removed symbol, the way the single symbol quick fix already did.
+- Extended the same cleanup to dead island removal, so imports left behind by a removed group of mutually referencing declarations are cleared too instead of staying orphaned in the file.
+
 ## 1.42.334
 
 This release fixes dead code removal leaving two blank lines in a row when the removed lines came from separate cuts next to each other.

@@ -72,6 +72,16 @@ describe('la demande de silence d une entree ne deborde pas sur sa voisine de li
     expect(signalees(src)).toEqual(['MORT']);
   });
 
+  it('l annotation d un parametre du constructeur de l enum ne fait pas taire la premiere entree', () => {
+    const src = 'package com.x\n\nenum class E(@Suppress("unused") val code: Int) { MORT(1), VIVANT(2) }\n';
+    expect(signalees(src)).toEqual(['MORT']);
+  });
+
+  it('temoin : meme enum sans annotation', () => {
+    const src = 'package com.x\n\nenum class E(val code: Int) { MORT(1), VIVANT(2) }\n';
+    expect(signalees(src)).toEqual(['MORT']);
+  });
+
   it('Java, sur une ligne : meme regle', () => {
     const java = (src: string) =>
       (findUnusedEnumEntries({ sources: [f('/w/app/src/main/java/com/x/E.java', src), APPEL, GRADLE], testSourceSets: ['/src/test/'] } as any) as any[])

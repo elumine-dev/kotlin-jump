@@ -175,17 +175,22 @@ export function collectEnums(
     // asked: `@Suppress("unused")` on the enum or on the entry itself left the
     // entry reported, and Remove Everything Unused deleted it. Arguments are
     // read on the raw text, the sanitizer blanks strings.
-    const silenceAt = (sym: RawSymbol, before?: RawSymbol): boolean => {
-      // From the end of the declaration that shares the line, not from the
-      // line start: on `enum class E { A, @Suppress("unused") B, C }` the
-      // annotation of B fell in the window of C, and C was never reported.
-      const slo = before && before.line === sym.line
-        ? lineStarts[before.line] + before.character + before.name.length
-        : lineStarts[sym.line];
+    const silenceAt = (sym: RawSymbol, from = lineStarts[sym.line]): boolean => {
       const shi = lineStarts[sym.line] + sym.character;
-      return annotations.some(a => a.target >= slo && a.target <= shi
+      return annotations.some(a => a.target >= from && a.target <= shi
         && (a.name === 'Suppress' || a.name === 'SuppressWarnings') && a.argStart >= 0
         && suppressesDiagnostic(src.text.slice(a.argStart, a.argEnd), UNUSED_DECLARATION));
+    };
+    // Where the annotations of an entry may start: not before what shares its
+    // line. On `enum class E { A, @Suppress("unused") B, C }` the annotation of
+    // B fell in the window of C, and C was never reported. For the first entry
+    // that is the brace opening the body: `enum class E(@Suppress("unused")
+    // val code: Int) { A(1) }` silenced A with its constructor's annotation.
+    const entryWindowStart = (entries: readonly RawSymbol[], k: number): number => {
+      const entry = entries[k];
+      const previous = entries[k - 1];
+      if (previous && previous.line === entry.line) return lineStarts[previous.line] + previous.character + previous.name.length;
+      return k === 0 ? clean.lastIndexOf('{', lineStarts[entry.line] + entry.character) + 1 : lineStarts[entry.line];
     };
 
     for (const [enumSym, entries] of byEnum) {
@@ -212,7 +217,7 @@ export function collectEnums(
         entries,
         rejection: silenceAt(enumSym) ? 'F12:suppress-unused'
           : foreign ? `E3:@${foreign}` : annotatedEntry ? 'E5:annotated-entry' : null,
-        silenced: new Set(entries.filter((entry, k) => silenceAt(entry, entries[k - 1]))),
+        silenced: new Set(entries.filter((entry, k) => silenceAt(entry, entryWindowStart(entries, k)))),
         isTest: isTestSourceSet(src.path, testSourceSets),
       });
     }

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.42.339
+
+This release fixes the message shown after Remove Test Only Code, which left out tests and imports it had actually removed.
+
+### Fixes
+- Fixed Remove Test Only Code reporting "0 tests" when the tests went with a test file deleted whole: only tests cut one by one were counted.
+- Fixed the same message leaving out the import lines the removal takes, in test files and in main files: they were applied, but only imports orphaned by the cascade were announced.
+
 ## 1.42.338
 
 Fixes two gaps in dead code detection where @SuppressWarnings("all") and @SuppressWarnings("UnusedDeclaration") failed to protect a declaration, so it could still be flagged and removed as unused.

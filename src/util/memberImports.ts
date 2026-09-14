@@ -5,9 +5,10 @@
  * and removing the member left that line behind: javac stops on it. The
  * container is part of the match, not a nicety: an enum entry resolved as a
  * homonym goes while its name is still written for another enum, whose import
- * must stay. The companion of a Kotlin container is dropped, since Java
- * imports its constants through the class; a Kotlin import written through
- * `Companion` is the sweep's.
+ * must stay. The companion segment is dropped on both sides: Java imports a
+ * companion constant through its class, Kotlin writes `Cles.Companion.MORTE`.
+ * Leaving the Kotlin form to the sweep held for Remove Everything Unused only;
+ * Remove Test Only Code has no sweep, and the import stayed behind.
  */
 export interface MemberImport {
   path: string;
@@ -34,7 +35,7 @@ export function findMemberImports(
   for (const src of sources) {
     if (!/\.(kt|java)$/.test(src.path) || !src.text.includes('import')) continue;
     for (const m of src.text.matchAll(IMPORT_RE)) {
-      const segments = m[1].split('.');
+      const segments = m[1].split('.').filter(x => x !== 'Companion');
       const key = segments.slice(-2).join('.');
       if (segments.length < 2 || !keys.has(key)) continue;
       const start = m.index!;

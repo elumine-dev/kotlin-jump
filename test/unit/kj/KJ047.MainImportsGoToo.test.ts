@@ -107,4 +107,21 @@ describe('KJ-047 les imports principaux partent avec la declaration', () => {
       expect(imports.join(''), label).toContain(label);
     }
   });
+
+  it('constante de compagnon : l import Kotlin du code principal par Companion est dans le plan', async () => {
+    // Cette commande n a pas de balayage Kotlin pour rattraper l import.
+    config();
+    const sources = [
+      f(`${K}/com/x/outil/Cles.kt`, 'package com.x.outil\n\nclass Cles {\n    companion object {\n        const val MORTE = "m"\n        const val VIVANTE = "v"\n    }\n}\n'),
+      f(`${T}/com/x/outil/ClesTest.kt`, 'package com.x.outil\n\nclass ClesTest {\n    @Test\n    fun morte() { check(Cles.MORTE == "m") }\n}\n'),
+      f(`${K}/com/x/ui/Ecran.kt`, 'package com.x.ui\n\nimport com.x.outil.Cles\nimport com.x.outil.Cles.Companion.MORTE\n\nclass Ecran {\n    fun v() = Cles.VIVANTE\n}\n'),
+      f(`${K}/com/x/Main.kt`, 'package com.x\n\nimport com.x.ui.Ecran\n\nfun main() { println(Ecran().v()) }\n'),
+    ];
+    const scan = await scanTestOnly(corpus(sources));
+    const groupe = scan!.groups.find(g => g.group.label.endsWith('MORTE'));
+    expect(groupe, 'MORTE est proposee').toBeDefined();
+    const ecran = sources[2];
+    const imports = groupe!.plan.cuts.filter(c => c.path === ecran.path && c.kind === 'import').map(c => ecran.text.slice(c.start, c.end));
+    expect(imports.join('')).toContain('Cles.Companion.MORTE');
+  });
 });

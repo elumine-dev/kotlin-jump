@@ -1,32 +1,21 @@
 {
-  "version": "1.42.326",
+  "version": "1.42.327",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Anonymous companion suppression, fixed",
-  "summary": "Fixes a gap where @Suppress(\"unused\") on an anonymous companion object was ignored and its members got deleted anyway.",
+  "tagline": "Suppressed declarations, safe from removal",
+  "summary": "Fixes dead code removal deleting classes that held a declaration explicitly marked to keep.",
   "highlights": [
     {
-      "title": "Companion Object Suppress Fix",
+      "title": "Suppressed Declarations Preserved",
       "kind": "fix",
-      "description": "A @Suppress(\"unused\") annotation written on an anonymous companion object is now respected, so Remove Everything Unused no longer deletes its members."
-    },
-    {
-      "title": "Release Notes Script Refined",
-      "kind": "note",
-      "description": "The internal script that drafts these release notes gained more test coverage, aimed at keeping future notes accurate."
+      "description": "Dead code removal no longer deletes a class, or a pair of classes that only called each other, when one of them holds a member marked to be kept."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Stops deleting members of an anonymous companion object marked @Suppress(\"unused\"): the 1.42.325 fix checked the member and its enclosing declarations for the suppress request, but an anonymous companion object is never emitted as a symbol, so it was never part of that chain and its members were still removed by Remove Everything Unused. A named companion object was already covered, which is why the gap went unnoticed."
-      ]
-    },
-    {
-      "heading": "Notes",
-      "bullets": [
-        "Ships no other changes to extension behavior: every command and setting works exactly as it did in 1.42.325.",
-        "Release notes no longer show a stray backslash in front of quotes. The 1.42.325 summary displayed one around \"unused\"; the drafting step now removes them and the release check refuses any that remain."
+        "Fixed dead island removal deleting a class member marked `@Suppress(\"unused\")`, or an equivalent detekt suppression for unused private declarations, along with its whole class: the class was still treated as removable because the marker's protection did not reach past the member into the group of classes referencing it, so two classes that only called each other were removed together, taking the member the author asked to keep.",
+        "Extended that same protection to private members, which the unused member detector does not track on its own, and to anonymous companion objects, which have no symbol of their own to carry the protection: the class that contains them is now kept when a suppress request is present, while the rest of the group, which nothing asked to keep, is still removed."
       ]
     }
   ],

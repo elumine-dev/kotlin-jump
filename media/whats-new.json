@@ -1,21 +1,20 @@
 {
-  "version": "1.42.339",
+  "version": "1.42.340",
   "title": "What's New in Kotlin Jump",
-  "tagline": "A report that matches the edit",
-  "summary": "This release fixes the message shown after Remove Test Only Code, which left out tests and imports it had actually removed.",
+  "tagline": "Java static imports go too",
+  "summary": "This release fixes Remove Everything Unused leaving a Java static import behind after deleting the class member or enum entry it named, which stopped javac with \"cannot find symbol\".",
   "highlights": [
     {
-      "title": "Removal report counts everything",
+      "title": "Static imports removed with their member",
       "kind": "fix",
-      "description": "The message shown once Remove Test Only Code has run now counts the tests of test files deleted whole and every import it removed, instead of reporting 0 tests for a removal that took one."
+      "description": "When Remove Everything Unused deletes a constant, a method or an enum entry, a Java file that still imported it statically loses that import too, so the build no longer fails on it."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Fixed Remove Test Only Code reporting \"0 tests\" when the tests went with a test file deleted whole: only tests cut one by one were counted.",
-        "Fixed the same message leaving out the import lines the removal takes, in test files and in main files: they were applied, but only imports orphaned by the cascade were announced."
+        "Fixed Remove Everything Unused leaving `import static p.Cles.MORTE;` in a Java file after deleting the unused constant MORTE, and `import static p.Mode.MORT;` after deleting the enum entry MORT. javac stopped on the import. Version 1.42.335 already did this for classes; members and enum entries now follow, including the constants of a Kotlin companion object that Java imports through their class. Kotlin files were already covered."
       ]
     }
   ],

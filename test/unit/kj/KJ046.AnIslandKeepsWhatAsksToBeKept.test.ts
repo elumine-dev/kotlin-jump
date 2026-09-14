@@ -91,3 +91,47 @@ describe('l ilot garde ce qui demande a rester', () => {
     expect(r).not.toContain('class Autre');
   });
 });
+
+/**
+ * Une demande de silence sur une LOCALE ou un PARAMETRE ne garde pas l ilot.
+ *
+ * La regle de 1.42.327 comptait toute demande contenue dans l etendue d une
+ * declaration. `@Suppress("unused") val tmp` dans un corps de fonction dit que
+ * cette locale est inutilisee, et `fun b(@Suppress("unused") x: Int)` le dit du
+ * parametre : rien sur la fonction qui les porte. Un ilot mort qui en
+ * contenait une n etait plus jamais retire, alors que 1.42.326 le retirait.
+ */
+describe('une locale ou un parametre sous silence ne garde pas l ilot', () => {
+  const partent = (src: string) => {
+    const r = reste(src);
+    return !r.includes('fun a()') && !r.includes('class Ile');
+  };
+
+  it('haut niveau, locale sous silence', () => {
+    expect(partent('package com.x\n\nfun a(): Int = b()\nfun b(): Int {\n    @Suppress("unused") val tmp = 1\n    return a()\n}\nfun vivante() = 3\n')).toBe(true);
+  });
+
+  it('haut niveau, parametre sous silence', () => {
+    expect(partent('package com.x\n\nfun a(): Int = b(0)\nfun b(@Suppress("unused") x: Int): Int = a()\nfun vivante() = 3\n')).toBe(true);
+  });
+
+  it('dans un membre de classe, locale sous silence', () => {
+    expect(partent('package com.x\n\nclass Ile {\n    fun a(): Int {\n        @Suppress("unused") val tmp = 1\n        return Autre().b()\n    }\n}\nclass Autre {\n    fun b(): Int = Ile().a()\n}\nfun vivante() = 3\n')).toBe(true);
+  });
+
+  it('dans l initialiseur d une propriete', () => {
+    expect(partent('package com.x\n\nclass Ile {\n    val a: Int = run {\n        @Suppress("unused") val tmp = 1\n        Autre().b()\n    }\n}\nclass Autre {\n    fun b(): Int = Ile().a\n}\nfun vivante() = 3\n')).toBe(true);
+  });
+
+  it('le membre de classe sous silence, lui, garde toujours sa classe', () => {
+    const r = reste(deuxClasses(A + '    @Suppress("unused")\n    fun garde() = 1\n'));
+    expect(r).toContain('fun garde()');
+  });
+
+  it('methode sans corps : son parametre sous silence ne garde pas l interface', () => {
+    // Une methode d interface n a pas de corps pour ancrer son etendue : la
+    // signature seule la delimite, et c est la qu est le parametre.
+    const src = 'package com.x\n\ninterface Ile {\n    fun a(@Suppress("unused") x: Int): Int\n}\nclass Autre {\n    fun b(i: Ile): Int = i.a(1)\n}\nfun vivante() = 3\n';
+    expect(reste(src)).not.toContain('interface Ile');
+  });
+});

@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.328
+
+This release fixes three cases where the dead code detectors hid real findings: a suppress annotation on a local variable that shielded its whole enclosing declaration, and declarations or enum entries sharing a name with another one that was still in use.
+
+### Fixes
+- Fixed dead code removal keeping an unused class or function alive when only a local variable or a function parameter inside it carried @Suppress("unused"). That annotation says the variable itself is unused, not the declaration holding it.
+- Fixed the unused symbols scanner missing classes, functions and properties whose name is declared in several packages. Each copy is now traced by package: a file sees it only from the same package, through an import of that name or of the whole package, or when it spells the package out. A mention in a string, a layout or a manifest still keeps every copy alive.
+- Fixed the unused enum entries scanner missing an entry whose name is shared by entries of other enums. A mention now counts for an enum when it is qualified by that enum or imported from it. A bare name in Java, where a switch case never qualifies, still keeps every entry of that name alive.
+- Fixed a live enum entry reported as unused when an enum declared in test sources had an entry of the same name.
+
+### Packaging and docs
+- Aligned the length limits used to draft these release notes with the ones that validate them, so a drafted note that is too long no longer stops a release after the changelog, README and package files were already rewritten.
+
 ## 1.42.327
 
 Fixes dead code removal deleting classes that held a declaration explicitly marked to keep.

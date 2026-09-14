@@ -67,16 +67,16 @@ describe.skipIf(!mod)('F1 à F4 — visibilité, tests, homonymes, KMP', () => {
     expect(find([kt(`${TEST}/GhostTest.kt`, 'package com.x\n\nclass Ghost\n')])).toEqual([]);
   });
 
-  it('F3 : le même nom déclaré deux fois au top level neutralise les deux', () => {
-    // Il faut une mention pour qu'il y ait quelque chose à attribuer. Sans
-    // aucune, KJ-036 relâche la garde et signale les deux, ce qui est le
-    // sujet de `KJ036.DuplicateNameNoMention`.
+  it('F3 : deux homonymes, la mention importée garde le sien et l autre sort', () => {
+    // Longtemps la mention neutralisait les deux : rien ne disait laquelle elle
+    // nommait. L import le dit. Le sujet complet est dans
+    // `KJ032.HomonymsResolvedByPackage`.
     const sources = [
       kt(`${MAIN}/a/Dup.kt`, 'package com.x.a\n\nclass Dup\n'),
       kt(`${MAIN}/b/Dup.kt`, 'package com.x.b\n\nclass Dup\n'),
       kt(`${MAIN}/Use.kt`, 'package com.x\n\nimport com.x.a.Dup\n\nval held: Dup? = null\n'),
     ];
-    expect(find(sources).map(f => f.name)).not.toContain('Dup');
+    expect(find(sources).filter(f => f.name === 'Dup').map(f => f.path)).toEqual([`${MAIN}/b/Dup.kt`]);
   });
 
   it('F3 : deux surcharges mortes dans un même fichier sont signalées', () => {

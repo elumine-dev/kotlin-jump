@@ -134,6 +134,10 @@ function annotationsAvantChaqueEntree(texte: string, chemin: string): Map<string
   return out;
 }
 
+function virgules(t: string): number {
+  return (sanitizeForUsageScan(t).match(/,\s*,|\{\s*,/g) ?? []).length;
+}
+
 function main(): void {
   const racine = process.argv[2];
   const sources: { path: string; text: string }[] = [];
@@ -215,7 +219,10 @@ function main(): void {
         compte.orpheline++;
         if (fautes.length < 12) fautes.push(`ORPHELINE ${rel} ${e.name} laisse ${JSON.stringify(orpheline)}`);
       }
-      if (/,\s*,/.test(sanitizeForUsageScan(reste)) || /\{\s*,/.test(sanitizeForUsageScan(reste))) {
+      // Compared with the file before the cut: blanking strings turns
+      // `listOf("a",\n "b",` into `, ,` already, and a file holding such a list
+      // was reported for a cut that left its enum well formed.
+      if (virgules(reste) > virgules(texte)) {
         compte.virgule++;
         if (fautes.length < 12) fautes.push(`VIRGULE ${rel} ${e.name}`);
       }

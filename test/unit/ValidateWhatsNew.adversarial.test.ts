@@ -49,6 +49,7 @@ function makeFixtureRepo(data: unknown, opts: { version?: string; planted?: stri
   mkdirSync(path.join(tmp, 'assets', 'demos'),     { recursive: true });
 
   copyFileSync(VALIDATOR, path.join(tmp, '.github', 'scripts', 'validate-whats-new.mjs'));
+  copyFileSync(path.join(path.dirname(VALIDATOR), 'whats-new-limits.mjs'), path.join(tmp, '.github', 'scripts', 'whats-new-limits.mjs'));
 
   // Plant package.json with the given version (or a default 1.16.0).
   writeFileSync(

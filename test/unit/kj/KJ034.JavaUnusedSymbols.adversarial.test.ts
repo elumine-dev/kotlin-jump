@@ -103,15 +103,15 @@ describe('les gardes héritées valent aussi pour Java', () => {
     expect(flagged([ghost('public class Ghost extends Fragment {\n}')], 'Ghost')).toBe(false);
   });
 
-  it('un nom déclaré des deux côtés de la frontière est neutralisé', () => {
-    // Une mention quelque part, et rien ne dit laquelle des deux elle nomme.
-    // Sans mention du tout, KJ-036 signale les deux (aucune n'est référencée).
+  it('un nom déclaré des deux côtés de la frontière : le paquet tranche', () => {
+    // `Use.kt` est dans com.y et ne nomme que la Ghost de son paquet. La classe
+    // Java de com.x, que rien ne voit, sort ; la Kotlin utilisée, jamais.
     const sources = [
       ghost(),
       j('/w/app/src/main/kotlin/com/y/Ghost.kt', 'package com.y\n\nclass Ghost\n'),
       j('/w/app/src/main/kotlin/com/y/Use.kt', 'package com.y\n\nval held: Ghost? = null\n'),
     ];
-    expect(find(sources).map((f: any) => f.name)).not.toContain('Ghost');
+    expect(find(sources).filter((f: any) => f.name === 'Ghost').map((f: any) => f.path)).toEqual([`${MAIN}/Ghost.java`]);
   });
 
   it('une classe nommée dans le manifest est vivante', () => {

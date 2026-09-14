@@ -1,14 +1,12 @@
 import * as vscode from 'vscode';
-import { DEFAULT_TEST_SEGMENTS, isTestSourceSet } from '../util/testPaths';
+import { DEFAULT_TEST_SEGMENTS } from '../util/testPaths';
 import { Corpus, ResourceCorpus } from '../indexer/ResourceCorpus';
 import { corpusUri } from '../util/corpusUri';
-import { parse } from '../indexer/KotlinParser';
-import { parseJava } from '../indexer/JavaParser';
 import { findUnusedSymbols } from '../providers/unusedSymbols';
 import { findUnusedMembers } from '../providers/unusedMembers';
 import { findDeadIslands } from '../providers/deadIslands';
 import { findUnusedEnumEntries } from '../providers/unusedEnumEntries';
-import { isOfferable, planTestCoRemoval, TestCoRemovalPlan } from '../providers/testCoRemoval';
+import { isOfferable, liveOutside, planTestCoRemoval, productionDeclarations, TestCoRemovalPlan } from '../providers/testCoRemoval';
 import { addCascadePlan, planCascade } from '../providers/applyCascade';
 import { plural } from '../util/plural';
 import { intersectionParCle } from '../util/intersectionParCle';
@@ -66,17 +64,6 @@ function ajouteLesImports(
   }
 }
 
-/** Everything production declares at top level, for the "covers something else" guard. */
-function liveTopLevelNames(sources: readonly { path: string; text: string }[], segs: readonly string[]): Set<string> {
-  const out = new Set<string>();
-  for (const s of sources) {
-    if (!/\.(kt|java)$/.test(s.path)) continue;
-    if (isTestSourceSet(s.path, segs)) continue;
-    const parsed = s.path.endsWith('.java') ? parseJava(s.path, s.text) : parse(s.path, s.text);
-    for (const sym of parsed.symbols) if (sym.depth === 0) out.add(sym.name);
-  }
-  return out;
-}
 
 export interface TestOnlyScan {
   groups: { group: Group; plan: TestCoRemovalPlan }[];
@@ -143,7 +130,12 @@ export async function scanTestOnly(
     }
   }
 
-  const live = liveTopLevelNames(data.sources, segs);
+  const declarations = productionDeclarations(data.sources, segs);
+  // Everything one label removes: an island pushes one group per member.
+  const extentsByLabel = new Map<string, { path: string; start: number; end: number }[]>();
+  for (const g of groups) {
+    (extentsByLabel.get(g.label) ?? extentsByLabel.set(g.label, []).get(g.label)!).push({ path: g.path, start: g.removeStart, end: g.removeEnd });
+  }
   const result: TestOnlyScan = {
     groups: [], textByPath: new Map(data.sources.map(s => [s.path, s.text])),
     offered: 0, withheld: 0, testFiles: new Set(), testFunctions: 0,
@@ -153,7 +145,7 @@ export async function scanTestOnly(
   for (const group of groups) {
     let plan = planByLabel.get(group.label);
     if (plan === undefined) {
-      plan = planTestCoRemoval(group.names, data.sources, segs, live, group.allowed);
+      plan = planTestCoRemoval(group.names, data.sources, segs, liveOutside(declarations, extentsByLabel.get(group.label) ?? []), group.allowed);
       if (group.withholdReason) plan.unresolved.push({ path: group.path, line: 0, reason: group.withholdReason });
       planByLabel.set(group.label, plan);
       if (isOfferable(plan)) result.offered++; else result.withheld++;

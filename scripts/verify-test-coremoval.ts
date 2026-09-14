@@ -24,8 +24,7 @@ import { coupeBienFormee } from './invariants';
 import { findUnusedMembers } from '../src/providers/unusedMembers';
 import { findDeadIslands } from '../src/providers/deadIslands';
 import { findUnusedEnumEntries } from '../src/providers/unusedEnumEntries';
-import { planTestCoRemoval, isOfferable, testFunctionsOf } from '../src/providers/testCoRemoval';
-import { isTestSourceSet } from '../src/util/testPaths';
+import { planTestCoRemoval, isOfferable, testFunctionsOf, productionDeclarations, liveOutside } from '../src/providers/testCoRemoval';
 import { parse } from '../src/indexer/KotlinParser';
 import { parseJava } from '../src/indexer/JavaParser';
 import { sanitizeForUsageScan } from '../src/util/kotlinScan';
@@ -78,17 +77,15 @@ function main(): void {
   const iles = findDeadIslands({ ...base, maxIslandSize: 8 } as any) as any[];
   const entrees = findUnusedEnumEntries(base as any) as any[];
 
-  const groupes: { label: string; names: string[]; allowed: string[] }[] = [];
-  for (const s of symbols) if (s.verdict === 'testOnly' && s.removeStart >= 0) groupes.push({ label: s.name, names: [s.name], allowed: [] });
-  for (const m of membres) if (m.verdict === 'testOnly' && m.removeStart >= 0) groupes.push({ label: `${m.container}.${m.name}`, names: [m.name], allowed: (m.container ?? '').split('.') });
-  for (const e of entrees) if (e.verdict === 'testOnly' && e.removeStart >= 0) groupes.push({ label: `${e.enumName}.${e.name}`, names: [e.name], allowed: [e.enumName] });
-  for (const i of iles) if (i.verdict === 'testOnly' && i.fixable) groupes.push({ label: i.members.map((m: any) => m.name).join(' + '), names: i.members.map((m: any) => m.name), allowed: [] });
+  type Etendue = { path: string; start: number; end: number };
+  const groupes: { label: string; names: string[]; allowed: string[]; etendues: Etendue[] }[] = [];
+  for (const s of symbols) if (s.verdict === 'testOnly' && s.removeStart >= 0) groupes.push({ label: s.name, names: [s.name], allowed: [], etendues: [{ path: s.path, start: s.removeStart, end: s.removeEnd }] });
+  for (const m of membres) if (m.verdict === 'testOnly' && m.removeStart >= 0) groupes.push({ label: `${m.container}.${m.name}`, names: [m.name], allowed: (m.container ?? '').split('.'), etendues: [{ path: m.path, start: m.removeStart, end: m.removeEnd }] });
+  for (const e of entrees) if (e.verdict === 'testOnly' && e.removeStart >= 0) groupes.push({ label: `${e.enumName}.${e.name}`, names: [e.name], allowed: [e.enumName], etendues: [{ path: e.path, start: e.removeStart, end: e.removeEnd }] });
+  for (const i of iles) if (i.verdict === 'testOnly' && i.fixable) groupes.push({ label: i.members.map((m: any) => m.name).join(' + '), names: i.members.map((m: any) => m.name), allowed: [], etendues: i.members.map((m: any) => ({ path: m.path, start: m.removeStart, end: m.removeEnd })) });
 
-  const live = new Set<string>();
-  for (const s of sources) {
-    if (!/\.(kt|java)$/.test(s.path) || isTestSourceSet(s.path, SEGS)) continue;
-    for (const n of declaresDe(s.path, s.text)) live.add(n);
-  }
+  // The command's own rule, not a copy of it: a copy drifts in silence.
+  const declarations = productionDeclarations(sources, SEGS);
 
   const compte = { ligne: 0, nom: 0, bornes: 0, chevauchement: 0, solde: 0, coquille: 0, dependance: 0 };
   const fautes: string[] = [];
@@ -98,7 +95,7 @@ function main(): void {
   for (const g of groupes) {
     if (vus.has(g.label)) continue;
     vus.add(g.label);
-    const plan = planTestCoRemoval(g.names, sources, SEGS, live, g.allowed);
+    const plan = planTestCoRemoval(g.names, sources, SEGS, liveOutside(declarations, g.etendues), g.allowed);
     if (!isOfferable(plan)) continue;
     plans++;
     fichiers += plan.files.length;

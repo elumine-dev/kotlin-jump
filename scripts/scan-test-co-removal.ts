@@ -10,10 +10,7 @@ import { findUnusedSymbols } from '../src/providers/unusedSymbols';
 import { findUnusedMembers } from '../src/providers/unusedMembers';
 import { findDeadIslands } from '../src/providers/deadIslands';
 import { findUnusedEnumEntries } from '../src/providers/unusedEnumEntries';
-import { planTestCoRemoval, isOfferable } from '../src/providers/testCoRemoval';
-import { parse } from '../src/indexer/KotlinParser';
-import { parseJava } from '../src/indexer/JavaParser';
-import { isTestSourceSet } from '../src/util/testPaths';
+import { planTestCoRemoval, isOfferable, productionDeclarations, liveOutside } from '../src/providers/testCoRemoval';
 
 const SOURCE_RE = /\.(kt|kts|java|xml|gradle|pro|properties|toml)$/;
 const EXCLUDED = new Set(['build', '.gradle', 'generated', '.idea', '.git', 'node_modules']);
@@ -45,23 +42,16 @@ function main(): void {
   const islands = findDeadIslands({ sources, testSourceSets: DEFAULT_TEST_SEGMENTS, includeTestOnly: true, maxIslandSize: 8 });
   const enums = findUnusedEnumEntries({ sources, testSourceSets: DEFAULT_TEST_SEGMENTS, includeTestOnly: true });
 
-  // Tout ce que la production declare : un test qui en exerce un n est pas a nous.
-  const liveNames = new Set<string>();
-  for (const s of sources) {
-    if (!/\.(kt|java)$/.test(s.path)) continue;
-    if (isTestSourceSet(s.path, DEFAULT_TEST_SEGMENTS)) continue;
-    const parsed = s.path.endsWith('.java') ? parseJava(s.path, s.text) : parse(s.path, s.text);
-    // Premier niveau seulement : les locales et les parametres partagent des
-    // noms communs, et les compter disqualifiait presque tous les tests.
-    for (const sym of parsed.symbols) if (sym.depth === 0) liveNames.add(sym.name);
-  }
-  console.log(`noms vivants         : ${liveNames.size}`);
+  // La regle de la commande elle meme : premier niveau et membres, hors de ce que le groupe retire.
+  const declarations = productionDeclarations(sources, DEFAULT_TEST_SEGMENTS);
+  console.log(`noms declares        : ${declarations.size}`);
 
-  const groupes: { famille: string; libelle: string; noms: string[]; allowed?: string[] }[] = [];
-  for (const s of symbols) if (s.verdict === 'testOnly') groupes.push({ famille: 'symbole', libelle: s.name, noms: [s.name] });
-  for (const m of members) if (m.verdict === 'testOnly') groupes.push({ famille: 'membre', libelle: `${m.container}.${m.name}`, noms: [m.name], allowed: (m.container ?? '').split('.') });
-  for (const i of islands) if (i.verdict === 'testOnly') groupes.push({ famille: 'ilot', libelle: i.members.map(m => m.name).join('+'), noms: i.members.map(m => m.name) });
-  for (const e of enums) if (e.verdict === 'testOnly') groupes.push({ famille: 'enum', libelle: `${e.enumName}.${e.name}`, noms: [e.name], allowed: [e.enumName] });
+  type Etendue = { path: string; start: number; end: number };
+  const groupes: { famille: string; libelle: string; noms: string[]; allowed?: string[]; etendues: Etendue[] }[] = [];
+  for (const s of symbols) if (s.verdict === 'testOnly') groupes.push({ famille: 'symbole', libelle: s.name, noms: [s.name], etendues: [{ path: s.path, start: s.removeStart, end: s.removeEnd }] });
+  for (const m of members) if (m.verdict === 'testOnly') groupes.push({ famille: 'membre', libelle: `${m.container}.${m.name}`, noms: [m.name], allowed: (m.container ?? '').split('.'), etendues: [{ path: m.path, start: m.removeStart, end: m.removeEnd }] });
+  for (const i of islands) if (i.verdict === 'testOnly') groupes.push({ famille: 'ilot', libelle: i.members.map(m => m.name).join('+'), noms: i.members.map(m => m.name), etendues: i.members.map(m => ({ path: m.path, start: m.removeStart, end: m.removeEnd })) });
+  for (const e of enums) if (e.verdict === 'testOnly') groupes.push({ famille: 'enum', libelle: `${e.enumName}.${e.name}`, noms: [e.name], allowed: [e.enumName], etendues: [{ path: e.path, start: e.removeStart, end: e.removeEnd }] });
 
   let offrables = 0, fichiers = 0, fonctions = 0, retenus = 0;
   const parFamille = new Map<string, { total: number; ok: number }>();
@@ -70,7 +60,7 @@ function main(): void {
   const raisons = new Map<string, number>();
   const detail: string[] = [];
   for (const g of groupes) {
-    const plan = planTestCoRemoval(g.noms, sources, DEFAULT_TEST_SEGMENTS, liveNames, g.allowed ?? []);
+    const plan = planTestCoRemoval(g.noms, sources, DEFAULT_TEST_SEGMENTS, liveOutside(declarations, g.etendues), g.allowed ?? []);
     const stat = parFamille.get(g.famille) ?? { total: 0, ok: 0 };
     stat.total++;
     if (isOfferable(plan)) {

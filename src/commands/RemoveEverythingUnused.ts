@@ -150,17 +150,31 @@ function posAt(starts: readonly number[], offset: number): vscode.Position {
  *
  * Exported for the witness.
  */
-export function sansTrouDeLignesVides(texte: string, coupes: readonly Coupe[]): Coupe[] {
+export function sansTrouDeLignesVides(
+  texte: string,
+  coupes: readonly Coupe[],
+  /** Whole lines another plan removes from this file, the cascade's imports. */
+  autres: readonly { start: number; end: number }[] = [],
+): Coupe[] {
   const triees = [...coupes].sort((a, b) => a.start - b.start);
   const suivante = (i: number): number => triees[i + 1]?.start ?? texte.length;
   const ligneVide = (debut: number, fin: number): boolean => texte.slice(debut, fin).trim() === '';
+  const entieres = (d: number, f: number): boolean =>
+    d < f && (d === 0 || texte[d - 1] === '\n') && (f === texte.length || texte[f - 1] === '\n');
+  // A hole is a RUN of removed lines. Judged cut by cut, two dead declarations
+  // written one under the other each had a non blank neighbour, and the file
+  // kept two blank lines in a row; so did an import block split between the
+  // sweep and the cascade.
+  const retirees: { start: number; end: number }[] = [
+    ...triees.filter(c => c.texte === '' && entieres(c.start, c.end)),
+    ...autres.filter(a => entieres(a.start, a.end)),
+  ];
   return triees.map((c, i) => {
-    if (c.texte !== '') return c;
-    const debutDeLigne = c.start === 0 || texte[c.start - 1] === '\n';
-    const finDeLigne = c.end === texte.length || texte[c.end - 1] === '\n';
-    if (!debutDeLigne || !finDeLigne) return c;
-    // La ligne juste avant la coupe.
-    const avantFin = c.start - 1;
+    if (c.texte !== '' || !entieres(c.start, c.end)) return c;
+    let debut = c.start;
+    for (let r = retirees.find(x => x.end === debut); r; r = retirees.find(x => x.end === debut)) debut = r.start;
+    // La ligne juste avant le trou.
+    const avantFin = debut - 1;
     if (avantFin < 0) return c;
     const avantDebut = texte.lastIndexOf('\n', avantFin - 1) + 1;
     if (!ligneVide(avantDebut, avantFin)) return c;
@@ -176,13 +190,14 @@ export function plagesDuFichier(
   path: string,
   mesure: string,
   coupes: readonly Coupe[],
+  autres: readonly { start: number; end: number }[] = [],
 ): { start: vscode.Position; end: vscode.Position; texte: string; quoi: string }[] | undefined {
   if (stillTheMeasuredText(path, mesure) === undefined) return undefined;
   const starts = debutsDeLigne(mesure);
   // `famille` voyage avec la plage : le temoin ne peut pas exiger des lignes
   // entieres d'une coupe d'entree d'enum, qui est partielle par contrat, et
   // sans ce champ il ne peut pas faire la difference.
-  return sansTrouDeLignesVides(mesure, coupes).map(c => ({
+  return sansTrouDeLignesVides(mesure, coupes, autres).map(c => ({
     start: posAt(starts, c.start), end: posAt(starts, c.end), texte: c.texte, quoi: c.quoi,
     famille: c.famille,
   }));
@@ -339,7 +354,7 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
       const edit = new vscode.WorkspaceEdit();
       for (const [p, l] of retenu) {
         if (cascade.deleteFiles.has(p)) continue;
-        const plages = plagesDuFichier(p, textes.get(p)!, l);
+        const plages = plagesDuFichier(p, textes.get(p)!, l, cascade.imports.get(p));
         if (plages === undefined) continue;
         for (const r of plages) {
           edit.replace(corpusUri(p), new vscode.Range(r.start, r.end), r.texte,

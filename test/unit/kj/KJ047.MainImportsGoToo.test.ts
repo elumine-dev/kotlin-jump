@@ -88,4 +88,23 @@ describe('KJ-047 les imports principaux partent avec la declaration', () => {
     expect(groupe, 'l ilot est propose').toBeDefined();
     expect(groupe!.plan.cuts.some(c => c.path === `${K}/com/x/ui/Ecran.kt` && c.kind === 'import')).toBe(true);
   });
+
+  it('membre et entree d enum : l import statique Java du code principal est dans le plan', async () => {
+    config();
+    const sources = [
+      f(`${K}/com/x/outil/Cles.java`, 'package com.x.outil;\n\npublic class Cles {\n    public static final String MORTE = "m";\n    public static final String VIVANTE = "v";\n}\n'),
+      f(`${K}/com/x/outil/Mode.java`, 'package com.x.outil;\n\npublic enum Mode {\n    VIVANT,\n    MORT,\n}\n'),
+      f(`${T}/com/x/outil/ClesTest.kt`, 'package com.x.outil\n\nclass ClesTest {\n    @Test\n    fun morte() { check(Cles.MORTE == "m") }\n\n    @Test\n    fun mort() { check(Mode.MORT != null) }\n}\n'),
+      f(`${K}/com/x/ui/Ecran.java`, 'package com.x.ui;\n\nimport static com.x.outil.Cles.MORTE;\nimport static com.x.outil.Mode.MORT;\nimport com.x.outil.Cles;\nimport com.x.outil.Mode;\n\npublic class Ecran {\n    public String v() { return Cles.VIVANTE + Mode.VIVANT; }\n}\n'),
+      f(`${K}/com/x/Main.kt`, 'package com.x\n\nimport com.x.ui.Ecran\n\nfun main() { println(Ecran().v()) }\n'),
+    ];
+    const scan = await scanTestOnly(corpus(sources));
+    const ecran = sources[3];
+    for (const label of ['Cles.MORTE', 'Mode.MORT']) {
+      const groupe = scan!.groups.find(g => g.group.label === label);
+      expect(groupe, `${label} est propose`).toBeDefined();
+      const imports = groupe!.plan.cuts.filter(c => c.path === ecran.path && c.kind === 'import').map(c => ecran.text.slice(c.start, c.end));
+      expect(imports.join(''), label).toContain(label);
+    }
+  });
 });

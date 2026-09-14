@@ -1,20 +1,20 @@
 {
-  "version": "1.42.340",
+  "version": "1.42.341",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Java static imports go too",
-  "summary": "This release fixes Remove Everything Unused leaving a Java static import behind after deleting the class member or enum entry it named, which stopped javac with \"cannot find symbol\".",
+  "tagline": "Static imports go with test only code",
+  "summary": "This release fixes Remove Test Only Code leaving a Java static import behind after removing a class member or an enum entry that only tests used.",
   "highlights": [
     {
-      "title": "Static imports removed with their member",
+      "title": "Static imports removed with tested members",
       "kind": "fix",
-      "description": "When Remove Everything Unused deletes a constant, a method or an enum entry, a Java file that still imported it statically loses that import too, so the build no longer fails on it."
+      "description": "When Remove Test Only Code removes a constant, a method or an enum entry that only tests used, a main source file that still imported it statically loses that import too, so the build keeps compiling."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Fixed Remove Everything Unused leaving `import static p.Cles.MORTE;` in a Java file after deleting the unused constant MORTE, and `import static p.Mode.MORT;` after deleting the enum entry MORT. javac stopped on the import. Version 1.42.335 already did this for classes; members and enum entries now follow, including the constants of a Kotlin companion object that Java imports through their class. Kotlin files were already covered."
+        "Fixed Remove Test Only Code leaving `import static p.Cles.MORTE;` in a main Java file after removing MORTE and its tests, and the same for an enum entry: javac stopped on the import. Remove Everything Unused already removed these imports; both commands now share one rule, which matches the import on the member's own class or enum so an entry of the same name in another enum keeps its import."
       ]
     }
   ],

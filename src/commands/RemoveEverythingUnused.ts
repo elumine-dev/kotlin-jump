@@ -9,6 +9,7 @@ import { findUnusedMembers } from '../providers/unusedMembers';
 import { findUnusedEnumEntries } from '../providers/unusedEnumEntries';
 import { findDeadIslands } from '../providers/deadIslands';
 import { sweepFile, planFileEdits } from '../providers/DeadCodeSweep';
+import { findMemberImports, memberKey } from '../util/memberImports';
 import { planCascade } from '../providers/removalCascade';
 import { addCascadePlan } from '../providers/applyCascade';
 import { stillTheMeasuredText } from '../util/measuredText';
@@ -91,27 +92,11 @@ export function collecterUnePasse(
   for (const e of entrees) if (e.verdict === 'unreferenced') { ajoute(e.path, e.removeStart, e.removeEnd, '', 'entrees', e.name); }
 
   // Same for class members and enum entries, which Java reaches through a
-  // static import: `import static p.Cles.MORTE;` stayed behind the removed
-  // constant and javac stopped on it. Matched on `Container.name`, the companion
-  // of a Kotlin container dropped since Java imports its constants through the
-  // class; a Kotlin import through `Companion` is the sweep's. Safe by
-  // construction: a removed name is written in no body, so such an import was
-  // already unused where it stands.
+  // static import (src/util/memberImports.ts).
   const membresRetires = new Set<string>();
-  const conteneurSimple = (c: string) => c.split('.').filter(x => x !== 'Companion').pop() ?? '';
-  for (const m of membres) if (m.verdict === 'unreferenced' && m.removeStart >= 0) membresRetires.add(`${conteneurSimple(m.container ?? '')}.${m.name}`);
+  for (const m of membres) if (m.verdict === 'unreferenced' && m.removeStart >= 0) membresRetires.add(memberKey(m.container ?? '', m.name));
   for (const e of entrees) if (e.verdict === 'unreferenced' && e.removeStart >= 0) membresRetires.add(`${e.enumName}.${e.name}`);
-  if (membresRetires.size > 0) {
-    for (const src of sources) {
-      if (!/\.(kt|java)$/.test(src.path) || !src.text.includes('import')) continue;
-      for (const m of src.text.matchAll(/^[ \t]*import[ \t]+(?:static[ \t]+)?([\w.]+)[ \t]*;?[ \t]*$/gm)) {
-        const segments = m[1].split('.');
-        if (segments.length < 2 || !membresRetires.has(segments.slice(-2).join('.'))) continue;
-        const nl = src.text.indexOf('\n', m.index!);
-        ajoute(src.path, m.index!, nl === -1 ? src.text.length : nl + 1, '', 'balayage', '');
-      }
-    }
-  }
+  for (const imp of findMemberImports(sources, membresRetires)) ajoute(imp.path, imp.start, imp.end, '', 'balayage', '');
   for (const i of iles) {
     if (i.verdict !== 'unreferenced' || !i.fixable) continue;
     for (const m of i.members) ajoute(m.path, m.removeStart, m.removeEnd, '', 'ilots', m.name);

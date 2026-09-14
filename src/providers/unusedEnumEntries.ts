@@ -760,5 +760,16 @@ function avecAnnotations(
 ): { removeStart: number; removeEnd: number } {
   if (extent.removeStart < 0) return extent;
   const clean = sanitizeForUsageScan(text);
-  return { ...extent, removeStart: debutAvecAnnotations(clean, lineStarts, extent.removeStart) };
+  let removeStart = debutAvecAnnotations(clean, lineStarts, extent.removeStart);
+  // Backing up to the line start takes the indentation, which is right only
+  // when nothing survives on that line. On `    NEVER_PULSE, PULSING` the
+  // neighbour was left against the margin and detekt rejected the file.
+  // A cut ending at a line start took its whole last line: nothing survives.
+  const finDeLigne = text.indexOf('\n', extent.removeEnd);
+  const survit = extent.removeEnd > 0 && text[extent.removeEnd - 1] !== '\n'
+    && text.slice(extent.removeEnd, finDeLigne === -1 ? text.length : finDeLigne).trim() !== '';
+  if (survit) {
+    while (removeStart < extent.removeStart && (text[removeStart] === ' ' || text[removeStart] === '\t')) removeStart++;
+  }
+  return { ...extent, removeStart };
 }

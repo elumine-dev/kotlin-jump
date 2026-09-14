@@ -119,7 +119,37 @@ export function cascadeAfterRemoval(
       const e = lineExtent(text, line);
       if (e) extents.push(e);
     }
-    if (extents.length > 0) cascade.imports.set(path, extents);
+    if (extents.length > 0) cascade.imports.set(path, avecUneLigneVide(text, extents, cuts));
   }
   return cascade;
+}
+
+/**
+ * A run of import lines framed by two blank lines takes one of them along.
+ *
+ * Cut line by line, a whole import block left the blank line under `package`
+ * and the one under the imports side by side: `BasePostViewModel.kt` on the
+ * reference project, and detekt rejected it (`NoConsecutiveBlankLines`). The
+ * declaration cuts have followed this rule for a long time
+ * (`sansTrouDeLignesVides`). The extent still starts on its import line; only
+ * its end grows, and never over a line a declaration cut already claims.
+ */
+function avecUneLigneVide(text: string, extents: Cut[], cuts: readonly Cut[]): Cut[] {
+  const triees = [...extents].sort((a, b) => a.start - b.start);
+  const reclamees = cuts.filter(c => c.start >= 0 && c.end >= c.start).map(c => wholeLineExtent(text, c.start, c.end));
+  const vide = (debut: number, fin: number) => text.slice(debut, fin).trim() === '';
+  for (let i = 0; i < triees.length; i++) {
+    let j = i;
+    while (j + 1 < triees.length && triees[j + 1].start === triees[j].end) j++;
+    const debut = triees[i].start;
+    const fin = triees[j].end;
+    const avantVide = debut === 0 || vide(text.lastIndexOf('\n', debut - 2) + 1, debut);
+    const finLigneApres = text.indexOf('\n', fin);
+    if (avantVide && finLigneApres !== -1 && vide(fin, finLigneApres)) {
+      const etendue = { start: fin, end: finLigneApres + 1 };
+      if (!reclamees.some(r => r.start < etendue.end && r.end > etendue.start)) triees[j] = { ...triees[j], end: etendue.end };
+    }
+    i = j;
+  }
+  return triees;
 }

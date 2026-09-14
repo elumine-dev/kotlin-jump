@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { corpusUri } from '../util/corpusUri';
+import { addCascadePlan, planCascade } from './applyCascade';
 import { DeadIsland, deleteTitleFor, messageFor } from './deadIslands';
 
 /**
@@ -27,6 +28,9 @@ interface PlacedIsland {
   island: DeadIsland;
   /** Outermost removal extents, as positions in the scanned text. */
   edits: PlacedEdit[];
+  /** The same extents as offsets, and the scanned texts they apply to, for the cascade. */
+  cuts: Map<string, { start: number; end: number }[]>;
+  texts: Map<string, string>;
 }
 
 export class DeadIslandProvider implements vscode.CodeActionProvider, vscode.Disposable {
@@ -58,6 +62,8 @@ export class DeadIslandProvider implements vscode.CodeActionProvider, vscode.Dis
         (byPath.get(m.path) ?? byPath.set(m.path, []).get(m.path)!).push({ start: m.removeStart, end: m.removeEnd });
       }
       const edits: PlacedEdit[] = [];
+      const cuts = new Map<string, { start: number; end: number }[]>();
+      const scanned = new Map<string, string>();
       for (const [p, spans] of byPath) {
         const text = texts.get(p);
         if (text === undefined) continue;
@@ -69,8 +75,10 @@ export class DeadIslandProvider implements vscode.CodeActionProvider, vscode.Dis
         for (const e of outermost) {
           edits.push({ path: p, range: new vscode.Range(posAt(text, e.start), posAt(text, e.end)) });
         }
+        cuts.set(p, outermost);
+        scanned.set(p, text);
       }
-      return { island, edits };
+      return { island, edits, cuts, texts: scanned };
     });
     this.publish();
   }
@@ -122,14 +130,30 @@ export class DeadIslandProvider implements vscode.CodeActionProvider, vscode.Dis
 
     const action = new vscode.CodeAction(deleteTitleFor(hit.island), vscode.CodeActionKind.QuickFix);
     const edit = new vscode.WorkspaceEdit();
+    // KJ-048, as in the other lightbulbs of the family: the imports the deleted
+    // bodies leave with no user, and the file left with nothing in it. This one
+    // only removed the imports of the island's NAMES elsewhere, and on the
+    // reference project `import androidx.compose.runtime.Composable` stayed in
+    // `Color.kt` and failed detekt. Planned BEFORE the range edits: a file the
+    // cascade deletes must receive none.
+    const cascade = planCascade(hit.cuts, hit.texts);
     for (const e of hit.edits) {
+      if (cascade.deleteFiles.has(e.path)) continue;
       edit.delete(corpusUri(e.path), e.range,
         { needsConfirmation: true, label: deleteTitleFor(hit.island) });
     }
+    // An import line the cascade already cuts is not cut a second time.
+    const lignesDeLaCascade = new Set<string>();
+    for (const [p, extents] of cascade.imports) {
+      const text = hit.texts.get(p) ?? '';
+      for (const x of extents) lignesDeLaCascade.add(`${p}:${posAt(text, x.start).line}`);
+    }
     for (const imp of hit.island.staleImports) {
+      if (cascade.deleteFiles.has(imp.path) || lignesDeLaCascade.has(`${imp.path}:${imp.line}`)) continue;
       edit.delete(corpusUri(imp.path), new vscode.Range(imp.line, 0, imp.line + 1, 0),
         { needsConfirmation: true, label: `Remove stale import of ${imp.name}` });
     }
+    addCascadePlan(edit, cascade, hit.texts);
     action.edit = edit;
     return [action];
   }

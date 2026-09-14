@@ -232,12 +232,6 @@ export function findUnusedDeclarations(text: string, lang: 'kotlin' | 'java' = '
   const lastLine = lines.length - 1;
   const annoTargets = collectAnnotationTargets(clean);
 
-  const annosFor = (sym: RawSymbol): string[] => {
-    const lo = lineStarts[sym.line];
-    const hi = lo + sym.character;
-    return annoTargets.filter(a => a.target >= lo && a.target <= hi).map(a => a.name);
-  };
-
   // Rule 6: any name shared by two symbols (any kind, any depth, locals
   // included) is never flagged — kills overloads and shadowing conservatively.
   const nameCounts = new Map<string, number>();
@@ -255,6 +249,8 @@ export function findUnusedDeclarations(text: string, lang: 'kotlin' | 'java' = '
   const silences = classesSousSilence(
     clean, symbols, lineStarts, lastLine, annotationsAvecArguments(text, annoTargets, lineStarts), UNUSED_PRIVATE_DECLARATION);
   const sousSilence = (line: number): boolean => silences.some(r => line > r.from && line <= r.to);
+
+  const annotationsDe = annotationsAvecArguments(text, annoTargets, lineStarts);
 
   const lineEndOf = (line: number): number =>
     line + 1 < lineStarts.length ? lineStarts[line + 1] : text.length;
@@ -278,8 +274,13 @@ export function findUnusedDeclarations(text: string, lang: 'kotlin' | 'java' = '
     if (sym.name === 'main' || sym.name === 'serialVersionUID' || sym.name.startsWith('_')) continue;
     if (text[nameOffset - 1] === '`') continue;
     if (isFun && (CONVENTION_FUN_NAMES.has(sym.name) || /^component\d+$/.test(sym.name))) continue;
-    const annoNames = annosFor(sym);
-    if (isFun ? annoNames.some(a => !BENIGN_DECL_ANNOTATIONS.has(a)) : annoNames.length > 0) continue;
+    // A compiler or lint directive makes nothing read the declaration: it only
+    // protects when it names the diagnostic this detector is the counterpart
+    // of, the rule annotated classes follow since 1.42.320. Counting every
+    // annotation hid `@Suppress("MagicNumber") private fun defaultDimensions()`
+    // on the reference project, dead and reported by detekt.
+    const protegeant = annotationsDe(sym).filter(a => protege(a, UNUSED_PRIVATE_DECLARATION));
+    if (isFun ? protegeant.some(a => !BENIGN_DECL_ANNOTATIONS.has(a.name)) : protegeant.length > 0) continue;
     if (isProp && inAnnotatedClass(sym.line)) continue;
     if (sousSilence(sym.line)) continue;
     if ((nameCounts.get(sym.name) ?? 0) > 1) continue;

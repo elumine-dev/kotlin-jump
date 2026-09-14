@@ -1,26 +1,33 @@
 {
-  "version": "1.42.332",
+  "version": "1.42.333",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Accurate unused enum entry detection",
-  "summary": "This release fixes a dead enum entry detection bug: a @Suppress(\"unused\") annotation on an enum's primary constructor parameter could also silence the unused warning for that enum's first entry, so a truly unused first entry was never flagged or offered for removal. No other extension behavior changed.",
+  "tagline": "More complete, more accurate dead code removal",
+  "summary": "This release fixes four dead code detection and removal bugs. Removing an enum's first entry from a shared line no longer strips its neighbor's indentation. Removing a dead island now also clears the imports its code left behind and deletes the file when nothing living remains. Removing a whole block of imports no longer leaves two blank lines in a row. A dead private function no longer stays hidden behind an unrelated suppress annotation.",
   "highlights": [
     {
-      "title": "Constructor Suppress Annotation Fix",
-      "description": "Fixes a false suppression that hid a truly unused first enum entry when the enum's primary constructor parameter carried @Suppress(\"unused\").",
-      "kind": "fix"
+      "title": "Complete cleanup on Dead Islands",
+      "kind": "fix",
+      "description": "Removing a dead island now also deletes the imports its code left with no other user and removes the file itself when nothing living remains, so the result no longer fails lint checks like NoUnusedImports."
+    },
+    {
+      "title": "Enum entry removal keeps indentation",
+      "kind": "fix",
+      "description": "Deleting the first entry of an enum written on one shared line no longer strips the indentation from the entry that stays behind, so the file no longer fails an Indentation lint check."
+    },
+    {
+      "title": "Suppress annotations no longer mask dead code",
+      "kind": "fix",
+      "description": "A suppress annotation aimed at an unrelated warning, such as MagicNumber, no longer stops a genuinely unused private function from being flagged and offered for removal."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Fixed the unused enum entries detector reading a @Suppress(\"unused\") annotation on the enum's primary constructor parameter as covering the enum's first entry too. On enum class E(@Suppress(\"unused\") val code: Int) { A(1) }, that annotation silenced entry A, so a genuinely unused A was never reported and never offered for removal."
-      ]
-    },
-    {
-      "heading": "Notes",
-      "bullets": [
-        "Ships no other changes to extension behavior: every command and setting works exactly as it did in 1.42.331."
+        "Fixed removing the first entry of an enum declared on one shared indented line, for example NewIndicatorPulseState { NEVER_PULSE, PULSING }, taking the indentation of the entry left behind instead of only its own.",
+        "Fixed dead island removal leaving behind imports that only the removed code used, and not deleting a file once it held nothing living. An import like androidx.compose.runtime.Composable could remain after its only user was removed.",
+        "Fixed the import cascade leaving two consecutive blank lines when it removed an entire block of imports along with the class that used them. One of the two blank lines that framed the block now goes with it.",
+        "Fixed a dead private function staying unreported when it carried a suppress annotation meant for a different warning, for example Suppress(MagicNumber). It is now flagged and offered for removal like any other unused code."
       ]
     }
   ],

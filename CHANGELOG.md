@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.333
+
+This release fixes four dead code detection and removal bugs. Removing an enum's first entry from a shared line no longer strips its neighbor's indentation. Removing a dead island now also clears the imports its code left behind and deletes the file when nothing living remains. Removing a whole block of imports no longer leaves two blank lines in a row. A dead private function no longer stays hidden behind an unrelated suppress annotation.
+
+### Fixes
+- Fixed removing the first entry of an enum declared on one shared indented line, for example NewIndicatorPulseState { NEVER_PULSE, PULSING }, taking the indentation of the entry left behind instead of only its own.
+- Fixed dead island removal leaving behind imports that only the removed code used, and not deleting a file once it held nothing living. An import like androidx.compose.runtime.Composable could remain after its only user was removed.
+- Fixed the import cascade leaving two consecutive blank lines when it removed an entire block of imports along with the class that used them. One of the two blank lines that framed the block now goes with it.
+- Fixed a dead private function staying unreported when it carried a suppress annotation meant for a different warning, for example Suppress(MagicNumber). It is now flagged and offered for removal like any other unused code.
+
 ## 1.42.332
 
 This release fixes a dead enum entry detection bug: a @Suppress("unused") annotation on an enum's primary constructor parameter could also silence the unused warning for that enum's first entry, so a truly unused first entry was never flagged or offered for removal. No other extension behavior changed.

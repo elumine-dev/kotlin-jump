@@ -44,7 +44,9 @@ const equilibre = (s: string) => (s.split('/*').length - 1) === (s.split('*/').l
 describe('la coupe d une entree d enum laisse les commentaires entiers', () => {
   it('un bloc ouvert sur la ligne et ferme plus bas reste en place', () => {
     const src = source(' /* on garde\n       as is */');
-    expect(coupe(src)).toBe('    MORT, ');
+    // Le commentaire reste sur la ligne : il garde l indentation de l entree
+    // (KJ039.TheNeighbourKeepsItsIndentation).
+    expect(coupe(src)).toBe('MORT, ');
     expect(reste(src)).toContain('/* on garde');
     expect(reste(src)).toContain('as is */');
     expect(equilibre(reste(src))).toBe(true);

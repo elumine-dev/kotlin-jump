@@ -171,8 +171,16 @@ export const SUPPRESS_NAMES = new Set(['Suppress', 'SuppressLint', 'SuppressWarn
  * as a word character and so blocks the short match.
  */
 export function suppressesDiagnostic(args: string, diagnostics: readonly string[]): boolean {
-  return diagnostics.some(d => new RegExp(`(?:^|[^\\w])${d}(?![\\w])`, 'i').test(args));
+  return [...diagnostics, ...SUPPRESS_EVERYTHING].some(d => new RegExp(`(?:^|[^\\w])${d}(?![\\w])`, 'i').test(args));
 }
+
+/**
+ * `"all"` silences every warning, for javac, IntelliJ and detekt alike. Until
+ * 1.42.319 any annotation protected a private declaration; once the directive
+ * had to NAME the diagnostic, a dead field under `@SuppressWarnings("all")` was
+ * reported and removed again.
+ */
+const SUPPRESS_EVERYTHING = ['all'] as const;
 
 // A file annotation must sit above `package`, so only what precedes it is ever
 // read. 64 KB rather than a few lines because the thing above `package` is
@@ -305,7 +313,7 @@ export function fileOptsOut(text: string, diagnostics: readonly string[]): boole
 }
 
 /** Opts out of "nothing references this declaration" everywhere in the family. */
-export const UNUSED_DECLARATION = ['unused'] as const;
+export const UNUSED_DECLARATION = ['unused', 'UnusedDeclaration'] as const;
 /**
  * …plus the detekt rules that say the same thing about PRIVATE declarations.
  *
@@ -314,7 +322,7 @@ export const UNUSED_DECLARATION = ['unused'] as const;
  * than `"unused"`. The whole name is matched, so `UnusedParameter` stays out.
  */
 export const UNUSED_PRIVATE_DECLARATION = [
-  'unused', 'UnusedPrivateMember', 'UnusedPrivateProperty', 'UnusedPrivateFunction', 'UnusedPrivateClass',
+  'unused', 'UnusedDeclaration', 'UnusedPrivateMember', 'UnusedPrivateProperty', 'UnusedPrivateFunction', 'UnusedPrivateClass',
 ] as const;
 /** …plus the compiler warning a parameter detector is the counterpart of. */
 export const UNUSED_PARAMETER = ['unused', 'UNUSED_PARAMETER'] as const;

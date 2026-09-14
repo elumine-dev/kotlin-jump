@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.42.340
+
+This release fixes Remove Everything Unused leaving a Java static import behind after deleting the class member or enum entry it named, which stopped javac with "cannot find symbol".
+
+### Fixes
+- Fixed Remove Everything Unused leaving `import static p.Cles.MORTE;` in a Java file after deleting the unused constant MORTE, and `import static p.Mode.MORT;` after deleting the enum entry MORT. javac stopped on the import. Version 1.42.335 already did this for classes; members and enum entries now follow, including the constants of a Kotlin companion object that Java imports through their class. Kotlin files were already covered.
+
 ## 1.42.339
 
 This release fixes the message shown after Remove Test Only Code, which left out tests and imports it had actually removed.

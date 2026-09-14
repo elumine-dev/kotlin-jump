@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.42.331
+
+This release fixes a dead enum entry detection bug: an @Suppress("unused") annotation on one enum entry could also mask a genuinely unused entry declared right after it, so that entry was never flagged or removed. No other extension behavior changed.
+
+### Fixes
+- Fixed the unused enum entries detector skipping an entry that follows one marked @Suppress("unused") on the same line: in enum class E { A, @Suppress("unused") B, C }, the annotation meant for B was also read as covering C, so a truly unused C was never reported and never offered for removal.
+
 ## 1.42.330
 
 This release fixes a dead code detection bug: marking a bodyless class with @Suppress("unused") could wrongly silence unused member warnings for the very next class in the file, hiding real dead code there. No other extension behavior changed.

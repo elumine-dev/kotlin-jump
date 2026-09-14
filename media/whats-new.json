@@ -1,20 +1,20 @@
 {
-  "version": "1.42.330",
+  "version": "1.42.331",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Suppress annotation scope fix",
-  "summary": "This release fixes a dead code detection bug: marking a bodyless class with @Suppress(\"unused\") could wrongly silence unused member warnings for the very next class in the file, hiding real dead code there. No other extension behavior changed.",
+  "tagline": "More accurate unused enum detection",
+  "summary": "This release fixes a dead enum entry detection bug: an @Suppress(\"unused\") annotation on one enum entry could also mask a genuinely unused entry declared right after it, so that entry was never flagged or removed. No other extension behavior changed.",
   "highlights": [
     {
-      "title": "Suppress Scope Fix",
+      "title": "Enum entry suppression fix",
       "kind": "fix",
-      "description": "Marking a class that has no body with @Suppress(\"unused\") no longer silences unused member warnings for the class declared right after it in the file, so real dead code in that next class is reported again."
+      "description": "Fixes a case where marking one enum entry with @Suppress(\"unused\") could also hide a genuinely unused entry declared right after it on the same line, so that dead entry was never flagged or removed."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Fixed @Suppress(\"unused\") on a class without a body, for example class A(private val x: Int), reaching past that class into the next one instead of stopping at its own (empty) end. Unused member detectors treated the next class as if it too were marked, silencing warnings for private members that were genuinely dead code."
+        "Fixed the unused enum entries detector skipping an entry that follows one marked @Suppress(\"unused\") on the same line: in enum class E { A, @Suppress(\"unused\") B, C }, the annotation meant for B was also read as covering C, so a truly unused C was never reported and never offered for removal."
       ]
     }
   ],

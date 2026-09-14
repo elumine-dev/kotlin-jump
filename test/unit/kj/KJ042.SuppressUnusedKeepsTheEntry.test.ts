@@ -52,3 +52,35 @@ describe('l entree d enum respecte la demande de silence', () => {
     expect(signalees(enumAvec('', '@Suppress("MagicNumber")\n    '))).toContain('AUTRE');
   });
 });
+
+describe('la demande de silence d une entree ne deborde pas sur sa voisine de ligne', () => {
+  // La fenetre allait du debut de la LIGNE jusqu au nom de l entree. Sur un
+  // enum ecrit d une ligne, l annotation de la premiere entree tombait dans la
+  // fenetre de toutes les suivantes, qui n etaient plus jamais signalees.
+  it('enum sur une ligne : seule l entree marquee reste', () => {
+    const src = 'package com.x\n\nenum class E { VIVANT, @Suppress("unused") GARDE, MORT }\n';
+    expect(signalees(src)).toEqual(['MORT']);
+  });
+
+  it('premiere ou derniere entree marquee : elle reste, et elle seule', () => {
+    expect(signalees('package com.x\n\nenum class E { @Suppress("unused") GARDE, MORT, VIVANT }\n')).toEqual(['MORT']);
+    expect(signalees('package com.x\n\nenum class E { VIVANT, MORT, @Suppress("unused") GARDE }\n')).toEqual(['MORT']);
+  });
+
+  it('un membre marque dans le corps de l entree precedente ne fait pas taire la suivante', () => {
+    const src = 'package com.x\n\nenum class E {\n    VIVANT {\n        @Suppress("unused")\n        override fun f() = 1\n    },\n    MORT;\n\n    open fun f() = 0\n}\n';
+    expect(signalees(src)).toEqual(['MORT']);
+  });
+
+  it('Java, sur une ligne : meme regle', () => {
+    const java = (src: string) =>
+      (findUnusedEnumEntries({ sources: [f('/w/app/src/main/java/com/x/E.java', src), APPEL, GRADLE], testSourceSets: ['/src/test/'] } as any) as any[])
+        .map(e => e.name).sort();
+    expect(java('package com.x;\n\npublic enum E { VIVANT, @SuppressWarnings("unused") GARDE, MORT }\n')).toEqual(['MORT']);
+  });
+
+  it('temoin : sans annotation, les deux sortent', () => {
+    const src = 'package com.x\n\nenum class E { VIVANT, GARDE, MORT }\n';
+    expect(signalees(src)).toEqual(['GARDE', 'MORT']);
+  });
+});

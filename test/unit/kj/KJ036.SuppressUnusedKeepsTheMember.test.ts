@@ -117,3 +117,4 @@ describe('le compagnon anonyme sous silence protege ses membres', () => {
     expect(signales(src)).toEqual(['morte']);
   });
 });
+

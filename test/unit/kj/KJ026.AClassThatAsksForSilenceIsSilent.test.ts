@@ -96,3 +96,31 @@ describe('le silence s arrete a la classe qui le demande', () => {
   });
 });
 
+describe('sur la declaration elle meme, une directive ne protege que si elle nomme le diagnostic', () => {
+  // Vu sur le projet de reference : `@Suppress("MagicNumber") private fun
+  // defaultDimensions()` n etait plus appelee par personne, detekt la signalait
+  // (`UnusedPrivateMember`), Kotlin Jump non. La regle des classes annotees
+  // (1.42.320 a 1.42.322) ne comptait deja plus `@Suppress` comme de la
+  // reflexion ; celle de la declaration continuait d ecarter toute annotation.
+  it('fonction privee sous @Suppress("MagicNumber") : elle sort', () => {
+    expect(noms('package x\n\n@Suppress("MagicNumber")\nprivate fun morte() = 42\n\nfun vivant() = 1\n')).toEqual(['morte']);
+  });
+
+  it('propriete privee sous @Suppress("MagicNumber") : elle sort', () => {
+    expect(noms('package x\n\nclass C {\n    @Suppress("MagicNumber")\n    private val MORT = 42\n    fun vivant() = 1\n}\n')).toEqual(['MORT']);
+  });
+
+  it('@OptIn ne fait rien lire non plus', () => {
+    expect(noms('package x\n\n@OptIn(ExperimentalStdlibApi::class)\nprivate fun morte() = 42\n')).toEqual(['morte']);
+  });
+
+  for (const anno of ['@Suppress("unused")', '@Suppress("UnusedPrivateMember")', '@SuppressWarnings("unused")']) {
+    it(`${anno} sur la declaration : elle reste`, () => {
+      expect(noms(`package x\n\n${anno}\nprivate fun garde() = 42\n`)).toEqual([]);
+    });
+  }
+
+  it('une annotation qui peut faire lire (injection, serialisation) protege toujours', () => {
+    expect(noms('package x\n\nclass C {\n    @Inject\n    private lateinit var service: Any\n    @JvmStatic\n    private fun appelee() = 1\n}\n')).toEqual([]);
+  });
+});

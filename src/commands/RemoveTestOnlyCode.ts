@@ -39,6 +39,31 @@ interface Group {
   fileBecomesEmpty: boolean;
   /** Set when the tests cannot be planned by name: nothing is offered. */
   withholdReason?: string;
+  /** Imports naming the declaration anywhere, main sources included. */
+  staleImports?: { path: string; line: number; name: string }[];
+}
+
+/** The import lines of `imports` as cuts of `plan`, each line once, only while it still names its declaration. */
+function ajouteLesImports(
+  plan: TestCoRemovalPlan,
+  imports: readonly { path: string; line: number; name: string }[],
+  textByPath: ReadonlyMap<string, string>,
+): void {
+  for (const imp of imports) {
+    const text = textByPath.get(imp.path);
+    if (text === undefined) continue;
+    let start = 0;
+    for (let l = 0; l < imp.line && start >= 0; l++) {
+      const nl = text.indexOf('\n', start);
+      start = nl === -1 ? -1 : nl + 1;
+    }
+    if (start < 0) continue;
+    const nl = text.indexOf('\n', start);
+    const end = nl === -1 ? text.length : nl + 1;
+    if (!new RegExp(`^\\s*import\\s+(?:static\\s+)?[\\w.]*\\b${imp.name}\\b`).test(text.slice(start, end))) continue;
+    if (plan.cuts.some(c => c.path === imp.path && c.start === start)) continue;
+    plan.cuts.push({ path: imp.path, start, end, name: imp.name, kind: 'import' });
+  }
 }
 
 /** Everything production declares at top level, for the "covers something else" guard. */
@@ -93,7 +118,7 @@ export async function scanTestOnly(
   const groups: Group[] = [];
   for (const s of symbols) {
     if (s.verdict !== 'testOnly' || s.removeStart < 0) continue;
-    groups.push({ label: s.name, names: [s.name], allowed: [], path: s.path, removeStart: s.removeStart, removeEnd: s.removeEnd, fileBecomesEmpty: s.fileBecomesEmpty });
+    groups.push({ label: s.name, names: [s.name], allowed: [], path: s.path, removeStart: s.removeStart, removeEnd: s.removeEnd, fileBecomesEmpty: s.fileBecomesEmpty, staleImports: s.staleImports.map(i => ({ ...i, name: s.name })) });
   }
   for (const m of members) {
     if (m.verdict !== 'testOnly' || m.removeStart < 0) continue;
@@ -114,7 +139,7 @@ export async function scanTestOnly(
     if (i.verdict !== 'testOnly' || !i.fixable) continue;
     const names = i.members.map(m => m.name);
     for (const m of i.members) {
-      groups.push({ label: names.join(' + '), names, allowed: [], path: m.path, removeStart: m.removeStart, removeEnd: m.removeEnd, fileBecomesEmpty: false });
+      groups.push({ label: names.join(' + '), names, allowed: [], path: m.path, removeStart: m.removeStart, removeEnd: m.removeEnd, fileBecomesEmpty: false, staleImports: i.staleImports });
     }
   }
 
@@ -132,6 +157,11 @@ export async function scanTestOnly(
       if (group.withholdReason) plan.unresolved.push({ path: group.path, line: 0, reason: group.withholdReason });
       planByLabel.set(group.label, plan);
       if (isOfferable(plan)) result.offered++; else result.withheld++;
+      // Only once the plan stands on its tests: an import alone must never make
+      // a withheld plan offerable. The plan reads test sources only, and a main
+      // file that imported the declaration without using it kept its import:
+      // the module no longer compiled once the declaration was gone.
+      if (isOfferable(plan)) ajouteLesImports(plan, group.staleImports ?? [], result.textByPath);
       // Counted with the PLAN, not with the group: an island pushes one group
       // per member and they all share a plan, so counting here announced three
       // times the tests a three member island actually removes.

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.42.336
+
+This release fixes Remove Test Only Code leaving a broken import behind in a main source file when the removed declaration was used only by its own tests.
+
+### Fixes
+- Fixed Remove Test Only Code leaving a stale import in a main source file. When a declaration was removed because only its tests used it, a main file that imported it without using it kept that import, and the module failed to compile in Kotlin or Java. The command now clears these imports too, once the removal itself is already decided from the tests alone: an import can never be the reason a withheld removal gets offered.
+
 ## 1.42.335
 
 This release fixes Remove Everything Unused leaving behind imports, including in Java files, that pointed at a class or dead island it had just deleted, which could break compilation.

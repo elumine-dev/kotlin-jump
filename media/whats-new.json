@@ -1,21 +1,20 @@
 {
-  "version": "1.42.335",
+  "version": "1.42.336",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Cross file import cleanup",
-  "summary": "This release fixes Remove Everything Unused leaving behind imports, including in Java files, that pointed at a class or dead island it had just deleted, which could break compilation.",
+  "tagline": "Safer test only code removal",
+  "summary": "This release fixes Remove Test Only Code leaving a broken import behind in a main source file when the removed declaration was used only by its own tests.",
   "highlights": [
     {
-      "title": "Stale import cleanup",
-      "kind": "fix",
-      "description": "Remove Everything Unused now deletes the imports in other files, including Java, that named a class it just removed, so the removal no longer leaves code that fails to compile."
+      "title": "Safer Test Only Code Removal",
+      "description": "Removing code kept alive only by its tests no longer leaves a broken import behind in a main source file, so the module keeps compiling.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Fixed Remove Everything Unused leaving a Java import pointing at a class it had just deleted. Removing LiveListViewScrollingEvent left LiveDetailFragment.java with import ...LiveListViewScrollingEvent still in place, and javac failed with cannot find symbol, because the workspace wide sweep only reads imports in Kotlin. The command now clears these imports for every removed symbol, the way the single symbol quick fix already did.",
-        "Extended the same cleanup to dead island removal, so imports left behind by a removed group of mutually referencing declarations are cleared too instead of staying orphaned in the file."
+        "Fixed Remove Test Only Code leaving a stale import in a main source file. When a declaration was removed because only its tests used it, a main file that imported it without using it kept that import, and the module failed to compile in Kotlin or Java. The command now clears these imports too, once the removal itself is already decided from the tests alone: an import can never be the reason a withheld removal gets offered."
       ]
     }
   ],

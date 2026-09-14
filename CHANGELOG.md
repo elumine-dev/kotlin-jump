@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.42.329
+
+This release fixes two defects in the duplicate name handling added in 1.42.328: Remove Test Only Code could delete the tests of a live enum entry sharing its name with a dead one, and removing a declaration that shares its name with one in another package could leave its import behind when that import line ended with a comment.
+
+### Fixes
+- Fixed Remove Test Only Code deleting a test of a live enum entry. When MediaSource.FEED was used only by tests while EventSource.FEED was used in the app, a test that imported EventSource.FEED and wrote only FEED was planned for removal with MediaSource.FEED. The removal is now withheld whenever a test may name the other entry.
+- Fixed the removal of a declaration sharing its name with one in another package leaving its import behind when the line read import p.Name followed by a comment. The file no longer compiled once the declaration was gone.
+
 ## 1.42.328
 
 This release fixes three cases where the dead code detectors hid real findings: a suppress annotation on a local variable that shielded its whole enclosing declaration, and declarations or enum entries sharing a name with another one that was still in use.

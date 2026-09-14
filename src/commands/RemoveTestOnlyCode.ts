@@ -37,6 +37,8 @@ interface Group {
   removeStart: number;
   removeEnd: number;
   fileBecomesEmpty: boolean;
+  /** Set when the tests cannot be planned by name: nothing is offered. */
+  withholdReason?: string;
 }
 
 /** Everything production declares at top level, for the "covers something else" guard. */
@@ -99,7 +101,13 @@ export async function scanTestOnly(
   }
   for (const e of entries) {
     if (e.verdict !== 'testOnly' || e.removeStart < 0) continue;
-    groups.push({ label: `${e.enumName}.${e.name}`, names: [e.name], allowed: [e.enumName], path: e.path, removeStart: e.removeStart, removeEnd: e.removeEnd, fileBecomesEmpty: false });
+    groups.push({
+      label: `${e.enumName}.${e.name}`, names: [e.name], allowed: [e.enumName], path: e.path, removeStart: e.removeStart, removeEnd: e.removeEnd, fileBecomesEmpty: false,
+      // The plan looks for the NAME in test files. When another enum declares
+      // it, a test importing that enum's entry writes only `FEED`, touches no
+      // other production name, and went with this entry: live code lost its test.
+      withholdReason: e.testsNameOnlyThisEntry ? undefined : `${e.name} is also an entry of another enum, which a test may name`,
+    });
   }
   // An island is ONE group: a test naming two of its members is one test.
   for (const i of islands) {
@@ -121,6 +129,7 @@ export async function scanTestOnly(
     let plan = planByLabel.get(group.label);
     if (plan === undefined) {
       plan = planTestCoRemoval(group.names, data.sources, segs, live, group.allowed);
+      if (group.withholdReason) plan.unresolved.push({ path: group.path, line: 0, reason: group.withholdReason });
       planByLabel.set(group.label, plan);
       if (isOfferable(plan)) result.offered++; else result.withheld++;
       // Counted with the PLAN, not with the group: an island pushes one group

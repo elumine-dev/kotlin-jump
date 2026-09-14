@@ -134,6 +134,17 @@ describe('le verdict de test suit la meme resolution', () => {
     expect(seulementEnTest(t)).toEqual([]);
   });
 
+  it('le drapeau des tests : faux des qu un test nomme l entree d un autre enum, qualifiee ou importee', () => {
+    const drapeau = (autres: Array<{ path: string; text: string }>) =>
+      findUnusedEnumEntries({ sources: [...base(), f('/w/app/src/test/kotlin/com/m/MTest.kt', 'package com.m\n\nfun t() = MediaSource.FEED\n'), ...autres], testSourceSets: TEST_SETS })
+        .map((e: any) => `${e.enumName}.${e.name} ${e.testsNameOnlyThisEntry}`);
+    expect(drapeau([])).toEqual(['MediaSource.FEED true']);
+    expect(drapeau([f('/w/app/src/test/kotlin/com/e/ETest.kt', 'package com.e\n\nfun t() = EventSource.FEED\n')]))
+      .toEqual(['MediaSource.FEED false']);
+    expect(drapeau([f('/w/app/src/test/kotlin/com/z/ZTest.kt', 'package com.z\n\nimport com.e.EventSource.FEED\n\nfun t() = FEED\n')]))
+      .toEqual(['MediaSource.FEED false']);
+  });
+
   it('un test de SON enum la nomme : testOnly', () => {
     const t = f('/w/app/src/test/kotlin/com/m/MTest.kt', 'package com.m\n\nfun t() = MediaSource.FEED\n');
     const found = findUnusedEnumEntries({ sources: [...base(), t], testSourceSets: TEST_SETS });

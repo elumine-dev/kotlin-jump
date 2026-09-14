@@ -71,6 +71,13 @@ export interface UnusedEnumEntry {
   removeStart: number;
   removeEnd: number;
   testMentions: number;
+  /**
+   * Every test mention of the name is proven to be this entry's. False when
+   * another enum declares the name and a test names that one, or when the
+   * mentions could not be told apart: the tests to remove along with the entry
+   * are then planned by name, and would take the other entry's tests too.
+   */
+  testsNameOnlyThisEntry: boolean;
 }
 
 /** One line per raw entry, saying what happened to it. For `--why`. */
@@ -563,30 +570,37 @@ function homonymEntryMentions(
   harvest: Harvest,
   declarations: EntryDeclarations,
   testSourceSets: readonly string[],
-): { main: number; test: number } | null {
+): { main: number; test: number; testElsewhere: number } | null {
   const dup = harvest.duplicates;
   if (!dup || dup.uncertain.has(entry) || harvest.aliased.has(entry)) return null;
   const others = declarations.enumsDeclaring.get(entry) ?? new Set<string>();
   const importsEntryOf = (imports: readonly string[], enumName: string) =>
     imports.some(i => `.${i}`.endsWith(`.${enumName}.${entry}`) || `.${i}`.endsWith(`.${enumName}.`));
 
-  const counts = { main: 0, test: 0 };
+  const counts = { main: 0, test: 0, testElsewhere: 0 };
   for (const mention of dup.byToken.get(entry) ?? []) {
     let ours = 0;
+    let theirs = 0;
     for (const q of mention.qualifiers) {
       const last = q.slice(q.lastIndexOf('.') + 1);
       if (last === e.name) ours++;
-      else if (!others.has(last)) return null;
+      else if (others.has(last)) theirs++;
+      else return null;
     }
     const bare = mention.bare - (declarations.inFile.get(`${mention.path}\0${entry}`) ?? 0);
     if (bare > 0) {
       if (mention.path === e.path) ours += bare;
       else if (!/\.kts?$/.test(mention.path)) return null;
       else if (importsEntryOf(mention.imports, e.name)) ours += bare;
-      else if (![...others].some(o => importsEntryOf(mention.imports, o))) return null;
+      else if ([...others].some(o => importsEntryOf(mention.imports, o))) theirs += bare;
+      else return null;
     }
-    if (isTestSourceSet(mention.path, testSourceSets)) counts.test += ours;
-    else counts.main += ours;
+    if (isTestSourceSet(mention.path, testSourceSets)) {
+      counts.test += ours;
+      counts.testElsewhere += theirs;
+    } else {
+      counts.main += ours;
+    }
   }
   return counts;
 }
@@ -647,6 +661,7 @@ export function findUnusedEnumEntries(input: UnusedEnumEntryScanInput): UnusedEn
         line: entry.line,
         character: entry.character,
         testMentions,
+        testsNameOnlyThisEntry: declared === 1 || (resolved !== null && resolved.testElsewhere === 0),
         ...avecAnnotations(text, lineStarts, entryExtent(text, lineStarts, entry, sansCommentaires)),
       });
     }

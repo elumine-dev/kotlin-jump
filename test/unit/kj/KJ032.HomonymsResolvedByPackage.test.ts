@@ -138,6 +138,14 @@ describe('la suppression ne touche pas aux imports de l homonyme', () => {
     expect(lignes).toEqual(['import com.a.Dimensions']);
   });
 
+  it('un import suivi d un commentaire part aussi : sinon le fichier ne compile plus', () => {
+    const sources = [...base(), f(`${K}/com/q/Q.kt`, 'package com.q\n\nimport com.a.Dimensions // plus utilise\nimport com.a.Dimensions/* x */;\n\nfun q() = 1\n')];
+    const hit = (findUnusedSymbols({ sources, testSourceSets: ['/src/test/'] } as any) as any[])
+      .find(s => s.name === 'Dimensions')!;
+    expect(hit.path).toBe(`${K}/com/a/ADims.kt`);
+    expect(hit.staleImports.map((s: any) => `${s.path.replace(`${K}/`, '')}:${s.line}`)).toEqual(['com/q/Q.kt:2', 'com/q/Q.kt:3']);
+  });
+
   it('par la commande de masse : l import de com.b dans CUse.kt reste intact', () => {
     const sources = [...base(), f(`${K}/com/q/Q.kt`, 'package com.q\n\nimport com.a.Dimensions\n\nfun q() = 1\n')];
     const { parFichier } = collecterUnePasse(sources, ['/src/test/']);

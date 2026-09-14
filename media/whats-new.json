@@ -1,20 +1,26 @@
 {
-  "version": "1.42.331",
+  "version": "1.42.332",
   "title": "What's New in Kotlin Jump",
-  "tagline": "More accurate unused enum detection",
-  "summary": "This release fixes a dead enum entry detection bug: an @Suppress(\"unused\") annotation on one enum entry could also mask a genuinely unused entry declared right after it, so that entry was never flagged or removed. No other extension behavior changed.",
+  "tagline": "Accurate unused enum entry detection",
+  "summary": "This release fixes a dead enum entry detection bug: a @Suppress(\"unused\") annotation on an enum's primary constructor parameter could also silence the unused warning for that enum's first entry, so a truly unused first entry was never flagged or offered for removal. No other extension behavior changed.",
   "highlights": [
     {
-      "title": "Enum entry suppression fix",
-      "kind": "fix",
-      "description": "Fixes a case where marking one enum entry with @Suppress(\"unused\") could also hide a genuinely unused entry declared right after it on the same line, so that dead entry was never flagged or removed."
+      "title": "Constructor Suppress Annotation Fix",
+      "description": "Fixes a false suppression that hid a truly unused first enum entry when the enum's primary constructor parameter carried @Suppress(\"unused\").",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Fixed the unused enum entries detector skipping an entry that follows one marked @Suppress(\"unused\") on the same line: in enum class E { A, @Suppress(\"unused\") B, C }, the annotation meant for B was also read as covering C, so a truly unused C was never reported and never offered for removal."
+        "Fixed the unused enum entries detector reading a @Suppress(\"unused\") annotation on the enum's primary constructor parameter as covering the enum's first entry too. On enum class E(@Suppress(\"unused\") val code: Int) { A(1) }, that annotation silenced entry A, so a genuinely unused A was never reported and never offered for removal."
+      ]
+    },
+    {
+      "heading": "Notes",
+      "bullets": [
+        "Ships no other changes to extension behavior: every command and setting works exactly as it did in 1.42.331."
       ]
     }
   ],

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.332
+
+This release fixes a dead enum entry detection bug: a @Suppress("unused") annotation on an enum's primary constructor parameter could also silence the unused warning for that enum's first entry, so a truly unused first entry was never flagged or offered for removal. No other extension behavior changed.
+
+### Fixes
+- Fixed the unused enum entries detector reading a @Suppress("unused") annotation on the enum's primary constructor parameter as covering the enum's first entry too. On enum class E(@Suppress("unused") val code: Int) { A(1) }, that annotation silenced entry A, so a genuinely unused A was never reported and never offered for removal.
+
+### Notes
+- Ships no other changes to extension behavior: every command and setting works exactly as it did in 1.42.331.
+
 ## 1.42.331
 
 This release fixes a dead enum entry detection bug: an @Suppress("unused") annotation on one enum entry could also mask a genuinely unused entry declared right after it, so that entry was never flagged or removed. No other extension behavior changed.

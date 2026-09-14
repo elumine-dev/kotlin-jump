@@ -66,3 +66,54 @@ describe('le membre respecte la demande de silence', () => {
     });
   }
 });
+
+/**
+ * Et quand c est le `companion object` anonyme qui porte l annotation.
+ *
+ * Le correctif de 1.42.325 cherchait la demande de silence sur le membre et
+ * sur la chaine de ses declarations englobantes. Le parseur n emet pas le
+ * compagnon anonyme comme un symbole : il n est jamais dans cette chaine, et
+ * `@Suppress("unused") companion object { fun garde() }` laissait `garde`
+ * partir. Le compagnon NOMME, lui, etait couvert, ce qui masquait le trou.
+ */
+describe('le compagnon anonyme sous silence protege ses membres', () => {
+  const avec = (annoCompagnon: string, nom = '') =>
+    `package com.x\n\nclass C {\n    ${annoCompagnon}companion object${nom} {\n        fun garde() = 1\n    }\n    fun vivante() = 3\n}\n`;
+
+  it('temoin : sans annotation le membre du compagnon sort', () => {
+    expect(signales(avec(''))).toEqual(['garde']);
+    expect(supprimes(avec(''))).toEqual(['fun garde() = 1']);
+  });
+
+  for (const [nom, anno] of [
+    ['annotation sur sa ligne', '@Suppress("unused")\n    '],
+    ['annotation en ligne', '@Suppress("unused") '],
+    ['avec un modificateur', '@Suppress("unused")\n    internal '],
+    ['SuppressWarnings', '@SuppressWarnings("unused")\n    '],
+  ] as Array<[string, string]>) {
+    it(`${nom} : ni signale, ni supprime`, () => {
+      expect(signales(avec(anno))).toEqual([]);
+      expect(supprimes(avec(anno))).toEqual([]);
+    });
+  }
+
+  it('le compagnon nomme reste couvert', () => {
+    expect(signales(avec('@Suppress("unused")\n    ', ' Usine'))).toEqual([]);
+  });
+
+  it('un autre diagnostic sur le compagnon ne vaut pas silence', () => {
+    expect(signales(avec('@Suppress("MagicNumber")\n    '))).toEqual(['garde']);
+  });
+
+  it('le silence d un compagnon ne deborde pas sur les membres de la classe', () => {
+    const src = 'package com.x\n\nclass C {\n    @Suppress("unused")\n    companion object {\n        fun calme() = 1\n    }\n    fun morte() = 2\n    fun vivante() = 3\n}\n';
+    expect(signales(src)).toEqual(['morte']);
+  });
+
+  it('l annotation du membre juste au dessus n est pas celle du compagnon', () => {
+    // La fenetre s arrete a la ligne du compagnon : lue plus haut, elle
+    // prenait le silence demande pour `calme` et l etendait a tout le compagnon.
+    const src = 'package com.x\n\nclass C {\n    @Suppress("unused")\n    fun calme() = 0\n    companion object {\n        fun morte() = 1\n    }\n    fun vivante() = 3\n}\n';
+    expect(signales(src)).toEqual(['morte']);
+  });
+});

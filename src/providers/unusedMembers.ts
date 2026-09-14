@@ -309,13 +309,23 @@ export function collectMemberCandidates(
     // The parser emits no symbol for `companion object`, so its members sit
     // one brace DEEPER than a direct member. Their extents make them
     // recognisable without guessing.
-    const companionExtents: { start: number; end: number; name: string }[] = [];
+    const companionExtents: { start: number; end: number; name: string; optsOutUnused: boolean }[] = [];
     const companionRe = /\bcompanion\s+object\b(?:\s+(\w+))?[^{\n]*\{/g;
     let cm: RegExpExecArray | null;
     while ((cm = companionRe.exec(clean)) !== null) {
       const open = clean.indexOf('{', cm.index);
       const close = open === -1 ? -1 : matchBrace(clean, open);
-      if (close !== -1) companionExtents.push({ start: open, end: close, name: cm[1] ?? 'Companion' });
+      if (close === -1) continue;
+      // The anonymous companion is not a symbol, so it never sits in the
+      // enclosing chain and a `@Suppress("unused")` written on it was never
+      // seen: its members went with Remove Everything Unused. Its annotations
+      // target the first code character of its header, `companion` or a
+      // modifier in front of it, on that same line.
+      const headerStart = clean.lastIndexOf('\n', cm.index - 1) + 1;
+      const optsOutUnused = annotations.some(a => a.target >= headerStart && a.target <= cm!.index
+        && (a.name === 'Suppress' || a.name === 'SuppressWarnings') && a.argStart >= 0
+        && suppressesDiagnostic(src.text.slice(a.argStart, a.argEnd), UNUSED_DECLARATION));
+      companionExtents.push({ start: open, end: close, name: cm[1] ?? 'Companion', optsOutUnused });
     }
 
     // Hoisted out of the symbol loop: it depends on the FILE, not on the
@@ -346,8 +356,11 @@ export function collectMemberCandidates(
       // emit as a symbol.
       const symOffset = lineStarts[sym.line] + sym.character;
       let companionName: string | undefined;
+      let companionSilence = false;
       if (sym.depth === enclosing.sym.depth + 2) {
-        companionName = companionExtents.find(e => symOffset > e.start && symOffset < e.end)?.name;
+        const companion = companionExtents.find(e => symOffset > e.start && symOffset < e.end);
+        companionName = companion?.name;
+        companionSilence = companion?.optsOutUnused ?? false;
         if (!companionName) continue;
       } else if (sym.depth !== enclosing.sym.depth + 1) {
         continue;
@@ -396,7 +409,7 @@ export function collectMemberCandidates(
         container: chain.map(e => e.sym.name).join('.') + (companionName ? `.${companionName}` : ''),
         isJava,
         annoNames: annosAt(sym),
-        optsOutUnused: silenceAt(sym) || chain.some(e => e.optsOutUnused),
+        optsOutUnused: silenceAt(sym) || companionSilence || chain.some(e => e.optsOutUnused),
         enclosingRejection,
         enclosingSupertyped,
         enclosingDeclTruncated,

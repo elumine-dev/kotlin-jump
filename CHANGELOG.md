@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.42.325
+
+Fixes two cases where a @Suppress("unused") annotation was ignored and the code it protected got deleted anyway.
+
+### Fixes
+- Stops removing a class member written as @Suppress("unused") fun keep(), or any member of a class carrying that annotation: it was reported as dead and deleted by Remove Everything Unused even though the author asked to keep it, while the same annotation on a top level function was already respected.
+- Stops removing an enum entry marked @Suppress("unused"), or any entry of an enum carrying that annotation, for the same reason: the detector treated @Suppress as harmless instead of checking which diagnostic it names.
+
 ## 1.42.324
 
 This release has no functional changes for users; it continues refining the internal script that drafts these release notes.

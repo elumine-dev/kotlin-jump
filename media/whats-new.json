@@ -1,21 +1,26 @@
 {
-  "version": "1.42.324",
+  "version": "1.42.325",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Behind the scenes release process update",
-  "summary": "This release has no functional changes for users; it continues refining the internal script that drafts these release notes.",
+  "tagline": "More reliable Suppress handling",
+  "summary": "Fixes two cases where a @Suppress(\"unused\") annotation was ignored and the code it protected got deleted anyway.",
   "highlights": [
     {
-      "title": "Release Notes Tooling",
-      "description": "The internal script that drafts these release notes gained more test coverage and refinements, with no change to how the extension behaves.",
-      "kind": "note"
+      "title": "Suppress Protects Class Members",
+      "kind": "fix",
+      "description": "A member marked @Suppress(\"unused\"), or one inside a class carrying that annotation, is no longer flagged and deleted by Remove Everything Unused."
+    },
+    {
+      "title": "Suppress Protects Enum Entries",
+      "kind": "fix",
+      "description": "An enum entry marked @Suppress(\"unused\"), or one inside an enum carrying that annotation, is no longer flagged and deleted by Remove Everything Unused."
     }
   ],
   "sections": [
     {
-      "heading": "Notes",
+      "heading": "Fixes",
       "bullets": [
-        "Ships no changes to extension behavior: every command and setting works exactly as it did in 1.42.323.",
-        "The script that generates these release notes was refined and gained additional test coverage, aimed at more reliable notes in future releases."
+        "Stops removing a class member written as @Suppress(\"unused\") fun keep(), or any member of a class carrying that annotation: it was reported as dead and deleted by Remove Everything Unused even though the author asked to keep it, while the same annotation on a top level function was already respected.",
+        "Stops removing an enum entry marked @Suppress(\"unused\"), or any entry of an enum carrying that annotation, for the same reason: the detector treated @Suppress as harmless instead of checking which diagnostic it names."
       ]
     }
   ],

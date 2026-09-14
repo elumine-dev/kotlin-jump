@@ -4,6 +4,7 @@ import {
   CONVENTION_FUN_NAMES,
   fileOptsOut,
   UNUSED_DECLARATION,
+  suppressesDiagnostic,
   buildLineStarts,
   collectAnnotationTargets,
   matchBrace,
@@ -151,6 +152,8 @@ interface MemberCandidate {
   isJava: boolean;
   /** The member's own annotations. */
   annoNames: string[];
+  /** A `@Suppress` naming `unused`, on the member or on any enclosing declaration. */
+  optsOutUnused: boolean;
   /** Guard that took the whole ENCLOSING out of scope, or null. */
   enclosingRejection: string | null;
   /** Any enclosing declares a supertype (Java inheritance, read late). */
@@ -178,6 +181,8 @@ interface MemberCandidate {
 interface EnclosingInfo {
   sym: RawSymbol;
   annoNames: string[];
+  /** Carries a `@Suppress` that names `unused`. */
+  optsOutUnused: boolean;
   isFunInterface: boolean;
   /** A Java declaration line that never reached its `{`: inheritance unknown. */
   declTruncated: boolean;
@@ -248,6 +253,19 @@ export function collectMemberCandidates(
       const hi = lo + sym.character;
       return annotations.filter(a => a.target >= lo && a.target <= hi).map(a => a.name);
     };
+    // `@Suppress` is in the benign list, which only says it makes nothing
+    // reachable. Whether it opts OUT of this detector depends on the
+    // diagnostic it names, the check the top level detector does as F12. This
+    // one inherited the benign list without the check, so a member written
+    // `@Suppress("unused") fun keep()` was deleted by Remove Everything Unused.
+    // Arguments are read on the raw text: the sanitizer blanks strings.
+    const silenceAt = (sym: RawSymbol): boolean => {
+      const lo = lineStarts[sym.line];
+      const hi = lo + sym.character;
+      return annotations.some(a => a.target >= lo && a.target <= hi
+        && (a.name === 'Suppress' || a.name === 'SuppressWarnings') && a.argStart >= 0
+        && suppressesDiagnostic(src.text.slice(a.argStart, a.argEnd), UNUSED_DECLARATION));
+    };
 
     const enclosingInfo = (sym: RawSymbol): EnclosingInfo => {
       const nameOffset = lineStarts[sym.line] + sym.character;
@@ -275,6 +293,7 @@ export function collectMemberCandidates(
       return {
         sym,
         annoNames: annosAt(sym),
+        optsOutUnused: silenceAt(sym),
         isFunInterface: /\bfun\s+interface\b/.test(rawLines[sym.line] ?? ''),
         // The Java parser reads supertypes from the DECLARATION LINE only, so
         // a line that never reaches its `{` may carry an `implements` clause
@@ -377,6 +396,7 @@ export function collectMemberCandidates(
         container: chain.map(e => e.sym.name).join('.') + (companionName ? `.${companionName}` : ''),
         isJava,
         annoNames: annosAt(sym),
+        optsOutUnused: silenceAt(sym) || chain.some(e => e.optsOutUnused),
         enclosingRejection,
         enclosingSupertyped,
         enclosingDeclTruncated,
@@ -449,6 +469,7 @@ function memberRejectionReason(
 ): string | null {
   const sym = c.sym;
   if (c.enclosingRejection) return c.enclosingRejection;
+  if (c.optsOutUnused) return 'F12:suppress-unused';
 
   // M2: overrides implement a contract the framework or a caller reaches
   // through the supertype. Kotlin's keyword is reliable; Java's belt is the

@@ -25,6 +25,7 @@
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { LIMITS } from './whats-new-limits.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -34,14 +35,14 @@ const WHATS_NEW_PATH = path.join(REPO_ROOT, 'media', 'whats-new.json');
 const DEMOS_DIR      = path.join(REPO_ROOT, 'assets', 'demos');
 const PACKAGE_JSON   = path.join(REPO_ROOT, 'package.json');
 
-// Limits cross-checked with WhatsNewPanel.buildHtml (cards slice to 3).
-const MAX_HIGHLIGHTS          = 3;
-const MAX_SECTION_BULLETS     = 5;
-const MAX_TITLE_LEN           = 120;
-const MAX_TAGLINE_LEN         = 200;
-const MAX_SUMMARY_LEN         = 800;
-const MAX_DESCRIPTION_LEN     = 1200;
-const MAX_BULLET_LEN          = 600;
+// Shared with the notes schema .publish hands to the drafting model.
+const MAX_HIGHLIGHTS          = LIMITS.highlights;
+const MAX_SECTION_BULLETS     = LIMITS.sectionBullets;
+const MAX_TITLE_LEN           = LIMITS.title;
+const MAX_TAGLINE_LEN         = LIMITS.tagline;
+const MAX_SUMMARY_LEN         = LIMITS.summary;
+const MAX_DESCRIPTION_LEN     = LIMITS.description;
+const MAX_BULLET_LEN          = LIMITS.bullet;
 const VALID_KINDS             = new Set(['feature', 'improvement', 'fix', 'note']);
 const SEMVER_RE               = /^\d+\.\d+\.\d+([.-][0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/;
 const PLAUSIBLE_URL_RE        = /^https?:\/\//;

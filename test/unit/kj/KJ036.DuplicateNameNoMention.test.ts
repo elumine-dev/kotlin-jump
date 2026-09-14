@@ -55,15 +55,16 @@ describe('les cas réels qui ont motivé la règle', () => {
     expect(names(sources)).toEqual(['watchForLeaks', 'watchForLeaks']);
   });
 
-  it('un seul appelant suffit à faire retomber F3 sur TOUT le groupe', () => {
-    // Le point de la garde : on ne sait pas laquelle des deux il appelle.
+  it('un seul appelant garde celle qu il importe, et seulement elle', () => {
+    // Longtemps on ne savait pas laquelle des deux il appelait, et F3 retombait
+    // sur tout le groupe. `import a.watchForLeaks` le dit.
     const sources = [
       j('/w/a/src/main/kotlin/A.kt', 'package a\n\nfun watchForLeaks(obj: Any) {\n}\n'),
       j('/w/b/src/main/kotlin/B.kt', 'package b\n\nfun watchForLeaks(obj: Any) {\n}\n'),
       j('/w/c/src/main/kotlin/C.kt', 'package c\n\nimport a.watchForLeaks\n\nfun go() {\n    watchForLeaks(this)\n}\n'),
     ];
-    expect(names(sources)).not.toContain('watchForLeaks');
-    expect(why(sources, 'watchForLeaks')).toEqual(['F3:duplicate-name', 'F3:duplicate-name']);
+    expect(find(sources).filter((f: any) => f.name === 'watchForLeaks').map((f: any) => f.path)).toEqual(['/w/b/src/main/kotlin/B.kt']);
+    expect(why(sources, 'watchForLeaks')).toEqual(['F3:duplicate-name', 'unreferenced']);
   });
 });
 
@@ -90,15 +91,16 @@ describe('ce que la règle refuse de faire', () => {
     expect(names(sources)).not.toContain('helper');
   });
 
-  it('une mention hors de sa propre étendue neutralise le groupe', () => {
-    // `helper` est appelée dans son propre fichier, mais par une fonction que
-    // rien n'appelle. La mention pourrait appartenir à l'un ou l'autre membre
-    // du groupe, donc on ne tranche pas.
+  it('une mention hors de sa propre étendue garde celle de son paquet', () => {
+    // `helper` est appelée dans son propre fichier par une fonction que rien
+    // n appelle. L appel est dans le paquet a et n importe rien de b : il
+    // nomme a.helper, qui reste hors de portee. b.helper, que rien ne voit,
+    // sort.
     const sources = [
       j('/w/a/src/main/kotlin/A.kt', 'package a\n\nfun helper() {\n}\n\nfun caller() {\n    helper()\n}\n'),
       j('/w/b/src/main/kotlin/B.kt', 'package b\n\nfun helper() {\n}\n'),
     ];
-    expect(names(sources)).not.toContain('helper');
+    expect(find(sources).filter((f: any) => f.name === 'helper').map((f: any) => f.path)).toEqual(['/w/b/src/main/kotlin/B.kt']);
   });
 
   it('une mention en XML compte comme partout ailleurs', () => {
@@ -142,13 +144,14 @@ describe('ce que la règle refuse de faire', () => {
 
   it('une propriété dupliquée voit ses accesseurs Java comptés', () => {
     // H9 : du Java, `val timeout` se lit `AKt.getTimeout()`. Le nom nu
-    // n'apparaît nulle part, donc sans H9 le groupe passerait pour muet.
+    // n'apparaît nulle part, donc sans H9 celle de a passerait pour muette.
+    // L import de la facade dit laquelle : celle de b, que rien ne voit, sort.
     const sources = [
       j('/w/a/src/main/kotlin/A.kt', 'package a\n\nval timeout = 30\n'),
       j('/w/b/src/main/kotlin/B.kt', 'package b\n\nval timeout = 60\n'),
-      j('/w/c/src/main/java/C.java', 'package c;\n\nclass C {\n    int t = AKt.getTimeout();\n}\n'),
+      j('/w/c/src/main/java/C.java', 'package c;\n\nimport a.AKt;\n\nclass C {\n    int t = AKt.getTimeout();\n}\n'),
     ];
-    expect(names(sources)).not.toContain('timeout');
+    expect(find(sources).filter((f: any) => f.name === 'timeout').map((f: any) => f.path)).toEqual(['/w/b/src/main/kotlin/B.kt']);
   });
 });
 

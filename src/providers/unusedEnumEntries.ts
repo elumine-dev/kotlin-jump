@@ -15,7 +15,7 @@ import {
 } from '../util/kotlinScan';
 import { isTestSourceSet } from '../util/testPaths';
 import { isBuildArtifactPath, isGeneratedSource } from '../util/resourceAllowlists';
-import { harvestMentions, SymbolSource } from './unusedSymbols';
+import { Harvest, harvestMentions, SymbolSource } from './unusedSymbols';
 import { DTO_NAME_RE, SERIALIZATION_ANNOTATIONS } from './unusedDtoFields';
 
 /**
@@ -504,6 +504,93 @@ function entryExtent(
   return { removeStart: avant, removeEnd: finPropre };
 }
 
+/** Declarations of each entry name, over the corpus and file by file. */
+interface EntryDeclarations {
+  total: Map<string, number>;
+  /**
+   * The same, split by source set. The harvest files a declaration token under
+   * the bag of its file: subtracting a test enum's declaration from the MAIN
+   * mentions ate a real use, and a live entry sharing its name with an entry of
+   * a test enum came out unreferenced.
+   */
+  inMain: Map<string, number>;
+  inTest: Map<string, number>;
+  /** `path` NUL `entry` -> declarations of that entry name in that file. */
+  inFile: Map<string, number>;
+  /** entry -> names of the enums declaring it. */
+  enumsDeclaring: Map<string, Set<string>>;
+}
+
+function countDeclarations(enums: readonly EnumDecl[]): EntryDeclarations {
+  const out: EntryDeclarations = { total: new Map(), inMain: new Map(), inTest: new Map(), inFile: new Map(), enumsDeclaring: new Map() };
+  for (const e of enums) {
+    const bySet = e.isTest ? out.inTest : out.inMain;
+    for (const entry of e.entries) {
+      out.total.set(entry.name, (out.total.get(entry.name) ?? 0) + 1);
+      bySet.set(entry.name, (bySet.get(entry.name) ?? 0) + 1);
+      const key = `${e.path}\0${entry.name}`;
+      out.inFile.set(key, (out.inFile.get(key) ?? 0) + 1);
+      (out.enumsDeclaring.get(entry.name) ?? out.enumsDeclaring.set(entry.name, new Set()).get(entry.name)!).add(e.name);
+    }
+  }
+  return out;
+}
+
+/** Entry names declared by more than one enum: the harvest records where each is written. */
+function homonymEntries(declarations: EntryDeclarations): Set<string> {
+  return new Set([...declarations.total].filter(([, n]) => n > 1).map(([name]) => name));
+}
+
+/**
+ * Mentions of `entry` that may designate the entry of `e`, when several enums
+ * declare that name. Counting every mention of the name minus its declarations
+ * kept all of them alive as soon as one was used: 318 entries on the reference
+ * project, `MediaSource.FEED` among them while only `EventSource.FEED` and its
+ * like were ever written.
+ *
+ * A mention belongs to `e` when qualified by its name, bare in its own file, or
+ * bare in a Kotlin file importing that entry or all entries of `e`. Qualified
+ * by another enum declaring the name, or bare in a Kotlin file importing the
+ * entry of such an enum, it belongs elsewhere. Anything else is a doubt and
+ * returns null, so the caller keeps counting every mention: bare in Java, where
+ * a `switch` case never qualifies; bare in Kotlin with no import to explain it,
+ * which context sensitive resolution may bind through the expected type; in a
+ * string or a non code file; behind an unknown qualifier, a typealias or a call.
+ */
+function homonymEntryMentions(
+  e: EnumDecl,
+  entry: string,
+  harvest: Harvest,
+  declarations: EntryDeclarations,
+  testSourceSets: readonly string[],
+): { main: number; test: number } | null {
+  const dup = harvest.duplicates;
+  if (!dup || dup.uncertain.has(entry) || harvest.aliased.has(entry)) return null;
+  const others = declarations.enumsDeclaring.get(entry) ?? new Set<string>();
+  const importsEntryOf = (imports: readonly string[], enumName: string) =>
+    imports.some(i => `.${i}`.endsWith(`.${enumName}.${entry}`) || `.${i}`.endsWith(`.${enumName}.`));
+
+  const counts = { main: 0, test: 0 };
+  for (const mention of dup.byToken.get(entry) ?? []) {
+    let ours = 0;
+    for (const q of mention.qualifiers) {
+      const last = q.slice(q.lastIndexOf('.') + 1);
+      if (last === e.name) ours++;
+      else if (!others.has(last)) return null;
+    }
+    const bare = mention.bare - (declarations.inFile.get(`${mention.path}\0${entry}`) ?? 0);
+    if (bare > 0) {
+      if (mention.path === e.path) ours += bare;
+      else if (!/\.kts?$/.test(mention.path)) return null;
+      else if (importsEntryOf(mention.imports, e.name)) ours += bare;
+      else if (![...others].some(o => importsEntryOf(mention.imports, o))) return null;
+    }
+    if (isTestSourceSet(mention.path, testSourceSets)) counts.test += ours;
+    else counts.main += ours;
+  }
+  return counts;
+}
+
 export function findUnusedEnumEntries(input: UnusedEnumEntryScanInput): UnusedEnumEntry[] {
   if (input.truncated) return [];                                     // contract rule 2
 
@@ -512,17 +599,11 @@ export function findUnusedEnumEntries(input: UnusedEnumEntryScanInput): UnusedEn
 
   const wanted = new Set<string>();
   for (const e of enums) for (const entry of e.entries) wanted.add(entry.name);
-  const harvest = harvestMentions(input.sources, wanted, input.testSourceSets);
-
   // How many times each entry name is DECLARED across the corpus. A mention
   // count equal to that is a corpus that names it nowhere else, which is the
   // same reasoning KJ-036 applies to duplicated top-level names.
-  const declaredCount = new Map<string, number>();
-  for (const e of enums) {
-    for (const entry of e.entries) {
-      declaredCount.set(entry.name, (declaredCount.get(entry.name) ?? 0) + 1);
-    }
-  }
+  const declarations = countDeclarations(enums);
+  const harvest = harvestMentions(input.sources, wanted, input.testSourceSets, homonymEntries(declarations));
 
   const ignored = new Set(input.ignoreNames ?? []);
   const walked = findWalkedEnums(new Set(enums.map(e => e.name)), input.sources);
@@ -545,11 +626,16 @@ export function findUnusedEnumEntries(input: UnusedEnumEntryScanInput): UnusedEn
     for (const entry of e.entries) {
       if (ignored.has(`${e.name}.${entry.name}`)) continue;
       if (e.silenced.has(entry)) continue;
-      const declared = declaredCount.get(entry.name) ?? 1;
-      const mainElsewhere = (harvest.main.get(entry.name) ?? 0) - declared;
+      const declared = declarations.total.get(entry.name) ?? 1;
+      const resolved = declared > 1
+        ? homonymEntryMentions(e, entry.name, harvest, declarations, input.testSourceSets)
+        : null;
+      const mainElsewhere = resolved ? resolved.main
+        : (harvest.main.get(entry.name) ?? 0) - (declarations.inMain.get(entry.name) ?? 0);
       if (mainElsewhere !== 0) continue;
 
-      const testMentions = harvest.test.get(entry.name) ?? 0;
+      const testMentions = resolved ? resolved.test
+        : (harvest.test.get(entry.name) ?? 0) - (declarations.inTest.get(entry.name) ?? 0);
       const verdict: EnumEntryVerdict = testMentions > 0 ? 'testOnly' : 'unreferenced';
       if (verdict === 'testOnly' && input.includeTestOnly === false) continue;
 
@@ -598,28 +684,28 @@ export function explainEnumEntries(input: UnusedEnumEntryScanInput): EnumEntryEx
   const enums = collectEnums(input.sources, input.testSourceSets);
   const wanted = new Set<string>();
   for (const e of enums) for (const entry of e.entries) wanted.add(entry.name);
-  const harvest = harvestMentions(input.sources, wanted, input.testSourceSets);
-
-  const declaredCount = new Map<string, number>();
-  for (const e of enums) {
-    for (const entry of e.entries) {
-      declaredCount.set(entry.name, (declaredCount.get(entry.name) ?? 0) + 1);
-    }
-  }
+  const declarations = countDeclarations(enums);
+  const harvest = harvestMentions(input.sources, wanted, input.testSourceSets, homonymEntries(declarations));
 
   const walkedEnums = findWalkedEnums(new Set(enums.map(e => e.name)), input.sources);
   const out: EnumEntryExplanation[] = [];
   for (const e of enums) {
     const walked = !e.rejection && !e.isTest && walkedEnums.has(e.name);
     for (const entry of e.entries) {
-      const declared = declaredCount.get(entry.name) ?? 1;
-      const mainElsewhere = (harvest.main.get(entry.name) ?? 0) - declared;
+      const declared = declarations.total.get(entry.name) ?? 1;
+      const resolved = declared > 1
+        ? homonymEntryMentions(e, entry.name, harvest, declarations, input.testSourceSets)
+        : null;
+      const mainElsewhere = resolved ? resolved.main
+        : (harvest.main.get(entry.name) ?? 0) - (declarations.inMain.get(entry.name) ?? 0);
+      const testMentions = resolved ? resolved.test
+        : (harvest.test.get(entry.name) ?? 0) - (declarations.inTest.get(entry.name) ?? 0);
       const outcome = e.rejection ? e.rejection
         : e.silenced.has(entry) ? 'F12:suppress-unused'
         : e.isTest ? 'E2:test-source-set'
           : walked ? 'E1:walked-as-whole'
             : mainElsewhere !== 0 ? 'alive:main'
-              : (harvest.test.get(entry.name) ?? 0) > 0 ? 'testOnly' : 'unreferenced';
+              : testMentions > 0 ? 'testOnly' : 'unreferenced';
       out.push({ name: entry.name, enumName: e.name, path: e.path, line: entry.line, outcome });
     }
   }

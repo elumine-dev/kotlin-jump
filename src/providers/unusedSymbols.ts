@@ -204,6 +204,56 @@ export interface Harvest {
   aliased: Set<string>;
   /** name -> the import lines that would dangle if the name went away. */
   importPostings: Map<string, StaleImport[]>;
+  /**
+   * What package resolution of duplicated names needs, gathered in the same
+   * pass: resolving afterwards re-stripped and re-tokenized every file, and the
+   * detector ran 20 percent slower. Only filled for the names asked for.
+   */
+  duplicates?: DuplicateMentions;
+}
+
+/** Where each duplicated name is written, with what can tell its bearers apart. */
+export interface DuplicateMentions {
+  /** Package declared by every code file read. */
+  packageByPath: Map<string, string>;
+  /** token -> one entry per code file that writes it in its body or inside an import. */
+  byToken: Map<string, DuplicateMention[]>;
+  /**
+   * Tokens written where no package applies: a non code file, or a string
+   * literal, which reflection or a DI container may resolve by name.
+   */
+  uncertain: Set<string>;
+}
+
+export interface DuplicateMention {
+  path: string;
+  filePackage: string;
+  /** Every import of the file, star imports included. */
+  imports: string[];
+  /**
+   * Qualifiers written right before the token in the body, `com.a` for
+   * `com.a.Name`, and `` when the dot follows a call or a line break.
+   */
+  qualifiers: string[];
+  /** Occurrences in the body with no dot before them, declarations included. */
+  bare: number;
+}
+
+/**
+ * Whether `at` sits inside a string literal that opened on its own line: odd
+ * count of unescaped quotes before it. A char literal `'"'` flips the parity
+ * and a multi line raw string goes unseen; the first error only keeps a name
+ * alive, the second is rare enough to accept.
+ */
+function insideStringOnItsLine(text: string, at: number): boolean {
+  let quotes = 0;
+  for (let i = text.lastIndexOf('\n', at - 1) + 1; i < at; i++) {
+    if (text.charCodeAt(i) !== 34) continue;
+    let backslashes = 0;
+    for (let j = i - 1; j >= 0 && text.charCodeAt(j) === 92; j--) backslashes++;
+    if (backslashes % 2 === 0) quotes++;
+  }
+  return quotes % 2 === 1;
 }
 
 const WORD_RE = /[A-Za-z_][A-Za-z0-9_]*/g;
@@ -818,8 +868,14 @@ export function harvestMentions(
   sources: readonly SymbolSource[],
   wanted: ReadonlySet<string>,
   testSourceSets: readonly string[],
+  /** Duplicated names to collect package data for, when resolving F3. */
+  duplicateTokens?: ReadonlySet<string>,
 ): Harvest {
   const harvest: Harvest = { main: new Map(), test: new Map(), aliased: new Set(), importPostings: new Map() };
+  const dup: DuplicateMentions | undefined = duplicateTokens && duplicateTokens.size > 0
+    ? { packageByPath: new Map(), byToken: new Map(), uncertain: new Set() }
+    : undefined;
+  if (dup) harvest.duplicates = dup;
 
   for (const src of sources) {
     // G2 of KJ-031, same reason: R8 writes every name of the build into these,
@@ -837,16 +893,25 @@ export function harvestMentions(
     }
 
     let text = src.text;
+    let fileImports: string[] | undefined;
+    let filePackage = '';
+    let perToken: Map<string, DuplicateMention> | undefined;
     if (isCode) {
       // Comments do not count: a commented-out reference is exactly the case
       // we want reported. String contents DO count (reflection, DI by name).
       text = stripKotlinComments(text);
+      if (dup) {
+        filePackage = packageOf(text);
+        dup.packageByPath.set(src.path, filePackage);
+        fileImports = [];
+      }
       const lines = text.split('\n');
       for (let i = 0; i < lines.length; i++) {
         // `static` for Java, and the trailing `;` is simply not captured.
         const imp = /^\s*import\s+(?:static\s+)?([\w.]+)(?:\s+as\s+(\w+))?/.exec(lines[i]);
         if (!imp) continue;
         const segments = imp[1].split('.');
+        if (fileImports) fileImports.push(imp[1]);
         const simple = segments[segments.length - 1];
         // Import lines never keep a symbol alive on their own, but an ALIASED
         // import means the simple name may never appear at the call site.
@@ -863,6 +928,14 @@ export function harvestMentions(
         // safe direction.
         for (let s = 0; s < segments.length - 1; s++) {
           if (/^[A-Z]/.test(segments[s])) bump(bag, segments[s], wanted);
+          // A token only inside an import, before its last segment, still needs
+          // an entry: `import p.Cmd.DISPATCH` depends on `p.Cmd`.
+          if (fileImports && s > 0 && duplicateTokens!.has(segments[s])) {
+            perToken ??= new Map();
+            if (!perToken.has(segments[s])) {
+              perToken.set(segments[s], { path: src.path, filePackage, imports: fileImports, qualifiers: [], bare: 0 });
+            }
+          }
         }
 
         if (!wanted.has(simple)) continue;
@@ -882,7 +955,35 @@ export function harvestMentions(
     // with no manifest, layout or nav-graph parser anywhere.
     WORD_RE.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while ((m = WORD_RE.exec(text)) !== null) bump(bag, m[0], wanted);
+    while ((m = WORD_RE.exec(text)) !== null) {
+      // Inlined bump: every word of the corpus goes through here, and the
+      // duplicated names are a subset of the wanted ones.
+      if (!wanted.has(m[0])) continue;
+      bag.set(m[0], (bag.get(m[0]) ?? 0) + 1);
+      if (!dup || !duplicateTokens!.has(m[0])) continue;
+      if (!isCode || insideStringOnItsLine(text, m.index)) { dup.uncertain.add(m[0]); continue; }
+      perToken ??= new Map();
+      let entry = perToken.get(m[0]);
+      if (!entry) {
+        entry = { path: src.path, filePackage, imports: fileImports!, qualifiers: [], bare: 0 };
+        perToken.set(m[0], entry);
+      }
+      // `com.a.Name`: the qualifier is the dotted run right before the token.
+      if (m.index > 0 && text[m.index - 1] === '.') {
+        let q = m.index - 1;
+        while (q > 0 && /[\w.]/.test(text[q - 1])) q--;
+        entry.qualifiers.push(text.slice(q, m.index - 1));
+      } else {
+        entry.bare++;
+      }
+    }
+    if (perToken) {
+      for (const [token, entry] of perToken) {
+        const list = dup!.byToken.get(token) ?? [];
+        list.push(entry);
+        dup!.byToken.set(token, list);
+      }
+    }
   }
 
   return harvest;
@@ -1007,6 +1108,111 @@ function duplicatesWithNoMention(
   return out;
 }
 
+/** True when the import at `posting` names `c` in its own package, and nothing else. */
+function importsFromPackage(sources: readonly SymbolSource[], posting: StaleImport, c: Candidate): boolean {
+  const importer = sources.find(src => src.path === posting.path);
+  const declarer = sources.find(src => src.path === c.path);
+  if (!importer || !declarer) return false;
+  const line = importer.text.split('\n')[posting.line] ?? '';
+  const p = packageOf(stripKotlinComments(declarer.text));
+  return new RegExp(`^\\s*import\\s+${p.replace(/\./g, '\\.')}\\.${c.name}\\s*;?\\s*$`).test(line);
+}
+
+/** The package a Kotlin or Java file declares, or '' for the default package. */
+function packageOf(strippedText: string): string {
+  return /^\s*package\s+([\w.]+)/m.exec(strippedText)?.[1] ?? '';
+}
+
+function isClassLike(c: Candidate): boolean {
+  return c.kind !== 'fun' && c.kind !== 'composable' && c.kind !== 'val' && c.kind !== 'var';
+}
+
+/**
+ * F3 again, resolved by PACKAGE.
+ *
+ * `duplicatesWithNoMention` clears a duplicated name only when the corpus
+ * never mentions it. On the reference project thirteen screens each declare
+ * their own `internal data class Dimensions` and use it at home: one screen's
+ * copy, left with no use at all, was never reported because the twelve others
+ * said "Dimensions" elsewhere. 783 declarations were held back that way.
+ *
+ * The compiler knows better. A `Dimensions` written in a file can only name the
+ * one declared in package P when the file is IN P, spells `P.Dimensions`, or
+ * imports it: `P.Dimensions` itself, something inside it, or `P.*`. Importing
+ * ANOTHER name of P shows nothing, except from Java to a top level function or
+ * property, which is reached through a facade class whose name `@JvmName` can
+ * change: there any import from P counts.
+ *
+ * In the file of another bearer, the name designates that bearer when both
+ * are classes, since classifiers do not overload. Otherwise only when its
+ * declaration is the one occurrence: a call there may pick the overload of P,
+ * or the function of P over a constructor that does not apply, through a star
+ * import.
+ *
+ * Every doubt counts as a use: a mention in a non code file or in a string, a
+ * mention from a test that could see P, two bearers in the same package, a
+ * bearer in the root package. The first two keep the declaration alive, the
+ * last two keep it out.
+ *
+ * Returns the candidates proven unreferenced this way, by identity: unlike the
+ * unmentioned groups, only SOME members of a name are cleared.
+ */
+function duplicatesResolvedByPackage(
+  candidates: readonly Candidate[],
+  topLevelNameCounts: ReadonlyMap<string, number>,
+  harvest: Harvest,
+  alreadyCleared: ReadonlySet<string>,
+): Set<Candidate> {
+  const dup = harvest.duplicates;
+  if (!dup) return new Set();
+
+  const byName = new Map<string, Candidate[]>();
+  for (const c of candidates) {
+    if ((topLevelNameCounts.get(c.name) ?? 0) <= 1 || alreadyCleared.has(c.name)) continue;
+    if (!/\.(kt|java)$/.test(c.path)) continue;
+    const list = byName.get(c.name) ?? [];
+    list.push(c);
+    byName.set(c.name, list);
+  }
+
+  // Every bearer visible and no aliased import, as for the unmentioned groups.
+  // The rest is decided per BEARER, since the package tells them apart: one
+  // used in its own file, or mentioning its name twice in its own span, stays
+  // out alone. Two bearers in the same package need no rule of their own: each
+  // one's declaration is a mention the other's package can see.
+  const out = new Set<Candidate>();
+  for (const [name, group] of byName) {
+    if (group.length !== topLevelNameCounts.get(name)) continue;
+    if (harvest.aliased.has(name)) continue;
+    const tokens = [name];
+    if (group.some(c => c.kind === 'val' || c.kind === 'var')) tokens.push(...accessorNames(name));   // H9
+    if (tokens.some(t => dup.uncertain.has(t))) continue;
+    const bearerAt = new Map(group.map(c => [c.path, c]));
+
+    for (const c of group) {
+      // Used in its own file, or mentioning its name twice in its own span:
+      // out alone, the package cannot tell those apart.
+      if (c.selfInSpan !== 1 || c.selfInFile !== c.selfInSpan) continue;
+      const p = dup.packageByPath.get(c.path) ?? '';
+      if (p === '') continue;
+      const classLike = isClassLike(c);
+
+      const seen = tokens.some(t => (dup.byToken.get(t) ?? []).some(mention => {
+        if (mention.path === c.path) return false;
+        if (mention.filePackage === p || mention.qualifiers.includes(p)) return true;
+        if (mention.imports.some(i => i === `${p}.${t}` || i.startsWith(`${p}.${t}.`))) return true;
+        const twin = bearerAt.get(mention.path);
+        if (twin && (classLike && isClassLike(twin)
+          || t === name && twin.selfInSpan === 1 && twin.selfInFile === 1)) return false;
+        if (mention.imports.includes(`${p}.`)) return true;
+        return !classLike && /\.java$/.test(mention.path) && mention.imports.some(i => i.startsWith(`${p}.`));
+      }));
+      if (!seen) out.add(c);
+    }
+  }
+  return out;
+}
+
 /** Everything the guards need that is not the candidate itself. */
 interface ScanContext {
   topLevelNameCounts: ReadonlyMap<string, number>;
@@ -1016,6 +1222,8 @@ interface ScanContext {
   exemptByEntryPoint: ReadonlySet<string>;
   /** Duplicated names the corpus never mentions outside their declarations. */
   unmentionedDuplicates: ReadonlySet<string>;
+  /** Bearers of a duplicated name that nothing able to see their package mentions. */
+  resolvedDuplicates: ReadonlySet<Candidate>;
 }
 
 /** A name the mention harvest can actually look for. */
@@ -1040,7 +1248,8 @@ function rejectionReason(
   // into a removable finding.
   if (!BARE_IDENTIFIER_RE.test(c.name)) return 'F11:backtick-name';
   if (sym.isPrivate) return 'F1:private';
-  if ((topLevelNameCounts.get(c.name) ?? 0) > 1 && !unmentionedDuplicates.has(c.name)) {
+  if ((topLevelNameCounts.get(c.name) ?? 0) > 1 && !unmentionedDuplicates.has(c.name)
+    && !ctx.resolvedDuplicates.has(c)) {
     return 'F3:duplicate-name';
   }
   if (sym.isExpect || sym.isActual) return 'F4:kmp';
@@ -1082,6 +1291,17 @@ export interface SymbolExplanation {
   testMentions: number;
 }
 
+/** Duplicated top level names, with the Java accessors of a duplicated property. */
+function duplicateTokens(candidates: readonly Candidate[], counts: ReadonlyMap<string, number>): Set<string> {
+  const out = new Set<string>();
+  for (const c of candidates) {
+    if ((counts.get(c.name) ?? 0) <= 1) continue;
+    out.add(c.name);
+    if (c.kind === 'val' || c.kind === 'var') for (const a of accessorNames(c.name)) out.add(a);
+  }
+  return out;
+}
+
 /** Names the harvest has to watch for: every candidate, plus its accessors. */
 function wantedNames(candidates: readonly Candidate[]): Set<string> {
   const wanted = new Set<string>();
@@ -1105,6 +1325,8 @@ function buildContext(
   collected: Collected,
   harvest: Harvest,
 ): ScanContext {
+  const unmentionedDuplicates = duplicatesWithNoMention(
+    collected.candidates, collected.topLevelNameCounts, harvest);
   return {
     topLevelNameCounts: collected.topLevelNameCounts,
     exemptFiles: new Set(
@@ -1113,15 +1335,17 @@ function buildContext(
     supertypesByName: collected.supertypesByName,
     parentsOfAnnotatedSubtypes: collected.parentsOfAnnotatedSubtypes,
     exemptByEntryPoint: collected.exemptByEntryPoint,
-    unmentionedDuplicates: duplicatesWithNoMention(
-      collected.candidates, collected.topLevelNameCounts, harvest),
+    unmentionedDuplicates,
+    resolvedDuplicates: duplicatesResolvedByPackage(
+      collected.candidates, collected.topLevelNameCounts, harvest, unmentionedDuplicates),
   };
 }
 
 export function explainSymbols(input: UnusedSymbolScanInput): SymbolExplanation[] {
   const collected = collectTopLevelCandidates(input.sources, input.testSourceSets);
   const { candidates } = collected;
-  const harvest = harvestMentions(input.sources, wantedNames(candidates), input.testSourceSets);
+  const harvest = harvestMentions(input.sources, wantedNames(candidates), input.testSourceSets,
+    duplicateTokens(candidates, collected.topLevelNameCounts));
   const ctx = buildContext(input, collected, harvest);
   const countIn = (bag: Map<string, number>, c: Candidate) => {
     let n = bag.get(c.name) ?? 0;
@@ -1138,6 +1362,7 @@ export function explainSymbols(input: UnusedSymbolScanInput): SymbolExplanation[
     let outcome: string;
     if (rejected) outcome = rejected;
     else if (harvest.aliased.has(c.name)) outcome = 'H10:aliased-import';
+    else if (ctx.resolvedDuplicates.has(c)) outcome = 'unreferenced';
     else if (!ctx.unmentionedDuplicates.has(c.name) && mainMentions - c.selfInFile !== 0) outcome = 'alive:main';
     // Mirror of the scan: a twin declared in the same file is not a mention.
     else if (!ctx.unmentionedDuplicates.has(c.name)
@@ -1198,7 +1423,8 @@ export function findUnusedSymbols(input: UnusedSymbolScanInput): UnusedSymbol[] 
   const { candidates } = collected;
   if (candidates.length === 0) return [];
 
-  const harvest = harvestMentions(input.sources, wantedNames(candidates), input.testSourceSets);
+  const harvest = harvestMentions(input.sources, wantedNames(candidates), input.testSourceSets,
+    duplicateTokens(candidates, collected.topLevelNameCounts));
   const ctx = buildContext(input, collected, harvest);
 
   const kept = candidates.filter(c => rejectionReason(c, input, ctx) === null);
@@ -1223,7 +1449,8 @@ export function findUnusedSymbols(input: UnusedSymbolScanInput): UnusedSymbol[] 
     // TWIN's declaration as a live mention, since the subtraction only removes
     // its own. The group check already established that the bag holds nothing
     // but the declarations themselves, so the residue is zero by construction.
-    const mainElsewhere = ctx.unmentionedDuplicates.has(c.name)
+    const resolved = ctx.resolvedDuplicates.has(c);
+    const mainElsewhere = ctx.unmentionedDuplicates.has(c.name) || resolved
       ? 0
       : mentionsOf(harvest.main, c) - c.selfInFile;
     // Defensive: over-counting self would manufacture a finding, so any
@@ -1234,12 +1461,19 @@ export function findUnusedSymbols(input: UnusedSymbolScanInput): UnusedSymbol[] 
     if (!ctx.unmentionedDuplicates.has(c.name)
       && c.selfInFile - c.selfInSpan > 0) continue;   // used elsewhere in its own file
 
-    const testMentions = mentionsOf(harvest.test, c);
+    // A resolved bearer was proven unmentioned by tests too; the bag's test
+    // count belongs to its twins.
+    const testMentions = resolved ? 0 : mentionsOf(harvest.test, c);
     const verdict: UnusedSymbolVerdict = testMentions > 0 ? 'testOnly' : 'unreferenced';
     if (verdict === 'testOnly' && input.includeTestOnly === false) continue;
 
     out.push({
-      staleImports: harvest.importPostings.get(c.name) ?? [],
+      // A resolved bearer shares its name with live twins: only an import of
+      // ITS package goes, or the cascade would delete the import a twin needs.
+      staleImports: resolved
+        ? (harvest.importPostings.get(c.name) ?? []).filter(posting =>
+          importsFromPackage(input.sources, posting, c))
+        : harvest.importPostings.get(c.name) ?? [],
       fileBecomesEmpty: false, // filled once every finding of the file is known
       name: c.name,
       kind: c.kind,

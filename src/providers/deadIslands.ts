@@ -240,10 +240,27 @@ function analyze(input: DeadIslandScanInput): Analysis {
     // instead of rooting anything, and the class went with its island, the
     // member the author wrote to keep included. Private members and the
     // anonymous companion have no row of their own to guard them at all.
-    const demandesDeSilence = collectAnnotationTargets(clean)
+    let demandesDeSilence = collectAnnotationTargets(clean)
       .filter(a => (a.name === 'Suppress' || a.name === 'SuppressWarnings') && a.argStart >= 0
         && suppressesDiagnostic(src.text.slice(a.argStart, a.argEnd), UNUSED_PRIVATE_DECLARATION))
       .map(a => a.target);
+    // Except a request written INSIDE a function or a property initializer,
+    // after its name: on a local or a parameter. `@Suppress("unused") val tmp`
+    // says that local is unused, nothing about whether the function holding it
+    // is reachable, and counting it kept every island that contained one. Only
+    // computed when the file has a request at all, which is rare.
+    if (demandesDeSilence.length > 0) {
+      const corps: Array<[number, number]> = [];
+      for (const s of parsed.symbols) {
+        const kind = SPAN_KIND[s.kind];
+        if (kind !== 'fun' && kind !== 'prop') continue;
+        const debut = lineStarts[s.line] + s.character;
+        const etendue = declarationSpan(clean, lineStarts, { kind, name: s.name, line: s.line, nameOffset: debut, lastLine })
+          ?? (kind === 'fun' ? signatureOnlySpan(clean, lineStarts, debut, s.name) : null);
+        if (etendue) corps.push([debut, etendue.scanEnd]);
+      }
+      demandesDeSilence = demandesDeSilence.filter(t => !corps.some(([debut, fin]) => t > debut && t < fin));
+    }
 
     for (const sym of parsed.symbols) {
       const row = rowByKey.get(rowKey(src.path, sym.line, sym.name));

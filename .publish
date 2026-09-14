@@ -507,6 +507,7 @@ Rules:
 - Never claim a speed, memory or performance gain unless the context states a measured result that supports it. When a header says the timing did not change, say that or say nothing.
 - Never call a release "internal cleanup with no behavior change" when a test header describes a defect a user could hit.
 - No hyphens in compound words either: write "write only", "multiline", "file level". The style rule bans them even though the pre-commit hook cannot check them reliably.
+$(node "$ROOT_DIR/.github/scripts/whats-new-limits.mjs" --rules)
 
 HARD EXCLUSIONS (must never appear in the output, even tangentially):
 - Anything under \`scripts/demo/\`, \`scripts/demo/recorder-ext/\`, \`dist/demo/\`, or \`doc/demo-recording.md\`.
@@ -1104,7 +1105,7 @@ draft_notes() {
     --model "$MODEL" \
     --max-budget-usd "$MAX_BUDGET_USD" \
     --output-format json \
-    --json-schema '{"type":"object","properties":{"summary":{"type":"string"},"tagline":{"type":"string"},"highlights":{"type":"array","items":{"type":"object","properties":{"title":{"type":"string"},"description":{"type":"string"},"kind":{"type":"string","enum":["feature","improvement","fix","note"]},"media":{"type":"string"},"mediaAlt":{"type":"string"}},"required":["title","kind"],"additionalProperties":false},"minItems":1,"maxItems":3},"sections":{"type":"array","items":{"type":"object","properties":{"heading":{"type":"string"},"bullets":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":5}},"required":["heading","bullets"],"additionalProperties":false},"minItems":1,"maxItems":4}},"required":["summary","tagline","highlights","sections"],"additionalProperties":false}' \
+    --json-schema "$(node "$ROOT_DIR/.github/scripts/whats-new-limits.mjs" --schema)" \
     < "$PROMPT_FILE" > "$RAW_AI_FILE"
   fi
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.42.342
+
+This release fixes Remove Test Only Code leaving a Kotlin import through Companion behind after removing a companion constant that only tests used.
+
+### Fixes
+- Fixed Remove Test Only Code leaving `import p.Cles.Companion.MORTE` in a main Kotlin file after removing the constant and its tests. Version 1.42.341 matched member imports without the Companion segment only on the Java side, counting on the Kotlin sweep that Remove Everything Unused runs; Remove Test Only Code has no such sweep, and the import stayed behind.
+
 ## 1.42.341
 
 This release fixes Remove Test Only Code leaving a Java static import behind after removing a class member or an enum entry that only tests used.

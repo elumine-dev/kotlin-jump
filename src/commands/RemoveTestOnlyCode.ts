@@ -6,7 +6,7 @@ import { findUnusedSymbols } from '../providers/unusedSymbols';
 import { findUnusedMembers } from '../providers/unusedMembers';
 import { findDeadIslands } from '../providers/deadIslands';
 import { findUnusedEnumEntries } from '../providers/unusedEnumEntries';
-import { isOfferable, liveOutside, planTestCoRemoval, productionDeclarations, TestCoRemovalPlan } from '../providers/testCoRemoval';
+import { isOfferable, liveOutside, planTestCoRemoval, productionDeclarations, TestCoRemovalPlan, testFunctionsOf } from '../providers/testCoRemoval';
 import { addCascadePlan, planCascade } from '../providers/applyCascade';
 import { plural } from '../util/plural';
 import { intersectionParCle } from '../util/intersectionParCle';
@@ -248,7 +248,16 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
     // One inside a doomed file counts too: it goes with the file rather than
     // through an edit of its own.
     let declarations = 0;
+    // A test file that goes whole produces no cut for its functions: counting
+    // cuts alone reported `0 tests` for a removal that took one.
     let tests = 0;
+    for (const p of scan.testFiles) {
+      const text = scan.textByPath.get(p);
+      if (text !== undefined) tests += testFunctionsOf(p, text).length;
+    }
+    // Import lines of the plans, in test files and, since 1.42.336, in main
+    // ones: applied, and missing from the report.
+    let importsDuPlan = 0;
     for (const { group, plan } of scan.groups) {
       const key = `${group.path}:${group.removeStart}`;
       if (!done.has(key)) {
@@ -270,7 +279,8 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
         if (done.has(cutKey)) continue;
         done.add(cutKey);
         if (doomed.has(cut.path)) {
-          if (cut.kind !== 'import') tests++;
+          // A function of a whole test file is already counted with its file.
+          if (cut.kind !== 'import' && !scan.testFiles.has(cut.path)) tests++;
           continue;
         }
         const range = rangeOf(cut.path, cut.start, cut.end);
@@ -278,7 +288,7 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
         edit.replace(corpusUri(cut.path), range, '',
           { needsConfirmation: confirm, label: cut.kind === 'import' ? `Remove the stale import of ${cut.name}` : `Remove the test ${cut.name}` });
         operations++;
-        if (cut.kind !== 'import') tests++;
+        if (cut.kind !== 'import') tests++; else importsDuPlan++;
         touches.add(cut.path);
       }
     }
@@ -290,7 +300,7 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
       edit, swept, skipped, fichiers: touches.size,
       supprimes: deletedFiles.size + swept.files,
       operations: operations + swept.imports + swept.files,
-      declarations, tests,
+      declarations, tests, imports: swept.imports + importsDuPlan,
     };
   };
 
@@ -394,7 +404,7 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
   const ok = await vscode.workspace.applyEdit(edit);
   void vscode.window.showInformationMessage(ok
     ? `Removed ${plural(choisi.declarations, 'declaration')} and ${plural(choisi.tests, 'test')}`
-      + (swept.imports > 0 ? `, plus ${plural(swept.imports, 'import')} left with no user` : '')
+      + (choisi.imports > 0 ? `, plus ${plural(choisi.imports, 'import')} left with no user` : '')
       + (swept.files > 0 ? ` and ${plural(swept.files, 'emptied file')}` : '')
       + (courant.withheld > 0 ? `. ${plural(courant.withheld, 'other')} withheld: their tests cover more than the declaration.` : '.')
     : 'Nothing was applied.');

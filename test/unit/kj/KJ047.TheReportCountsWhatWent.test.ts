@@ -142,5 +142,23 @@ describe('KJ-047 le rapport compte ce qui est parti', () => {
     ]);
     expect(r.messages).toContain('1 test');
     expect(r.messages).not.toContain('2 tests');
+    // Mais il est parti, et le rapport le dit : il ne l annoncait jamais.
+    expect(r.messages).toContain('plus 1 import left with no user');
+  });
+
+  it('l import du code principal retire depuis 1.42.336 est annonce aussi', async () => {
+    const r = await lanceAvec([
+      { path: '/w/app/src/main/java/p/Horloge.kt', text: 'package p\n\nclass Horloge {\n    fun maintenant() = 42\n}\n' },
+      { path: '/w/app/src/main/java/q/Ecran.kt', text: 'package q\n\nimport p.Horloge\nimport java.util.UUID\n\nclass Ecran {\n    fun id() = UUID.randomUUID()\n}\n' },
+      { path: '/w/app/src/main/java/q/Main.kt', text: 'package q\n\nfun main() {\n    println(Ecran().id())\n}\n' },
+      {
+        path: '/w/app/src/test/java/p/HorlogeTest.kt',
+        text: 'package p\n\nimport org.junit.Test\n\nclass HorlogeTest {\n    @Test\n    fun maintenant() {\n        check(Horloge().maintenant() == 42)\n    }\n}\n',
+      },
+    ]);
+    expect(r.messages).toContain('1 declaration ');
+    expect(r.messages).toContain('plus 1 import left with no user');
+    // HorlogeTest.kt part en entier : son test est parti avec lui.
+    expect(r.messages).toContain('and 1 test,');
   });
 });

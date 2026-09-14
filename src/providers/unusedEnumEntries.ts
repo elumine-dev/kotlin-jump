@@ -5,6 +5,7 @@ import { parseJava } from '../indexer/JavaParser';
 import {
   fileOptsOut,
   UNUSED_DECLARATION,
+  suppressesDiagnostic,
   buildLineStarts,
   collectAnnotationTargets,
   offsetToPos,
@@ -118,6 +119,8 @@ interface EnumDecl {
   entries: RawSymbol[];
   /** Guard that took the whole enum out of scope, or null. */
   rejection: string | null;
+  /** Entries whose own `@Suppress` names `unused`: out of scope one by one. */
+  silenced: ReadonlySet<RawSymbol>;
   isTest: boolean;
 }
 
@@ -160,6 +163,19 @@ export function collectEnums(
       }
     }
 
+    // `Suppress` is benign here, which only says it makes nothing reachable.
+    // Whether it opts OUT depends on the diagnostic it names, and nothing
+    // asked: `@Suppress("unused")` on the enum or on the entry itself left the
+    // entry reported, and Remove Everything Unused deleted it. Arguments are
+    // read on the raw text, the sanitizer blanks strings.
+    const silenceAt = (sym: RawSymbol): boolean => {
+      const slo = lineStarts[sym.line];
+      const shi = slo + sym.character;
+      return annotations.some(a => a.target >= slo && a.target <= shi
+        && (a.name === 'Suppress' || a.name === 'SuppressWarnings') && a.argStart >= 0
+        && suppressesDiagnostic(src.text.slice(a.argStart, a.argEnd), UNUSED_DECLARATION));
+    };
+
     for (const [enumSym, entries] of byEnum) {
       if (entries.length === 0) continue;
       // E5: an annotation on ANY entry means the generator or a serializer
@@ -182,7 +198,9 @@ export function collectEnums(
         name: enumSym.name,
         path: src.path,
         entries,
-        rejection: foreign ? `E3:@${foreign}` : annotatedEntry ? 'E5:annotated-entry' : null,
+        rejection: silenceAt(enumSym) ? 'F12:suppress-unused'
+          : foreign ? `E3:@${foreign}` : annotatedEntry ? 'E5:annotated-entry' : null,
+        silenced: new Set(entries.filter(silenceAt)),
         isTest: isTestSourceSet(src.path, testSourceSets),
       });
     }
@@ -526,6 +544,7 @@ export function findUnusedEnumEntries(input: UnusedEnumEntryScanInput): UnusedEn
 
     for (const entry of e.entries) {
       if (ignored.has(`${e.name}.${entry.name}`)) continue;
+      if (e.silenced.has(entry)) continue;
       const declared = declaredCount.get(entry.name) ?? 1;
       const mainElsewhere = (harvest.main.get(entry.name) ?? 0) - declared;
       if (mainElsewhere !== 0) continue;
@@ -596,6 +615,7 @@ export function explainEnumEntries(input: UnusedEnumEntryScanInput): EnumEntryEx
       const declared = declaredCount.get(entry.name) ?? 1;
       const mainElsewhere = (harvest.main.get(entry.name) ?? 0) - declared;
       const outcome = e.rejection ? e.rejection
+        : e.silenced.has(entry) ? 'F12:suppress-unused'
         : e.isTest ? 'E2:test-source-set'
           : walked ? 'E1:walked-as-whole'
             : mainElsewhere !== 0 ? 'alive:main'

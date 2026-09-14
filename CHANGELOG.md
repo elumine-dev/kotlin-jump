@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.42.327
+
+Fixes dead code removal deleting classes that held a declaration explicitly marked to keep.
+
+### Fixes
+- Fixed dead island removal deleting a class member marked `@Suppress("unused")`, or an equivalent detekt suppression for unused private declarations, along with its whole class: the class was still treated as removable because the marker's protection did not reach past the member into the group of classes referencing it, so two classes that only called each other were removed together, taking the member the author asked to keep.
+- Extended that same protection to private members, which the unused member detector does not track on its own, and to anonymous companion objects, which have no symbol of their own to carry the protection: the class that contains them is now kept when a suppress request is present, while the rest of the group, which nothing asked to keep, is still removed.
+
 ## 1.42.326
 
 Fixes a gap where @Suppress("unused") on an anonymous companion object was ignored and its members got deleted anyway.

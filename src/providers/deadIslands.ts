@@ -1,7 +1,10 @@
 import { parse } from '../indexer/KotlinParser';
 import { parseJava } from '../indexer/JavaParser';
 import { RawSymbol } from '../indexer/KotlinParser';
-import { buildLineStarts, sanitizeForUsageScan, findMatchingParen } from '../util/kotlinScan';
+import {
+  buildLineStarts, sanitizeForUsageScan, findMatchingParen,
+  collectAnnotationTargets, suppressesDiagnostic, UNUSED_PRIVATE_DECLARATION,
+} from '../util/kotlinScan';
 import { declarationSpan, SpanKind } from '../util/declarationSpan';
 import { stripKotlinComments, stripXmlComments } from '../util/xmlRefs';
 import { isBuildArtifactPath, isGeneratedSource } from '../util/resourceAllowlists';
@@ -229,6 +232,18 @@ function analyze(input: DeadIslandScanInput): Analysis {
     const lastLine = lineStarts.length - 1;
     const annotations = collectAnnotationExtents(clean);
     const filePool: PoolNode[] = [];
+    // Where the file asks for something to be kept: the target of every
+    // `@Suppress` naming `unused` or a detekt rule for private declarations.
+    // A top level declaration marked so is already guarded by its detector.
+    // One nested inside a class is not enough: the mentions in its body fall
+    // inside the class extent too, so they were attributed to the class
+    // instead of rooting anything, and the class went with its island, the
+    // member the author wrote to keep included. Private members and the
+    // anonymous companion have no row of their own to guard them at all.
+    const demandesDeSilence = collectAnnotationTargets(clean)
+      .filter(a => (a.name === 'Suppress' || a.name === 'SuppressWarnings') && a.argStart >= 0
+        && suppressesDiagnostic(src.text.slice(a.argStart, a.argEnd), UNUSED_PRIVATE_DECLARATION))
+      .map(a => a.target);
 
     for (const sym of parsed.symbols) {
       const row = rowByKey.get(rowKey(src.path, sym.line, sym.name));
@@ -270,6 +285,15 @@ function analyze(input: DeadIslandScanInput): Analysis {
         && lineStarts[other.line] + other.character < span.scanEnd
         && lineStarts[other.line] + other.character > nameOffset);
       if (intruder) { reject('I3:refused-extent'); continue; }
+
+      // Holding a declaration that asks to be kept keeps this one out of the
+      // pool, which roots everything its body mentions: the guard that saves a
+      // node saves its island. Counted strictly after the node's own name, so
+      // only what it CONTAINS decides.
+      if (demandesDeSilence.some(t => t > nameOffset && t < span!.scanEnd)) {
+        reject('F12:holds-a-suppressed-declaration');
+        continue;
+      }
 
       let removeStart = -1;
       let removeEnd = -1;

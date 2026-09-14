@@ -1109,12 +1109,14 @@ function duplicatesWithNoMention(
 }
 
 /** True when the import at `posting` names `c` in its own package, and nothing else. */
-function importsFromPackage(sources: readonly SymbolSource[], posting: StaleImport, c: Candidate): boolean {
+function importsFromPackage(sources: readonly SymbolSource[], posting: StaleImport, c: Candidate, harvest: Harvest): boolean {
   const importer = sources.find(src => src.path === posting.path);
-  const declarer = sources.find(src => src.path === c.path);
-  if (!importer || !declarer) return false;
-  const line = importer.text.split('\n')[posting.line] ?? '';
-  const p = packageOf(stripKotlinComments(declarer.text));
+  if (!importer) return false;
+  // Read on the same comment free copy the posting line was counted on. On the
+  // raw line `import p.Name // gone` did not match, the import stayed behind
+  // the deleted declaration and the file no longer compiled.
+  const line = stripKotlinComments(importer.text).split('\n')[posting.line] ?? '';
+  const p = harvest.duplicates?.packageByPath.get(c.path) ?? '';
   return new RegExp(`^\\s*import\\s+${p.replace(/\./g, '\\.')}\\.${c.name}\\s*;?\\s*$`).test(line);
 }
 
@@ -1472,7 +1474,7 @@ export function findUnusedSymbols(input: UnusedSymbolScanInput): UnusedSymbol[] 
       // ITS package goes, or the cascade would delete the import a twin needs.
       staleImports: resolved
         ? (harvest.importPostings.get(c.name) ?? []).filter(posting =>
-          importsFromPackage(input.sources, posting, c))
+          importsFromPackage(input.sources, posting, c, harvest))
         : harvest.importPostings.get(c.name) ?? [],
       fileBecomesEmpty: false, // filled once every finding of the file is known
       name: c.name,

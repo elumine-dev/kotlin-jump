@@ -1,39 +1,26 @@
 {
-  "version": "1.42.328",
+  "version": "1.42.329",
   "title": "What's New in Kotlin Jump",
-  "tagline": "More accurate dead code and duplicate name detection",
-  "summary": "This release fixes three cases where the dead code detectors hid real findings: a suppress annotation on a local variable that shielded its whole enclosing declaration, and declarations or enum entries sharing a name with another one that was still in use.",
+  "tagline": "Safer cleanup around duplicate names",
+  "summary": "This release fixes two defects in the duplicate name handling added in 1.42.328: Remove Test Only Code could delete the tests of a live enum entry sharing its name with a dead one, and removing a declaration that shares its name with one in another package could leave its import behind when that import line ended with a comment.",
   "highlights": [
     {
-      "title": "Local suppress scoped correctly",
+      "title": "Tests of live enum entries kept",
       "kind": "fix",
-      "description": "A @Suppress(\"unused\") placed on a local variable or a function parameter no longer keeps the class or function around it from being offered as dead code. That annotation only says the variable itself is intentionally unused."
+      "description": "Remove Test Only Code no longer deletes a test of a live enum entry because a dead entry of another enum has the same name."
     },
     {
-      "title": "Duplicate declarations detected",
+      "title": "Commented imports removed",
       "kind": "fix",
-      "description": "Classes, functions and properties that share a name across packages are now traced by package, so an unused copy is flagged even when a same named declaration elsewhere is still in use."
-    },
-    {
-      "title": "Duplicate enum entries detected",
-      "kind": "fix",
-      "description": "An enum entry whose name also exists in other enums is now traced to its own enum, so it is flagged when only the other entries of that name are used."
+      "description": "Removing a declaration whose name also exists in another package now removes its import even when the import line ends with a comment, so the file still compiles."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Fixed dead code removal keeping an unused class or function alive when only a local variable or a function parameter inside it carried @Suppress(\"unused\"). That annotation says the variable itself is unused, not the declaration holding it.",
-        "Fixed the unused symbols scanner missing classes, functions and properties whose name is declared in several packages. Each copy is now traced by package: a file sees it only from the same package, through an import of that name or of the whole package, or when it spells the package out. A mention in a string, a layout or a manifest still keeps every copy alive.",
-        "Fixed the unused enum entries scanner missing an entry whose name is shared by entries of other enums. A mention now counts for an enum when it is qualified by that enum or imported from it. A bare name in Java, where a switch case never qualifies, still keeps every entry of that name alive.",
-        "Fixed a live enum entry reported as unused when an enum declared in test sources had an entry of the same name."
-      ]
-    },
-    {
-      "heading": "Packaging and docs",
-      "bullets": [
-        "Aligned the length limits used to draft these release notes with the ones that validate them, so a drafted note that is too long no longer stops a release after the changelog, README and package files were already rewritten."
+        "Fixed Remove Test Only Code deleting a test of a live enum entry. When MediaSource.FEED was used only by tests while EventSource.FEED was used in the app, a test that imported EventSource.FEED and wrote only FEED was planned for removal with MediaSource.FEED. The removal is now withheld whenever a test may name the other entry.",
+        "Fixed the removal of a declaration sharing its name with one in another package leaving its import behind when the line read import p.Name followed by a comment. The file no longer compiled once the declaration was gone."
       ]
     }
   ],

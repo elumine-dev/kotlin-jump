@@ -1,26 +1,20 @@
 {
-  "version": "1.42.329",
+  "version": "1.42.330",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Safer cleanup around duplicate names",
-  "summary": "This release fixes two defects in the duplicate name handling added in 1.42.328: Remove Test Only Code could delete the tests of a live enum entry sharing its name with a dead one, and removing a declaration that shares its name with one in another package could leave its import behind when that import line ended with a comment.",
+  "tagline": "Suppress annotation scope fix",
+  "summary": "This release fixes a dead code detection bug: marking a bodyless class with @Suppress(\"unused\") could wrongly silence unused member warnings for the very next class in the file, hiding real dead code there. No other extension behavior changed.",
   "highlights": [
     {
-      "title": "Tests of live enum entries kept",
+      "title": "Suppress Scope Fix",
       "kind": "fix",
-      "description": "Remove Test Only Code no longer deletes a test of a live enum entry because a dead entry of another enum has the same name."
-    },
-    {
-      "title": "Commented imports removed",
-      "kind": "fix",
-      "description": "Removing a declaration whose name also exists in another package now removes its import even when the import line ends with a comment, so the file still compiles."
+      "description": "Marking a class that has no body with @Suppress(\"unused\") no longer silences unused member warnings for the class declared right after it in the file, so real dead code in that next class is reported again."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Fixed Remove Test Only Code deleting a test of a live enum entry. When MediaSource.FEED was used only by tests while EventSource.FEED was used in the app, a test that imported EventSource.FEED and wrote only FEED was planned for removal with MediaSource.FEED. The removal is now withheld whenever a test may name the other entry.",
-        "Fixed the removal of a declaration sharing its name with one in another package leaving its import behind when the line read import p.Name followed by a comment. The file no longer compiled once the declaration was gone."
+        "Fixed @Suppress(\"unused\") on a class without a body, for example class A(private val x: Int), reaching past that class into the next one instead of stopping at its own (empty) end. Unused member detectors treated the next class as if it too were marked, silencing warnings for private members that were genuinely dead code."
       ]
     }
   ],

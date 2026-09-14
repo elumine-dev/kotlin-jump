@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.42.330
+
+This release fixes a dead code detection bug: marking a bodyless class with @Suppress("unused") could wrongly silence unused member warnings for the very next class in the file, hiding real dead code there. No other extension behavior changed.
+
+### Fixes
+- Fixed @Suppress("unused") on a class without a body, for example class A(private val x: Int), reaching past that class into the next one instead of stopping at its own (empty) end. Unused member detectors treated the next class as if it too were marked, silencing warnings for private members that were genuinely dead code.
+
 ## 1.42.329
 
 This release fixes two defects in the duplicate name handling added in 1.42.328: Remove Test Only Code could delete the tests of a live enum entry sharing its name with a dead one, and removing a declaration that shares its name with one in another package could leave its import behind when that import line ended with a comment.

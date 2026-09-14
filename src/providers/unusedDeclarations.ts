@@ -145,8 +145,17 @@ function derniereLigneDeClasse(
 ): number {
   const s = symbols[i];
   let to = rangeEndLine(symbols, i, lastLine);
-  const brace = clean.indexOf('{', lineStarts[s.line] + s.character);
-  if (brace !== -1) {
+  const nom = lineStarts[s.line] + s.character;
+  // The first `{` after the name is the body only when it comes before the
+  // symbol listed next. A class with no body has none, and the brace found was
+  // the NEXT class's: a `@Suppress("unused")` on `class A(private val x: Int)`
+  // silenced every private member of the class below it. When the next symbol
+  // sits before the body (a constructor parameter), the brace is not needed:
+  // `rangeEndLine` already reaches the next declaration at the class's depth.
+  const suivant = symbols[i + 1];
+  const limite = suivant ? lineStarts[suivant.line] + suivant.character : clean.length;
+  const brace = clean.indexOf('{', nom);
+  if (brace !== -1 && brace < limite) {
     const close = matchBrace(clean, brace);
     if (close !== -1) to = Math.max(to, offsetToPos(lineStarts, close).line);
   }

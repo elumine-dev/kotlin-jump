@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.42.338
+
+Fixes two gaps in dead code detection where @SuppressWarnings("all") and @SuppressWarnings("UnusedDeclaration") failed to protect a declaration, so it could still be flagged and removed as unused.
+
+### Fixes
+- Fixed dead code detectors ignoring @SuppressWarnings("all") on a declaration. A dead private field carrying only that annotation could still be reported and erased by Remove Everything Unused, even though "all" silences every warning.
+- Fixed dead code detectors missing @SuppressWarnings("UnusedDeclaration"), the older IntelliJ spelling of "unused". A method annotated only that way was reported and removed as if it had no suppress annotation.
+
 ## 1.42.337
 
 This release stops Remove Test Only Code from deleting tests that also cover live code through class members.

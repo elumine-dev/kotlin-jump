@@ -1,20 +1,26 @@
 {
-  "version": "1.42.337",
+  "version": "1.42.338",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Tests of live code stay",
-  "summary": "This release stops Remove Test Only Code from deleting tests that also cover live code through class members.",
+  "tagline": "Suppress annotations, fully honored",
+  "summary": "Fixes two gaps in dead code detection where @SuppressWarnings(\"all\") and @SuppressWarnings(\"UnusedDeclaration\") failed to protect a declaration, so it could still be flagged and removed as unused.",
   "highlights": [
     {
-      "title": "Tests of live members kept",
+      "title": "Suppress(\"all\") now respected",
       "kind": "fix",
-      "description": "Remove Test Only Code no longer offers to delete a test that calls live class members, even when the test also checks the member being removed."
+      "description": "A declaration marked @SuppressWarnings(\"all\") is no longer flagged and removed as unused, since \"all\" is meant to silence every warning, the same way it does for javac, IntelliJ, and detekt."
+    },
+    {
+      "title": "UnusedDeclaration alias recognized",
+      "kind": "fix",
+      "description": "@SuppressWarnings(\"UnusedDeclaration\"), the older IntelliJ name for \"unused\", now protects a declaration from being flagged and removed, matching what the newer name already does."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Fixed Remove Test Only Code offering to delete tests of live code. Seven tests of EditionDatabaseHelperTest save and read back editions through live members, and each also asserts isDownloadingZip, a member only tests used: all seven were planned for removal with it, because the guard only looked for top level names and a member call never tripped it. A test is now kept when it names a class member declared outside what the removal takes; the members of a removed class still go with it, and the words of a test's own name are not counted."
+        "Fixed dead code detectors ignoring @SuppressWarnings(\"all\") on a declaration. A dead private field carrying only that annotation could still be reported and erased by Remove Everything Unused, even though \"all\" silences every warning.",
+        "Fixed dead code detectors missing @SuppressWarnings(\"UnusedDeclaration\"), the older IntelliJ spelling of \"unused\". A method annotated only that way was reported and removed as if it had no suppress annotation."
       ]
     }
   ],

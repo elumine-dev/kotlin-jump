@@ -1552,6 +1552,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('kotlin-jump.removeTestOnlyCode', () =>
       removeTestOnlyCodeCommand(resourceCorpus),
     ),
+    // La soeur non prouvee : meme scan, groupes retenus inclus, et jamais
+    // d'application silencieuse. Volontairement une entree de palette a part,
+    // pour que la commande sure garde sa garantie.
+    vscode.commands.registerCommand('kotlin-jump.removeTestOnlyCodeUnproven', () =>
+      removeTestOnlyCodeCommand(resourceCorpus, true),
+    ),
     vscode.commands.registerCommand('kotlin-jump.makeSelfOnlyPrivate', () =>
       makeSelfOnlyPrivateCommand(resourceCorpus),
     ),

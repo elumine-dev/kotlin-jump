@@ -261,6 +261,11 @@
         "category": "Kotlin Jump"
       },
       {
+        "command": "kotlin-jump.removeTestOnlyCodeUnproven",
+        "title": "Remove Code Used Only by Tests: Unproven Groups, Review Each",
+        "category": "Kotlin Jump"
+      },
+      {
         "command": "kotlin-jump.makeSelfOnlyPrivate",
         "title": "Make Every Self Only Member Private",
         "category": "Kotlin Jump"

@@ -58,6 +58,7 @@ const SHIPPED = [
   'src/ui/AndroidProjectViewProvider.ts',
   'src/ui/ScreenFlowPanel.ts',
   'src/providers/testCoRemoval.ts',
+  'src/providers/testCoRemovalClosure.ts',
   'src/providers/removalCascade.ts',
   'src/providers/applyCascade.ts',
   'src/providers/narrowToPrivate.ts',

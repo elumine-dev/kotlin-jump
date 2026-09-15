@@ -1057,6 +1057,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('kotlin-jump.removeTestOnlyCode', () =>
       removeTestOnlyCodeCommand(resourceCorpusWeb),
     ),
+    // The unproven sibling. Nothing in it touches the filesystem directly, so
+    // the browser host can offer it exactly as it offers the proven one.
+    vscode.commands.registerCommand('kotlin-jump.removeTestOnlyCodeUnproven', () =>
+      removeTestOnlyCodeCommand(resourceCorpusWeb, true),
+    ),
     vscode.commands.registerCommand('kotlin-jump.makeSelfOnlyPrivate', () =>
       makeSelfOnlyPrivateCommand(resourceCorpusWeb),
     ),

@@ -7,6 +7,7 @@ import { findUnusedMembers } from '../providers/unusedMembers';
 import { findDeadIslands } from '../providers/deadIslands';
 import { findUnusedEnumEntries } from '../providers/unusedEnumEntries';
 import { isOfferable, liveOutside, planTestCoRemoval, productionDeclarations, TestCoRemovalPlan, testFunctionsOf } from '../providers/testCoRemoval';
+import { isClosed, planClosure } from '../providers/testCoRemovalClosure';
 import { addCascadePlan, planCascade } from '../providers/applyCascade';
 import { plural } from '../util/plural';
 import { findMemberImports, memberKey } from '../util/memberImports';
@@ -38,6 +39,13 @@ interface Group {
   fileBecomesEmpty: boolean;
   /** Set when the tests cannot be planned by name: nothing is offered. */
   withholdReason?: string;
+  /**
+   * Why this group is NOT proven, when the review command offers it anyway.
+   * Carried all the way to the Refactor Preview label: the reader has to see
+   * the reason next to the box being ticked, not in a message that is gone by
+   * then.
+   */
+  unprovenReason?: string;
   /** Imports naming the declaration anywhere, main sources included. */
   staleImports?: { path: string; line: number; name: string }[];
 }
@@ -81,6 +89,16 @@ export interface TestOnlyScan {
 export async function scanTestOnly(
   corpus: ResourceCorpus,
   token?: vscode.CancellationToken,
+  /**
+   * Include the groups `isOfferable` withholds.
+   *
+   * False for the ordinary command, whose whole value is offering nothing on a
+   * guess. True for its sibling, which applies nothing either: it opens the
+   * Refactor Preview with EVERY box unticked and the reason on each label. The
+   * mechanical half, finding the tests and computing the extents, is
+   * automated; the judgement stays with the reader.
+   */
+  includeUnproven = false,
 ): Promise<TestOnlyScan | undefined> {
   const data = await corpus.get(token);
   if (token?.isCancellationRequested || data.sourcesTruncated) return undefined;
@@ -173,26 +191,86 @@ export async function scanTestOnly(
         result.testFunctions += plan.functions;
       }
     }
-    if (!isOfferable(plan)) continue;
+    if (!isOfferable(plan)) {
+      if (!includeUnproven) continue;
+      // Not the withheld plan: it stops planning the moment it doubts, and an
+      // edit built from it removed the subject and kept the tests that call
+      // it, 15 compilation errors on the reference project. The closure
+      // planner builds the whole edit, applies it in memory and proves no
+      // surviving source names what leaves. Only a plan that closes is put in
+      // the preview; the doubt that withheld it stays on the label.
+      const closure = planClosure(group.names, data.sources, segs, extentsByLabel.get(group.label) ?? []);
+      if (!isClosed(closure)) continue;
+      // The first reason is enough: they all describe the same doubt, and a
+      // Refactor Preview label carrying four of them stops being readable.
+      // `plan.unresolved` keeps them all for whoever wants the detail.
+      const pourquoi = plan.unresolved[0]?.reason ?? 'unproven';
+      const portee = closure.files.length > 0
+        ? `${closure.files.length} test file(s) whole, ${closure.cutFunctions} test function(s)`
+        : `${closure.cutFunctions} test function(s)`;
+      result.groups.push({ group: { ...group, unprovenReason: `${pourquoi}; takes ${portee}` }, plan: closure });
+      for (const f of closure.files) result.testFiles.add(f);
+      result.testFunctions += closure.functions;
+      continue;
+    }
     result.groups.push({ group, plan });
   }
   return result;
 }
 
-export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise<void> {
+export async function removeTestOnlyCodeCommand(
+  corpus: ResourceCorpus,
+  /**
+   * The UNPROVEN mode, the sibling command.
+   *
+   * Same scan, except the groups `isOfferable` withholds are kept, and nothing
+   * is ever applied silently: the Refactor Preview opens with every box
+   * unticked and the reason for the doubt on each label. Nothing goes without
+   * one click per item.
+   *
+   * Why a separate command rather than a flag on the big one: the value of
+   * `Remove Everything Unused` and of this command is offering nothing on a
+   * guess. Merging the two would erase the one guarantee this tool can keep.
+   */
+  unproven = false,
+): Promise<void> {
   if (!vscode.workspace.workspaceFolders?.length) {
     void vscode.window.showWarningMessage('Open a folder before scanning.');
     return;
   }
-  const scan = await vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: 'Scanning for code kept alive only by its tests…', cancellable: true },
-    (_p, token) => scanTestOnly(corpus, token),
+  const scanBrut = await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: unproven
+        ? 'Scanning for code kept alive only by its tests, unproven groups included…'
+        : 'Scanning for code kept alive only by its tests…',
+      cancellable: true,
+    },
+    (_p, token) => scanTestOnly(corpus, token, unproven),
   );
+  // In unproven mode only the DOUBTFUL groups are kept: the proven ones are
+  // the other command's work, and mixing them would have the reader tick the
+  // certain and the doubtful in one pass without telling them apart.
+  const scan = scanBrut === undefined || !unproven ? scanBrut : (() => {
+    const retenus = scanBrut.groups.filter(g => g.group.unprovenReason !== undefined);
+    const testFiles = new Set<string>();
+    let testFunctions = 0;
+    for (const g of retenus) {
+      for (const f of g.plan.files) testFiles.add(f);
+      testFunctions += g.plan.functions;
+    }
+    return { ...scanBrut, groups: retenus, testFiles, testFunctions, offered: retenus.length };
+  })();
   if (!scan) {
     void vscode.window.showWarningMessage('The workspace is too large to prove that nothing else uses these declarations.');
     return;
   }
   if (scan.groups.length === 0) {
+    if (unproven) {
+      void vscode.window.showInformationMessage(
+        'No unproven group either: nothing is kept alive only by its tests.');
+      return;
+    }
     void vscode.window.showInformationMessage(
       scan.withheld > 0
         ? `Nothing to remove on its own: ${plural(scan.withheld, 'declaration')} used only from tests, each with a test that also covers something else.`
@@ -242,8 +320,12 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
     // is, a class and the two tests that are its only users: the plan said
     // four, the edit carried two.
     let operations = 0;
+    const nonProuves = new Set(scan.groups.filter(g => g.group.unprovenReason).flatMap(g => g.plan.files));
     for (const p of deletedFiles) {
-      edit.deleteFile(corpusUri(p), { ignoreIfNotExists: true }, { needsConfirmation: confirm, label: `Delete ${p.split(/[\\/]/).pop()}` });
+      edit.deleteFile(corpusUri(p), { ignoreIfNotExists: true }, {
+        needsConfirmation: confirm,
+        label: `${nonProuves.has(p) ? 'UNPROVEN: delete' : 'Delete'} ${p.split(/[\\/]/).pop()}`,
+      });
       operations++;
       touches.add(p);
     }
@@ -278,7 +360,12 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
         } else {
           const range = rangeOf(group.path, group.removeStart, group.removeEnd);
           if (range) {
-            edit.replace(corpusUri(group.path), range, '', { needsConfirmation: confirm, label: `Remove ${group.label}` });
+            edit.replace(corpusUri(group.path), range, '', {
+              needsConfirmation: confirm,
+              label: group.unprovenReason
+                ? `UNPROVEN: remove ${group.label} (${group.unprovenReason})`
+                : `Remove ${group.label}`,
+            });
             operations++;
             declarations++;
             touches.add(group.path);
@@ -296,8 +383,12 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
         }
         const range = rangeOf(cut.path, cut.start, cut.end);
         if (!range) { skipped++; continue; }
-        edit.replace(corpusUri(cut.path), range, '',
-          { needsConfirmation: confirm, label: cut.kind === 'import' ? `Remove the stale import of ${cut.name}` : `Remove the test ${cut.name}` });
+        edit.replace(corpusUri(cut.path), range, '', {
+          needsConfirmation: confirm,
+          label: cut.kind === 'import'
+            ? `Remove the stale import of ${cut.name}`
+            : `${group.unprovenReason ? 'UNPROVEN: remove' : 'Remove'} the test ${cut.name}`,
+        });
         operations++;
         if (cut.kind !== 'import') tests++; else importsDuPlan++;
         touches.add(cut.path);
@@ -320,12 +411,22 @@ export async function removeTestOnlyCodeCommand(corpus: ResourceCorpus): Promise
   // Files are DELETED here, not just edited, and Apply all skips the preview
   // that would have shown it. Saying how many, before the click, is the least
   // this owes the reader.
-  const choix = await askHowToApply(
-    `Remove ${plural(scan.offered, 'declaration')} and ${plural(scan.testFunctions, 'test')}?`,
-    bulkDetail(combien, apercu.fichiers)
-      + (apercu.supprimes > 0 ? ` ${plural(apercu.supprimes, 'file')} deleted outright.` : ''),
-  );
+  // No "Apply all" in unproven mode. What this command offers is, by
+  // definition, not proven, so the only honest gesture is the preview, one box
+  // at a time.
+  const choix = unproven
+    ? 'review' as const
+    : await askHowToApply(
+      `Remove ${plural(scan.offered, 'declaration')} and ${plural(scan.testFunctions, 'test')}?`,
+      bulkDetail(combien, apercu.fichiers)
+        + (apercu.supprimes > 0 ? ` ${plural(apercu.supprimes, 'file')} deleted outright.` : ''),
+    );
   if (choix === 'cancel') return;
+  if (unproven) {
+    void vscode.window.showWarningMessage(
+      `${plural(scan.offered, 'unproven group')} in the Refactor Preview, every box unticked.`
+      + ` Each label says why it is unproven. Nothing is applied until you tick it.`);
+  }
 
   // What is APPLIED is what must be REPORTED. The dialog gives the workspace
   // all the time it needs to move, and reading the counts off the first build

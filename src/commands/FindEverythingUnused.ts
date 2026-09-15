@@ -22,6 +22,8 @@ import {
   UnusedSymbolProvider,
   findUnusedSymbols,
 } from '../providers/UnusedSymbolProvider';
+import { planCascade } from '../providers/removalCascade';
+import { planFileEdits } from '../providers/DeadCodeSweep';
 import { UnheardEventProvider, findUnheardEvents } from '../providers/UnheardEventProvider';
 import { UnusedEnumEntryProvider, findUnusedEnumEntries } from '../providers/UnusedEnumEntryProvider';
 import { UnusedRemoteConfigKeyProvider, findUnusedRemoteConfigKeys } from '../providers/UnusedRemoteConfigKeyProvider';
@@ -82,6 +84,23 @@ export async function findEverythingUnusedCommand(
       let keptAliveByTests = 0;
 
       let symbolFindings: ReturnType<typeof findUnusedSymbols> | undefined;
+      /**
+       * Les etendues que `Remove Everything Unused` couperait, accumulees au
+       * fil des familles pour calculer la CASCADE a la fin.
+       *
+       * Rapportee ici parce qu'elle ne l'etait nulle part : la commande
+       * supprime des fichiers devenus vides et des imports orphelins que ce
+       * rapport n'annoncait pas, donc le clic sur Remove faisait plus que ce
+       * que la lecture avait promis. On accumule au lieu de relancer
+       * `collecterUnePasse`, qui ferait un second scan complet.
+       */
+      const etendues = new Map<string, { start: number; end: number }[]>();
+      const noteEtendue = (chemin: string, start: number, end: number) => {
+        if (start < 0 || end <= start) return;
+        const l = etendues.get(chemin) ?? [];
+        l.push({ start, end });
+        etendues.set(chemin, l);
+      };
       // ── 1. Dead code inside files ────────────────────────────────────────
       progress.report({ message: 'dead code in files…' });
       if (cfg.get<boolean>('deadCodeSweep', true)) {
@@ -89,6 +108,11 @@ export async function findEverythingUnusedCommand(
         if (token.isCancellationRequested) return;
         sweepReport.setScan(sweep);
         const all = sweep.files.flatMap(f => f.findings);
+        // `SweptFile` porte une Uri, pas un chemin : la cascade raisonne sur
+        // les memes chemins que le corpus, d'ou `fsPath`.
+        for (const f of sweep.files) {
+          for (const e of planFileEdits(f.findings)) noteEtendue(f.uri.fsPath, e.start, e.end);
+        }
         sections.push({
           label: 'dead code',
           one: 'dead code',
@@ -123,6 +147,9 @@ export async function findEverythingUnusedCommand(
             includeTestOnly: cfg.get<boolean>('unusedSymbolsIncludeTestOnly', true),
             frameworkNameSuffixes: cfg.get<boolean>('unusedSymbolsFrameworkNameSuffixes', false),
           });
+          for (const f of symbols) {
+            if (f.verdict === 'unreferenced') noteEtendue(f.path, f.removeStart, f.removeEnd);
+          }
           symbolProvider.setFindings(symbols);
           const unreferenced = symbols.filter(s => s.verdict === 'unreferenced');
           const testOnly = symbols.filter(s => s.verdict === 'testOnly');
@@ -223,6 +250,9 @@ export async function findEverythingUnusedCommand(
             ignoreNames: cfg.get<string[]>('unusedEnumEntriesIgnoreNames', []),
             includeTestOnly: cfg.get<boolean>('unusedEnumEntriesIncludeTestOnly', true),
           });
+          for (const f of entries) {
+            if (f.verdict === 'unreferenced') noteEtendue(f.path, f.removeStart, f.removeEnd);
+          }
           enumEntryProvider.setFindings(entries);
           keptAliveByTests += entries.filter(e => e.verdict === 'testOnly').length;
           // Counted on THIS line only when the entry is not already counted on
@@ -306,6 +336,9 @@ export async function findEverythingUnusedCommand(
             includeSelfOnly: cfg.get<boolean>('unusedMembersSelfOnly', true),
             deadDeclarations: dead,
           });
+          for (const f of members) {
+            if (f.verdict === 'unreferenced') noteEtendue(f.path, f.removeStart, f.removeEnd);
+          }
           memberProvider.setFindings(members);
           const unref = members.filter(m => m.verdict === 'unreferenced').length;
           const selfOnly = members.filter(m => m.verdict === 'selfOnly').length;
@@ -334,6 +367,10 @@ export async function findEverythingUnusedCommand(
             includeTestOnly: cfg.get<boolean>('unusedSymbolsIncludeTestOnly', true),
             maxIslandSize: cfg.get<number>('deadIslandsMaxSize', 8),
           });
+          for (const i of islands) {
+            if (i.verdict !== 'unreferenced' || !i.fixable) continue;
+            for (const mem of i.members) noteEtendue(mem.path, mem.removeStart, mem.removeEnd);
+          }
           islandProvider.setFindings(islands, new Map(data.sources.map(s => [s.path, s.text])));
           keptAliveByTests += islands.filter(i => i.verdict === 'testOnly').length;
           // Same reason as the enum entries above: one finding, one section.
@@ -362,6 +399,27 @@ export async function findEverythingUnusedCommand(
       }
 
       // ── the one summary ──────────────────────────────────────────────────
+      // ── La cascade, ce que Remove emporte EN PLUS des coupes ────────────
+      // Elle ne juge rien : elle deduit de coupes deja decidees quels fichiers
+      // ne gardent plus rien et quels imports nomment un disparu. La rapporter
+      // ici est ce qui rend la lecture et l'ecriture comparables.
+      if (etendues.size > 0) {
+        const textes = new Map(data.sources.map(s2 => [s2.path, s2.text]));
+        const cascade = planCascade(etendues, textes);
+        const orphelins = [...cascade.imports.values()].reduce((n, l) => n + l.length, 0);
+        if (cascade.deleteFiles.size > 0 || orphelins > 0) {
+          sections.push({
+            label: 'knock-on removals',
+            one: 'knock-on removal',
+            count: cascade.deleteFiles.size + orphelins,
+            detail: [
+              cascade.deleteFiles.size > 0 ? `${cascade.deleteFiles.size} file(s) left empty` : '',
+              orphelins > 0 ? `${orphelins} orphaned import(s)` : '',
+            ].filter(Boolean).join(', '),
+          });
+        }
+      }
+
       void vscode.window.showInformationMessage(resumeTout(sections, data.sources.length, skipped));
     },
   );

@@ -11,6 +11,13 @@ import { findDeadIslands } from '../providers/deadIslands';
 import { sweepFile, planFileEdits } from '../providers/DeadCodeSweep';
 import { findMemberImports, memberKey } from '../util/memberImports';
 import { planCascade } from '../providers/removalCascade';
+import { findUnusedGradleDependencies } from '../providers/unusedGradleDependencies';
+import { findUnheardEvents } from '../providers/unheardEvents';
+import { findUnusedRemoteConfigKeys } from '../providers/unusedRemoteConfigKeys';
+import { findUnusedResourceKeys, expandToWholeLines } from '../providers/unusedResourceKeys';
+import { collectValueKeyDeclarations, parseValuesPath } from '../indexer/ValueResourceScanner';
+import { findUnusedResources } from '../providers/UnusedResourceProvider';
+import type { FileResEntry } from '../indexer/FileResourceIndex';
 import { addCascadePlan } from '../providers/applyCascade';
 import { stillTheMeasuredText } from '../util/measuredText';
 
@@ -33,10 +40,48 @@ export interface Coupe { start: number; end: number; texte: string; famille: str
 export type Tally = Record<string, number>;
 
 /** The cuts one pass finds, per file, already free of overlaps. */
+/**
+ * Ce qu'une passe a besoin en plus des sources, pour les familles qui ne se
+ * contentent pas du texte.
+ *
+ * Optionnel par necessite : le temoin et les scripts appellent
+ * `collecterUnePasse` avec deux arguments, et une famille sans son entree se
+ * tait au lieu de rendre zero constat, ce qui ressemblerait a un succes.
+ */
+export interface ContexteDePasse {
+  /** Repertoires de module portant du .kt ou .java. Sans eux, pas de cles. */
+  modulesWithCode?: readonly string[];
+  libraryModules?: readonly string[];
+  /** Index des FICHIERS de ressources, binaires inclus. Sans lui, pas de fichiers. */
+  resourceEntries?: readonly FileResEntry[];
+}
+
+/**
+ * Le contexte qu'un corpus donne, defensivement.
+ *
+ * Defensif par necessite, et le temoin l'a prouve : vingt d'entre eux
+ * construisent un corpus partiel, sans index de ressources, et
+ * `data.index.entries()` y levait. Le contrat de `ContexteDePasse` dit qu'une
+ * famille sans son entree se TAIT ; cette fonction est l'endroit ou ce contrat
+ * se tient, plutot que de demander a chaque appelant d'y penser.
+ */
+function contexteDuCorpus(data: {
+  modulesWithCode?: readonly string[];
+  libraryModules?: readonly string[];
+  index?: { entries?: () => FileResEntry[] };
+}): ContexteDePasse {
+  return {
+    modulesWithCode: data.modulesWithCode,
+    libraryModules: data.libraryModules,
+    resourceEntries: typeof data.index?.entries === 'function' ? data.index.entries() : undefined,
+  };
+}
+
 export function collecterUnePasse(
   sources: readonly { path: string; text: string }[],
   segs: readonly string[],
-): { parFichier: Map<string, Coupe[]>; tally: Tally } {
+  ctx: ContexteDePasse = {},
+): { parFichier: Map<string, Coupe[]>; fichiersMorts: Set<string>; tally: Tally } {
   const base = { sources, testSourceSets: segs } as any;
   const syms = findUnusedSymbols(base) as any[];
   const membres = findUnusedMembers({
@@ -108,6 +153,77 @@ export function collecterUnePasse(
     for (const e of plan) ajoute(src.path, e.start, e.end, e.text, 'balayage', '');
   }
 
+  // ── Les cinq familles que `FindEverythingUnused` rapportait sans que cette
+  //    commande ne les retire jamais. L'ecart etait invisible a l'usage : on
+  //    voyait 82 cles de ressources dans le rapport, on cliquait Remove, et
+  //    aucune ne partait, sans un mot pour le dire.
+  //
+  //    Chacune garde la regle de son fournisseur, aucune n'est relachee ici.
+
+  // Alias du catalogue Gradle, et la version devenue orpheline avec l'alias.
+  for (const g of findUnusedGradleDependencies({ sources } as any) as any[]) {
+    ajoute(g.path, g.removeStart, g.removeEnd, '', 'alias', g.name);
+    if (g.orphanedVersion) {
+      ajoute(g.path, g.orphanedVersion.removeStart, g.orphanedVersion.removeEnd, '', 'alias', g.orphanedVersion.name);
+    }
+  }
+
+  // Posts que personne n'ecoute. Un seul abonnement illisible retire la
+  // famille entiere : le fournisseur raisonne par soustraction, et une
+  // soustraction sur un corpus incomplet ne prouve aucune absence.
+  const scanEvenements = findUnheardEvents({ sources, testSourceSets: segs } as any) as any;
+  if ((scanEvenements.unreadable?.length ?? 0) === 0) {
+    for (const e of (scanEvenements.events ?? []) as any[]) {
+      if (e.verdict !== 'unheard') continue;
+      // `removeStart` vaut -1 quand la coupe changerait la structure, un post
+      // seul dans sa branche par exemple. `ajoute` l'ecarte de lui meme.
+      ajoute(e.path, e.removeStart, e.removeEnd, '', 'evenements', e.name);
+    }
+  }
+
+  // Cles de Remote Config que rien ne lit.
+  for (const k of findUnusedRemoteConfigKeys({ sources } as any) as any[]) {
+    ajoute(k.path, k.removeStart, k.removeEnd, '', 'remoteconfig', k.name);
+  }
+
+  // Cles de values/, toutes leurs variantes de qualificatif. Les offsets sont
+  // recalcules sur le texte courant, jamais portes depuis le scan.
+  if (ctx.modulesWithCode !== undefined) {
+    const declarations = sources
+      .filter(src => parseValuesPath(src.path) !== undefined)
+      .flatMap(src => collectValueKeyDeclarations(src.path, src.text, ctx.modulesWithCode));
+    const cles = findUnusedResourceKeys({
+      declarations, sources,
+      modulesWithCode: ctx.modulesWithCode, libraryModules: ctx.libraryModules,
+    } as any) as any[];
+    for (const k of cles) {
+      for (const v of k.variants as any[]) {
+        const texte = textes.get(v.path);
+        if (texte === undefined) continue;
+        const frais = (collectValueKeyDeclarations(v.path, texte) as any[])
+          .find(d => d.kind === k.kind && d.name === k.name);
+        if (!frais) continue;
+        const w = expandToWholeLines(texte, frais.start, frais.end);
+        ajoute(v.path, w.start, w.end, '', 'cles', `${k.kind}/${k.name}`);
+      }
+    }
+  }
+
+  // FICHIERS de ressources que rien ne nomme. Ceux la ne se coupent pas, ils
+  // se suppriment, donc ils sortent par `fichiersMorts` et non par `ajoute`.
+  const fichiersMorts = new Set<string>();
+  if (ctx.resourceEntries !== undefined && ctx.modulesWithCode !== undefined) {
+    const trouves = findUnusedResources({
+      entries: ctx.resourceEntries as any, sources,
+      modulesWithCode: ctx.modulesWithCode, libraryModules: ctx.libraryModules,
+      includeDrawables: false,
+    } as any) as any[];
+    for (const r of trouves) {
+      if (!r.deletable) continue;
+      for (const chemin of r.paths as string[]) fichiersMorts.add(chemin);
+    }
+  }
+
   // Chevauchements : la premiere gagne, comme chez chaque fournisseur.
   const parFichier = new Map<string, Coupe[]>();
   for (const [p, l] of brut) {
@@ -121,7 +237,7 @@ export function collecterUnePasse(
     }
     parFichier.set(p, gardees);
   }
-  return { parFichier, tally: compteLesFamilles(parFichier) };
+  return { parFichier, fichiersMorts, tally: compteLesFamilles(parFichier) };
 }
 
 /**
@@ -135,7 +251,14 @@ export function collecterUnePasse(
  * chose.
  */
 export function compteLesFamilles(parFichier: ReadonlyMap<string, Coupe[]>): Tally {
-  const tally: Tally = { symboles: 0, membres: 0, entrees: 0, ilots: 0, balayage: 0, renommages: 0, imports: 0, fichiers: 0 };
+  const tally: Tally = {
+    symboles: 0, membres: 0, entrees: 0, ilots: 0, balayage: 0, renommages: 0,
+    imports: 0, fichiers: 0,
+    // Les cinq familles rapatriees depuis `FindEverythingUnused`. Absentes de
+    // cet objet, `tally[famille]++` valait NaN et la phrase du compte rendu
+    // annoncait `NaN resource keys`.
+    alias: 0, evenements: 0, remoteconfig: 0, cles: 0, ressources: 0,
+  };
   for (const l of parFichier.values()) {
     for (const c of l) tally[c.famille === 'balayage' && c.texte !== '' ? 'renommages' : c.famille]++;
   }
@@ -277,7 +400,10 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
     async (_p, token) => {
       const data = await corpus.get(token);
       if (token.isCancellationRequested || data.sourcesTruncated) return undefined;
-      return { data, ...collecterUnePasse(data.sources, segs) };
+      // Le MEME contexte que les rondes suivantes. Sans lui, la premiere passe
+      // taisait les familles de ressources et le dialogue d'ouverture
+      // annoncait moins que ce que la commande allait retirer.
+      return { data, ...collecterUnePasse(data.sources, segs, contexteDuCorpus(data)) };
     },
   );
   if (!premier) {
@@ -285,7 +411,11 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
     return;
   }
 
-  const total = [...premier.parFichier.values()].reduce((n, l) => n + l.length, 0);
+  // Les fichiers de ressources comptent dans ce total : ils ne portent aucune
+  // coupe, et sans eux la commande annoncait « Nothing unused left to remove »
+  // sur un espace de travail ou dix layouts morts attendaient.
+  const total = [...premier.parFichier.values()].reduce((n, l) => n + l.length, 0)
+    + (premier.fichiersMorts?.size ?? 0);
   if (total === 0) {
     void vscode.window.showInformationMessage('Nothing unused left to remove.');
     return;
@@ -298,7 +428,11 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
   );
   if (choix === 'cancel') return;
 
-  const cumul: Tally = { symboles: 0, membres: 0, entrees: 0, ilots: 0, balayage: 0, renommages: 0, imports: 0, fichiers: 0, bouges: 0 };
+  const cumul: Tally = {
+    symboles: 0, membres: 0, entrees: 0, ilots: 0, balayage: 0, renommages: 0,
+    imports: 0, fichiers: 0, bouges: 0,
+    alias: 0, evenements: 0, remoteconfig: 0, cles: 0, ressources: 0,
+  };
   const ajouteTally = (t: Tally) => { for (const k of Object.keys(t)) cumul[k] = (cumul[k] ?? 0) + t[k]; };
   /** Les fichiers ecartes, par chemin : la boucle repasse sur les memes. */
   const ecartes = new Set<string>();
@@ -363,11 +497,15 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
       // contrat du corpus est ecrit dans sa propre classe : un balayage
       // incomplet ne peut pas prouver une absence.
       if (data.sourcesTruncated) { incomplet = true; break; }
-      const { parFichier } = n === 0 && data === premier.data
-        ? { parFichier: premier.parFichier }
-        : collecterUnePasse(data.sources, segs);
+      // Le corpus porte deja tout ce que les familles de ressources demandent.
+      // Sans ce contexte elles se taisaient, et `Find` les rapportait quand
+      // meme : c'est l'ecart que cette version supprime.
+      const contexte = contexteDuCorpus(data);
+      const { parFichier, fichiersMorts } = n === 0 && data === premier.data
+        ? { parFichier: premier.parFichier, fichiersMorts: premier.fichiersMorts }
+        : collecterUnePasse(data.sources, segs, contexte);
       const combien = [...parFichier.values()].reduce((a, l) => a + l.length, 0);
-      if (combien === 0) break;
+      if (combien === 0 && fichiersMorts.size === 0) break;
 
       const textes = new Map(data.sources.map(s => [s.path, s.text]));
 
@@ -378,15 +516,19 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
       // annoncee, elle ne verifie rien.
       const { retenu, bouges } = coupesRetenues(parFichier, textes);
       for (const p of bouges) ecartes.add(p);
-      if (retenu.size === 0) break;
+      if (retenu.size === 0 && fichiersMorts.size === 0) break;
 
+      // `fichiersMorts` passe en troisieme argument : la cascade ne doit pas
+      // compter une deuxieme fois un fichier que la famille des ressources
+      // emporte deja, ni retirer les imports d'un fichier qui disparait.
       const cascade = planCascade(
         new Map([...retenu].map(([p, l]) => [p, l.map(c => ({ start: c.start, end: c.end }))])),
         textes,
+        fichiersMorts,
       );
       const edit = new vscode.WorkspaceEdit();
       for (const [p, l] of retenu) {
-        if (cascade.deleteFiles.has(p)) continue;
+        if (cascade.deleteFiles.has(p) || fichiersMorts.has(p)) continue;
         const plages = plagesDuFichier(p, textes.get(p)!, l, cascade.imports.get(p));
         if (plages === undefined) continue;
         for (const r of plages) {
@@ -395,6 +537,21 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
         }
       }
       const swept = addCascadePlan(edit, cascade, textes, choix === 'review');
+      // Etiquette distincte de celle de la cascade : un fichier de ressources
+      // n'est pas vide, il n'est nomme par personne. Dire « nothing is left in
+      // it » d'un layout intact serait faux dans la fenetre de relecture.
+      let ressourcesSupprimees = 0;
+      for (const chemin of fichiersMorts) {
+        edit.deleteFile(
+          corpusUri(chemin),
+          { ignoreIfNotExists: true },
+          {
+            needsConfirmation: choix === 'review',
+            label: `Delete ${chemin.split(/[\\/]/).pop()}, nothing references it`,
+          },
+        );
+        ressourcesSupprimees++;
+      }
       // Ce qui est RETENU, jamais ce que la passe a trouve. Un fichier ecarte
       // parce qu'il a bouge garde ses coupes dans `parFichier`, et les compter
       // faisait annoncer « Removed 2 declarations » sur une edition d'une seule
@@ -407,6 +564,7 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
       const applique = compteLesFamilles(retenu);
       applique.imports += swept.imports;
       applique.fichiers += swept.files;
+      applique.ressources += ressourcesSupprimees;
       ajouteTally(applique);
 
       const ok = await vscode.workspace.applyEdit(edit);
@@ -513,6 +671,14 @@ export function resumeDesFamilles(cumul: Tally): string {
     cumul.renommages > 0 ? `${plural(cumul.renommages, 'unused name')} renamed to \`_\`` : '',
     cumul.imports > 0 ? plural(cumul.imports, 'orphaned import') : '',
     cumul.fichiers > 0 ? plural(cumul.fichiers, 'emptied file') : '',
+    // Rapatriees de `FindEverythingUnused`. Sans ces lignes la phrase
+    // totalisait moins que ce que l'edition emportait, ce que le temoin
+    // KJ050.WhatItAnnouncesIsWhatItSends attrape.
+    cumul.cles > 0 ? plural(cumul.cles, 'resource key') : '',
+    cumul.ressources > 0 ? plural(cumul.ressources, 'resource file') : '',
+    cumul.evenements > 0 ? plural(cumul.evenements, 'unheard post') : '',
+    cumul.alias > 0 ? plural(cumul.alias, 'catalog alias', 'catalog aliases') : '',
+    cumul.remoteconfig > 0 ? plural(cumul.remoteconfig, 'remote config key') : '',
   ].filter(Boolean).join(', ');
 }
 

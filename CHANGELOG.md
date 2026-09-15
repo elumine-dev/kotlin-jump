@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.42.343
+
+This release closes a gap where Remove Everything Unused reported several categories of unused code, Gradle dependency aliases, unheard event posts, Remote Config keys, and resource keys and files, without actually removing them. It also adds a preview of files and imports a cleanup would affect, and introduces a new command that offers additional test only cleanup candidates for manual, one by one review.
+
+### Improvements
+- Added a "Remove Code Used Only by Tests: Unproven Groups, Review Each" command that offers cleanup candidates the standard command could not prove safe on its own, and shows the specific reason for the doubt next to each one.
+- Each unproven candidate is rebuilt as a full edit and rechecked against every remaining source file before it is offered, catching cases where an earlier, simpler check would have broken the build or removed more tests than intended.
+- Find Everything Unused now reports how many files a cleanup would leave empty and how many imports would become orphaned, so you see the full impact before running Remove.
+
+### Fixes
+- Fixed Remove Everything Unused silently skipping categories it had already reported as unused: Gradle dependency catalog aliases, event posts nothing listens to, Remote Config keys, resource keys, and resource files. All of these are now actually removed along with everything else.
+- Fixed the summary shown after Remove Everything Unused undercounting the cleanup, since it previously left out the categories above even when they were part of what got removed.
+
 ## 1.42.342
 
 This release fixes Remove Test Only Code leaving a Kotlin import through Companion behind after removing a companion constant that only tests used.

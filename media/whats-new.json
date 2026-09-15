@@ -1,20 +1,39 @@
 {
-  "version": "1.42.342",
+  "version": "1.42.343",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Companion imports go too",
-  "summary": "This release fixes Remove Test Only Code leaving a Kotlin import through Companion behind after removing a companion constant that only tests used.",
+  "tagline": "More thorough, more transparent cleanup",
+  "summary": "This release closes a gap where Remove Everything Unused reported several categories of unused code, Gradle dependency aliases, unheard event posts, Remote Config keys, and resource keys and files, without actually removing them. It also adds a preview of files and imports a cleanup would affect, and introduces a new command that offers additional test only cleanup candidates for manual, one by one review.",
   "highlights": [
     {
-      "title": "Companion imports removed",
+      "title": "Unproven Test Cleanup Command",
+      "kind": "feature",
+      "description": "A new command offers cleanup candidates that could not be automatically proven safe, rebuilds and rechecks the change first, then lets you review and approve each one individually with the reason for the doubt shown right on it."
+    },
+    {
+      "title": "Remove Now Matches What It Reports",
       "kind": "fix",
-      "description": "When Remove Test Only Code removes a companion object constant that only tests used, a main Kotlin file importing it as Cles.Companion.MORTE loses that import too, so the module keeps compiling."
+      "description": "Remove Everything Unused now actually removes unused Gradle dependency catalog aliases, unheard event posts, Remote Config keys, resource keys, and resource files, categories that were previously listed in the report but left untouched when you clicked Remove."
+    },
+    {
+      "title": "Preview Of Side Effects",
+      "kind": "improvement",
+      "description": "Find Everything Unused now shows how many files a cleanup would leave empty and how many imports would become orphaned, so the summary matches what Remove will actually do."
     }
   ],
   "sections": [
     {
+      "heading": "Improvements",
+      "bullets": [
+        "Added a \"Remove Code Used Only by Tests: Unproven Groups, Review Each\" command that offers cleanup candidates the standard command could not prove safe on its own, and shows the specific reason for the doubt next to each one.",
+        "Each unproven candidate is rebuilt as a full edit and rechecked against every remaining source file before it is offered, catching cases where an earlier, simpler check would have broken the build or removed more tests than intended.",
+        "Find Everything Unused now reports how many files a cleanup would leave empty and how many imports would become orphaned, so you see the full impact before running Remove."
+      ]
+    },
+    {
       "heading": "Fixes",
       "bullets": [
-        "Fixed Remove Test Only Code leaving `import p.Cles.Companion.MORTE` in a main Kotlin file after removing the constant and its tests. Version 1.42.341 matched member imports without the Companion segment only on the Java side, counting on the Kotlin sweep that Remove Everything Unused runs; Remove Test Only Code has no such sweep, and the import stayed behind."
+        "Fixed Remove Everything Unused silently skipping categories it had already reported as unused: Gradle dependency catalog aliases, event posts nothing listens to, Remote Config keys, resource keys, and resource files. All of these are now actually removed along with everything else.",
+        "Fixed the summary shown after Remove Everything Unused undercounting the cleanup, since it previously left out the categories above even when they were part of what got removed."
       ]
     }
   ],

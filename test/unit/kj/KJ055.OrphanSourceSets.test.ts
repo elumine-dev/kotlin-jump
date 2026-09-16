@@ -35,7 +35,7 @@ const APP_GRADLE = [
   '    flavorDimensions += listOf("app", "brand")',
   '    productFlavors {',
   '        create("variant") { dimension = "app" }',
-  '        create("adRehearsal") { dimension = "app" }',
+  '        create("preview") { dimension = "app" }',
   '        create("exampleapp") { dimension = "brand" }',
   '    }',
   '    sourceSets {',
@@ -59,10 +59,10 @@ describe.skipIf(!mod)('findOrphanSourceSets', () => {
     const legaux = [
       'main', 'test', 'testFixtures', 'androidTest',
       'debug', 'release', 'staging',
-      'variant', 'adRehearsal', 'exampleapp',
-      'variantexampleappRelease', 'adRehearsalexampleappRelease',
-      'testvariant', 'testAdRehearsal',
-      'testvariantexampleappRelease', 'testAdRehearsalexampleappRelease',
+      'variant', 'preview', 'exampleapp',
+      'variantexampleappRelease', 'previewexampleappRelease',
+      'testvariant', 'testPreview',
+      'testvariantexampleappRelease', 'testPreviewexampleappRelease',
       'sharedTest',
     ];
     const sources = [

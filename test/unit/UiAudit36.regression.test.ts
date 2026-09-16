@@ -177,7 +177,7 @@ describe('Source sets de test, portée de la règle de variante', () => {
     // Formes relevées dans le dépôt : Gradle suffixe le nom de base, et pour
     // un source set de test unitaire le répertoire de langage compte aussi.
     expect(isTest('/ws/variant/app/src/testvariant/java/ca/exampleapp/FooTest.java')).toBe(true);
-    expect(isTest('/ws/variant/app/src/testAdRehearsalexampleappRelease/java/A.java')).toBe(true);
+    expect(isTest('/ws/variant/app/src/testPreviewexampleappRelease/java/A.java')).toBe(true);
     expect(isTest('/ws/app/src/androidTestDebug/kotlin/FooTest.kt')).toBe(true);
     expect(isTest('/ws/lib/src/jvmTestFixtures/kotlin/Fake.kt')).toBe(true);
     expect(isTest('/ws/app/src/test/kotlin/FooTest.kt')).toBe(true);

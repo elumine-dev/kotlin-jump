@@ -6,7 +6,7 @@ import { fileBecomesEmpty, wholeLineExtent } from './unusedSymbols';
  *
  * Deleting a function takes its body with it, never the imports that body was
  * the only user of. `DeadCodeSweep` says so in as many words ("Cascades are
- * NOT resolved"), and on /Users/kevin/Desktop/work/lapresse applying every
+ * NOT resolved"), and on /workspace/exampleapp applying every
  * removal the extension offers left 100 newly dead imports across 36 files,
  * plus shells holding nothing but a package line.
  *

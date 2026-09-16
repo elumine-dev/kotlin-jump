@@ -120,8 +120,8 @@ export function collectXmlResourceRefs(xml: string, kinds: readonly string[]): R
  * (`as baseColor`), and the R class itself aliased (`import ca.foo.R as AppR`
  * then `AppR.string.hello`).
  *
- * Missing them is not a debatable diagnostic: on /Users/kevin/Desktop/work/lapresse
- * two live colours were reported dead, deleted, and `:rubicon:component-feed`
+ * Missing them is not a debatable diagnostic: on /workspace/exampleapp
+ * two live colours were reported dead, deleted, and `:baseapp:component-feed`
  * stopped compiling. 7 files import a nested `R.<kind>` there, 5 alias R.
  *
  * `android.R` is the platform's, so `import android.R.style` opens nothing of
@@ -136,7 +136,7 @@ export function importedResourcePrefixes(code: string): { prefix: string; kind?:
   const nested = /^[ \t]*import[ \t]+(?:static[ \t]+)?([\w.]*?)\bR2?\.([a-z]\w*)(?:[ \t]+as[ \t]+([A-Za-z_]\w*))?[ \t]*;?[ \t]*$/gm;
   const whole = /^[ \t]*import[ \t]+([\w.]*?)\bR2?[ \t]+as[ \t]+([A-Za-z_]\w*)[ \t]*;?[ \t]*$/gm;
   // Seule la plateforme, ancree. `(^|\.)` acceptait aussi
-  // `com.mycompany.android.`, `ca.lapresse.android.`, n'importe quel paquet
+  // `com.mycompany.android.`, `ca.exampleapp.android.`, n'importe quel paquet
   // dont le dernier segment est `android`, ce qui est une convention tres
   // repandue : tout `import <ns>.R.color` y devenait invisible et les cles du
   // module partaient a la suppression.

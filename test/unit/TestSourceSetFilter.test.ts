@@ -59,16 +59,16 @@ describe('depuis un fichier de production', () => {
     // figurent dans aucune liste par defaut.
     avecDefauts();
     const allow = buildAllowFilter(PROD);
-    expect(allow('/p/replica/app/src/savedAndroidTest/java/ca/T.kt'),
+    expect(allow('/p/variant/app/src/savedAndroidTest/java/ca/T.kt'),
       'savedAndroidTest est un source set de test').toBe(false);
-    expect(allow('/p/core/ui/src/sharedTest/java/nuglif/T.kt'),
+    expect(allow('/p/core/ui/src/sharedTest/java/vendor/T.kt'),
       'sharedTest aussi').toBe(false);
   });
 
   it('mais la production reste visible', () => {
     avecDefauts();
     const allow = buildAllowFilter(PROD);
-    expect(allow('/p/core/ui/src/main/java/nuglif/Autre.kt')).toBe(true);
+    expect(allow('/p/core/ui/src/main/java/vendor/Autre.kt')).toBe(true);
     // `src/testing/` n'est pas un source set : c'est du code de production
     // qui parle de tests. La convention Gradle vise `src/<nom>/`, et
     // `testing` contient bien « test »... donc il est traite comme un test.
@@ -89,7 +89,7 @@ describe('depuis un fichier de test', () => {
 
   it('y compris depuis un source set non configure', () => {
     avecDefauts();
-    const allow = buildAllowFilter('/p/replica/app/src/savedAndroidTest/java/ca/T.kt');
+    const allow = buildAllowFilter('/p/variant/app/src/savedAndroidTest/java/ca/T.kt');
     expect(allow('/p/app/src/androidTest/java/com/x/Autre.kt'),
       'un test peut en voir un autre').toBe(true);
   });

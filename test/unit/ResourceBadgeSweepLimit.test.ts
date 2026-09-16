@@ -7,7 +7,7 @@
  * ligne quand ce nombre est zero. Il n'avait meme aucune garde de troncature.
  *
  * Mesure par la fonction de production `countAllResourceUsages` sur
- * /Users/kevin/Desktop/work/lapresse, 229 fichiers values, 2007 cles badgees,
+ * /workspace/exampleapp, 229 fichiers values, 2007 cles badgees,
  * 6278 fichiers de projet :
  *
  *   avec tous les fichiers        : 130 cles reellement a 0 usage

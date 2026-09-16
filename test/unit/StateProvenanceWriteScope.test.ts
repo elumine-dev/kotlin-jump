@@ -9,7 +9,7 @@
  * les collecteurs Compose vivent ailleurs. Celle des ecritures affichait
  * `✎ 0 writes` sans reserve.
  *
- * Mesure sur /Users/kevin/Desktop/work/lapresse, par le chemin de production :
+ * Mesure sur /workspace/exampleapp, par le chemin de production :
  * 319 etats detectes, 269 prives, 21 non prives affiches a zero, et **3** de
  * ces 21 sont bel et bien ecrits ailleurs. `contentIsInflatedState`, declare
  * dans TemplateScreen.kt, est ecrit dans quatre autres fichiers et la lentille

@@ -209,7 +209,7 @@ export async function runPostProcess(opts: PostProcessOpts): Promise<void> {
 
     // Synthetic drop shadow around the rounded window. Macos `screencapture
     // -o` produces native window shadows for stills, but we capture via
-    // `screencapture -v` (animated) which does not. We replicate the effect
+    // `screencapture -v` (animated) which does not. We variantte the effect
     // here so every demo ships with the same depth-cue the README hero
     // shot gets.
     //

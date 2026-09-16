@@ -588,7 +588,7 @@ export function findUnusedMembers(input: UnusedMemberScanInput): UnusedMember[] 
       // A test that names the member is a use `private` would break, and the
       // compiler only says so when the test sources are built, which an
       // `assembleDebug` never does. Measured on a real project: sixteen
-      // members went private and `:core:utils` and `:replica:consent` stopped
+      // members went private and `:core:utils` and `:variant:consent` stopped
       // compiling their tests with
       //   Cannot access 'val EMAIL_FORBIDDEN_CHARS': it is private in ...
       const usedByTests = mentionsOf(harvest.test, c) > 0;

@@ -8,7 +8,7 @@ import { findingAt } from '../../src/util/findingAt';
 // Audit 49 : les quick fixes de la famille code mort appariaient leur finding
 // sur la seule LIGNE du curseur. Kotlin declare les champs d'une data class et
 // les entrees d'un enum sur une meme ligne, donc l'ampoule ouverte sur le
-// second agissait sur le premier et supprimait le mauvais token. LaPresse
+// second agissait sur le premier et supprimait le mauvais token. exampleapp
 // porte 34 data classes et 4 enums ecrits ainsi.
 
 function doc(path: string, code: string): any {

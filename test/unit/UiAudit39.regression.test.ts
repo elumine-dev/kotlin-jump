@@ -12,7 +12,7 @@ import { workspace } from './__mocks__/vscode';
 // dénoncé le moteur, pas le surlignage : à l'intérieur d'une interpolation on
 // est en code, donc un littéral imbriqué est du texte à nouveau. Find Usages
 // comptait le libellé, et comme Rename passe par le même scan, un renommage
-// réécrivait ce texte. Cas réel : LaPresse, EditionStatus.kt, le toString
+// réécrivait ce texte. Cas réel : exampleapp, EditionStatus.kt, le toString
 // `${if (downloadedDate == null) "" else ", downloadedDate=$downloadedDate"}`.
 
 const URI = 'file:///com/example/EditionStatus.kt';

@@ -21,7 +21,7 @@ const VISIBILITY_RE = /\b(public|internal|protected)\s+/;
  *
  * Kotlin rejects `private open` and `private abstract`: a private member
  * cannot be overridden, so the pair is contradictory. Found by running the
- * bulk narrowing on /Users/kevin/Desktop/work/lapresse, where
+ * bulk narrowing on /workspace/exampleapp, where
  * `protected open fun createLibrarySessionCallback` became `private open fun`
  * and `:core:ui` stopped compiling with two errors on one line:
  *   Modifier 'private' is incompatible with 'open'.

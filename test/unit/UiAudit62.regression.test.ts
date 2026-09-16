@@ -9,7 +9,7 @@ import { bodyEndLine, rangeEndLine } from '../../src/util/symbolRanges';
 // profondeur inferieure ou egale, et pour `val x = object : L {` ce suivant est
 // la propriete elle meme, sur la meme ligne : l'objet anonyme etait donc borne
 // a une ligne. Ses `override` sortaient de lui dans l'Outline, et son repli ne
-// repliait rien. 111 objets anonymes sur les 3187 fichiers de LaPresse.
+// repliait rien. 111 objets anonymes sur les 3187 fichiers de exampleapp.
 
 const URI = 'file:///a62/Holder.kt';
 const CODE = [

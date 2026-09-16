@@ -3,7 +3,7 @@
  *
  * Trois fournisseurs gardent le TEXTE de tous les fichiers du projet pour
  * repondre vite. Depuis que le plafond est passe a 20000 (v1.42.178 et
- * v1.42.182) cela represente, sur /Users/kevin/Desktop/work/lapresse :
+ * v1.42.182) cela represente, sur /workspace/exampleapp :
  *
  *   DeadWeightActionProvider   6278 fichiers, 40,8 Mo   (deja discipline)
  *   ResourceUsageBadgeProvider 6278 fichiers, 40,8 Mo

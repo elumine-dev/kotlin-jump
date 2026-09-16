@@ -6,7 +6,7 @@ import { parse } from '../../src/indexer/KotlinParser';
 // `object : Interface`, mais seulement depuis deux endroits de la boucle. Toute
 // ligne qui matchait une autre branche (`fun`, `class`, entrée d'enum) sortait
 // par son propre `continue` avant l'appel, et toute ligne écartée par le
-// préfiltre O(1) n'y arrivait jamais. Sur LaPresse : 79 des 276 objets anonymes
+// préfiltre O(1) n'y arrivait jamais. Sur exampleapp : 79 des 276 objets anonymes
 // n'étaient pas comptés, dont la forme Dagger
 // `fun provideX(): X = object : X {` que Kevin a signalée sur AdProvider
 // (1 annoncée, 3 réelles) et AudioRepository (3 annoncées, 5 réelles).

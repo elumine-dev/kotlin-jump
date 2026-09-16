@@ -32,7 +32,7 @@ describe('KJ-047 un test qui couvre des membres vivants reste', () => {
 
   it('le cas du projet de reference : le test du depot n est pas propose avec estEnCours', async () => {
     config();
-    // Le depot vient d un champ, comme `replicaDatabaseServiceImpl` injecte :
+    // Le depot vient d un champ, comme `variantDatabaseServiceImpl` injecte :
     // le corps du test ne nomme aucune declaration de premier niveau.
     const test = f(`${T}/DepotTest.kt`, 'package com.x\n\nclass DepotTest {\n    private val d = Depot()\n\n    @Test\n    fun persiste() {\n        d.enregistre(1)\n        check(d.lit().estPret())\n        check(!d.lit().estEnCours())\n    }\n}\n');
     const scan = await scanTestOnly(corpus([etat, depot, main, test]));

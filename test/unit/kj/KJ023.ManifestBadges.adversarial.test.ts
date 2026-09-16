@@ -16,7 +16,7 @@ describe('KJ-023 adversarial', () => {
   });
 
   it('VIBRATE reste vivante quand un canal de notification la demande', () => {
-    // Mesure sur /Users/kevin/Desktop/work/lapresse : sur 56 permissions,
+    // Mesure sur /workspace/exampleapp : sur 56 permissions,
     // VIBRATE etait la SEULE classee « unused », donc grisee et proposee a la
     // suppression. Or le projet appelle `enableVibration(true)` sur ses canaux
     // de notification, a cinq endroits. La table ne connaissait que

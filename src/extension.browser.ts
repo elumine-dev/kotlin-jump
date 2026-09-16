@@ -111,6 +111,7 @@ import { findEverythingUnusedCommand } from './commands/FindEverythingUnused';
 // les laisser hors de cet hote, c'est les offrir sur vscode.dev et repondre
 // « command not found ».
 import { removeTestOnlyCodeCommand } from './commands/RemoveTestOnlyCode';
+import { findDormantCodeCommand } from './commands/FindDormantCode';
 import { makeSelfOnlyPrivateCommand } from './commands/MakeSelfOnlyPrivate';
 import { removeEverythingUnusedCommand } from './commands/RemoveEverythingUnused';
 import {
@@ -1061,6 +1062,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // the browser host can offer it exactly as it offers the proven one.
     vscode.commands.registerCommand('kotlin-jump.removeTestOnlyCodeUnproven', () =>
       removeTestOnlyCodeCommand(resourceCorpusWeb, true),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.findDormantCode', () =>
+      findDormantCodeCommand(resourceCorpusWeb),
     ),
     vscode.commands.registerCommand('kotlin-jump.makeSelfOnlyPrivate', () =>
       makeSelfOnlyPrivateCommand(resourceCorpusWeb),

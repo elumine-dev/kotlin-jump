@@ -9,7 +9,7 @@ import { workspace } from './__mocks__/vscode';
 // était alors lue comme une signature, et l'argument étiqueté avec un nom
 // ramassé dans cette expression. Cas réel : `Color.alpha(result)` recevait
 // `opacity:`, tiré de `val alpha = (Color.alpha(this) * opacity).toInt()`
-// déclaré ailleurs. 14 étiquettes inventées sur le corpus LaPresse.
+// déclaré ailleurs. 14 étiquettes inventées sur le corpus exampleapp.
 
 const LOCALE_URI = 'file:///a52/ColorUtilExt.kt';
 const LOCALE = [

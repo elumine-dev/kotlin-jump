@@ -11,7 +11,7 @@ import { importOrNull } from './harness';
  * etalee sur six lignes : l'etendue etait refusee et le diagnostic s'affichait
  * sans le moindre correctif.
  *
- * Mesure sur /Users/kevin/Desktop/work/lapresse : 58 des 66 declarations
+ * Mesure sur /workspace/exampleapp : 58 des 66 declarations
  * signalees sans correctif tenaient a ce seul mot.
  */
 

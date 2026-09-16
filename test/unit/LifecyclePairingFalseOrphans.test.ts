@@ -2,7 +2,7 @@
  * KJ-016 — les deux familles de faux avertissements mesurees sur le vrai projet.
  *
  * Le diagnostic est en Warning et actif par defaut. Passe sur
- * /Users/kevin/Desktop/work/lapresse (5088 sources, 132 fichiers retenus par la
+ * /workspace/exampleapp (5088 sources, 132 fichiers retenus par la
  * garde du fournisseur), il produit 5 avertissements, et 4 sont faux :
  *
  *   3x  onBackPressedDispatcher.addCallback(callback)

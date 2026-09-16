@@ -25,6 +25,9 @@ const PROD_TEXT = 'package com.x\n\nclass Resize {\n    fun go(a: Int) = a * 2\n
 /** The cut the caller makes: the whole class. */
 const PROD_EXTENT = { path: PROD_PATH, start: PROD_TEXT.indexOf('class'), end: PROD_TEXT.length };
 
+const LIVE = { path: 'app/src/main/java/com/x/Live.kt', text: 'package com.x\n\nclass Live {\n    fun ping() = 1\n}\n' };
+/** `Live` is used by main code, so it is not dead with any island. */
+const LIVE_USER = { path: 'app/src/main/java/com/x/UsesLive.kt', text: 'package com.x\n\nfun boot() = Live().ping()\n' };
 const closure = (names: string[], sources: { path: string; text: string }[], extents = [PROD_EXTENT]) =>
   mod.planClosure(names, sources, SEGS, extents);
 
@@ -79,6 +82,8 @@ describe.skipIf(!mod)('planClosure', () => {
         '',
       ].join('\n'),
     };
+    // The subclass tests something LIVE too, like the eleven assembler tests
+    // under AssemblerBaseTest: it is not dedicated to the island.
     const sub = {
       path: 'app/src/test/java/com/x/OtherTest.kt',
       text: [
@@ -88,12 +93,12 @@ describe.skipIf(!mod)('planClosure', () => {
         '',
         'class OtherTest : BaseTest() {',
         '    @Test',
-        '    fun other() { ready() }',
+        '    fun other() { ready(); Live().ping() }',
         '}',
         '',
       ].join('\n'),
     };
-    const plan = closure(['Resize'], [{ path: PROD_PATH, text: PROD_TEXT }, base, sub]);
+    const plan = closure(['Resize'], [{ path: PROD_PATH, text: PROD_TEXT }, LIVE, LIVE_USER, base, sub]);
     expect(mod.isClosed(plan)).toBe(false);
     expect(plan.withheld).toContain('BaseTest');
     expect(plan.withheld).toContain(sub.path);
@@ -178,6 +183,138 @@ describe.skipIf(!mod)('planClosure', () => {
     expect(plan.cuts.map((c: any) => c.name)).toEqual(['keep']);
   });
 
+  it('un champ d une classe de base partagee, utilise seulement par des instructions isolees : le champ et ces lignes partent, la base reste', () => {
+    // La forme AssemblerBaseTest mesuree au niveau du MEMBRE : le champ
+    // `htmlFormatterHelper` et une ligne dans un @Before, jamais nommes par
+    // les onze sous-classes. Le fichier partage reste, ses sous-classes aussi.
+    const base = {
+      path: 'app/src/test/java/com/x/BaseTest.kt',
+      text: [
+        'package com.x',
+        '',
+        'import org.junit.Before',
+        '',
+        'abstract class BaseTest {',
+        '    internal lateinit var resize: Resize',
+        '    internal var other = 1',
+        '',
+        '    @Before',
+        '    fun setUp() {',
+        '        resize = Resize()',
+        '        other = 2',
+        '    }',
+        '}',
+        '',
+      ].join('\n'),
+    };
+    const sub = {
+      path: 'app/src/test/java/com/x/OtherTest.kt',
+      text: 'package com.x\n\nimport kotlin.test.Test\n\nclass OtherTest : BaseTest() {\n    @Test\n    fun other() { check(other == 2) }\n}\n',
+    };
+    const plan = closure(['Resize'], [{ path: PROD_PATH, text: PROD_TEXT }, base, sub]);
+    expect(plan.withheld).toBeUndefined();
+    expect(mod.isClosed(plan)).toBe(true);
+    expect(plan.files).toEqual([]);
+    const cuts = plan.cuts.filter((c: any) => c.path === base.path).map((c: any) => base.text.slice(c.start, c.end).trim());
+    expect(cuts).toEqual(['internal lateinit var resize: Resize', 'resize = Resize()']);
+  });
+
+  it('un champ partage dont un usage n est pas une instruction isolee : rien n est coupe, le groupe est retenu', () => {
+    const base = {
+      path: 'app/src/test/java/com/x/BaseTest.kt',
+      text: [
+        'package com.x',
+        '',
+        'abstract class BaseTest {',
+        '    internal lateinit var resize: Resize',
+        '    fun ready() = if (true) resize.go(1) else 0',
+        '}',
+        '',
+      ].join('\n'),
+    };
+    const sub = {
+      path: 'app/src/test/java/com/x/OtherTest.kt',
+      text: 'package com.x\n\nimport kotlin.test.Test\n\nclass OtherTest : BaseTest() {\n    @Test\n    fun other() { ready(); Live().ping() }\n}\n',
+    };
+    const plan = closure(['Resize'], [{ path: PROD_PATH, text: PROD_TEXT }, LIVE, LIVE_USER, base, sub]);
+    expect(mod.isClosed(plan)).toBe(false);
+    expect(plan.cuts.filter((c: any) => c.path === base.path)).toEqual([]);
+  });
+
+  it('un double de test et le test qui l utilise forment un ilot a cheval sur la frontiere : les trois partent ensemble', () => {
+    // La forme GridGameTimer : `GridGameTimer4Test extends GridGameTimer`,
+    // `GridGameTimerTest` n utilise que le double, et rien d autre ne nomme
+    // aucun des trois. Un ilot de code mort dont deux membres sont des tests.
+    const double = {
+      path: 'app/src/test/java/com/x/ResizeDouble.kt',
+      text: 'package com.x\n\nclass ResizeDouble : Resize() {\n    fun peek() = 1\n}\n',
+    };
+    const test = {
+      path: 'app/src/test/java/com/x/ResizeDoubleTest.kt',
+      text: 'package com.x\n\nimport kotlin.test.Test\n\nclass ResizeDoubleTest {\n    private val d = ResizeDouble()\n    @Test\n    fun peeks() { d.peek() }\n}\n',
+    };
+    const plan = closure(['Resize'], [{ path: PROD_PATH, text: PROD_TEXT }, double, test]);
+    expect(plan.withheld).toBeUndefined();
+    expect(mod.isClosed(plan)).toBe(true);
+    expect(plan.files.sort()).toEqual([double.path, test.path].sort());
+  });
+
+  it('un ilot dont un membre est nomme par une source principale n en est pas un : retenu', () => {
+    const double = {
+      path: 'app/src/test/java/com/x/ResizeDouble.kt',
+      text: 'package com.x\n\nclass ResizeDouble : Resize()\n',
+    };
+    const mainUser = {
+      path: 'app/src/main/java/com/x/Uses.kt',
+      text: 'package com.x\n\nval d = ResizeDouble()\n',
+    };
+    const plan = closure(['Resize'], [{ path: PROD_PATH, text: PROD_TEXT }, double, mainUser]);
+    expect(mod.isClosed(plan)).toBe(false);
+  });
+
+  it('un homonyme importe d un autre paquet, ou imbrique en production, ne retient pas l ilot', () => {
+    // La forme GridGameTimerTest : il nomme `View` (android.view.View) et
+    // la production declare un `View` IMBRIQUE dans NavigatorContract. Un
+    // nom simple, deux types. L ilot {double, test, regles} doit fermer.
+    const contract = {
+      path: 'app/src/main/java/com/x/NavigatorContract.kt',
+      text: 'package com.x\n\ninterface NavigatorContract {\n    interface View { fun show() }\n}\n',
+    };
+    const contractUser = {
+      path: 'app/src/main/java/com/x/Navigator.kt',
+      text: 'package com.x\n\nclass Navigator(val v: NavigatorContract.View)\n',
+    };
+    const double = {
+      path: 'app/src/test/java/com/x/ResizeDouble.kt',
+      text: 'package com.x\n\nclass ResizeDouble : Resize()\n',
+    };
+    const rules = {
+      path: 'app/src/test/java/com/x/ResizeRules.kt',
+      text: 'package com.x\n\nobject ResizeRules { const val START = 1 }\n',
+    };
+    const test = {
+      path: 'app/src/test/java/com/x/ResizeDoubleTest.kt',
+      text: [
+        'package com.x',
+        '',
+        'import android.view.View',
+        'import kotlin.test.Test',
+        '',
+        'class ResizeDoubleTest {',
+        '    private val d = ResizeDouble()',
+        '    private var view: View? = null',
+        '    @Test',
+        '    fun starts() { check(ResizeRules.START == 1); d.go(1) }',
+        '}',
+        '',
+      ].join('\n'),
+    };
+    const plan = closure(['Resize'], [{ path: PROD_PATH, text: PROD_TEXT }, contract, contractUser, double, rules, test]);
+    expect(plan.withheld).toBeUndefined();
+    expect(mod.isClosed(plan)).toBe(true);
+    expect(plan.files.sort()).toEqual([double.path, rules.path, test.path].sort());
+  });
+
   it('une mention dans une source principale, hors import, retient le groupe : le verdict etait faux', () => {
     const user = {
       path: 'app/src/main/java/com/x/Caller.kt',
@@ -200,5 +337,166 @@ describe.skipIf(!mod)('planClosure', () => {
     const plan = closure(['Resize'], [{ path: PROD_PATH, text: PROD_TEXT }, importer, test]);
     expect(mod.isClosed(plan)).toBe(true);
     expect(plan.cuts.some((c: any) => c.path === importer.path && c.kind === 'import')).toBe(true);
+  });
+
+  it('la forme AssemblerBaseTest : un mock partage, un @Before sur trois lignes, et le fichier reste', () => {
+    // Le cas mesure qui retenait HtmlFormatterHelper. Le fichier est etendu
+    // par vingt-six classes, et AUCUNE ne nomme `htmlFormatterHelper` : le
+    // champ est une surface privee dans un fichier partage. L'usage tient sur
+    // trois lignes, la mention est sur la DERNIERE.
+    const base = {
+      path: 'app/src/test/java/com/x/AssemblerBaseTest.kt',
+      text: [
+        'package com.x',
+        '',
+        'abstract class AssemblerBaseTest {',
+        '    @Mock',
+        '    internal lateinit var resize: Resize',
+        '',
+        '    @Mock',
+        '    internal lateinit var dateParseDelegate: DateParseDelegate',
+        '',
+        '    @Before',
+        '    open fun setup() {',
+        '        MockitoAnnotations.openMocks(this)',
+        '',
+        '        doAnswer {',
+        '            it.arguments[0]',
+        '        }.whenever(resize).go(any())',
+        '',
+        '        whenever(dateParseDelegate.parseDate(any())).thenReturn(null)',
+        '    }',
+        '',
+        '    fun ready() = dateParseDelegate.parseDate("x")',
+        '}',
+        '',
+      ].join('\n'),
+    };
+    const sub = {
+      path: 'app/src/test/java/com/x/OtherTest.kt',
+      text: 'package com.x\n\nimport kotlin.test.Test\n\nclass OtherTest : AssemblerBaseTest() {\n    @Test\n    fun other() { ready(); Live().ping() }\n}\n',
+    };
+    const plan = closure(['Resize'], [{ path: PROD_PATH, text: PROD_TEXT }, LIVE, LIVE_USER, base, sub]);
+    expect(plan.withheld).toBeUndefined();
+    expect(mod.isClosed(plan)).toBe(true);
+    expect(plan.files).toEqual([]);
+    const cuts = plan.cuts.filter((c: any) => c.path === base.path).map((c: any) => base.text.slice(c.start, c.end).trim());
+    expect(cuts).toEqual([
+      '@Mock\n    internal lateinit var resize: Resize',
+      'doAnswer {\n            it.arguments[0]\n        }.whenever(resize).go(any())',
+    ]);
+    // Ce que le @Before fait d'autre reste : le framework l'execute encore.
+    expect(cuts.join('')).not.toContain('openMocks');
+    expect(cuts.join('')).not.toContain('dateParseDelegate');
+  });
+
+  it('une mention dans un initialiseur static : l instruction part, pas le fichier', () => {
+    // La forme MockAnalyticsDataUtils : les mocks vivent dans un `static { }`,
+    // qu aucun analyseur ne rapporte comme declaration. Le fichier entier
+    // etait donc la seule reponse disponible, et il est partage.
+    const util = {
+      path: 'app/src/test/java/com/x/MockData.java',
+      text: [
+        'package com.x;',
+        '',
+        'final class MockData {',
+        '',
+        '\tstatic String NAME = "n";',
+        '',
+        '\tstatic Resize RESIZE;',
+        '',
+        '\tstatic {',
+        '\t\tRESIZE = Mockito.mock(Resize.class);',
+        '\t\twhen(RESIZE.go(1)).thenReturn(2);',
+        '\t}',
+        '}',
+        '',
+      ].join('\n'),
+    };
+    const user = {
+      path: 'app/src/test/java/com/x/UserTest.java',
+      text: 'package com.x;\n\npublic class UserTest {\n\t@Test\n\tpublic void t() { assertEquals("n", MockData.NAME); new Live().ping(); }\n}\n',
+    };
+    const plan = closure(['Resize'], [{ path: PROD_PATH, text: PROD_TEXT }, LIVE, LIVE_USER, util, user]);
+    expect(plan.withheld).toBeUndefined();
+    expect(mod.isClosed(plan)).toBe(true);
+    expect(plan.files).toEqual([]);
+    const cuts = plan.cuts.filter((c: any) => c.path === util.path).map((c: any) => util.text.slice(c.start, c.end).trim());
+    expect(cuts).toContain('static Resize RESIZE;');
+    expect(cuts.join('\n')).toContain('RESIZE = Mockito.mock(Resize.class);');
+    expect(cuts.join('\n')).toContain('when(RESIZE.go(1)).thenReturn(2);');
+    // `NAME`, que l autre test lit, ne bouge pas.
+    expect(cuts.join('\n')).not.toContain('NAME');
+  });
+
+  it('un @Before qui ne fait qu appeler une aide retiree : la ligne part, le fichier reste', () => {
+    // La forme AbstractAnalyticsHelperTest : `setUpPageDataModelMocks()` est
+    // appelee depuis le `@Before`, et le fichier est etendu par trois autres.
+    const base = {
+      path: 'app/src/test/java/com/x/AbstractHelperTest.java',
+      text: [
+        'package com.x;',
+        '',
+        'public abstract class AbstractHelperTest {',
+        '',
+        '\t@Before',
+        '\tpublic void setup() throws Exception {',
+        '\t\tMockitoAnnotations.openMocks(this);',
+        '\t\tsetUpResizeMocks();',
+        '\t\tonSetUp();',
+        '\t}',
+        '',
+        '\tprotected void setUpResizeMocks() {',
+        '\t\tResize resize = new Resize();',
+        '\t\twhen(resize.go(1)).thenReturn(2);',
+        '\t}',
+        '',
+        '\tprotected void onSetUp() { }',
+        '}',
+        '',
+      ].join('\n'),
+    };
+    const sub = {
+      path: 'app/src/test/java/com/x/SubTest.java',
+      text: 'package com.x;\n\npublic class SubTest extends AbstractHelperTest {\n\t@Test\n\tpublic void t() { onSetUp(); }\n}\n',
+    };
+    const plan = closure(['Resize'], [{ path: PROD_PATH, text: PROD_TEXT }, base, sub]);
+    expect(plan.withheld).toBeUndefined();
+    expect(mod.isClosed(plan)).toBe(true);
+    expect(plan.files).toEqual([]);
+    const cuts = plan.cuts.filter((c: any) => c.path === base.path).map((c: any) => base.text.slice(c.start, c.end).trim());
+    expect(cuts.some((c: string) => c.startsWith('protected void setUpResizeMocks'))).toBe(true);
+    expect(cuts).toContain('setUpResizeMocks();');
+    // `onSetUp`, que la sous-classe appelle, et `openMocks` restent.
+    expect(cuts.join('\n')).not.toContain('onSetUp');
+    expect(cuts.join('\n')).not.toContain('openMocks');
+  });
+
+  it('une declaration dont un dependant n est pas une instruction isolee : rien ne part', () => {
+    // La discipline qui borne tout le reste. `held` sort avec les lignes qui
+    // le lisent quand ce sont des instructions ; ici la derniere est un
+    // `return` dans une aide que la sous-classe appelle, et plus rien ne bouge.
+    const base = {
+      path: 'app/src/test/java/com/x/BaseTest.kt',
+      text: [
+        'package com.x',
+        '',
+        'abstract class BaseTest {',
+        '    private val held = Resize()',
+        '',
+        '    fun ready(): Int {',
+        '        return held.go(1) + 1',
+        '    }',
+        '}',
+        '',
+      ].join('\n'),
+    };
+    const sub = {
+      path: 'app/src/test/java/com/x/OtherTest.kt',
+      text: 'package com.x\n\nimport kotlin.test.Test\n\nclass OtherTest : BaseTest() {\n    @Test\n    fun other() { check(ready() == 3); Live().ping() }\n}\n',
+    };
+    const plan = closure(['Resize'], [{ path: PROD_PATH, text: PROD_TEXT }, LIVE, LIVE_USER, base, sub]);
+    expect(mod.isClosed(plan)).toBe(false);
+    expect(plan.cuts.filter((c: any) => c.path === base.path)).toEqual([]);
   });
 });

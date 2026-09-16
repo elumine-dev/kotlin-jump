@@ -266,6 +266,11 @@
         "category": "Kotlin Jump"
       },
       {
+        "command": "kotlin-jump.findDormantCode",
+        "title": "Find Ignored Tests and Commented-Out Code",
+        "category": "Kotlin Jump"
+      },
+      {
         "command": "kotlin-jump.makeSelfOnlyPrivate",
         "title": "Make Every Self Only Member Private",
         "category": "Kotlin Jump"
@@ -1731,6 +1736,12 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Show inlay hints with the Android version name next to `@RequiresApi` annotations and `SDK_INT` comparisons."
+        },
+        "kotlinJump.dormantCodeMinCommentedLines": {
+          "type": "number",
+          "default": 5,
+          "minimum": 2,
+          "description": "Consecutive commented-out lines a block needs before Find Ignored Tests and Commented-Out Code reports it."
         }
       }
     },

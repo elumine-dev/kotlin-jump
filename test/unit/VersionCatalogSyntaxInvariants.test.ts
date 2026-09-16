@@ -115,7 +115,7 @@ describe('le scanner de catalogue respecte ses propres invariants', () => {
  * Absent d'une machine de CI, on saute plutot que d'echouer sur une absence
  * qui n'est pas un defaut.
  */
-const REEL = '/Users/kevin/Desktop/work/lapresse/gradle/libs.versions.toml';
+const REEL = '/workspace/exampleapp/gradle/libs.versions.toml';
 const present = fs.existsSync(REEL);
 
 describe.skipIf(!present)('sur un catalogue reel', () => {

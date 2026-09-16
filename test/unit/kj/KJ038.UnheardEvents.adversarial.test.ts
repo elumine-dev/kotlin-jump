@@ -605,7 +605,7 @@ describe('l’étendue de suppression', () => {
   it('un post SEUL DANS SA BRANCHE ne l’est pas', () => {
     // Le retrait laissait `} else if (cond) {\n}` : ça compile, donc rien ne
     // l’attrape, et les locales que l’instruction consommait meurent avec
-    // elle. Vu sur /Users/kevin/Desktop/work/lapresse dans
+    // elle. Vu sur /workspace/exampleapp dans
     // DeepLinkIntentController, branche vide et `deepLinkUrl` orpheline.
     const sources = [
       ...base,
@@ -646,7 +646,7 @@ describe('l’étendue de suppression', () => {
     ['catch', '        try {\n            println("a")\n        } catch (e: Exception) {\n', '        }\n'],
   ] as Array<[string, string, string]>) {
     it(`un post seul dans un bloc ${bloc} ne l’est pas`, () => {
-      // Vu sur /Users/kevin/Desktop/work/lapresse, LiveNewsServiceImpl : un
+      // Vu sur /workspace/exampleapp, LiveNewsServiceImpl : un
       // `bus.post` seul dans son `finally`, retire avec l en-tete du bloc. Il
       // restait un `try` sans `catch` ni `finally`, que javac refuse. La regle
       // existait depuis 1.42.223, aucun test ne la tenait.

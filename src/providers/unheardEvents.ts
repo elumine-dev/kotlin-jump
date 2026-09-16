@@ -984,7 +984,7 @@ function statementExtent(
   // The post may be the whole CONTENT OF ITS BLOCK. Removing it then leaves
   // `} else if (cond) {\n}` behind: it compiles, so nothing catches it, and
   // the locals the statement consumed go dead with it. Seen on
-  // /Users/kevin/Desktop/work/lapresse in DeepLinkIntentController, where the
+  // /workspace/exampleapp in DeepLinkIntentController, where the
   // cut left an empty branch and an unused `deepLinkUrl`.
   let avant = lineStart - 1;
   while (avant >= 0 && /\s/.test(clean[avant])) avant--;

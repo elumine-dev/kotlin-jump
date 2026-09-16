@@ -1209,7 +1209,7 @@ The limit stopped being what the detector finds and became what it can cut. Thre
 - An enum entry sharing its line with its neighbours had no removal either. It takes the entry and ONE adjacent comma, the following one when there is one, the preceding one for the last entry. Two dead neighbours used to claim the same comma, which a single lightbulb never showed and which ate the closing brace of `enum SortOrder { ASC, DESC }` when both went at once; the later extent yields.
 
 ### Notes
-- Measured on /Users/kevin/Desktop/work/lapresse: removable unreferenced symbols go from 84 to 95 out of 98, and enum entries from 24 to 33 out of 33, with the five removal invariants clean on 6329 sources both before and after.
+- Measured on /workspace/exampleapp: removable unreferenced symbols go from 84 to 95 out of 98, and enum entries from 24 to 33 out of 33, with the five removal invariants clean on 6329 sources both before and after.
 - Two tests said the opposite of what this release does. They were not wrong, they recorded a limit, and each is rewritten to assert the new behaviour rather than deleted: one of them now checks something stronger than before, that the lightbulb cuts the entry under the CURSOR and not its neighbour.
 
 ## 1.42.231
@@ -1316,7 +1316,7 @@ Five defects in yesterday's own removals, four of which edit code nothing would 
 Two removals that were deleting live code, and the bulk commands the dead code family was missing.
 
 ### Fixes
-- A resource key or a resource file reached through an imported R class was invisible to the scan. `import ca.foo.R.color` followed by `color.name`, the same with an alias, and `import ca.foo.R as AppR` followed by `AppR.color.name` all count as references now. Found by applying every removal the extension offers on a 6300 file project: two live colours went, and `:rubicon:component-feed` stopped compiling on two unresolved references.
+- A resource key or a resource file reached through an imported R class was invisible to the scan. `import ca.foo.R.color` followed by `color.name`, the same with an alias, and `import ca.foo.R as AppR` followed by `AppR.color.name` all count as references now. Found by applying every removal the extension offers on a 6300 file project: two live colours went, and `:baseapp:component-feed` stopped compiling on two unresolved references.
 - A member whose name is written between backticks came back unreferenced even when it was called. The mention harvest looks for identifiers, and `w.` + backtick + `a ghost` + backtick + `()` is not one, so absence could never be proven for such a name. The symbol detector held by accident, because the extent could not be delimited either; the member detector did not hold at all. Both stay silent on those names now, called or not.
 
 ### Improvements
@@ -1442,8 +1442,8 @@ The same quick fix as last release, one line above the one that was corrected. `
 `Add a subscriber for this event` wrote a subscriber naming a type the compiler cannot see. The fix has to decide whether the event type also needs an import line, and the test it used said yes too easily. Every yes suppresses the import.
 
 ### Fixes
-- A subpackage is not visible without an import either. The test asked whether the fully qualified name STARTS with the package of the open file, so a screen in `ca.lapresse.android.lapresseplus` was told it could already see `ca.lapresse.android.lapresseplus.module.fcm.FcmBreakingNewsEvent`. Measured over the events the detector reports crossed with all 5 146 sources of a real project: wrong 467 times. That layout is the normal one, the event lives down in its module and the screen that should listen sits above it.
-- The same test had no separator, so a file in `nuglif.rubicon.card` passed for anything under `nuglif.rubicon.cardlist`, two packages with nothing to do with each other.
+- A subpackage is not visible without an import either. The test asked whether the fully qualified name STARTS with the package of the open file, so a screen in `ca.exampleapp.android.exampleapp` was told it could already see `ca.exampleapp.android.exampleapp.module.fcm.FcmBreakingNewsEvent`. Measured over the events the detector reports crossed with all 5 146 sources of a real project: wrong 467 times. That layout is the normal one, the event lives down in its module and the screen that should listen sits above it.
+- The same test had no separator, so a file in `vendor.baseapp.card` passed for anything under `vendor.baseapp.cardlist`, two packages with nothing to do with each other.
 - The other half looked for `import` followed by the name ANYWHERE in the text. A longer import that begins the same way counted as the real one, `import a.b.EventBus` for `a.b.Event`, and so did those words sitting in a comment. It has to be an import line now, with or without a semicolon, and an alias counts as one.
 
 ### Notes

@@ -5,7 +5,7 @@ import { importOrNull, REPO_ROOT } from './harness';
 
 /**
  * KJ-042 — deux defauts du verdict `selfOnly`, tous deux trouves en appliquant
- * la commande de masse sur /Users/kevin/Desktop/work/lapresse et en compilant.
+ * la commande de masse sur /workspace/exampleapp et en compilant.
  *
  * 1. LES OFFSETS. Les mentions sont cherchees dans un texte dont les lignes
  *    d'import ont ete VIDEES DE LEURS CARACTERES, puis comparees a des bornes
@@ -115,8 +115,8 @@ describe('la boucle d offsets compare des bases identiques', () => {
    * Garde STRUCTURELLE, et je prefere le dire : je n'ai pas su construire de
    * cas synthetique qui echoue avant le correctif. La preuve est ailleurs, et
    * elle est plus forte qu'un test unitaire : sur
-   * /Users/kevin/Desktop/work/lapresse le membre `onItemRangeInserted` revenait
-   * selfOnly, la commande de masse l'a passe en prive, et `:rubicon:component-feed`
+   * /workspace/exampleapp le membre `onItemRangeInserted` revenait
+   * selfOnly, la commande de masse l'a passe en prive, et `:baseapp:component-feed`
    * a cesse de compiler. Aligner les bases retire ce verdict et en change 84
    * en tout sur ce seul projet.
    *

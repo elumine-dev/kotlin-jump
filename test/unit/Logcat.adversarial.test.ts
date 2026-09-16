@@ -494,7 +494,7 @@ describe('LogcatService — close→restart race with switchDevice', () => {
     (svc as unknown as { stream?: any }).stream = fakeStreamA;
     (svc as unknown as { currentSerial?: string }).currentSerial = 'A';
 
-    // The close handler installed by the real startStream — replicated here
+    // The close handler installed by the real startStream — variantted here
     // because we replaced startStream above.
     fakeStreamA.on('close', () => {
       setTimeout(() => {

@@ -12,7 +12,7 @@
  * false positive that deletes live code ». La branche `fun` ne s en gardait
  * pas.
  *
- * Deux consequences, mesurees sur /Users/kevin/Desktop/work/lapresse :
+ * Deux consequences, mesurees sur /workspace/exampleapp :
  *   - le correctif rapide « supprimer ce membre » effaçait une cinquantaine de
  *     lignes vivantes, dont la classe d implementation entiere ;
  *   - les appels situes dans cette classe tombaient DANS l etendue du membre,
@@ -134,7 +134,7 @@ describe('declarationSpan - une fonction sans corps', () => {
   });
 
   it('une clause throws sur la ligne suivante laisse trouver le corps', () => {
-    // Forme reelle, deux fois sur /Users/kevin/Desktop/work/lapresse. La ligne
+    // Forme reelle, deux fois sur /workspace/exampleapp. La ligne
     // qui suit la signature n ouvre pas une declaration, elle la termine, donc
     // la fenetre doit continuer jusqu a son accolade. Ajouter `throws` a la
     // liste des debuts de declaration casserait ces deux methodes.

@@ -11,14 +11,13 @@
  *   - `fqn.startsWith(packageOf(text))` n a pas de separateur, et surtout un
  *     SOUS paquet n est pas visible sans import non plus.
  *
- * Mesure sur /Users/kevin/Desktop/work/lapresse, les 13 evenements que le
- * detecteur signale croises avec les 5 146 sources : la seconde moitie se
- * trompe 467 fois, la premiere 0 fois. Le cas dominant est le sous paquet, et
- * c est la disposition normale : l evenement vit dans le module, l ecran qui
- * devrait l ecouter vit au dessus.
+ * Mesure sur un grand projet, les evenements que le detecteur signale croises
+ * avec les sources : la seconde moitie se trompe souvent, la premiere 0 fois.
+ * Le cas dominant est le sous paquet, et c est la disposition normale :
+ * l evenement vit dans le module, l ecran qui devrait l ecouter vit au dessus.
  *
- *   fichier  package ca.lapresse.android.lapresseplus
- *   type     ca.lapresse.android.lapresseplus.module.fcm.FcmBreakingNewsEvent
+ *   fichier  package com.example.app
+ *   type     com.example.app.module.feature.NewsEvent
  */
 import { describe, it, expect } from 'vitest';
 import { importNeeded } from '../../src/commands/FindUnheardEvents';
@@ -27,17 +26,17 @@ const NL = String.fromCharCode(10);
 const fichier = (pkg: string, ...imports: string[]) =>
   [`package ${pkg}`, '', ...imports, '', 'class Ecran'].join(NL);
 
-const FCM = 'ca.lapresse.android.lapresseplus.module.fcm.FcmBreakingNewsEvent';
+const FCM = 'com.example.app.module.feature.NewsEvent';
 
 describe('importNeeded', () => {
   it('un sous paquet a besoin de son import', () => {
-    expect(importNeeded(fichier('ca.lapresse.android.lapresseplus'), FCM)).toBe(true);
+    expect(importNeeded(fichier('com.example.app'), FCM)).toBe(true);
   });
 
   it('un paquet voisin qui commence pareil aussi', () => {
-    // `nuglif.rubicon.card` est un prefixe de `nuglif.rubicon.cardlist` sans
+    // `com.example.app.card` est un prefixe de `com.example.app.cardlist` sans
     // qu il y ait le moindre lien entre les deux.
-    expect(importNeeded(fichier('nuglif.rubicon.card'), 'nuglif.rubicon.cardlist.OpenEvent'))
+    expect(importNeeded(fichier('com.example.app.card'), 'com.example.app.cardlist.OpenEvent'))
       .toBe(true);
   });
 

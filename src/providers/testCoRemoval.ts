@@ -124,9 +124,9 @@ export function planTestCoRemoval(
    * Production declarations that SURVIVE this removal. A test function that
    * also exercises one of them is not ours to delete.
    *
-   * Found on /Users/kevin/Desktop/work/lapresse: `ReplicaConstTest.testConsts`
+   * Found on /workspace/exampleapp: `variantConstTest.testConsts`
    * is one test function asserting twenty dead `AnimConst` values AND four
-   * live `ReplicaConst` ones. Without this set the file went whole, and live
+   * live `variantConst` ones. Without this set the file went whole, and live
    * code silently lost its only test.
    */
   liveNames?: ReadonlySet<string> | ((name: string) => boolean),

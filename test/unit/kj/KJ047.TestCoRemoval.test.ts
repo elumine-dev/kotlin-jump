@@ -190,7 +190,7 @@ describe.skipIf(!mod)('planTestCoRemoval', () => {
     expect(p.functions).toBe(1);
   });
   it('un test qui couvre AUSSI du code vivant est retenu', () => {
-    // Le cas de ReplicaConstTest sur LaPresse : une seule fonction de test
+    // Le cas de variantConstTest sur exampleapp : une seule fonction de test
     // verifie vingt constantes mortes et quatre vivantes. Sans la garde, le
     // fichier partait entier et le code vivant perdait son unique test.
     const source = {
@@ -200,18 +200,18 @@ describe.skipIf(!mod)('planTestCoRemoval', () => {
         '    @Test',
         '    fun `the constants`() {',
         '        assertEquals(1, AnimConst.DEAD)',
-        '        assertEquals("x", ReplicaConst.APP_NAME)',
+        '        assertEquals("x", variantConst.APP_NAME)',
         '    }',
         '}',
       ].join('\n'),
     };
-    const vivants = new Set(['ReplicaConst', 'APP_NAME', 'Widget']);
+    const vivants = new Set(['variantConst', 'APP_NAME', 'Widget']);
     const retenu = mod.planTestCoRemoval(['DEAD'], [PROD, source], SEGS, vivants);
     expect(mod.isOfferable(retenu)).toBe(false);
-    expect(retenu.unresolved[0].reason).toContain('ReplicaConst');
+    expect(retenu.unresolved[0].reason).toContain('variantConst');
 
     // Temoin : sans le nom vivant dans le test, le meme plan est offert.
-    const seul = { ...source, text: source.text.replace('        assertEquals("x", ReplicaConst.APP_NAME)\n', '') };
+    const seul = { ...source, text: source.text.replace('        assertEquals("x", variantConst.APP_NAME)\n', '') };
     const offert = mod.planTestCoRemoval(['DEAD'], [PROD, seul], SEGS, vivants);
     expect(mod.isOfferable(offert)).toBe(true);
     expect(offert.files).toEqual(['app/src/test/java/com/x/ConstTest.kt']);

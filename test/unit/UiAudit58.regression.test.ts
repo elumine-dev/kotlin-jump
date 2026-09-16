@@ -5,7 +5,7 @@ import { parse } from '../../src/indexer/KotlinParser';
 // Audit 58 : `implementsExactly` ne regardait que les homonymes DECLARES dans
 // l'espace de travail. Un `import android.view.View` ne contredisait donc rien,
 // et l'interface `View` imbriquee du projet revendiquait toutes les classes qui
-// etendent celle d'Android. Mesure sur LaPresse, 5088 fichiers indexes Java
+// etendent celle d'Android. Mesure sur exampleapp, 5088 fichiers indexes Java
 // compris : 127 paires, dont 80 pour le seul nom `View`, 16 pour `Factory`,
 // 12 pour `ViewHolder`.
 //
@@ -117,7 +117,7 @@ describe('Un qualificateur est un espace de noms, pas un parent', () => {
 describe('Deux interfaces imbriquees homonymes sont toutes les deux comptees', () => {
   // `implements A.Callback, B.Callback` : la recherche s'arretait a la
   // premiere occurrence du nom dans `supertypes`, donc B.Callback n'etait
-  // jamais credite. Deux cas sur LaPresse, dont AdminEnvironmentFragment.
+  // jamais credite. Deux cas sur exampleapp, dont AdminEnvironmentFragment.
   const CODES: Record<string, string> = {
     'file:///a58b/A.kt': 'package p\n\nclass Dialogue {\n    interface Callback {\n        fun ok()\n    }\n}\n',
     'file:///a58b/B.kt': 'package p\n\nclass Selecteur {\n    interface Callback {\n        fun ok()\n    }\n}\n',

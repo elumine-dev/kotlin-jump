@@ -6,7 +6,7 @@
  * fois pour toutes au pluriel, et deux d entre eux ne sont meme pas des mots :
  * la commande d ensemble affichait la CLE du detecteur, pas son libelle.
  *
- * Mesure sur /Users/kevin/Desktop/work/lapresse, 5093 fichiers Kotlin et Java :
+ * Mesure sur /workspace/exampleapp, 5093 fichiers Kotlin et Java :
  * le detail de la section « dead code » y annonce aujourd hui
  * « 43 locals, 21 imports, 19 declarations, 4 writeOnly, 2 parameters ».
  * `locals` et `writeOnly` sont des identifiants de code, et le libelle qui

@@ -8,7 +8,7 @@
  * est deja la. Le badge de dependances est reste en dehors, alors qu il tient
  * exactement le meme genre de cache.
  *
- * Mesure sur /Users/kevin/Desktop/work/lapresse : 56 589 lignes `import` sur
+ * Mesure sur /workspace/exampleapp : 56 589 lignes `import` sur
  * 5 093 sources, soit environ 5,2 Mo de caracteres, plus l entete de chaque
  * chaine. Le balayage lit un fichier a la fois et dure plusieurs secondes, donc
  * fermer la fenetre ou couper le reglage pendant qu il tourne est le cas

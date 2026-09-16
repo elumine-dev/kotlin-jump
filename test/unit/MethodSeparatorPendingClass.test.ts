@@ -11,7 +11,7 @@
  * fermante correspondante le refermait pour de bon. Tous les separateurs de
  * cette classe disparaissaient.
  *
- * Mesure sur /Users/kevin/Desktop/work/lapresse (3187 fichiers Kotlin) :
+ * Mesure sur /workspace/exampleapp (3187 fichiers Kotlin) :
  * 1290 declarations de classe sans corps dans 685 fichiers. 15 fichiers
  * changent de resultat : 37 separateurs retrouves, dont 5 fichiers ou la
  * fonctionnalite etait completement muette (`FileLoggingTree.kt` passait de 0 a

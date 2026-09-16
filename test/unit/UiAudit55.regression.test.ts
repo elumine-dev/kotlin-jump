@@ -4,7 +4,7 @@ import { parse } from '../../src/indexer/KotlinParser';
 
 // Audit 55 : le compte « N implementations » ne lisait que les supertypes
 // DIRECTS. Une classe qui implémente une interface à travers une classe
-// intermédiaire n'était pas comptée : sur LaPresse, `BindableModule` affichait
+// intermédiaire n'était pas comptée : sur exampleapp, `BindableModule` affichait
 // 2 implémentations là où 33 classes l'implémentent, toutes via
 // `ModuleViewHolderBase`. 60 interfaces sur 394 étaient sous évaluées.
 

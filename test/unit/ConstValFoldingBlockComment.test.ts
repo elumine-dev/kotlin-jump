@@ -11,7 +11,7 @@
  * Le fichier savait deja porter un etat multiligne, il le faisait pour les
  * chaines brutes (`inRawString`), pas pour les commentaires.
  *
- * Mesure sur /Users/kevin/Desktop/work/lapresse : 120 `const val` a valeur
+ * Mesure sur /workspace/exampleapp : 120 `const val` a valeur
  * litterale non ambigue, et 3 occurrences a l'interieur d'un bloc de
  * commentaire, toutes dans des KDoc :
  *   « * - [DEEPLINK]: the edition was opened from a deep link »

@@ -6,7 +6,7 @@
  * consulter `kotlinJump.deadWeightQuickFixes`, donc quelqu'un qui a coupe ces
  * correctifs payait quand meme le balayage.
  *
- * Mesure A/B entrelacee sur /Users/kevin/Desktop/work/lapresse, lecture seule
+ * Mesure A/B entrelacee sur /workspace/exampleapp, lecture seule
  * des memes fichiers, cinq passes alternees :
  *   plafond 4000  : mediane 60 ms, 26,5 Mo retenus
  *   listing 6278  : mediane 92 ms, 40,8 Mo retenus

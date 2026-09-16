@@ -7,7 +7,7 @@ import { importOrNull } from './harness';
  * Supprimer une fonction emporte son corps, jamais les imports dont ce corps
  * etait le seul utilisateur. `DeadCodeSweep` l'ecrit noir sur blanc
  * (« Cascades are NOT resolved »), et la mesure sur
- * /Users/kevin/Desktop/work/lapresse le chiffre : appliquer toutes les
+ * /workspace/exampleapp le chiffre : appliquer toutes les
  * suppressions offertes par l'extension laissait 100 imports morts de plus
  * dans 36 fichiers, plus des coquilles qui ne contenaient plus que leur
  * ligne de paquet.

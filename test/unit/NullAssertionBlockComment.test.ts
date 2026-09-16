@@ -8,7 +8,7 @@
  * et rend faux, donc les `!!` de la documentation recevaient la decoration
  * d'assertion non nulle.
  *
- * Mesure sur /Users/kevin/Desktop/work/lapresse : 2 occurrences, toutes deux
+ * Mesure sur /workspace/exampleapp : 2 occurrences, toutes deux
  * dans de la prose de KDoc.
  *   « * |!!| Needs [clearCache] to be called otherwise a memory leak … »
  *   « * NB: This implementation is temporary!! »

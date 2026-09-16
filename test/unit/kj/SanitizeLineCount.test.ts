@@ -13,7 +13,7 @@
  * la longueur restait juste, et toutes les lignes d en dessous remontaient
  * d une. Une suppression exprimee en lignes tombait alors a cote.
  *
- * Zero fichier de /Users/kevin/Desktop/work/lapresse produit cette forme, elle
+ * Zero fichier de /workspace/exampleapp produit cette forme, elle
  * ne compile pas. Un fichier en cours de frappe, si.
  */
 import { describe, it, expect } from 'vitest';

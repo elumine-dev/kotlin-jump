@@ -14,7 +14,7 @@ import { askHowToApply, bulkDetail } from '../util/bulkEdit';
  *
  * The per-member lightbulb has been there since KJ-042, and it is the one fix
  * of the family the compiler fully re-checks behind us. What was missing is
- * scale: 142 of them on /Users/kevin/Desktop/work/lapresse, and clicking a
+ * scale: 142 of them on /workspace/exampleapp, and clicking a
  * lightbulb 142 times is not a workflow.
  *
  * Overrides are already out of the detector (M2), so nothing here can break a

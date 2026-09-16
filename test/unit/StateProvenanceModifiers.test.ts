@@ -5,7 +5,7 @@
  * Un `override val state: StateFlow<UiState> = MutableStateFlow(UiState())`,
  * la forme meme d'une interface de ViewModel, ne correspondait donc a rien.
  *
- * Mesure sur /Users/kevin/Desktop/work/lapresse, 3558 fichiers Kotlin :
+ * Mesure sur /workspace/exampleapp, 3558 fichiers Kotlin :
  * 518 lignes portent un constructeur d'etat, 306 etaient reconnues comme
  * declarations, et **13** le deviennent avec la liste de modificateurs
  * complete, soit 4 pour cent des etats du projet qui n'avaient pas de

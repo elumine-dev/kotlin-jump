@@ -8,12 +8,12 @@
  * l'iteration d'une Map alimentee par l'ordre de balayage des fichiers : le
  * « gagnant » changeait de machine en machine.
  *
- * Mesure sur /Users/kevin/Desktop/work/lapresse, par le vrai chemin de
+ * Mesure sur /workspace/exampleapp, par le vrai chemin de
  * production (229 fichiers values, 1644 cles) : 122 survols d'ombrage rendus,
  * dont 20 couronnaient une definition a egalite et barraient l'autre.
  * Exemples : `color.colorPrimary` defini dans `ui`, `login` et `base` ;
  * `string.app_name` defini dans les deux variantes exclusives
- * `replicaLaPresseRelease` et `adPreflightLaPresseRelease` de `app`.
+ * `variantexampleappRelease` et `adPreflightexampleappRelease` de `app`.
  *
  * Barrer une definition qui n'est pas ombragee est un faux affichage : entre
  * deux libraries c'est l'ordre des dependances Gradle qui tranche, et entre
@@ -58,8 +58,8 @@ describe('resolveWinner — une egalite n est pas un ombrage', () => {
 
   it('deux variantes exclusives du meme module app', () => {
     const r = resolveWinner([
-      def({ sourceSet: 'replicaLaPresseRelease' }),
-      def({ sourceSet: 'adPreflightLaPresseRelease' }),
+      def({ sourceSet: 'variantexampleappRelease' }),
+      def({ sourceSet: 'adPreflightexampleappRelease' }),
     ]);
     expect(r.shadowed).toEqual([]);
     expect(r.tied).toEqual([1]);

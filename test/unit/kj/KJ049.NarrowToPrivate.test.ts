@@ -9,7 +9,7 @@ import { importOrNull } from './harness';
  * une copie est exactement la maniere dont un correctif cesse de correspondre
  * a son propre diagnostic.
  *
- * Mesure sur /Users/kevin/Desktop/work/lapresse : 142 membres « pourrait etre
+ * Mesure sur /workspace/exampleapp : 142 membres « pourrait etre
  * prive », soit 142 clics sur une ampoule.
  */
 
@@ -109,7 +109,7 @@ describe.skipIf(!mod)('narrowToPrivate', () => {
   it('un membre OPEN ou ABSTRACT ne peut pas devenir prive', () => {
     // Kotlin refuse la paire : un membre prive ne peut pas etre surcharge.
     // Trouve en lancant la commande de masse sur
-    // /Users/kevin/Desktop/work/lapresse : `protected open fun` est devenu
+    // /workspace/exampleapp : `protected open fun` est devenu
     // `private open fun` et :core:ui a cesse de compiler.
     //   Modifier 'private' is incompatible with 'open'.
     expect(mod.narrowToPrivate('    protected open fun createLibrarySessionCallback(): X {')).toBeUndefined();

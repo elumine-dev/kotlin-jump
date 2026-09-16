@@ -9,7 +9,7 @@ import { workspace } from './__mocks__/vscode';
 // Audit 41 : le compteur du lens comptait les surcharges du même nom comme des
 // usages. `withoutDeclaration` n'en retirait qu'une, celle sous le curseur, et
 // la ligne `fun` d'une surcharge sœur restait dans le total. Cas réel :
-// LaPresse, EmptyReplicaApplicationComponent (composant Dagger) déclare 176
+// exampleapp, EmptyvariantApplicationComponent (composant Dagger) déclare 176
 // surcharges de `inject` ; le lens affichait 354 usages pour 179 réels. Une
 // fonction que personne n'appelle pouvait afficher « 1 usage ».
 

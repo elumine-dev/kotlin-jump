@@ -6,7 +6,7 @@ import { SymbolIndex } from '../../src/indexer/SymbolIndex';
 // cle `fun`, faisait rater la declaration entiere. `ANNOT` ne couvre que les
 // annotations qui precedent `fun`. Consequence : la fonction n'existait pour
 // aucune fonctionnalite, ni Outline, ni Cmd+T, ni Go to Definition, ni
-// hierarchie d'appels. Six fonctions d'un meme fichier de LaPresse.
+// hierarchie d'appels. Six fonctions d'un meme fichier de exampleapp.
 
 const URI = 'file:///a63/ColorUtilExt.kt';
 const CODE = [
@@ -74,7 +74,7 @@ describe('Un appel appartient a la fonction englobante, pas a une locale', () =>
   // Le dernier `fun` avant la ligne d'appel peut etre un `override` imbrique
   // dans un objet anonyme, deja referme. Le repli choisissait alors la
   // derniere variable LOCALE, et la hierarchie d'appels annoncait `end` comme
-  // appelant de `start`. 74 cas sur LaPresse avant la serie d'etendues, 12
+  // appelant de `start`. 74 cas sur exampleapp avant la serie d'etendues, 12
   // avant ce correctif.
   const URI_CH = 'file:///a63/Use.kt';
   const CODE_CH = [

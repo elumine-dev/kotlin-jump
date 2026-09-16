@@ -2,7 +2,7 @@
  * Le correctif « ajouter un abonne » se posait sur la derniere accolade DU
  * TEXTE, pas du code.
  *
- * Mesure sur /Users/kevin/Desktop/work/lapresse : 6 fichiers sur 5 093 se
+ * Mesure sur /workspace/exampleapp : 6 fichiers sur 5 093 se
  * terminent par une chaine brute qui porte un gabarit JSON, donc leur derniere
  * accolade est une accolade de donnees. L abonne y etait insere : le fichier
  * compile toujours, la methode n existe pas, et le gabarit est corrompu. Une

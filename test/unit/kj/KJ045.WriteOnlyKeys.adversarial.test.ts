@@ -121,7 +121,7 @@ describe('les permissions', () => {
   });
 
   it('RECEIVE_BOOT_COMPLETED n’est pas signalée : rien ne peut l’exercer depuis le code', () => {
-    // Mesure sur /Users/kevin/Desktop/work/lapresse : le detecteur rendait
+    // Mesure sur /workspace/exampleapp : le detecteur rendait
     // deux constats, dont celui-ci. Le projet utilise WorkManager (47 mentions
     // de `androidx.work`, 10 `PeriodicWorkRequest`), dont le manifeste fusionne
     // declare le recepteur BOOT_COMPLETED et qui exige cette permission pour

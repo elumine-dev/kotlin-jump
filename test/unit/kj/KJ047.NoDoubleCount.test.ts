@@ -11,7 +11,7 @@ import { DeadIslandProvider } from '../../../src/providers/DeadIslandProvider';
  * Les sections symboles et membres ont toujours exclu leurs verdicts testOnly
  * de leur compte. Les sections entrees d'enum et ilots, non. La ligne « tenu en
  * vie par ses tests » ajoutee en 1.42.222 les recomptait donc : sur
- * /Users/kevin/Desktop/work/lapresse, onze trouvailles comptees deux fois dans
+ * /workspace/exampleapp, onze trouvailles comptees deux fois dans
  * le total, 3 entrees d'enum et 8 ilots.
  */
 

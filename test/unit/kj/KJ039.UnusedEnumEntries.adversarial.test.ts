@@ -206,7 +206,7 @@ describe('l’étendue de suppression', () => {
   it('plusieurs entrées sur une ligne le sont aussi, virgule comprise', () => {
     // Ce test disait l'inverse jusqu'a 1.42.232 : recoller la ligne n'etait pas
     // fait, donc le correctif abandonnait. Six des neuf trouvailles restantes
-    // sur /Users/kevin/Desktop/work/lapresse etaient exactement cette forme,
+    // sur /workspace/exampleapp etaient exactement cette forme,
     // que les enums Java prennent des que la liste est courte.
     const packed = f(`${MAIN}/Level.kt`, 'package com.x\n\nenum class Level {\n    LOW, HIGH,\n}\n');
     const trouves = find([packed]);
@@ -254,7 +254,7 @@ describe('l’étendue de suppression', () => {
     // suivant, DESC la reclame comme separateur precedent. Une ampoule a la
     // fois, c'est sans consequence ; appliquees ensemble, la seconde coupe
     // mangeait l'accolade fermante. Vu sur
-    // /Users/kevin/Desktop/work/lapresse dans LogDatabaseCriteria.java.
+    // /workspace/exampleapp dans LogDatabaseCriteria.java.
     const texte = 'package com.x\n\nenum class SortOrder { ASC, DESC }\n';
     const packed = f(`${MAIN}/SortOrder.kt`, texte);
     const trouves = find([packed]).filter(e => e.removeStart >= 0)

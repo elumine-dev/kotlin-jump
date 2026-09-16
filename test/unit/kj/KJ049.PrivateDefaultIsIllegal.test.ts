@@ -14,7 +14,7 @@ import { narrowToPrivate } from '../../../src/providers/narrowToPrivate';
  *
  * Reproduit au minimum : une interface Java dont la methode a corps n'est
  * appelee que par sa voisine. Pas atteignable sur
- * /Users/kevin/Desktop/work/lapresse aujourd'hui, ou aucune methode `default`
+ * /workspace/exampleapp aujourd'hui, ou aucune methode `default`
  * n'est selfOnly, mais l'edition casse le build partout ailleurs.
  */
 

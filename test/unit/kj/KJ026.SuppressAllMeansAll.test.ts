@@ -14,7 +14,7 @@ import { suppressesDiagnostic, UNUSED_DECLARATION, UNUSED_PRIVATE_DECLARATION, U
  * sous `@SuppressWarnings("all")`, ou une methode sous
  * `@SuppressWarnings("UnusedDeclaration")`, sortaient de nouveau et « Remove
  * Everything Unused » les effacait. Le projet de reference porte les deux
- * (`CirclePageWithMarginIndicator`, `ReplicaMainLayout`).
+ * (`CirclePageWithMarginIndicator`, `variantMainLayout`).
  */
 
 const noms = (src: string, lang: 'kotlin' | 'java') => (findUnusedDeclarations(src, lang) as any[]).map(d => d.name).sort();

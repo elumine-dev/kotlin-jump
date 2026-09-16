@@ -11,7 +11,7 @@
  * mettait rien de cote. Sa propre description dit pourquoi il doit le faire,
  * un plugin de convention etant identifie par son nom de fichier, donc chacune
  * de ses declarations parait non referencee et se fait proposer a la
- * suppression. Mesure sur /Users/kevin/Desktop/work/lapresse : 1 fichier sous
+ * suppression. Mesure sur /workspace/exampleapp : 1 fichier sous
  * `buildSrc/`, 0 exclu.
  *
  * Le test qui couvrait le reglage passait, avec un chemin de fixture

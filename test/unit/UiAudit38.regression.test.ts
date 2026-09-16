@@ -10,7 +10,7 @@ import { workspace } from './__mocks__/vscode';
 // Audit 38 : dans une chaîne brute, le surlignage d'occurrences allumait
 // `$name` mais pas `${name}`, alors que Find Usages comptait les deux. Le
 // même fichier répondait donc deux choses différentes sur la même position.
-// Cas réel : LaPresse, PhotoCaptionOverlayConstraintLayout.kt, `ev.y:${ev.y}`
+// Cas réel : exampleapp, PhotoCaptionOverlayConstraintLayout.kt, `ev.y:${ev.y}`
 // dans une chaîne triple, où l'occurrence de code restait éteinte.
 
 const URI = 'file:///com/example/Raw.kt';

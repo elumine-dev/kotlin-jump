@@ -14,7 +14,7 @@ import { importOrNull } from './harness';
  *
  * Trouve par l'invariant ORPHELIN du harnais, ajoute parce que les sept autres
  * regardent ce que la coupe CONTIENT et aucun ce qu'elle LAISSE. Trois
- * occurrences sur /Users/kevin/Desktop/work/lapresse, dans du code vivant.
+ * occurrences sur /workspace/exampleapp, dans du code vivant.
  */
 
 const mod: any = await importOrNull('src/providers/unusedMembers');

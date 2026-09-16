@@ -8,7 +8,7 @@ import { KotlinFileProvider } from '../../src/providers/FileProvider';
 // `object : Interface`, pour que le compte d'implementations le voie. Rien ne
 // l'empechait d'atteindre l'ecran :
 //   - 275 noeuds `$anon$25` dans le panneau Outline et le fil d'Ariane, sur
-//     172 fichiers de LaPresse ;
+//     172 fichiers de exampleapp ;
 //   - Cmd+T sur « anon » : 200 resultats sur 200 sont synthetiques, donc une
 //     classe reellement nommee AnonymousUser devient introuvable ;
 //   - « @object: » : 37 des 122 resultats.
@@ -101,7 +101,7 @@ describe('Aucun nom synthetique n\'atteint l\'ecran', () => {
 
 describe('Les objets anonymes ne consomment pas le plafond de resultats', () => {
   // Le filtre de la v1.42.84 s'appliquait APRES le plafond de 200 de
-  // `index.search`. Sur LaPresse, « anon » remplissait le plafond de 199
+  // `index.search`. Sur exampleapp, « anon » remplissait le plafond de 199
   // symboles synthetiques, et la classe reelle dont le nom les contient au
   // milieu ne passait pas. Le depot ecarte deja les locaux DANS `search`,
   // pour cette raison exacte.

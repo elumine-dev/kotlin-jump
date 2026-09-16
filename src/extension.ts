@@ -63,6 +63,7 @@ import {
 import { findUnusedEnumEntriesCommand } from './commands/FindUnusedEnumEntries';
 import { findEverythingUnusedCommand } from './commands/FindEverythingUnused';
 import { removeTestOnlyCodeCommand } from './commands/RemoveTestOnlyCode';
+import { findDormantCodeCommand } from './commands/FindDormantCode';
 import { makeSelfOnlyPrivateCommand } from './commands/MakeSelfOnlyPrivate';
 import { removeEverythingUnusedCommand } from './commands/RemoveEverythingUnused';
 import {
@@ -918,7 +919,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // Filtre par la MEME exclusion que l'index, pour la meme raison qu'elle y
   // est : un `gradlew assembleDebug` ecrit des milliers de xml sous `build/`,
   // manifestes fusionnes, ressources fusionnees, rapports de lint. Mesure sur
-  // /Users/kevin/Desktop/work/lapresse : 5656 fichiers de sortie de build
+  // /workspace/exampleapp : 5656 fichiers de sortie de build
   // repondent a ce glob contre 1185 vrais. Sans filtre, chaque build invalide
   // le corpus des milliers de fois et son cache d'une minute ne tient plus
   // jamais : chaque commande repart pour un balayage complet des 6340
@@ -1557,6 +1558,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // pour que la commande sure garde sa garantie.
     vscode.commands.registerCommand('kotlin-jump.removeTestOnlyCodeUnproven', () =>
       removeTestOnlyCodeCommand(resourceCorpus, true),
+    ),
+    // KJ-054: ignored tests and commented-out code, reported and reviewed.
+    vscode.commands.registerCommand('kotlin-jump.findDormantCode', () =>
+      findDormantCodeCommand(resourceCorpus),
     ),
     vscode.commands.registerCommand('kotlin-jump.makeSelfOnlyPrivate', () =>
       makeSelfOnlyPrivateCommand(resourceCorpus),

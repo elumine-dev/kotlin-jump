@@ -11,7 +11,7 @@
  * le backing prive que personne ne collecte, au lieu de ceux de `x`. Elle
  * affiche donc « 0 readers in this file » alors que l'ecran collecte l'etat.
  *
- * Mesure sur /Users/kevin/Desktop/work/lapresse, par le chemin de production :
+ * Mesure sur /workspace/exampleapp, par le chemin de production :
  * 166 etats a backing `_`, 141 expositions detectees, 25 sans. Sur ces 25,
  * **23 ne sont reellement pas exposes** (doublures de test, etat interne) et
  * **2** utilisent l'accesseur, dans AdminNotificationViewModel et

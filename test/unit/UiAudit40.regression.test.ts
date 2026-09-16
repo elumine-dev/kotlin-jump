@@ -25,7 +25,7 @@ function doc(texte: string, version = 1, uri = 'file:///a40/A.kt'): any {
 
 describe('inRawStringTemplate : le texte brut ne compte pas les accolades', () => {
   it('une accolade écrite dans le texte ne fait pas croire à une interpolation', () => {
-    // Motif réel : `"padding": "{5,10,15,20}"` dans un JSON de test LaPresse.
+    // Motif réel : `"padding": "{5,10,15,20}"` dans un JSON de test exampleapp.
     const l = '            "padding": "{5,10,15,20}", suite';
     expect(inRawStringTemplate(l, l.indexOf('suite'))).toBe(false);
     // Une vraie interpolation sur la même ligne reste reconnue.
@@ -35,7 +35,7 @@ describe('inRawStringTemplate : le texte brut ne compte pas les accolades', () =
   });
 
   it('du JS injecté garde son interpolation malgré les apostrophes', () => {
-    // Ligne réelle de LaPresse (NGAdViewAdGlif.kt) : les apostrophes du JS
+    // Ligne réelle de exampleapp (NGAdViewAdGlif.kt) : les apostrophes du JS
     // ouvrent des littéraux, et l'interpolation est écrite dans l'un d'eux.
     const l = "document.documentElement.style.setProperty('--safe-area-inset-bottom', '${insetBottom}px');";
     expect(inRawStringTemplate(l, l.indexOf('insetBottom'))).toBe(true);

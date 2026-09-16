@@ -8,7 +8,7 @@
  * balayage lance avant se terminait une ou deux secondes plus tard, et ses
  * megaoctets revenaient dans un fournisseur pourtant mort.
  *
- * Mesure sur /Users/kevin/Desktop/work/lapresse : 40,8 Mo pour les correctifs
+ * Mesure sur /workspace/exampleapp : 40,8 Mo pour les correctifs
  * rapides, 40,8 Mo pour le badge de ressources, environ 17 Mo pour la carte
  * inverse des strings. Le balayage dure plusieurs secondes, un aller-retour par
  * fichier, donc fermer la fenetre pendant qu'il tourne est le cas courant, pas

@@ -349,7 +349,7 @@ describe('navigateFromInlay — temporal suppression window', () => {
   it('the listener guard ignores pending entirely while suppression is active', async () => {
     // Simulate the EXACT bug shape: post-navigation provideDefinition refire
     // sets pending DURING the suppression window. The listener (whose logic
-    // we replicate inline below) must clear the pending and return without
+    // we variantte inline below) must clear the pending and return without
     // firing goToReferences.
     _setPendingDeclNavForTest({ uri: 'file:///User.kt', line: 6, word: 'get' });
     _setInlayNavSuppressUntilMsForTest(Date.now() + 500); // active

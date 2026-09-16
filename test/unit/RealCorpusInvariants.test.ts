@@ -33,7 +33,7 @@ import { kdocReferences, sanitizeForUsageScan } from '../../src/util/kotlinScan'
 import { KotlinDefinitionProvider } from '../../src/providers/DefinitionProvider';
 
 const NL = String.fromCharCode(10);
-const RACINE = '/Users/kevin/Desktop/work/lapresse';
+const RACINE = '/workspace/exampleapp';
 /**
  * Les fichiers du corpus, ou une liste vide s'il n'est pas la.
  *

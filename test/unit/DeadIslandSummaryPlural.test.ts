@@ -10,7 +10,7 @@
  * Le gardien de pluriels ne pouvait pas le voir : ce qui cloche ici n est pas
  * le nom, c est l accord du verbe et la reciprocite de la phrase.
  *
- * Mesure sur /Users/kevin/Desktop/work/lapresse : 2 ilots sur 21 tiennent une
+ * Mesure sur /workspace/exampleapp : 2 ilots sur 21 tiennent une
  * seule declaration.
  */
 import { describe, it, expect } from 'vitest';

@@ -147,7 +147,7 @@ function main(): void {
     }
   }
 
-  // La moitie SUPPRESSION de la cascade : 54 fichiers sur lapresse, et rien ne
+  // La moitie SUPPRESSION de la cascade : 54 fichiers sur exampleapp, et rien ne
   // la regardait. Un fichier efface a tort ne laisse pas non plus de trace.
   const DECL_RE = /(?:^|[;{])\s*(?:(?:public|private|internal|protected|open|abstract|final|sealed|data|enum|annotation|value|inline|suspend|external|expect|actual|operator|infix|lateinit|const|override|companion|static|synchronized)\s+)*(?:val|var|fun|class|object|interface|typealias|record)\s+[A-Za-z_`]/;
   for (const p of plan.deleteFiles) {

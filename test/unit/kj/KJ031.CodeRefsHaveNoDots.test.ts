@@ -54,7 +54,7 @@ describe('exclusion du R de la plateforme', () => {
 
   for (const imp of [
     'import com.mycompany.android.R.string',
-    'import ca.lapresse.android.R.string',
+    'import ca.exampleapp.android.R.string',
   ]) {
     it(`un paquet finissant par .android n est PAS la plateforme : ${imp}`, () => {
       expect(importedResourcePrefixes(imp + '\n')).toEqual([{ prefix: 'string', kind: 'string' }]);

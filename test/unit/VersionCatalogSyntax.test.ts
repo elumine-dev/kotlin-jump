@@ -20,7 +20,7 @@ const CATALOGUE = [
   'guava = "33.5.0-android"',
   'androidJunit5 = "2.0.1" # REDONDANT, kotlin-test suffit',
   '#noinspection GradleDependency: Robolectric casse plus haut',
-  'androidxRoomReplica = "2.4.2"',
+  'androidxRoomvariant = "2.4.2"',
   '',
   '[libraries]',
   'aboutlibraries-core = { module = "com.mikepenz:aboutlibraries-core", version.ref = "aboutlibraries" }',

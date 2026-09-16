@@ -344,7 +344,7 @@ function finDeLEntree(clean: string, nameEnd: number): number {
  * An entry alone on its line takes the whole line, which is what this used to
  * do and all it used to do: `A, B, C` on one line, the shape Java enums take
  * for short lists, left every entry unremovable. Measured on
- * /Users/kevin/Desktop/work/lapresse, six of the nine remaining enum findings
+ * /workspace/exampleapp, six of the nine remaining enum findings
  * were exactly that.
  *
  * The rule is the one a human applies: take the entry and ONE adjacent comma,

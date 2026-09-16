@@ -7,7 +7,7 @@
  * les deux. Chacune avait son propre plafond a 4000 fichiers, et chacune une
  * garde qui coupe tout quand le plafond est atteint.
  *
- * Or /Users/kevin/Desktop/work/lapresse compte 5088 sources Kotlin et Java,
+ * Or /workspace/exampleapp compte 5088 sources Kotlin et Java,
  * 6278 en comptant les XML de ressources. Les trois gardes etaient donc
  * declenchees en PERMANENCE :
  *   - les 56 permissions des 51 manifestes affichaient toutes la meme etiquette
@@ -35,7 +35,7 @@ const attendre = async () => { for (let i = 0; i < 8; i++) await new Promise<voi
 afterEach(() => vi.restoreAllMocks());
 
 describe('MAX_SWEEP_FILES — au dessus d un vrai projet', () => {
-  it('depasse les 6278 fichiers de lapresse', () => {
+  it('depasse les 6278 fichiers de exampleapp', () => {
     expect(MAX_SWEEP_FILES).toBeGreaterThan(6278);
   });
 });

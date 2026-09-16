@@ -10,7 +10,7 @@ import { KotlinFoldingRangeProvider } from '../../src/providers/FoldingRangeProv
 // `constructor(...)` est la forme que ktlint impose sur un constructeur
 // injecte : la classe recevait une etendue d'UNE ligne, donc dans l'Outline
 // et le fil d'Ariane tous ses membres debordaient de leur parent, et replier
-// la classe ne repliait rien. 154 cas sur les 3187 fichiers de LaPresse.
+// la classe ne repliait rien. 154 cas sur les 3187 fichiers de exampleapp.
 
 const CODE = [
   'package p',
@@ -170,7 +170,7 @@ describe('Un seul repli par ligne de depart', () => {
   // produisait un repli, l'un allant jusqu'a la fin de la classe et l'autre
   // s'arretant a la ligne qui precede le premier membre. VS Code n'affiche
   // qu'un chevron par ligne, donc replier la classe repliait un fragment.
-  // 181 cas sur LaPresse. La KDoc entre l'en tete et le premier membre est ce
+  // 181 cas sur exampleapp. La KDoc entre l'en tete et le premier membre est ce
   // qui etire l'etendue du parametre : sans elle le defaut ne se reproduit pas.
   const CODE_CTOR = [
     'package p',
@@ -225,7 +225,7 @@ describe('Un seul repli par ligne de depart', () => {
 describe('La documentation d\'un voisin n\'appartient pas a la declaration en cours', () => {
   // Un parametre de constructeur finit par une virgule, donc le balayage
   // continuait dans la KDoc du parametre suivant : son repli croisait celui du
-  // commentaire. 10 cas sur LaPresse.
+  // commentaire. 10 cas sur exampleapp.
   const CODE_DOC = [
     'package p',
     '',
@@ -281,7 +281,7 @@ describe('Une ligne faite d\'annotations introduit ce qui suit', () => {
   // Contrepartie de la KDoc : `val a: String,` finit par une virgule, donc le
   // balayage continuait dans la ligne `@SerializedName("b")` du parametre
   // suivant. Replier le premier cachait l'annotation du second. 669 cas sur
-  // LaPresse apres le correctif KDoc de la v1.42.86.
+  // exampleapp apres le correctif KDoc de la v1.42.86.
   const CODE_ANNO = [
     'package p',
     '',

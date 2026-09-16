@@ -10,7 +10,7 @@ import { workspace } from './__mocks__/vscode';
 // surcharge avec une expression qui ne connaît que `fun nom(`. En Java une
 // déclaration s'écrit `protected void nom(`, donc elle passait pour un appel
 // et la surcharge apparaissait comme appelante d'elle-même. Motif réel :
-// LaPresse, LiveNewsModelV4AssemblerTest.java, trois `initDagger` surchargés.
+// exampleapp, LiveNewsModelV4AssemblerTest.java, trois `initDagger` surchargés.
 
 const URI = 'file:///a42/Base.java';
 const CODE = [

@@ -6,7 +6,7 @@ import { parse } from '../../src/indexer/KotlinParser';
 import { KotlinFoldingRangeProvider } from '../../src/providers/FoldingRangeProvider';
 
 // Audit 37 : segmentMatchesPath réécrit sans allocation par appel. Mesuré sur
-// les 5088 chemins du projet LaPresse, le coût passe de 26,1 ms à 9,9 ms par
+// les 5088 chemins du projet exampleapp, le coût passe de 26,1 ms à 9,9 ms par
 // passe complète. Pas d'assertion sur une horloge ici : ce qui est vérifié,
 // c'est que la réécriture répond exactement comme avant.
 

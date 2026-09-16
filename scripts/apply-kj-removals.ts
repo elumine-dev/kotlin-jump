@@ -31,6 +31,7 @@ import {
   collecterUnePasse, coupesRetenues, plagesDuFichier, compteLesFamilles,
 } from '../src/commands/RemoveEverythingUnused';
 import { planCascade } from '../src/providers/removalCascade';
+import { orphanSummary } from '../src/providers/orphanSourceSets';
 import { FileResourceIndex } from '../src/indexer/FileResourceIndex';
 
 /** What the detectors read as text. */
@@ -47,6 +48,8 @@ interface Corpus {
   sources: { path: string; text: string }[];
   modulesWithCode: string[];
   libraryModules: string[];
+  /** Every module directory: KJ-055 needs them to know the legal source sets. */
+  moduleDirs: string[];
   resourceEntries: ReturnType<FileResourceIndex['entries']>;
 }
 
@@ -78,6 +81,7 @@ function readCorpus(root: string): Corpus {
   for (const file of resFiles) index.addFile(file, moduleDirs);
   return {
     sources,
+    moduleDirs,
     modulesWithCode: moduleDirs.filter(d => sources.some(s => s.path.startsWith(`${d}/`) && /\.(kt|java)$/.test(s.path))),
     libraryModules: moduleDirs.filter(d => sources.some(s => s.path.startsWith(`${d}/build.gradle`) && declaresLibraryPlugin(s.text))),
     resourceEntries: index.entries(),
@@ -113,11 +117,16 @@ function main(): void {
     if (round === 0) {
       console.log(`sources ${corpus.sources.length}  modules ${corpus.modulesWithCode.length} with code, ${corpus.libraryModules.length} library  resource names ${corpus.resourceEntries.length}`);
     }
-    const { parFichier, fichiersMorts, tally } = collecterUnePasse(corpus.sources, segs, {
+    const { parFichier, fichiersMorts, tally, orphelins } = collecterUnePasse(corpus.sources, segs, {
       modulesWithCode: corpus.modulesWithCode,
       libraryModules: corpus.libraryModules,
+      moduleDirs: corpus.moduleDirs,
       resourceEntries: corpus.resourceEntries,
     });
+    if (round === 0 && orphelins.length > 0) {
+      console.log(`\n${orphanSummary(orphelins)} Their mentions keep nothing alive:`);
+      for (const o of orphelins) console.log(`  ${path.relative(root, o.path)}  ${o.files.length} file(s): ${o.reason}`);
+    }
 
     // `--only` filters the COLLECTED cuts. Skipping a scan would change the
     // inputs the other families see: `findUnusedMembers` takes the dead

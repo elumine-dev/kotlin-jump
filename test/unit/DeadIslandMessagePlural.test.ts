@@ -10,7 +10,7 @@
  * correctement (`reference${n > 1 ? 's' : ''}`), et la commande qui compte les
  * ilots aussi. Ces deux la ont ete oubliees.
  *
- * Mesure sur /Users/kevin/Desktop/work/lapresse : 21 ilots, dont 2 avec une
+ * Mesure sur /workspace/exampleapp : 21 ilots, dont 2 avec une
  * seule declaration et 13 dans un seul fichier.
  */
 import { describe, it, expect } from 'vitest';

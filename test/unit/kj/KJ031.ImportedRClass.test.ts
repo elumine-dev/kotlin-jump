@@ -8,10 +8,10 @@ import { importOrNull } from './harness';
  * classe imbriquee (`import ca.foo.R.color`) ecrit ensuite `color.name`, sans
  * jamais epeler `R.`, et la reference devenait invisible.
  *
- * Mesure sur /Users/kevin/Desktop/work/lapresse : 7 fichiers importent un
+ * Mesure sur /workspace/exampleapp : 7 fichiers importent un
  * `R.<kind>` imbrique, 5 aliasent la classe R. Deux couleurs vivantes,
  * `vertical_video_post_background_color` et `vertical_video_post_border_color`,
- * ont ete signalees mortes puis supprimees, et `:rubicon:component-feed`
+ * ont ete signalees mortes puis supprimees, et `:baseapp:component-feed`
  * a cesse de compiler :
  *   e: VerticalVideoItemComposable.kt:68:54 Unresolved reference.
  *
@@ -30,11 +30,11 @@ const fileRefs = (code: string) =>
   mod.collectCodeResourceRefs(code, FILE_KINDS).map((r: any) => `${r.kind}/${r.name}`);
 
 describe.skipIf(!mod)('la classe R importee', () => {
-  it('le cas de LaPresse : import du R imbrique puis usage nu', () => {
+  it('le cas de exampleapp : import du R imbrique puis usage nu', () => {
     const code = [
-      'package nuglif.rubicon.foundation.feed.ui.post.generic.verticalvideo',
+      'package vendor.baseapp.foundation.feed.ui.post.generic.verticalvideo',
       'import androidx.compose.ui.res.colorResource',
-      'import nuglif.rubicon.feed.R.color',
+      'import vendor.baseapp.feed.R.color',
       'fun VerticalVideoItem() {',
       '    Column(modifier = Modifier.background(',
       '        color = colorResource(id = color.vertical_video_post_background_color)))',
@@ -45,7 +45,7 @@ describe.skipIf(!mod)('la classe R importee', () => {
 
   it('le R imbrique aliase', () => {
     const code = [
-      'import nuglif.rubicon.base.R.color as baseColor',
+      'import vendor.baseapp.base.R.color as baseColor',
       'val c = colorResource(baseColor.text_hyper_link_blue)',
     ].join('\n');
     expect(refs(code)).toContain('color/text_hyper_link_blue');
@@ -53,7 +53,7 @@ describe.skipIf(!mod)('la classe R importee', () => {
 
   it('la classe R elle meme aliasee', () => {
     const code = [
-      'import ca.lapresse.lapresseplus.R as AppR',
+      'import ca.exampleapp.exampleapp.R as AppR',
       'val s = getString(AppR.string.hello)',
     ].join('\n');
     expect(refs(code)).toContain('string/hello');

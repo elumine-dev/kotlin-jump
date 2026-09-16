@@ -24,7 +24,7 @@ vi.mock('../../src/android/AdbBinary', () => ({
 }));
 
 // Audit 36 : trouvé en passant l'extension sur un vrai projet Android,
-// 3187 fichiers Kotlin et 1901 Java (LaPresse).
+// 3187 fichiers Kotlin et 1901 Java (exampleapp).
 
 /** Document fidèle : lineAt lève hors bornes, comme le vrai TextDocument. */
 function doc(uri: string, text: string, opts: { dirty?: boolean; version?: number } = {}): any {
@@ -50,7 +50,7 @@ describe('Expand Selection sur une ligne d\'annotation', () => {
   // balayage du vrai projet a trouvé 24 fichiers dans ce cas.
   const URI = 'file:///lp/ButtonContentDO.kt';
   const CODE = [
-    'package nuglif.starship.core.network.dataobject',
+    'package vendor.platform.core.network.dataobject',
     '',
     'import kotlinx.parcelize.Parcelize',
     '',
@@ -105,7 +105,7 @@ describe('Fichier fermé sans enregistrer puis rouvert', () => {
   // Session 1 : le tampon est long. VS Code détruit le document à la
   // fermeture, et la réouverture repart de la version 1.
   const LONG = [
-    'package nuglif.starship.core.network',
+    'package vendor.platform.core.network',
     '',
     'class Repo(private val api: Api) {',
     '    fun load(id: String): Item? = api.get(id)',
@@ -117,7 +117,7 @@ describe('Fichier fermé sans enregistrer puis rouvert', () => {
     'data class Item(val id: String)',
   ].join('\n');
   const SHORT = [
-    'package nuglif.starship.core.network',
+    'package vendor.platform.core.network',
     '',
     'class Repo(private val api: Api) {',
     '    fun load(id: String): Item? = api.get(id)',
@@ -173,11 +173,11 @@ describe('Source sets de test, portée de la règle de variante', () => {
   const SETS = ['test/java', 'test/kotlin', 'androidTest', 'jvmTest', 'commonTest'];
   const isTest = (p: string) => isTestPath(p, SETS);
 
-  it('les variantes réelles du projet LaPresse sont reconnues', () => {
+  it('les variantes réelles du projet exampleapp sont reconnues', () => {
     // Formes relevées dans le dépôt : Gradle suffixe le nom de base, et pour
     // un source set de test unitaire le répertoire de langage compte aussi.
-    expect(isTest('/lp/replica/app/src/testReplica/java/ca/lapresse/FooTest.java')).toBe(true);
-    expect(isTest('/lp/replica/app/src/testAdPreflightLaPresseRelease/java/A.java')).toBe(true);
+    expect(isTest('/lp/variant/app/src/testvariant/java/ca/exampleapp/FooTest.java')).toBe(true);
+    expect(isTest('/lp/variant/app/src/testAdPreflightexampleappRelease/java/A.java')).toBe(true);
     expect(isTest('/lp/app/src/androidTestDebug/kotlin/FooTest.kt')).toBe(true);
     expect(isTest('/lp/lib/src/jvmTestFixtures/kotlin/Fake.kt')).toBe(true);
     expect(isTest('/lp/app/src/test/kotlin/FooTest.kt')).toBe(true);

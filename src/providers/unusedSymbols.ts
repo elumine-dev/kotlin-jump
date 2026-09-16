@@ -587,7 +587,7 @@ export function removalExtent(
   // genre. La liste s arretait a `data` et `inline` : un bloc de constantes,
   // la forme que prend tout companion object, se lisait comme UNE declaration
   // etalee sur six lignes, l etendue etait refusee et le diagnostic sortait
-  // sans correctif. 58 des 66 declarations sans coupe sur lapresse tenaient a
+  // sans correctif. 58 des 66 declarations sans coupe sur exampleapp tenaient a
   // `const`. Ajouter un mot ne peut qu ouvrir une coupe, jamais l elargir :
   // l etendue vient de la portee, ce test decide seulement de la rendre.
   // Une ligne INTERIEURE d un commentaire de bloc ne commence par aucun des

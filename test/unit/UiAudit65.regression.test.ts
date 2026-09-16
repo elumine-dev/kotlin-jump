@@ -78,7 +78,7 @@ describe('Le plafond de fichiers scannes est exact', () => {
   // `MAX_SCANNED_FILES` empeche un editeur lance depuis le dossier personnel
   // d'indexer tout le disque. La garde etait testee AVANT le `lstat`, dans une
   // rafale `Promise.all` : tous les enfants d'un dossier demarraient avant que
-  // le premier ait pousse son entree. Mesure sur LaPresse : plafond annonce
+  // le premier ait pousse son entree. Mesure sur exampleapp : plafond annonce
   // 1000, 1803 fichiers indexes.
   const os = require('node:os') as typeof import('node:os');
   const fsSync = require('node:fs') as typeof import('node:fs');

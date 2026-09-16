@@ -12,7 +12,7 @@
  * Consequence pour le lecteur : apres une Entree, chaque pastille de couleur
  * et chaque `!!` surligne sous le curseur se dessine une ligne trop haut, sur
  * du code qui n a rien a voir, jusqu a ce qu un autre evenement force un
- * balayage complet. Mesure sur /Users/kevin/Desktop/work/lapresse : 882
+ * balayage complet. Mesure sur /workspace/exampleapp : 882
  * pastilles dans 138 fichiers et 283 assertions dans 108 fichiers, et dans
  * chacun de ces fichiers la derniere decoration est sous la premiere ligne,
  * donc joignable par une seule frappe.

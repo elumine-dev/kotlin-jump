@@ -6,7 +6,7 @@
  * corps d un KDoc, dont les lignes commencent par `*`, et le corps d une
  * chaine brute passaient donc pour du code.
  *
- * Mesure sur /Users/kevin/Desktop/work/lapresse : 642 sites d appel lus dans
+ * Mesure sur /workspace/exampleapp : 642 sites d appel lus dans
  * du commentaire ou de la chaine, 511 que l action reecrirait, et 118 dont le
  * nom est vraiment declare quelque part dans le projet, ce que le resolveur
  * exige pour offrir l action. Les appliquer reecrit la phrase :

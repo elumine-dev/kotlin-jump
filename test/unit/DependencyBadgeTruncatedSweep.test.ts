@@ -2,7 +2,7 @@
  * KJ-022 — un balayage tronque ne peut pas produire un compte.
  *
  * Le fournisseur lisait les imports de l'espace de travail avec un plafond de
- * 4000 fichiers. Mesure sur /Users/kevin/Desktop/work/lapresse : 5088 sources
+ * 4000 fichiers. Mesure sur /workspace/exampleapp : 5088 sources
  * hors `build/`, donc 1088 fichiers n'etaient jamais lus, et le badge affichait
  * quand meme un chiffre.
  *
@@ -96,7 +96,7 @@ async function decorations(nbSources: number, avecImport: boolean) {
 
 describe('DependencyUsageBadgeProvider — le badge quand le balayage deborde', () => {
   it('le plafond depasse la taille d un vrai projet', () => {
-    // lapresse : 5088 sources hors build/. L ancien plafond, 4000, passait
+    // exampleapp : 5088 sources hors build/. L ancien plafond, 4000, passait
     // dessous sans rien dire.
     expect(MAX_SWEEP_FILES).toBeGreaterThan(5088);
   });

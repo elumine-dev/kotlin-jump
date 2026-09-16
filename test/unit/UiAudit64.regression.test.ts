@@ -3,7 +3,7 @@ import { parse } from '../../src/indexer/KotlinParser';
 import { SymbolIndex } from '../../src/indexer/SymbolIndex';
 
 // Audit 64 : aucun type ne peut etre son propre supertype. Pourtant 32 le
-// sont sur LaPresse. Cause : `lookAheadSupertypes` cherche `) : Types` sur les
+// sont sur exampleapp. Cause : `lookAheadSupertypes` cherche `) : Types` sur les
 // 20 lignes qui suivent un constructeur multi ligne, sans s'arreter au `)` qui
 // ferme CE constructeur. Une `sealed class X(` sans liste de supertypes
 // heritait donc de celle de sa premiere variante imbriquee, c'est a dire
@@ -86,7 +86,7 @@ describe('Une classe n\'herite pas de la liste de supertypes de sa variante', ()
 describe('La hierarchie de types applique la meme regle que le reste', () => {
   // `interface Factory : AndroidInjector.Factory<X>` implemente vraiment un
   // type nomme `Factory`, mais pas LUI MEME. Le panneau l'affichait comme son
-  // propre sous type, et deplier bouclait. 21 types sur LaPresse.
+  // propre sous type, et deplier bouclait. 21 types sur exampleapp.
   const CODES: Record<string, string> = {
     'file:///a64b/Injector.kt':
       'package dagger\n\ninterface AndroidInjector<T> {\n    interface Factory<T> {\n        fun create(): T\n    }\n}\n',
@@ -122,7 +122,7 @@ describe('La hierarchie de types applique la meme regle que le reste', () => {
 describe('Une parenthese fermante seule ne clot pas l\'en tete', () => {
   // Le correctif de la v1.42.92 s'arrete des qu'une ligne commence par `)`.
   // C'est juste pour `) {`, faux quand la liste de supertypes est renvoyee a la
-  // ligne suivante, ce que Kotlin autorise. Aucun cas sur LaPresse, mais le
+  // ligne suivante, ce que Kotlin autorise. Aucun cas sur exampleapp, mais le
   // correctif perdait alors les supertypes en silence.
   const URI2 = 'file:///a64c/Foo.kt';
 
@@ -188,7 +188,7 @@ describe('Seule la parenthese qui ferme le CONSTRUCTEUR termine l\'en tete', () 
   // Un parametre dont le type est une fonction ecrite sur plusieurs lignes se
   // ferme lui aussi par `)`. La regle des v1.42.92 et 93 le prenait pour la fin
   // du constructeur et jetait la liste de supertypes. Idem quand un commentaire
-  // suit la parenthese fermante. Sept lignes de cette forme sur LaPresse, aucune
+  // suit la parenthese fermante. Sept lignes de cette forme sur exampleapp, aucune
   // dans un constructeur, mais les deux formes sont du Kotlin valide.
   const URI3 = 'file:///a64d/Foo.kt';
 
@@ -251,7 +251,7 @@ describe('Une parenthese dans un litteral ne compte pas', () => {
   // Le comptage de profondeur de la v1.42.94 lisait les parentheses sans savoir
   // ce qui est du texte. Une valeur par defaut contenant `")"` fermait donc le
   // constructeur au milieu de la liste et la classe perdait ses supertypes.
-  // 44 lignes de ce genre sur LaPresse, aucune dans un en tete aujourd'hui,
+  // 44 lignes de ce genre sur exampleapp, aucune dans un en tete aujourd'hui,
   // mais les trois formes sont du Kotlin valide.
   const URI4 = 'file:///a64e/Foo.kt';
   const avec = (param: string) => [

@@ -6,7 +6,7 @@ import { findUnusedSymbols, explainSymbols } from '../../src/providers/unusedSym
 // dans le MÊME fichier voient chacune le nom de l'autre, donc le fichier était
 // compté deux fois et le groupe passait pour mentionné. Résultat : deux
 // surcharges mortes côte à côte n'étaient jamais signalées, alors que les deux
-// mêmes dans des fichiers séparés l'étaient. LaPresse porte 22 groupes de
+// mêmes dans des fichiers séparés l'étaient. exampleapp porte 22 groupes de
 // fonctions top level surchargées dans un même fichier.
 
 const TEST_SETS = ['test/java', 'test/kotlin', 'androidTest'];

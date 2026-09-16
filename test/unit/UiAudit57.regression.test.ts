@@ -9,7 +9,7 @@ import { mockDocument } from './helpers';
 
 // Audit 57 : la v1.42.77 a fait passer le COMPTE du lens à la marche
 // transitive et a laissé toutes les LISTES sur les supertypes directs. Sur
-// LaPresse, 133 types class-like sur 6423 affichaient un nombre que la liste
+// exampleapp, 133 types class-like sur 6423 affichaient un nombre que la liste
 // ouverte au clic ne pouvait pas montrer, dans les deux sens : le lens
 // principal annonçait 10 sous types scellés là où la liste en montrait 2, et
 // `DispatcherModule` annonçait 0 là où la liste en montrait 1 de trop, prise à
@@ -145,7 +145,7 @@ describe('Un supertype venu d\'une dependance garde ses implementeurs', () => {
   // Regression introduite par le correctif de la v1.42.79 : `bySuper` est
   // indexe par NOM de supertype, y compris ceux qu'aucun fichier de l'espace
   // de travail ne declare (androidx `ViewModel`, `Exception`, `WebViewClient`).
-  // Exiger une declaration locale a vide la liste : sur LaPresse, 1145
+  // Exiger une declaration locale a vide la liste : sur exampleapp, 1145
   // implementations reparties sur 250 noms ne s'affichaient plus.
   const CODES: Record<string, string> = {
     'file:///a57c/Un.kt': 'package p\n\nclass UnViewModel : ViewModel() {\n    fun go() {}\n}\n',

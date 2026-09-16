@@ -64,7 +64,8 @@ function variantAt(p: string, from: number, seg: ParsedSegment): boolean {
   const c = p.charCodeAt(after);
   // The suffix must exist and start upper case: `androidTestDebug` yes,
   // `testdata` no, and a bare `androidTest` is the exact match handled above.
-  if (!(c >= 65 && c <= 90)) return false;
+  const lowerVariant = base === 'test' && c >= 97 && c <= 122;
+  if (!(c >= 65 && c <= 90) && !(lowerVariant && p.indexOf('/', after) - after >= 5)) return false;
 
   let end = p.indexOf('/', after);
   if (end < 0) end = p.length;

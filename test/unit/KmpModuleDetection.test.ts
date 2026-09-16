@@ -7,7 +7,7 @@ import { moduleRootFor } from '../../src/indexer/FileScanner';
 const KMP_SOURCE_SET_RE = /[/\\]src[/\\]([a-z]\w+(?:Main|Test))[/\\]/;
 
 /**
- * Replicates FileScanner.moduleFor() for testing.
+ * varianttes FileScanner.moduleFor() for testing.
  * Must stay in sync with the implementation in FileScanner.ts.
  */
 function moduleFor(fsPath: string, moduleMap: Map<string, string>): string | undefined {

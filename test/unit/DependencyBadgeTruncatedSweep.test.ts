@@ -96,7 +96,7 @@ async function decorations(nbSources: number, avecImport: boolean) {
 
 describe('DependencyUsageBadgeProvider — le badge quand le balayage deborde', () => {
   it('le plafond depasse la taille d un vrai projet', () => {
-    // projet de reference : 5088 sources hors build/. L ancien plafond, 4000, passait
+    // exampleapp : 5088 sources hors build/. L ancien plafond, 4000, passait
     // dessous sans rien dire.
     expect(MAX_SWEEP_FILES).toBeGreaterThan(5088);
   });

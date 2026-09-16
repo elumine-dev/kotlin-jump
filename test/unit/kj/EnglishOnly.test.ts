@@ -59,6 +59,7 @@ const SHIPPED = [
   'src/ui/ScreenFlowPanel.ts',
   'src/providers/testCoRemoval.ts',
   'src/providers/testCoRemovalClosure.ts',
+  'src/providers/dormantCode.ts',
   'src/providers/removalCascade.ts',
   'src/providers/applyCascade.ts',
   'src/providers/narrowToPrivate.ts',

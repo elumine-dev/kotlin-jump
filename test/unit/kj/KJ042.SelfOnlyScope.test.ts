@@ -116,7 +116,7 @@ describe('la boucle d offsets compare des bases identiques', () => {
    * cas synthetique qui echoue avant le correctif. La preuve est ailleurs, et
    * elle est plus forte qu'un test unitaire : sur
    * /workspace/exampleapp le membre `onItemRangeInserted` revenait
-   * selfOnly, la commande de masse l'a passe en prive, et `:saffron:component-feed`
+   * selfOnly, la commande de masse l'a passe en prive, et `:baseapp:component-feed`
    * a cesse de compiler. Aligner les bases retire ce verdict et en change 84
    * en tout sur ce seul projet.
    *

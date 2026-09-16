@@ -5,7 +5,7 @@ import { collecterUnePasse } from '../../../src/commands/RemoveEverythingUnused'
  * Supprimer une classe emporte les imports qui la nomment dans les autres
  * fichiers, Java compris.
  *
- * Vu en compilant Juniper apres « Remove Everything Unused » : les posts de
+ * Vu en compilant variant apres « Remove Everything Unused » : les posts de
  * `TernRookViewWolverineEvent` etaient partis, la classe aussi, et
  * `TernQuinceFragment.java` gardait `import ...TernRookViewWolverineEvent;`.
  * javac : `cannot find symbol`. L ampoule d un symbole retire ces imports

@@ -8,6 +8,7 @@ import { findDeadIslands } from '../providers/deadIslands';
 import { findUnusedEnumEntries } from '../providers/unusedEnumEntries';
 import { isOfferable, liveOutside, planTestCoRemoval, productionDeclarations, TestCoRemovalPlan, testFunctionsOf } from '../providers/testCoRemoval';
 import { isClosed, planClosure } from '../providers/testCoRemovalClosure';
+import { withoutOrphanSourceSets } from '../providers/orphanSourceSets';
 import { addCascadePlan, planCascade } from '../providers/applyCascade';
 import { plural } from '../util/plural';
 import { findMemberImports, memberKey } from '../util/memberImports';
@@ -100,8 +101,18 @@ export async function scanTestOnly(
    */
   includeUnproven = false,
 ): Promise<TestOnlyScan | undefined> {
-  const data = await corpus.get(token);
-  if (token?.isCancellationRequested || data.sourcesTruncated) return undefined;
+  const corpusData = await corpus.get(token);
+  if (token?.isCancellationRequested || corpusData.sourcesTruncated) return undefined;
+  // KJ-055: a source set Gradle never builds cannot make a declaration
+  // testOnly, because nothing ever compiles the test that names it. On the
+  // reference project three groups read as held by a shared base test class
+  // that lives in a directory no Gradle task touches.
+  const { sources: vivantes } = withoutOrphanSourceSets({
+    sources: corpusData.sources, moduleDirs: corpusData.moduleDirs,
+  });
+  const data = vivantes === corpusData.sources
+    ? corpusData
+    : { ...corpusData, sources: vivantes as typeof corpusData.sources };
   const cfg = vscode.workspace.getConfiguration('kotlinJump');
   const segs = cfg.get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS);
   const ignorePaths = cfg.get<string[]>('unusedSymbolsIgnorePaths', ['**/buildSrc/**', '**/build-logic/**']);

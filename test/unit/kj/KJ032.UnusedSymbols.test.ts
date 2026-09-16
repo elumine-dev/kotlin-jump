@@ -13,7 +13,7 @@ import { DEMO_ROOT, importOrNull } from './harness';
 
 const mod: any = await importOrNull('src/providers/unusedSymbols');
 
-const SOURCE_RE = /\.(kt|kts|java|xml|gradle|pro|properties|toml)$/;
+const CORPUS_FILE_RE = /\.(kt|kts|java|xml|gradle|pro|properties|toml)$/;
 const SKIP = new Set(['build', '.gradle', 'node_modules', '.git']);
 const TEST_SETS = ['test/java', 'test/kotlin', 'androidTest', 'jvmTest', 'commonTest'];
 
@@ -24,7 +24,7 @@ function scanDemo() {
       const full = path.join(dir, e.name);
       if (e.isDirectory()) {
         if (!SKIP.has(e.name)) walk(full);
-      } else if (SOURCE_RE.test(full) || /[\\/]META-INF[\\/]services[\\/]/.test(full)) {
+      } else if (CORPUS_FILE_RE.test(full) || /[\\/]META-INF[\\/]services[\\/]/.test(full)) {
         sources.push({ path: full, text: fs.readFileSync(full, 'utf8') });
       }
     }

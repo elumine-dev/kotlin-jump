@@ -11,6 +11,7 @@ import { findDeadIslands } from '../providers/deadIslands';
 import { sweepFile, planFileEdits } from '../providers/DeadCodeSweep';
 import { findMemberImports, memberKey } from '../util/memberImports';
 import { planCascade } from '../providers/removalCascade';
+import { findOrphanSourceSets, OrphanSourceSet } from '../providers/orphanSourceSets';
 import { findUnusedGradleDependencies } from '../providers/unusedGradleDependencies';
 import { findUnheardEvents } from '../providers/unheardEvents';
 import { findUnusedRemoteConfigKeys } from '../providers/unusedRemoteConfigKeys';
@@ -54,6 +55,12 @@ export interface ContexteDePasse {
   libraryModules?: readonly string[];
   /** Index des FICHIERS de ressources, binaires inclus. Sans lui, pas de fichiers. */
   resourceEntries?: readonly FileResEntry[];
+  /**
+   * Repertoires de module, TOUS. KJ-055 en a besoin pour savoir quels dossiers
+   * sous `src/` Gradle sait construire. Sans eux, aucun source set orphelin
+   * n'est ecarte et les familles comptent ce qu'un source set orphelin nomme.
+   */
+  moduleDirs?: readonly string[];
 }
 
 /**
@@ -68,11 +75,13 @@ export interface ContexteDePasse {
 function contexteDuCorpus(data: {
   modulesWithCode?: readonly string[];
   libraryModules?: readonly string[];
+  moduleDirs?: readonly string[];
   index?: { entries?: () => FileResEntry[] };
 }): ContexteDePasse {
   return {
     modulesWithCode: data.modulesWithCode,
     libraryModules: data.libraryModules,
+    moduleDirs: data.moduleDirs,
     resourceEntries: typeof data.index?.entries === 'function' ? data.index.entries() : undefined,
   };
 }
@@ -81,7 +90,21 @@ export function collecterUnePasse(
   sources: readonly { path: string; text: string }[],
   segs: readonly string[],
   ctx: ContexteDePasse = {},
-): { parFichier: Map<string, Coupe[]>; fichiersMorts: Set<string>; tally: Tally } {
+): { parFichier: Map<string, Coupe[]>; fichiersMorts: Set<string>; tally: Tally; orphelins: OrphanSourceSet[] } {
+  // KJ-055 en premier, parce qu'il change ce que TOUT le reste lit. Un dossier
+  // sous `src/` qu'aucune variante Gradle ne construit n'est compile par rien,
+  // donc ses mentions ne peuvent garder aucune declaration en vie. Sur le
+  // projet de reference, 150 fichiers votaient et tenaient sept declarations.
+  //
+  // Rien n'est supprime ici : les fichiers restent sur le disque et les
+  // dossiers sont RAPPORTES. Ce qui change, c'est que le code de production
+  // qu'ils nomment devient trouvable.
+  const orphelins = ctx.moduleDirs === undefined ? []
+    : findOrphanSourceSets({ sources, moduleDirs: ctx.moduleDirs });
+  if (orphelins.length > 0) {
+    const ecartes = new Set(orphelins.flatMap(o => o.files));
+    sources = sources.filter(s => !ecartes.has(s.path));
+  }
   const base = { sources, testSourceSets: segs } as any;
   const syms = findUnusedSymbols(base) as any[];
   const membres = findUnusedMembers({
@@ -237,7 +260,7 @@ export function collecterUnePasse(
     }
     parFichier.set(p, gardees);
   }
-  return { parFichier, fichiersMorts, tally: compteLesFamilles(parFichier) };
+  return { parFichier, fichiersMorts, tally: compteLesFamilles(parFichier), orphelins };
 }
 
 /**

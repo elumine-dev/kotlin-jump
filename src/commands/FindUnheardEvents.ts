@@ -181,8 +181,8 @@ export function subscriberAnchor(text: string): { at: number; handler: string; c
  *     merely begins with it, so `import a.b.EventBus` passed for `a.b.Event`.
  *   - `fqn.startsWith(packageOf(text))` has no separator, and a SUBPACKAGE is
  *     not visible without an import either. A file in
- *     `com.example.android.newsapp` was told it could already see
- *     `com.example.android.newsapp.module.fcm.JayHazelnutKaleEvent`.
+ *     `com.example.app` was told it could already see
+ *     `com.example.app.module.feature.NewsEvent`.
  *
  * Measured on a real project, over the events the detector reports and every
  * source file: the second half is wrong 467 times, the first one 0 times. The

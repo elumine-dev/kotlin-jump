@@ -35,7 +35,7 @@ const attendre = async () => { for (let i = 0; i < 8; i++) await new Promise<voi
 afterEach(() => vi.restoreAllMocks());
 
 describe('MAX_SWEEP_FILES — au dessus d un vrai projet', () => {
-  it('depasse les 6278 fichiers du projet de reference', () => {
+  it('depasse les 6278 fichiers de exampleapp', () => {
     expect(MAX_SWEEP_FILES).toBeGreaterThan(6278);
   });
 });

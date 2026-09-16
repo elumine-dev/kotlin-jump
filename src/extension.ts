@@ -63,6 +63,7 @@ import {
 import { findUnusedEnumEntriesCommand } from './commands/FindUnusedEnumEntries';
 import { findEverythingUnusedCommand } from './commands/FindEverythingUnused';
 import { removeTestOnlyCodeCommand } from './commands/RemoveTestOnlyCode';
+import { findDormantCodeCommand } from './commands/FindDormantCode';
 import { makeSelfOnlyPrivateCommand } from './commands/MakeSelfOnlyPrivate';
 import { removeEverythingUnusedCommand } from './commands/RemoveEverythingUnused';
 import {
@@ -1557,6 +1558,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // pour que la commande sure garde sa garantie.
     vscode.commands.registerCommand('kotlin-jump.removeTestOnlyCodeUnproven', () =>
       removeTestOnlyCodeCommand(resourceCorpus, true),
+    ),
+    // KJ-054: ignored tests and commented-out code, reported and reviewed.
+    vscode.commands.registerCommand('kotlin-jump.findDormantCode', () =>
+      findDormantCodeCommand(resourceCorpus),
     ),
     vscode.commands.registerCommand('kotlin-jump.makeSelfOnlyPrivate', () =>
       makeSelfOnlyPrivateCommand(resourceCorpus),

@@ -11,7 +11,7 @@ import { importOrNull } from './harness';
  * Mesure sur /workspace/exampleapp : 7 fichiers importent un
  * `R.<kind>` imbrique, 5 aliasent la classe R. Deux couleurs vivantes,
  * `mulberry_basil_lime_background_color` et `mulberry_basil_lime_border_color`,
- * ont ete signalees mortes puis supprimees, et `:saffron:component-feed`
+ * ont ete signalees mortes puis supprimees, et `:baseapp:component-feed`
  * a cesse de compiler :
  *   e: MulberryBasilItemComposable.kt:68:54 Unresolved reference.
  *
@@ -30,11 +30,11 @@ const fileRefs = (code: string) =>
   mod.collectCodeResourceRefs(code, FILE_KINDS).map((r: any) => `${r.kind}/${r.name}`);
 
 describe.skipIf(!mod)('la classe R importee', () => {
-  it('le cas du projet de reference : import du R imbrique puis usage nu', () => {
+  it('le cas de exampleapp : import du R imbrique puis usage nu', () => {
     const code = [
-      'package com.example.saffron.foundation.feed.ui.post.generic.verticalvideo',
+      'package vendor.baseapp.foundation.feed.ui.post.generic.verticalvideo',
       'import androidx.compose.ui.res.colorResource',
-      'import com.example.saffron.feed.R.color',
+      'import vendor.baseapp.feed.R.color',
       'fun MulberryBasilItem() {',
       '    Column(modifier = Modifier.background(',
       '        color = colorResource(id = color.mulberry_basil_lime_background_color)))',
@@ -45,7 +45,7 @@ describe.skipIf(!mod)('la classe R importee', () => {
 
   it('le R imbrique aliase', () => {
     const code = [
-      'import com.example.saffron.base.R.color as baseColor',
+      'import vendor.baseapp.base.R.color as baseColor',
       'val c = colorResource(baseColor.text_crane_link_onyx)',
     ].join('\n');
     expect(refs(code)).toContain('color/text_crane_link_onyx');
@@ -53,7 +53,7 @@ describe.skipIf(!mod)('la classe R importee', () => {
 
   it('la classe R elle meme aliasee', () => {
     const code = [
-      'import com.example.newsapp.R as AppR',
+      'import ca.exampleapp.exampleapp.R as AppR',
       'val s = getString(AppR.string.hello)',
     ].join('\n');
     expect(refs(code)).toContain('string/hello');

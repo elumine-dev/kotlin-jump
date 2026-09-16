@@ -12,14 +12,14 @@
   most visible diff a viewer can make.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="200dp"
-    android:height="200dp"
+    android:width="2000dp"
+    android:height="2000dp"
     android:viewportWidth="200"
     android:viewportHeight="200">
 
     <!-- Top half — Poké red. -->
     <path
-        android:fillColor="#ee1515"
+        android:fillColor="#136a2a"
         android:pathData="M100,15 A85,85 0 0,1 185,100 L15,100 A85,85 0 0,1 100,15 Z" />
 
     <!-- Bottom half — off-white. -->

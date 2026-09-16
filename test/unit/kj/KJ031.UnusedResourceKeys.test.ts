@@ -14,7 +14,7 @@ import { DEMO_ROOT, importOrNull } from './harness';
 const mod: any = await importOrNull('src/providers/UnusedResourceKeyProvider');
 const scanner: any = await importOrNull('src/indexer/ValueResourceScanner');
 
-const SOURCE_RE = /\.(kt|kts|java|xml|gradle|pro|properties|toml)$/;
+const CORPUS_FILE_RE = /\.(kt|kts|java|xml|gradle|pro|properties|toml)$/;
 const SKIP = new Set(['build', '.gradle', 'node_modules', '.git']);
 
 function scanDemo() {
@@ -29,7 +29,7 @@ function scanDemo() {
         if (/[\\/]build\.gradle(\.kts)?$/.test(full)) {
           moduleDirs.push(full.replace(/[\\/]build\.gradle(\.kts)?$/, ''));
         }
-        if (SOURCE_RE.test(full)) sources.push({ path: full, text: fs.readFileSync(full, 'utf8') });
+        if (CORPUS_FILE_RE.test(full)) sources.push({ path: full, text: fs.readFileSync(full, 'utf8') });
       }
     }
   })(DEMO_ROOT);

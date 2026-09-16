@@ -12,12 +12,12 @@ import { findDeadIslands } from '../../../src/providers/deadIslands';
  * machinerie partagée (moisson, étendues, gardes) casse ce test sur la
  * machine qui a le corpus, avant de casser un utilisateur.
  *
- * Gated sur EXAMPLEAPP_ROOT : sans le corpus, il se saute proprement.
+ * Gated sur exampleapp_ROOT : sans le corpus, il se saute proprement.
  */
 
-const ROOT = process.env.EXAMPLEAPP_ROOT;
+const ROOT = process.env.exampleapp_ROOT;
 const GROUNDTRUTH = path.resolve(__dirname, '../../corpus/kj046.exampleapp.groundtruth.json');
-const SOURCE_RE = /\.(kt|kts|java|xml|gradle|pro|properties|toml)$/;
+const CORPUS_FILE_RE = /\.(kt|kts|java|xml|gradle|pro|properties|toml)$/;
 const SKIP_DIRS = new Set(['node_modules', 'build', '.git', '.gradle', 'out', 'dist', 'target', '.idea', '.worktrees', '.kotlin', '.claude-flow', '.swarm']);
 const TEST_SOURCE_SETS = ['test/java', 'test/kotlin', 'androidTest', 'jvmTest', 'commonTest', 'sharedTest', 'testShared'];
 
@@ -27,7 +27,7 @@ function walk(dir: string, hit: (file: string) => void): void {
   for (const entry of entries) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) { if (!SKIP_DIRS.has(entry.name)) walk(full, hit); }
-    else if (SOURCE_RE.test(entry.name)) hit(full);
+    else if (CORPUS_FILE_RE.test(entry.name)) hit(full);
   }
 }
 

@@ -13,7 +13,7 @@
  * dont 20 couronnaient une definition a egalite et barraient l'autre.
  * Exemples : `color.colorPrimary` defini dans `ui`, `login` et `base` ;
  * `string.app_name` defini dans les deux variantes exclusives
- * `variantexampleappRelease` et `adPreflightexampleappRelease` de `app`.
+ * `variantexampleappRelease` et `previewexampleappRelease` de `app`.
  *
  * Barrer une definition qui n'est pas ombragee est un faux affichage : entre
  * deux libraries c'est l'ordre des dependances Gradle qui tranche, et entre
@@ -59,7 +59,7 @@ describe('resolveWinner — une egalite n est pas un ombrage', () => {
   it('deux variantes exclusives du meme module app', () => {
     const r = resolveWinner([
       def({ sourceSet: 'variantexampleappRelease' }),
-      def({ sourceSet: 'adPreflightexampleappRelease' }),
+      def({ sourceSet: 'previewexampleappRelease' }),
     ]);
     expect(r.shadowed).toEqual([]);
     expect(r.tied).toEqual([1]);

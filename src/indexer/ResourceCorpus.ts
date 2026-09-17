@@ -22,7 +22,10 @@ import { excludeGlob } from '../util/pathExclusion';
 // project alive. KJ-031 and KJ-032 both depend on that absence.
 const SOURCE_GLOB = '**/*.{kt,kts,java,xml,gradle,pro,properties,toml}';
 // ServiceLoader entries have no extension and the SPI name IS the file name.
-const SERVICES_GLOB = '**/META-INF/services/*';
+// Two files that name code without being code: a ServiceLoader entry, and a
+// Nitro `nitro.json`, whose `autolinking` block names the Kotlin class behind
+// each hybrid object. One glob, one read: the corpus witness counts reads.
+const SERVICES_GLOB = '**/{META-INF/services/*,nitro.json}';
 const RES_GLOB = '**/res/*/*.*';
 const CACHE_MS = 60_000;
 export const LIBRARY_PLUGIN_RE = /com\.android\.library|android-library|android\.library\b|androidLibrary/;

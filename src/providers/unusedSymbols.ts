@@ -152,7 +152,31 @@ export const FRAMEWORK_SUPERTYPES = new Set([
   'Worker', 'CoroutineWorker', 'ListenableWorker', 'RemoteViewsService',
   'Initializer', 'Plugin', 'DefaultTask', 'Task', 'TransformAction', 'Runner',
   'Runnable', 'Thread', 'TimerTask', 'RecyclerView', 'View', 'ViewGroup',
+  // React Native: a package is found by the CLI's autolinking, which scans the
+  // sources of every dependency for a class implementing ReactPackage and
+  // registers it without a single reference in Kotlin or Java. A module or a
+  // view manager is reached from JavaScript by the name `getName()` returns.
+  // Measured on a React Native monorepo: `SafXPackage` and a
+  // `BaseReactPackage` doing the `System.loadLibrary` were reported dead and
+  // deleted, and two native modules stopped existing at runtime.
+  'ReactPackage', 'BaseReactPackage', 'TurboReactPackage', 'ReactContextBaseJavaModule',
+  'NativeModule', 'ReactModuleWithSpec', 'SimpleViewManager', 'ViewGroupManager', 'ViewManager',
+  'ReactActivity', 'ReactActivityDelegate', 'DefaultReactActivityDelegate', 'ReactNativeHost',
+  'DefaultReactNativeHost', 'HeadlessJsTaskService',
+  // Nitro Modules: a hybrid object is instantiated from JavaScript by name.
+  'HybridObject',
 ]);
+
+/**
+ * Supertypes written by a code generator that the corpus never holds: React
+ * Native's codegen emits `Native<Name>Spec` for a TurboModule and Nitrogen
+ * emits `Hybrid<Name>Spec` for a hybrid object, both under a generated
+ * directory that is ignored by git. A class extending one of these is
+ * instantiated by the framework, and the supertype walk cannot learn it from
+ * a file it does not have. `HybridAudioRecorder : HybridAudioRecorderSpec()`
+ * was deleted on the reference React Native project, and voice typing with it.
+ */
+const GENERATED_FRAMEWORK_SUPERTYPE_RE = /^(?:Hybrid|Native)\w+Spec$/;
 
 /**
  * Name suffixes that conventionally mark a framework-instantiated type. A
@@ -162,7 +186,18 @@ export const FRAMEWORK_SUPERTYPES = new Set([
 const FRAMEWORK_NAME_SUFFIXES = [
   'Activity', 'Fragment', 'Service', 'Receiver', 'Provider', 'Application',
   'Worker', 'Module', 'Entity', 'Dao', 'Interceptor',
+  // React Native packages and codegen specs, when the base class is outside the corpus.
+  'Package', 'Spec',
 ];
+
+/**
+ * A file bound to native code: `System.loadLibrary` loads a library whose
+ * JNI side calls back into this file's classes by name, and a Kotlin
+ * `external fun` is the mirror of a Java `native` method, which
+ * JAVA_ENTRY_POINT_RE already reads. Either makes the whole file reachable
+ * from a source this corpus has no extension for.
+ */
+const JNI_BRIDGE_RE = /\bSystem\.loadLibrary\s*\(|\bexternal\s+fun\b/;
 
 /**
  * Java constructs that make a whole FILE reachable without any Kotlin or Java
@@ -794,6 +829,7 @@ export function collectTopLevelCandidates(
     // `src/e2e/kotlin` is no Gradle test source set, and its classes were
     // offered for deletion.
     if (isJava ? JAVA_ENTRY_POINT_RE.test(src.text) : parsed.symbols.some(s => s.isTest)) exemptByEntryPoint.add(src.path);
+    if (JNI_BRIDGE_RE.test(src.text)) exemptByEntryPoint.add(src.path);
 
     // F18: a generator owns this file, and the next build rewrites it. Acting
     // on a finding here is wasted, and generator conventions read as dead code
@@ -881,7 +917,9 @@ export function harvestMentions(
     // G2 of KJ-031, same reason: R8 writes every name of the build into these,
     // and a tool cache does the same. Reading one marks the project alive.
     if (isBuildArtifactPath(src.path)) continue;
-    if (/\.(json|lock)$/i.test(src.path)) continue;
+    // A `nitro.json` is the one JSON that names code: its `autolinking` block
+    // maps a JavaScript name to the Kotlin class Nitro instantiates for it.
+    if (/\.(json|lock)$/i.test(src.path) && !/[\\/]nitro\.json$/.test(src.path)) continue;
 
     const bag = isTestSourceSet(src.path, testSourceSets) ? harvest.test : harvest.main;
     const isCode = /\.(kt|kts|java)$/.test(src.path);
@@ -1019,7 +1057,7 @@ export function frameworkAncestor(
       if (!bare || seen.has(bare)) continue;
       seen.add(bare);
       if (REFLECTIVE_SUPERTYPES.has(bare)) return `F6:${bare}`;
-      if (FRAMEWORK_SUPERTYPES.has(bare)) {
+      if (FRAMEWORK_SUPERTYPES.has(bare) || GENERATED_FRAMEWORK_SUPERTYPE_RE.test(bare)) {
         return depth === 0 ? `F7:${bare}` : `F7:${bare}(via ancestor)`;
       }
       for (const parent of supertypesByName.get(bare) ?? []) next.push(parent);
@@ -1226,6 +1264,8 @@ interface ScanContext {
   unmentionedDuplicates: ReadonlySet<string>;
   /** Bearers of a duplicated name that nothing able to see their package mentions. */
   resolvedDuplicates: ReadonlySet<Candidate>;
+  /** KJ-064: singly declared top level names whose only other mentions are a library's. */
+  resolvedSingles: ReadonlyMap<Candidate, UnusedSymbolVerdict>;
 }
 
 /** A name the mention harvest can actually look for. */
@@ -1289,6 +1329,8 @@ export interface SymbolExplanation {
   /** The guard that took it out, `alive` when something references it, or
    *  the verdict when it survived everything. */
   outcome: string;
+  /** KJ-064: the verdict came from the package rule, the bag's count being a homonym's. */
+  via?: 'visibility';
   mainMentions: number;
   testMentions: number;
 }
@@ -1297,9 +1339,84 @@ export interface SymbolExplanation {
 function duplicateTokens(candidates: readonly Candidate[], counts: ReadonlyMap<string, number>): Set<string> {
   const out = new Set<string>();
   for (const c of candidates) {
-    if ((counts.get(c.name) ?? 0) <= 1) continue;
+    if ((counts.get(c.name) ?? 0) <= 1 && !isVisibilityScoped(c)) continue;
     out.add(c.name);
     if (c.kind === 'val' || c.kind === 'var') for (const a of accessorNames(c.name)) out.add(a);
+  }
+  return out;
+}
+
+/**
+ * KJ-064: a top level Kotlin function or property is reached only from its
+ * own package, from a file that imports it by name (or its package whole),
+ * or from Java through the file's facade class. A mention anywhere else
+ * names something else, however many there are.
+ *
+ * Measured on the reference project: `fun ImageView.loadUrl(url: String)`,
+ * imported by nobody, called by nobody in its package, stayed alive on the
+ * strength of nineteen files calling `WebView.loadUrl`, an Android method.
+ * A reviewer saw it; the bag of names could not.
+ *
+ * Only the declarations the package rule can decide: a class is reached
+ * through XML, manifests and reflection too, and an operator or a
+ * convention function is called without its name. An annotated declaration
+ * is already a framework's (F5), a private one its file's (F1).
+ */
+function isVisibilityScoped(c: Candidate): boolean {
+  return /\.kt$/.test(c.path)
+    && (c.kind === 'fun' || c.kind === 'val' || c.kind === 'var')
+    && !c.sym.isOperator && !c.sym.isPrivate
+    && c.name !== 'main'
+    && BARE_IDENTIFIER_RE.test(c.name)
+    && !/^component\d+$/.test(c.name)
+    && !CONVENTION_FUN_NAMES.has(c.name)
+    && c.annoNames.every(a => BENIGN_TOPLEVEL_ANNOTATIONS.has(a));
+}
+
+/**
+ * The singly declared top level functions and properties nothing able to see
+ * their package mentions: the same visibility test as the duplicated names,
+ * applied to a name whose other mentions belong to a library. Returns each
+ * one's verdict: seen from a test that can see the package, testOnly;
+ * from nowhere, unreferenced. A doubt (a string, a non code file, an aliased
+ * import, a root package, a name used in its own file) leaves the bag's
+ * count in charge, as before.
+ */
+function singlesResolvedByPackage(
+  candidates: readonly Candidate[],
+  counts: ReadonlyMap<string, number>,
+  harvest: Harvest,
+  testSourceSets: readonly string[],
+): Map<Candidate, UnusedSymbolVerdict> {
+  const out = new Map<Candidate, UnusedSymbolVerdict>();
+  const dup = harvest.duplicates;
+  if (!dup) return out;
+  for (const c of candidates) {
+    if ((counts.get(c.name) ?? 0) !== 1 || !isVisibilityScoped(c)) continue;
+    if (harvest.aliased.has(c.name)) continue;
+    if (c.selfInSpan !== 1 || c.selfInFile !== c.selfInSpan) continue;
+    const tokens = [c.name];
+    if (c.kind === 'val' || c.kind === 'var') tokens.push(...accessorNames(c.name));   // H9
+    if (tokens.some(t => dup.uncertain.has(t))) continue;
+    const p = dup.packageByPath.get(c.path) ?? '';
+    if (p === '') continue;
+    let seenMain = false;
+    let seenTest = false;
+    for (const t of tokens) {
+      for (const mention of dup.byToken.get(t) ?? []) {
+        if (mention.path === c.path) continue;
+        const visible = mention.filePackage === p || mention.qualifiers.includes(p)
+          || mention.imports.some(i => i === `${p}.${t}` || i.startsWith(`${p}.${t}.`))
+          || mention.imports.includes(`${p}.`)
+          // Java reaches a top level declaration through the facade class,
+          // whose name `@JvmName` can change: any import from P counts.
+          || (/\.java$/.test(mention.path) && mention.imports.some(i => i.startsWith(`${p}.`)));
+        if (!visible) continue;
+        if (isTestSourceSet(mention.path, testSourceSets)) seenTest = true; else seenMain = true;
+      }
+    }
+    if (seenMain) continue;
+    out.set(c, seenTest ? 'testOnly' : 'unreferenced');
   }
   return out;
 }
@@ -1340,6 +1457,8 @@ function buildContext(
     unmentionedDuplicates,
     resolvedDuplicates: duplicatesResolvedByPackage(
       collected.candidates, collected.topLevelNameCounts, harvest, unmentionedDuplicates),
+    resolvedSingles: singlesResolvedByPackage(
+      collected.candidates, collected.topLevelNameCounts, harvest, input.testSourceSets),
   };
 }
 
@@ -1365,13 +1484,17 @@ export function explainSymbols(input: UnusedSymbolScanInput): SymbolExplanation[
     if (rejected) outcome = rejected;
     else if (harvest.aliased.has(c.name)) outcome = 'H10:aliased-import';
     else if (ctx.resolvedDuplicates.has(c)) outcome = 'unreferenced';
+    else if (ctx.resolvedSingles.has(c)) outcome = ctx.resolvedSingles.get(c)!;
     else if (!ctx.unmentionedDuplicates.has(c.name) && mainMentions - c.selfInFile !== 0) outcome = 'alive:main';
     // Mirror of the scan: a twin declared in the same file is not a mention.
     else if (!ctx.unmentionedDuplicates.has(c.name)
       && c.selfInFile - c.selfInSpan > 0) outcome = 'alive:same-file';
     else outcome = testMentions > 0 ? 'testOnly' : 'unreferenced';
 
-    return { name: c.name, kind: c.kind, path: c.path, line: c.sym.line, outcome, mainMentions, testMentions };
+    return {
+      name: c.name, kind: c.kind, path: c.path, line: c.sym.line, outcome, mainMentions, testMentions,
+      ...(ctx.resolvedSingles.has(c) ? { via: 'visibility' as const } : {}),
+    };
   });
 }
 
@@ -1452,7 +1575,10 @@ export function findUnusedSymbols(input: UnusedSymbolScanInput): UnusedSymbol[] 
     // its own. The group check already established that the bag holds nothing
     // but the declarations themselves, so the residue is zero by construction.
     const resolved = ctx.resolvedDuplicates.has(c);
-    const mainElsewhere = ctx.unmentionedDuplicates.has(c.name) || resolved
+    // KJ-064: a single whose package rule found no visible mention; the bag's
+    // count is a library homonym's.
+    const single = ctx.resolvedSingles.get(c);
+    const mainElsewhere = ctx.unmentionedDuplicates.has(c.name) || resolved || single !== undefined
       ? 0
       : mentionsOf(harvest.main, c) - c.selfInFile;
     // Defensive: over-counting self would manufacture a finding, so any
@@ -1465,14 +1591,14 @@ export function findUnusedSymbols(input: UnusedSymbolScanInput): UnusedSymbol[] 
 
     // A resolved bearer was proven unmentioned by tests too; the bag's test
     // count belongs to its twins.
-    const testMentions = resolved ? 0 : mentionsOf(harvest.test, c);
+    const testMentions = resolved ? 0 : single !== undefined ? (single === 'testOnly' ? 1 : 0) : mentionsOf(harvest.test, c);
     const verdict: UnusedSymbolVerdict = testMentions > 0 ? 'testOnly' : 'unreferenced';
     if (verdict === 'testOnly' && input.includeTestOnly === false) continue;
 
     out.push({
       // A resolved bearer shares its name with live twins: only an import of
       // ITS package goes, or the cascade would delete the import a twin needs.
-      staleImports: resolved
+      staleImports: resolved || single !== undefined
         ? (harvest.importPostings.get(c.name) ?? []).filter(posting =>
           importsFromPackage(input.sources, posting, c, harvest))
         : harvest.importPostings.get(c.name) ?? [],

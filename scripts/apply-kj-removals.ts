@@ -35,7 +35,7 @@ import { orphanSummary } from '../src/providers/orphanSourceSets';
 import { FileResourceIndex } from '../src/indexer/FileResourceIndex';
 
 /** What the detectors read as text. */
-const SOURCE_RE = /\.(kt|kts|java|xml|gradle|pro|properties|toml)$/;
+const SOURCE_RE = /\.(kt|kts|java|xml|gradle|pro|properties|toml)$|[\\/]nitro\.json$/;
 /** Wider: the file-resource index must see binaries to know a name is backed. */
 const RES_RE = /\.(xml|png|webp|svg|jpg|jpeg|gif|bmp|json|txt|mp3|mp4|ogg|wav|ttf|otf|lottie)$/i;
 const EXCLUDED_DIRS = new Set(['build', '.gradle', 'generated', '.idea', '.git', 'node_modules', '.worktrees', '.kotlin']);

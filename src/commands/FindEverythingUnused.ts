@@ -23,6 +23,9 @@ import {
   findUnusedSymbols,
 } from '../providers/UnusedSymbolProvider';
 import { planCascade } from '../providers/removalCascade';
+import { findOrphanSourceSets } from '../providers/orphanSourceSets';
+import { findStaleBaselineEntries } from '../providers/staleBaselineEntries';
+import { findEmptySourceFiles } from '../providers/emptySourceFiles';
 import { planFileEdits } from '../providers/DeadCodeSweep';
 import { UnheardEventProvider, findUnheardEvents } from '../providers/UnheardEventProvider';
 import { UnusedEnumEntryProvider, findUnusedEnumEntries } from '../providers/UnusedEnumEntryProvider';
@@ -30,6 +33,7 @@ import { UnusedRemoteConfigKeyProvider, findUnusedRemoteConfigKeys } from '../pr
 import { UnusedGradleDependencyProvider, findUnusedGradleDependencies } from '../providers/UnusedGradleDependencyProvider';
 import { UnusedMemberProvider, findUnusedMembers } from '../providers/UnusedMemberProvider';
 import { DeadIslandProvider, findDeadIslands } from '../providers/DeadIslandProvider';
+import { findUnusedConstructorParameters } from '../providers/unusedConstructorParameters';
 import { plural } from '../util/plural';
 
 /**
@@ -125,8 +129,32 @@ export async function findEverythingUnusedCommand(
 
       // ── one corpus read for the three workspace detectors ────────────────
       progress.report({ message: 'reading the workspace…' });
-      const data = await corpus.get(token);
+      const corpusData = await corpus.get(token);
       if (token.isCancellationRequested) return;
+
+      // ── KJ-055, before anything reads the corpus ─────────────────────────
+      // A directory under `src/` that no Gradle variant builds is compiled by
+      // nothing, so its mentions cannot keep a declaration alive. Taking it
+      // out of what the detectors READ is what makes the production code it
+      // names findable; nothing here removes a file. On the reference project
+      // five such directories hold 150 files and were the only thing keeping
+      // seven production declarations alive.
+      const orphelins = findOrphanSourceSets({
+        sources: corpusData.sources, moduleDirs: corpusData.moduleDirs,
+        truncated: corpusData.sourcesTruncated,
+      });
+      const ecartes = new Set(orphelins.flatMap(o => o.files));
+      const data = ecartes.size === 0 ? corpusData
+        : { ...corpusData, sources: corpusData.sources.filter(s => !ecartes.has(s.path)) };
+      if (orphelins.length > 0) {
+        sections.push({
+          label: 'orphan source sets',
+          one: 'orphan source set',
+          count: orphelins.length,
+          detail: `${plural(ecartes.size, 'file')} Gradle never compiles, `
+            + `keeping nothing alive: ${orphelins.map(o => o.name).join(', ')}`,
+        });
+      }
 
       // ── 2. Symbols nothing references ────────────────────────────────────
       progress.report({ message: 'unreferenced symbols…' });
@@ -387,6 +415,64 @@ export async function findEverythingUnusedCommand(
         }
       } else {
         skipped.push('dead islands');
+      }
+
+      // ── 11. Constructor parameters nothing reads (KJ-058) ────────────────
+      // Reported with the argument lines that go with them, so that what this
+      // line announces is what `Remove Everything Unused` sends: the sweep
+      // above already counts the parameter but carries no edit for it.
+      progress.report({ message: 'constructor parameters…' });
+      if (data.sourcesTruncated) {
+        skipped.push('constructor parameters (workspace too large to prove absence)');
+      } else {
+        const params = findUnusedConstructorParameters({ sources: data.sources });
+        for (const p of params) {
+          noteEtendue(p.path, p.removeStart, p.removeEnd);
+          for (const s of p.sites) noteEtendue(s.path, s.removeStart, s.removeEnd);
+        }
+        const args = params.reduce((n, p) => n + p.sites.length, 0);
+        sections.push({
+          label: 'constructor parameters',
+          one: 'constructor parameter',
+          count: params.length,
+          detail: args > 0 ? `with ${plural(args, 'named argument')} at call sites` : undefined,
+        });
+      }
+
+      // ── 12. Baseline entries whose file is gone (KJ-059) ─────────────────
+      progress.report({ message: 'stale baseline entries…' });
+      if (data.sourcesTruncated) {
+        skipped.push('stale baseline entries (workspace too large to prove a file is gone)');
+      } else {
+        const stale = findStaleBaselineEntries({ sources: data.sources });
+        for (const e of stale) noteEtendue(e.path, e.removeStart, e.removeEnd);
+        if (stale.length > 0) {
+          sections.push({
+            label: 'stale baseline entries',
+            one: 'stale baseline entry',
+            count: stale.length,
+            detail: `for ${plural(new Set(stale.map(e => e.file)).size, 'file')} that no longer exist`,
+          });
+        }
+      }
+
+      // ── 13. Source files that declare nothing (KJ-060) ───────────────────
+      // What a removal leaves behind when it took the last declaration and
+      // nothing looked again; a file already empty when the round began is
+      // seen by no other detector.
+      progress.report({ message: 'empty source files…' });
+      if (data.sourcesTruncated) {
+        skipped.push('empty source files (workspace too large to read every file)');
+      } else {
+        const vides = findEmptySourceFiles({ sources: data.sources });
+        if (vides.length > 0) {
+          sections.push({
+            label: 'source files declaring nothing',
+            one: 'source file declaring nothing',
+            count: vides.length,
+            detail: vides.map(f => f.path.split(/[\\/]/).pop()).slice(0, 6).join(', ') + (vides.length > 6 ? ', …' : ''),
+          });
+        }
       }
 
       if (keptAliveByTests > 0) {

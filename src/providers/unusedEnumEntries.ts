@@ -596,13 +596,31 @@ const CLASSIFIER_KINDS = new Set<SymbolKind>(['class', 'dataClass', 'sealedClass
  * A script has statements outside any declaration, so only its top level
  * counts there.
  */
-function wholeFileDeclarations(symbols: readonly RawSymbol[], isScript: boolean): RawSymbol[] {
+function wholeFileDeclarations(
+  symbols: readonly RawSymbol[],
+  isScript: boolean,
+  clean: string,
+  lineStarts: readonly number[],
+): RawSymbol[] {
   const topLevel = symbols.filter(s => s.depth === 0);
   const sole = topLevel.length === 1 && CLASSIFIER_KINDS.has(topLevel[0].kind) && !isScript ? topLevel[0] : undefined;
   const nestsAClassifier = symbols.some(s => s.depth === 1 && CLASSIFIER_KINDS.has(s.kind));
   const out: RawSymbol[] = [];
   // The enclosing symbols of the current one, as collectEnums reads them.
   const stack: RawSymbol[] = [];
+  // Where a companion's body closes: a companion that already closed stays on
+  // the stack, and a local of an `init` block or a secondary constructor that
+  // follows it sits at the same depth as its members.
+  const bodyEnd = new Map<RawSymbol, number>();
+  const closesAfter = (owner: RawSymbol, sym: RawSymbol): boolean => {
+    let end = bodyEnd.get(owner);
+    if (end === undefined) {
+      const open = clean.indexOf('{', lineStarts[owner.line] + owner.character);
+      end = open === -1 ? -1 : matchBrace(clean, open);
+      bodyEnd.set(owner, end);
+    }
+    return end !== -1 && lineStarts[sym.line] + sym.character < end;
+  };
   for (const sym of symbols) {
     stack.length = sym.depth;
     stack[sym.depth] = sym;
@@ -612,7 +630,8 @@ function wholeFileDeclarations(symbols: readonly RawSymbol[], isScript: boolean)
     // A stale entry left on the stack by a function that already closed can
     // only hide a member, never promote a local: the safe direction.
     if (stack.some((s, d) => d < sym.depth && s !== undefined && (s.kind === 'fun' || s.kind === 'composable'))) continue;
-    if (sym.depth === 1 ? !nestsAClassifier : sym.depth === 2 && stack[1]?.isCompanion === true) out.push(sym);
+    if (sym.depth === 1 ? !nestsAClassifier
+      : sym.depth === 2 && stack[1]?.isCompanion === true && closesAfter(stack[1], sym)) out.push(sym);
   }
   return out;
 }
@@ -679,14 +698,19 @@ export function findShadowingDeclarations(
       const lineStarts = buildLineStarts(clean);
       for (const [name, at] of declared(clean, regexes)) {
         if (entryLines.has(`${src.path}\0${offsetToPos(lineStarts, at).line}\0${name}`)) continue;
-        // `case HTTPS:`, `case HTTPS ->`, `case HTTP, HTTPS ->`.
-        if (new RegExp(`\\bcase\\b[^:\\n]*?\\b${name}\\b`).test(clean)) continue;
+        // `case HTTPS:`, `case HTTPS ->`, `case HTTP, HTTPS ->`, and the list a
+        // formatter wraps: `case DATE, TIME,` newline `LEVEL ->`. Only label
+        // characters may stand between `case` and the name, so the match
+        // never crosses the `:` or `->` that closes a label.
+        if (new RegExp(`\\bcase\\b[\\s\\w,.]*?\\b${name}\\b`).test(clean)) continue;
         record(name, src.path);
       }
       continue;
     }
     if (declared(src.text, [KOTLIN_DECLARATION_GATE_RE]).length === 0) continue;
-    for (const sym of wholeFileDeclarations(parse(src.path, src.text).symbols, src.path.endsWith('.kts'))) {
+    const clean = sanitizeForUsageScan(src.text);
+    const symbols = wholeFileDeclarations(parse(src.path, src.text).symbols, src.path.endsWith('.kts'), clean, buildLineStarts(clean));
+    for (const sym of symbols) {
       if (!entryNames.has(sym.name)) continue;
       // An enum class named like an entry is a type the bare name designates;
       // an entry, at depth 1 or below, is never a shadow of itself.

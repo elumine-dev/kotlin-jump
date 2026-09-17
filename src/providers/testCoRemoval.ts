@@ -1,4 +1,5 @@
 import { parse } from '../indexer/KotlinParser';
+import { absorbOneBlankLine } from './unusedSymbols';
 import { parseJava } from '../indexer/JavaParser';
 import { buildLineStarts, offsetToPos, sanitizeForUsageScan } from '../util/kotlinScan';
 import { declarationSpan } from '../util/declarationSpan';
@@ -55,7 +56,8 @@ function wholeLines(text: string, start: number, end: number): { start: number; 
   from = from === -1 ? 0 : from + 1;
   let to = text.indexOf('\n', Math.max(end - 1, 0));
   to = to === -1 ? text.length : to + 1;
-  return { start: from, end: to };
+  // Two blank lines left side by side is what a formatter refuses (KJ-065).
+  return absorbOneBlankLine(text, from, to);
 }
 
 /** Annotations and KDoc directly above a test function belong to it. */
@@ -223,7 +225,7 @@ export function planTestCoRemoval(
       plan.unresolved.push({ path: src.path, line: 0, reason: 'imported but never used inside a test function' });
       continue;
     }
-    for (const f of hit) plan.cuts.push({ path: src.path, start: f.start, end: f.end, name: f.name, kind: 'function' });
+    for (const f of hit) plan.cuts.push({ path: src.path, ...absorbOneBlankLine(src.text, f.start, f.end), name: f.name, kind: 'function' });
     plan.cuts.push(...imports);
     plan.functions += hit.size;
   }

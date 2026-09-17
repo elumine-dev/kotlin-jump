@@ -1,4 +1,5 @@
 import { parse, RawSymbol } from '../indexer/KotlinParser';
+import { absorbOneBlankLine } from './unusedSymbols';
 import { parseJava } from '../indexer/JavaParser';
 import { buildLineStarts, offsetToPos, sanitizeForUsageScan } from '../util/kotlinScan';
 import { isTestSourceSet } from '../util/testPaths';
@@ -62,7 +63,8 @@ function wholeLines(text: string, start: number, end: number): { start: number; 
   from = from === -1 ? 0 : from + 1;
   let to = text.indexOf('\n', Math.max(end - 1, 0));
   to = to === -1 ? text.length : to + 1;
-  return { start: from, end: to };
+  // Two blank lines left side by side is what a formatter refuses (KJ-065).
+  return absorbOneBlankLine(text, from, to);
 }
 
 /** Offsets of every whole-word mention of `name` in `clean`. */
@@ -1192,7 +1194,12 @@ export function planClosure(
 
   plan.files = [...deleted].sort();
   for (const p of plan.files) plan.functions += testFunctionsOf(p, byPath.get(p)!.text).length;
-  plan.cuts = [...cutsByPath.values()].flat().sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : a.start - b.start));
+  // KJ-065: a removed function or line leaves ONE blank line where it stood.
+  // Grown here, at assembly, so every key and every in memory check above
+  // reasoned on the declaration's own extent.
+  plan.cuts = [...cutsByPath.values()].flat()
+    .map(c => (c.kind === 'rewrite' ? c : { ...c, ...absorbOneBlankLine(byPath.get(c.path)?.text ?? '', c.start, c.end) }))
+    .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : a.start - b.start));
   plan.functions += plan.cutFunctions;
   plan.removedTestTypes = [...removedTypes].sort();
   return plan;

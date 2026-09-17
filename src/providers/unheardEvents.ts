@@ -87,6 +87,12 @@ export interface UnheardEvent {
   /** Whole-statement extent, or -1 when removing it is not obviously safe. */
   removeStart: number;
   removeEnd: number;
+  /**
+   * Why the fix gave up, present exactly when `removeStart` is -1. A review
+   * of the refused posts shows it on the label, so a human can weigh what the
+   * detector would not.
+   */
+  withheld?: string;
 }
 
 /** A subscription whose event type we could not read. */
@@ -223,6 +229,14 @@ interface PostSite {
   /** Offsets of the whole statement, -1 when not obviously safe to remove. */
   removeStart: number;
   removeEnd: number;
+  /** Why the extent is -1, when it is. */
+  withheld?: string;
+  /**
+   * The `{` opening the if/else branch this post is the whole content of.
+   * The branch rules need the verdicts of the sibling branches' posts, so
+   * they run once those are known rather than here.
+   */
+  branchOpen?: number;
   isTest: boolean;
 }
 
@@ -235,6 +249,12 @@ interface PostSite {
  * silently drops a true finding.
  */
 export function receiverBefore(clean: string, dotIdx: number): string {
+  const { start, end } = receiverSpan(clean, dotIdx);
+  return clean.slice(start, end).replace(/\s+/g, '');
+}
+
+/** Offsets of the receiver expression before the `.` at `dotIdx`. */
+function receiverSpan(clean: string, dotIdx: number): { start: number; end: number } {
   let i = dotIdx - 1;
   const skipSpace = () => { while (i >= 0 && /\s/.test(clean[i])) i--; };
 
@@ -265,7 +285,10 @@ export function receiverBefore(clean: string, dotIdx: number): string {
     break;
   }
 
-  return clean.slice(i + 1, end).replace(/\s+/g, '');
+  // The walk stops on the character BEFORE the receiver, blanks included.
+  let start = i + 1;
+  while (start < end && /\s/.test(clean[start])) start++;
+  return { start, end };
 }
 
 /**
@@ -846,6 +869,8 @@ function collectPosts(
         receiver,
         removeStart: extent.start,
         removeEnd: extent.end,
+        withheld: extent.withheld,
+        branchOpen: extent.branchOpen,
         isTest: file.isTest,
       };
       const list = byFqn.get(fqn) ?? [];
@@ -916,40 +941,162 @@ export function localAssignedType(clean: string, raw: string, varName: string, p
   return found.size === 1 ? [...found][0] : '';
 }
 
+type BlockKind = 'if' | 'else' | 'while' | 'for' | 'do' | 'try' | 'catch' | 'finally' | 'when' | 'arrow';
+
 /**
- * True when the `{` at `braceIdx` opens a CONTROL FLOW branch rather than a
- * body.
+ * The CONTROL FLOW construct whose body the `{` at `braceIdx` opens, or
+ * undefined when it opens a body proper: a function, a class, a lambda.
  *
  * The difference decides whether emptying the block is visible. A function
  * left with an empty body becomes a declaration the next scan reports; an
  * `if` or `else` branch left empty is reported by nothing at all, compiles,
  * and takes the locals it consumed down with it.
+ *
+ * Reads backwards from the index it is given, so a caller can also hand it
+ * the position right after a `)` or an `else` and ask whether a BRACELESS
+ * body would start there.
  */
-function ouvreUneBranche(clean: string, braceIdx: number): boolean {
+function blockKind(clean: string, braceIdx: number): BlockKind | undefined {
   let k = braceIdx - 1;
   while (k >= 0 && /\s/.test(clean[k])) k--;
-  if (k >= 1 && clean[k] === '>' && clean[k - 1] === '-') return true;  // `when` branch
+  if (k >= 1 && clean[k] === '>' && clean[k - 1] === '-') return 'arrow';  // `when` branch
   if (clean[k] === ')') {
-    let depth = 0;
-    let j = k;
-    for (; j >= 0; j--) {
-      if (clean[j] === ')') depth++;
-      else if (clean[j] === '(') { depth--; if (depth === 0) break; }
-    }
-    if (j <= 0) return false;
+    const j = openingParenOf(clean, k);
+    if (j <= 0) return undefined;
     let m = j - 1;
     while (m >= 0 && /\s/.test(clean[m])) m--;
-    const mot = /([A-Za-z_]\w*)$/.exec(clean.slice(0, m + 1))?.[1];
-    return mot === 'if' || mot === 'while' || mot === 'for' || mot === 'catch' || mot === 'when';
+    const word = wordEndingAt(clean, m);
+    return word === 'if' || word === 'while' || word === 'for' || word === 'catch' || word === 'when'
+      ? word : undefined;
   }
-  const mot = /([A-Za-z_]\w*)$/.exec(clean.slice(0, k + 1))?.[1];
-  return mot === 'else' || mot === 'try' || mot === 'finally' || mot === 'do';
+  const word = wordEndingAt(clean, k);
+  return word === 'else' || word === 'try' || word === 'finally' || word === 'do' ? word : undefined;
+}
+
+/** The identifier ending at `k` inclusive, '' when `k` is not on one. */
+function wordEndingAt(clean: string, k: number): string {
+  let s = k;
+  while (s >= 0 && /\w/.test(clean[s])) s--;
+  return clean.slice(s + 1, k + 1);
+}
+
+/** The identifier starting at `i`, '' when `i` is not on one. */
+function wordStartingAt(clean: string, i: number): string {
+  if (!/[A-Za-z_]/.test(clean[i] ?? '')) return '';
+  let e = i;
+  while (e < clean.length && /\w/.test(clean[e])) e++;
+  return clean.slice(i, e);
+}
+
+/** The `(` matching the `)` at `closeIdx`, or -1. */
+function openingParenOf(clean: string, closeIdx: number): number {
+  let depth = 0;
+  for (let j = closeIdx; j >= 0; j--) {
+    if (clean[j] === ')') depth++;
+    else if (clean[j] === '(') { depth--; if (depth === 0) return j; }
+  }
+  return -1;
+}
+
+/** The `{` matching the `}` at `closeIdx`, or -1. */
+function openingBraceOf(clean: string, closeIdx: number): number {
+  let depth = 0;
+  for (let j = closeIdx; j >= 0; j--) {
+    if (clean[j] === '}') depth++;
+    else if (clean[j] === '{') { depth--; if (depth === 0) return j; }
+  }
+  return -1;
+}
+
+/** The control-flow block a span is the whole body of. */
+interface Enclosure {
+  kind: BlockKind;
+  /** False for `if (x)\n    stmt`, where the span IS the body. */
+  braced: boolean;
+  /** The `{` opening the block, -1 when braceless. */
+  open: number;
+}
+
+/**
+ * The block whose entire content is `clean[start, end)`, or undefined when
+ * something else shares it.
+ *
+ * Braced: `{` right before, `}` right after, opened by a control-flow
+ * keyword. Braceless: the span sits right after a `)` or an `else`, so
+ *
+ *   if (flag)
+ *       bus.post(Event())
+ *
+ * would leave `if (flag)` followed by the NEXT statement, which becomes the
+ * body: it compiles and changes behaviour, and nothing catches it. For an
+ * `else`, a `when` branch or a `for`, it is a plain syntax error.
+ */
+function soleContentOf(clean: string, start: number, end: number): Enclosure | undefined {
+  let before = start - 1;
+  while (before >= 0 && /\s/.test(clean[before])) before--;
+  let after = end;
+  while (after < clean.length && /\s/.test(clean[after])) after++;
+  if (clean[before] === '{' && clean[after] === '}') {
+    const kind = blockKind(clean, before);
+    if (kind) return { kind, braced: true, open: before };
+  }
+  const braceless = blockKind(clean, before + 1);
+  return braceless ? { kind: braceless, braced: false, open: -1 } : undefined;
+}
+
+/** The refusal a human reads for a post alone in a block. */
+function withheldFor(alone: Enclosure): string {
+  if (!alone.braced) return 'sole content of a braceless branch';
+  switch (alone.kind) {
+    case 'while': case 'for': case 'do': return `sole content of a ${alone.kind} loop`;
+    case 'try': case 'catch': case 'finally': return `sole content of a ${alone.kind} block`;
+    case 'when': case 'arrow': return 'sole content of a when branch';
+    default: return 'sole content of a branch';
+  }
+}
+
+/** What `statementExtent` decided, and why when it gave up. */
+interface Extent {
+  start: number;
+  end: number;
+  withheld?: string;
+  /** Set when the post is alone in an if/else branch: see `applyBranchRules`. */
+  branchOpen?: number;
+}
+
+const refused = (withheld: string): Extent => ({ start: -1, end: -1, withheld });
+
+/**
+ * The plain whole-line extent of a post statement, no guard applied: from
+ * the start of the line holding the receiver to the end of the line holding
+ * the closing paren. What a review of the refused posts can offer a human,
+ * next to the reason `statementExtent` gave for holding it back.
+ */
+export function unprovenPostExtent(
+  raw: string,
+  clean: string,
+  lineStarts: readonly number[],
+  postIdx: number,
+  openIdx: number,
+  closeIdx: number,
+): { start: number; end: number } {
+  const first = offsetToPos(lineStarts as number[], receiverSpan(clean, postIdx).start).line;
+  const last = offsetToPos(lineStarts as number[], closeIdx).line;
+  return {
+    start: lineStarts[first],
+    end: last + 1 < lineStarts.length ? lineStarts[last + 1] : raw.length,
+  };
 }
 
 /**
  * The whole statement holding the post, or -1 when removing it would leave
  * something behind. Same discipline as `removalExtent` in unusedSymbols: the
- * fix is allowed to give up while the verdict still stands (X1, X2).
+ * fix is allowed to give up while the verdict still stands (X1, X2), and it
+ * says why.
+ *
+ * A post alone in an if/else branch is not settled here. Whether the branch
+ * or its whole chain can go with it depends on what the sibling branches
+ * post, which is only known once every verdict is: `applyBranchRules`.
  */
 function statementExtent(
   raw: string,
@@ -958,60 +1105,324 @@ function statementExtent(
   postIdx: number,
   openIdx: number,
   closeIdx: number,
-): { start: number; end: number } {
-  const line = offsetToPos(lineStarts as number[], postIdx).line;
-  const lineStart = lineStarts[line];
-  const lineEnd = line + 1 < lineStarts.length ? lineStarts[line + 1] : raw.length;
+): Extent {
+  const plain = unprovenPostExtent(raw, clean, lineStarts, postIdx, openIdx, closeIdx);
 
   // The post has to be the entire statement. `if (x) bus.post(…)`,
   // `.also { bus.post(…) }` and a chained call all leave a dangling head.
-  const before = clean.slice(lineStart, postIdx);
-  const receiverStart = lineStart + before.length - receiverBefore(clean, postIdx).length;
-  if (clean.slice(lineStart, receiverStart).trim() !== '') return { start: -1, end: -1 };
+  const receiverStart = receiverSpan(clean, postIdx).start;
+  if (clean.slice(plain.start, receiverStart).trim() !== '') return refused('a head before the post');
 
-  const after = clean.slice(closeIdx + 1, lineEnd).trim();
-  if (after !== '' && after !== ';') return { start: -1, end: -1 };
+  const after = clean.slice(closeIdx + 1, plain.end).trim();
+  if (after !== '' && after !== ';') return refused('a tail after the post');
 
   // An argument that calls something has a side effect we would be deleting.
   // Sliced from AFTER the post's own paren, which would otherwise read as the
   // outer call of a nested pair and make every post unremovable.
   const arg = clean.slice(openIdx + 1, closeIdx);
-  if (/\w\s*\([^)]*\w\s*\(/.test(arg)) return { start: -1, end: -1 };
-
-  const endLine = offsetToPos(lineStarts as number[], closeIdx).line;
-  const end = endLine + 1 < lineStarts.length ? lineStarts[endLine + 1] : raw.length;
+  const nested = /\w\s*\([^)]*?([A-Za-z_$][\w$]*)\s*\(/.exec(arg);
+  if (nested) return refused(`argument calls ${nested[1]}(), which may have a side effect`);
 
   // The post may be the whole CONTENT OF ITS BLOCK. Removing it then leaves
   // `} else if (cond) {\n}` behind: it compiles, so nothing catches it, and
   // the locals the statement consumed go dead with it. Seen on
   // /workspace/exampleapp in DeepLinkIntentController, where the
   // cut left an empty branch and an unused `deepLinkUrl`.
-  let avant = lineStart - 1;
-  while (avant >= 0 && /\s/.test(clean[avant])) avant--;
-  let apres = end;
-  while (apres < clean.length && /\s/.test(clean[apres])) apres++;
-  if (clean[avant] === '{' && clean[apres] === '}' && ouvreUneBranche(clean, avant)) {
-    return { start: -1, end: -1 };
+  const alone = soleContentOf(clean, plain.start, plain.end);
+  if (alone) {
+    const withheld = withheldFor(alone);
+    return alone.braced && (alone.kind === 'if' || alone.kind === 'else')
+      ? { start: -1, end: -1, withheld, branchOpen: alone.open }
+      : refused(withheld);
   }
 
-  // Et la meme branche SANS accolades, ou l'instruction EST le corps. Le test
-  // ci-dessus ne peut se declencher que sur un `{`, donc
-  //   if (flag)
-  //       bus.post(Event())
-  // passait tout droit. Retirer le post laisse `if (flag)` suivi de
-  // l'instruction SUIVANTE, qui devient le corps de l'if : cela compile et
-  // change le comportement, ce que rien ne rattrape. Pour `else`, une branche
-  // de `when` ou un `for`, c'est une erreur de syntaxe franche.
-  // `ouvreUneBranche` lit deja vers l'arriere depuis l'index qu'on lui donne,
-  // et sait reconnaitre `)`, `->` et `else` aussi bien qu'une accolade.
-  if (ouvreUneBranche(clean, avant + 1)) {
-    return { start: -1, end: -1 };
+  return plain;
+}
+
+interface IfBranch {
+  kind: 'if' | 'else';
+  /** The condition as written, '' for a final `else`. */
+  cond: string;
+  open: number;
+  close: number;
+}
+
+interface IfChain {
+  /** Offset of the head `if`. */
+  head: number;
+  branches: IfBranch[];
+}
+
+/**
+ * The if / else if / else chain one branch belongs to, or undefined when the
+ * chain is not the plain braced shape: every branch `(cond) {…}` or
+ * `else {…}`, nothing braceless. Walks back from the branch to the head
+ * `if`, then reads the whole chain forward from there.
+ */
+function ifChainAround(clean: string, branchOpen: number): IfChain | undefined {
+  let open = branchOpen;
+  let head = -1;
+  // Bounded: a chain longer than this was not written by hand.
+  for (let guard = 0; guard < 64 && head === -1; guard++) {
+    let k = open - 1;
+    while (k >= 0 && /\s/.test(clean[k])) k--;
+    if (clean[k] === ')') {
+      const paren = openingParenOf(clean, k);
+      if (paren <= 0) return undefined;
+      k = paren - 1;
+      while (k >= 0 && /\s/.test(clean[k])) k--;
+      if (wordEndingAt(clean, k) !== 'if') return undefined;
+      const ifStart = k - 1;
+      k = ifStart - 1;
+      while (k >= 0 && /\s/.test(clean[k])) k--;
+      if (wordEndingAt(clean, k) !== 'else') { head = ifStart; break; }
+    } else if (wordEndingAt(clean, k) !== 'else') {
+      return undefined;
+    }
+    // Before an `else`: the `}` closing the previous branch.
+    k -= 4;
+    while (k >= 0 && /\s/.test(clean[k])) k--;
+    if (clean[k] !== '}') return undefined;
+    open = openingBraceOf(clean, k);
+    if (open === -1) return undefined;
+  }
+  if (head === -1) return undefined;
+  const chain = ifChainFrom(clean, head);
+  return chain?.branches.some(b => b.open === branchOpen) ? chain : undefined;
+}
+
+function ifChainFrom(clean: string, head: number): IfChain | undefined {
+  const branches: IfBranch[] = [];
+  const skip = (i: number) => { while (i < clean.length && /\s/.test(clean[i])) i++; return i; };
+  const wordAt = (i: number) => wordStartingAt(clean, i);
+  let pos = head;
+  for (;;) {
+    if (wordAt(pos) !== 'if') return undefined;
+    let i = skip(pos + 2);
+    if (clean[i] !== '(') return undefined;
+    const condClose = findMatchingParen(clean, i);
+    if (condClose === -1) return undefined;
+    const cond = clean.slice(i + 1, condClose);
+    i = skip(condClose + 1);
+    if (clean[i] !== '{') return undefined;
+    const close = matchBrace(clean, i);
+    if (close === -1) return undefined;
+    branches.push({ kind: 'if', cond, open: i, close });
+    i = skip(close + 1);
+    if (wordAt(i) !== 'else') return { head, branches };
+    i = skip(i + 4);
+    if (wordAt(i) === 'if') { pos = i; continue; }
+    if (clean[i] !== '{') return undefined;
+    const elseClose = matchBrace(clean, i);
+    if (elseClose === -1) return undefined;
+    branches.push({ kind: 'else', cond: '', open: i, close: elseClose });
+    return { head, branches };
+  }
+}
+
+/**
+ * What makes a condition unsafe to drop, or undefined when it is pure.
+ *
+ * Evaluating the condition is the one thing a removed branch still did. A
+ * call in it may have had a side effect, an assignment certainly had, and a
+ * trailing lambda is a call without parens. A `(` after a name, a `)` or a
+ * `>` reads as a call, so `a > (b)` is refused too: that loses a removal and
+ * invents nothing.
+ */
+function impurityOf(cond: string): string | undefined {
+  const named = /([A-Za-z_$][\w$]*)\s*\(/.exec(cond);
+  if (named) return `calls ${named[1]}()`;
+  if (/[)\]>]\s*\(/.test(cond)) return 'contains a call';
+  if (cond.includes('{')) return 'contains a lambda';
+  if (/(^|[^=!<>])=(?!=)/.test(cond) || /\+\+|--/.test(cond)) return 'assigns';
+  return undefined;
+}
+
+/**
+ * True when the chain is a statement of its own: nothing before its `if` is
+ * waiting for a value.
+ *
+ * Kotlin ends a statement with a newline, so the token before can be a `)`,
+ * a name or a literal as well as a `}` or a `;`. What cannot precede a
+ * statement is an operator or an opener left open on the line above, or a
+ * `return`/`throw` whose value the chain is:
+ *
+ *   fun f() =
+ *       if (…) { post } else { post }
+ *
+ * The head LINE is clean, and removing the chain leaves `fun f() =` dangling.
+ * That is a compile error rather than a silent change, so this only saves a
+ * human a broken build; it still costs nothing to refuse.
+ */
+function startsAStatement(clean: string, head: number): boolean {
+  let k = head - 1;
+  while (k >= 0 && /\s/.test(clean[k])) k--;
+  if (k < 0) return true;
+  const ch = clean[k];
+  // Java's `case X:` starts a statement; Kotlin's `?:` waits for its right side.
+  if (ch === ':') return clean[k - 1] !== '?';
+  if (/[=(\[,.&|+\-*/%^<>]/.test(ch)) return false;
+  const word = wordEndingAt(clean, k);
+  return word !== 'return' && word !== 'throw' && word !== 'else';
+}
+
+/**
+ * The whole chain, head line through the line of the final `}`, or the
+ * reason it cannot go as a unit.
+ */
+function wholeChainExtent(
+  raw: string,
+  clean: string,
+  lineStarts: readonly number[],
+  chain: IfChain,
+): Extent {
+  const end = chain.branches[chain.branches.length - 1].close;
+  const headLine = offsetToPos(lineStarts as number[], chain.head).line;
+  const lineEnd = lineEndAfter(raw, lineStarts, end);
+  const tail = clean.slice(end + 1, lineEnd).trim();
+  // `val x = if (…)` is an expression, and a `}.also {` a continuation.
+  if (clean.slice(lineStarts[headLine], chain.head).trim() !== '' || (tail !== '' && tail !== ';')) {
+    return refused('sole content of a branch whose chain shares a line with other code');
+  }
+  const extent = { start: lineStarts[headLine], end: lineEnd };
+  // The chain alone in an outer branch would leave THAT one empty; as a
+  // braceless body, it would hand the outer `if` the next statement.
+  if (soleContentOf(clean, extent.start, extent.end)) {
+    return refused('sole content of a branch whose chain is itself alone in a branch');
+  }
+  if (!startsAStatement(clean, chain.head)) {
+    return refused('sole content of a branch whose chain is not a statement of its own');
+  }
+  return extent;
+}
+
+/**
+ * From right after the `}` closing the previous branch to right after the
+ * last one's, so `\t} else if (c) {\n\t\tpost\n\t}\n` leaves `\t}\n`; or the
+ * reason the last branch cannot go alone.
+ */
+function trailingBranchExtent(
+  raw: string,
+  clean: string,
+  lineStarts: readonly number[],
+  chain: IfChain,
+): Extent {
+  const last = chain.branches[chain.branches.length - 1];
+  const previous = chain.branches[chain.branches.length - 2];
+  const tail = clean.slice(last.close + 1, lineEndAfter(raw, lineStarts, last.close)).trim();
+  if (tail !== '' && tail !== ';') {
+    return refused('sole content of a trailing branch that shares its last line with other code');
+  }
+  // An `else` after a chain that already ends in one belongs to an outer
+  // `if` whose BRACELESS body the chain is:
+  //
+  //   if (outer)
+  //       if (a) { foo() } else { post }
+  //   else
+  //       bar()
+  //
+  // Dropping the inner `else` compiles, and both kotlinc and javac then bind
+  // the outer `else` to `if (a)`: `bar()` ran when `!outer`, it would run when
+  // `outer && !a`, and nothing at all when `!outer`. A `when` branch followed
+  // by `else ->` is the same token. Without that `else`, the emptied chain is
+  // still the whole body and nothing rebinds, so the branch may go.
+  let next = last.close + 1;
+  while (next < clean.length && /\s/.test(clean[next])) next++;
+  if (wordStartingAt(clean, next) === 'else') {
+    return refused('sole content of a trailing branch whose chain is the braceless body of an outer branch');
+  }
+  if (!startsAStatement(clean, chain.head)) {
+    return refused('sole content of a trailing branch whose chain is not a statement of its own');
+  }
+  return { start: previous.close + 1, end: last.close + 1 };
+}
+
+/** Offset just past the newline ending the line that holds `offset`. */
+function lineEndAfter(raw: string, lineStarts: readonly number[], offset: number): number {
+  const line = offsetToPos(lineStarts as number[], offset).line;
+  return line + 1 < lineStarts.length ? lineStarts[line + 1] : raw.length;
+}
+
+/**
+ * Rules 1 and 2: a post alone in its if/else branch goes with MORE than
+ * itself, so that nothing is left empty.
+ *
+ *   1. Every branch of the chain is one post of an event this scan reports,
+ *      with the same verdict, and every condition is pure: the whole chain
+ *      goes, head line through closing line, and every site in it gets the
+ *      IDENTICAL extent so a consumer's overlap pass collapses them. A scroll
+ *      callback posting `Scrolling(true)` in one branch and `Scrolling(false)`
+ *      in the other: what the human left was the empty override.
+ *   2. Otherwise, the post is alone in the LAST branch and that condition is
+ *      pure: the branch alone goes, `} else if (c) {…}` leaving `}`. A middle
+ *      branch cannot, dropping it hands its cases to the branch after it.
+ *      Nor can the last one when an outer `else` follows the chain, since
+ *      that `else` would rebind to the inner `if`: `trailingBranchExtent`.
+ *
+ * Both need the sibling posts' verdicts, hence a pass over the built findings
+ * rather than a line in `statementExtent`. One verdict across the chain
+ * matters because consumers act per verdict: the sweep removes `unheard`
+ * only, and a chain cut must not take a `testOnlySubscriber` post with it.
+ */
+function applyBranchRules(
+  entries: readonly { event: UnheardEvent; site: PostSite }[],
+  files: readonly { path: string; clean: string; raw: string }[],
+): void {
+  const fileByPath = new Map(files.map(f => [f.path, f]));
+  const byPath = new Map<string, { event: UnheardEvent; open: number }[]>();
+  for (const { event, site } of entries) {
+    if (site.branchOpen === undefined) continue;
+    const list = byPath.get(site.path) ?? [];
+    list.push({ event, open: site.branchOpen });
+    byPath.set(site.path, list);
   }
 
-  return {
-    start: lineStart,
-    end,
-  };
+  for (const [path, list] of byPath) {
+    const file = fileByPath.get(path);
+    if (!file) continue;
+    const lineStarts = buildLineStarts(file.clean);
+    const postAlone = (open: number, verdict: UnheardVerdict) =>
+      list.some(e => e.open === open && e.event.verdict === verdict);
+    const settle = (event: UnheardEvent, extent: Extent) => {
+      if (extent.withheld !== undefined) {
+        event.withheld = extent.withheld;
+        return;
+      }
+      event.removeStart = extent.start;
+      event.removeEnd = extent.end;
+      delete event.withheld;
+    };
+
+    for (const { event, open } of list) {
+      const chain = ifChainAround(file.clean, open);
+      if (!chain) {
+        event.withheld = 'sole content of a branch whose chain could not be read';
+        continue;
+      }
+      const idx = chain.branches.findIndex(b => b.open === open);
+      const allPosts = chain.branches.every(b => postAlone(b.open, event.verdict));
+      const impure = chain.branches.map(b => impurityOf(b.cond)).find(x => x !== undefined);
+
+      if (allPosts && impure === undefined) {
+        settle(event, wholeChainExtent(file.raw, file.clean, lineStarts, chain));
+        continue;
+      }
+
+      if (idx === chain.branches.length - 1 && idx > 0) {
+        const own = impurityOf(chain.branches[idx].cond);
+        if (own !== undefined) {
+          event.withheld = `sole content of a trailing branch whose condition ${own}`;
+          continue;
+        }
+        settle(event, trailingBranchExtent(file.raw, file.clean, lineStarts, chain));
+        continue;
+      }
+
+      event.withheld = allPosts
+        ? `sole content of a branch whose chain has a condition that ${impure}`
+        : 'sole content of a branch whose chain does other things';
+    }
+  }
 }
 
 
@@ -1419,7 +1830,7 @@ export function findUnheardEvents(input: UnheardEventScanInput): UnheardEventSca
     }
   }
 
-  const events: UnheardEvent[] = [];
+  const entries: { event: UnheardEvent; site: PostSite }[] = [];
   for (const [fqn, sites] of posts) {
     const simple = simpleOf(fqn);
     if (ignored.has(simple)) continue;                                // P10
@@ -1436,18 +1847,26 @@ export function findUnheardEvents(input: UnheardEventScanInput): UnheardEventSca
     for (const site of sites) {
       if (site.isTest) continue;                                      // P7
       if (exemptFiles.has(site.path)) continue;                       // P10
-      events.push({
-        name: simple,
-        fqn,
-        verdict,
-        path: site.path,
-        line: site.line,
-        character: site.character,
-        removeStart: site.removeStart,
-        removeEnd: site.removeEnd,
+      entries.push({
+        site,
+        event: {
+          name: simple,
+          fqn,
+          verdict,
+          path: site.path,
+          line: site.line,
+          character: site.character,
+          removeStart: site.removeStart,
+          removeEnd: site.removeEnd,
+          ...(site.withheld === undefined ? {} : { withheld: site.withheld }),
+        },
       });
     }
   }
+
+  // A post alone in its branch is settled only now that every verdict is.
+  applyBranchRules(entries, files);
+  const events = entries.map(e => e.event);
 
   events.sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line);
 

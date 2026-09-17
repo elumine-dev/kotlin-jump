@@ -196,8 +196,6 @@ function flavourNames(algebra: Algebra): string[] {
   for (const [name, dim] of algebra.flavourDimension) {
     (byDimension.get(dim) ?? byDimension.set(dim, []).get(dim)!).push(name);
   }
-  // Ordered by the declared dimensions, then any dimension the flavours name
-  // that `flavorDimensions` did not, then the dimensionless ones.
   // Declared order first, then any dimension the flavours name that
   // `flavorDimensions` did not, then the dimensionless ones LAST. A flavour
   // with no dimension AGP would reject, so reading one means the parse missed
@@ -214,7 +212,7 @@ function flavourNames(algebra: Algebra): string[] {
     combos = [...combos, ...next];
   }
   const out = new Set<string>();
-  for (const combo of combos) if (combo.length > 0) out.add(combo.join(''));
+  for (const combo of combos) if (combo.length > 0) out.add(join(combo));
   for (const f of algebra.flavourDimension.keys()) out.add(f);
   return [...out];
 }

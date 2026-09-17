@@ -116,7 +116,7 @@ function main(): void {
 
   console.log('\nthe findings:');
   for (const e of scan.events) {
-    const removable = e.removeStart >= 0 ? '' : '  (not removable)';
+    const removable = e.removeStart >= 0 ? '' : `  (not removable: ${e.withheld ?? 'no reason recorded'})`;
     console.log(`  ${e.verdict.padEnd(20)} ${e.name.padEnd(34)} ${e.path}:${e.line + 1}${removable}`);
   }
 }

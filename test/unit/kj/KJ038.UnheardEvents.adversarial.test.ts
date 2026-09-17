@@ -602,20 +602,27 @@ describe('l’étendue de suppression', () => {
     expect(scan(sources).events[0].removeStart).toBeGreaterThanOrEqual(0);
   });
 
-  it('un post SEUL DANS SA BRANCHE ne l’est pas', () => {
-    // Le retrait laissait `} else if (cond) {\n}` : ça compile, donc rien ne
-    // l’attrape, et les locales que l’instruction consommait meurent avec
-    // elle. Vu sur /workspace/exampleapp dans
+  it('un post SEUL DANS SA BRANCHE finale emporte la branche avec lui', () => {
+    // Retirer le post seul laissait `} else if (cond) {\n}` : ça compile,
+    // donc rien ne l’attrape, et les locales que l’instruction consommait
+    // meurent avec elle. Vu sur /workspace/exampleapp dans
     // DeepLinkIntentController, branche vide et `deepLinkUrl` orpheline.
+    // La branche finale part donc EN ENTIER, et l’accolade qui ferme la
+    // precedente reste (KJ056).
+    const texte =
+      'package com.x\n\nclass Poster {\n    fun go(ready: Boolean) {\n' +
+      '        if (ready) {\n            println("a")\n        } else if (!ready) {\n' +
+      '            EventBus.getDefault().post(Orphan())\n        }\n    }\n}\n';
     const sources = [
       ...base,
       f(`${MAIN}/Orphan.kt`, 'package com.x\n\nclass Orphan\n'),
-      f(`${MAIN}/Poster.kt`,
-        'package com.x\n\nclass Poster {\n    fun go(ready: Boolean) {\n' +
-        '        if (ready) {\n            println("a")\n        } else if (!ready) {\n' +
-        '            EventBus.getDefault().post(Orphan())\n        }\n    }\n}\n'),
+      f(`${MAIN}/Poster.kt`, texte),
     ];
-    expect(scan(sources).events[0].removeStart).toBe(-1);
+    const e = scan(sources).events[0];
+    expect(e.removeStart).toBeGreaterThanOrEqual(0);
+    expect(texte.slice(0, e.removeStart) + texte.slice(e.removeEnd)).toBe(
+      'package com.x\n\nclass Poster {\n    fun go(ready: Boolean) {\n' +
+      '        if (ready) {\n            println("a")\n        }\n    }\n}\n');
   });
 
   it('témoin : le même post avec un voisin dans la branche reste supprimable', () => {

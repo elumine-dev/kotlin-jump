@@ -1520,6 +1520,30 @@ export function wholeLineExtent(
 }
 
 /**
+ * A declaration usually sits between two blank lines. Cutting it whole leaves
+ * the two side by side, and a formatter refuses that: detekt's
+ * NoConsecutiveBlankLines goes red, one finding per cut. Both removal
+ * commands already grow their extents for it (`wholeLineExtent` above, and
+ * `sansTrouDeLignesVides` in Remove Everything Unused, kept in step by the
+ * BothPathsCutTheSame witness); the test cuts of the closure planner did not.
+ * Same policy as the merged pass: when the line above the extent is blank
+ * and the line below is blank too, the extent takes the one below, and the
+ * file keeps a single blank line where the declaration stood. Nothing is
+ * taken at the very start or end of the file.
+ */
+export function absorbOneBlankLine(text: string, lineStart: number, lineEnd: number): { start: number; end: number } {
+  const above = text.lastIndexOf('\n', lineStart - 2);
+  const previousLine = lineStart >= 1 ? text.slice(above === -1 ? 0 : above + 1, lineStart - 1) : undefined;
+  const nextBreak = text.indexOf('\n', lineEnd);
+  const nextLine = lineEnd < text.length ? text.slice(lineEnd, nextBreak === -1 ? text.length : nextBreak) : undefined;
+  if (previousLine !== undefined && previousLine.trim() === '' && lineStart >= 2
+    && nextLine !== undefined && nextLine.trim() === '' && nextBreak !== -1) {
+    return { start: lineStart, end: nextBreak + 1 };
+  }
+  return { start: lineStart, end: lineEnd };
+}
+
+/**
  * True when applying `extents` leaves the file with nothing but package,
  * imports, file annotations and comments. The caller then deletes the file
  * instead of leaving a shell behind.

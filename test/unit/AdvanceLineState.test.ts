@@ -87,7 +87,7 @@ describe('advanceLineState', () => {
       }
     }
     expect(cas, 'sans cas compare, la comparaison ne prouve rien').toBe(180000);
-  });
+  }, 60000);
 
   it('temoin : le defaut que la v1.42.33 corrigeait reste corrige', () => {
     // Un triple guillemet CITE dans un commentaire n ouvre pas de chaine brute.

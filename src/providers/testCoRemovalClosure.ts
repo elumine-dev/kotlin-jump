@@ -1,4 +1,4 @@
-import { parse } from '../indexer/KotlinParser';
+import { parse, RawSymbol } from '../indexer/KotlinParser';
 import { parseJava } from '../indexer/JavaParser';
 import { buildLineStarts, offsetToPos, sanitizeForUsageScan } from '../util/kotlinScan';
 import { isTestSourceSet } from '../util/testPaths';
@@ -215,10 +215,35 @@ function delta(s: string): { net: number; lowest: number } {
   return { net, lowest };
 }
 
+/**
+ * The leftmost identifier of a statement: what it assigns to, the receiver it
+ * calls a method on, or the function it calls. `components.put(x)` has subject
+ * `components`, `setUpMocks()` has subject `setUpMocks`.
+ */
+function subjectOf(text: string): string | undefined {
+  const m = /^(?:this\.)?(`[^`]+`|[A-Za-z_$][\w$]*)/.exec(text);
+  return m ? m[1].replace(/`/g, '') : undefined;
+}
+
 function standaloneStatementExtent(
   lines: readonly string[],
   lineNo: number,
   name: string,
+  /**
+   * When set, the statement's SUBJECT must be this name. Required inside a
+   * lifecycle method, and this is where the Gradle run earned its keep: two
+   * tests compiled and then failed, one on a `ComparisonFailure` and one on a
+   * NullPointerException, because a `@Before` lost a line that configured an
+   * object the tests still used.
+   *
+   *   components.put(ConfigConst.LIVE_NEWS_V2_API.getValue(), live())
+   *   thumbnailSpec.setOtherThumbnailToPrefetch(ThumbnailSpec(…))
+   *
+   * Both mention a leaving member, and both feed something that SURVIVES, so
+   * every surviving test in the file observes the cut. A statement whose
+   * subject is itself leaving cannot be observed by anything that stays.
+   */
+  subject?: string,
 ): { first: number; last: number } | undefined {
   if ((lines[lineNo] ?? '').trim() === '') return undefined;
   // Backwards to the line the statement opens on: the slice from there to the
@@ -276,6 +301,7 @@ function standaloneStatementExtent(
   // how a Kotlin test calls Mockito, and requiring a word character refused
   // every one of them: it is what withheld the `AnalyticsPageModel` island.
   if (!/^(?:`[^`]+`|[\w$.]+)\s*[({.=]/.test(text)) return undefined;
+  if (subject !== undefined && subjectOf(text) !== subject) return undefined;
   // The sole content of a block: `{` right above, `}` right below. Removing it
   // would leave `if (x) { }`, which compiles and silently changes nothing, or
   // a lambda with no body, which does not.
@@ -287,8 +313,205 @@ function standaloneStatementExtent(
   return { first, last };
 }
 
-/** `text` with the extents removed, whole lines, later ones first. */
-function applyInMemory(text: string, extents: readonly { start: number; end: number }[]): string {
+/**
+ * A Kotlin SETTER the group removes, and the property a call site can write
+ * instead. Undefined when the chased name is anything else.
+ *
+ * Measured on the reference project: `ThumbnailSpec.setOtherThumbnailToPrefetch`
+ * is called once, from a @Before, and the call feeds `thumbnailSpec`, an
+ * object every test in the file still reads. Cutting the line compiles and
+ * fails those tests at runtime, so the planner withholds the group, and that
+ * refusal stands. The hand written branch neither cut nor kept the line: it
+ * wrote `thumbnailSpec.otherThumbnailToPrefetch = new ThumbnailSpec(...)` and
+ * deleted the setter. `@JvmField var` exposes the property to Java as a plain
+ * field, so the assignment does exactly what the call did.
+ *
+ * The shape is narrow on purpose. One parameter, a body that is exactly one
+ * assignment of it to a property, the property declared in the same class as
+ * the setter: `fun setX(p: T) { x = p }`, `this.x` allowed, a trailing `;`
+ * allowed, nothing else. What the call site may write depends on where it is
+ * written: Java sees no property without `@JvmField`, only accessors; Kotlin
+ * needs a `var` visible from the caller, with its default setter.
+ */
+interface SetterShape {
+  property: string;
+  javaWritable: boolean;
+  kotlinWritable: boolean;
+}
+
+/**
+ * `@Synchronized` makes the call take a lock the assignment would not. It is
+ * the one modifier found that changes what the call does at runtime while the
+ * body still reads as one assignment, so it is refused by name.
+ */
+const SYNCHRONIZED_RE = /@(?:kotlin\.jvm\.)?Synchronized\b/;
+const RESTRICTED_SET_RE = /\b(?:private|protected|internal)\s+set\b/;
+
+function setterShape(
+  name: string,
+  extents: readonly { path: string; start: number; end: number }[],
+  byPath: ReadonlyMap<string, Src>,
+  clean: (s: Src) => string,
+): SetterShape | undefined {
+  // The parameter type may carry one generic argument list; a function type
+  // or a second parameter both break the match, which is the point.
+  const re = new RegExp(
+    `\\bfun\\s+${escape(name)}\\s*\\(\\s*([A-Za-z_]\\w*)\\s*:\\s*[^(),<>]+(?:<[^()]*>)?[^(),<>]*\\)`
+    + `\\s*(?::\\s*Unit)?\\s*\\{\\s*(?:this\\.)?([A-Za-z_]\\w*)\\s*=\\s*\\1\\s*;?\\s*\\}`,
+  );
+  // One declaration, or no rewrite: with an overload in the same group the
+  // call site may bind to the other one, whose body is not this assignment.
+  const declRe = new RegExp(`\\bfun\\s+${escape(name)}\\s*\\(`, 'g');
+  let declared = 0;
+  for (const e of extents) {
+    const src = byPath.get(e.path);
+    if (src) declared += (clean(src).slice(e.start, e.end).match(declRe) ?? []).length;
+  }
+  if (declared !== 1) return undefined;
+  for (const e of extents) {
+    const src = byPath.get(e.path);
+    if (!src || !e.path.endsWith('.kt')) continue;
+    const text = clean(src);
+    const m = re.exec(text.slice(e.start, e.end));
+    if (!m) continue;
+    const property = m[2];
+    const funLine = offsetToPos(buildLineStarts(text), e.start + m.index).line;
+    const lines = src.text.split('\n');
+    // The regex reads nothing before `fun`, so what stands there is read
+    // here: the extent's own head, and the annotation lines above the
+    // function for a caller whose extent starts at the `fun` line.
+    let locked = SYNCHRONIZED_RE.test(text.slice(e.start, e.start + m.index));
+    for (let k = funLine - 1; !locked && k >= 0 && (lines[k] ?? '').trim().startsWith('@'); k--) {
+      locked = SYNCHRONIZED_RE.test(lines[k] ?? '');
+    }
+    if (locked) continue;
+    const symbols = parse(e.path, src.text).symbols;
+    const fun = symbols.find(s => s.kind === 'fun' && s.name === name && s.line === funLine);
+    if (!fun) continue;
+    // The class a member belongs to: the last class-like declaration opened
+    // one brace level above it. The parser reports a primary constructor
+    // property one level below the class header, like a body member.
+    const classOf = (line: number, depth: number): RawSymbol | undefined => {
+      let best: RawSymbol | undefined;
+      for (const s of symbols) {
+        if (!CLASS_LIKE.has(s.kind) || s.depth !== depth - 1 || s.line >= line) continue;
+        if (!best || s.line > best.line) best = s;
+      }
+      return best;
+    };
+    const owner = classOf(fun.line, fun.depth);
+    // A property of an object is a static field to Java and a member of the
+    // object to Kotlin: two spellings the rewrite does not attempt.
+    if (!owner || owner.kind === 'object') continue;
+    const prop = symbols.find(s => (s.kind === 'val' || s.kind === 'var') && s.name === property
+      && s.depth === fun.depth && classOf(s.line, s.depth) === owner);
+    if (!prop || prop.kind !== 'var') continue;
+    const own = lines[prop.line] ?? '';
+    const before = own.slice(0, prop.character);
+    // `internal` is refused with the private ones. The module a call site
+    // belongs to is not something its path proves: reading it as everything
+    // before the first `src/` made every file of a checkout under `~/src` one
+    // module, and nothing measured writes an internal property.
+    if (/\b(?:private|protected|internal)\b/.test(before)) continue;
+    // `@JvmField` sits before the name on its line, or alone on a line above.
+    let jvmField = /@JvmField\b/.test(before);
+    for (let k = prop.line - 1; k >= 0 && !jvmField; k--) {
+      const t = (lines[k] ?? '').trim();
+      if (!t.startsWith('@') || /\b(?:val|var|fun|class)\b/.test(t)) break;
+      jvmField = /@JvmField\b/.test(t);
+    }
+    // `private set`: readable from outside, not writable. It sits on the
+    // declaration, on the line below, or further down once an explicit
+    // `get()` stands in between, so the accessor lines are read up to the
+    // next member at the property's depth, whatever a getter body spans.
+    const nextMember = Math.min(lines.length,
+      ...symbols.filter(s => s.line > prop.line && s.depth <= prop.depth).map(s => s.line));
+    const setterRestricted = RESTRICTED_SET_RE.test(own.slice(prop.character))
+      || lines.slice(prop.line + 1, nextMember).some(l => RESTRICTED_SET_RE.test(l));
+    return { property, javaWritable: jvmField, kotlinWritable: !setterRestricted };
+  }
+  return undefined;
+}
+
+/**
+ * An assignment is a statement, never an expression, in Kotlin. A call whose
+ * value is taken is therefore not rewritable: the value of `=`, `->`,
+ * `return` or `else`, an argument of a call left open on the line above, or
+ * the head of a chain that goes on below (`.also { }`, `?: return`).
+ */
+const CONTINUES_FROM_ABOVE_RE = /(?:[=(,.]|->|\?:|&&|\|\||\breturn|\belse)$/;
+const CONTINUES_BELOW_RE = /^(?:\.|\?\.|\?:|!!|&&|\|\|)/;
+/** `spec.setOther(spec = x)`: written as an assignment it becomes `spec.other = spec = x`. */
+const NAMED_ARGUMENT_RE = /^[A-Za-z_]\w*\s*=(?!=)/;
+
+/** The nearest line beyond `from` in direction `step` that is code, trimmed; empty at the edge. */
+function neighbourCode(lines: readonly string[], from: number, step: -1 | 1): string {
+  for (let k = from + step; k >= 0 && k < lines.length; k += step) {
+    const t = (lines[k] ?? '').trim();
+    if (t === '' || t.startsWith('//') || t.startsWith('/*') || t.startsWith('*')) continue;
+    return t;
+  }
+  return '';
+}
+
+/**
+ * The statement holding `lineNo` when it is exactly `recv.NAME(arg)`, with
+ * the same statement written `recv.PROPERTY = arg`. Undefined for anything
+ * else: no receiver, a chained call, a second statement on the line, an
+ * argument that does not balance, a named argument, or a call whose value
+ * the line above or below takes. Indentation, the trailing `;` and the
+ * argument are kept as written, the argument across its lines.
+ */
+function setterCallRewrite(
+  lines: readonly string[],
+  lineNo: number,
+  name: string,
+  property: string,
+): { first: number; last: number; text: string } | undefined {
+  if ((lines[lineNo] ?? '').trim() === '') return undefined;
+  let first = lineNo;
+  for (let guard = 0; guard < 64; guard++) {
+    if (delta(lines.slice(first, lineNo + 1).join('\n')).lowest >= 0) break;
+    if (first === 0) return undefined;
+    first--;
+  }
+  let last = lineNo;
+  for (let guard = 0; guard < 64; guard++) {
+    if (delta(lines.slice(first, last + 1).join('\n')).net <= 0) break;
+    if (last + 1 >= lines.length) return undefined;
+    last++;
+  }
+  if (CONTINUES_FROM_ABOVE_RE.test(neighbourCode(lines, first, -1))) return undefined;
+  if (CONTINUES_BELOW_RE.test(neighbourCode(lines, last, 1))) return undefined;
+  const stmt = lines.slice(first, last + 1).join('\n');
+  const head = new RegExp(
+    `^(\\s*)([A-Za-z_$][\\w$]*(?:\\s*\\.\\s*[A-Za-z_$][\\w$]*)*)\\s*\\.\\s*${escape(name)}\\s*\\(`,
+  ).exec(stmt);
+  if (!head) return undefined;
+  const open = head[0].length - 1;
+  let depth = 0, close = -1, quote = '';
+  for (let i = open; i < stmt.length; i++) {
+    const c = stmt[i];
+    if (quote !== '') {
+      if (c === '\\') i++;
+      else if (c === quote) quote = '';
+      continue;
+    }
+    if (c === '"' || c === "'") { quote = c; continue; }
+    if (c === '(' || c === '{' || c === '[') depth++;
+    else if (c === ')' || c === '}' || c === ']') { depth--; if (depth === 0) { close = i; break; } }
+  }
+  if (close === -1 || stmt[close] !== ')') return undefined;
+  const tail = /^\s*(;?)(\s*)$/.exec(stmt.slice(close + 1));
+  if (!tail) return undefined;
+  const arg = stmt.slice(open + 1, close).trim();
+  if (arg === '' || NAMED_ARGUMENT_RE.test(arg)) return undefined;
+  const receiver = head[2].replace(/\s+/g, '');
+  return { first, last, text: `${head[1]}${receiver}.${property} = ${arg}${tail[1]}${tail[2]}` };
+}
+
+/** `text` with the extents removed, or replaced when they say so, whole lines, later ones first. */
+function applyInMemory(text: string, extents: readonly { start: number; end: number; replacement?: string }[]): string {
   const sorted = [...extents]
     .filter(e => e.start >= 0 && e.end > e.start)
     .sort((a, b) => b.start - a.start);
@@ -297,7 +520,7 @@ function applyInMemory(text: string, extents: readonly { start: number; end: num
   for (const e of sorted) {
     if (e.end > lastStart) continue;          // overlap with a later cut already applied
     const w = wholeLines(out, e.start, e.end);
-    out = out.slice(0, w.start) + out.slice(w.end);
+    out = out.slice(0, w.start) + (e.replacement ?? '') + out.slice(w.end);
     lastStart = w.start;
   }
   return out;
@@ -332,11 +555,20 @@ export function planClosure(
   const cleanCache = new Map<string, string>();
   const clean = (s: Src) => cleanCache.get(s.path) ?? cleanCache.set(s.path, sanitizeForUsageScan(s.text)).get(s.path)!;
 
-  const addCut = (path: string, start: number, end: number, name: string, kind: TestCut['kind']) => {
+  const addCut = (path: string, start: number, end: number, name: string, kind: TestCut['kind'], replacement?: string) => {
     const key = `${path}:${start}:${end}`;
     if (cutKeys.has(key)) return;
     cutKeys.add(key);
-    (cutsByPath.get(path) ?? cutsByPath.set(path, []).get(path)!).push({ path, start, end, name, kind });
+    let list = cutsByPath.get(path) ?? cutsByPath.set(path, []).get(path)!;
+    // A rewrite inside a function that goes whole has nothing left to
+    // rewrite, and two edits on nested ranges are one edit VS Code rejects.
+    if (kind === 'function') {
+      const nested = (c: TestCut) => c.kind === 'rewrite' && c.start >= start && c.end <= end;
+      for (const c of list.filter(nested)) cutKeys.delete(`${c.path}:${c.start}:${c.end}`);
+      list = list.filter(c => !nested(c));
+      cutsByPath.set(path, list);
+    }
+    list.push(replacement === undefined ? { path, start, end, name, kind } : { path, start, end, name, kind, replacement });
     if (kind === 'function') plan.cutFunctions++;
   };
 
@@ -349,14 +581,50 @@ export function planClosure(
    * at the top of a block. Before this, a mention outside every declaration
    * took the FILE, which is what withheld every shared base test class.
    */
-  const statementAt = (src: Src, offset: number, name: string): { start: number; end: number } | undefined => {
+  const statementAt = (src: Src, offset: number, name: string, subject?: string): { start: number; end: number } | undefined => {
+    const lineStarts = buildLineStarts(clean(src));
+    const lines = src.text.split('\n');
+    const ln = offsetToPos(lineStarts as number[], offset).line;
+    const ext = standaloneStatementExtent(lines, ln, name, subject);
+    if (!ext) return undefined;
+    return wholeLines(src.text, lineStarts[ext.first],
+      lineStarts[ext.last] + (lines[ext.last] ?? '').length + 1);
+  };
+
+  /**
+   * The assertion statement holding `offset` inside test function `owner`,
+   * when the function keeps at least one other assertion that names nothing
+   * being removed; undefined otherwise. An assertion is a standalone
+   * statement whose subject is a verifying call.
+   */
+  const ASSERTION_RE = /^(?:verify|coVerify|verifyOrder|verifySequence|verifyAll|confirmVerified|assert\w*|check|expect\w*|should\w*|require\w*)$/;
+  /** True when at least one @Test function of the file names nothing that leaves. */
+  const testsOtherThings = (src: Src, funs: readonly { start: number; end: number }[]): boolean => {
+    const text = clean(src);
+    const leaving = new RegExp(`\\b(?:${wanted.map(escape).join('|')})\\b`);
+    return funs.some(f => !leaving.test(text.slice(f.start, f.end)));
+  };
+  const assertionAt = (src: Src, offset: number, name: string, owner: { start: number; end: number }): { start: number; end: number } | undefined => {
     const lineStarts = buildLineStarts(clean(src));
     const lines = src.text.split('\n');
     const ln = offsetToPos(lineStarts as number[], offset).line;
     const ext = standaloneStatementExtent(lines, ln, name);
     if (!ext) return undefined;
-    return wholeLines(src.text, lineStarts[ext.first],
-      lineStarts[ext.last] + (lines[ext.last] ?? '').length + 1);
+    const subject = subjectOf(lines.slice(ext.first, ext.last + 1).join('\n').trim());
+    if (subject === undefined || !ASSERTION_RE.test(subject)) return undefined;
+    // Another assertion must survive, and it must name nothing that leaves.
+    const first = offsetToPos(lineStarts as number[], owner.start).line;
+    const last = offsetToPos(lineStarts as number[], Math.max(owner.end - 1, 0)).line;
+    const leaving = new RegExp(`\\b(?:${[...wanted, name].map(escape).join('|')})\\b`);
+    let survives = false;
+    for (let k = first; k <= last && !survives; k++) {
+      if (k >= ext.first && k <= ext.last) continue;
+      const t = (lines[k] ?? '').trim();
+      const head = subjectOf(t);
+      if (head !== undefined && ASSERTION_RE.test(head) && !leaving.test(t)) survives = true;
+    }
+    if (!survives) return undefined;
+    return wholeLines(src.text, lineStarts[ext.first], lineStarts[ext.last] + (lines[ext.last] ?? '').length + 1);
   };
 
   /** True when `offset` in `src` falls inside one of the caller's production cuts. */
@@ -619,6 +887,20 @@ export function planClosure(
   /** Names cut inside a test file, chased only within that file. */
   const localNames = new Map<string, Set<string>>();
   const localQueue: { path: string; name: string }[] = [];
+  /**
+   * Everything the plan removes so far, whatever the file: the subjects, the
+   * test types deleted whole, and the helpers cut in ANY test file. A rewrite
+   * keeps its argument verbatim, and that argument may call a helper cut in
+   * another file: `spec.setOther(primed())` with `primed` a fixture cut in
+   * Fixtures.kt closed and did not compile. The per file check below reads
+   * only the file's own local names, so a rewrite is measured against all.
+   */
+  const leavingNames = (): string[] =>
+    [...wanted, ...removedTypes, ...[...localNames.values()].flatMap(s => [...s])];
+  const mentionedIn = (text: string, names: readonly string[]): string | undefined => {
+    const c = sanitizeForUsageScan(text);
+    return names.find(n => mentionOffsets(n, c).length > 0);
+  };
   let rounds = 0;
   while (queue.length > 0) {
     if (++rounds > MAX_ROUNDS * 50) return withhold('closure did not settle');
@@ -626,6 +908,9 @@ export function planClosure(
     if (seen.has(name)) continue;
     seen.add(name);
     const isProductionName = wanted.includes(name);
+    // A setter of the shape `fun setX(p: T) { x = p }` has call sites that
+    // can be REWRITTEN as the assignment rather than cut.
+    const setter = isProductionName ? setterShape(name, productionExtents, byPath, clean) : undefined;
 
     for (const src of sources) {
       if (deleted.has(src.path)) continue;
@@ -669,8 +954,42 @@ export function planClosure(
           addCut(src.path, w.start, w.end, name, 'import');
           continue;
         }
+        // Before the test function, the lifecycle method and the initialiser
+        // below: `recv.setX(v)` written `recv.x = v` changes nothing at
+        // runtime, so it is the smallest edit wherever the statement sits.
+        // Cutting the line instead would leave `recv`, which survives,
+        // without its value. What the closure has to prove is `v`: it is
+        // kept as written, so it must name nothing the plan cuts.
+        if (setter !== undefined) {
+          const writable = src.path.endsWith('.java') ? setter.javaWritable : setter.kotlinWritable;
+          const r = writable ? setterCallRewrite(lines, line, name, setter.property) : undefined;
+          // Refused when the argument names a helper already cut; a helper
+          // cut later is caught by the check on every rewrite at the end.
+          if (r && mentionedIn(r.text, leavingNames()) === undefined) {
+            const w = wholeLines(src.text, lineStarts[r.first], lineStarts[r.last] + (lines[r.last] ?? '').length + 1);
+            const newline = src.text.slice(w.start, w.end).endsWith('\n') ? '\n' : '';
+            addCut(src.path, w.start, w.end, name, 'rewrite', r.text + newline);
+            continue;
+          }
+        }
         const owner = funs.find(f => o >= f.start && o < f.end);
-        if (owner) { addCut(src.path, owner.start, owner.end, owner.name, 'function'); continue; }
+        if (owner) {
+          // One ASSERTION of a test that asserts other things: the statement
+          // goes, the test stays. Measured on the reference project, a test of
+          // the newsletter events verified two posts, one of them the removed
+          // event's; taking the function lost a live test, and the hand
+          // written branch had removed one `verify` line. A test left with no
+          // assertion at all would pass for nothing, so it goes whole as before.
+          // Only in a file that tests OTHER things too: a dedicated test file
+          // whose every function names what leaves goes whole, as the hand
+          // written branch did with `ViewUtilsTest` and `ReplicaConstTest`,
+          // where each function also carried an incidental assertion that
+          // would have kept a hollow test alive.
+          const st = testsOtherThings(src, funs) ? assertionAt(src, o, name, owner) : undefined;
+          if (st) { addCut(src.path, st.start, st.end, name, 'import'); continue; }
+          addCut(src.path, owner.start, owner.end, owner.name, 'function');
+          continue;
+        }
         // Outside every @Test function. The first draft took the file whole
         // here, and deleted `BaseLoginViewModelPopupModelTest` (7 tests) where
         // the hand written branch removed one: the mention sat in a helper of
@@ -685,7 +1004,7 @@ export function planClosure(
           // go alone, and only then the file. `MockAnalyticsDataUtils` keeps
           // its mocks in a `static { … }` block, which no parser reports as a
           // declaration, so the whole file was the only answer available.
-          const st = statementAt(src, o, name);
+          const st = statementAt(src, o, name, name);
           if (st) { addCut(src.path, st.start, st.end, name, 'import'); continue; }
           whole = true; continue;
         }
@@ -694,7 +1013,7 @@ export function planClosure(
         // One statement of it can still go: that is a body the framework still
         // runs, minus a line about something that no longer exists.
         if (inner.lifecycle) {
-          const st = statementAt(src, o, name);
+          const st = statementAt(src, o, name, name);
           if (st) { addCut(src.path, st.start, st.end, name, 'import'); continue; }
           whole = true; continue;
         }
@@ -796,7 +1115,7 @@ export function planClosure(
         // One line of it, when the line is the whole call: `setUpPageDataModelMocks();`
         // inside a `@Before setup()` is a statement about something leaving,
         // and the rest of the setup still has to run.
-        const st = statementAt(src, o, name);
+        const st = statementAt(src, o, name, name);
         if (st) { addCut(p, st.start, st.end, name, 'import'); continue; }
         const user = usedByOtherFiles(src);
         if (user !== undefined) return withhold(`test file ${p} is shared with ${user} and its lifecycle method names ${name}`);
@@ -860,6 +1179,15 @@ export function planClosure(
       const line = offsetToPos(buildLineStarts(afterClean) as number[], hits[0]).line + 1;
       return withhold(`${n} still mentioned in ${src.path}:${line} after the edit`);
     }
+  }
+  // The rewritten lines once more, against the names cut in EVERY file: the
+  // loop above measures a file against its own local names, and a rewrite
+  // keeps an argument that may call a helper cut elsewhere.
+  const leaving = leavingNames();
+  for (const cut of [...cutsByPath.values()].flat()) {
+    if (cut.kind !== 'rewrite' || cut.replacement === undefined) continue;
+    const n = mentionedIn(cut.replacement, leaving);
+    if (n !== undefined) return withhold(`${n} still mentioned in the rewritten ${cut.path}`);
   }
 
   plan.files = [...deleted].sort();

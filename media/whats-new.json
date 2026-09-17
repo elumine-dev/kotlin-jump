@@ -1,39 +1,43 @@
 {
-  "version": "1.42.343",
+  "version": "1.42.344",
   "title": "What's New in Kotlin Jump",
-  "tagline": "More thorough, more transparent cleanup",
-  "summary": "This release closes a gap where Remove Everything Unused reported several categories of unused code, Gradle dependency aliases, unheard event posts, Remote Config keys, and resource keys and files, without actually removing them. It also adds a preview of files and imports a cleanup would affect, and introduces a new command that offers additional test only cleanup candidates for manual, one by one review.",
+  "tagline": "Deeper cleanup, quieter false positives",
+  "summary": "Remove Everything Unused now sees eight more kinds of dead code, and three real projects taught it where a scan must stay silent.",
   "highlights": [
     {
-      "title": "Unproven Test Cleanup Command",
+      "title": "Orphan source sets",
       "kind": "feature",
-      "description": "A new command offers cleanup candidates that could not be automatically proven safe, rebuilds and rechecks the change first, then lets you review and approve each one individually with the reason for the doubt shown right on it."
+      "description": "A directory under src/ that no Gradle variant builds is reported, and its files no longer keep production code alive: on the reference project 150 such files were the only thing holding seven declarations."
     },
     {
-      "title": "Remove Now Matches What It Reports",
-      "kind": "fix",
-      "description": "Remove Everything Unused now actually removes unused Gradle dependency catalog aliases, unheard event posts, Remote Config keys, resource keys, and resource files, categories that were previously listed in the report but left untouched when you clicked Remove."
-    },
-    {
-      "title": "Preview Of Side Effects",
+      "title": "Smarter test cleanup",
       "kind": "improvement",
-      "description": "Find Everything Unused now shows how many files a cleanup would leave empty and how many imports would become orphaned, so the summary matches what Remove will actually do."
+      "description": "The closure planner cuts a single statement or assertion instead of a whole test file, rewrites a trivial setter call as a field assignment, and refuses any cut that would change what a surviving test exercises."
+    },
+    {
+      "title": "Codegen entry points",
+      "kind": "fix",
+      "description": "React Native packages, Nitro hybrid objects, JNI bridge files and top level Kotlin declarations reached only through an import are judged by how the platform actually reaches them, closing four false positives found on a React Native monorepo."
     }
   ],
   "sections": [
     {
       "heading": "Improvements",
       "bullets": [
-        "Added a \"Remove Code Used Only by Tests: Unproven Groups, Review Each\" command that offers cleanup candidates the standard command could not prove safe on its own, and shows the specific reason for the doubt next to each one.",
-        "Each unproven candidate is rebuilt as a full edit and rechecked against every remaining source file before it is offered, catching cases where an earlier, simpler check would have broken the build or removed more tests than intended.",
-        "Find Everything Unused now reports how many files a cleanup would leave empty and how many imports would become orphaned, so you see the full impact before running Remove."
+        "Reports unread primary constructor parameters together with the named argument at each construction site, stale detekt baseline entries whose file is gone, and source files that declare nothing.",
+        "Finds enum entries that a test's own constant of the same name kept alive, and unheard event posts that are the sole content of an if or else if branch, taking the branch with them.",
+        "Offers the posts the safe removal refused in the unproven review, each with the reason on its label, so a reader can tick what the scan could not prove.",
+        "Cuts one assertion out of a test that keeps asserting other things, and takes the test whole only when the file is dedicated to what leaves.",
+        "Leaves a single blank line where a removed test function stood, so a formatter's consecutive blank line rule stays quiet on the files it touches."
       ]
     },
     {
       "heading": "Fixes",
       "bullets": [
-        "Fixed Remove Everything Unused silently skipping categories it had already reported as unused: Gradle dependency catalog aliases, event posts nothing listens to, Remote Config keys, resource keys, and resource files. All of these are now actually removed along with everything else.",
-        "Fixed the summary shown after Remove Everything Unused undercounting the cleanup, since it previously left out the categories above even when they were part of what got removed."
+        "Keeps a React Native package, a Nitro hybrid object declared in nitro.json, and a class doing System.loadLibrary alive: the platform instantiates them by name, without a single reference in Kotlin or Java.",
+        "Stops nineteen WebView.loadUrl calls from keeping an unused ImageView.loadUrl extension alive: a top level Kotlin declaration counts only the mentions that can see its package.",
+        "Withholds a statement inside a lifecycle method when its subject survives, and a post that a test verifies on a mocked bus: both compiled and then failed tests on the reference project.",
+        "Concatenates flavour names in camel case when deriving Gradle source sets, so a variant directory is never mistaken for an orphan."
       ]
     }
   ],

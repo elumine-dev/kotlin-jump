@@ -47,3 +47,20 @@ export function coupeBienFormee(
   if (couvreDesLignesEntieres(texte, start, end)) return true;
   return !texte.slice(start, end).includes('\n');
 }
+
+/**
+ * The one cut that starts mid line, crosses a newline and is still right: a
+ * trailing if/else branch (KJ056), taken from just after the `}` closing the
+ * branch before it to just after its own, so `} else if (c) {\n    post\n}`
+ * leaves `}`.
+ *
+ * Brace balance proves such a cut whole; this proves it anchored. Shifted by
+ * one character either way, the cut no longer starts right after a `}` nor
+ * ends on one, so the shift is still seen without the whole-line rule.
+ */
+export function coupeDeBrancheFinale(texte: string, start: number, end: number): boolean {
+  return start > 0
+    && texte[start - 1] === '}'
+    && texte[end - 1] === '}'
+    && /^\s*else\b/.test(texte.slice(start, start + 8));
+}

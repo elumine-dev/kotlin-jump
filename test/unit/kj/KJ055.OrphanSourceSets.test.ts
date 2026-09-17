@@ -60,9 +60,9 @@ describe.skipIf(!mod)('findOrphanSourceSets', () => {
       'main', 'test', 'testFixtures', 'androidTest',
       'debug', 'release', 'staging',
       'variant', 'preview', 'exampleapp',
-      'variantexampleappRelease', 'previewexampleappRelease',
-      'testvariant', 'testPreview',
-      'testvariantexampleappRelease', 'testPreviewexampleappRelease',
+      'variantExampleappRelease', 'previewExampleappRelease',
+      'testVariant', 'testPreview',
+      'testVariantExampleappRelease', 'testPreviewExampleappRelease',
       'sharedTest',
     ];
     const sources = [
@@ -70,10 +70,10 @@ describe.skipIf(!mod)('findOrphanSourceSets', () => {
       ...legaux.map(s => kt(`/p/variant/app/src/${s}/java/com/x/T.kt`)),
       kt('/p/variant/app/src/savedAndroidTest/java/com/x/Saved.kt'),
       kt('/p/variant/app/src/savedAndroidTest/java/com/x/Saved2.kt'),
-      kt('/p/variant/app/src/savedAndroidTestexampleapp/java/com/x/SavedBrand.kt'),
+      kt('/p/variant/app/src/savedAndroidTestExampleapp/java/com/x/SavedBrand.kt'),
     ];
     const found = scan(sources, ['/p/variant/app']);
-    expect(found.map((o: any) => o.name)).toEqual(['savedAndroidTest', 'savedAndroidTestexampleapp']);
+    expect(found.map((o: any) => o.name)).toEqual(['savedAndroidTest', 'savedAndroidTestExampleapp']);
     expect(found[0].files).toHaveLength(2);
     expect(found[0].path).toBe('/p/variant/app/src/savedAndroidTest');
     expect(found[0].module).toBe('/p/variant/app');

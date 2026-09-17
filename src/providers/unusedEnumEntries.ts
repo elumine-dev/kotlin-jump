@@ -1,4 +1,4 @@
-import { parse, RawSymbol } from '../indexer/KotlinParser';
+import { parse, RawSymbol, SymbolKind } from '../indexer/KotlinParser';
 import { stripKotlinComments } from '../util/xmlRefs';
 import { coupeUnBloc, debutDuBloc } from '../util/blocDeCommentaire';
 import { parseJava } from '../indexer/JavaParser';
@@ -559,31 +559,203 @@ function homonymEntries(declarations: EntryDeclarations): Set<string> {
 }
 
 /**
+ * entry name -> files declaring a symbol of that name which is not an enum
+ * entry, and which is in scope for every bare mention of the file.
+ */
+export type ShadowingDeclarations = ReadonlyMap<string, ReadonlySet<string>>;
+
+// Cheap gate before parsing a Kotlin file: `val HTTPS`, `fun HTTPS(`, `class Live`.
+const KOTLIN_DECLARATION_GATE_RE = /\b(?:val|var|fun|class|object|interface)\s+([A-Za-z_]\w*)\b/g;
+// Java: `class Live`, `interface Live`, and a Java 10 `var live = ...`.
+const JAVA_KEYWORD_DECLARATION_RE = /\b(?:var|class|interface)\s+([A-Za-z_]\w*)\b/g;
+// A Java field or local: modifiers and type as a run of tokens, then the name,
+// closed by `=` or `;`. Anchored to the line, otherwise `return HTTPS;` reads
+// as a declaration of HTTPS with `return` for its type, and the lookahead
+// refuses the statement keywords that could stand where the type does.
+const JAVA_FIELD_RE = /^[ \t]*(?!(?:return|throw|case|yield|assert|else|do|new|break|continue|goto|package|import|extends|implements|throws|instanceof)\b)(?:[\w<>\[\],?.]+[ \t]+)+([A-Za-z_]\w*)[ \t]*[=;]/gm;
+
+/** Kotlin declarations a bare name can designate: a value, a call, a type. */
+const SHADOWING_KINDS = new Set<SymbolKind>([
+  'val', 'var', 'fun', 'composable', 'class', 'dataClass', 'sealedClass', 'annotation', 'object', 'interface',
+]);
+const CLASSIFIER_KINDS = new Set<SymbolKind>(['class', 'dataClass', 'sealedClass', 'annotation', 'object', 'interface', 'enum']);
+
+/**
+ * The declarations of a Kotlin file that every bare mention in it can see.
+ *
+ * A top-level declaration is in scope for the whole file. Below that, only a
+ * member of the file's SOLE top-level classifier qualifies: a companion member
+ * is visible everywhere in the class body, nested classes included; an
+ * instance member is not visible from a nested class nor from the companion,
+ * so it counts only when the class nests no classifier at all. A local, or
+ * anything inside a function body, is visible to nobody else: `class A {
+ * companion object { const val HTTPS } }` next to `class B { fun f(s: Scheme)
+ * = when (s) { HTTPS -> 1 } }` binds the branch to the entry through the
+ * expected type, and the file shadows nothing.
+ *
+ * A script has statements outside any declaration, so only its top level
+ * counts there.
+ */
+function wholeFileDeclarations(symbols: readonly RawSymbol[], isScript: boolean): RawSymbol[] {
+  const topLevel = symbols.filter(s => s.depth === 0);
+  const sole = topLevel.length === 1 && CLASSIFIER_KINDS.has(topLevel[0].kind) && !isScript ? topLevel[0] : undefined;
+  const nestsAClassifier = symbols.some(s => s.depth === 1 && CLASSIFIER_KINDS.has(s.kind));
+  const out: RawSymbol[] = [];
+  // The enclosing symbols of the current one, as collectEnums reads them.
+  const stack: RawSymbol[] = [];
+  for (const sym of symbols) {
+    stack.length = sym.depth;
+    stack[sym.depth] = sym;
+    if (sym.isLocal) continue;
+    if (sym.depth === 0) { out.push(sym); continue; }
+    if (!sole) continue;
+    // A stale entry left on the stack by a function that already closed can
+    // only hide a member, never promote a local: the safe direction.
+    if (stack.some((s, d) => d < sym.depth && s !== undefined && (s.kind === 'fun' || s.kind === 'composable'))) continue;
+    if (sym.depth === 1 ? !nestsAClassifier : sym.depth === 2 && stack[1]?.isCompanion === true) out.push(sym);
+  }
+  return out;
+}
+
+/**
+ * Where an entry name is declared as something ELSE than an enum entry, in
+ * scope for the whole file.
+ *
+ * Two tests of the reference project wrote `const val HTTPS = "https://..."`
+ * in their companion and used `HTTPS` bare a few lines below, importing
+ * nothing from the enum. Those bare mentions counted as the entry's, and
+ * `UriScheme.HTTPS` came out testOnly while nothing named it: the human removed
+ * the entry outright. A bare mention in a file that declares the name is that
+ * declaration's, which `homonymEntryMentions` applies.
+ *
+ * Kotlin declarations come from the parser, so that `wholeFileDeclarations`
+ * can read their scope: a declaration nobody else in the file can see is not
+ * recorded, and the bare mentions of that file stay the doubt they were.
+ *
+ * Java declarations come from two regexes on the sanitized text, and a file
+ * that also writes the name as a `case` label is not recorded either. The case
+ * constant of a switch on the enum is the simple name of one of its constants,
+ * resolved against the selector's type and never against the file's scope
+ * (JLS 14.11.1): `private static final String HTTPS` and `case HTTPS:` compile
+ * side by side, and the label needs no import the escape hatch could see.
+ *
+ * Only a file that already hits on its raw text is parsed or sanitized: a
+ * declaration keyword followed by an entry name is rare. A comment standing
+ * before the type on the same line hides a Java field this way, in the safe
+ * direction.
+ */
+export function findShadowingDeclarations(
+  sources: readonly SymbolSource[],
+  entryNames: ReadonlySet<string>,
+  enums: readonly EnumDecl[],
+): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  if (entryNames.size === 0) return out;
+  // `enum Kind { A, B; }` on one line reads as a Java field named B: an entry
+  // is not a shadow of itself, its declarations are counted by countDeclarations.
+  const entryLines = new Set<string>();
+  for (const e of enums) for (const entry of e.entries) entryLines.add(`${e.path}\0${entry.line}\0${entry.name}`);
+  const record = (name: string, path: string) => (out.get(name) ?? out.set(name, new Set()).get(name)!).add(path);
+
+  const declared = (text: string, regexes: readonly RegExp[]): Array<[name: string, at: number]> => {
+    const found: Array<[string, number]> = [];
+    for (const re of regexes) {
+      re.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(text)) !== null) {
+        if (entryNames.has(m[1])) found.push([m[1], m.index + m[0].lastIndexOf(m[1])]);
+      }
+    }
+    return found;
+  };
+
+  for (const src of sources) {
+    if (!/\.(kt|kts|java)$/.test(src.path)) continue;
+    if (isBuildArtifactPath(src.path)) continue;
+    if (src.path.endsWith('.java')) {
+      const regexes = [JAVA_KEYWORD_DECLARATION_RE, JAVA_FIELD_RE];
+      if (declared(src.text, regexes).length === 0) continue;
+      const clean = sanitizeForUsageScan(src.text);
+      const lineStarts = buildLineStarts(clean);
+      for (const [name, at] of declared(clean, regexes)) {
+        if (entryLines.has(`${src.path}\0${offsetToPos(lineStarts, at).line}\0${name}`)) continue;
+        // `case HTTPS:`, `case HTTPS ->`, `case HTTP, HTTPS ->`.
+        if (new RegExp(`\\bcase\\b[^:\\n]*?\\b${name}\\b`).test(clean)) continue;
+        record(name, src.path);
+      }
+      continue;
+    }
+    if (declared(src.text, [KOTLIN_DECLARATION_GATE_RE]).length === 0) continue;
+    for (const sym of wholeFileDeclarations(parse(src.path, src.text).symbols, src.path.endsWith('.kts'))) {
+      if (!entryNames.has(sym.name)) continue;
+      // An enum class named like an entry is a type the bare name designates;
+      // an entry, at depth 1 or below, is never a shadow of itself.
+      if (sym.kind === 'enum' ? sym.depth !== 0 : !SHADOWING_KINDS.has(sym.kind)) continue;
+      record(sym.name, src.path);
+    }
+  }
+  return out;
+}
+
+/** Everything the corpus says about the entry names of `enums`, read once. */
+interface EntryMentions {
+  declarations: EntryDeclarations;
+  declaredElsewhere: ShadowingDeclarations;
+  harvest: Harvest;
+}
+
+function readEntryMentions(
+  enums: readonly EnumDecl[],
+  sources: readonly SymbolSource[],
+  testSourceSets: readonly string[],
+): EntryMentions {
+  const wanted = new Set<string>();
+  for (const e of enums) for (const entry of e.entries) wanted.add(entry.name);
+  // How many times each entry name is DECLARED across the corpus. A mention
+  // count equal to that is a corpus that names it nowhere else, which is the
+  // same reasoning KJ-036 applies to duplicated top-level names.
+  const declarations = countDeclarations(enums);
+  const declaredElsewhere = findShadowingDeclarations(sources, wanted, enums);
+  // Per file mention data costs, so the harvest only keeps it for the names
+  // something can tell apart: another enum, or a declaration of the name.
+  const contested = new Set([...homonymEntries(declarations), ...declaredElsewhere.keys()]);
+  return { declarations, declaredElsewhere, harvest: harvestMentions(sources, wanted, testSourceSets, contested) };
+}
+
+/**
  * Mentions of `entry` that may designate the entry of `e`, when several enums
- * declare that name. Counting every mention of the name minus its declarations
- * kept all of them alive as soon as one was used: 318 entries on the reference
- * project, `MediaSource.FEED` among them while only `EventSource.FEED` and its
- * like were ever written.
+ * declare that name or a file declares it as something else. Counting every
+ * mention of the name minus its declarations kept all of them alive as soon as
+ * one was used: 318 entries on the reference project, `MediaSource.FEED` among
+ * them while only `EventSource.FEED` and its like were ever written.
  *
  * A mention belongs to `e` when qualified by its name, bare in its own file, or
  * bare in a Kotlin file importing that entry or all entries of `e`. Qualified
  * by another enum declaring the name, or bare in a Kotlin file importing the
- * entry of such an enum, it belongs elsewhere. Anything else is a doubt and
+ * entry of such an enum, it belongs elsewhere. So does a bare mention in a file
+ * that declares the name in a scope covering the whole file, as
+ * `findShadowingDeclarations` records it: top level, or a member of the file's
+ * sole class the whole body can see, never a local. A Java file writing the
+ * name as a `case` label is not such a file, the label being the enum's
+ * whatever the file declares. And a file that also imports the entry has the
+ * two competing for the name, so the doubt stays. Anything else is a doubt and
  * returns null, so the caller keeps counting every mention: bare in Java, where
  * a `switch` case never qualifies; bare in Kotlin with no import to explain it,
  * which context sensitive resolution may bind through the expected type; in a
- * string or a non code file; behind an unknown qualifier, a typealias or a call.
+ * string or a non code file; behind an unknown qualifier, a typealias or a
+ * call.
  */
 function homonymEntryMentions(
   e: EnumDecl,
   entry: string,
-  harvest: Harvest,
-  declarations: EntryDeclarations,
+  corpus: EntryMentions,
   testSourceSets: readonly string[],
 ): { main: number; test: number; testElsewhere: number } | null {
+  const { harvest, declarations } = corpus;
   const dup = harvest.duplicates;
   if (!dup || dup.uncertain.has(entry) || harvest.aliased.has(entry)) return null;
   const others = declarations.enumsDeclaring.get(entry) ?? new Set<string>();
+  const shadows = corpus.declaredElsewhere.get(entry);
   const importsEntryOf = (imports: readonly string[], enumName: string) =>
     imports.some(i => `.${i}`.endsWith(`.${enumName}.${entry}`) || `.${i}`.endsWith(`.${enumName}.`));
 
@@ -600,6 +772,10 @@ function homonymEntryMentions(
     const bare = mention.bare - (declarations.inFile.get(`${mention.path}\0${entry}`) ?? 0);
     if (bare > 0) {
       if (mention.path === e.path) ours += bare;
+      else if (shadows?.has(mention.path)) {
+        if (importsEntryOf(mention.imports, e.name)) return null;
+        theirs += bare;
+      }
       else if (!/\.kts?$/.test(mention.path)) return null;
       else if (importsEntryOf(mention.imports, e.name)) ours += bare;
       else if ([...others].some(o => importsEntryOf(mention.imports, o))) theirs += bare;
@@ -615,19 +791,34 @@ function homonymEntryMentions(
   return counts;
 }
 
+/**
+ * What the corpus writes of one entry outside its declarations, and whether
+ * every test mention is proven to be this entry's.
+ */
+function mentionsOf(
+  e: EnumDecl,
+  entry: string,
+  corpus: EntryMentions,
+  testSourceSets: readonly string[],
+): { main: number; test: number; testsNameOnlyThisEntry: boolean } {
+  const { harvest, declarations } = corpus;
+  // A name nothing else declares is counted raw: there is no one to tell apart.
+  const contested = (declarations.total.get(entry) ?? 1) > 1 || corpus.declaredElsewhere.has(entry);
+  const resolved = contested ? homonymEntryMentions(e, entry, corpus, testSourceSets) : null;
+  if (resolved) return { main: resolved.main, test: resolved.test, testsNameOnlyThisEntry: resolved.testElsewhere === 0 };
+  return {
+    main: (harvest.main.get(entry) ?? 0) - (declarations.inMain.get(entry) ?? 0),
+    test: (harvest.test.get(entry) ?? 0) - (declarations.inTest.get(entry) ?? 0),
+    testsNameOnlyThisEntry: !contested,
+  };
+}
+
 export function findUnusedEnumEntries(input: UnusedEnumEntryScanInput): UnusedEnumEntry[] {
   if (input.truncated) return [];                                     // contract rule 2
 
   const enums = collectEnums(input.sources, input.testSourceSets);
   if (enums.length === 0) return [];
-
-  const wanted = new Set<string>();
-  for (const e of enums) for (const entry of e.entries) wanted.add(entry.name);
-  // How many times each entry name is DECLARED across the corpus. A mention
-  // count equal to that is a corpus that names it nowhere else, which is the
-  // same reasoning KJ-036 applies to duplicated top-level names.
-  const declarations = countDeclarations(enums);
-  const harvest = harvestMentions(input.sources, wanted, input.testSourceSets, homonymEntries(declarations));
+  const corpus = readEntryMentions(enums, input.sources, input.testSourceSets);
 
   const ignored = new Set(input.ignoreNames ?? []);
   const walked = findWalkedEnums(new Set(enums.map(e => e.name)), input.sources);
@@ -650,17 +841,10 @@ export function findUnusedEnumEntries(input: UnusedEnumEntryScanInput): UnusedEn
     for (const entry of e.entries) {
       if (ignored.has(`${e.name}.${entry.name}`)) continue;
       if (e.silenced.has(entry)) continue;
-      const declared = declarations.total.get(entry.name) ?? 1;
-      const resolved = declared > 1
-        ? homonymEntryMentions(e, entry.name, harvest, declarations, input.testSourceSets)
-        : null;
-      const mainElsewhere = resolved ? resolved.main
-        : (harvest.main.get(entry.name) ?? 0) - (declarations.inMain.get(entry.name) ?? 0);
-      if (mainElsewhere !== 0) continue;
+      const mentions = mentionsOf(e, entry.name, corpus, input.testSourceSets);
+      if (mentions.main !== 0) continue;
 
-      const testMentions = resolved ? resolved.test
-        : (harvest.test.get(entry.name) ?? 0) - (declarations.inTest.get(entry.name) ?? 0);
-      const verdict: EnumEntryVerdict = testMentions > 0 ? 'testOnly' : 'unreferenced';
+      const verdict: EnumEntryVerdict = mentions.test > 0 ? 'testOnly' : 'unreferenced';
       if (verdict === 'testOnly' && input.includeTestOnly === false) continue;
 
       out.push({
@@ -670,8 +854,8 @@ export function findUnusedEnumEntries(input: UnusedEnumEntryScanInput): UnusedEn
         path: e.path,
         line: entry.line,
         character: entry.character,
-        testMentions,
-        testsNameOnlyThisEntry: declared === 1 || (resolved !== null && resolved.testElsewhere === 0),
+        testMentions: mentions.test,
+        testsNameOnlyThisEntry: mentions.testsNameOnlyThisEntry,
         ...avecAnnotations(text, lineStarts, entryExtent(text, lineStarts, entry, sansCommentaires)),
       });
     }
@@ -707,30 +891,20 @@ export function findUnusedEnumEntries(input: UnusedEnumEntryScanInput): UnusedEn
 
 export function explainEnumEntries(input: UnusedEnumEntryScanInput): EnumEntryExplanation[] {
   const enums = collectEnums(input.sources, input.testSourceSets);
-  const wanted = new Set<string>();
-  for (const e of enums) for (const entry of e.entries) wanted.add(entry.name);
-  const declarations = countDeclarations(enums);
-  const harvest = harvestMentions(input.sources, wanted, input.testSourceSets, homonymEntries(declarations));
+  const corpus = readEntryMentions(enums, input.sources, input.testSourceSets);
 
   const walkedEnums = findWalkedEnums(new Set(enums.map(e => e.name)), input.sources);
   const out: EnumEntryExplanation[] = [];
   for (const e of enums) {
     const walked = !e.rejection && !e.isTest && walkedEnums.has(e.name);
     for (const entry of e.entries) {
-      const declared = declarations.total.get(entry.name) ?? 1;
-      const resolved = declared > 1
-        ? homonymEntryMentions(e, entry.name, harvest, declarations, input.testSourceSets)
-        : null;
-      const mainElsewhere = resolved ? resolved.main
-        : (harvest.main.get(entry.name) ?? 0) - (declarations.inMain.get(entry.name) ?? 0);
-      const testMentions = resolved ? resolved.test
-        : (harvest.test.get(entry.name) ?? 0) - (declarations.inTest.get(entry.name) ?? 0);
+      const mentions = mentionsOf(e, entry.name, corpus, input.testSourceSets);
       const outcome = e.rejection ? e.rejection
         : e.silenced.has(entry) ? 'F12:suppress-unused'
         : e.isTest ? 'E2:test-source-set'
           : walked ? 'E1:walked-as-whole'
-            : mainElsewhere !== 0 ? 'alive:main'
-              : testMentions > 0 ? 'testOnly' : 'unreferenced';
+            : mentions.main !== 0 ? 'alive:main'
+              : mentions.test > 0 ? 'testOnly' : 'unreferenced';
       out.push({ name: entry.name, enumName: e.name, path: e.path, line: entry.line, outcome });
     }
   }

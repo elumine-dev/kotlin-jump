@@ -15,6 +15,7 @@ import * as path from 'path';
 import { findUnheardEvents } from '../src/providers/unheardEvents';
 import { findUnusedGradleDependencies } from '../src/providers/unusedGradleDependencies';
 import { stripKotlinComments } from '../src/util/xmlRefs';
+import { coupeDeBrancheFinale } from './invariants';
 
 const SKIP = new Set(['node_modules', 'build', '.git', '.gradle', 'out', 'dist', 'target', '.idea']);
 const TEST_SETS = ['test/java', 'test/kotlin', 'androidTest', 'jvmTest', 'commonTest'];
@@ -78,10 +79,12 @@ function main(): void {
       // La coupe part d un debut de ligne et finit juste apres un saut de
       // ligne. Sans cet invariant, un decalage d un seul caractere passe :
       // il ne fait que grignoter de l indentation, le solde ne bouge pas et
-      // le nom reste dans la coupe.
+      // le nom reste dans la coupe. Une branche finale d if/else (KJ056)
+      // part de l accolade fermante d avant, en milieu de ligne : le solde
+      // la prouve entiere, et son ancre sur `}` voit encore le decalage.
       const debutLigne = s0 === 0 || texte[s0 - 1] === '\n';
       const finLigne = e0 === texte.length || texte[e0 - 1] === '\n';
-      if (!debutLigne || !finLigne) {
+      if ((!debutLigne || !finLigne) && !coupeDeBrancheFinale(texte, s0, e0)) {
         compte.ligne++;
         if (fautes.length < 8) fautes.push(`LIGNE ${c.nom} ${c.path} debut=${debutLigne} fin=${finLigne} coupe=${JSON.stringify(coupe.slice(0, 60))}`);
       }

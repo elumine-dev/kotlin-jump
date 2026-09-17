@@ -12,9 +12,12 @@ import { sweepFile, planFileEdits } from '../providers/DeadCodeSweep';
 import { findMemberImports, memberKey } from '../util/memberImports';
 import { planCascade } from '../providers/removalCascade';
 import { findOrphanSourceSets, OrphanSourceSet } from '../providers/orphanSourceSets';
+import { findStaleBaselineEntries } from '../providers/staleBaselineEntries';
+import { findEmptySourceFiles } from '../providers/emptySourceFiles';
 import { findUnusedGradleDependencies } from '../providers/unusedGradleDependencies';
 import { findUnheardEvents } from '../providers/unheardEvents';
 import { findUnusedRemoteConfigKeys } from '../providers/unusedRemoteConfigKeys';
+import { findUnusedConstructorParameters } from '../providers/unusedConstructorParameters';
 import { findUnusedResourceKeys, expandToWholeLines } from '../providers/unusedResourceKeys';
 import { collectValueKeyDeclarations, parseValuesPath } from '../indexer/ValueResourceScanner';
 import { findUnusedResources } from '../providers/UnusedResourceProvider';
@@ -209,6 +212,26 @@ export function collecterUnePasse(
     ajoute(k.path, k.removeStart, k.removeEnd, '', 'remoteconfig', k.name);
   }
 
+  // KJ-058 : parametres de constructeur que rien ne lit, et l'argument nomme
+  // de chaque site avec eux. Deux familles et non une : « Removed 3
+  // constructor parameters » pour deux parametres et un argument serait le
+  // meme compte faux que celui des renommages, corrige plus haut.
+  for (const p of findUnusedConstructorParameters({ sources })) {
+    ajoute(p.path, p.removeStart, p.removeEnd, '', 'parametres',
+      `constructor parameter ${p.name} of ${p.className}, nothing reads it`);
+    for (const s of p.sites) {
+      ajoute(s.path, s.removeStart, s.removeEnd, '', 'arguments', `argument ${p.name}, the parameter is gone`);
+    }
+  }
+
+  // KJ-059 : une entree de baseline detekt dont le fichier n'existe plus.
+  // Detekt ne se plaint jamais d'un defaut qu'il ne trouve pas, donc rien ne
+  // pointe jamais sur la ligne. La passe suivante de la boucle voit les
+  // fichiers que celle-ci supprime : aucun couplage avec les autres familles.
+  for (const e of findStaleBaselineEntries({ sources })) {
+    ajoute(e.path, e.removeStart, e.removeEnd, '', 'baseline', `stale baseline entry for ${e.file}, which no longer exists`);
+  }
+
   // Cles de values/, toutes leurs variantes de qualificatif. Les offsets sont
   // recalcules sur le texte courant, jamais portes depuis le scan.
   if (ctx.modulesWithCode !== undefined) {
@@ -246,6 +269,10 @@ export function collecterUnePasse(
       for (const chemin of r.paths as string[]) fichiersMorts.add(chemin);
     }
   }
+  // KJ-060 : un fichier source qui ne declare rien. La cascade supprime un
+  // fichier qu'elle VIDE dans la ronde ; celui qui etait deja vide au depart
+  // n'etait vu par personne, chaque detecteur cherchant des declarations.
+  for (const f of findEmptySourceFiles({ sources })) fichiersMorts.add(f.path);
 
   // Chevauchements : la premiere gagne, comme chez chaque fournisseur.
   const parFichier = new Map<string, Coupe[]>();
@@ -281,6 +308,7 @@ export function compteLesFamilles(parFichier: ReadonlyMap<string, Coupe[]>): Tal
     // cet objet, `tally[famille]++` valait NaN et la phrase du compte rendu
     // annoncait `NaN resource keys`.
     alias: 0, evenements: 0, remoteconfig: 0, cles: 0, ressources: 0,
+    parametres: 0, arguments: 0, baseline: 0, vides: 0,
   };
   for (const l of parFichier.values()) {
     for (const c of l) tally[c.famille === 'balayage' && c.texte !== '' ? 'renommages' : c.famille]++;
@@ -455,6 +483,7 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
     symboles: 0, membres: 0, entrees: 0, ilots: 0, balayage: 0, renommages: 0,
     imports: 0, fichiers: 0, bouges: 0,
     alias: 0, evenements: 0, remoteconfig: 0, cles: 0, ressources: 0,
+    parametres: 0, arguments: 0, baseline: 0, vides: 0,
   };
   const ajouteTally = (t: Tally) => { for (const k of Object.keys(t)) cumul[k] = (cumul[k] ?? 0) + t[k]; };
   /** Les fichiers ecartes, par chemin : la boucle repasse sur les memes. */
@@ -564,16 +593,20 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
       // n'est pas vide, il n'est nomme par personne. Dire « nothing is left in
       // it » d'un layout intact serait faux dans la fenetre de relecture.
       let ressourcesSupprimees = 0;
+      let videsSupprimes = 0;
       for (const chemin of fichiersMorts) {
+        // Un fichier source vide n'est pas « nomme par personne », il ne
+        // declare rien : l'etiquette dit lequel des deux.
+        const vide = /\.(kt|java)$/.test(chemin);
         edit.deleteFile(
           corpusUri(chemin),
           { ignoreIfNotExists: true },
           {
             needsConfirmation: choix === 'review',
-            label: `Delete ${chemin.split(/[\\/]/).pop()}, nothing references it`,
+            label: `Delete ${chemin.split(/[\\/]/).pop()}, ${vide ? 'it declares nothing' : 'nothing references it'}`,
           },
         );
-        ressourcesSupprimees++;
+        if (vide) videsSupprimes++; else ressourcesSupprimees++;
       }
       // Ce qui est RETENU, jamais ce que la passe a trouve. Un fichier ecarte
       // parce qu'il a bouge garde ses coupes dans `parFichier`, et les compter
@@ -588,6 +621,7 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
       applique.imports += swept.imports;
       applique.fichiers += swept.files;
       applique.ressources += ressourcesSupprimees;
+      applique.vides += videsSupprimes;
       ajouteTally(applique);
 
       const ok = await vscode.workspace.applyEdit(edit);
@@ -702,6 +736,12 @@ export function resumeDesFamilles(cumul: Tally): string {
     cumul.evenements > 0 ? plural(cumul.evenements, 'unheard post') : '',
     cumul.alias > 0 ? plural(cumul.alias, 'catalog alias', 'catalog aliases') : '',
     cumul.remoteconfig > 0 ? plural(cumul.remoteconfig, 'remote config key') : '',
+    // KJ-058. Les arguments a part : ce sont des lignes de sites d'appel,
+    // pas des parametres, et les compter sous ce nom gonflerait le nombre.
+    cumul.parametres > 0 ? plural(cumul.parametres, 'constructor parameter') : '',
+    cumul.arguments > 0 ? plural(cumul.arguments, 'argument of a removed parameter', 'arguments of removed parameters') : '',
+    cumul.baseline > 0 ? plural(cumul.baseline, 'stale baseline entry', 'stale baseline entries') : '',
+    cumul.vides > 0 ? `${plural(cumul.vides, 'source file')} declaring nothing` : '',
   ].filter(Boolean).join(', ');
 }
 

@@ -34,6 +34,11 @@ function walk(dir: string, ext: RegExp): string[] {
 
 /** Sources shipped in the VSIX (KJ wave). Legacy files predate the rule. */
 const SHIPPED = [
+  'src/providers/unprovenPosts.ts',
+  'src/providers/emptySourceFiles.ts',
+  'src/providers/staleBaselineEntries.ts',
+  'src/providers/orphanSourceSets.ts',
+  'src/providers/unusedConstructorParameters.ts',
   'src/providers/PostfixCompletionProvider.ts',
   'src/providers/NamedArgumentsActionProvider.ts',
   'src/providers/SurroundWithProvider.ts',

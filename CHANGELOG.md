@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.42.344
+
+Remove Everything Unused now sees eight more kinds of dead code, and three real projects taught it where a scan must stay silent.
+
+### Improvements
+- Reports unread primary constructor parameters together with the named argument at each construction site, stale detekt baseline entries whose file is gone, and source files that declare nothing.
+- Finds enum entries that a test's own constant of the same name kept alive, and unheard event posts that are the sole content of an if or else if branch, taking the branch with them.
+- Offers the posts the safe removal refused in the unproven review, each with the reason on its label, so a reader can tick what the scan could not prove.
+- Cuts one assertion out of a test that keeps asserting other things, and takes the test whole only when the file is dedicated to what leaves.
+- Leaves a single blank line where a removed test function stood, so a formatter's consecutive blank line rule stays quiet on the files it touches.
+
+### Fixes
+- Keeps a React Native package, a Nitro hybrid object declared in nitro.json, and a class doing System.loadLibrary alive: the platform instantiates them by name, without a single reference in Kotlin or Java.
+- Stops nineteen WebView.loadUrl calls from keeping an unused ImageView.loadUrl extension alive: a top level Kotlin declaration counts only the mentions that can see its package.
+- Withholds a statement inside a lifecycle method when its subject survives, and a post that a test verifies on a mocked bus: both compiled and then failed tests on the reference project.
+- Concatenates flavour names in camel case when deriving Gradle source sets, so a variant directory is never mistaken for an orphan.
+
 ## 1.42.343
 
 This release closes a gap where Remove Everything Unused reported several categories of unused code, Gradle dependency aliases, unheard event posts, Remote Config keys, and resource keys and files, without actually removing them. It also adds a preview of files and imports a cleanup would affect, and introduces a new command that offers additional test only cleanup candidates for manual, one by one review.

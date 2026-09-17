@@ -29,9 +29,11 @@ export interface TestCut {
   path: string;
   start: number;
   end: number;
-  /** Test function removed, or the imported name for an import line. */
+  /** Test function removed, the imported name for an import line, or the setter a rewrite retires. */
   name: string;
-  kind: 'function' | 'import';
+  kind: 'function' | 'import' | 'rewrite';
+  /** What the extent becomes. A removal has none; a rewrite carries the new statement, whole lines. */
+  replacement?: string;
 }
 
 export interface TestCoRemovalPlan {

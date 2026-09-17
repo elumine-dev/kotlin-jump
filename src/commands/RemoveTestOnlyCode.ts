@@ -6,9 +6,10 @@ import { findUnusedSymbols } from '../providers/unusedSymbols';
 import { findUnusedMembers } from '../providers/unusedMembers';
 import { findDeadIslands } from '../providers/deadIslands';
 import { findUnusedEnumEntries } from '../providers/unusedEnumEntries';
-import { isOfferable, liveOutside, planTestCoRemoval, productionDeclarations, TestCoRemovalPlan, testFunctionsOf } from '../providers/testCoRemoval';
+import { isOfferable, liveOutside, planTestCoRemoval, productionDeclarations, TestCoRemovalPlan, TestCut, testFunctionsOf } from '../providers/testCoRemoval';
 import { isClosed, planClosure } from '../providers/testCoRemovalClosure';
 import { withoutOrphanSourceSets } from '../providers/orphanSourceSets';
+import { findRefusedPosts } from '../providers/unprovenPosts';
 import { addCascadePlan, planCascade } from '../providers/applyCascade';
 import { plural } from '../util/plural';
 import { findMemberImports, memberKey } from '../util/memberImports';
@@ -72,6 +73,17 @@ function ajouteLesImports(
     if (plan.cuts.some(c => c.path === imp.path && c.start === start)) continue;
     plan.cuts.push({ path: imp.path, start, end, name: imp.name, kind: 'import' });
   }
+}
+
+/**
+ * `Rewrite x.setFoo(v) as x.foo = v`, with the receiver, the setter and the
+ * property the cut really names. The argument is not repeated: the preview
+ * shows it, and it can run over several lines.
+ */
+function rewriteLabel(cut: TestCut): string {
+  const m = /^\s*([\w$.]+)\.([\w$]+)\s*=/.exec(cut.replacement ?? '');
+  if (!m) return `Rewrite the call to ${cut.name}`;
+  return `Rewrite ${m[1]}.${cut.name}(v) as ${m[1]}.${m[2]} = v`;
 }
 
 
@@ -216,15 +228,33 @@ export async function scanTestOnly(
       // Refactor Preview label carrying four of them stops being readable.
       // `plan.unresolved` keeps them all for whoever wants the detail.
       const pourquoi = plan.unresolved[0]?.reason ?? 'unproven';
-      const portee = closure.files.length > 0
-        ? `${closure.files.length} test file(s) whole, ${closure.cutFunctions} test function(s)`
-        : `${closure.cutFunctions} test function(s)`;
+      const reecrits = closure.cuts.filter(c => c.kind === 'rewrite').length;
+      const portee = (closure.files.length > 0
+        ? `${plural(closure.files.length, 'test file')} whole, ${plural(closure.cutFunctions, 'test function')}`
+        : plural(closure.cutFunctions, 'test function'))
+        + (reecrits > 0 ? `, ${plural(reecrits, 'setter call')} rewritten` : '');
       result.groups.push({ group: { ...group, unprovenReason: `${pourquoi}; takes ${portee}` }, plan: closure });
       for (const f of closure.files) result.testFiles.add(f);
       result.testFunctions += closure.functions;
       continue;
     }
     result.groups.push({ group, plan });
+  }
+  // KJ-061, review mode only: the posts of an unheard event that the safe
+  // removal refused, each with the reason on its label. No test goes with a
+  // post, so the plan is empty; once the reader ticks the post, the event
+  // class and its tests are what the next round finds on its own.
+  if (includeUnproven) {
+    for (const r of findRefusedPosts({ sources: data.sources, testSourceSets: segs })) {
+      result.groups.push({
+        group: {
+          label: `the post of ${r.name} in ${r.path.split(/[\\/]/).pop()}`,
+          names: [], allowed: [], path: r.path, removeStart: r.start, removeEnd: r.end,
+          fileBecomesEmpty: false, unprovenReason: r.reason,
+        },
+        plan: { files: [], cuts: [], unresolved: [], functions: 0 },
+      });
+    }
   }
   return result;
 }
@@ -313,6 +343,11 @@ export async function removeTestOnlyCodeCommand(
       const cle = `${group.path}:${group.removeStart}`;
       if (!vus.has(cle) && !deletedFiles.has(group.path)) { vus.add(cle); note(group.path, group.removeStart, group.removeEnd); }
       for (const cut of plan.cuts) {
+        // A rewrite removes nothing but the setter's name, which no import
+        // targets. Noted as a removal, it had the cascade sweep the import
+        // the ARGUMENT still needs: `spec.other = Other()` kept, its
+        // `import com.y.Other` gone.
+        if (cut.kind === 'rewrite') continue;
         const cleCut = `${cut.path}:${cut.start}`;
         if (vus.has(cleCut) || deletedFiles.has(cut.path)) continue;
         vus.add(cleCut);
@@ -321,6 +356,23 @@ export async function removeTestOnlyCodeCommand(
     }
     const cascade = planCascade(planned, scan.textByPath, deletedFiles);
     const doomed = new Set([...deletedFiles, ...cascade.deleteFiles]);
+    // The planner drops a rewrite nested in a test function IT cuts whole.
+    // Two groups are planned apart and can meet on one test, one rewriting a
+    // line the other removes with the function: nested ranges, one
+    // WorkspaceEdit VS Code rejects whole. The removal wins here too, and a
+    // FIELD or STATEMENT cut counts as much as a function cut: a plan that
+    // takes `spec.setOther(foo)` as a statement of a leaving field subsumes
+    // the rewrite of that same line, and emitting both left a call to `foo`
+    // after `foo` was gone.
+    const functionCuts = new Map<string, { start: number; end: number }[]>();
+    for (const { plan } of scan.groups) {
+      for (const cut of plan.cuts) {
+        if (cut.kind === 'rewrite') continue;
+        (functionCuts.get(cut.path) ?? functionCuts.set(cut.path, []).get(cut.path)!).push({ start: cut.start, end: cut.end });
+      }
+    }
+    const absorbed = (cut: TestCut): boolean => cut.kind === 'rewrite'
+      && (functionCuts.get(cut.path) ?? []).some(f => cut.start >= f.start && cut.end <= f.end);
 
     // Never a deleteFile AND range edits on the same URI: VS Code rejects the
     // whole WorkspaceEdit, silently.
@@ -362,6 +414,9 @@ export async function removeTestOnlyCodeCommand(
     // Import lines of the plans, in test files and, since 1.42.336, in main
     // ones: applied, and missing from the report.
     let importsDuPlan = 0;
+    // Setter calls written as assignments: nothing is removed there, so they
+    // are neither a test nor an import in the report.
+    let rewrites = 0;
     for (const { group, plan } of scan.groups) {
       const key = `${group.path}:${group.removeStart}`;
       if (!done.has(key)) {
@@ -386,22 +441,30 @@ export async function removeTestOnlyCodeCommand(
       for (const cut of plan.cuts) {
         const cutKey = `${cut.path}:${cut.start}`;
         if (done.has(cutKey)) continue;
+        // Absorption is decided BEFORE the key is claimed: the other plan's
+        // removal of the same line still has to be emitted, and claiming the
+        // key here let the rewrite win the line it had just yielded.
+        if (absorbed(cut)) continue;
         done.add(cutKey);
         if (doomed.has(cut.path)) {
           // A function of a whole test file is already counted with its file.
-          if (cut.kind !== 'import' && !scan.testFiles.has(cut.path)) tests++;
+          if (cut.kind === 'function' && !scan.testFiles.has(cut.path)) tests++;
           continue;
         }
         const range = rangeOf(cut.path, cut.start, cut.end);
         if (!range) { skipped++; continue; }
-        edit.replace(corpusUri(cut.path), range, '', {
+        edit.replace(corpusUri(cut.path), range, cut.replacement ?? '', {
           needsConfirmation: confirm,
-          label: cut.kind === 'import'
-            ? `Remove the stale import of ${cut.name}`
-            : `${group.unprovenReason ? 'UNPROVEN: remove' : 'Remove'} the test ${cut.name}`,
+          label: cut.kind === 'rewrite'
+            ? rewriteLabel(cut)
+            : cut.kind === 'import'
+              ? `Remove the stale import of ${cut.name}`
+              : `${group.unprovenReason ? 'UNPROVEN: remove' : 'Remove'} the test ${cut.name}`,
         });
         operations++;
-        if (cut.kind !== 'import') tests++; else importsDuPlan++;
+        if (cut.kind === 'function') tests++;
+        else if (cut.kind === 'import') importsDuPlan++;
+        else rewrites++;
         touches.add(cut.path);
       }
     }
@@ -413,7 +476,7 @@ export async function removeTestOnlyCodeCommand(
       edit, swept, skipped, fichiers: touches.size,
       supprimes: deletedFiles.size + swept.files,
       operations: operations + swept.imports + swept.files,
-      declarations, tests, imports: swept.imports + importsDuPlan,
+      declarations, tests, imports: swept.imports + importsDuPlan, rewrites,
     };
   };
 
@@ -528,6 +591,7 @@ export async function removeTestOnlyCodeCommand(
   void vscode.window.showInformationMessage(ok
     ? `Removed ${plural(choisi.declarations, 'declaration')} and ${plural(choisi.tests, 'test')}`
       + (choisi.imports > 0 ? `, plus ${plural(choisi.imports, 'import')} left with no user` : '')
+      + (choisi.rewrites > 0 ? `, with ${plural(choisi.rewrites, 'setter call')} rewritten as an assignment` : '')
       + (swept.files > 0 ? ` and ${plural(swept.files, 'emptied file')}` : '')
       + (courant.withheld > 0 ? `. ${plural(courant.withheld, 'other')} withheld: their tests cover more than the declaration.` : '.')
     : 'Nothing was applied.');

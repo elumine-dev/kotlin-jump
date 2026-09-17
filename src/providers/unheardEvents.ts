@@ -1325,9 +1325,12 @@ function trailingBranchExtent(
   // the outer `else` to `if (a)`: `bar()` ran when `!outer`, it would run when
   // `outer && !a`, and nothing at all when `!outer`. A `when` branch followed
   // by `else ->` is the same token. Without that `else`, the emptied chain is
-  // still the whole body and nothing rebinds, so the branch may go.
+  // still the whole body and nothing rebinds, so the branch may go. Kotlin
+  // also allows a `;` before `else` (`if (a) b; else c`), so a `;` after the
+  // chain's `}` is skipped like blank space: without this the separator hid
+  // the `else` and the trailing branch went, rebinding it all the same.
   let next = last.close + 1;
-  while (next < clean.length && /\s/.test(clean[next])) next++;
+  while (next < clean.length && /[\s;]/.test(clean[next])) next++;
   if (wordStartingAt(clean, next) === 'else') {
     return refused('sole content of a trailing branch whose chain is the braceless body of an outer branch');
   }
@@ -1866,6 +1869,33 @@ export function findUnheardEvents(input: UnheardEventScanInput): UnheardEventSca
 
   // A post alone in its branch is settled only now that every verdict is.
   applyBranchRules(entries, files);
+  // A test that names the event may VERIFY the post: `verify { bus.post(E(url, null)) }`
+  // on a mocked bus. Removing the post then compiles and fails that test at
+  // runtime, which no scan of main code can see. On the reference project
+  // `DeepLinkIntentControllerTest` verified the one post of its event that the
+  // branch rule removed, and two tests went red while the build stayed green.
+  // The human removed those tests with the event; here the post is withheld
+  // with its reason, for the review that shows the reader what to tick, and
+  // once every post of the event is gone the event is testOnly and its tests
+  // are the closure planner's to take.
+  const namedByTests = new Map<string, string>();
+  for (const s of input.sources) {
+    if (!/\.(kt|kts|java)$/.test(s.path) || !isTestSourceSet(s.path, input.testSourceSets)) continue;
+    for (const e of entries) {
+      if (e.event.verdict !== 'unheard' || e.event.removeStart < 0 || namedByTests.has(e.event.fqn)) continue;
+      if (!s.text.includes(e.event.name)) continue;
+      const clean = sanitizeForUsageScan(s.text).replace(/^[ \t]*import\b[^\n]*/gm, '');
+      const word = new RegExp(`\\b${e.event.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+      if (word.test(clean)) namedByTests.set(e.event.fqn, s.path);
+    }
+  }
+  for (const e of entries) {
+    const by = namedByTests.get(e.event.fqn);
+    if (by === undefined || e.event.verdict !== 'unheard' || e.event.removeStart < 0) continue;
+    e.event.removeStart = -1;
+    e.event.removeEnd = -1;
+    e.event.withheld = `tests name ${e.event.name} (${by.split(/[\\/]/).pop()}) and may verify this post`;
+  }
   const events = entries.map(e => e.event);
 
   events.sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line);

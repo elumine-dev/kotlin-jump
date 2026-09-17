@@ -251,6 +251,33 @@ describe.skipIf(!mod)('regle 2 : un else qui suit la chaine la retient', () => {
     expect(e.withheld).toBe(REBIND);
   });
 
+  it('H1 : un `;` entre l accolade de la chaine et le `else` exterieur ne cache rien', () => {
+    // Kotlin admet `if (a) b; else c` : le `;` est un separateur legal avant
+    // `else`. Il faisait passer le `else` pour absent, la branche partait, et
+    // le rattachement de D1 se produisait par une porte derobee.
+    const appelant = kt('    fun route(outer: Boolean, a: Boolean) {\n' + CHAINE.replace(/\n$/, ';\n')
+      + '        else\n            bar()\n    }\n');
+    const [e] = sites(appelant, 'ScrollingEvent');
+    expect(e.removeStart).toBe(-1);
+    expect(e.withheld).toBe(REBIND);
+  });
+
+  it('H1b : le meme `;` seul sur sa ligne', () => {
+    const appelant = kt('    fun route(outer: Boolean, a: Boolean) {\n' + CHAINE
+      + '            ;\n        else\n            bar()\n    }\n');
+    const [e] = sites(appelant, 'ScrollingEvent');
+    expect(e.removeStart).toBe(-1);
+    expect(e.withheld).toBe(REBIND);
+  });
+
+  it('temoin : `};` puis une instruction, sans `else` : la branche finale part', () => {
+    const appelant = kt('    fun route(outer: Boolean, a: Boolean) {\n' + CHAINE.replace(/\n$/, ';\n')
+      + '        bar()\n    }\n');
+    const [e] = sites(appelant, 'ScrollingEvent');
+    expect(appelant.text.slice(e.removeStart, e.removeEnd)).toBe(ELSE);
+    expect(e.withheld).toBeUndefined();
+  });
+
   it('D3, temoin : sans `else` exterieur, la branche finale part encore', () => {
     // La chaine videe de son `else` reste tout le corps du `if (outer)`, et
     // `bar()` tourne dans les memes cas qu avant.

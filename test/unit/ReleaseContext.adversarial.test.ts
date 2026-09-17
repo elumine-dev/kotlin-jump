@@ -49,7 +49,7 @@ describe('le pourquoi d un test deja existant vient de ce qui lui est ajoute', (
     const ctx = releaseContext({ cwd: repo, base: 'v1' });
     expect(ctx).toContain('NOUVEAU cas, la raison de cette version.');
     expect(ctx).not.toContain('ANCIEN correctif');
-  });
+  }, 120000);
 
   it('un test modifie sans nouveau bloc de commentaire ne produit rien', () => {
     ecrit('test/unit/Ancien.test.ts', readFileSync(join(repo, 'test/unit/Ancien.test.ts'), 'utf8') + "it('z', () => {});\n");

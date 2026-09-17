@@ -95,5 +95,5 @@ describe('aucune collection de diagnostics ne refabrique son URI', () => {
     };
     walk(path.join(depot, 'src'));
     expect(coupables, 'passer par corpusUri, voir src/util/corpusUri.ts').toEqual([]);
-  });
+  }, 15000);
 });

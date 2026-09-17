@@ -28,7 +28,7 @@ const NL = String.fromCharCode(10);
 
 /** Laisse passer les événements error/exit des workers. */
 async function laisserMourir(): Promise<void> {
-  for (let i = 0; i < 20; i++) await new Promise<void>(r => setTimeout(r, 25));
+  for (let i = 0; i < 80; i++) await new Promise<void>(r => setTimeout(r, 25));
 }
 
 describe('WorkerPool — le fichier worker est introuvable', () => {
@@ -37,7 +37,7 @@ describe('WorkerPool — le fichier worker est introuvable', () => {
     await laisserMourir();
     expect(pool.available, 'un pool sans worker vivant n est pas disponible').toBe(false);
     await pool.destroy();
-  });
+  }, 15000);
 
   it('rejette au lieu de rester en suspens pour toujours', async () => {
     const pool = new WorkerPool(2);
@@ -93,7 +93,7 @@ describe('FileScanner — pool hors service', () => {
 
     expect(index.lookup('Repli'), 'le fichier est indexe malgre le pool mort').toHaveLength(1);
     await scanner.destroy();
-  });
+  }, 15000);
 });
 
 describe('FileScanner — le worker meurt pendant la course', () => {

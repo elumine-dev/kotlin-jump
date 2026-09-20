@@ -87,9 +87,20 @@ describe.skipIf(!mod)('cascadeAfterRemoval', () => {
     expect(c.emptyFiles).toEqual([]);
   });
 
-  it('temoin : un fichier Java est laisse tranquille', () => {
+  it('un import Java orpheline par la coupe part avec elle', () => {
+    // La garde `.kt` laissait `import java.io.File;` debout apres le retrait de
+    // son unique utilisateur, et javac s arretait dessus. KJ-068.
     const texte = ['package com.x;', '', 'import java.io.File;', '', 'class A { File f; }'].join(NL);
     const c = cascade('a/A.java', texte, [{ start: texte.indexOf('class A'), end: texte.length }]);
+    const e = (c.imports.get('a/A.java') ?? [])[0];
+    // La ligne vide qui suivait part avec, comme du cote Kotlin.
+    expect(texte.slice(e.start, e.end)).toBe('import java.io.File;' + NL + NL);
+  });
+
+  it('temoin : un import Java encore utilise reste', () => {
+    const texte = ['package com.x;', '', 'import java.io.File;', '',
+      'class A { File f; }', 'class B { File g; }'].join(NL);
+    const c = cascade('a/A.java', texte, [{ start: texte.indexOf('class B'), end: texte.length }]);
     expect(c.imports.size).toBe(0);
   });
 
@@ -119,8 +130,9 @@ describe.skipIf(!mod)('cascadeAfterRemoval', () => {
       'class Coquille {', '    void f(File x) {}', '}'].join(NL);
     const c = cascade('a/A.java', texte, [{ start: texte.indexOf('class Coquille'), end: texte.length }]);
     expect(c.emptyFiles).toEqual(['a/A.java']);
-    // L autre moitie reste Kotlin : aucun import Java n est touche.
-    expect(c.imports.size).toBe(0);
+    // Le fichier part entier : son import orpheline est signale avec, et
+    // l applique le supprime dans un fichier qui n existera plus.
+    expect(c.imports.size).toBe(1);
   });
 
   it('temoin : un fichier Java qui garde une classe n est pas signale', () => {

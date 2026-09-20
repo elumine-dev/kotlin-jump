@@ -10,6 +10,7 @@ import {
   sanitizeForUsageScan,
   splitParamSegments,
 } from '../util/kotlinScan';
+import { COMMENCE_UNE_SUITE_RE } from './unusedSymbols';
 import { isTestSourceSet } from '../util/testPaths';
 import { isBuildArtifactPath } from '../util/resourceAllowlists';
 
@@ -88,11 +89,22 @@ export interface UnheardEvent {
   removeStart: number;
   removeEnd: number;
   /**
-   * Why the fix gave up, present exactly when `removeStart` is -1. A review
-   * of the refused posts shows it on the label, so a human can weigh what the
-   * detector would not.
+   * Why the fix gave up, present exactly when `removeStart` is -1 AND no
+   * rewrite is offered. A review of the refused posts shows it on the label,
+   * so a human can weigh what the detector would not.
    */
   withheld?: string;
+  /**
+   * KJ-069: the post was the sole content of a `finally` whose `try` has no
+   * catch, so the cut is a REPLACEMENT, not a deletion: `try { A } finally {
+   * post }` becomes `A`, de indented one level. Deleting the range would take
+   * the try body with it, so these travel in their own fields and
+   * `removeStart` stays -1: a consumer that only knows how to delete does
+   * nothing rather than something wrong.
+   */
+  rewriteStart?: number;
+  rewriteEnd?: number;
+  rewriteText?: string;
 }
 
 /** A subscription whose event type we could not read. */
@@ -237,6 +249,12 @@ interface PostSite {
    * they run once those are known rather than here.
    */
   branchOpen?: number;
+  /**
+   * The `{` opening the `finally` this post is the whole content of. Settled
+   * in the same second pass, for the same reason: the tests may name the
+   * event, and that verdict is not known here.
+   */
+  finallyOpen?: number;
   isTest: boolean;
 }
 
@@ -871,6 +889,7 @@ function collectPosts(
         removeEnd: extent.end,
         withheld: extent.withheld,
         branchOpen: extent.branchOpen,
+        finallyOpen: extent.finallyOpen,
         isTest: file.isTest,
       };
       const list = byFqn.get(fqn) ?? [];
@@ -1062,6 +1081,10 @@ interface Extent {
   withheld?: string;
   /** Set when the post is alone in an if/else branch: see `applyBranchRules`. */
   branchOpen?: number;
+  /** Set when the post is alone in a `finally`: see `applyFinallyRules`. */
+  finallyOpen?: number;
+  /** The text replacing the extent, for a lifted try body (KJ-069). */
+  rewriteText?: string;
 }
 
 const refused = (withheld: string): Extent => ({ start: -1, end: -1, withheld });
@@ -1131,9 +1154,13 @@ function statementExtent(
   const alone = soleContentOf(clean, plain.start, plain.end);
   if (alone) {
     const withheld = withheldFor(alone);
-    return alone.braced && (alone.kind === 'if' || alone.kind === 'else')
-      ? { start: -1, end: -1, withheld, branchOpen: alone.open }
-      : refused(withheld);
+    if (alone.braced && (alone.kind === 'if' || alone.kind === 'else')) {
+      return { start: -1, end: -1, withheld, branchOpen: alone.open };
+    }
+    if (alone.braced && alone.kind === 'finally') {
+      return { start: -1, end: -1, withheld, finallyOpen: alone.open };
+    }
+    return refused(withheld);
   }
 
   return plain;
@@ -1344,6 +1371,230 @@ function trailingBranchExtent(
 function lineEndAfter(raw: string, lineStarts: readonly number[], offset: number): number {
   const line = offsetToPos(lineStarts as number[], offset).line;
   return line + 1 < lineStarts.length ? lineStarts[line + 1] : raw.length;
+}
+
+/** A `try` statement read backwards from the `{` of its `finally`. */
+interface TryStatement {
+  /** Offset of the `t` of `try`. */
+  tryWord: number;
+  tryOpen: number;
+  tryClose: number;
+  /** The catch clauses between the try body and the finally, in source order. */
+  catches: { open: number; close: number }[];
+  finallyOpen: number;
+  finallyClose: number;
+  /** Java `try (Closeable c = …)`: the resources close on the way out. */
+  withResources: boolean;
+}
+
+/**
+ * The `try` the `finally` at `finallyOpen` belongs to, or undefined.
+ *
+ * Read backwards, clause by clause, the way `ifChainAround` reads a chain:
+ * the word `finally`, then the `}` of the block before it, and so on until a
+ * `try` is reached. Sixteen clauses is far past any real statement and stops
+ * a malformed file from walking the whole buffer.
+ */
+function tryStatementAround(clean: string, finallyOpen: number): TryStatement | undefined {
+  let k = finallyOpen - 1;
+  while (k >= 0 && /\s/.test(clean[k])) k--;
+  if (wordEndingAt(clean, k) !== 'finally') return undefined;
+  k -= 'finally'.length;
+  while (k >= 0 && /\s/.test(clean[k])) k--;
+  if (clean[k] !== '}') return undefined;
+
+  const finallyClose = matchBrace(clean, finallyOpen);
+  if (finallyClose < 0) return undefined;
+  const catches: { open: number; close: number }[] = [];
+
+  for (let garde = 0; garde < 16; garde++) {
+    const close = k;
+    const open = openingBraceOf(clean, close);
+    if (open < 0) return undefined;
+    let m = open - 1;
+    while (m >= 0 && /\s/.test(clean[m])) m--;
+
+    if (clean[m] === ')') {
+      const j = openingParenOf(clean, m);
+      if (j < 0) return undefined;
+      let w = j - 1;
+      while (w >= 0 && /\s/.test(clean[w])) w--;
+      const mot = wordEndingAt(clean, w);
+      if (mot === 'try') {
+        return { tryWord: w - 2, tryOpen: open, tryClose: close, catches: catches.reverse(), finallyOpen, finallyClose, withResources: true };
+      }
+      if (mot !== 'catch') return undefined;
+      catches.push({ open, close });
+      let p = w - 'catch'.length;
+      while (p >= 0 && /\s/.test(clean[p])) p--;
+      if (clean[p] !== '}') return undefined;
+      k = p;
+      continue;
+    }
+
+    if (wordEndingAt(clean, m) !== 'try') return undefined;
+    return { tryWord: m - 2, tryOpen: open, tryClose: close, catches: catches.reverse(), finallyOpen, finallyClose, withResources: false };
+  }
+  return undefined;
+}
+
+/** The innermost block holding `offset`, braces balanced backwards. */
+function enclosingBlockOf(clean: string, offset: number): { open: number; close: number } | undefined {
+  let depth = 0;
+  for (let i = offset - 1; i >= 0; i--) {
+    if (clean[i] === '}') depth++;
+    else if (clean[i] === '{') {
+      if (depth === 0) {
+        const close = matchBrace(clean, i);
+        return close < 0 ? undefined : { open: i, close };
+      }
+      depth--;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * The names a span declares at its own level, braces and parens excluded.
+ *
+ * Over approximates on purpose: `return x;` reads as a declaration of `x`,
+ * and a name collected for nothing only makes the lift refuse. The lift is
+ * the only caller, and refusing is its safe direction.
+ */
+function namesDeclaredAtTopLevel(span: string): string[] {
+  let depth = 0;
+  let plat = '';
+  for (const ch of span) {
+    if (ch === '{' || ch === '(' || ch === '[') { depth++; plat += ' '; continue; }
+    if (ch === '}' || ch === ')' || ch === ']') { depth = Math.max(0, depth - 1); plat += ' '; continue; }
+    plat += depth === 0 ? ch : (ch === '\n' ? '\n' : ' ');
+  }
+  const noms = new Set<string>();
+  for (const m of plat.matchAll(/\b(?:val|var)\s+([A-Za-z_]\w*)/g)) noms.add(m[1]);
+  for (const m of plat.matchAll(/(?:^|[;{}])\s*(?:final\s+)?[A-Za-z_][\w.]*(?:<[^>;{}]*>)?(?:\[\])*\s+([a-z_]\w*)\s*[=;]/gm)) noms.add(m[1]);
+  return [...noms];
+}
+
+/**
+ * KJ-069: what to do with a post that is the whole content of a `finally`.
+ *
+ * Two shapes, and everything else is withheld with its reason.
+ *
+ *   1. The try has catch clauses. The `finally { … }` tail goes and the
+ *      try/catch stays whole: the same shape as a trailing if branch.
+ *   2. The try has no catch. `try { A } finally { post }` IS `A` once the post
+ *      goes, so the body is lifted one indentation level and the wrapper
+ *      disappears. Anything that makes the identity doubtful refuses: a try
+ *      with resources (the close would go), a try that is an EXPRESSION
+ *      (`val x = try { … }`), a brace written any way but one clause per line,
+ *      a raw string in the body (de indenting changes what it holds), a
+ *      continuation binding to the `}`, and a local the enclosing block
+ *      already names, which would be a conflicting declaration after the lift.
+ */
+function finallyExtent(
+  raw: string,
+  clean: string,
+  lineStarts: readonly number[],
+  t: TryStatement,
+): Extent {
+  const refuse = (pourquoi: string) => refused(`sole content of a finally block ${pourquoi}`);
+
+  if (t.catches.length > 0) {
+    const tail = clean.slice(t.finallyClose + 1, lineEndAfter(raw, lineStarts, t.finallyClose)).trim();
+    if (tail !== '' && tail !== ';') return refuse('that shares its last line with other code');
+    return { start: t.catches[t.catches.length - 1].close + 1, end: t.finallyClose + 1 };
+  }
+
+  if (t.withResources) return refuse('of a try with resources');
+  if (!startsAStatement(clean, t.tryWord)) return refuse('of a try that is not a statement of its own');
+
+  const lignes = raw.split('\n');
+  const ligneDe = (offset: number) => offsetToPos(lineStarts as number[], offset).line;
+  const ligneTry = ligneDe(t.tryWord);
+  const ligneFinally = ligneDe(t.tryClose);
+  const ligneFin = ligneDe(t.finallyClose);
+  if ((lignes[ligneTry] ?? '').trim() !== 'try {') return refuse('written other than one clause per line');
+  if ((lignes[ligneFinally] ?? '').trim() !== '} finally {') return refuse('written other than one clause per line');
+  if ((lignes[ligneFin] ?? '').trim().replace(/;$/, '') !== '}') return refuse('written other than one clause per line');
+
+  const suite = (lignes.slice(ligneFin + 1).find(l => l.trim() !== '') ?? '').trim();
+  if (COMMENCE_UNE_SUITE_RE.test(suite)) return refuse('followed by a line that would bind to its body');
+
+  const corps = lignes.slice(ligneTry + 1, ligneFinally);
+  if (corps.every(l => l.trim() === '')) return refuse('whose try body is empty');
+  if (corps.some(l => l.includes('"""'))) return refuse('whose try body holds a raw string');
+
+  const retraitTry = /^[ \t]*/.exec(lignes[ligneTry] ?? '')![0];
+  const premiere = corps.find(l => l.trim() !== '')!;
+  const retraitCorps = /^[ \t]*/.exec(premiere)![0];
+  if (!retraitCorps.startsWith(retraitTry) || retraitCorps.length === retraitTry.length) {
+    return refuse('whose try body could not be de indented');
+  }
+  const unite = retraitCorps;
+  if (corps.some(l => l.trim() !== '' && !l.startsWith(unite))) {
+    return refuse('whose try body could not be de indented');
+  }
+
+  // Une locale du corps que le bloc englobant nomme deja : apres la remontee
+  // c est une declaration en conflit, en Kotlin comme en Java.
+  const englobant = enclosingBlockOf(clean, t.tryWord);
+  if (!englobant) return refuse('whose enclosing block could not be read');
+  const dehors = clean.slice(englobant.open + 1, t.tryWord) + '\n'
+    + clean.slice(t.finallyClose + 1, englobant.close);
+  for (const nom of namesDeclaredAtTopLevel(clean.slice(t.tryOpen + 1, t.tryClose))) {
+    if (new RegExp(`\\b${nom}\\b`).test(dehors)) {
+      return refuse(`whose try body declares ${nom}, which the enclosing block already names`);
+    }
+  }
+
+  const remonte = corps
+    .map(l => (l.trim() === '' ? '' : retraitTry + l.slice(unite.length)))
+    .join('\n') + '\n';
+  return {
+    start: lineStarts[ligneTry],
+    end: lineEndAfter(raw, lineStarts, t.finallyClose),
+    rewriteText: remonte,
+  };
+}
+
+/**
+ * Rule 3: a post alone in a `finally` takes the block, or the whole wrapper.
+ *
+ * Runs beside `applyBranchRules` and for the same reason: the shape is known
+ * here, the verdict is not. A lift travels in `rewriteStart/rewriteEnd/
+ * rewriteText` and leaves `removeStart` at -1, so a consumer that only knows
+ * how to delete a range does nothing rather than delete a live try body.
+ */
+function applyFinallyRules(
+  entries: readonly { event: UnheardEvent; site: PostSite }[],
+  files: readonly { path: string; clean: string; raw: string }[],
+): void {
+  const fileByPath = new Map(files.map(f => [f.path, f]));
+  for (const { event, site } of entries) {
+    if (site.finallyOpen === undefined) continue;
+    const file = fileByPath.get(site.path);
+    if (!file) continue;
+    const lineStarts = buildLineStarts(file.clean);
+    const t = tryStatementAround(file.clean, site.finallyOpen);
+    if (!t) {
+      event.withheld = 'sole content of a finally block whose try could not be read';
+      continue;
+    }
+    const extent = finallyExtent(file.raw, file.clean, lineStarts, t);
+    if (extent.withheld !== undefined) {
+      event.withheld = extent.withheld;
+      continue;
+    }
+    delete event.withheld;
+    if (extent.rewriteText === undefined) {
+      event.removeStart = extent.start;
+      event.removeEnd = extent.end;
+      continue;
+    }
+    event.rewriteStart = extent.start;
+    event.rewriteEnd = extent.end;
+    event.rewriteText = extent.rewriteText;
+  }
 }
 
 /**
@@ -1869,6 +2120,9 @@ export function findUnheardEvents(input: UnheardEventScanInput): UnheardEventSca
 
   // A post alone in its branch is settled only now that every verdict is.
   applyBranchRules(entries, files);
+  // Same pass for a post alone in a `finally`, whose try then has nothing to
+  // protect (KJ-069).
+  applyFinallyRules(entries, files);
   // A test that names the event may VERIFY the post: `verify { bus.post(E(url, null)) }`
   // on a mocked bus. Removing the post then compiles and fails that test at
   // runtime, which no scan of main code can see. On the reference project
@@ -1882,7 +2136,8 @@ export function findUnheardEvents(input: UnheardEventScanInput): UnheardEventSca
   for (const s of input.sources) {
     if (!/\.(kt|kts|java)$/.test(s.path) || !isTestSourceSet(s.path, input.testSourceSets)) continue;
     for (const e of entries) {
-      if (e.event.verdict !== 'unheard' || e.event.removeStart < 0 || namedByTests.has(e.event.fqn)) continue;
+      const propose = e.event.removeStart >= 0 || e.event.rewriteText !== undefined;
+      if (e.event.verdict !== 'unheard' || !propose || namedByTests.has(e.event.fqn)) continue;
       if (!s.text.includes(e.event.name)) continue;
       const clean = sanitizeForUsageScan(s.text).replace(/^[ \t]*import\b[^\n]*/gm, '');
       const word = new RegExp(`\\b${e.event.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
@@ -1891,9 +2146,13 @@ export function findUnheardEvents(input: UnheardEventScanInput): UnheardEventSca
   }
   for (const e of entries) {
     const by = namedByTests.get(e.event.fqn);
-    if (by === undefined || e.event.verdict !== 'unheard' || e.event.removeStart < 0) continue;
+    const propose = e.event.removeStart >= 0 || e.event.rewriteText !== undefined;
+    if (by === undefined || e.event.verdict !== 'unheard' || !propose) continue;
     e.event.removeStart = -1;
     e.event.removeEnd = -1;
+    delete e.event.rewriteStart;
+    delete e.event.rewriteEnd;
+    delete e.event.rewriteText;
     e.event.withheld = `tests name ${e.event.name} (${by.split(/[\\/]/).pop()}) and may verify this post`;
   }
   const events = entries.map(e => e.event);

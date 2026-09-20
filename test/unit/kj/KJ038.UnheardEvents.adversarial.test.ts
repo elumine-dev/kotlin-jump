@@ -667,6 +667,10 @@ describe('l’étendue de suppression', () => {
       const found = scan(sources).events;
       expect(found.map(e => e.name)).toEqual(['Orphan']);
       expect(found[0].removeStart).toBe(-1);
+      // Depuis KJ-069 le `finally` sans `catch` remonte le corps du `try` :
+      // ca reste un -1 pour qui ne sait que supprimer, et une reecriture pour
+      // qui sait remplacer. Les blocs `try` et `catch` n ont rien de tel.
+      expect(found[0].rewriteText !== undefined).toBe(bloc === 'finally');
     });
   }
 
@@ -681,6 +685,8 @@ describe('l’étendue de suppression', () => {
     const found = scan(sources).events;
     expect(found.map(e => e.name)).toEqual(['Orphan']);
     expect(found[0].removeStart).toBe(-1);
+    // KJ-069 : le corps du `try` remonte, l habillage disparait.
+    expect(found[0].rewriteText).toBe('        data = load();\n');
   });
 
   it('un post sous condition ne l’est pas', () => {

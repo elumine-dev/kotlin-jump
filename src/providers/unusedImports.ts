@@ -6,6 +6,16 @@ import { importBlockBounds } from '../util/importBlock';
  * Wildcard imports are NEVER flagged (conservative: the package contents are
  * unknown).
  *
+ * KJ-068 : la meme lecture vaut pour Java. La forme `import a.b.C;` et la
+ * forme statique `import static a.B.m;` ne differaient que par le point
+ * virgule et le mot `static`, et le corps est deja scanne par jetons sur le
+ * texte assaini : `Map<String, C>`, `C[]`, `(C)`, `C::m`, `instanceof C`,
+ * `throws C`, `catch (C e)`, `@C`, `C.D` et une constante importee en
+ * etiquette de `case` sont toutes vues. Un `package-info.java` porte ses
+ * annotations AVANT le mot `package`, donc `importBlockBounds` s arrete la et
+ * ne rapporte rien : c est le bon reflexe, ses imports ne servent qu aux
+ * annotations.
+ *
  * The detector lives here rather than in `UnusedImportProvider` so a plain Node
  * script can run it. That file hosts the VS Code layer, whose static
  * initializers touch `vscode.CodeActionKind` at module load, which is enough to
@@ -21,7 +31,7 @@ export interface UnusedImport {
   statement: string;
 }
 
-const IMPORT_RE = /^\s*import\s+([\w.]+?)(\.\*)?(?:\s+as\s+(\w+))?\s*(?:\/\/.*)?$/;
+const IMPORT_RE = /^\s*import\s+(?:static\s+)?([\w.]+?)(\.\*)?(?:\s+as\s+(\w+))?\s*;?\s*(?:\/\/.*)?$/;
 
 /**
  * Names Kotlin resolves BY CONVENTION, so the call site never spells them.

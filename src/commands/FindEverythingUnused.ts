@@ -27,8 +27,9 @@ import { findOrphanSourceSets } from '../providers/orphanSourceSets';
 import { findStaleBaselineEntries } from '../providers/staleBaselineEntries';
 import { findEmptySourceFiles } from '../providers/emptySourceFiles';
 import { planFileEdits } from '../providers/DeadCodeSweep';
+import { findIdleImplementations } from '../providers/idleImplementations';
 import { UnheardEventProvider, findUnheardEvents } from '../providers/UnheardEventProvider';
-import { UnusedEnumEntryProvider, findUnusedEnumEntries } from '../providers/UnusedEnumEntryProvider';
+import { UnusedEnumEntryProvider, scanEnums } from '../providers/UnusedEnumEntryProvider';
 import { UnusedRemoteConfigKeyProvider, findUnusedRemoteConfigKeys } from '../providers/UnusedRemoteConfigKeyProvider';
 import { UnusedGradleDependencyProvider, findUnusedGradleDependencies } from '../providers/UnusedGradleDependencyProvider';
 import { UnusedMemberProvider, findUnusedMembers } from '../providers/UnusedMemberProvider';
@@ -176,21 +177,47 @@ export async function findEverythingUnusedCommand(
             frameworkNameSuffixes: cfg.get<boolean>('unusedSymbolsFrameworkNameSuffixes', false),
           });
           for (const f of symbols) {
-            if (f.verdict === 'unreferenced') noteEtendue(f.path, f.removeStart, f.removeEnd);
+            if (f.verdict !== 'unreferenced') continue;
+            noteEtendue(f.path, f.removeStart, f.removeEnd);
+            // KJ-067: the injection declarations go with the class, in other
+            // files, so the knock on count matches what Remove sends.
+            for (const site of f.injectionSites) noteEtendue(site.path, site.removeStart, site.removeEnd);
           }
           symbolProvider.setFindings(symbols);
           const unreferenced = symbols.filter(s => s.verdict === 'unreferenced');
           const testOnly = symbols.filter(s => s.verdict === 'testOnly');
+          const parInjection = unreferenced.filter(s => s.via === 'injection').length;
           keptAliveByTests += testOnly.length;
           sections.push({
             label: 'unreferenced symbols',
             one: 'unreferenced symbol',
             count: unreferenced.length,
-            detail: testOnly.length > 0 ? `${testOnly.length} used only from tests` : undefined,
+            detail: [
+              testOnly.length > 0 ? `${testOnly.length} used only from tests` : '',
+              parInjection > 0 ? `${parInjection} named only by an injection method` : '',
+            ].filter(Boolean).join(', ') || undefined,
           });
         }
       } else {
         skipped.push('unreferenced symbols');
+      }
+
+      // ── 2b. Interfaces implemented for nothing ───────────────────────────
+      if (!data.sourcesTruncated) {
+        const idles = findIdleImplementations({
+          sources: data.sources,
+          testSourceSets: cfg.get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS),
+        });
+        for (const impl of idles) {
+          for (const c of impl.cuts) noteEtendue(impl.path, c.start, c.end);
+        }
+        const places = idles.reduce((n, impl) => n + impl.cuts.length, 0);
+        sections.push({
+          label: 'interfaces implemented for nothing',
+          one: 'interface implemented for nothing',
+          count: idles.length,
+          detail: places > 0 ? `${plural(places, 'place')} to cut` : undefined,
+        });
       }
 
       // ── 3. Resource keys ─────────────────────────────────────────────────
@@ -272,7 +299,7 @@ export async function findEverythingUnusedCommand(
         if (data.sourcesTruncated) {
           skipped.push('enum entries (workspace too large to prove absence)');
         } else {
-          const entries = findUnusedEnumEntries({
+          const { entries, emptied: entiers } = scanEnums({
             sources: data.sources,
             testSourceSets: cfg.get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS),
             ignoreNames: cfg.get<string[]>('unusedEnumEntriesIgnoreNames', []),
@@ -289,11 +316,16 @@ export async function findEverythingUnusedCommand(
           // in the headline counted eleven of them twice on a real project.
           const propres = entries.filter(e => e.verdict !== 'testOnly');
           const enums = new Set(propres.map(e => e.enumName)).size;
+          // KJ-066: the nested enums that go whole, so the knock on count here
+          // matches what Remove sends, file deletion included.
+          for (const e of entiers) noteEtendue(e.path, e.removeStart, e.removeEnd);
+          const surEnums = enums > 0 ? `across ${enums} enum${enums > 1 ? 's' : ''}` : '';
+          const surEntiers = entiers.length > 0 ? `${entiers.length} of them emptied whole` : '';
           sections.push({
             label: 'enum entries',
             one: 'enum entry',
             count: propres.length,
-            detail: enums > 0 ? `across ${enums} enum${enums > 1 ? 's' : ''}` : undefined,
+            detail: [surEnums, surEntiers].filter(Boolean).join(', ') || undefined,
           });
         }
       } else {

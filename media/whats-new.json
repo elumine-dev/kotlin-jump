@@ -1,43 +1,42 @@
 {
-  "version": "1.42.344",
+  "version": "1.42.345",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Deeper cleanup, quieter false positives",
-  "summary": "Remove Everything Unused now sees eight more kinds of dead code, and three real projects taught it where a scan must stay silent.",
+  "tagline": "Cleaner removals, fewer leftovers, safer layouts",
+  "summary": "Remove Everything Unused now takes whole empty enums, Dagger injection methods, idle listener interfaces and Java imports, and keeps layouts whose ids are still read.",
   "highlights": [
     {
-      "title": "Orphan source sets",
+      "title": "Idle listeners removed whole",
       "kind": "feature",
-      "description": "A directory under src/ that no Gradle variant builds is reported, and its files no longer keep production code alive: on the reference project 150 such files were the only thing holding seven declarations."
+      "description": "When a class implements an interface for nothing, such as a scroll listener whose callbacks are all empty, the cleanup now removes the overrides, the implements clause and the registration together instead of leaving an inert listener."
     },
     {
-      "title": "Smarter test cleanup",
-      "kind": "improvement",
-      "description": "The closure planner cuts a single statement or assertion instead of a whole test file, rewrites a trivial setter call as a field assignment, and refuses any cut that would change what a surviving test exercises."
-    },
-    {
-      "title": "Codegen entry points",
+      "title": "No more hollow leftovers",
       "kind": "fix",
-      "description": "React Native packages, Nitro hybrid objects, JNI bridge files and top level Kotlin declarations reached only through an import are judged by how the platform actually reaches them, closing four false positives found on a React Native monorepo."
+      "description": "Nested enums whose entries are all unused, and classes named only by a Dagger inject method, now go whole instead of leaving an empty enum body or a gutted class with dead imports."
+    },
+    {
+      "title": "Layouts keep ids still read",
+      "kind": "fix",
+      "description": "A layout is no longer offered for deletion while code still reads an id it declares, which avoids a javac cannot find symbol error after the cleanup."
     }
   ],
   "sections": [
     {
       "heading": "Improvements",
       "bullets": [
-        "Reports unread primary constructor parameters together with the named argument at each construction site, stale detekt baseline entries whose file is gone, and source files that declare nothing.",
-        "Finds enum entries that a test's own constant of the same name kept alive, and unheard event posts that are the sole content of an if or else if branch, taking the branch with them.",
-        "Offers the posts the safe removal refused in the unproven review, each with the reason on its label, so a reader can tick what the scan could not prove.",
-        "Cuts one assertion out of a test that keeps asserting other things, and takes the test whole only when the file is dedicated to what leaves.",
-        "Leaves a single blank line where a removed test function stood, so a formatter's consecutive blank line rule stays quiet on the files it touches."
+        "Removes a nested enum whole when all its entries are unused and nothing writes its name. On the reference project, `enum OrderBy { CREATED_ASC, CREATED_DESC, LAST_ACCESSED }` used to end up as `enum OrderBy {\\n\\n}`, and a reviewer sent it back.",
+        "Removes the whole implementation of an interface a class implements for nothing: the empty overrides, the `implements` clause and the `setOnScrollListener(this)` style registration go together. This finishes the job left after the unheard event rule empties a listener, and it only applies when nothing else can see the class as that interface.",
+        "Sweeps unused imports in Java files as well as Kotlin. A class emptied of its members no longer keeps fifteen dead imports, and `import a.b.C;` with its semicolon is now recognised. Javadoc `{@link C}` references are still respected so doclint does not break.",
+        "Removes the `inject(target: X)` methods of a removed class, in other files, together with the class. On the reference project a 241 line class was deleted but left its injected field, an empty constructor and fifteen dead imports.",
+        "Counts the new cases in Find Everything Unused: enums emptied whole, classes named only by an injection method, and interfaces implemented for nothing (with the number of places to cut)."
       ]
     },
     {
       "heading": "Fixes",
       "bullets": [
-        "Keeps a React Native package, a Nitro hybrid object declared in nitro.json, and a class doing System.loadLibrary alive: the platform instantiates them by name, without a single reference in Kotlin or Java.",
-        "Stops nineteen WebView.loadUrl calls from keeping an unused ImageView.loadUrl extension alive: a top level Kotlin declaration counts only the mentions that can see its package.",
-        "Withholds a statement inside a lifecycle method when its subject survives, and a post that a test verifies on a mocked bus: both compiled and then failed tests on the reference project.",
-        "Concatenates flavour names in camel case when deriving Gradle source sets, so a variant directory is never mistaken for an orphan."
+        "Stopped Remove Everything Unused from deleting a layout while another file still reads an id it declares. Deleting the layout broke every surviving `R.id.foo` with javac's `cannot find symbol, location: class id`, seen when a dead controller freed its panel layout.",
+        "Recognised scope annotations that the repository declares itself with `@Scope`, so a custom `@ScopeActivity` no longer keeps an unreferenced controller alive.",
+        "Removed the post that is the only content of a `finally` block for an event nobody hears. With `catch` clauses the `finally` tail goes and the try/catch stays. Without any, the `try` body is lifted one level, instead of leaving an empty `finally {}` and an unread local."
       ]
     }
   ],

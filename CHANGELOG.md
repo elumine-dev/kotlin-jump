@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.42.345
+
+Remove Everything Unused now takes whole empty enums, Dagger injection methods, idle listener interfaces and Java imports, and keeps layouts whose ids are still read.
+
+### Improvements
+- Removes a nested enum whole when all its entries are unused and nothing writes its name. On the reference project, `enum OrderBy { CREATED_ASC, CREATED_DESC, LAST_ACCESSED }` used to end up as `enum OrderBy {\n\n}`, and a reviewer sent it back.
+- Removes the whole implementation of an interface a class implements for nothing: the empty overrides, the `implements` clause and the `setOnScrollListener(this)` style registration go together. This finishes the job left after the unheard event rule empties a listener, and it only applies when nothing else can see the class as that interface.
+- Sweeps unused imports in Java files as well as Kotlin. A class emptied of its members no longer keeps fifteen dead imports, and `import a.b.C;` with its semicolon is now recognised. Javadoc `{@link C}` references are still respected so doclint does not break.
+- Removes the `inject(target: X)` methods of a removed class, in other files, together with the class. On the reference project a 241 line class was deleted but left its injected field, an empty constructor and fifteen dead imports.
+- Counts the new cases in Find Everything Unused: enums emptied whole, classes named only by an injection method, and interfaces implemented for nothing (with the number of places to cut).
+
+### Fixes
+- Stopped Remove Everything Unused from deleting a layout while another file still reads an id it declares. Deleting the layout broke every surviving `R.id.foo` with javac's `cannot find symbol, location: class id`, seen when a dead controller freed its panel layout.
+- Recognised scope annotations that the repository declares itself with `@Scope`, so a custom `@ScopeActivity` no longer keeps an unreferenced controller alive.
+- Removed the post that is the only content of a `finally` block for an event nobody hears. With `catch` clauses the `finally` tail goes and the try/catch stays. Without any, the `try` body is lifted one level, instead of leaving an empty `finally {}` and an unread local.
+
 ## 1.42.344
 
 Remove Everything Unused now sees eight more kinds of dead code, and three real projects taught it where a scan must stay silent.

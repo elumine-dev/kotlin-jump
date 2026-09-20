@@ -18,7 +18,17 @@ import { fileBecomesEmpty, wholeLineExtent } from './unusedSymbols';
  * would silently widen a fix the user asked for something else.
  */
 
-export interface Cut { start: number; end: number }
+export interface Cut {
+  start: number;
+  end: number;
+  /**
+   * What replaces the range, when the cut is a rewrite rather than a
+   * deletion. A lifted `try` body (KJ-069) keeps using the imports its
+   * statements name, so simulating the cut as a deletion reported them
+   * orphaned and the fix deleted an import the file still needs.
+   */
+  replacement?: string;
+}
 
 export interface Cascade {
   /** Whole-line extents of the imports the cuts orphaned, per file. */
@@ -65,6 +75,12 @@ function applyCuts(text: string, cuts: readonly Cut[]): string {
   let out = text;
   for (const c of [...cuts].sort((a, b) => b.start - a.start)) {
     if (c.start < 0 || c.end < c.start) continue;
+    // A rewrite keeps its own bounds: widening it to whole lines would swallow
+    // what the replacement text is meant to put back.
+    if (c.replacement !== undefined) {
+      out = out.slice(0, c.start) + c.replacement + out.slice(c.end);
+      continue;
+    }
     const w = wholeLineExtent(out, c.start, c.end);
     out = out.slice(0, w.start) + out.slice(w.end);
   }
@@ -93,11 +109,12 @@ export function cascadeAfterRemoval(
     const text = textByPath.get(path);
     if (text === undefined || cuts.length === 0) continue;
 
-    // Emptiness is language agnostic: `package a;` reads the same either way.
-    // Only the IMPORT half carries Kotlin grammar, and gating both on the
-    // extension left every emptied Java file standing as a shell.
+    // Emptiness is language agnostic: `package a;` reads the same either way,
+    // and gating it on the extension left every emptied Java file standing as
+    // a shell. The import half followed on the day the detector learned the
+    // Java forms (KJ-068); `.kts` stays out, a build script imports plugins.
     if (fileBecomesEmpty(text, [...cuts])) cascade.emptyFiles.push(path);
-    if (!/\.kt$/.test(path)) continue;
+    if (!/\.(?:kt|java)$/.test(path)) continue;
 
     const before = new Set(findUnusedImports(text).map(i => i.statement.trim()));
     const after = applyCuts(text, cuts);
@@ -142,7 +159,7 @@ function avecUneLigneVide(text: string, extents: Cut[], cuts: readonly Cut[]): C
     d < f && (d === 0 || text[d - 1] === '\n') && (f === text.length || text[f - 1] === '\n');
   // The run of removed lines, the caller's whole line cuts included: an import
   // block may go partly with the sweep and partly here.
-  const retirees: Cut[] = [...triees, ...cuts.filter(c => entieres(c.start, c.end))];
+  const retirees: Cut[] = [...triees, ...cuts.filter(c => c.replacement === undefined && entieres(c.start, c.end))];
   return triees.map(e => {
     let debut = e.start;
     for (let r = retirees.find(x => x.end === debut); r; r = retirees.find(x => x.end === debut)) debut = r.start;

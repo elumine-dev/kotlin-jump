@@ -107,12 +107,41 @@ export interface UnusedSymbol {
    * rather than leave an empty shell.
    */
   fileBecomesEmpty: boolean;
+  /**
+   * How the bag's count was set aside. `visibility` (KJ-064): the mentions
+   * belong to a library homonym no file can see. `injection` (KJ-067): every
+   * mention is a Dagger members injection declaration, which holds no
+   * instance.
+   */
+  via?: 'visibility' | 'injection';
+  /**
+   * KJ-067: the injection declarations to cut WITH the class, in other files.
+   * All of them or none: cutting a `@Component` interface's line while a fake
+   * implementation keeps its `override` stops the workspace compiling.
+   */
+  injectionSites: InjectionCut[];
 }
 
 export interface StaleImport {
   path: string;
   /** 0-based line of the `import` statement, re-verified before any edit. */
   line: number;
+}
+
+/** A `inject(target: X)` declaration, which holds no instance of X. */
+export interface InjectionPosting {
+  path: string;
+  /** 0-based line of the declaration's first line. */
+  line: number;
+  isTest: boolean;
+}
+
+/** One injection declaration to cut with the class it names. */
+export interface InjectionCut {
+  path: string;
+  line: number;
+  removeStart: number;
+  removeEnd: number;
 }
 
 /** Kinds this detector reasons about. `typealias` and `annotation` are v2. */
@@ -142,6 +171,41 @@ export const BENIGN_TOPLEVEL_ANNOTATIONS = new Set([
   // behaviour, they do not make it reachable from anywhere.
   'Stable', 'Immutable', 'NonRestartableComposable', 'ReadOnlyComposable',
 ]);
+
+/**
+ * KJ-070: annotation declarations of the workspace that are DI scopes.
+ *
+ * A scope tells the injector how many instances to keep; it never creates one.
+ * Something still has to REQUEST the type, and a request spells its name. The
+ * member side already reads `@Singleton` and `@Reusable` that way, and left a
+ * project's own scopes foreign because the set was unknowable. It is knowable
+ * when the workspace declares the annotation itself: the declaration carries
+ * `@Scope` from `javax.inject` or `jakarta.inject`, which IS the definition.
+ * On the reference project `@ScopeActivity` alone kept a dead controller
+ * alive, and nothing else named it.
+ *
+ * Only what the workspace declares. `javax.inject.Singleton` is a library
+ * annotation whose declaration no scan here reads, so it stays foreign at this
+ * level, where the allowlist is the deliberate place to put a known name.
+ */
+export function scopeAnnotationsOf(sources: readonly SymbolSource[]): Set<string> {
+  const out = new Set<string>();
+  for (const src of sources) {
+    if (!/\.(kt|java)$/.test(src.path)) continue;
+    if (!src.text.includes('Scope')) continue;
+    const clean = stripKotlinComments(src.text);
+    // `@Scope` must sit on the annotation's own declaration, and the file must
+    // import it from the injection package: a `@Scope` of someone else's
+    // making says nothing about instance creation.
+    if (!/^\s*import\s+(?:javax|jakarta)\.inject\.Scope\s*;?\s*$/m.test(clean)) continue;
+    // Rien qu'une accolade fermante entre les deux : sans elle, le `@Scope`
+    // d'une annotation pourrait se lier au nom de la suivante.
+    for (const m of clean.matchAll(/@Scope\b[^}]{0,400}?(?:\bannotation\s+class|@interface)\s+([A-Za-z_]\w*)/g)) {
+      out.add(m[1]);
+    }
+  }
+  return out;
+}
 
 /** Supertypes whose instances the framework creates; nothing names the class. */
 export const FRAMEWORK_SUPERTYPES = new Set([
@@ -239,6 +303,13 @@ export interface Harvest {
   aliased: Set<string>;
   /** name -> the import lines that would dangle if the name went away. */
   importPostings: Map<string, StaleImport[]>;
+  /**
+   * KJ-067: name -> the Dagger members injection declarations that name it.
+   * `fun inject(target: X)` is a PARAMETER, it never creates an X, so a
+   * mention there is not a use. Collected in the same pass as the bag so the
+   * two can never disagree about what a mention is.
+   */
+  injectionPostings: Map<string, InjectionPosting[]>;
   /**
    * What package resolution of duplicated names needs, gathered in the same
    * pass: resolving afterwards re-stripped and re-tokenized every file, and the
@@ -402,7 +473,7 @@ const OUVRE_UNE_DECLARATION_RE = new RegExp(
  * declaration starts with them, and reading that as a continuation would
  * swallow the declaration it documents.
  */
-const COMMENCE_UNE_SUITE_RE =
+export const COMMENCE_UNE_SUITE_RE =
   /^\s*(?:\?:|\?\.|\.(?!\.)|::|\+|&&|\|\||==|!=|<=|>=|->|,|\)|\]|else\b|in\b|is\b|as\b)/;
 
 /** Une ligne qui se termine sur un operateur appelle une suite. */
@@ -900,6 +971,60 @@ export function collectTopLevelCandidates(
 }
 
 /** Every token mentioned anywhere, in one pass over the corpus. */
+/**
+ * A Dagger members injection declaration, Kotlin and Java.
+ *
+ * Anchored to the whole line on purpose. `component.inject(activity as X)` is
+ * a CALL, it holds an instance, and reading it as a declaration would subtract
+ * a real use. Exactly one parameter, its type a bare identifier: a generic
+ * (`inject(target: Repo<T>)`), a type parameter or a qualifier annotation does
+ * not match, so the mention stays an ordinary one and the class stays alive.
+ * Every shape the regex refuses is a false negative, which is the safe side.
+ */
+const INJECT_DECL_KT_RE =
+  /^[ \t]*(?:(?:override|abstract|open|public|internal|actual|expect|protected|private)[ \t]+)*fun[ \t]+inject[ \t]*\([ \t]*\w+[ \t]*:[ \t]*([A-Za-z_]\w*)[ \t]*\)[ \t]*(?::[ \t]*Unit[ \t]*)?(?:\{[ \t]*\}?)?[ \t]*$/gm;
+
+const INJECT_DECL_JAVA_RE =
+  /^[ \t]*(?:(?:public|protected|private|abstract|default|final|static)[ \t]+)*void[ \t]+inject[ \t]*\([ \t]*(?:final[ \t]+)?([A-Za-z_]\w*)[ \t]+\w+[ \t]*\)[ \t]*(?:;|\{[ \t]*\}?)[ \t]*$/gm;
+
+/** An annotation alone on its line, which belongs to the declaration below. */
+const ANNOTATION_ALONE_RE = /^[ \t]*@[\w.]+(?:\([^()]*\))?[ \t]*$/;
+
+/**
+ * KJ-067: the whole-line extent of an injection declaration, or undefined.
+ *
+ * Takes the annotation lines above it, so a Java `@Override` does not rebind
+ * to the next method, and the body when the declaration opens one. Undefined
+ * when the line holds anything else, or when the body does not close: the
+ * finding is then dropped whole, since cutting the class without its
+ * declaration stops the build.
+ */
+export function injectionDeclarationExtent(
+  text: string,
+  clean: string,
+  lineStarts: readonly number[],
+  line: number,
+): { start: number; end: number } | undefined {
+  const lines = text.split('\n');
+  if (line < 0 || line >= lines.length) return undefined;
+
+  let first = line;
+  for (let k = 0; k < 8 && first > 0 && ANNOTATION_ALONE_RE.test(lines[first - 1]); k++) first--;
+
+  const lineEndOf = (l: number) => (l + 1 < lineStarts.length ? lineStarts[l + 1] : text.length);
+  const declaration = lines[line];
+  let last = line;
+  if (/\{[ \t]*$/.test(declaration)) {
+    const open = clean.indexOf('{', lineStarts[line]);
+    if (open === -1 || open >= lineEndOf(line)) return undefined;
+    const close = matchBrace(clean, open);
+    if (close < 0) return undefined;
+    last = offsetToPos(lineStarts as number[], close).line;
+    if (clean.slice(close + 1, lineEndOf(last)).trim() !== '') return undefined;
+  }
+  return { start: lineStarts[first], end: lineEndOf(last) };
+}
+
 export function harvestMentions(
   sources: readonly SymbolSource[],
   wanted: ReadonlySet<string>,
@@ -907,7 +1032,7 @@ export function harvestMentions(
   /** Duplicated names to collect package data for, when resolving F3. */
   duplicateTokens?: ReadonlySet<string>,
 ): Harvest {
-  const harvest: Harvest = { main: new Map(), test: new Map(), aliased: new Set(), importPostings: new Map() };
+  const harvest: Harvest = { main: new Map(), test: new Map(), aliased: new Set(), importPostings: new Map(), injectionPostings: new Map() };
   const dup: DuplicateMentions | undefined = duplicateTokens && duplicateTokens.size > 0
     ? { packageByPath: new Map(), byToken: new Map(), uncertain: new Set() }
     : undefined;
@@ -938,6 +1063,25 @@ export function harvestMentions(
       // Comments do not count: a commented-out reference is exactly the case
       // we want reported. String contents DO count (reflection, DI by name).
       text = stripKotlinComments(text);
+      // KJ-067: the members injection declarations of this file. Read on a
+      // copy with the STRINGS blanked too, so a string that happens to spell a
+      // declaration is never subtracted from the bag; the bag itself keeps
+      // its strings. Only the few files writing `inject(` pay for the copy.
+      if (/\binject\s*\(/.test(text)) {
+        const sansChaines = sanitizeForUsageScan(src.text);
+        const isTest = bag === harvest.test;
+        for (const re of [INJECT_DECL_KT_RE, INJECT_DECL_JAVA_RE]) {
+          re.lastIndex = 0;
+          let d: RegExpExecArray | null;
+          while ((d = re.exec(sansChaines)) !== null) {
+            if (!wanted.has(d[1])) continue;
+            const line = sansChaines.slice(0, d.index).split('\n').length - 1;
+            const postings = harvest.injectionPostings.get(d[1]) ?? [];
+            postings.push({ path: src.path, line, isTest });
+            harvest.injectionPostings.set(d[1], postings);
+          }
+        }
+      }
       if (dup) {
         filePackage = packageOf(text);
         dup.packageByPath.set(src.path, filePackage);
@@ -1065,6 +1209,82 @@ export function frameworkAncestor(
     frontier = next;
   }
   return null;
+}
+
+/**
+ * KJ-067: every supertype up the chain is declared in THIS workspace.
+ *
+ * A members injected class is, by definition, constructed by something other
+ * than Dagger. When its base class lives in an AAR, that something may be a
+ * framework convention no scan can see: `class SyncWorker : BaseWorker()`
+ * where `BaseWorker` is a library type is instantiated by name, and nothing in
+ * the corpus writes it. `frameworkAncestor` cannot answer this, it returns
+ * null both for a chain that ends clean and for a parent it could not follow.
+ *
+ * `Any` and `Object` end a chain. Anything else the corpus does not declare
+ * withholds the finding.
+ */
+function chainResolvedInCorpus(
+  supertypes: readonly string[],
+  ctx: ScanContext,
+): boolean {
+  const seen = new Set<string>();
+  let frontier = supertypes.map(t => t.replace(/<.*/, '').trim()).filter(Boolean);
+  for (let depth = 0; depth < 8 && frontier.length > 0; depth++) {
+    const next: string[] = [];
+    for (const bare of frontier) {
+      if (seen.has(bare)) continue;
+      seen.add(bare);
+      if (bare === 'Any' || bare === 'Object') continue;
+      if (!ctx.topLevelNameCounts.has(bare)) return false;
+      for (const parent of ctx.supertypesByName.get(bare) ?? []) {
+        const clean = parent.replace(/<.*/, '').trim();
+        if (clean) next.push(clean);
+      }
+    }
+    frontier = next;
+  }
+  return frontier.length === 0;
+}
+
+/**
+ * KJ-067: the class is reached by nothing but members injection declarations.
+ *
+ * Returns the sites to cut with it, or undefined when the rule does not
+ * apply. The fact it stands on is syntactic: `inject(target: X)` declares a
+ * PARAMETER. Every way to hold an X spells X somewhere the corpus reads, a
+ * constructor call, a field or parameter type, a supertype, a `Provider<X>`,
+ * a provision method, a manifest entry, a layout, a keep rule, a reflection
+ * string. So when the only mentions left are those declarations, nobody can
+ * hold an instance, and the declarations go with the class.
+ */
+function injectionOnlyMentions(
+  c: Candidate,
+  mainElsewhere: number,
+  harvest: Harvest,
+  ctx: ScanContext,
+  textByPath: ReadonlyMap<string, string>,
+): InjectionCut[] | undefined {
+  // Dagger injects members of a CONCRETE class. An interface or an object is
+  // not a members injection target, and neither is a function or a property.
+  if (c.kind !== 'class' && c.kind !== 'dataClass') return undefined;
+  if (!chainResolvedInCorpus(c.sym.supertypes ?? [], ctx)) return undefined;
+
+  const postings = (harvest.injectionPostings.get(c.name) ?? []).filter(p => p.path !== c.path);
+  const inMain = postings.filter(p => !p.isTest).length;
+  if (inMain === 0 || mainElsewhere !== inMain) return undefined;
+
+  const sites: InjectionCut[] = [];
+  for (const posting of postings) {
+    const text = textByPath.get(posting.path);
+    if (text === undefined) return undefined;
+    const clean = sanitizeForUsageScan(text);
+    const extent = injectionDeclarationExtent(text, clean, buildLineStarts(clean), posting.line);
+    // All of them or none: a half applied fix does not compile.
+    if (!extent) return undefined;
+    sites.push({ path: posting.path, line: posting.line, removeStart: extent.start, removeEnd: extent.end });
+  }
+  return sites;
 }
 
 /**
@@ -1266,6 +1486,8 @@ interface ScanContext {
   resolvedDuplicates: ReadonlySet<Candidate>;
   /** KJ-064: singly declared top level names whose only other mentions are a library's. */
   resolvedSingles: ReadonlyMap<Candidate, UnusedSymbolVerdict>;
+  /** KJ-070: the workspace's own DI scope annotations, which reach nothing. */
+  scopeAnnotations: ReadonlySet<string>;
 }
 
 /** A name the mention harvest can actually look for. */
@@ -1296,7 +1518,8 @@ function rejectionReason(
   }
   if (sym.isExpect || sym.isActual) return 'F4:kmp';
 
-  const foreign = c.annoNames.find(a => !BENIGN_TOPLEVEL_ANNOTATIONS.has(a));
+  const foreign = c.annoNames.find(a =>
+    !BENIGN_TOPLEVEL_ANNOTATIONS.has(a) && !ctx.scopeAnnotations.has(a));
   if (foreign) return `F5:@${foreign}`;
 
   const framework = frameworkAncestor(c.sym.supertypes ?? [], supertypesByName);
@@ -1330,7 +1553,7 @@ export interface SymbolExplanation {
    *  the verdict when it survived everything. */
   outcome: string;
   /** KJ-064: the verdict came from the package rule, the bag's count being a homonym's. */
-  via?: 'visibility';
+  via?: 'visibility' | 'injection';
   mainMentions: number;
   testMentions: number;
 }
@@ -1459,6 +1682,7 @@ function buildContext(
       collected.candidates, collected.topLevelNameCounts, harvest, unmentionedDuplicates),
     resolvedSingles: singlesResolvedByPackage(
       collected.candidates, collected.topLevelNameCounts, harvest, input.testSourceSets),
+    scopeAnnotations: scopeAnnotationsOf(input.sources),
   };
 }
 
@@ -1476,6 +1700,9 @@ export function explainSymbols(input: UnusedSymbolScanInput): SymbolExplanation[
     return n;
   };
 
+  const textesExplain = new Map(input.sources.map(src => [src.path, src.text]));
+  const parInjection = new Set<Candidate>();
+
   return candidates.map(c => {
     const mainMentions = countIn(harvest.main, c);
     const testMentions = countIn(harvest.test, c);
@@ -1485,7 +1712,14 @@ export function explainSymbols(input: UnusedSymbolScanInput): SymbolExplanation[
     else if (harvest.aliased.has(c.name)) outcome = 'H10:aliased-import';
     else if (ctx.resolvedDuplicates.has(c)) outcome = 'unreferenced';
     else if (ctx.resolvedSingles.has(c)) outcome = ctx.resolvedSingles.get(c)!;
-    else if (!ctx.unmentionedDuplicates.has(c.name) && mainMentions - c.selfInFile !== 0) outcome = 'alive:main';
+    else if (!ctx.unmentionedDuplicates.has(c.name) && mainMentions - c.selfInFile !== 0) {
+      // KJ-067: the residue may be injection declarations only.
+      const sites = injectionOnlyMentions(c, mainMentions - c.selfInFile, harvest, ctx, textesExplain);
+      outcome = sites === undefined ? 'alive:main'
+        : testMentions - sites.filter(x => isTestSourceSet(x.path, input.testSourceSets)).length > 0
+          ? 'testOnly' : 'unreferenced';
+      if (sites !== undefined) parInjection.add(c);
+    }
     // Mirror of the scan: a twin declared in the same file is not a mention.
     else if (!ctx.unmentionedDuplicates.has(c.name)
       && c.selfInFile - c.selfInSpan > 0) outcome = 'alive:same-file';
@@ -1493,7 +1727,8 @@ export function explainSymbols(input: UnusedSymbolScanInput): SymbolExplanation[
 
     return {
       name: c.name, kind: c.kind, path: c.path, line: c.sym.line, outcome, mainMentions, testMentions,
-      ...(ctx.resolvedSingles.has(c) ? { via: 'visibility' as const } : {}),
+      ...(parInjection.has(c) ? { via: 'injection' as const }
+        : ctx.resolvedSingles.has(c) ? { via: 'visibility' as const } : {}),
     };
   });
 }
@@ -1588,6 +1823,9 @@ export function findUnusedSymbols(input: UnusedSymbolScanInput): UnusedSymbol[] 
   };
 
   const out: UnusedSymbol[] = [];
+  // Hoisted above the loop: KJ-067 reads the component files to delimit the
+  // injection declarations, and the empties pass below reads the same map.
+  const textesDesSources = new Map(input.sources.map(src => [src.path, src.text]));
   for (const c of kept) {
     if (harvest.aliased.has(c.name)) continue;                        // H10
 
@@ -1605,17 +1843,27 @@ export function findUnusedSymbols(input: UnusedSymbolScanInput): UnusedSymbol[] 
     const mainElsewhere = ctx.unmentionedDuplicates.has(c.name) || resolved || single !== undefined
       ? 0
       : mentionsOf(harvest.main, c) - c.selfInFile;
+    // KJ-067: the residue may be nothing but `inject(target: X)` declarations,
+    // which hold no instance of X. The sites travel with the finding: they are
+    // part of the fix, not a nicety.
+    const injection = mainElsewhere === 0
+      ? undefined
+      : injectionOnlyMentions(c, mainElsewhere, harvest, ctx, textesDesSources);
     // Defensive: over-counting self would manufacture a finding, so any
     // negative residue reads as alive.
-    if (mainElsewhere !== 0) continue;
+    if (mainElsewhere !== 0 && injection === undefined) continue;
     // Same reasoning as above for a twin declared in the SAME file: the group
     // check already proved the only mentions are the declarations themselves.
     if (!ctx.unmentionedDuplicates.has(c.name)
       && c.selfInFile - c.selfInSpan > 0) continue;   // used elsewhere in its own file
 
     // A resolved bearer was proven unmentioned by tests too; the bag's test
-    // count belongs to its twins.
-    const testMentions = resolved ? 0 : single !== undefined ? (single === 'testOnly' ? 1 : 0) : mentionsOf(harvest.test, c);
+    // count belongs to its twins. A test component's `inject` declaration is
+    // not a test USE either: no test holds an instance through it.
+    const testMentions = resolved ? 0 : single !== undefined ? (single === 'testOnly' ? 1 : 0)
+      : injection !== undefined
+        ? mentionsOf(harvest.test, c) - injection.filter(site => isTestSourceSet(site.path, input.testSourceSets)).length
+        : mentionsOf(harvest.test, c);
     const verdict: UnusedSymbolVerdict = testMentions > 0 ? 'testOnly' : 'unreferenced';
     if (verdict === 'testOnly' && input.includeTestOnly === false) continue;
 
@@ -1638,12 +1886,14 @@ export function findUnusedSymbols(input: UnusedSymbolScanInput): UnusedSymbol[] 
       testMentions,
       isDeprecated: c.sym.isDeprecated === true,
       isLibraryModule: (input.libraryModules ?? []).some(d => isUnder(c.path, d)),
+      injectionSites: injection ?? [],
+      ...(injection !== undefined ? { via: 'injection' as const } : single !== undefined ? { via: 'visibility' as const } : {}),
     });
   }
 
   // A file is only emptied by ALL of its findings together, so this is a
   // second pass once every finding is known.
-  const textByPath = new Map(input.sources.map(s => [s.path, s.text]));
+  const textByPath = textesDesSources;
   const byPath = new Map<string, UnusedSymbol[]>();
   for (const f of out) {
     const list = byPath.get(f.path) ?? [];
@@ -1679,6 +1929,11 @@ export function messageFor(f: UnusedSymbol): string {
   const scope = f.isLibraryModule
     ? ' anywhere in this workspace (library module, an external consumer may use it)'
     : ' anywhere in this workspace';
+  if (f.via === 'injection') {
+    const n = f.injectionSites.length;
+    return `${label} '${f.name}' is never referenced${scope}: `
+      + `${n} injection method${n > 1 ? 's' : ''} name${n > 1 ? '' : 's'} it, and none of them holds one`;
+  }
   return `${label} '${f.name}' is never referenced${scope}`;
 }
 

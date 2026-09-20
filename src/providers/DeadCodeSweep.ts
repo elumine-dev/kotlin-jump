@@ -53,14 +53,28 @@ function lineStartsOf(text: string): number[] {
 /**
  * Every finding of every detector for one file, in document order.
  *
- * For Java only the declarations detector runs: the other four carry Kotlin
- * grammar assumptions (import forms, scope functions, lambda parameters) and
- * running them on Java would trade correctness for coverage.
+ * For Java the imports and the declarations run: the other three carry Kotlin
+ * grammar assumptions (scope functions, lambda parameters, `var` locals) and
+ * running them on Java would trade correctness for coverage. Imports left
+ * that list on the day they learned `import a.b.C;` (KJ-068): the body scan
+ * that decides them reads tokens, and a token is a token in either language.
  */
 export function sweepFile(text: string, lang: 'kotlin' | 'java' = 'kotlin'): SweepFinding[] {
   const starts = lineStartsOf(text);
   const lineEnd = (line: number) => (line + 1 < starts.length ? starts[line + 1] : text.length);
   const out: SweepFinding[] = [];
+
+  for (const imp of findUnusedImports(text)) {
+    const indent = imp.statement.length - imp.statement.trimStart().length;
+    out.push({
+      detector: 'imports',
+      line: imp.line,
+      character: indent,
+      name: imp.statement.trim().replace(/^import\s+/, '').replace(/\s*;$/, ''),
+      message: 'Import is never used',
+      edits: [{ start: starts[imp.line], end: lineEnd(imp.line), text: '' }],
+    });
+  }
 
   if (lang === 'java') {
     for (const d of findUnusedDeclarations(text, 'java')) {
@@ -74,18 +88,6 @@ export function sweepFile(text: string, lang: 'kotlin' | 'java' = 'kotlin'): Swe
       });
     }
     return out.sort((a, b) => a.line - b.line || a.character - b.character);
-  }
-
-  for (const imp of findUnusedImports(text)) {
-    const indent = imp.statement.length - imp.statement.trimStart().length;
-    out.push({
-      detector: 'imports',
-      line: imp.line,
-      character: indent,
-      name: imp.statement.trim().replace(/^import\s+/, ''),
-      message: 'Import is never used',
-      edits: [{ start: starts[imp.line], end: lineEnd(imp.line), text: '' }],
-    });
   }
 
   for (const p of findUnusedParameters(text)) {

@@ -15,7 +15,8 @@ import {
 } from '../util/kotlinScan';
 import { isTestSourceSet } from '../util/testPaths';
 import { isBuildArtifactPath, isGeneratedSource } from '../util/resourceAllowlists';
-import { Harvest, harvestMentions, SymbolSource } from './unusedSymbols';
+import { Harvest, harvestMentions, removalExtent, SymbolSource } from './unusedSymbols';
+import { declarationSpan } from '../util/declarationSpan';
 import { DTO_NAME_RE, SERIALIZATION_ANNOTATIONS } from './unusedDtoFields';
 
 /**
@@ -71,6 +72,15 @@ export interface UnusedEnumEntry {
   removeStart: number;
   removeEnd: number;
   testMentions: number;
+  /**
+   * KJ-066: set on every entry of an enum whose entries are ALL unreferenced
+   * and whose type name the corpus writes nowhere but its own declaration.
+   * Cutting this extent replaces the per entry cuts: the entries were the only
+   * content, and an `enum OrderBy {\n\n}` left standing is what a reviewer
+   * sends back. Absent for a top level enum, which KJ-032 already reports
+   * whole, with guards this family does not carry.
+   */
+  wholeEnum?: { line: number; removeStart: number; removeEnd: number };
   /**
    * Every test mention of the name is proven to be this entry's. False when
    * another enum declares the name and a test names that one, or when the
@@ -129,6 +139,18 @@ interface EnumDecl {
   /** Entries whose own `@Suppress` names `unused`: out of scope one by one. */
   silenced: ReadonlySet<RawSymbol>;
   isTest: boolean;
+  /** The enum's own symbol: what KJ-066 needs to cut the declaration whole. */
+  sym: RawSymbol;
+  /** A guard carried by a class holding this enum, or null (KJ-066). */
+  enclosingRejection: string | null;
+}
+
+/** True when the enum's braces hold nothing but blank space. */
+function enumBodyIsEmpty(clean: string, lineStarts: readonly number[], sym: RawSymbol): boolean {
+  const open = clean.indexOf('{', lineStarts[sym.line] + sym.character);
+  if (open === -1) return false;
+  const close = matchBrace(clean, open);
+  return close > open && clean.slice(open + 1, close).trim() === '';
 }
 
 /** Enums of the corpus with their entries, and why some are out of scope. */
@@ -156,6 +178,8 @@ export function collectEnums(
     // Group entries under the enum immediately above them in the nesting.
     const stack: RawSymbol[] = [];
     const byEnum = new Map<RawSymbol, RawSymbol[]>();
+    /** The declarations holding each enum, outermost first (KJ-066). */
+    const ancestors = new Map<RawSymbol, RawSymbol[]>();
     for (const sym of parsed.symbols) {
       stack.length = sym.depth;
       stack[sym.depth] = sym;
@@ -167,6 +191,7 @@ export function collectEnums(
         byEnum.set(parent, list);
       } else if (!byEnum.has(sym)) {
         byEnum.set(sym, []);
+        ancestors.set(sym, stack.slice(0, sym.depth).filter(Boolean));
       }
     }
 
@@ -194,7 +219,11 @@ export function collectEnums(
     };
 
     for (const [enumSym, entries] of byEnum) {
-      if (entries.length === 0) continue;
+      // An enum with no entry left is the shell KJ-066 exists for, so it is
+      // collected too: a human, or an earlier round, already cut them and the
+      // `enum OrderBy {\n\n}` stayed. Only when the body holds nothing else,
+      // since the extent takes the whole declaration.
+      if (entries.length === 0 && !enumBodyIsEmpty(clean, lineStarts, enumSym)) continue;
       // E5: an annotation on ANY entry means the generator or a serializer
       // maps the whole set by name. `@SerializedName("circle")` on one variant
       // says the others come back from JSON the same way.
@@ -211,6 +240,18 @@ export function collectEnums(
         .map(a => a.name)
         .find(a => !BENIGN_ENUM_ANNOTATIONS.has(a));
 
+      // A class holding the enum may be the one a framework reaches by name:
+      // `@Keep class Config { enum class Mode { A, B } }` is read by reflection
+      // from a file no scan sees. The entries stay in scope, cutting the TYPE
+      // does not (KJ-066).
+      const enclosingForeign = (ancestors.get(enumSym) ?? [])
+        .flatMap(a => {
+          const alo = lineStarts[a.line];
+          const ahi = alo + a.character;
+          return annotations.filter(x => x.target >= alo && x.target <= ahi).map(x => x.name);
+        })
+        .find(a => !BENIGN_ENUM_ANNOTATIONS.has(a));
+
       out.push({
         name: enumSym.name,
         path: src.path,
@@ -219,6 +260,8 @@ export function collectEnums(
           : foreign ? `E3:@${foreign}` : annotatedEntry ? 'E5:annotated-entry' : null,
         silenced: new Set(entries.filter((entry, k) => silenceAt(entry, entryWindowStart(entries, k)))),
         isTest: isTestSourceSet(src.path, testSourceSets),
+        sym: enumSym,
+        enclosingRejection: enclosingForeign ? `E6:@${enclosingForeign}` : null,
       });
     }
   }
@@ -735,6 +778,9 @@ function readEntryMentions(
 ): EntryMentions {
   const wanted = new Set<string>();
   for (const e of enums) for (const entry of e.entries) wanted.add(entry.name);
+  // KJ-066 asks one more question of the same harvest: does anything name the
+  // enum TYPE. Adding the names here costs nothing, the pass already runs.
+  for (const e of enums) wanted.add(e.name);
   // How many times each entry name is DECLARED across the corpus. A mention
   // count equal to that is a corpus that names it nowhere else, which is the
   // same reasoning KJ-036 applies to duplicated top-level names.
@@ -837,17 +883,89 @@ function mentionsOf(
   };
 }
 
+/**
+ * KJ-066: nothing in the corpus writes this enum's own name.
+ *
+ * The entry loop leaves `enum OrderBy {\n\n}` behind when every entry dies,
+ * and a reviewer sent exactly that back on the reference project. The type can
+ * then go too, but only on a fact: the harvest counts the name once, which is
+ * the declaration token itself. A second occurrence, anywhere, in any file the
+ * corpus reads, strings and XML included, withholds. So does an import of the
+ * name: it does not count as a mention, and cutting the type under it stops
+ * the compiler. That import is KJ-009's own finding this round, so the fixed
+ * point loop takes the enum on the next one.
+ *
+ * A top level enum is left to KJ-032, which already reports it whole with
+ * guards this family does not carry. Only a NESTED enum is nobody else's.
+ */
+function enumTypeUnmentioned(e: EnumDecl, harvest: Harvest): boolean {
+  if (e.sym.depth === 0) return false;
+  if (e.enclosingRejection) return false;
+  if ((harvest.main.get(e.name) ?? 0) + (harvest.test.get(e.name) ?? 0) !== 1) return false;
+  if (harvest.aliased.has(e.name)) return false;
+  return (harvest.importPostings.get(e.name) ?? []).length === 0;
+}
+
+/** Whole-declaration extent of an enum, the same one KJ-032 would compute. */
+function enumExtent(
+  text: string,
+  clean: string,
+  lineStarts: readonly number[],
+  sym: RawSymbol,
+  sansCommentaires: () => string,
+): { removeStart: number; removeEnd: number } {
+  const lastLine = lineStarts.length - 1;
+  const span = declarationSpan(clean, lineStarts, {
+    kind: 'classLike',
+    name: sym.name,
+    line: sym.line,
+    nameOffset: lineStarts[sym.line] + sym.character,
+    lastLine,
+  });
+  if (!span) return { removeStart: -1, removeEnd: -1 };
+  return removalExtent(text, clean, lineStarts, lastLine, sym, span, sansCommentaires);
+}
+
+/**
+ * One cut per enum whose entries all died and whose name nothing writes.
+ *
+ * A shell whose entries were ALREADY cut, by a human or by an earlier round,
+ * has no entry to hang on, which is why this travels beside the entries
+ * rather than on them. The entry cuts inside it are dropped by the caller's
+ * overlap pass: they start later and the enum's cut starts first.
+ */
+export interface EmptiedEnum {
+  enumName: string;
+  path: string;
+  line: number;
+  removeStart: number;
+  removeEnd: number;
+}
+
 export function findUnusedEnumEntries(input: UnusedEnumEntryScanInput): UnusedEnumEntry[] {
-  if (input.truncated) return [];                                     // contract rule 2
+  return scanEnums(input).entries;
+}
+
+/**
+ * The family's two findings in one pass: the dead entries, and the enums left
+ * with nothing. A caller that wants both must not pay the harvest twice.
+ */
+export function scanEnums(input: UnusedEnumEntryScanInput): {
+  entries: UnusedEnumEntry[];
+  emptied: EmptiedEnum[];
+} {
+  const rien = { entries: [], emptied: [] };
+  if (input.truncated) return rien;                                   // contract rule 2
 
   const enums = collectEnums(input.sources, input.testSourceSets);
-  if (enums.length === 0) return [];
+  if (enums.length === 0) return rien;
   const corpus = readEntryMentions(enums, input.sources, input.testSourceSets);
 
   const ignored = new Set(input.ignoreNames ?? []);
   const walked = findWalkedEnums(new Set(enums.map(e => e.name)), input.sources);
   const textByPath = new Map(input.sources.map(s => [s.path, s.text]));
   const out: UnusedEnumEntry[] = [];
+  const emptied: EmptiedEnum[] = [];
 
   for (const e of enums) {
     if (e.rejection) continue;
@@ -862,13 +980,21 @@ export function findUnusedEnumEntries(input: UnusedEnumEntryScanInput): UnusedEn
     let copieSc: string | undefined;
     const sansCommentaires = (): string => (copieSc ??= stripKotlinComments(text));
 
+    // Toutes les entrees de cet enum sont-elles mortes ? Une seule qui reste,
+    // qu un test nomme ou qu un `@Suppress` protege, et le type reste debout.
+    const depuis = out.length;
+    // Un corps deja vide satisfait « toutes les entrees sont mortes » : il n'en
+    // reste aucune a garder en vie.
+    let toutesMortes = true;
+
     for (const entry of e.entries) {
-      if (ignored.has(`${e.name}.${entry.name}`)) continue;
-      if (e.silenced.has(entry)) continue;
+      if (ignored.has(`${e.name}.${entry.name}`)) { toutesMortes = false; continue; }
+      if (e.silenced.has(entry)) { toutesMortes = false; continue; }
       const mentions = mentionsOf(e, entry.name, corpus, input.testSourceSets);
-      if (mentions.main !== 0) continue;
+      if (mentions.main !== 0) { toutesMortes = false; continue; }
 
       const verdict: EnumEntryVerdict = mentions.test > 0 ? 'testOnly' : 'unreferenced';
+      if (verdict === 'testOnly') toutesMortes = false;
       if (verdict === 'testOnly' && input.includeTestOnly === false) continue;
 
       out.push({
@@ -883,6 +1009,13 @@ export function findUnusedEnumEntries(input: UnusedEnumEntryScanInput): UnusedEn
         ...avecAnnotations(text, lineStarts, entryExtent(text, lineStarts, entry, sansCommentaires)),
       });
     }
+
+    if (!toutesMortes || !enumTypeUnmentioned(e, corpus.harvest)) continue;
+    const etendue = enumExtent(text, sanitizeForUsageScan(text), lineStarts, e.sym, sansCommentaires);
+    if (etendue.removeStart < 0) continue;
+    const entier = { line: e.sym.line, removeStart: etendue.removeStart, removeEnd: etendue.removeEnd };
+    for (let i = depuis; i < out.length; i++) out[i].wholeEnum = entier;
+    emptied.push({ enumName: e.name, path: e.path, ...entier });
   }
 
   // Two neighbours claim the same comma: the one before it as its trailing
@@ -910,7 +1043,10 @@ export function findUnusedEnumEntries(input: UnusedEnumEntryScanInput): UnusedEn
     }
   }
 
-  return out.sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line);
+  return {
+    entries: out.sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line),
+    emptied: emptied.sort((a, b) => a.path.localeCompare(b.path) || a.removeStart - b.removeStart),
+  };
 }
 
 export function explainEnumEntries(input: UnusedEnumEntryScanInput): EnumEntryExplanation[] {

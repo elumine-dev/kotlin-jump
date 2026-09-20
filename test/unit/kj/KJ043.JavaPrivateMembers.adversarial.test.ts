@@ -171,7 +171,7 @@ describe('les gardes traduites', () => {
 });
 
 describe('le sweep KJ-030 en Java', () => {
-  it('ne fait tourner que le détecteur declarations', () => {
+  it('fait tourner les imports et les declarations, pas le reste', () => {
     const text = [
       'package p;',
       'import java.util.List;',
@@ -181,11 +181,13 @@ describe('le sweep KJ-030 en Java', () => {
       '}',
     ].join('\n');
     const findings = sweepFile(text, 'java');
-    // `import java.util.List` est mort et `unusedParam` aussi, mais les
-    // détecteurs imports/parameters portent des hypothèses Kotlin : les faire
-    // tourner sur du Java troquerait la justesse contre la couverture.
-    expect(findings.map(f => f.detector)).toEqual(['declarations']);
-    expect(findings[0].name).toBe('dead');
+    // `import java.util.List` est mort et part (KJ-068) ; `unusedParam` l'est
+    // aussi, mais les détecteurs parameters, locals et writeOnly portent des
+    // hypothèses Kotlin : les faire tourner sur du Java troquerait la justesse
+    // contre la couverture.
+    expect(findings.map(f => f.detector)).toEqual(['imports', 'declarations']);
+    expect(findings[0].name).toBe('java.util.List');
+    expect(findings[1].name).toBe('dead');
   });
 
   it('propose une édition de suppression exploitable', () => {

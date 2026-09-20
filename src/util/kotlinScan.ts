@@ -644,9 +644,27 @@ export function kdocReferences(text: string): Set<string> {
     const premier = /^[A-Za-z_][A-Za-z0-9_]*/.exec(ref.trim());
     if (premier) noms.add(premier[0]);
   };
+  // Une etiquette porte une reference entiere, pas un nom nu : `@see C#m(D, E)`
+  // en nomme trois, et javadoc avec doclint refuse le fichier si l un des trois
+  // ne se resout plus. La capture s arrete au premier blanc hors parentheses,
+  // donc la prose qui suit la reference n entre jamais dans le compte.
+  const ajouterTous = (ref: string) => {
+    for (const m of ref.matchAll(/[A-Za-z_][A-Za-z0-9_]*/g)) noms.add(m[0]);
+  };
   for (const commentaire of commentSpans(text)) {
     for (const m of commentaire.matchAll(/\[([^\]\s][^\]]*)\]/g)) ajouter(m[1]);
-    for (const m of commentaire.matchAll(/@(?:see|throws|exception|sample)\s+([A-Za-z_][A-Za-z0-9_.]*)/g)) ajouter(m[1]);
+    for (const m of commentaire.matchAll(DOC_TAG_REFERENCE_RE)) ajouterTous(m[1]);
   }
   return noms;
 }
+
+/**
+ * Une reference de documentation, etiquette de bloc ou balise en ligne.
+ *
+ * `@see`, `@throws`, `@exception` et `@sample` prennent la reference apres un
+ * blanc ; `{@link}`, `{@linkplain}` et `{@value}` l encadrent d accolades, et
+ * `@link` suffit a les reconnaitre. La liste de parametres optionnelle est
+ * capturee avec le reste : `C#m(D, E)` nomme bien D et E.
+ */
+const DOC_TAG_REFERENCE_RE =
+  /@(?:see|throws|exception|sample|link|linkplain|value)\s+([\w.#$]+(?:\s*\([^)\n]*\))?)/g;

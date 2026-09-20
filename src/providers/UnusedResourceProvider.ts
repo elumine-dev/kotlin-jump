@@ -41,6 +41,13 @@ export type UnusedResourceKind = Extract<
 const SUPPORTED_KINDS: UnusedResourceKind[] = [
   'layout', 'menu', 'anim', 'animator', 'raw', 'drawable', 'mipmap',
 ];
+/** `@+id/foo`, an id a resource file DECLARES. */
+const ID_DECL_RE = /@\+id\/([A-Za-z_]\w*)/g;
+/** `R.id.foo` or ButterKnife's `R2.id.foo`, an id code READS. */
+const ID_READ_RE = /\bR2?\.id\.([A-Za-z_]\w*)/g;
+/** `@id/foo` in another XML file: a constraint, an include, a binding. */
+const ID_XML_READ_RE = /@id\/([A-Za-z_]\w*)/g;
+
 /** Reported but not deletable unless `includeDrawables` is on. */
 const REVIEW_ONLY_KINDS = new Set<UnusedResourceKind>(['drawable', 'mipmap']);
 
@@ -115,6 +122,9 @@ export function findUnusedResources(input: ScanInput): UnusedResource[] {
   const referenced = new Set<string>();
   const literals = new Set<string>();
   const bindings = new Set<string>();
+  /** KJ-071: `@+id/foo` declared by each XML file, and who reads `R.id.foo`. */
+  const idsDeclaredByPath = new Map<string, Set<string>>();
+  const idsRead = new Map<string, Set<string>>();
   let manifestHasPlaceholder = false;
   /** Kinds reached by dynamic lookup; `null` once any call is unreadable. */
   let dynamicKinds: Set<string> | null = new Set<string>();
@@ -135,9 +145,18 @@ export function findUnusedResources(input: ScanInput): UnusedResource[] {
       }
       for (const s of collectStringLiterals(src.text)) literals.add(s);
       for (const b of bindingClassTokens(src.text)) bindings.add(b);
+      for (const m of src.text.matchAll(ID_READ_RE)) {
+        (idsRead.get(m[1]) ?? idsRead.set(m[1], new Set()).get(m[1])!).add(src.path);
+      }
       continue;
     }
     if (/\.xml$/.test(src.path)) {
+      const declares = new Set<string>();
+      for (const m of src.text.matchAll(ID_DECL_RE)) declares.add(m[1]);
+      if (declares.size > 0) idsDeclaredByPath.set(src.path, declares);
+      for (const m of src.text.matchAll(ID_XML_READ_RE)) {
+        (idsRead.get(m[1]) ?? idsRead.set(m[1], new Set()).get(m[1])!).add(src.path);
+      }
       for (const r of collectXmlResourceRefs(src.text, SUPPORTED_KINDS)) {
         referenced.add(`${r.kind}/${r.name}`);
       }
@@ -201,6 +220,18 @@ export function findUnusedResources(input: ScanInput): UnusedResource[] {
 
     // The escape hatch, and self-references: a file naming itself is not a use.
     const ownPaths = new Set(entry.variants.map(v => v.path));
+
+    // Guard 9: the file declares an id that something else still reads.
+    //
+    // Deleting a layout takes the `@+id/foo` it declares with it, and every
+    // surviving `R.id.foo` stops resolving: javac says `cannot find symbol,
+    // location: class id`. Seen on the reference project the day a dead
+    // controller freed its panel layout, while the panel VIEW, alive, kept
+    // reading two ids of that layout. A reader in a file this entry owns does
+    // not count, it goes with the file.
+    const lit = [...ownPaths].flatMap(p => [...(idsDeclaredByPath.get(p) ?? [])]);
+    if (lit.some(id => [...(idsRead.get(id) ?? [])].some(p => !ownPaths.has(p)))) continue;
+
     const ignored = input.sources.some(s => ownPaths.has(s.path) && IGNORE_RE.test(s.text));
     if (ignored) continue;
 

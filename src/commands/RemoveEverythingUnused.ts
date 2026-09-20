@@ -6,7 +6,8 @@ import { plural } from '../util/plural';
 import { askHowToApply } from '../util/bulkEdit';
 import { findUnusedSymbols } from '../providers/unusedSymbols';
 import { findUnusedMembers } from '../providers/unusedMembers';
-import { findUnusedEnumEntries } from '../providers/unusedEnumEntries';
+import { scanEnums } from '../providers/unusedEnumEntries';
+import { findIdleImplementations } from '../providers/idleImplementations';
 import { findDeadIslands } from '../providers/deadIslands';
 import { sweepFile, planFileEdits } from '../providers/DeadCodeSweep';
 import { findMemberImports, memberKey } from '../util/memberImports';
@@ -114,7 +115,7 @@ export function collecterUnePasse(
     ...base, includeSelfOnly: false,
     deadDeclarations: syms.map(f => ({ path: f.path, removeStart: f.removeStart, removeEnd: f.removeEnd })),
   } as any) as any[];
-  const entrees = findUnusedEnumEntries(base) as any[];
+  const { entries: entrees, emptied: enumsVides } = scanEnums(base) as any;
   const iles = findDeadIslands({ ...base, maxIslandSize: 8 } as any) as any[];
 
   const brut = new Map<string, Coupe[]>();
@@ -135,10 +136,11 @@ export function collecterUnePasse(
   };
 
   // The imports that name a removed declaration in OTHER files go with it, as
-  // in the lightbulb. The sweep only reads imports in Kotlin, so a Java file
-  // kept `import ...LiveListViewScrollingEvent;` once the class was gone, and
-  // javac stopped on it. The Kotlin duplicate of the sweep's own cut collapses
-  // in the overlap pass below.
+  // in the lightbulb. This predates KJ-068, which taught the sweep the Java
+  // import forms: before that, a Java file kept
+  // `import ...LiveListViewScrollingEvent;` once the class was gone and javac
+  // stopped on it. Both readings now find the same line, and the duplicate
+  // collapses in the overlap pass below.
   const textes = new Map(sources.map(src => [src.path, src.text]));
   const importPerime = (imp: { path: string; line: number }, nom: string) => {
     const texte = textes.get(imp.path);
@@ -158,9 +160,25 @@ export function collecterUnePasse(
     if (s.verdict !== 'unreferenced') continue;
     ajoute(s.path, s.removeStart, s.removeEnd, '', 'symboles', s.name);
     if (s.removeStart >= 0) for (const imp of s.staleImports ?? []) importPerime(imp, s.name);
+    // KJ-067 : les declarations `inject(target: X)` qui nommaient la classe.
+    // Toutes ou aucune : couper la ligne du composant sans l'`override` du
+    // faux composant, ou l'inverse, ne compile pas. Le fournisseur les rend
+    // deja d'un bloc, ou pas du tout.
+    if (s.removeStart >= 0) {
+      for (const site of s.injectionSites ?? []) {
+        ajoute(site.path, site.removeStart, site.removeEnd, '', 'injections', s.name);
+      }
+    }
   }
   for (const m of membres) if (m.verdict === 'unreferenced') { ajoute(m.path, m.removeStart, m.removeEnd, '', 'membres', m.name); }
   for (const e of entrees) if (e.verdict === 'unreferenced') { ajoute(e.path, e.removeStart, e.removeEnd, '', 'entrees', e.name); }
+  // KJ-066 : un enum imbrique dont toutes les entrees partent et dont rien
+  // n'ecrit le nom s'en va entier, au lieu de laisser `enum OrderBy {\n\n}`.
+  // Sa coupe commence avant celles de ses entrees, donc la passe de
+  // chevauchement plus bas les fait tomber d'elles-memes.
+  for (const e of enumsVides) {
+    ajoute(e.path, e.removeStart, e.removeEnd, '', 'enums', `enum ${e.enumName}`);
+  }
 
   // Same for class members and enum entries, which Java reaches through a
   // static import (src/util/memberImports.ts).
@@ -204,6 +222,22 @@ export function collecterUnePasse(
       // `removeStart` vaut -1 quand la coupe changerait la structure, un post
       // seul dans sa branche par exemple. `ajoute` l'ecarte de lui meme.
       ajoute(e.path, e.removeStart, e.removeEnd, '', 'evenements', e.name);
+      // KJ-069 : le post seul dans un `finally` sans `catch` remonte le corps
+      // du `try` au lieu de laisser un bloc vide. C'est un REMPLACEMENT, et il
+      // voyage dans ses propres champs pour qu'un consommateur qui ne sait que
+      // supprimer ne supprime pas le corps.
+      if (e.rewriteText !== undefined) {
+        ajoute(e.path, e.rewriteStart, e.rewriteEnd, e.rewriteText, 'evenements', e.name);
+      }
+    }
+  }
+
+  // KJ-072 : une interface qu'une classe implemente pour rien. La clause, les
+  // surcharges vides et l'inscription partent d'un bloc : une surcharge seule
+  // ne compile pas sans sa clause, et l'inverse non plus.
+  for (const impl of findIdleImplementations({ sources, testSourceSets: segs } as any)) {
+    for (const c of impl.cuts) {
+      ajoute(impl.path, c.start, c.end, c.replacement, 'implementations', `${impl.interfaceName} de ${impl.className}`);
     }
   }
 
@@ -308,7 +342,7 @@ export function compteLesFamilles(parFichier: ReadonlyMap<string, Coupe[]>): Tal
     // cet objet, `tally[famille]++` valait NaN et la phrase du compte rendu
     // annoncait `NaN resource keys`.
     alias: 0, evenements: 0, remoteconfig: 0, cles: 0, ressources: 0,
-    parametres: 0, arguments: 0, baseline: 0, vides: 0,
+    parametres: 0, arguments: 0, baseline: 0, vides: 0, enums: 0, injections: 0, implementations: 0,
   };
   for (const l of parFichier.values()) {
     for (const c of l) tally[c.famille === 'balayage' && c.texte !== '' ? 'renommages' : c.famille]++;
@@ -483,7 +517,7 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
     symboles: 0, membres: 0, entrees: 0, ilots: 0, balayage: 0, renommages: 0,
     imports: 0, fichiers: 0, bouges: 0,
     alias: 0, evenements: 0, remoteconfig: 0, cles: 0, ressources: 0,
-    parametres: 0, arguments: 0, baseline: 0, vides: 0,
+    parametres: 0, arguments: 0, baseline: 0, vides: 0, enums: 0, injections: 0, implementations: 0,
   };
   const ajouteTally = (t: Tally) => { for (const k of Object.keys(t)) cumul[k] = (cumul[k] ?? 0) + t[k]; };
   /** Les fichiers ecartes, par chemin : la boucle repasse sur les memes. */
@@ -574,7 +608,7 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
       // compter une deuxieme fois un fichier que la famille des ressources
       // emporte deja, ni retirer les imports d'un fichier qui disparait.
       const cascade = planCascade(
-        new Map([...retenu].map(([p, l]) => [p, l.map(c => ({ start: c.start, end: c.end }))])),
+        new Map([...retenu].map(([p, l]) => [p, l.map(c => ({ start: c.start, end: c.end, replacement: c.texte === '' ? undefined : c.texte }))])),
         textes,
         fichiersMorts,
       );
@@ -742,6 +776,15 @@ export function resumeDesFamilles(cumul: Tally): string {
     cumul.arguments > 0 ? plural(cumul.arguments, 'argument of a removed parameter', 'arguments of removed parameters') : '',
     cumul.baseline > 0 ? plural(cumul.baseline, 'stale baseline entry', 'stale baseline entries') : '',
     cumul.vides > 0 ? `${plural(cumul.vides, 'source file')} declaring nothing` : '',
+    // KJ-066. Le nom dit pourquoi il part : ses entrees sont toutes mortes et
+    // le type lui meme n'est ecrit nulle part.
+    cumul.enums > 0 ? `${plural(cumul.enums, 'enum')} left with no entry` : '',
+    // KJ-067. Une declaration d'injection ne tient aucune instance : elle part
+    // avec la classe qu'elle nommait, sinon le projet ne compile plus.
+    cumul.injections > 0 ? `${plural(cumul.injections, 'injection method')} of a removed class` : '',
+    // KJ-072. Le compte porte sur les PLACES, clause et inscription comprises,
+    // parce que c'est ce que l'edition envoie.
+    cumul.implementations > 0 ? `${plural(cumul.implementations, 'place')} of an interface implemented for nothing` : '',
   ].filter(Boolean).join(', ');
 }
 

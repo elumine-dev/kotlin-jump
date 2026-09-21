@@ -1,0 +1,5 @@
+# Outils d'audit locaux : ils pointent vers une copie de travail d'un projet
+# externe et n'ont aucun sens ailleurs. Ils restent sur le disque, hors du
+# depot, comme `doc/`.
+verif-references.mjs
+verif-fixtures.ts

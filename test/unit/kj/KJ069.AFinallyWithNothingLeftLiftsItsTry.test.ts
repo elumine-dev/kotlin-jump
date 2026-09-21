@@ -166,9 +166,19 @@ describe.skipIf(!mod)('un finally vide par le retrait du post', () => {
 // Un point d entree Android tient le poster : sans ca la classe entiere meurt,
 // KJ-032 la coupe, et la reecriture disparait dans une coupe qui n est pas la
 // sienne.
+/**
+ * KJ-075 : ce qui tient `Poster` doit lui meme etre tenu.
+ *
+ * Cette fixture etait une `Activity`, et c'est F7 qui la gardait vivante. Une
+ * declaration que F7 ecarte n'est pas prouvee vivante, elle est non jugee : la
+ * famille des ilots l'absorbe desormais, et `Poster` mourait avec elle. Le
+ * point d'entree est donc explicite, comme dans un projet reel.
+ */
 const TIENT = f(`${MAIN}/Holder.java`,
-  'package com.x;\n\nimport android.app.Activity;\n\npublic class Holder extends Activity {\n'
-  + '    Object go() { return new Poster().get(); }\n}\n');
+  'package com.x;\n\npublic class Holder {\n'
+  + '    public static Object go() { return new Poster().get(); }\n}\n');
+
+const ENTREE = f(`${MAIN}/Main.kt`, 'package com.x\n\nfun main() {\n    Holder.go()\n}\n');
 
 describe.skipIf(!commande)('par la commande de masse', () => {
   it('la coupe est un remplacement, et la cascade ne croit pas l import orphelin', () => {
@@ -192,7 +202,7 @@ describe.skipIf(!commande)('par la commande de masse', () => {
       '}',
       '',
     ].join('\n'));
-    const { parFichier } = commande.collecterUnePasse([...BASE, TIENT, poster], ['/src/test/']);
+    const { parFichier } = commande.collecterUnePasse([...BASE, TIENT, ENTREE, poster], ['/src/test/']);
     const coupes = (parFichier.get(poster.path) ?? []) as any[];
     expect(coupes.map(c => c.famille)).toEqual(['evenements']);
     expect(coupes[0].texte).toContain('Locale.US');
@@ -222,7 +232,7 @@ describe.skipIf(!commande)('par la commande de masse', () => {
       '}',
       '',
     ].join('\n'));
-    const { parFichier } = commande.collecterUnePasse([...BASE, TIENT, poster], ['/src/test/']);
+    const { parFichier } = commande.collecterUnePasse([...BASE, TIENT, ENTREE, poster], ['/src/test/']);
     const tally = commande.compteLesFamilles(parFichier);
     expect(tally.evenements).toBe(1);
     expect(tally.renommages).toBe(0);

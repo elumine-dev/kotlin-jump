@@ -60,6 +60,12 @@ export interface ContexteDePasse {
   /** Index des FICHIERS de ressources, binaires inclus. Sans lui, pas de fichiers. */
   resourceEntries?: readonly FileResEntry[];
   /**
+   * KJ-081 : les fichiers de `src/main/assets/`, hors de `sources`. Sans eux,
+   * pas d'assets morts ; avec eux dans `sources`, leur texte garderait en vie
+   * toute declaration dont le nom y figure par hasard.
+   */
+  assets?: readonly { path: string; text: string }[];
+  /**
    * Repertoires de module, TOUS. KJ-055 en a besoin pour savoir quels dossiers
    * sous `src/` Gradle sait construire. Sans eux, aucun source set orphelin
    * n'est ecarte et les familles comptent ce qu'un source set orphelin nomme.
@@ -80,12 +86,14 @@ function contexteDuCorpus(data: {
   modulesWithCode?: readonly string[];
   libraryModules?: readonly string[];
   moduleDirs?: readonly string[];
+  assets?: readonly { path: string; text: string }[];
   index?: { entries?: () => FileResEntry[] };
 }): ContexteDePasse {
   return {
     modulesWithCode: data.modulesWithCode,
     libraryModules: data.libraryModules,
     moduleDirs: data.moduleDirs,
+    assets: data.assets,
     resourceEntries: typeof data.index?.entries === 'function' ? data.index.entries() : undefined,
   };
 }
@@ -242,8 +250,17 @@ export function collecterUnePasse(
   }
 
   // Cles de Remote Config que rien ne lit.
+  //
+  // Une trouvaille porte un NOM et la liste de ses declarations, une par
+  // variante de build : la coupe est sur chaque declaration, pas sur la
+  // trouvaille. Lue comme une coupe plate, elle rendait `path`, `removeStart`
+  // et `removeEnd` indefinis, et `ajoute` les rangeait sous la clef
+  // `undefined`. Invisible jusqu'ici parce que le coupe circuit de la famille
+  // rendait zero trouvaille sur le projet de reference.
   for (const k of findUnusedRemoteConfigKeys({ sources } as any) as any[]) {
-    ajoute(k.path, k.removeStart, k.removeEnd, '', 'remoteconfig', k.name);
+    for (const d of k.declarations as any[]) {
+      ajoute(d.path, d.removeStart, d.removeEnd, '', 'remoteconfig', k.name);
+    }
   }
 
   // KJ-058 : parametres de constructeur que rien ne lit, et l'argument nomme
@@ -294,7 +311,7 @@ export function collecterUnePasse(
   const fichiersMorts = new Set<string>();
   if (ctx.resourceEntries !== undefined && ctx.modulesWithCode !== undefined) {
     const trouves = findUnusedResources({
-      entries: ctx.resourceEntries as any, sources,
+      entries: ctx.resourceEntries as any, sources, assets: ctx.assets ?? [],
       modulesWithCode: ctx.modulesWithCode, libraryModules: ctx.libraryModules,
       includeDrawables: false,
     } as any) as any[];

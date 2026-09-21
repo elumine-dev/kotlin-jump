@@ -25,14 +25,19 @@ const MAIN = '/w/app/src/main/java/com/x';
 const f = (path: string, text: string) => ({ path, text });
 const GRADLE = f('/w/app/build.gradle', "plugins { id 'com.android.application' }\n");
 
-// Quelqu un tient l interface, et ce quelqu un est un point d entree Android :
-// sans ca l interface meurt aussi, et l enum imbrique disparait dans une coupe
-// qui n est pas la sienne (KJ-032 pour le type, KJ-046 pour l ilot des deux).
+// Quelqu un tient l interface : sans ca l interface meurt aussi, et l enum
+// imbrique disparait dans une coupe qui n est pas la sienne (KJ-032 pour le
+// type, KJ-046 pour l ilot des deux).
+//
+// C etait une `Activity`, et c est F7 qui la gardait vivante. KJ-075 a retire
+// cette protection a la famille des ilots : une declaration ecartee par un
+// filtre n est pas prouvee vivante. Le porteur est donc atteint pour de vrai.
 const CLIENT = f(`${MAIN}/Client.java`,
-  'package com.x;\n\nimport android.app.Activity;\n\npublic class Client extends Activity {\n    Repo repo;\n}\n');
+  'package com.x;\n\npublic class Client {\n    Repo repo;\n\n    public Repo get() { return repo; }\n}\n');
+const ENTREE = f(`${MAIN}/Main.kt`, 'package com.x\n\nfun main() {\n    Client().get()\n}\n');
 
 const passe = (...sources: { path: string; text: string }[]) =>
-  mod.scanEnums({ sources: [...sources, CLIENT, GRADLE], testSourceSets: ['/src/test/'] }) as any;
+  mod.scanEnums({ sources: [...sources, CLIENT, ENTREE, GRADLE], testSourceSets: ['/src/test/'] }) as any;
 
 const scan = (...sources: { path: string; text: string }[]) => passe(...sources).entries as any[];
 
@@ -71,7 +76,7 @@ describe.skipIf(!mod)('emptiedEnums', () => {
     // Les trois coupes d entrees tombent dans celle du type : elle commence
     // avant elles, et la passe de chevauchement garde la premiere.
     const source = f(`${MAIN}/Repo.java`, REPO_JAVA);
-    const { parFichier } = collecterUnePasse([source, CLIENT, GRADLE], ['/src/test/']);
+    const { parFichier } = collecterUnePasse([source, CLIENT, ENTREE, GRADLE], ['/src/test/']);
     const coupes = parFichier.get(source.path) ?? [];
     expect(coupes.map((c: any) => c.famille)).toEqual(['enums']);
     expect(coupes[0].quoi).toBe('enum OrderBy');
@@ -100,8 +105,11 @@ describe.skipIf(!mod)('emptiedEnums', () => {
       '',
     ].join('\n');
     const source = f(`${MAIN}/Config.kt`, texte);
+    // KJ-075 : une `Activity` ne tient plus rien par le seul fait d'en etre
+    // une. Ce qui tient doit etre tenu, d'ou le point d'entree explicite.
     const tient = f(`${MAIN}/Tient.kt`,
-      'package com.x\n\nimport android.app.Activity\n\nclass Tient : Activity() {\n    fun go(c: Config) = c.go()\n}\n');
+      'package com.x\n\nclass Tient {\n    fun go(c: Config) = c.go()\n}\n'
+      + '\nfun main() {\n    Tient().go(Config())\n}\n');
     const coupes = entier(source, tient);
     expect(coupes).toHaveLength(1);
     const apres = texte.slice(0, coupes[0].removeStart) + texte.slice(coupes[0].removeEnd);
@@ -224,8 +232,10 @@ describe.skipIf(!mod)('emptiedEnums', () => {
       '',
     ].join('\n');
     const source = f(`${MAIN}/Config.kt`, texte);
+    // Meme raison qu'au dessus : le porteur doit etre atteint pour porter.
     const tient = f(`${MAIN}/Tient.kt`,
-      'package com.x\n\nimport android.app.Activity\n\nclass Tient : Activity() {\n    fun go(c: Config) = c.toString()\n}\n');
+      'package com.x\n\nclass Tient {\n    fun go(c: Config) = c.toString()\n}\n'
+      + '\nfun main() {\n    Tient().go(Config())\n}\n');
     expect(scan(source, tient).length).toBe(2);
     expect(entier(source, tient)).toEqual([]);
   });

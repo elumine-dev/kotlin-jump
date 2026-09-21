@@ -175,16 +175,36 @@ describe('KJ-029 adversarial — détection', () => {
     expect(names(scan(files, [kt('println(1)')], { modulesWithCode: [] }))).toEqual([]);
   });
 
-  it('même clé dans deux modules : overlay, jamais flaguée', () => {
+  /**
+   * KJ-078 : la garde de recouvrement protège d'une ambiguïté de RÉSOLUTION,
+   * laquelle des copies le consommateur atteint. Quand PERSONNE ne demande le
+   * nom, il n'y a rien à résoudre, et les deux copies sont mortes.
+   *
+   * Elle s'appliquait avant même de regarder les références, donc elle
+   * couvrait aussi ce cas-là.
+   */
+  const deuxModules = (sources: { path: string; text: string }[]) => {
     const index = new FileResourceIndex();
     index.addFile('/ws/app/src/main/res/layout/shared.xml', ['/ws/app', '/ws/lib']);
     index.addFile('/ws/lib/src/main/res/layout/shared.xml', ['/ws/app', '/ws/lib']);
-    const found = findUnusedResources({
+    return findUnusedResources({
       entries: index.entries(),
-      sources: [kt('println(1)')],
+      sources,
       modulesWithCode: ['/ws/app', '/ws/lib'],
     });
-    expect(found).toEqual([]);
+  };
+
+  it('même clé dans deux modules, que personne ne nomme : les deux sont mortes', () => {
+    const found = deuxModules([kt('println(1)')]);
+    expect(found.map(f => `${f.kind}/${f.name}`)).toEqual(['layout/shared']);
+    expect(found[0].paths).toEqual([
+      '/ws/app/src/main/res/layout/shared.xml',
+      '/ws/lib/src/main/res/layout/shared.xml',
+    ]);
+  });
+
+  it('mais dès que quelqu\'un la nomme, l\'overlay reprend et sauve les deux', () => {
+    expect(deuxModules([kt('R.layout.shared')])).toEqual([]);
   });
 
   it('corpus tronqué : zéro signalement, quoi qu’il arrive', () => {

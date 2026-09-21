@@ -33,10 +33,14 @@ import { reportDecorations } from '../util/demoProbe';
  * `transition/`, `values*` (KJ-021's territory).
  */
 
-export type UnusedResourceKind = Extract<
-  FileResKind,
-  'layout' | 'menu' | 'anim' | 'animator' | 'raw' | 'drawable' | 'mipmap'
->;
+export type UnusedResourceKind =
+  | Extract<FileResKind, 'layout' | 'menu' | 'anim' | 'animator' | 'raw' | 'drawable' | 'mipmap'>
+  // KJ-081 : `assets/` est le SECOND endroit ou un projet Android range des
+  // fichiers, et il n'a jamais eu de representation. Ce n'est pas une sorte de
+  // `res/` : son nom est le chemin RELATIF a la racine `assets/`, parce que
+  // c'est ce que `AssetManager.open` prend, et un depot range volontiers
+  // plusieurs `feed.json` dans des modules differents.
+  | 'asset';
 
 const SUPPORTED_KINDS: UnusedResourceKind[] = [
   'layout', 'menu', 'anim', 'animator', 'raw', 'drawable', 'mipmap',
@@ -64,7 +68,7 @@ const MANIFEST_CRITICAL = [
 // Moved to src/util/resourceAllowlists.ts so KJ-031 shares the same list.
 // Re-exported: the KJ-029 suites import it from here.
 export { LIBRARY_PREFIXES } from '../util/resourceAllowlists';
-import { LIBRARY_PREFIXES } from '../util/resourceAllowlists';
+import { LIBRARY_PREFIXES, isBuildArtifactPath } from '../util/resourceAllowlists';
 
 export interface ResourceSource {
   path: string;
@@ -81,6 +85,21 @@ export interface ScanInput {
   /** True when the corpus could not be read in full: forces zero findings. */
   truncated?: boolean;
   includeDrawables?: boolean;
+  /**
+   * KJ-081 : les fichiers de `src/main/assets/`, dans leur PROPRE canal.
+   *
+   * Surtout pas dans `sources`. Un asset est souvent un bloc de donnees, et
+   * son texte donne a la recolte generale garde en vie n'importe quelle
+   * declaration dont le nom y figure par hasard : mesure faite, une extension
+   * `observe` cessait d'etre rapportee parce qu'un JSON de bouchon contenait
+   * le mot. C'est exactement l'avertissement que le corpus porte deja sur les
+   * `.txt` de R8, ou R8 ecrit tous les noms du build.
+   *
+   * Ici, le texte d'un asset ne sert qu'a decider de la vie d'un AUTRE asset.
+   * Un binaire entre avec un texte vide : present comme candidat, muet comme
+   * citant.
+   */
+  assets?: readonly ResourceSource[];
 }
 
 export interface UnusedResource {
@@ -112,6 +131,110 @@ export { dynamicallyLookedUpKinds };
 
 function isCodePath(path: string): boolean {
   return /\.(kt|kts|java)$/.test(path);
+}
+
+/**
+ * `<module>/src/main/assets/<relatif>` : la racine, et ce qui la suit.
+ *
+ * `main` SEULEMENT, et c'est mesure. Un `src/<autre>/assets/` appartient a un
+ * source set que la variante courante ne construit pas forcement, et ce qui le
+ * nomme vit souvent dans le meme source set, que le corpus peut ne pas porter.
+ * Sur le projet de reference, ouvrir la regle a tous les source sets faisait
+ * sortir 40 assets au lieu de 12 : vingt `.zip` de
+ * un source set d'essais qu'aucune variante
+ * Gradle ne construit, et les bouchons de `src/debug/assets/1-fake-server/`.
+ */
+const ASSET_RE = /^(.*)[\\/]src[\\/]main[\\/]assets[\\/](.+)$/;
+
+/**
+ * Un prefixe de repertoire construit par concatenation : `"fonts/" + value`.
+ *
+ * C'est la garde qui compte le plus, et celle qui a fait tomber la mesure de
+ * 83 assets morts a 8. Deux appels du projet de reference construisent leur
+ * chemin, et tout ce qu'ils atteignent echappe a l'analyse statique :
+ *
+ *   FontServiceImpl.java:32    Typeface.createFromAsset(a, "fonts/" + value + ".otf")
+ *   CrosswordsParser.java:46   am.open("devAssets/" + path)
+ *
+ * La famille connait deja cette idee pour `res/`, sous le nom de
+ * `dynamicallyLookedUpKinds`. La nuance ici : un acces construit eteint le
+ * REPERTOIRE qu'il atteint, pas un fichier.
+ */
+const PREFIXE_CONSTRUIT_RE = /"([^"\n]*\/)"\s*\+/g;
+
+/** Les suffixes qui disent « copiez-moi sous un autre nom ». */
+const GABARIT_RE = /\.(CHANGE_ME|sample|template|example|dist)$/i;
+
+/**
+ * Les assets que rien n'ouvre (KJ-081, G19).
+ *
+ * Un asset est vivant des qu'un SUFFIXE de son chemin relatif, coupe sur un
+ * `/`, apparait ailleurs que dans lui meme. Le suffixe et pas seulement le
+ * chemin entier, parce qu'un asset en cite souvent un autre relativement a LUI
+ * et non a la racine : `assets/css/fonts.css` ecrit
+ * `url("../fonts/Calluna-Regular.otf")` et tient ainsi les soixante polices du
+ * dossier voisin. Accepter les suffixes retient des assets vivants, ce qui est
+ * le bon sens de l'erreur.
+ */
+function assetsQueRienNOuvre(
+  fichiers: readonly { path: string; text: string }[],
+  sources: readonly { path: string; text: string }[],
+  libraryModules: ReadonlySet<string>,
+): UnusedResource[] {
+  const assets: { path: string; module: string; relatif: string }[] = [];
+  for (const s of fichiers) {
+    if (isBuildArtifactPath(s.path)) continue;
+    const m = ASSET_RE.exec(s.path);
+    if (m) assets.push({ path: s.path, module: m[1], relatif: m[2].replace(/\\/g, '/') });
+  }
+  if (assets.length === 0) return [];
+
+  const eteints: string[] = [];
+  for (const s of sources) {
+    if (!/\.(kt|kts|java)$/.test(s.path)) continue;
+    PREFIXE_CONSTRUIT_RE.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = PREFIXE_CONSTRUIT_RE.exec(s.text)) !== null) eteints.push(m[1]);
+  }
+
+  const texteDe = new Map(fichiers.map(s => [s.path, s.text]));
+  const suffixesDe = (relatif: string) => {
+    const parts = relatif.split('/');
+    return parts.map((_, i) => parts.slice(i).join('/'));
+  };
+
+  const out: UnusedResource[] = [];
+  for (const a of assets) {
+    if (eteints.some(p => a.relatif.startsWith(p))) continue;
+    if (IGNORE_RE.test(texteDe.get(a.path) ?? '')) continue;
+    // Un GABARIT n'est pas nomme par construction : on le copie sous un autre
+    // nom. `developer.properties.CHANGE_ME` est le motif reel, et le code
+    // nomme `developer.properties`, pas lui.
+    if (GABARIT_RE.test(a.relatif)) continue;
+    // Un asset qui NOMME d'autres assets est un referent, pas une feuille :
+    // `assets/css/fonts.css` tient les soixante polices du dossier voisin. Le
+    // retirer les orphelinerait toutes, et sa propre atteinte passe par une
+    // URL `file:///android_asset/` construite, que rien ne permet de lire.
+    const texteA = texteDe.get(a.path) ?? '';
+    if (texteA !== '' && assets.some(
+      b => b.path !== a.path && suffixesDe(b.relatif).some(x => texteA.includes(x)))) continue;
+
+    // Chaque suffixe coupe sur un `/`, du chemin entier au nom de base. Le
+    // code, les layouts et les AUTRES assets comptent tous comme citants.
+    const suffixes = suffixesDe(a.relatif);
+    const nomme = [...sources, ...fichiers].some(
+      s => s.path !== a.path && suffixes.some(x => s.text.includes(x)));
+    if (nomme) continue;
+
+    out.push({
+      kind: 'asset',
+      name: a.relatif,
+      paths: [a.path],
+      isLibraryModule: libraryModules.has(a.module),
+      deletable: true,
+    });
+  }
+  return out.sort((x, y) => x.name.localeCompare(y.name));
 }
 
 export function findUnusedResources(input: ScanInput): UnusedResource[] {
@@ -195,10 +318,11 @@ export function findUnusedResources(input: ScanInput): UnusedResource[] {
     moduleCountByKey.set(key, set);
   }
 
-  const findings: UnusedResource[] = [];
+  const findings: UnusedResource[] = [
+    ...assetsQueRienNOuvre(input.assets ?? [], input.sources, libraryModules)];
 
   for (const entry of input.entries) {
-    const kind = entry.kind as UnusedResourceKind;
+    const kind = entry.kind as Exclude<UnusedResourceKind, 'asset'>;
     if (!SUPPORTED_KINDS.includes(kind)) continue;
     if (dynamicKinds.has(kind)) continue;
     if (manifestHasPlaceholder && REVIEW_ONLY_KINDS.has(kind)) continue;
@@ -208,7 +332,18 @@ export function findUnusedResources(input: ScanInput): UnusedResource[] {
     if (entry.variants.some(v => shrinkerRuleFiles.has(v.path))) continue;
 
     const key = FileResourceIndex.key(kind, entry.name);
-    if ((moduleCountByKey.get(key)?.size ?? 0) > 1) continue;
+    // KJ-078 : la garde 5 protege d'une ambiguite de RESOLUTION, laquelle des
+    // copies le consommateur atteint. Quand PERSONNE ne demande le nom, il n'y
+    // a rien a resoudre et les deux copies sont mortes.
+    //
+    // Elle s'appliquait avant meme de regarder les references, donc elle
+    // couvrait aussi ce cas la. Sur le projet de reference : 75 noms definis
+    // dans plusieurs modules, 271 fichiers, et UN seul que rien ne nomme,
+    // un layout present dans deux modules applicatifs.
+    const nommeQuelquePart = referenced.has(key)
+      || literals.has(entry.name)
+      || bindings.has(bindingStemOf(entry.name));
+    if ((moduleCountByKey.get(key)?.size ?? 0) > 1 && nommeQuelquePart) continue;
 
     // Guard 4: a module with no code cannot be the consumer of its own files.
     const moduleDir = entry.variants[0]?.moduleDir ?? '';

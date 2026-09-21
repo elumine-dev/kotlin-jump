@@ -70,16 +70,22 @@ const VIDE = f(`${KT}/EmptyAppComponent.kt`, [
 const SERVICE = f(`${JAVA}/ConnectivityService.java`,
   'package com.x;\n\npublic interface ConnectivityService {\n    boolean isConnected();\n}\n');
 
-// Un point d entree Android tient les deux composants : sinon ils meurent eux
-// memes, et leurs lignes d injection partent dans une coupe qui n est pas la
-// notre. Il ne nomme PAS la classe injectee, ce qui est tout le sujet.
+// Un point d entree tient les deux composants : sinon ils meurent eux memes,
+// et leurs lignes d injection partent dans une coupe qui n est pas la notre.
+// Il ne nomme PAS la classe injectee, ce qui est tout le sujet.
+//
+// C etait une `Activity`, gardee vivante par F7. KJ-075 a retire cette
+// protection a la famille des ilots, parce qu une declaration ecartee par un
+// filtre n est pas prouvee vivante : le porteur est desormais atteint.
 const APP = f(`${KT}/App.kt`, [
   'package com.x',
   '',
-  'import android.app.Activity',
-  '',
-  'class App : Activity() {',
+  'class App {',
   '    val component: AppComponent = EmptyAppComponent',
+  '}',
+  '',
+  'fun main() {',
+  '    App().component',
   '}',
   '',
 ].join('\n'));

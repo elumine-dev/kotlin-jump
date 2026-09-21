@@ -66,8 +66,29 @@ export interface RemoteConfigKeyExplanation {
 
 const IGNORE_MARKER = 'kotlin-jump:ignore unused-remote-config-key';
 
-/** `remoteConfig.all`, `rc.all.forEach`, `firebaseRemoteConfig.getAll()`: the app reads every key. */
-const READS_EVERY_KEY = /\b(?:\w*[Rr]emote[Cc]onfig\w*|rc|config)\s*(?:\.\s*\w+\s*)?\.\s*(?:all\b|getAll\s*\()/;
+/**
+ * Where the whole map is taken: `remoteConfig.all`, `rc.getAll()`,
+ * `FirebaseRemoteConfig.getInstance().all`.
+ *
+ * Taking the map is not yet reading every key. A lookup table takes it and
+ * then asks for one key at a time, which leaves every other key unread.
+ */
+const TAKES_THE_WHOLE_MAP =
+  /\b(?:\w*[Rr]emote[Cc]onfig\w*|rc|config)\s*(?:\.\s*\w+\s*(?:\(\s*\))?\s*){0,2}\.\s*(?:all\b|getAll\s*\(\s*\))/g;
+
+/** What turns the map back into a single key: `[key]`, `.getValue(key)`, `.get(key)`. */
+const ASKS_FOR_ONE_KEY = /^\s*(?:\?\s*)?(?:\[|\.\s*(?:getValue|getOrDefault|getOrElse|get)\s*\()/;
+
+/**
+ * A `getAll()` the workspace declares itself.
+ *
+ * Calling it proves nothing: its body is in the corpus and is judged on its
+ * own `.all`. Without this, the enum-bounded projection of
+ * `RemoteConfigurationService.getAll()` silenced the detector from every one
+ * of its call sites, on top of its declaration.
+ */
+const DECLARES_GET_ALL =
+  /\bfun\s+getAll\s*\(|^[^\n]*\b(?:public|protected|private|abstract|static|final)\b[^\n]*\bgetAll\s*\(/m;
 
 /** `<entry>` blocks with a `<key>`, held by a `<defaults>` root. */
 const ENTRY_RE = /<entry\b[^>]*>([\s\S]*?)<\/entry\s*>/g;
@@ -116,6 +137,72 @@ function wholeLines(text: string, start: number, end: number): { start: number; 
     return { start, end };
   }
   return { start: lineStart, end: lineEnd };
+}
+
+/**
+ * The name a `val`/`var` binds this site to, when the site is the whole of its
+ * initialiser: `val allValues = remoteConfig.all`.
+ */
+function boundName(text: string, siteStart: number): string | null {
+  const before = text.slice(Math.max(0, siteStart - 160), siteStart);
+  const m = /(?:\bva[lr]\s+)?([A-Za-z_]\w*)\s*(?::\s*[^=\n]*)?=\s*$/.exec(before);
+  return m ? m[1] : null;
+}
+
+/**
+ * True when this site only ever asks for keys it names.
+ *
+ * Two shapes, both observed on one workspace:
+ *
+ *   remoteConfig.all.getValue(it)            asked on the spot
+ *   val allValues = remoteConfig.all         bound, then asked further down
+ *   ... allValues[it.key]?.asString()
+ */
+function onlyAsksForNamedKeys(text: string, siteStart: number, siteEnd: number): boolean {
+  if (ASKS_FOR_ONE_KEY.test(text.slice(siteEnd, siteEnd + 48))) return true;
+
+  const name = boundName(text, siteStart);
+  if (!name) return false;
+
+  const rest = text.slice(siteEnd);
+  const uses = new RegExp(`\\b${name}\\b`, 'g');
+  let seen = 0;
+  let u: RegExpExecArray | null;
+  while ((u = uses.exec(rest)) !== null) {
+    seen++;
+    const after = u.index + name.length;
+    if (!ASKS_FOR_ONE_KEY.test(rest.slice(after, after + 48))) return false;
+  }
+  return seen > 0;
+}
+
+/**
+ * The file that reads every key without naming one, or null.
+ *
+ * Exported because `find` and `explain` must answer the same question: a
+ * detector whose two outputs contradict each other cannot have its guards
+ * measured.
+ */
+export function fileReadingEveryKey(sources: readonly SymbolSource[]): string | null {
+  const code = sources.filter(s => /\.(kt|java)$/.test(s.path) && !isBuildArtifactPath(s.path));
+  const getAllIsOurs = code.some(
+    s => /[Rr]emote\s*[Cc]onfig/.test(s.text) && DECLARES_GET_ALL.test(s.text),
+  );
+
+  for (const src of code) {
+    // The marker says this file's sweep is not a reason to blind the family:
+    // an admin screen that dumps every value is a mirror, not a consumer.
+    if (src.text.includes(IGNORE_MARKER)) continue;
+
+    TAKES_THE_WHOLE_MAP.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = TAKES_THE_WHOLE_MAP.exec(src.text)) !== null) {
+      if (getAllIsOurs && /getAll/.test(m[0])) continue;
+      if (onlyAsksForNamedKeys(src.text, m.index, m.index + m[0].length)) continue;
+      return src.path;
+    }
+  }
+  return null;
 }
 
 /** Every key declared in every defaults file of the corpus. */
@@ -190,11 +277,9 @@ export function findUnusedRemoteConfigKeys(
   const byKey = collectRemoteConfigKeys(input.sources);
   if (byKey.size === 0) return [];
 
-  // `remoteConfig.all` / `getAll()` reads every key without naming one:
-  // an admin screen iterating them kept them all alive, invisibly.
-  // The receiver must be the remote config instance: `items.all { … }`, the
-  // commonest stdlib idiom, used to silence the whole detector.
-  if (input.sources.some(s => /\.(kt|java)$/.test(s.path) && READS_EVERY_KEY.test(s.text))) return [];
+  // Iterating `remoteConfig.all` reaches every key without naming one, so no
+  // key can be proven unread. A lookup table does not: see `fileReadingEveryKey`.
+  if (fileReadingEveryKey(input.sources) !== null) return [];
 
   const mentions = mentionsOutsideDefaults(input.sources, new Set(byKey.keys()));
   const ignored = input.ignoreNames ?? [];
@@ -215,12 +300,20 @@ export function explainRemoteConfigKeys(
   const byKey = collectRemoteConfigKeys(input.sources);
   const mentions = mentionsOutsideDefaults(input.sources, new Set(byKey.keys()));
   const ignored = input.ignoreNames ?? [];
+  // The two bail-outs of `find`, modelled here too: an outcome of
+  // `unreferenced` must mean the key IS reported, or `--why` explains a
+  // finding that never comes.
+  const truncated = input.truncated === true;
+  const sweeper = truncated ? null : fileReadingEveryKey(input.sources);
 
   const out: RemoteConfigKeyExplanation[] = [];
   for (const [name, declarations] of byKey) {
     const n = mentions.get(name) ?? 0;
-    const outcome = ignored.some(p => matchesGlob(name, p)) ? 'R3:ignored-name'
-      : n > 0 ? `alive:${n}` : 'unreferenced';
+    const outcome = truncated ? 'R0:truncated-corpus'
+      : ignored.some(p => matchesGlob(name, p)) ? 'R3:ignored-name'
+      : n > 0 ? `alive:${n}`
+      : sweeper !== null ? `R4:every-key-read:${sweeper}`
+      : 'unreferenced';
     for (const d of declarations) out.push({ name, path: d.path, line: d.line, outcome });
   }
   return out;

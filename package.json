@@ -1920,6 +1920,7 @@
     "release:notes": "./.publish --notes-only",
     "release:prepare": "./.publish",
     "test": "vitest run",
+    "test:gaps": "vitest run --config vitest.gaps.config.ts",
     "validate:whats-new": "node .github/scripts/validate-whats-new.mjs",
     "test:watch": "vitest",
     "pretest:integration": "npm run compile",

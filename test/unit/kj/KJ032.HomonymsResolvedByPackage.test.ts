@@ -87,7 +87,7 @@ describe('un homonyme inutilise dans son paquet est signale', () => {
 
 describe('un nom qui n apparait que dans un import de ce qu il contient', () => {
   // Trouve par verification manuelle sur le projet de reference :
-  // `import ...legacy.ADGLIFCommand.DISPATCH_EVENT`, puis seulement
+  // `import ...legacy.AdCommand.DISPATCH_EVENT`, puis seulement
   // `DISPATCH_EVENT` dans le corps. Le fichier casse si l enum disparait.
   const sources = (importeur: string) => [
     f(`${K}/com/a/Cmd.kt`, 'package com.a\n\nenum class Cmd { DISPATCH, IGNORE }\n'),

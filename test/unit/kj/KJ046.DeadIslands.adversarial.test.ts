@@ -282,9 +282,49 @@ describe('les gardes', () => {
     expect(islands([island, decoy])).toEqual([['ringA', 'ringB']]);
   });
 
-  it('F7 via l’éligibilité : une classe au supertype framework enracine son contenu', () => {
+  /**
+   * KJ-075 a retourné cette garde, et c'est le sujet de G21. Une déclaration
+   * que F7 écarte n'est pas PROUVÉE VIVANTE, elle est NON JUGÉE ; la prendre
+   * pour l'extérieur de l'île en fait un citant vivant qui n'a jamais été
+   * jugé. Une bibliothèque recopiée de neuf fichiers tenait à deux ancres de
+   * cette sorte.
+   *
+   * Ce que F7 dit — « le cadre peut instancier un sous-type sans le nommer » —
+   * cette famille sait le vérifier elle-même : le manifeste et les layouts
+   * enracinent. La garde porte donc maintenant sur le manifeste.
+   */
+  it('F7 : une Activity que le manifeste nomme est enracinée', () => {
     const screen = f(`${MAIN}/Screen.kt`, 'package com.x\n\nclass Screen : Activity() {\n    fun open() = helperShow()\n}\n\nfun helperShow() {\n    println("x")\n}\n');
-    expect(islands([screen, witnessA, witnessB])).toEqual([WITNESS]);
+    const manifeste = f('/w/app/src/main/AndroidManifest.xml',
+      '<manifest>\n    <application>\n        <activity android:name=".Screen" />\n    </application>\n</manifest>\n');
+    expect(why([screen, manifeste], 'Screen'))
+      .toEqual(['alive:root(/w/app/src/main/AndroidManifest.xml:3)']);
+    expect(islands([screen, manifeste, witnessA, witnessB]).flat()).not.toContain('Screen');
+  });
+
+  /**
+   * Mais l'enracinement porte sur la CLASSE, pas sur tout ce qu'elle contient.
+   * Sa méthode que personne n'appelle, et l'assistante que cette méthode est
+   * seule à appeler, restent un îlot. C'est une trouvaille que l'ancienne
+   * règle cachait, pas un effet de bord.
+   */
+  it('F7 : mais le membre que personne n\'appelle reste un îlot', () => {
+    const screen = f(`${MAIN}/Screen.kt`, 'package com.x\n\nclass Screen : Activity() {\n    fun open() = helperShow()\n}\n\nfun helperShow() {\n    println("x")\n}\n');
+    const manifeste = f('/w/app/src/main/AndroidManifest.xml',
+      '<manifest>\n    <application>\n        <activity android:name=".Screen" />\n    </application>\n</manifest>\n');
+    expect(islands([screen, manifeste, witnessA, witnessB]))
+      .toEqual([['Screen.open', 'helperShow'], WITNESS]);
+  });
+
+  /**
+   * Et la contrepartie, qui est le gain : la MÊME Activity, sans entrée au
+   * manifeste, n'enracine plus rien. Rien ne peut la construire, et son
+   * contenu part avec elle.
+   */
+  it('F7 : la même Activity sans manifeste est absorbée à son tour', () => {
+    const screen = f(`${MAIN}/Screen.kt`, 'package com.x\n\nclass Screen : Activity() {\n    fun open() = helperShow()\n}\n\nfun helperShow() {\n    println("x")\n}\n');
+    expect(why([screen], 'Screen')[0]).toMatch(/^island#/);
+    expect(islands([screen, witnessA, witnessB]).flat()).toContain('Screen');
   });
 
   it('F9 via l’éligibilité : main est hors pool, son corps est une racine', () => {

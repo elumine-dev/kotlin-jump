@@ -28,6 +28,7 @@ import {
   removalExtent,
   blankImportLines,
   stripImportLines,
+  scopeAnnotationsOf,
 } from './unusedSymbols';
 
 /**
@@ -147,6 +148,42 @@ const BENIGN_MEMBER_ANNOTATIONS = new Set([
 interface MemberCandidate {
   sym: RawSymbol;
   name: string;
+  /**
+   * KJ-073 : un ancetre declare ce membre de facon ENGAGEANTE, et retirer la
+   * surcharge seule ne compilerait plus.
+   */
+  boundByContract: boolean;
+  /**
+   * KJ-076 : ou se trouvent les mentions de code hors de son etendue mais
+   * dans sa classe. Ce sont les TEMOINS du verdict `selfOnly`, et il faut
+   * savoir qui les porte.
+   */
+  codeInsideClassAt: number[];
+  /** KJ-073 : toute la chaine d ancetres se resout dans le corpus. */
+  chainVisible: boolean;
+  /**
+   * KJ-073 : des declarations de ce nom qui ne sont NI la sienne NI celle d un
+   * ancetre. La recolte compte par nom : une soeur qui porte le meme nom rend
+   * toute mention inattribuable, et M2 reste la seule reponse honnete.
+   *
+   * Mesure : sans cette retenue, `restoreIdModel` de
+   * `PageExternalAnalyticsIdModelHelper` se voyait vivant par la declaration de
+   * `PageAnalyticsIdModelHelper`, et l ilot mort de la premiere disparaissait.
+   */
+  homonyms: number;
+  /** Les supertypes directs des conteneurs, et d ou les resoudre. */
+  supersDirects: readonly string[];
+  portee: Portee;
+  /**
+   * KJ-073 : combien d ANCETRES du conteneur declarent un membre de ce nom.
+   *
+   * Une declaration n est pas un appel. La recolte compte les occurrences du
+   * nom dans tout le corpus, et la ligne `fun computeSeek(p: Float): Float` de
+   * l interface en est une : sans cet escompte, toute surcharge d une methode
+   * declaree ailleurs se voit vivante par sa propre declaration parente.
+   * C est la regle de G40, appliquee a la verticale.
+   */
+  ancestorDecls: number;
   path: string;
   container: string;
   isJava: boolean;
@@ -209,10 +246,15 @@ export function collectMemberCandidates(
   declNameCounts: Map<string, number>;
   /** Class name -> union of its supertypes, for the framework walk. */
   supertypesByName: Map<string, string[]>;
+  /** KJ-070: the workspace's own DI scopes, benign like `@Singleton`. */
+  scopeAnnotations: Set<string>;
 } {
+  const scopeAnnotations = scopeAnnotationsOf(sources);
   const candidates: MemberCandidate[] = [];
   const declNameCounts = new Map<string, number>();
   const supertypesByName = new Map<string, string[]>();
+  /** Toutes les declarations de type du corpus, par nom NU : les homonymes cohabitent. */
+  const typesByName = new Map<string, TypeDecl[]>();
 
   for (const src of sources) {
     const isJava = src.path.endsWith('.java');
@@ -223,7 +265,44 @@ export function collectMemberCandidates(
 
     // Every declared name counts toward the duplicate denominator, because a
     // mention can never be attributed to one bearer.
+    // Les proprietaires ouverts a cet instant de la lecture. Cette boucle voit
+    // TOUS les types, y compris les interfaces, dont les membres ne seront
+    // jamais candidats (pas de corps, donc pas d'etendue, F16). C'est
+    // justement leur declaration qu'il faut connaitre pour l'escompte.
+    // L'escompte se soustrait de `harvest.main`, qui range les sources de test
+    // dans un autre sac. Compter ici une declaration que ce sac n'a jamais vue
+    // retirerait une mention inexistante, et inventerait la trouvaille.
+    const dansUnTest = isTestSourceSet(src.path, testSourceSets);
+    const proprietaires: RawSymbol[] = [];
+    const declaresIci = new Map<RawSymbol, TypeDecl>();
     for (const s of parsed.symbols) {
+      while (proprietaires.length > 0
+        && proprietaires[proprietaires.length - 1].depth >= s.depth) proprietaires.pop();
+      if (CLASS_LIKE_KINDS.has(s.kind)) {
+        const decl: TypeDecl = {
+          name: s.name,
+          fqn: parsed.packageName ? `${parsed.packageName}.${s.name}` : s.name,
+          paquet: parsed.packageName,
+          imports: parsed.imports,
+          isInterface: s.kind === 'interface',
+          supertypes: (s.supertypes ?? []).map(t => t.replace(/<.*/, '').trim()).filter(Boolean),
+          members: new Set<string>(),
+          bindingMembers: new Set<string>(),
+        };
+        declaresIci.set(s, decl);
+        const liste = typesByName.get(s.name) ?? [];
+        liste.push(decl);
+        typesByName.set(s.name, liste);
+        proprietaires.push(s);
+      } else if (MEMBER_KINDS.has(s.kind) && proprietaires.length > 0 && !dansUnTest) {
+        const owner = proprietaires[proprietaires.length - 1];
+        const decl = declaresIci.get(owner);
+        if (decl) {
+          decl.members.add(s.name);
+          if (owner.kind === 'interface' || s.isAbstract === true) decl.bindingMembers.add(s.name);
+        }
+      }
+
       declNameCounts.set(s.name, (declNameCounts.get(s.name) ?? 0) + 1);
       if (CLASS_LIKE_KINDS.has(s.kind) && (s.supertypes?.length ?? 0) > 0) {
         const bare = s.supertypes!.map(t => t.replace(/<.*/, '').trim()).filter(Boolean);
@@ -369,7 +448,7 @@ export function collectMemberCandidates(
       if (sym.isPrimaryCtorParam) continue;                           // M7: KJ-025's territory
 
       const chain = [...stack];
-      const enclosingRejection = rejectEnclosingChain(chain);
+      const enclosingRejection = rejectEnclosingChain(chain, scopeAnnotations);
       const enclosingSupertyped = chain.some(e => (e.sym.supertypes?.length ?? 0) > 0);
       const enclosingDeclTruncated = chain.some(e => e.declTruncated);
 
@@ -391,6 +470,10 @@ export function collectMemberCandidates(
       // selfOnly: are they all inside the enclosing class?
       let codeOutsideSpan = 0;
       let codeInsideClass = 0;
+      // KJ-076 : les POSITIONS, pas seulement leur compte. `selfOnly` declenche
+      // une transformation, et il faut pouvoir dire QUEL membre porte chaque
+      // mention pour savoir si ce membre est, lui, vivant.
+      const codeInsideClassAt: number[] = [];
       const wordRe = new RegExp(`(?<![A-Za-z0-9_])${sym.name}(?![A-Za-z0-9_])`, 'g');
       let m: RegExpExecArray | null;
       while ((m = wordRe.exec(cleanNoImports)) !== null) {
@@ -399,6 +482,7 @@ export function collectMemberCandidates(
         if (enclosing.extentStart !== -1
           && m.index > enclosing.extentStart && m.index < enclosing.extentEnd) {
           codeInsideClass++;
+          codeInsideClassAt.push(m.index);
         }
       }
 
@@ -417,11 +501,19 @@ export function collectMemberCandidates(
         selfInFile,
         codeOutsideSpan,
         codeInsideClass,
+        codeInsideClassAt,
         // A string mention anywhere in the file (reflection by name, a log
         // that spells it) disqualifies selfOnly and keeps the member alive.
         stringMentions: selfInFile - cleanTotal,
         ...removalExtent(src.text, clean, lineStarts, lastLine, sym, span, sansCommentaires),
         memberOffset: nameOffset,
+        // KJ-073 : remplis apres la boucle, quand tous les types sont connus.
+        ancestorDecls: 0,
+        boundByContract: false,
+        chainVisible: false,
+        homonyms: 0,
+        supersDirects: chain.flatMap(e => declaresIci.get(e.sym)?.supertypes ?? []),
+        portee: { paquet: parsed.packageName, imports: parsed.imports },
         // The inline-body parse path can drop flags, so the raw line is the
         // belt, exactly as KJ-026 does with its MODIFIER_GUARD_RE.
         hasOverrideModifier: /\boverride\b/.test(rawLines[sym.line] ?? ''),
@@ -432,7 +524,20 @@ export function collectMemberCandidates(
     }
   }
 
-  return { candidates, declNameCounts, supertypesByName };
+  // L'escompte se calcule quand tous les types sont connus : un ancetre peut
+  // etre declare dans un fichier lu apres.
+  // La resolution passe par les IMPORTS du fichier, pas par le nom nu : un
+  // homonyme de bibliotheque ferait passer une chaine etrangere pour visible.
+  for (const c of candidates) {
+    const ancetres = chaineResolue(c.supersDirects, c.portee, typesByName);
+    if (ancetres === null) continue;
+    c.chainVisible = true;
+    c.ancestorDecls = ancetres.filter(t => t.members.has(c.name)).length;
+    c.boundByContract = ancetres.some(t => t.bindingMembers.has(c.name));
+    c.homonyms = Math.max(0, (declNameCounts.get(c.name) ?? 1) - 1 - c.ancestorDecls);
+  }
+
+  return { candidates, declNameCounts, supertypesByName, scopeAnnotations };
 }
 
 /** Guard that takes the whole enclosing chain out of scope, or null (M4/M5). */
@@ -440,10 +545,29 @@ export function collectMemberCandidates(
 /** A name the mention harvest can actually look for. */
 const BARE_IDENTIFIER_RE = /^[A-Za-z_]\w*$/;
 
-function rejectEnclosingChain(chain: readonly EnclosingInfo[]): string | null {
+/**
+ * KJ-070 traverse ici.
+ *
+ * `BENIGN_MEMBER_ANNOTATIONS` code `Singleton` et `Reusable` en dur, avec le
+ * raisonnement exact qui vaut pour toute portée : « le code généré par Dagger
+ * n'appelle jamais que le CONSTRUCTEUR d'une classe à portée ; ses autres
+ * membres sont appelés par du code ordinaire que le sac lit. » Le commentaire
+ * ajoutait que les portées personnalisées restaient étrangères, l'ensemble
+ * étant inconnaissable. Il ne l'est plus depuis que `scopeAnnotationsOf` lit
+ * les annotations du workspace qui portent `@Scope`.
+ *
+ * Sur le projet de référence, `@ScopeApplication` et `@ScopeActivity`
+ * écartaient à eux seuls 1679 membres, pour une raison que l'autre famille
+ * savait déjà lever.
+ */
+function rejectEnclosingChain(
+  chain: readonly EnclosingInfo[],
+  scopeAnnotations: ReadonlySet<string>,
+): string | null {
   for (const e of chain) {
     if (e.isFunInterface) return 'M5:sam-interface';
-    const foreign = e.annoNames.find(a => !BENIGN_MEMBER_ANNOTATIONS.has(a));
+    const foreign = e.annoNames.find(
+      a => !BENIGN_MEMBER_ANNOTATIONS.has(a) && !scopeAnnotations.has(a));
     if (foreign) return `M4:@${foreign}`;
   }
   return null;
@@ -466,8 +590,23 @@ function javaInheritanceReason(c: MemberCandidate): string | null {
   // A declaration line that never reached its `{` may hide the very clause
   // M3 looks for, so an unread inheritance counts as inheritance.
   if (c.enclosingDeclTruncated) return 'M3:java-decl-truncated';
-  if (c.enclosingSupertyped) return 'M3:java-supertyped';
-  return null;
+  if (!c.enclosingSupertyped) return null;
+
+  // KJ-077 : M3 dit « ce membre implemente peut-etre une interface sans le
+  // dire ». Quand TOUTE la chaine d ancetres est resolue ici et qu AUCUN
+  // d eux ne declare ce nom, il n y a pas d implementation non marquee
+  // possible : le membre est un membre ordinaire de sa classe.
+  //
+  // Mesure sur le projet de reference : 1238 membres en M3, 184 dont la chaine
+  // est entierement visible, 170 dont aucun ancetre ne porte le nom, et deux
+  // qui survivent au comptage. `CacheServiceImpl.setCacheEnabled` est `static`,
+  // donc aucun supertype ne peut l appeler par polymorphisme.
+  //
+  // `homonyms` est la meme retenue qu en KJ-073 : une declaration du meme nom
+  // ailleurs rend toute mention inattribuable, et M3 reste alors la seule
+  // reponse honnete.
+  if (c.chainVisible && c.ancestorDecls === 0 && c.homonyms === 0) return null;
+  return 'M3:java-supertyped';
 }
 
 /**
@@ -479,6 +618,7 @@ function memberRejectionReason(
   input: UnusedMemberScanInput,
   supertypesByName: ReadonlyMap<string, string[]>,
   deadByPath: ReadonlyMap<string, readonly { removeStart: number; removeEnd: number }[]>,
+  scopeAnnotations: ReadonlySet<string>,
 ): string | null {
   const sym = c.sym;
   if (c.enclosingRejection) return c.enclosingRejection;
@@ -487,15 +627,37 @@ function memberRejectionReason(
   // M2: overrides implement a contract the framework or a caller reaches
   // through the supertype. Kotlin's keyword is reliable; Java's belt is the
   // (optional) @Override annotation, with M3 catching the unmarked rest.
-  if (sym.isOverride || c.hasOverrideModifier) return 'M2:override';
-  if (c.annoNames.includes('Override')) return 'M2:override';
+  //
+  // KJ-073 le rend CONDITIONNEL : le filtre ne tient que tant qu un ancetre
+  // echappe au corpus. Quand toute la chaine est declaree ici, la surcharge
+  // redescend dans le comptage ordinaire, et les filtres suivants (M4 cadre,
+  // M6 annotation, M8 convention) continuent de la juger.
+  const surcharge = sym.isOverride || c.hasOverrideModifier || c.annoNames.includes('Override');
+  if (surcharge && (!c.chainVisible || c.homonyms > 0)) return 'M2:override';
+  // Et la chaine visible ne suffit pas a rendre la coupe SURE : tant que le
+  // contrat parent reste, retirer la surcharge seule ne compile plus. La
+  // paire est la vraie trouvaille, et elle demande une coupe liee que la
+  // famille ne sait pas encore porter.
+  if (surcharge && c.boundByContract) return 'M11:bound-by-contract';
+
+  // M6 AVANT M4, et l'ordre porte du sens depuis KJ-075. Les deux ecartent le
+  // membre, donc aucune trouvaille ne change ici : c'est l'ETIQUETTE qui
+  // compte, et la famille des ilots la lit. Elle absorbe desormais les F7,
+  // qui ne sont pas des declarations prouvees vivantes ; un membre que sa
+  // PROPRE annotation protege ne doit pas etre absorbe avec eux.
+  //
+  // Mesure : `@Inject lateinit var breakingNewsController` de
+  // Un champ injecte de la classe `Application` sortait en `M4:F7:Application`
+  // parce que sa classe
+  // etend `Application`. Absorbe dans le bassin des ilots, ce champ que le
+  // code genere de Dagger ECRIT devenait un ilot mort.
+  const foreign = c.annoNames.find(
+    a => !BENIGN_MEMBER_ANNOTATIONS.has(a) && !scopeAnnotations.has(a));
+  if (foreign) return `M6:@${foreign}`;
 
   const framework = frameworkAncestor(
     supertypesFor(c, supertypesByName), supertypesByName);
   if (framework) return `M4:${framework}`;
-
-  const foreign = c.annoNames.find(a => !BENIGN_MEMBER_ANNOTATIONS.has(a));
-  if (foreign) return `M6:@${foreign}`;
 
   const inherited = javaInheritanceReason(c);
   if (inherited) return inherited;
@@ -526,6 +688,102 @@ function memberRejectionReason(
   return null;
 }
 
+/** Une declaration de type du corpus, avec de quoi resoudre ce qu elle nomme. */
+interface TypeDecl {
+  name: string;
+  fqn: string;
+  paquet: string;
+  imports: readonly string[];
+  isInterface: boolean;
+  supertypes: readonly string[];
+  members: Set<string>;
+  /**
+   * Les membres dont la declaration ENGAGE : un membre d interface, ou un
+   * `abstract`. Une sous classe qui retire sa surcharge d un tel membre ne
+   * compile plus. Mesure : retirer `FileServiceImpl.createTempFile` seul, en
+   * laissant `FileService.createTempFile(): File?`, fait echouer
+   * la compilation du module qui la declare.
+   *
+   * Un membre d interface AVEC corps par defaut y entre aussi. Distinguer les
+   * deux demanderait de lire le corps, et se tromper du mauvais cote casse le
+   * build : ici, trop retenir ne coute qu une trouvaille.
+   */
+  bindingMembers: Set<string>;
+}
+
+/** D ou part une resolution : un fichier, avec son paquet et ses imports. */
+interface Portee {
+  paquet: string;
+  imports: readonly string[];
+}
+
+/**
+ * Le type que ce nom NU designe depuis cette portee, ou null s il est etranger
+ * au corpus, ou undefined si plusieurs homonymes se disputent le nom.
+ *
+ * L import fait foi, et c est tout l interet. Une classe de service
+ * etend `FirebaseMessagingService` de Firebase, et le corpus declare SA PROPRE
+ * `interface FirebaseMessagingService`
+ * sous un autre paquet. Resolue par nom
+ * nu, la chaine paraissait visible, `onNewToken` et `onRegistered` cessaient
+ * d etre gardees, et cinq ilots morts apparaissaient sur des rappels que
+ * Firebase appelle. Les notifications push seraient parties avec.
+ */
+function resoudreType(
+  bare: string,
+  depuis: Portee,
+  typesByName: ReadonlyMap<string, TypeDecl[]>,
+): TypeDecl | null | undefined {
+  const importe = depuis.imports.find(i => i === bare || i.endsWith(`.${bare}`));
+  const candidats = typesByName.get(bare) ?? [];
+  if (importe !== undefined) {
+    const exact = candidats.filter(t => t.fqn === importe);
+    if (exact.length === 1) return exact[0];
+    if (exact.length > 1) return undefined;
+    // Importe d ailleurs : le corpus ne declare pas CE type la.
+    return null;
+  }
+  const memePaquet = candidats.filter(t => t.paquet === depuis.paquet);
+  if (memePaquet.length === 1) return memePaquet[0];
+  if (memePaquet.length > 1) return undefined;
+  if (candidats.length === 0) return null;
+  if (candidats.length > 1) return undefined;
+  return candidats[0];
+}
+
+/**
+ * La chaine d ancetres, resolue par import, en partant de cette portee.
+ *
+ * Rend null des qu un maillon est etranger ou ambigu : une chaine qu on ne
+ * sait pas suivre n est pas une chaine visible.
+ */
+function chaineResolue(
+  supertypes: readonly string[],
+  depuis: Portee,
+  typesByName: ReadonlyMap<string, TypeDecl[]>,
+): TypeDecl[] | null {
+  const out: TypeDecl[] = [];
+  const vus = new Set<string>();
+  let frontier: { bare: string; depuis: Portee }[] =
+    supertypes.map(t => t.replace(/<.*/, '').trim()).filter(Boolean).map(b => ({ bare: b, depuis }));
+
+  for (let depth = 0; depth < 8 && frontier.length > 0; depth++) {
+    const next: { bare: string; depuis: Portee }[] = [];
+    for (const { bare, depuis: portee } of frontier) {
+      if (bare === 'Any' || bare === 'Object') continue;
+      const decl = resoudreType(bare, portee, typesByName);
+      if (decl === null || decl === undefined) return null;
+      if (vus.has(decl.fqn)) continue;
+      vus.add(decl.fqn);
+      out.push(decl);
+      for (const parent of decl.supertypes) next.push({ bare: parent, depuis: decl });
+    }
+    frontier = next;
+  }
+  // Plus profond que huit etages n est pas une chaine prouvee.
+  return frontier.length === 0 ? out : null;
+}
+
 /** The supertype chain the framework walk starts from: the enclosing classes'. */
 function supertypesFor(
   c: MemberCandidate,
@@ -538,10 +796,50 @@ function supertypesFor(
   return out;
 }
 
+/**
+ * KJ-076 : au moins un temoin de `selfOnly` est porte par un membre VIVANT.
+ *
+ * `selfOnly` veut dire « toutes les mentions restantes sont dans la classe qui
+ * declare le membre », et c est le seul verdict qui declenche une
+ * TRANSFORMATION : `MakeSelfOnlyPrivate` propose de passer le membre en
+ * `private`. La justesse y compte autrement que pour une suppression.
+ *
+ * Le detecteur ne demandait pas si ces mentions etaient, elles, vivantes. Deux
+ * facons de ne pas l etre, et c est la quatrieme apparition de la meme erreur
+ * de categorie apres G21, G22 et G27 :
+ *
+ *   - le porteur est rapporte MORT par le meme appel : le temoin part avec lui ;
+ *   - le porteur est ECARTE par un filtre : personne ne l a juge, et une
+ *     declaration non jugee ne prouve rien.
+ *
+ * Mesure approchee sur le projet de reference : 34 des 169 `selfOnly`. Aucune
+ * ne devient morte ; ce qui change, c est la transformation qu on ne propose
+ * plus a tort.
+ *
+ * Prudence assumee : une mention qu on ne sait rattacher a AUCUN membre (un
+ * initialiseur de propriete, un bloc `init`) compte comme un temoin valable.
+ * Ne pas savoir n autorise pas a conclure, dans un sens comme dans l autre.
+ */
+function temoinVivant(
+  c: MemberCandidate,
+  parFichier: ReadonlyMap<string, readonly MemberCandidate[]>,
+  ecartes: ReadonlySet<MemberCandidate>,
+  mortsProbables: ReadonlySet<MemberCandidate>,
+): boolean {
+  const voisins = parFichier.get(c.path) ?? [];
+  for (const at of c.codeInsideClassAt) {
+    const porteur = voisins.find(
+      v => v !== c && v.removeStart >= 0 && at >= v.removeStart && at < v.removeEnd);
+    if (porteur === undefined) return true;              // inattribuable : on ne conclut pas
+    if (!ecartes.has(porteur) && !mortsProbables.has(porteur)) return true;
+  }
+  return false;
+}
+
 export function findUnusedMembers(input: UnusedMemberScanInput): UnusedMember[] {
   if (input.truncated) return [];                                     // contract rule 2
 
-  const { candidates, declNameCounts, supertypesByName } =
+  const { candidates, declNameCounts, supertypesByName, scopeAnnotations } =
     collectMemberCandidates(input.sources, input.testSourceSets);
   if (candidates.length === 0) return [];
 
@@ -554,7 +852,7 @@ export function findUnusedMembers(input: UnusedMemberScanInput): UnusedMember[] 
   }
 
   const kept = candidates.filter(c =>
-    memberRejectionReason(c, input, supertypesByName, deadByPath) === null);
+    memberRejectionReason(c, input, supertypesByName, deadByPath, scopeAnnotations) === null);
   if (kept.length === 0) return [];
 
   const wanted = new Set<string>();
@@ -569,12 +867,38 @@ export function findUnusedMembers(input: UnusedMemberScanInput): UnusedMember[] 
   const bareKotlin = harvestBareKotlinMentions(input.sources, kept);
   const unmentioned = unmentionedDuplicateMembers(kept, declNameCounts, harvest);
 
+  // KJ-076 : de quoi savoir qui porte un temoin de `selfOnly`, et ce que ce
+  // porteur vaut. `mortsProbables` est calcule AVANT la boucle des verdicts
+  // sur la seule regle qui ne depend pas d'elle : plus aucune mention hors de
+  // sa propre declaration. C'est exactement ce que la boucle appellera
+  // `unreferenced` ou `testOnly`.
+  const gardes = new Set(kept);
+  const ecartes = new Set(candidates.filter(c => !gardes.has(c)));
+  const parFichier = new Map<string, MemberCandidate[]>();
+  for (const c of candidates) {
+    const l = parFichier.get(c.path) ?? [];
+    l.push(c);
+    parFichier.set(c.path, l);
+  }
+  const mortsProbables = new Set<MemberCandidate>();
+  for (const c of kept) {
+    if (harvest.aliased.has(c.name)) continue;
+    const dehors = unmentioned.has(c.name)
+      ? 0 : mentionsOf(harvest.main, c, bareXml, bareKotlin) - c.selfInFile - c.ancestorDecls;
+    const dedans = unmentioned.has(c.name) ? 0 : c.selfInFile - c.selfInSpan;
+    if (dehors === 0 && dedans <= 0) mortsProbables.add(c);
+  }
+
   const out: UnusedMember[] = [];
   for (const c of kept) {
     if (harvest.aliased.has(c.name)) continue;                        // H10
 
     const mainMentions = mentionsOf(harvest.main, c, bareXml, bareKotlin);
-    const mainElsewhere = unmentioned.has(c.name) ? 0 : mainMentions - c.selfInFile;
+      // `ancestorDecls` : la declaration parente d'une surcharge n'est pas un
+    // appel. Sans elle, toute surcharge d'un contrat visible se prouve vivante
+    // par sa propre declaration d'interface.
+    const mainElsewhere = unmentioned.has(c.name) ? 0
+      : mainMentions - c.selfInFile - c.ancestorDecls;
     if (mainElsewhere !== 0) continue;
 
     let verdict: UnusedMemberVerdict;
@@ -595,7 +919,8 @@ export function findUnusedMembers(input: UnusedMemberScanInput): UnusedMember[] 
       const selfOnly = c.stringMentions === 0
         && !usedByTests
         && c.codeOutsideSpan > 0
-        && c.codeOutsideSpan === c.codeInsideClass;
+        && c.codeOutsideSpan === c.codeInsideClass
+        && temoinVivant(c, parFichier, ecartes, mortsProbables);
       if (!selfOnly) continue;
       if (input.includeSelfOnly === false) continue;
       verdict = 'selfOnly';
@@ -776,7 +1101,7 @@ function unmentionedDuplicateMembers(
 }
 
 export function explainMembers(input: UnusedMemberScanInput): MemberExplanation[] {
-  const { candidates, declNameCounts, supertypesByName } =
+  const { candidates, declNameCounts, supertypesByName, scopeAnnotations } =
     collectMemberCandidates(input.sources, input.testSourceSets);
 
   const deadByPath = new Map<string, { removeStart: number; removeEnd: number }[]>();
@@ -799,16 +1124,17 @@ export function explainMembers(input: UnusedMemberScanInput): MemberExplanation[
   const bareKotlin = harvestBareKotlinMentions(input.sources, candidates);
   const unmentioned = unmentionedDuplicateMembers(
     candidates.filter(c =>
-      memberRejectionReason(c, input, supertypesByName, deadByPath) === null),
+      memberRejectionReason(c, input, supertypesByName, deadByPath, scopeAnnotations) === null),
     declNameCounts, harvest);
 
   return candidates.map(c => {
-    const rejected = memberRejectionReason(c, input, supertypesByName, deadByPath);
+    const rejected = memberRejectionReason(c, input, supertypesByName, deadByPath, scopeAnnotations);
     let outcome: string;
     if (rejected) outcome = rejected;
     else if (harvest.aliased.has(c.name)) outcome = 'H10:aliased-import';
     else if (!unmentioned.has(c.name)
-             && mentionsOf(harvest.main, c, bareXml, bareKotlin) - c.selfInFile !== 0) {
+             && mentionsOf(harvest.main, c, bareXml, bareKotlin)
+                - c.selfInFile - c.ancestorDecls !== 0) {
       outcome = 'alive:main';
     } else if (!unmentioned.has(c.name) && c.selfInFile - c.selfInSpan > 0) {
       const selfOnly = c.stringMentions === 0 && c.codeOutsideSpan > 0

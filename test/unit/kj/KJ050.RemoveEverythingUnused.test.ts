@@ -111,3 +111,58 @@ describe('collecterUnePasse : suppressions et renommages', () => {
     expect(tally.renommages).toBe(0);
   });
 });
+
+/**
+ * Une trouvaille de Remote Config porte un NOM et la liste de ses
+ * declarations, une par variante de build. La coupe est sur chaque
+ * declaration, jamais sur la trouvaille.
+ *
+ * La collecte lisait `k.path`, `k.removeStart` et `k.removeEnd` a plat, donc
+ * trois fois `undefined`. `ajoute` ne rejetait pas ces bornes, il rangeait la
+ * coupe sous la clef `undefined`. Invisible sur le projet de reference, ou le
+ * coupe circuit de la famille rendait zero trouvaille : il a fallu desarmer ce
+ * coupe circuit pour que le defaut se voie.
+ */
+describe('collecterUnePasse : les cles de Remote Config', () => {
+  const DEFAUTS = (variante: string) => ({
+    path: `/w/app/src/${variante}/res/xml/remote_config_defaults.xml`,
+    text: [
+      '<defaults>',
+      '    <entry>',
+      '        <key>enable_dark_mode</key>',
+      '        <value>false</value>',
+      '    </entry>',
+      '</defaults>',
+      '',
+    ].join('\n'),
+  });
+
+  it('coupe chaque declaration, et dans son propre fichier', () => {
+    const sources = [DEFAUTS('main'), DEFAUTS('debug'), DEFAUTS('release')];
+    const { parFichier } = collecterUnePasse(sources, SEGS);
+
+    const coupes = [...parFichier.entries()].flatMap(
+      ([p, l]) => l.filter(c => c.famille === 'remoteconfig').map(c => ({ p, ...c })),
+    );
+    expect(coupes).toHaveLength(3);
+    expect(new Set(coupes.map(c => c.p))).toEqual(new Set(sources.map(s => s.path)));
+    for (const c of coupes) {
+      expect(c.quoi).toBe('enable_dark_mode');
+      expect(Number.isInteger(c.start)).toBe(true);
+      expect(c.end).toBeGreaterThan(c.start);
+    }
+  });
+
+  /**
+   * Le defaut ne laissait aucune trace lisible : pas de coupe, mais une clef
+   * `undefined` dans la carte. Une clef qui n'est pas un chemin de source est
+   * un aveu, quelle que soit la famille.
+   */
+  it('et aucune coupe ne se range sous un chemin inconnu', () => {
+    const sources = [DEFAUTS('main'), DEFAUTS('debug')];
+    const chemins = new Set(sources.map(s => s.path));
+    for (const p of collecterUnePasse(sources, SEGS).parFichier.keys()) {
+      expect(chemins.has(p), `coupe rangee sous ${String(p)}`).toBe(true);
+    }
+  });
+});

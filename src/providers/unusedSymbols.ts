@@ -152,6 +152,7 @@ const CANDIDATE_KINDS = new Set<string>([
   'fun', 'composable', 'val', 'var',
 ]);
 
+
 /**
  * Annotations that do NOT make a top-level declaration reachable. Everything
  * else does, which is the point: an ALLOWLIST covers DI, serialization, Room,
@@ -161,6 +162,41 @@ const CANDIDATE_KINDS = new Set<string>([
  * it is an entry point). `@Deprecated` is present on purpose: deprecated AND
  * unreferenced is the best finding this detector produces.
  */
+/**
+ * Les annotations qui disent qu un CADRE fabrique l instance (F8).
+ *
+ * F8 cautionne un parent par son sous type : « un parent dont le sous type
+ * appartient a un cadre est lui meme atteint par ce cadre ». Le motif qui l a
+ * fait ecrire est reel, une classe scellee dont les variantes portent
+ * `@SerializedName` est instanciee par la bibliotheque JSON et jamais par son
+ * nom.
+ *
+ * La regle acceptait N IMPORTE QUELLE annotation non benigne, et sur le projet
+ * de reference elle ecartait 93 declarations, presque toutes des interfaces,
+ * sur des cautions qui ne fabriquent rien : 119 portees DI, 32 `@UnstableApi`,
+ * 15 `@Provides`, 11 `@RunWith`. Une liste POSITIVE est la seule forme qui dise
+ * ce que la regle pretend dire.
+ *
+ * Ce qui entre ici fabrique vraiment : serialisation (le motif d origine),
+ * Parcelable, Room, et `@Keep` qui promet a R8 qu un nom est atteint autrement.
+ * Ce qui n y entre pas n empeche rien : la declaration redescend dans le
+ * comptage ordinaire, et les autres filtres continuent de la juger.
+ */
+export const FABRICATING_ANNOTATIONS = new Set([
+  // Serialisation : la bibliotheque construit depuis le document, jamais par nom.
+  'SerializedName', 'Serializable', 'JsonClass', 'JsonProperty', 'JsonSubTypes',
+  'JsonTypeInfo', 'JsonDeserialize', 'JsonCreator', 'JsonIgnoreProperties',
+  'XmlRootElement', 'Root', 'Element', 'ElementList', 'Attribute', 'Path',
+  // Android et Room.
+  //
+  // `@Keep` n y est PAS : il promet a R8 qu un nom est atteint autrement, ce
+  // qui protege la declaration ANNOTEE, et F5 s en charge deja. Il ne dit rien
+  // de qui fabrique le PARENT, qui est la seule question de F8.
+  'Parcelize', 'Entity', 'Dao', 'Database', 'TypeConverters', 'TypeConverter',
+  // Migrations et fabriques que le cadre appelle par reflexion.
+  'AutoValue', 'AutoService', 'Generated',
+]);
+
 export const BENIGN_TOPLEVEL_ANNOTATIONS = new Set([
   'Composable', 'Deprecated', 'JvmOverloads', 'Throws', 'OptIn', 'RequiresApi', 'SuppressLint',
   // `@Suppress` addresses the compiler, never a framework, so it cannot make a
@@ -208,6 +244,21 @@ export function scopeAnnotationsOf(sources: readonly SymbolSource[]): Set<string
 }
 
 /** Supertypes whose instances the framework creates; nothing names the class. */
+/**
+ * Les supertypes dont la seule voie d'instanciation invisible au CODE est une
+ * balise XML, que ce scanner lit (KJ-080, G20).
+ *
+ * `RecyclerView` y est : une `RecyclerView.Adapter` ou une `ItemDecoration` se
+ * construit en code, jamais par reflexion. `ViewHolder` de meme.
+ */
+const VIEW_SUPERTYPES = new Set(['View', 'ViewGroup', 'RecyclerView']);
+
+/** Le verdict de `frameworkAncestor` designe-t-il une vue ? */
+function estUneVue(verdict: string): boolean {
+  const m = /^F7:([A-Za-z_]\w*)/.exec(verdict);
+  return m !== null && VIEW_SUPERTYPES.has(m[1]);
+}
+
 export const FRAMEWORK_SUPERTYPES = new Set([
   'Application', 'Activity', 'AppCompatActivity', 'ComponentActivity', 'FragmentActivity',
   'Fragment', 'DialogFragment', 'BottomSheetDialogFragment', 'PreferenceFragmentCompat',
@@ -839,12 +890,87 @@ export function currentRemovalExtent(
   return removalExtent(text, clean, lineStarts, lastLine, sym, span, () => stripKotlinComments(text));
 }
 
+/**
+ * Le module et le source set d un chemin : `app/src/debug/java/...`
+ * rend `{ module: 'app', sourceSet: 'debug' }`.
+ *
+ * Hors d un `src/<nom>/`, le source set est vide, ce qui vaut « je ne sais
+ * pas » et empeche toute fusion.
+ */
+function sourceSetOf(path: string): { module: string; sourceSet: string } {
+  const m = /^(.*)[\\/]src[\\/]([^\\/]+)[\\/]/.exec(path);
+  return m ? { module: m[1], sourceSet: m[2] } : { module: path, sourceSet: '' };
+}
+
+/**
+ * KJ-074 : trois source sets ne font pas trois classes.
+ *
+ * Android compile UN type de build a la fois. `ShortcutHelper` declare dans
+ * `app/src/{debug,release,staging}/`, meme paquet et
+ * meme module, est une classe en trois versions : dans chaque variante une
+ * seule existe, et l appel unique de `StartupActivity.kt:122` ne designe
+ * jamais qu elle. F3 ecartait les trois.
+ *
+ * La preuve que les source sets s excluent est le projet lui meme : deux
+ * source sets actifs ensemble qui declarent la meme classe dans le meme
+ * paquet ne compilent pas. On ne tourne que sur un projet qui compile.
+ *
+ * Trois gardes, et la premiere est la plus importante :
+ *
+ *   - `main` n est exclusif de RIEN, il compile avec tous. Un groupe qui le
+ *     contient n est pas fondu.
+ *   - deux copies dans le MEME source set ne s excluent pas non plus.
+ *   - modules ou paquets differents restent des homonymes, et c est juste :
+ *     un meme module de journalisation existe dans DEUX modules applicatifs.
+ */
+function countingTwinsOnce(
+  sites: readonly { cle: string; sourceSet: string }[],
+): number {
+  const parGroupe = new Map<string, string[]>();
+  for (const s of sites) {
+    const l = parGroupe.get(s.cle) ?? [];
+    l.push(s.sourceSet);
+    parGroupe.set(s.cle, l);
+  }
+  let total = 0;
+  for (const [, sourceSets] of parGroupe) {
+    const fusionnable = sourceSets.length > 1
+      && sourceSets.every(ss => ss !== '' && ss !== 'main')
+      && new Set(sourceSets).size === sourceSets.length;
+    total += fusionnable ? 1 : sourceSets.length;
+  }
+  return total;
+}
+
 export function collectTopLevelCandidates(
   sources: readonly SymbolSource[],
   testSourceSets: readonly string[],
 ): {
   candidates: Candidate[];
   topLevelNameCounts: Map<string, number>;
+  /**
+   * KJ-032 : les homonymes que le corpus peut VOIR.
+   *
+   * `topLevelNameCounts` compte toute déclaration de premier niveau, la
+   * membership du corpus étant lue dessus (la marche des supertypes s'en sert
+   * pour savoir si un type est déclaré ici). F3, lui, demande autre chose :
+   * « une mention de ce nom peut-elle désigner autre chose que cette
+   * déclaration ? ». Un `private` de premier niveau en Kotlin est visible dans
+   * SON fichier et nulle part ailleurs ; il ne crée donc aucune ambiguïté.
+   *
+   * Sur le projet de référence, 39 noms n'avaient qu'une copie visible, toutes
+   * les autres étant privées : six composables `private fun CloseButton(...)`
+   * empêchaient de juger la classe scellée du même nom.
+   *
+   * En Java, une classe sans modificateur est visible dans tout son PAQUET :
+   * elle continue de compter.
+   *
+   * KJ-074 : et trois source sets ne font pas trois classes. Android compile
+   * un type de build a la fois ; `debug`, `release` et `staging` s excluent.
+   * Une classe declaree dans les trois, MEME module et MEME paquet, est une
+   * classe en trois versions. Voir `variantTwins`.
+   */
+  visibleNameCounts: Map<string, number>;
   /** Declared name -> its direct supertypes, for the inheritance walk. */
   supertypesByName: Map<string, string[]>;
   /** Names whose subtypes carry a framework annotation (F8). */
@@ -853,6 +979,9 @@ export function collectTopLevelCandidates(
   exemptByEntryPoint: Set<string>;
 } {
   const topLevelNameCounts = new Map<string, number>();
+  const visibleNameCounts = new Map<string, number>();
+  /** Nom -> ou chaque copie visible est declaree, pour fondre les jumeaux de variante. */
+  const visibleSites = new Map<string, { cle: string; sourceSet: string }[]>();
   const supertypesByName = new Map<string, string[]>();
   // Java entry points nothing in the corpus names. Each exempts every
   // top-level type of its file, because the reachable thing is the FILE:
@@ -862,6 +991,13 @@ export function collectTopLevelCandidates(
   // F8: a parent whose SUBTYPE is framework-owned is itself reached through
   // that framework. A sealed class whose variants carry @SerializedName is
   // instantiated by the JSON library, never by name.
+  //
+  // Les portees `@Scope` de l espace de travail (KJ-070) cautionnaient 119
+  // parents sur le projet de reference, `@ScopeApplication` a lui seul 65.
+  // Il n y a pas de test separe pour elles : la liste positive ci dessous les
+  // ecarte deja, et un mutant qui retirerait une verification de portee ne
+  // ferait tomber aucun temoin. Une garde que rien ne peut faire echouer n en
+  // est pas une.
   const parentsOfAnnotatedSubtypes = new Set<string>();
   const perFile: { path: string; clean: string; syms: RawSymbol[]; text: string; sc?: string }[] = [];
 
@@ -881,6 +1017,12 @@ export function collectTopLevelCandidates(
       s => s.depth === 0 && CANDIDATE_KINDS.has(s.kind) && !s.name.startsWith('$'));
     for (const s of tops) {
       topLevelNameCounts.set(s.name, (topLevelNameCounts.get(s.name) ?? 0) + 1);
+      if (isJava || !s.isPrivate) {
+        const ou = sourceSetOf(src.path);
+        const sites = visibleSites.get(s.name) ?? [];
+        sites.push({ cle: `${ou.module}\u0000${parsed.packageName}`, sourceSet: ou.sourceSet });
+        visibleSites.set(s.name, sites);
+      }
       const supers = (s.supertypes ?? []).map(x => x.replace(/<.*/, '').trim()).filter(Boolean);
       if (supers.length > 0) supertypesByName.set(s.name, supers);
     }
@@ -891,7 +1033,9 @@ export function collectTopLevelCandidates(
     for (const s of parsed.symbols) {
       const at = fileStarts[s.line] + s.character;
       const hasForeign = fileAnnos.some(a =>
-        a.target >= fileStarts[s.line] && a.target <= at && !BENIGN_TOPLEVEL_ANNOTATIONS.has(a.name));
+        a.target >= fileStarts[s.line] && a.target <= at
+        && !BENIGN_TOPLEVEL_ANNOTATIONS.has(a.name)
+        && FABRICATING_ANNOTATIONS.has(a.name));
       if (!hasForeign) continue;
       for (const sup of s.supertypes ?? []) parentsOfAnnotatedSubtypes.add(sup.replace(/<.*/, '').trim());
     }
@@ -967,7 +1111,9 @@ export function collectTopLevelCandidates(
       });
     }
   }
-  return { candidates, topLevelNameCounts, supertypesByName, parentsOfAnnotatedSubtypes, exemptByEntryPoint };
+  for (const [nom, sites] of visibleSites) visibleNameCounts.set(nom, countingTwinsOnce(sites));
+
+  return { candidates, topLevelNameCounts, visibleNameCounts, supertypesByName, parentsOfAnnotatedSubtypes, exemptByEntryPoint };
 }
 
 /** Every token mentioned anywhere, in one pass over the corpus. */
@@ -1476,6 +1622,8 @@ function duplicatesResolvedByPackage(
 /** Everything the guards need that is not the candidate itself. */
 interface ScanContext {
   topLevelNameCounts: ReadonlyMap<string, number>;
+  /** KJ-032 : les homonymes VISIBLES, ceux qu'un autre fichier peut désigner. */
+  visibleNameCounts: ReadonlyMap<string, number>;
   exemptFiles: ReadonlySet<string>;
   supertypesByName: ReadonlyMap<string, string[]>;
   parentsOfAnnotatedSubtypes: ReadonlySet<string>;
@@ -1499,7 +1647,7 @@ function rejectionReason(
   ctx: ScanContext,
 ): string | null {
   const sym = c.sym;
-  const { topLevelNameCounts, exemptFiles, supertypesByName } = ctx;
+  const { exemptFiles, supertypesByName } = ctx;
   const { parentsOfAnnotatedSubtypes, exemptByEntryPoint, unmentionedDuplicates } = ctx;
   if (exemptByEntryPoint.has(c.path)) return 'F9j:java-entry-point';
 
@@ -1512,7 +1660,9 @@ function rejectionReason(
   // into a removable finding.
   if (!BARE_IDENTIFIER_RE.test(c.name)) return 'F11:backtick-name';
   if (sym.isPrivate) return 'F1:private';
-  if ((topLevelNameCounts.get(c.name) ?? 0) > 1 && !unmentionedDuplicates.has(c.name)
+  // F3 lit le compte VISIBLE : un `private` de premier niveau ne peut pas
+  // être ce qu'une mention d'un autre fichier désigne.
+  if ((ctx.visibleNameCounts.get(c.name) ?? 0) > 1 && !unmentionedDuplicates.has(c.name)
     && !ctx.resolvedDuplicates.has(c)) {
     return 'F3:duplicate-name';
   }
@@ -1523,7 +1673,24 @@ function rejectionReason(
   if (foreign) return `F5:@${foreign}`;
 
   const framework = frameworkAncestor(c.sym.supertypes ?? [], supertypesByName);
-  if (framework) return framework;
+  // KJ-080 : F7 ne s'applique plus aux VUES.
+  //
+  // Une classe qui prolonge `View` a deux voies d'instanciation, et deux
+  // seulement : `new X(...)` dans du code, ou une balise XML portant son nom
+  // pleinement qualifie, que `LayoutInflater` lit par reflexion. C'est cette
+  // seconde voie, invisible a une analyse de CODE, qui justifie le filtre.
+  //
+  // Mais ce scanner lit le XML. La balise, le style, la regle de conservation
+  // sont toutes des mentions que la recolte compte deja. Le filtre couvrait
+  // donc une invisibilite qui n'en est pas une, et il privait au passage la
+  // famille des ilots de son gibier : les quatre `StickyRecyclerHeaders*`
+  // forment un ilot mort que F7 ecartait un par un.
+  //
+  // Rien de tel pour un `Fragment`, une `Activity` ou un `Worker` : leur
+  // contrat d'instanciation passe par un nom de classe que le corpus ne
+  // contient pas forcement, un `Fragment` se reconstruisant apres une rotation
+  // a partir du nom range dans son `Bundle`.
+  if (framework && !estUneVue(framework)) return framework;
   if (parentsOfAnnotatedSubtypes.has(c.name)) return 'F8:annotated-subtype';
   // An interface is never instantiated by a framework, so the name belt must
   // not apply to one: `interface OnboardingService` is not an Android Service.
@@ -1556,6 +1723,25 @@ export interface SymbolExplanation {
   via?: 'visibility' | 'injection';
   mainMentions: number;
   testMentions: number;
+  /**
+   * Ce que le COMPTAGE seul aurait donné, même quand un filtre a parlé.
+   *
+   * `outcome` porte le filtre dès qu'il s'en applique un, et l'écrase donc :
+   * une interface `F8` reste `F8` qu'un consommateur existe ou non, et rien ne
+   * disait si elle EST vivante ou seulement NON JUGÉE. Mesurer le coût d'une
+   * garde demandait alors une simulation ; trois de celles de
+   * `doc/gaps-detection.md` ont rendu des chiffres faux avant qu'on s'en
+   * aperçoive. Ici la réponse est directe.
+   *
+   * Quand aucun filtre ne s'applique, `wouldBe` vaut `outcome`.
+   */
+  wouldBe: string;
+  /**
+   * Les mentions du nom dans le fichier qui le déclare, déclaration comprise.
+   * `mainMentions` les compte sans les distinguer, donc lui seul ne permet pas
+   * de recalculer le verdict depuis l'extérieur.
+   */
+  selfInFile: number;
 }
 
 /** Duplicated top level names, with the Java accessors of a duplicated property. */
@@ -1671,6 +1857,7 @@ function buildContext(
     collected.candidates, collected.topLevelNameCounts, harvest);
   return {
     topLevelNameCounts: collected.topLevelNameCounts,
+    visibleNameCounts: collected.visibleNameCounts,
     exemptFiles: new Set(
       input.sources.filter(s => s.text.includes(IGNORE_MARKER)).map(s => s.path),
     ),
@@ -1707,26 +1894,45 @@ export function explainSymbols(input: UnusedSymbolScanInput): SymbolExplanation[
     const mainMentions = countIn(harvest.main, c);
     const testMentions = countIn(harvest.test, c);
     const rejected = rejectionReason(c, input, ctx);
+    // Le verdict du comptage est calculé DANS TOUS LES CAS, filtre ou pas :
+    // c'est `wouldBe`, et c'est ce qui manquait pour mesurer une garde sans
+    // simuler. `outcome` reste le filtre quand il y en a un.
     let outcome: string;
-    if (rejected) outcome = rejected;
-    else if (harvest.aliased.has(c.name)) outcome = 'H10:aliased-import';
+    if (harvest.aliased.has(c.name)) outcome = 'H10:aliased-import';
     else if (ctx.resolvedDuplicates.has(c)) outcome = 'unreferenced';
     else if (ctx.resolvedSingles.has(c)) outcome = ctx.resolvedSingles.get(c)!;
-    else if (!ctx.unmentionedDuplicates.has(c.name) && mainMentions - c.selfInFile !== 0) {
-      // KJ-067: the residue may be injection declarations only.
-      const sites = injectionOnlyMentions(c, mainMentions - c.selfInFile, harvest, ctx, textesExplain);
-      outcome = sites === undefined ? 'alive:main'
-        : testMentions - sites.filter(x => isTestSourceSet(x.path, input.testSourceSets)).length > 0
-          ? 'testOnly' : 'unreferenced';
-      if (sites !== undefined) parInjection.add(c);
+    else {
+      // Le scan enchaîne DEUX tests, et dans cet ordre : la branche KJ-067,
+      // puis le même-fichier, appliqué quoi qu'elle ait conclu. L'explication
+      // les mettait en `else if`, donc le second ne s'exécutait jamais quand
+      // le premier avait parlé.
+      //
+      // `MainActivityV2PreferenceInjectionHolder` en est le cas réel : sa
+      // seule mention hors du fichier est la déclaration d'injection du
+      // composant, donc KJ-067 concluait `unreferenced` ; mais son propre
+      // fichier la construit (MainActivityV2.kt:152), et le scan l'épargne.
+      // Les deux sorties se contredisaient sur la même déclaration.
+      const residu = mainMentions - c.selfInFile;
+      const dansSonFichier = !ctx.unmentionedDuplicates.has(c.name)
+        && c.selfInFile - c.selfInSpan > 0;
+      if (!ctx.unmentionedDuplicates.has(c.name) && residu !== 0) {
+        const sites = injectionOnlyMentions(c, residu, harvest, ctx, textesExplain);
+        if (sites === undefined) outcome = 'alive:main';
+        else if (dansSonFichier) outcome = 'alive:same-file';
+        else {
+          parInjection.add(c);
+          outcome = testMentions - sites.filter(x => isTestSourceSet(x.path, input.testSourceSets)).length > 0
+            ? 'testOnly' : 'unreferenced';
+        }
+      } else if (dansSonFichier) outcome = 'alive:same-file';
+      else outcome = testMentions > 0 ? 'testOnly' : 'unreferenced';
     }
-    // Mirror of the scan: a twin declared in the same file is not a mention.
-    else if (!ctx.unmentionedDuplicates.has(c.name)
-      && c.selfInFile - c.selfInSpan > 0) outcome = 'alive:same-file';
-    else outcome = testMentions > 0 ? 'testOnly' : 'unreferenced';
+    const wouldBe = outcome;
+    if (rejected) outcome = rejected;
 
     return {
-      name: c.name, kind: c.kind, path: c.path, line: c.sym.line, outcome, mainMentions, testMentions,
+      name: c.name, kind: c.kind, path: c.path, line: c.sym.line, outcome, wouldBe,
+      mainMentions, testMentions, selfInFile: c.selfInFile,
       ...(parInjection.has(c) ? { via: 'injection' as const }
         : ctx.resolvedSingles.has(c) ? { via: 'visibility' as const } : {}),
     };

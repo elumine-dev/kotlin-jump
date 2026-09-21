@@ -2252,11 +2252,43 @@ export function findUnheardEvents(input: UnheardEventScanInput): UnheardEventSca
   }
 
   return {
-    events,
+    // Une étendue, une trouvaille.
+    //
+    // Les trouvailles sont par SITE DE PUBLICATION, ce qui est voulu : chaque
+    // site reçoit son propre correctif. Mais deux `post()` du même événement
+    // dans une seule méthode reçoivent la MÊME étendue de suppression, celle
+    // de la méthode. Sur le projet de référence,
+    // `LiveSlideshowGridFragment.onScrollStateChanged` en portait deux : deux
+    // ampoules pour une seule édition, et appliquer la seconde après la
+    // première portait sur un texte qui avait changé.
+    //
+    // Le premier site garde la trouvaille : c'est celui que le tri par ligne
+    // met en tête, donc celui que l'utilisateur voit d'abord.
+    events: sansEtenduePartagee(events),
     unreadable: [],
-    deadSubscriptions,
+    deadSubscriptions: sansEtenduePartagee(deadSubscriptions),
     unboundedPosts: delivered.unbounded,
   };
+}
+
+/**
+ * Retire les trouvailles qui proposent une étendue déjà proposée. Celles sans
+ * étendue lisible (`removeStart < 0`) passent toutes : elles ne proposent
+ * aucune édition, donc elles ne peuvent pas se marcher dessus.
+ */
+function sansEtenduePartagee<T extends { path: string; removeStart: number; removeEnd: number }>(
+  trouvailles: readonly T[],
+): T[] {
+  const vues = new Set<string>();
+  const out: T[] = [];
+  for (const t of trouvailles) {
+    if (t.removeStart < 0) { out.push(t); continue; }
+    const cle = `${t.path}#${t.removeStart}-${t.removeEnd}`;
+    if (vues.has(cle)) continue;
+    vues.add(cle);
+    out.push(t);
+  }
+  return out;
 }
 
 /** One line per raw post site, for the dry-run harness. */

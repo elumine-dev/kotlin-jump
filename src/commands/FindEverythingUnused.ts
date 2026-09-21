@@ -253,6 +253,7 @@ export async function findEverythingUnusedCommand(
           const files = findUnusedResources({
             entries: data.index.entries(),
             sources: data.sources,
+            assets: data.assets,
             modulesWithCode: data.modulesWithCode,
             libraryModules: data.libraryModules,
             includeDrawables: resourceSettings.includeDrawables,

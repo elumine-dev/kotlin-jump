@@ -78,10 +78,22 @@ describe.skipIf(!mod)('regle 1 : la chaine entiere', () => {
     expect(premier.withheld).toBeUndefined();
   });
 
-  it('les deux sites rendent la MEME etendue, pour que le dedoublonnage les fonde', () => {
-    const [premier, second] = sites(java, 'ScrollingEvent');
-    expect(second.line).not.toBe(premier.line);
-    expect([second.removeStart, second.removeEnd]).toEqual([premier.removeStart, premier.removeEnd]);
+  /**
+   * Le dédoublonnage a lieu, désormais. Les deux branches rendaient la MÊME
+   * étendue, ce qui était voulu — la coupe est la chaîne entière — mais les
+   * deux trouvailles arrivaient jusqu'au bout : deux ampoules pour une seule
+   * édition, et appliquer la seconde après la première portait sur un texte
+   * qui avait changé. `findUnheardEvents` n'en rend plus qu'une, celle du
+   * premier site, et son étendue est bien la chaîne (test précédent).
+   *
+   * Deux posts aux étendues DISTINCTES restent deux trouvailles : sur le
+   * projet de référence, `LiveDetailFragment.java:213` et `:216` sont toutes
+   * deux conservées.
+   */
+  it('une seule trouvaille pour la chaine, et c est le premier site', () => {
+    const trouves = sites(java, 'ScrollingEvent');
+    expect(trouves).toHaveLength(1);
+    expect(java.text.slice(trouves[0].removeStart, trouves[0].removeEnd)).toBe(CHAINE);
   });
 
   it('une branche qui fait autre chose : refus, avec la raison', () => {

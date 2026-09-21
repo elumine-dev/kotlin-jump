@@ -14,6 +14,7 @@ import {
   explainSymbols,
   matchesGlob,
   removalExtent,
+  scopeAnnotationsOf,
   SymbolSource,
 } from './unusedSymbols';
 import { explainMembers } from './unusedMembers';
@@ -186,6 +187,7 @@ function analyze(input: DeadIslandScanInput): Analysis {
   if (input.truncated) return { islands: [], explanations: [] };     // I1
 
   const maxIslandSize = input.maxIslandSize ?? DEFAULT_MAX_ISLAND_SIZE;
+  const scopeAnnotations = scopeAnnotationsOf(input.sources);
 
   // ── Eligibility: the underlying detectors' own explain surfaces, so this
   // detector can never disagree with them about a guard.
@@ -205,8 +207,24 @@ function analyze(input: DeadIslandScanInput): Analysis {
   // A guard outcome keeps a declaration OUT of the extent pool; its contents
   // then root-anchor whatever they mention (I2). F3 stays in: the positional
   // model locates instead of subtracting, so the census F3 defends is free.
+  //
+  // KJ-075 : F7 en sort aussi, et c'est l'erreur de categorie de G21. Une
+  // declaration ecartee par un filtre n'est pas PROUVEE VIVANTE, elle est NON
+  // JUGEE ; la prendre pour l'exterieur de l'ilot fait d'elle un citant
+  // vivant. `StickyRecyclerHeadersAdapter` et `StickyRecyclerHeadersDecoration`
+  // tenaient ainsi sept fichiers d'une bibliotheque recopiee et morte.
+  //
+  // F7 dit « un sous type d'un type de cadre peut etre instancie par le cadre
+  // sans etre nomme ». Cette famille a son PROPRE modele pour ca : le
+  // manifeste et les layouts ancrent (`alive:root`), ce que le filtre amont ne
+  // sait pas faire. L'absorber dans le bassin, c'est le faire juger par le
+  // modele qui repond a la question, au lieu de le declarer hors sujet.
+  //
+  // Les autres restent gardes : F6 est de la reflexion vraie, F5 une
+  // annotation, F1 une visibilite. Aucun n'a d'equivalent ici.
   const isGuarded = (outcome: string): boolean =>
-    /^[A-Z]+\d/.test(outcome) && !/^F3:/.test(outcome) && !/^H10:/.test(outcome);
+    /^[A-Z]+\d/.test(outcome) && !/^F3:/.test(outcome) && !/^H10:/.test(outcome)
+    && !/^F7:/.test(outcome) && !/^M4:F7:/.test(outcome);
 
   // ── Extent pool + the set of every declared name in the corpus.
   const declaredNames = new Set<string>();
@@ -275,7 +293,7 @@ function analyze(input: DeadIslandScanInput): Analysis {
       // this detector deliberately keeps eligible. Re-checking annotations by
       // position is immune to guard ordering (and to any parser window).
       const nameOffset = lineStarts[sym.line] + sym.character;
-      const foreign = foreignAnnotationFor(clean, annotations, nameOffset, lineStarts, sym.line);
+      const foreign = foreignAnnotationFor(clean, annotations, nameOffset, lineStarts, sym.line, scopeAnnotations);
       if (foreign !== null) { reject(`I2:@${foreign}`); continue; }
 
       const spanKind = SPAN_KIND[sym.kind];
@@ -705,12 +723,23 @@ function collectAnnotationExtents(clean: string): AnnotationExtent[] {
  * An annotation targets the next declaration when only whitespace and other
  * annotations separate them — no line-count window to overflow.
  */
+/**
+ * KJ-070 traverse ici aussi.
+ *
+ * Une annotation de portée dit à l'injecteur combien d'instances garder ; elle
+ * n'en crée aucune, et quelque chose doit toujours DEMANDER le type. Les
+ * portées déclarées par le workspace sont donc bénignes, exactement comme
+ * `@Singleton` l'est déjà côté membres. Sur le projet de référence,
+ * `@ScopeApplication`, `@ScopeActivity`, `@ScopeFragment` et
+ * `@ScopeGridGameFragment` écartaient 269 déclarations à elles quatre.
+ */
 function foreignAnnotationFor(
   clean: string,
   annotations: readonly AnnotationExtent[],
   nameOffset: number,
   lineStarts: readonly number[],
   line: number,
+  scopeAnnotations: ReadonlySet<string>,
 ): string | null {
   const declLineStart = lineStarts[line];
   let foreign: string | null = null;
@@ -728,7 +757,7 @@ function foreignAnnotationFor(
       break;
     }
     if (!covered) continue;
-    if (!BENIGN_ANNOTATIONS.has(a.name)) foreign = a.name;
+    if (!BENIGN_ANNOTATIONS.has(a.name) && !scopeAnnotations.has(a.name)) foreign = a.name;
   }
   return foreign;
 }

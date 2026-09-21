@@ -984,7 +984,7 @@ export function planClosure(
           // assertion at all would pass for nothing, so it goes whole as before.
           // Only in a file that tests OTHER things too: a dedicated test file
           // whose every function names what leaves goes whole, as the hand
-          // written branch did with `ViewUtilsTest` and `ReplicaConstTest`,
+          // written branch did with two utility test classes,
           // where each function also carried an incidental assertion that
           // would have kept a hollow test alive.
           const st = testsOtherThings(src, funs) ? assertionAt(src, o, name, owner) : undefined;

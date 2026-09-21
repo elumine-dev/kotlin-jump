@@ -42,6 +42,7 @@ export async function findUnusedResourcesCommand(
       const findings = findUnusedResources({
         entries: scan.index.entries(),
         sources: scan.sources,
+        assets: scan.assets,
         modulesWithCode: scan.modulesWithCode,
         libraryModules: scan.libraryModules,
         includeDrawables,

@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.43.0
+
+Find Everything Unused now reports dead files under assets/, and nine filters that used to skip declarations without judging them now let the counting decide.
+
+### New Detections
+- Reports files under src/main/assets/ that nothing opens. A file counts as used when its relative path, or a trailing part of it, appears in code, in a layout or in another asset. Binary assets can be reported but never keep anything alive. Three were reported on the reference project.
+- Leaves an asset alone when code builds its path by concatenation, such as "fonts/" plus a value: everything under that directory stays, because a static scan cannot tell which files are reached. Template files ending in .sample or .CHANGE_ME are also left alone.
+- Reports a resource declared in several modules when no copy is named anywhere. The guard against overlays protects against an ambiguity of resolution, and there is nothing to resolve when nobody asks for the name.
+
+### Filters That Blinded The Detectors
+- A class extending View, ViewGroup or RecyclerView is judged like any other. The XML tag that inflates it is not invisible to this scanner, which reads XML, so the filter was covering a blind spot that does not exist.
+- Scope annotations the project declares with @Scope are recognised when looking for dead islands: they say how many instances to keep, never who creates one. Ten more islands on the reference project.
+- A parent is only spared by an annotated subtype when the annotation really denotes construction by a framework, such as serialization, Parcelable or Room. It used to accept any annotation at all.
+- A private top level declaration and three build variants of the same class no longer count as homonyms, so the duplicate name filter stops hiding what it cannot attribute.
+- An override whose whole supertype chain is declared in the workspace is judged, and the parent declaration stops counting as a call. Supertypes are resolved through imports, so a library type and a project type of the same simple name are no longer confused.
+
+### Removal Fixes
+- Remove Everything Unused ignored unused Remote Config keys. A finding carries one declaration per build variant, and the removal read it as a single flat cut, so it cut nothing. Every declaration is now cut.
+- The Gradle root file counted as a library module when a plugin is written .apply(false), including when the formatter moves the call to the next line. A root listing a publishing plugin that way could have silenced the dead symbol detector across the whole workspace.
+- Two unheard event posts sharing one removal range produced two quick fixes for the same edit, and applying the second acted on text the first had changed. One finding per range now.
+
 ## 1.42.345
 
 Remove Everything Unused now takes whole empty enums, Dagger injection methods, idle listener interfaces and Java imports, and keeps layouts whose ids are still read.

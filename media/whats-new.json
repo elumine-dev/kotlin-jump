@@ -1,42 +1,50 @@
 {
-  "version": "1.42.345",
+  "version": "1.43.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Cleaner removals, fewer leftovers, safer layouts",
-  "summary": "Remove Everything Unused now takes whole empty enums, Dagger injection methods, idle listener interfaces and Java imports, and keeps layouts whose ids are still read.",
+  "tagline": "Filters that judge instead of skipping",
+  "summary": "Find Everything Unused now reports dead files under assets/, and nine filters that used to skip declarations without judging them now let the counting decide.",
   "highlights": [
     {
-      "title": "Idle listeners removed whole",
-      "kind": "feature",
-      "description": "When a class implements an interface for nothing, such as a scroll listener whose callbacks are all empty, the cleanup now removes the overrides, the implements clause and the registration together instead of leaving an inert listener."
+      "title": "Dead assets reported",
+      "description": "Files under src/main/assets/ that nothing opens are now reported, with their path relative to the assets root.",
+      "kind": "feature"
     },
     {
-      "title": "No more hollow leftovers",
-      "kind": "fix",
-      "description": "Nested enums whose entries are all unused, and classes named only by a Dagger inject method, now go whole instead of leaving an empty enum body or a gutted class with dead imports."
+      "title": "Framework filters now judge",
+      "description": "A class the framework filter used to skip no longer keeps its neighbours alive, so a copied in library of nine files becomes visible.",
+      "kind": "improvement"
     },
     {
-      "title": "Layouts keep ids still read",
-      "kind": "fix",
-      "description": "A layout is no longer offered for deletion while code still reads an id it declares, which avoids a javac cannot find symbol error after the cleanup."
+      "title": "Remote Config keys removed",
+      "description": "Remove Everything Unused now cuts every declaration of an unread Remote Config key instead of silently cutting none.",
+      "kind": "fix"
     }
   ],
   "sections": [
     {
-      "heading": "Improvements",
+      "heading": "New Detections",
       "bullets": [
-        "Removes a nested enum whole when all its entries are unused and nothing writes its name. On the reference project, `enum OrderBy { CREATED_ASC, CREATED_DESC, LAST_ACCESSED }` used to end up as `enum OrderBy {\\n\\n}`, and a reviewer sent it back.",
-        "Removes the whole implementation of an interface a class implements for nothing: the empty overrides, the `implements` clause and the `setOnScrollListener(this)` style registration go together. This finishes the job left after the unheard event rule empties a listener, and it only applies when nothing else can see the class as that interface.",
-        "Sweeps unused imports in Java files as well as Kotlin. A class emptied of its members no longer keeps fifteen dead imports, and `import a.b.C;` with its semicolon is now recognised. Javadoc `{@link C}` references are still respected so doclint does not break.",
-        "Removes the `inject(target: X)` methods of a removed class, in other files, together with the class. On the reference project a 241 line class was deleted but left its injected field, an empty constructor and fifteen dead imports.",
-        "Counts the new cases in Find Everything Unused: enums emptied whole, classes named only by an injection method, and interfaces implemented for nothing (with the number of places to cut)."
+        "Reports files under src/main/assets/ that nothing opens. A file counts as used when its relative path, or a trailing part of it, appears in code, in a layout or in another asset. Binary assets can be reported but never keep anything alive. Three were reported on the reference project.",
+        "Leaves an asset alone when code builds its path by concatenation, such as \"fonts/\" plus a value: everything under that directory stays, because a static scan cannot tell which files are reached. Template files ending in .sample or .CHANGE_ME are also left alone.",
+        "Reports a resource declared in several modules when no copy is named anywhere. The guard against overlays protects against an ambiguity of resolution, and there is nothing to resolve when nobody asks for the name."
       ]
     },
     {
-      "heading": "Fixes",
+      "heading": "Filters That Blinded The Detectors",
       "bullets": [
-        "Stopped Remove Everything Unused from deleting a layout while another file still reads an id it declares. Deleting the layout broke every surviving `R.id.foo` with javac's `cannot find symbol, location: class id`, seen when a dead controller freed its panel layout.",
-        "Recognised scope annotations that the repository declares itself with `@Scope`, so a custom `@ScopeActivity` no longer keeps an unreferenced controller alive.",
-        "Removed the post that is the only content of a `finally` block for an event nobody hears. With `catch` clauses the `finally` tail goes and the try/catch stays. Without any, the `try` body is lifted one level, instead of leaving an empty `finally {}` and an unread local."
+        "A class extending View, ViewGroup or RecyclerView is judged like any other. The XML tag that inflates it is not invisible to this scanner, which reads XML, so the filter was covering a blind spot that does not exist.",
+        "Scope annotations the project declares with @Scope are recognised when looking for dead islands: they say how many instances to keep, never who creates one. Ten more islands on the reference project.",
+        "A parent is only spared by an annotated subtype when the annotation really denotes construction by a framework, such as serialization, Parcelable or Room. It used to accept any annotation at all.",
+        "A private top level declaration and three build variants of the same class no longer count as homonyms, so the duplicate name filter stops hiding what it cannot attribute.",
+        "An override whose whole supertype chain is declared in the workspace is judged, and the parent declaration stops counting as a call. Supertypes are resolved through imports, so a library type and a project type of the same simple name are no longer confused."
+      ]
+    },
+    {
+      "heading": "Removal Fixes",
+      "bullets": [
+        "Remove Everything Unused ignored unused Remote Config keys. A finding carries one declaration per build variant, and the removal read it as a single flat cut, so it cut nothing. Every declaration is now cut.",
+        "The Gradle root file counted as a library module when a plugin is written .apply(false), including when the formatter moves the call to the next line. A root listing a publishing plugin that way could have silenced the dead symbol detector across the whole workspace.",
+        "Two unheard event posts sharing one removal range produced two quick fixes for the same edit, and applying the second acted on text the first had changed. One finding per range now."
       ]
     }
   ],

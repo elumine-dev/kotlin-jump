@@ -33,6 +33,7 @@ import {
 import { planCascade } from '../src/providers/removalCascade';
 import { orphanSummary } from '../src/providers/orphanSourceSets';
 import { FileResourceIndex } from '../src/indexer/FileResourceIndex';
+import { scanTestOnly } from '../src/commands/RemoveTestOnlyCode';
 
 /** What the detectors read as text. */
 const SOURCE_RE = /\.(kt|kts|java|xml|gradle|pro|properties|toml)$|[\\/]nitro\.json$/;
@@ -111,7 +112,7 @@ function lineStarts(text: string): number[] {
 const offsetOf = (starts: readonly number[], line: number, character: number) =>
   (starts[line] ?? starts[starts.length - 1] ?? 0) + character;
 
-function main(): void {
+async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const root = args.find(a => !a.startsWith('--'));
   if (!root) { console.error('usage: apply-kj-removals.ts <project-root> [--apply] [--only=...] [--max=N]'); process.exit(2); }
@@ -120,7 +121,28 @@ function main(): void {
   const max = doApply ? Number(args.find(a => a.startsWith('--max='))?.slice('--max='.length) ?? 16) : 1;
   const segs = DEFAULT_TEST_SEGMENTS as readonly string[];
 
-  const manifest: { round: number; path: string; start: number; end: number; why: string }[] = [];
+  // `--tests`: what « Remove Test Only Code » would offer in review mode (every
+  // group, closure plans included), measured on the untouched project and
+  // written to KJ_TEST_MANIFEST. Remove All never calls that planner, so a
+  // gate reading only the Remove All manifest was blind to it (G52).
+  const testManifest = process.env.KJ_TEST_MANIFEST;
+  if (args.includes('--tests') && testManifest) {
+    const corpus = readCorpus(root);
+    const scan = await scanTestOnly({ get: async () => ({ ...corpus, sourcesTruncated: false }) } as any, undefined, true);
+    const textes = new Map(corpus.sources.map(s => [s.path, s.text]));
+    const coupes: { path: string; why: string; extrait: string }[] = [];
+    for (const { plan } of scan?.groups ?? []) {
+      for (const f of plan.files) coupes.push({ path: path.relative(root, f), why: 'test-file-deleted', extrait: '' });
+      for (const c of plan.cuts) {
+        const extrait = (textes.get(c.path) ?? '').slice(c.start, c.end).replace(/\s+/g, ' ').trim().slice(0, 60);
+        coupes.push({ path: path.relative(root, c.path), why: `${c.kind}:${c.name}`, extrait });
+      }
+    }
+    fs.writeFileSync(testManifest, JSON.stringify(coupes, null, 1));
+    console.log(`tests: ${scan?.groups.length ?? 0} group(s), ${coupes.length} test cut(s) planned`);
+  }
+
+  const manifest: { round: number; path: string; start: number; end: number; why: string; extrait?: string }[] = [];
   const cumul = new Map<string, number>();
   const bump = (k: string, n = 1) => cumul.set(k, (cumul.get(k) ?? 0) + n);
   const deleted = new Set<string>();
@@ -194,7 +216,9 @@ function main(): void {
       if (out === texte) continue;
       cutThisRound += spans.length;
       linesThisRound += texte.split('\n').length - out.split('\n').length;
-      for (const s of spans) manifest.push({ round: round + 1, path: path.relative(root, p), start: s.start, end: s.end, why: s.quoi || 'cut' });
+      // `extrait` names a bare 'cut' for a reader: the gate shows it when a
+      // finding is lost or gained, and the file is reset right after.
+      for (const s of spans) manifest.push({ round: round + 1, path: path.relative(root, p), start: s.start, end: s.end, why: s.quoi || 'cut', extrait: texte.slice(s.start, s.end).replace(/\s+/g, ' ').trim().slice(0, 60) });
       if (doApply) fs.writeFileSync(p, out);
     }
 
@@ -223,4 +247,4 @@ function main(): void {
   if (out) fs.writeFileSync(out, JSON.stringify(manifest, null, 1));
 }
 
-main();
+main().catch(e => { console.error(e); process.exit(1); });

@@ -606,13 +606,22 @@ export function planClosure(
     const leaving = new RegExp(`\\b(?:${wanted.map(escape).join('|')})\\b`);
     return funs.some(f => !leaving.test(text.slice(f.start, f.end)));
   };
+  // `Assert.assertEquals(...)` read `Assert` as its subject and never counted
+  // as an assertion: ListAggregatorV4DOTest went whole for one line.
+  const assertionHead = (t: string): string | undefined =>
+    subjectOf(t.replace(/^(?:[a-z_$][\w$]*\.)*[A-Z][\w$]*\.(?=[a-z])/, ''));
+  /** True when the file is named after a main type that stays (FooTest tests Foo). */
+  const testsASurvivingType = (src: Src): boolean => {
+    const base = (src.path.split(/[\\/]/).pop() ?? '').replace(/\.(kt|java)$/, '').replace(/(?:Tests?|IT|Spec)$/, '');
+    return base.length > 0 && mainTypes().has(base) && !wanted.includes(base) && !removedTypes.has(base);
+  };
   const assertionAt = (src: Src, offset: number, name: string, owner: { start: number; end: number }): { start: number; end: number } | undefined => {
     const lineStarts = buildLineStarts(clean(src));
     const lines = src.text.split('\n');
     const ln = offsetToPos(lineStarts as number[], offset).line;
     const ext = standaloneStatementExtent(lines, ln, name);
     if (!ext) return undefined;
-    const subject = subjectOf(lines.slice(ext.first, ext.last + 1).join('\n').trim());
+    const subject = assertionHead(lines.slice(ext.first, ext.last + 1).join('\n').trim());
     if (subject === undefined || !ASSERTION_RE.test(subject)) return undefined;
     // Another assertion must survive, and it must name nothing that leaves.
     const first = offsetToPos(lineStarts as number[], owner.start).line;
@@ -622,7 +631,7 @@ export function planClosure(
     for (let k = first; k <= last && !survives; k++) {
       if (k >= ext.first && k <= ext.last) continue;
       const t = (lines[k] ?? '').trim();
-      const head = subjectOf(t);
+      const head = assertionHead(t);
       if (head !== undefined && ASSERTION_RE.test(head) && !leaving.test(t)) survives = true;
     }
     if (!survives) return undefined;
@@ -986,8 +995,10 @@ export function planClosure(
           // whose every function names what leaves goes whole, as the hand
           // written branch did with two utility test classes,
           // where each function also carried an incidental assertion that
-          // would have kept a hollow test alive.
-          const st = testsOtherThings(src, funs) ? assertionAt(src, o, name, owner) : undefined;
+          // would have kept a hollow test alive. A file named after a main
+          // type that stays is not dedicated to what leaves: FooTest with one
+          // @Test went whole for a single `Assert.assertEquals(Foo.DEAD, ...)`.
+          const st = (testsOtherThings(src, funs) || testsASurvivingType(src)) ? assertionAt(src, o, name, owner) : undefined;
           if (st) { addCut(src.path, st.start, st.end, name, 'import'); continue; }
           addCut(src.path, owner.start, owner.end, owner.name, 'function');
           continue;

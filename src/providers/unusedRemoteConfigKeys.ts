@@ -1,6 +1,7 @@
 import { matchesGlob } from '../util/glob';
 import { isBuildArtifactPath, isGeneratedSource } from '../util/resourceAllowlists';
 import { stripXmlComments } from '../util/xmlRefs';
+import { readModuleGraph } from '../util/gradleModuleGraph';
 import { harvestMentions, SymbolSource } from './unusedSymbols';
 
 /**
@@ -184,11 +185,17 @@ function onlyAsksForNamedKeys(text: string, siteStart: number, siteEnd: number):
  * measured.
  */
 export function fileReadingEveryKey(sources: readonly SymbolSource[]): string | null {
+  return filesReadingEveryKey(sources)[0] ?? null;
+}
+
+/** Every file that reads every key without naming one. */
+export function filesReadingEveryKey(sources: readonly SymbolSource[]): string[] {
   const code = sources.filter(s => /\.(kt|java)$/.test(s.path) && !isBuildArtifactPath(s.path));
   const getAllIsOurs = code.some(
     s => /[Rr]emote\s*[Cc]onfig/.test(s.text) && DECLARES_GET_ALL.test(s.text),
   );
 
+  const out: string[] = [];
   for (const src of code) {
     // The marker says this file's sweep is not a reason to blind the family:
     // an admin screen that dumps every value is a mirror, not a consumer.
@@ -199,8 +206,36 @@ export function fileReadingEveryKey(sources: readonly SymbolSource[]): string | 
     while ((m = TAKES_THE_WHOLE_MAP.exec(src.text)) !== null) {
       if (getAllIsOurs && /getAll/.test(m[0])) continue;
       if (onlyAsksForNamedKeys(src.text, m.index, m.index + m[0].length)) continue;
-      return src.path;
+      out.push(src.path);
+      break;
     }
+  }
+  return out;
+}
+
+/**
+ * G58: the sweeper that blinds this declaration, or null.
+ *
+ * A sweeper only reads the keys of the applications it is packaged in: a
+ * replica admin screen dumping `remoteConfig.all` never sees a key of rubicon,
+ * another app with its own Firebase project. Judged per DECLARATION, not per
+ * key: on LaPresse, 24 keys were declared in both apps, and blinding the key
+ * whole kept rubicon's copy that nothing in rubicon reads. Without a readable
+ * module graph, or when either side's applications are unknown, every
+ * sweeper blinds every declaration, the workspace-wide reading this replaced.
+ */
+function blindingSweeper(
+  declaration: RemoteConfigKeyDeclaration,
+  sweepers: readonly string[],
+  graph: ReturnType<typeof readModuleGraph>,
+): string | null {
+  if (sweepers.length === 0) return null;
+  if (graph === undefined) return sweepers[0];
+  const keyApps = graph.appsOf(declaration.path);
+  if (keyApps === undefined) return sweepers[0];
+  for (const sweeper of sweepers) {
+    const apps = graph.appsOf(sweeper);
+    if (apps === undefined || [...keyApps].some(app => apps.has(app))) return sweeper;
   }
   return null;
 }
@@ -278,8 +313,11 @@ export function findUnusedRemoteConfigKeys(
   if (byKey.size === 0) return [];
 
   // Iterating `remoteConfig.all` reaches every key without naming one, so no
-  // key can be proven unread. A lookup table does not: see `fileReadingEveryKey`.
-  if (fileReadingEveryKey(input.sources) !== null) return [];
+  // key of the same application can be proven unread. A lookup table does
+  // not: see `filesReadingEveryKey`. Nor does another app (G58).
+  const sweepers = filesReadingEveryKey(input.sources);
+  const graph = sweepers.length > 0 ? readModuleGraph(input.sources) : undefined;
+  if (sweepers.length > 0 && graph === undefined) return [];
 
   const mentions = mentionsOutsideDefaults(input.sources, new Set(byKey.keys()));
   const ignored = input.ignoreNames ?? [];
@@ -288,7 +326,9 @@ export function findUnusedRemoteConfigKeys(
   for (const [name, declarations] of byKey) {
     if ((mentions.get(name) ?? 0) > 0) continue;
     if (ignored.some(p => matchesGlob(name, p))) continue;
-    out.push({ name, declarations });
+    const unread = declarations.filter(d => blindingSweeper(d, sweepers, graph) === null);
+    if (unread.length === 0) continue;
+    out.push({ name, declarations: unread });
   }
 
   return out.sort((a, b) => a.name.localeCompare(b.name));
@@ -304,17 +344,21 @@ export function explainRemoteConfigKeys(
   // `unreferenced` must mean the key IS reported, or `--why` explains a
   // finding that never comes.
   const truncated = input.truncated === true;
-  const sweeper = truncated ? null : fileReadingEveryKey(input.sources);
+  const sweepers = truncated ? [] : filesReadingEveryKey(input.sources);
+  const graph = sweepers.length > 0 ? readModuleGraph(input.sources) : undefined;
 
   const out: RemoteConfigKeyExplanation[] = [];
   for (const [name, declarations] of byKey) {
     const n = mentions.get(name) ?? 0;
-    const outcome = truncated ? 'R0:truncated-corpus'
-      : ignored.some(p => matchesGlob(name, p)) ? 'R3:ignored-name'
-      : n > 0 ? `alive:${n}`
-      : sweeper !== null ? `R4:every-key-read:${sweeper}`
-      : 'unreferenced';
-    for (const d of declarations) out.push({ name, path: d.path, line: d.line, outcome });
+    for (const d of declarations) {
+      const sweeper = blindingSweeper(d, sweepers, graph);
+      const outcome = truncated ? 'R0:truncated-corpus'
+        : ignored.some(p => matchesGlob(name, p)) ? 'R3:ignored-name'
+        : n > 0 ? `alive:${n}`
+        : sweeper !== null ? `R4:every-key-read:${sweeper}`
+        : 'unreferenced';
+      out.push({ name, path: d.path, line: d.line, outcome });
+    }
   }
   return out;
 }

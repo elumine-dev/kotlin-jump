@@ -14,6 +14,10 @@ import { findWriteOnlyVariables } from '../../../src/providers/WriteOnlyProvider
 /**
  * `@file:Suppress` ne compte qu'au-dessus de `package`.
  *
+ * G59 (2026-10-14) : la directive unused ne protege plus aucune declaration,
+ * fichier compris ; ces cas en sont les temoins. La lecture de l'en-tête reste
+ * éprouvée sur la famille des paramètres, que `"unused"` fait toujours taire.
+ *
  * La regex tournait sur le texte brut du fichier entier. Une mention dans un
  * KDoc, une chaîne ou un TODO commenté éteignait le détecteur pour tout le
  * fichier, sans que rien ne le signale. Et la forme entre crochets, valide en
@@ -27,70 +31,79 @@ import { findWriteOnlyVariables } from '../../../src/providers/WriteOnlyProvider
  */
 
 const DECL = UNUSED_DECLARATION;
+const PARAM = UNUSED_PARAMETER;
 
-describe('fileOptsOut : ce qui fait taire', () => {
+describe('fileOptsOut : ce qui fait taire les paramètres, jamais plus les déclarations', () => {
   it('la forme simple en en-tête', () => {
-    expect(fileOptsOut('@file:Suppress("unused")\npackage a\n\nclass Ghost\n', DECL)).toBe(true);
+    expect(fileOptsOut('@file:Suppress("unused")\npackage a\n\nclass Ghost\n', DECL)).toBe(false);
+    expect(fileOptsOut('@file:Suppress("unused")\npackage a\n\nclass Ghost\n', PARAM)).toBe(true);
   });
 
   it('la forme entre crochets, Suppress en second', () => {
-    expect(fileOptsOut('@file:[JvmName("X") Suppress("unused")]\npackage a\n', DECL)).toBe(true);
+    expect(fileOptsOut('@file:[JvmName("X") Suppress("unused")]\npackage a\n', DECL)).toBe(false);
+    expect(fileOptsOut('@file:[JvmName("X") Suppress("unused")]\npackage a\n', PARAM)).toBe(true);
   });
 
   it('la forme entre crochets, Suppress en premier', () => {
-    expect(fileOptsOut('@file:[Suppress("unused") JvmName("X")]\npackage a\n', DECL)).toBe(true);
+    expect(fileOptsOut('@file:[Suppress("unused") JvmName("X")]\npackage a\n', DECL)).toBe(false);
+    expect(fileOptsOut('@file:[Suppress("unused") JvmName("X")]\npackage a\n', PARAM)).toBe(true);
   });
 
   it('la seconde de deux annotations @file:', () => {
-    expect(fileOptsOut('@file:JvmName("X")\n@file:Suppress("unused")\npackage a\n', DECL)).toBe(true);
+    expect(fileOptsOut('@file:JvmName("X")\n@file:Suppress("unused")\npackage a\n', DECL)).toBe(false);
+    expect(fileOptsOut('@file:JvmName("X")\n@file:Suppress("unused")\npackage a\n', PARAM)).toBe(true);
   });
 
   it('un nom parmi plusieurs arguments', () => {
-    expect(fileOptsOut('@file:Suppress("unused", "TooManyFunctions")\n\npackage a\n', DECL)).toBe(true);
+    expect(fileOptsOut('@file:Suppress("unused", "TooManyFunctions")\n\npackage a\n', DECL)).toBe(false);
+    expect(fileOptsOut('@file:Suppress("unused", "TooManyFunctions")\n\npackage a\n', PARAM)).toBe(true);
   });
 
   it('un fichier sans package, où la coupe de repli s’applique', () => {
-    expect(fileOptsOut('@file:Suppress("unused")\nclass A(dead: Int) { val x = 1 }\n', DECL)).toBe(true);
+    expect(fileOptsOut('@file:Suppress("unused")\nclass A(dead: Int) { val x = 1 }\n', DECL)).toBe(false);
+    expect(fileOptsOut('@file:Suppress("unused")\nclass A(dead: Int) { val x = 1 }\n', PARAM)).toBe(true);
   });
 
   it('un « // package » commenté avant l’annotation ne coupe pas trop tôt', () => {
     // Le blanchiment des commentaires passe AVANT la coupe, sinon ce
     // commentaire terminerait l'en-tête et l'annotation tomberait dehors.
-    expect(fileOptsOut('// package foo\n@file:Suppress("unused")\npackage a\n', DECL)).toBe(true);
+    expect(fileOptsOut('// package foo\n@file:Suppress("unused")\npackage a\n', DECL)).toBe(false);
+    expect(fileOptsOut('// package foo\n@file:Suppress("unused")\npackage a\n', PARAM)).toBe(true);
   });
 
   it('un bloc commentaire ouvert avant et refermé après un faux package', () => {
-    expect(fileOptsOut('/*\npackage a\n*/\n@file:Suppress("unused")\npackage b\n', DECL)).toBe(true);
+    expect(fileOptsOut('/*\npackage a\n*/\n@file:Suppress("unused")\npackage b\n', DECL)).toBe(false);
+    expect(fileOptsOut('/*\npackage a\n*/\n@file:Suppress("unused")\npackage b\n', PARAM)).toBe(true);
   });
 });
 
-describe('fileOptsOut : ce qui ne fait plus taire', () => {
+describe('fileOptsOut : ce qui ne fait pas taire, même les paramètres', () => {
   it('une mention dans un KDoc au-dessus de package', () => {
-    expect(fileOptsOut('/** @file:Suppress("unused") */\npackage a\n\nclass Ghost\n', DECL)).toBe(false);
+    expect(fileOptsOut('/** @file:Suppress("unused") */\npackage a\n\nclass Ghost\n', PARAM)).toBe(false);
   });
 
   it('une mention dans un TODO commenté', () => {
-    expect(fileOptsOut('// remove this: @file:Suppress("unused")\npackage a\n', DECL)).toBe(false);
+    expect(fileOptsOut('// remove this: @file:Suppress("unused")\npackage a\n', PARAM)).toBe(false);
   });
 
   it('une mention dans une chaîne du corps', () => {
-    expect(fileOptsOut('package a\nval s = "@file:Suppress(\\"unused\\")"\n', DECL)).toBe(false);
+    expect(fileOptsOut('package a\nval s = "@file:Suppress(\\"unused\\")"\n', PARAM)).toBe(false);
   });
 
   it('une mention dans un littéral brut', () => {
-    expect(fileOptsOut('package a\nval s = """@file:Suppress("unused")"""\n', DECL)).toBe(false);
+    expect(fileOptsOut('package a\nval s = """@file:Suppress("unused")"""\n', PARAM)).toBe(false);
   });
 
   it('une mention dans un KDoc sous les import', () => {
-    expect(fileOptsOut('package a\nimport b.C\n/** @file:Suppress("unused") */\nclass Ghost\n', DECL)).toBe(false);
+    expect(fileOptsOut('package a\nimport b.C\n/** @file:Suppress("unused") */\nclass Ghost\n', PARAM)).toBe(false);
   });
 
   it('une autre annotation de fichier', () => {
-    expect(fileOptsOut('@file:JvmName("X")\npackage a\n', DECL)).toBe(false);
+    expect(fileOptsOut('@file:JvmName("X")\npackage a\n', PARAM)).toBe(false);
   });
 
   it('un fichier sans @file du tout', () => {
-    expect(fileOptsOut('package a\nclass Ghost\n', DECL)).toBe(false);
+    expect(fileOptsOut('package a\nclass Ghost\n', PARAM)).toBe(false);
   });
 });
 
@@ -98,30 +111,35 @@ describe('fileOptsOut : ce que la relecture adversariale a trouvé', () => {
   it('un commentaire de bloc IMBRIQUÉ est entièrement un commentaire', () => {
     // Kotlin imbrique les blocs, contrairement à C. S'arrêter au premier `*/`
     // rendait l'annotation au code appelant, exactement le défaut corrigé ici.
-    expect(fileOptsOut('/* /* */ @file:Suppress("unused") */\npackage a\n', DECL)).toBe(false);
-    expect(fileOptsOut('/* a /* b /* c */ d */ @file:Suppress("unused") */\npackage a\n', DECL)).toBe(false);
+    expect(fileOptsOut('/* /* */ @file:Suppress("unused") */\npackage a\n', PARAM)).toBe(false);
+    expect(fileOptsOut('/* a /* b /* c */ d */ @file:Suppress("unused") */\npackage a\n', PARAM)).toBe(false);
   });
 
   it('« packageName » et « importantFlag » sont des identifiants, pas le début du corps', () => {
-    expect(fileOptsOut('packageName = 1\n@file:Suppress("unused")\npackage a\n', DECL)).toBe(true);
-    expect(fileOptsOut('importantFlag = 1\n@file:Suppress("unused")\npackage a\n', DECL)).toBe(true);
+    expect(fileOptsOut('packageName = 1\n@file:Suppress("unused")\npackage a\n', DECL)).toBe(false);
+    expect(fileOptsOut('packageName = 1\n@file:Suppress("unused")\npackage a\n', PARAM)).toBe(true);
+    expect(fileOptsOut('importantFlag = 1\n@file:Suppress("unused")\npackage a\n', DECL)).toBe(false);
+    expect(fileOptsOut('importantFlag = 1\n@file:Suppress("unused")\npackage a\n', PARAM)).toBe(true);
   });
 
   it('la forme qualifiée @file:kotlin.Suppress compte', () => {
-    expect(fileOptsOut('@file:kotlin.Suppress("unused")\npackage a\n', DECL)).toBe(true);
-    expect(fileOptsOut('@file:[JvmName("X") kotlin.Suppress("unused")]\npackage a\n', DECL)).toBe(true);
+    expect(fileOptsOut('@file:kotlin.Suppress("unused")\npackage a\n', DECL)).toBe(false);
+    expect(fileOptsOut('@file:kotlin.Suppress("unused")\npackage a\n', PARAM)).toBe(true);
+    expect(fileOptsOut('@file:[JvmName("X") kotlin.Suppress("unused")]\npackage a\n', DECL)).toBe(false);
+    expect(fileOptsOut('@file:[JvmName("X") kotlin.Suppress("unused")]\npackage a\n', PARAM)).toBe(true);
   });
 
-  it('une licence de 60 lignes ne coûte pas son opt-out au fichier', () => {
+  it('une licence de 60 lignes ne coûte pas son opt-out de paramètres au fichier', () => {
     // Le plafond de lignes ne vaut que pour un fichier SANS package ni import.
     // L'appliquer pendant le parcours coupait l'en-tête sous une longue licence.
     const src = '// licence\n'.repeat(60) + '@file:Suppress("unused")\npackage a\n';
-    expect(fileOptsOut(src, DECL)).toBe(true);
+    expect(fileOptsOut(src, DECL)).toBe(false);
+    expect(fileOptsOut(src, PARAM)).toBe(true);
   });
 
   it('un fichier sans package ne fait pas lire son corps entier', () => {
     const src = '@file:JvmName("X")\n' + 'val a = 1\n'.repeat(80) + 'val s = "@file:Suppress(\\"unused\\")"\n';
-    expect(fileOptsOut(src, DECL)).toBe(false);
+    expect(fileOptsOut(src, PARAM)).toBe(false);
   });
 });
 
@@ -150,30 +168,30 @@ describe('fileHeader', () => {
   });
 });
 
-describe('le câblage tient dans les quatre familles', () => {
+describe('le câblage : la directive de fichier ne tait plus les déclarations', () => {
   const kdoc = (body: string) => `/** @file:Suppress("unused") */\npackage a\n\n${body}`;
   const marked = (body: string) => `@file:[JvmName("X") Suppress("unused")]\npackage a\n\n${body}`;
 
-  it('KJ-032, déclarations de premier niveau', () => {
+  it('KJ-032, déclarations de premier niveau : rapportées malgré la directive', () => {
     const at = (text: string) => [{ path: '/w/a/src/main/kotlin/A.kt', text }];
     const run = (text: string) =>
       findUnusedSymbols({ sources: at(text), testSourceSets: ['test/kotlin'] }).map(f => f.name);
     expect(run(kdoc('class Ghost\n'))).toEqual(['Ghost']);
-    expect(run(marked('class Ghost\n'))).toEqual([]);
+    expect(run(marked('class Ghost\n'))).toEqual(['Ghost']);
   });
 
-  it('KJ-025, paramètres', () => {
+  it('KJ-025, paramètres : toujours tus', () => {
     const body = 'class A(dead: Int) {\n  val x = 1\n}\n';
     expect(findUnusedParameters(kdoc(body))).toHaveLength(1);
     expect(findUnusedParameters(marked(body))).toHaveLength(0);
   });
 
-  it('KJ-026, déclarations privées', () => {
+  it('KJ-026, déclarations privées : rapportées malgré la directive', () => {
     expect(findUnusedDeclarations(kdoc('private fun gone() = 1\n'))).toHaveLength(1);
-    expect(findUnusedDeclarations(marked('private fun gone() = 1\n'))).toHaveLength(0);
+    expect(findUnusedDeclarations(marked('private fun gone() = 1\n'))).toHaveLength(1);
   });
 
-  it('KJ-027, variables locales', () => {
+  it('KJ-027, variables locales : toujours tues', () => {
     const body = 'fun f() {\n  val dead = 1\n  println(2)\n}\n';
     expect(findUnusedLocals(kdoc(body))).toHaveLength(1);
     expect(findUnusedLocals(marked(body))).toHaveLength(0);

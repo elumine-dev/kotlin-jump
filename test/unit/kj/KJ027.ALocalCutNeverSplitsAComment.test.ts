@@ -7,6 +7,9 @@ import { findWriteOnlyVariables } from '../../../src/providers/writeOnlyVariable
 /**
  * Deux trous de la meme journee, sur deux detecteurs.
  *
+ * G59 (2026-10-14) : la directive unused ne protege plus aucune declaration,
+ * fichier compris ; ces cas en sont les temoins.
+ *
  * Le premier : retirer une variable locale morte prenait sa ligne entiere,
  * ouverture de commentaire de bloc comprise, en laissant la fermeture seule
  * derriere. Troisieme chemin de coupe touche par cette famille.
@@ -86,15 +89,13 @@ describe('une directive de compilation ne protege pas le corps de la classe', ()
 });
 
 /**
- * Sauf quand la directive dit justement de se taire.
+ * Meme quand la directive dit justement de se taire.
  *
- * La version precedente de ce fichier affirmait qu un `@Suppress("unused")`
- * sur la classe ne cachait pas la constante. Elle decrivait le defaut : en
- * ecartant TOUTES les directives, le correctif avait fait signaler, et donc
- * proposer de supprimer, ce que l auteur avait marque comme volontairement
- * inutilise. En 1.42.319 cette classe etait respectee.
+ * Avant G59, `@Suppress("unused")` sur la classe cachait la constante : la
+ * directive valait demande de garder. Depuis G59 elle ne dit rien de
+ * l atteignabilite, et la constante morte sort comme les autres.
  */
-describe('une directive qui demande le silence est respectee', () => {
+describe('une directive qui demande le silence ne cache plus la constante morte', () => {
   const objet = (anno: string) =>
     `package x\n\n${anno}object U {\n    private const val MORT = "a.txt"\n    fun vivant() = 1\n}\n`;
   const noms = (src: string) => (findUnusedDeclarations(src) as any[]).map(d => d.name);
@@ -106,8 +107,8 @@ describe('une directive qui demande le silence est respectee', () => {
     '@Suppress("MagicNumber", "unused")\n',
     '@Suppress(\n    "unused",\n)\n',
   ]) {
-    it(`${JSON.stringify(anno.trim())} garde la constante`, () => {
-      expect(noms(objet(anno))).not.toContain('MORT');
+    it(`${JSON.stringify(anno.trim())} ne garde pas la constante`, () => {
+      expect(noms(objet(anno))).toContain('MORT');
     });
   }
 

@@ -14,6 +14,9 @@ import { expectFasterThan } from '../perfBudget';
  *
  * Les quatre cas marqués « le moteur d'usages casse ici » sont la raison pour
  * laquelle KJ-032 moissonne le corpus au lieu d'appeler FindUsagesEngine.
+ *
+ * G59 (2026-10-14) : la directive unused ne protege plus aucune declaration,
+ * fichier compris ; ces cas en sont les temoins (F12).
  */
 
 const mod: any = await importOrNull('src/providers/unusedSymbols');
@@ -247,12 +250,12 @@ describe.skipIf(!mod)('F11 à F17 — opt-outs et périmètre', () => {
     expect(find([kt(`${MAIN}/B.kt`, 'package com.x\n\nfun `a ghost`() {}\n')])).toEqual([]);
   });
 
-  it('F12 : @Suppress sur la déclaration', () => {
-    expect(find([ghost('@Suppress("unused")\nclass Ghost')])).toEqual([]);
+  it('F12 : @Suppress sur la déclaration ne la protège plus', () => {
+    expect(names(find([ghost('@Suppress("unused")\nclass Ghost')]))).toEqual(['Ghost']);
   });
 
-  it('F12 : @file:Suppress éteint tout le fichier', () => {
-    expect(find([kt(`${MAIN}/S.kt`, '@file:Suppress("unused")\npackage com.x\n\nclass Ghost\n')])).toEqual([]);
+  it('F12 : @file:Suppress n’éteint plus le fichier', () => {
+    expect(names(find([kt(`${MAIN}/S.kt`, '@file:Suppress("unused")\npackage com.x\n\nclass Ghost\n')]))).toEqual(['Ghost']);
   });
 
   it('F12 : @file:Suppress cité dans un KDoc n’éteint rien', () => {
@@ -262,9 +265,9 @@ describe.skipIf(!mod)('F11 à F17 — opt-outs et périmètre', () => {
       '/** @file:Suppress("unused") */\npackage com.x\n\nclass Ghost\n')]))).toEqual(['Ghost']);
   });
 
-  it('F12 : la forme entre crochets éteint le fichier comme la forme simple', () => {
-    expect(find([kt(`${MAIN}/S.kt`,
-      '@file:[JvmName("S") Suppress("unused")]\npackage com.x\n\nclass Ghost\n')])).toEqual([]);
+  it('F12 : la forme entre crochets n’éteint pas plus le fichier que la forme simple', () => {
+    expect(names(find([kt(`${MAIN}/S.kt`,
+      '@file:[JvmName("S") Suppress("unused")]\npackage com.x\n\nclass Ghost\n')]))).toEqual(['Ghost']);
   });
 
   it('un objet anonyme au niveau fichier n’est pas une déclaration', () => {

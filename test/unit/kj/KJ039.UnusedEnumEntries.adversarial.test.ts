@@ -13,6 +13,9 @@ import { findUnusedEnumEntries, explainEnumEntries } from '../../../src/provider
  * atteignables sans qu'aucune ne soit écrite. Juger entrée par entrée
  * signalerait celle qui n'apparaît pas alors que ses sœurs apparaissent, ce
  * qui est la pire forme d'erreur : elle est plausible.
+ *
+ * G59 (2026-10-14) : la directive unused ne protege plus aucune declaration,
+ * fichier compris ; ces cas en sont les temoins.
  */
 
 const TEST_SETS = ['test/java', 'test/kotlin', 'androidTest'];
@@ -371,10 +374,10 @@ describe('le contrat', () => {
     expect(names([marked])).toEqual([]);
   });
 
-  it('@file:Suppress("unused") aussi', () => {
+  it('@file:Suppress("unused") ne tait plus le fichier', () => {
     const suppressed = f(`${MAIN}/Mode.kt`,
       '@file:Suppress("unused")\n\npackage com.x\n\nenum class Mode {\n    ALLOW,\n}\n');
-    expect(names([suppressed])).toEqual([]);
+    expect(names([suppressed])).toEqual(['Mode.ALLOW']);
   });
 
   it('un nom d’enum ou une entrée qualifiée peuvent être ignorés', () => {

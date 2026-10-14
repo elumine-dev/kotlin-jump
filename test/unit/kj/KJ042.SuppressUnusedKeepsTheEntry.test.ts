@@ -3,9 +3,13 @@ import { findUnusedEnumEntries } from '../../../src/providers/unusedEnumEntries'
 import { collecterUnePasse } from '../../../src/commands/RemoveEverythingUnused';
 
 /**
- * Une entree d enum marquee `@Suppress("unused")`, ou dont l enum l est, n est
- * ni signalee ni supprimee.
+ * Une entree d enum marquee `@Suppress("unused")`, ou dont l enum l est, est
+ * signalee et supprimee comme les autres.
  *
+ * G59 (2026-10-14) : la directive unused ne protege plus aucune declaration,
+ * fichier compris ; ces cas en sont les temoins.
+ *
+ * Historique, avant G59 :
  * Meme defaut que pour les membres : `Suppress` figure parmi les annotations
  * benignes des enums, ce qui dit seulement qu il ne rend rien atteignable, et
  * personne ne regardait QUEL diagnostic il nomme. L entree restait signalee et
@@ -26,25 +30,25 @@ const supprimees = (src: string) =>
   (collecterUnePasse([f(`${MAIN}/E.kt`, src), APPEL, GRADLE], ['/src/test/']).parFichier.get(`${MAIN}/E.kt`) ?? [])
     .filter((c: any) => c.famille === 'entrees').length;
 
-describe('l entree d enum respecte la demande de silence', () => {
+describe('l entree d enum morte sort malgre la demande de silence', () => {
   it('temoin : sans annotation, les deux entrees mortes sortent', () => {
     expect(signalees(enumAvec('', ''))).toEqual(['AUTRE', 'MORT']);
   });
 
-  it('sur l enum : aucune entree, et rien ne part', () => {
+  it('sur l enum : les deux entrees mortes sortent et partent', () => {
     const src = enumAvec('@Suppress("unused")\n', '');
-    expect(signalees(src)).toEqual([]);
-    expect(supprimees(src)).toBe(0);
+    expect(signalees(src)).toEqual(['AUTRE', 'MORT']);
+    expect(supprimees(src)).toBe(2);
   });
 
-  it('sur l entree : elle reste, sa voisine morte sort toujours', () => {
+  it('sur l entree : elle sort, et sa voisine morte aussi', () => {
     const src = enumAvec('', '@Suppress("unused")\n    ');
-    expect(signalees(src)).toEqual(['AUTRE']);
+    expect(signalees(src)).toEqual(['AUTRE', 'MORT']);
   });
 
-  it('SuppressWarnings, et parmi d autres diagnostics', () => {
-    expect(signalees(enumAvec('@SuppressWarnings("unused")\n', ''))).toEqual([]);
-    expect(signalees(enumAvec('@Suppress("MagicNumber", "unused")\n', ''))).toEqual([]);
+  it('SuppressWarnings, et parmi d autres diagnostics : rien ne protege', () => {
+    expect(signalees(enumAvec('@SuppressWarnings("unused")\n', ''))).toEqual(['AUTRE', 'MORT']);
+    expect(signalees(enumAvec('@Suppress("MagicNumber", "unused")\n', ''))).toEqual(['AUTRE', 'MORT']);
   });
 
   it('un autre diagnostic ne vaut pas silence', () => {
@@ -53,18 +57,18 @@ describe('l entree d enum respecte la demande de silence', () => {
   });
 });
 
-describe('la demande de silence d une entree ne deborde pas sur sa voisine de ligne', () => {
-  // La fenetre allait du debut de la LIGNE jusqu au nom de l entree. Sur un
-  // enum ecrit d une ligne, l annotation de la premiere entree tombait dans la
-  // fenetre de toutes les suivantes, qui n etaient plus jamais signalees.
-  it('enum sur une ligne : seule l entree marquee reste', () => {
+describe('l entree sous silence et sa voisine de ligne sortent toutes deux', () => {
+  // Avant G59, la fenetre allait du debut de la LIGNE jusqu au nom de l entree.
+  // Sur un enum ecrit d une ligne, l annotation de la premiere entree tombait
+  // dans la fenetre de toutes les suivantes, qui n etaient plus jamais signalees.
+  it('enum sur une ligne : l entree marquee sort avec sa voisine', () => {
     const src = 'package com.x\n\nenum class E { VIVANT, @Suppress("unused") GARDE, MORT }\n';
-    expect(signalees(src)).toEqual(['MORT']);
+    expect(signalees(src)).toEqual(['GARDE', 'MORT']);
   });
 
-  it('premiere ou derniere entree marquee : elle reste, et elle seule', () => {
-    expect(signalees('package com.x\n\nenum class E { @Suppress("unused") GARDE, MORT, VIVANT }\n')).toEqual(['MORT']);
-    expect(signalees('package com.x\n\nenum class E { VIVANT, MORT, @Suppress("unused") GARDE }\n')).toEqual(['MORT']);
+  it('premiere ou derniere entree marquee : elle sort, sa voisine aussi', () => {
+    expect(signalees('package com.x\n\nenum class E { @Suppress("unused") GARDE, MORT, VIVANT }\n')).toEqual(['GARDE', 'MORT']);
+    expect(signalees('package com.x\n\nenum class E { VIVANT, MORT, @Suppress("unused") GARDE }\n')).toEqual(['GARDE', 'MORT']);
   });
 
   it('un membre marque dans le corps de l entree precedente ne fait pas taire la suivante', () => {
@@ -82,11 +86,11 @@ describe('la demande de silence d une entree ne deborde pas sur sa voisine de li
     expect(signalees(src)).toEqual(['MORT']);
   });
 
-  it('Java, sur une ligne : meme regle', () => {
+  it('Java, sur une ligne : meme regle, les deux sortent', () => {
     const java = (src: string) =>
       (findUnusedEnumEntries({ sources: [f('/w/app/src/main/java/com/x/E.java', src), APPEL, GRADLE], testSourceSets: ['/src/test/'] } as any) as any[])
         .map(e => e.name).sort();
-    expect(java('package com.x;\n\npublic enum E { VIVANT, @SuppressWarnings("unused") GARDE, MORT }\n')).toEqual(['MORT']);
+    expect(java('package com.x;\n\npublic enum E { VIVANT, @SuppressWarnings("unused") GARDE, MORT }\n')).toEqual(['GARDE', 'MORT']);
   });
 
   it('temoin : sans annotation, les deux sortent', () => {

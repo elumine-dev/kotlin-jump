@@ -8,7 +8,7 @@ import { stripKotlinComments } from '../util/xmlRefs';
 import { isBuildArtifactPath, isGeneratedSource } from '../util/resourceAllowlists';
 import { isTestSourceSet } from '../util/testPaths';
 import {
-  BENIGN_TOPLEVEL_ANNOTATIONS, harvestMentions, removalExtent, scopeAnnotationsOf, SymbolSource,
+  accessorNames, BENIGN_TOPLEVEL_ANNOTATIONS, harvestMentions, removalExtent, scopeAnnotationsOf, SymbolSource,
 } from './unusedSymbols';
 import { resoudreType, TypeDecl } from './unusedMembers';
 import { signatureOnlySpan } from './deadIslands';
@@ -85,8 +85,13 @@ interface TypeInfo {
   decl: TypeDecl;
   file: FileInfo;
   sym: RawSymbol;
-  funs: RawSymbol[];
+  /** Direct members: `fun`, `val`, `var`. Primary-constructor params are not here. */
+  members: RawSymbol[];
 }
+
+const MEMBER_KINDS = new Set(['fun', 'val', 'var']);
+/** Kinds a subclass can extend: an object, an enum or a data class cannot hold a contract. */
+const EXTENSIBLE_CLASS_KINDS = new Set(['class', 'sealedClass']);
 
 const annotationNames = (f: FileInfo, sym: RawSymbol): string[] => {
   const lo = f.lineStarts[sym.line];
@@ -143,12 +148,17 @@ function bodyOf(f: FileInfo, sym: RawSymbol): 'body' | 'none' | 'unknown' {
 
 /** The removal extent of one declaration, or undefined when it cannot be cut safely. */
 function cutOf(f: FileInfo, sym: RawSymbol, lastLine: number, sansCommentaires: () => string): ContractCut | undefined {
-  const body = bodyOf(f, sym);
-  if (body === 'unknown') return undefined;
   const nameOffset = f.lineStarts[sym.line] + sym.character;
-  const span = body === 'body'
-    ? declarationSpan(f.clean, f.lineStarts, { kind: 'fun', name: sym.name, line: sym.line, nameOffset, lastLine })
-    : signatureOnlySpan(f.clean, f.lineStarts, nameOffset, sym.name);
+  let span: ReturnType<typeof declarationSpan> | ReturnType<typeof signatureOnlySpan>;
+  if (sym.kind === 'fun') {
+    const body = bodyOf(f, sym);
+    if (body === 'unknown') return undefined;
+    span = body === 'body'
+      ? declarationSpan(f.clean, f.lineStarts, { kind: 'fun', name: sym.name, line: sym.line, nameOffset, lastLine })
+      : signatureOnlySpan(f.clean, f.lineStarts, nameOffset, sym.name);
+  } else {
+    span = declarationSpan(f.clean, f.lineStarts, { kind: 'prop', name: sym.name, line: sym.line, nameOffset, lastLine });
+  }
   if (!span) return undefined;
   // Same clamp as the islands: an extent crossing a following declaration of
   // the same or a shallower depth is refused, never trimmed.
@@ -213,13 +223,14 @@ export function findUnusedContracts(input: ContractScanInput): UnusedContract[] 
           members: new Set(),
           bindingMembers: new Set(),
         };
-        const t: TypeInfo = { decl, file: f, sym: s, funs: [] };
+        const t: TypeInfo = { decl, file: f, sym: s, members: [] };
         types.push(t);
         typeOf.set(decl, t);
         typesByName.set(s.name, [...(typesByName.get(s.name) ?? []), decl]);
         stack.push(t);
-      } else if (s.kind === 'fun' && stack.length > 0 && stack[stack.length - 1].sym.depth === s.depth - 1) {
-        stack[stack.length - 1].funs.push(s);
+      } else if (MEMBER_KINDS.has(s.kind) && !s.isPrimaryCtorParam
+        && stack.length > 0 && stack[stack.length - 1].sym.depth === s.depth - 1) {
+        stack[stack.length - 1].members.push(s);
       }
     }
   }
@@ -237,19 +248,28 @@ export function findUnusedContracts(input: ContractScanInput): UnusedContract[] 
     for (const m of f.clean.matchAll(/\bnew\s+(?:[\w]+\.)*([A-Za-z_]\w*)\s*(?:<[^>]*>)?\s*\([^)]*\)\s*\{/g)) anonymous.add(m[1]);
   }
   /** The contracts left once structure is checked, judged after ONE harvest. */
-  const pending: { contract: TypeInfo; holders: TypeInfo[]; funNames: Set<string> }[] = [];
+  const pending: { contract: TypeInfo; holders: TypeInfo[]; names: Set<string> }[] = [];
+  const headOf = (t: { file: FileInfo }, s: RawSymbol) => t.file.clean.slice(t.file.lineStarts[s.line], t.file.lineStarts[s.line] + s.character);
+  /** A member that overrides something is not the root of its contract: the root is higher. */
+  const overrides = (t: TypeInfo, s: RawSymbol) => /\boverride\b/.test(headOf(t, s)) || annotationNames(t.file, s).includes('Override');
 
   for (const contract of types) {
     const f = contract.file;
-    if (!contract.decl.isInterface || f.isTest || f.frozen) continue;
+    const isInterface = contract.decl.isInterface;
+    if (!isInterface && !EXTENSIBLE_CLASS_KINDS.has(contract.sym.kind)) continue;
+    if (f.isTest || f.frozen) continue;
     if (annotationNames(f, contract.sym).some(n => !benign(n))) continue;
     const head = f.clean.slice(f.lineStarts[contract.sym.line], f.lineStarts[contract.sym.line] + contract.sym.character);
     if (/\bfun\s+interface\b/.test(head) || /@interface\b/.test(head)) continue;
     const own = ancestries.get(contract);
     if (own !== undefined && !own.complete) continue;
 
-    const abstractFuns = contract.funs.filter(s => bodyOf(f, s) === 'none' && !/\bstatic\b/.test(f.clean.slice(f.lineStarts[s.line], f.lineStarts[s.line] + s.character)));
-    if (abstractFuns.length < 2) continue;
+    const own_ = contract.members.filter(s => !overrides(contract, s) && !/\bstatic\b/.test(headOf(contract, s)));
+    // An interface with a single abstract member may be the target of a
+    // lambda that implements it without spelling the name. A property counts:
+    // it compiles to an abstract getter, so it rules a lambda out as well.
+    const abstractMembers = isInterface ? own_.filter(s => s.kind !== 'fun' || bodyOf(f, s) === 'none') : [];
+    if (isInterface && abstractMembers.length < 2) continue;
 
     // Anonymous implementations. The SAM form `Name { }` needs no pattern, a
     // single abstract method already kept the pair.
@@ -272,27 +292,41 @@ export function findUnusedContracts(input: ContractScanInput): UnusedContract[] 
     }
     if (blocked || impls.length === 0) continue;
 
-    pending.push({ contract, holders: [contract, ...impls], funNames: new Set(abstractFuns.map(s => s.name)) });
+    // An interface offers its abstract members. A class offers what a
+    // subclass overrides: the rest is ordinary members, judged elsewhere.
+    const offered = isInterface ? abstractMembers
+      : own_.filter(s => impls.some(i => i.members.some(m => m.name === s.name && m.kind === s.kind)));
+    if (offered.length === 0) continue;
+    pending.push({ contract, holders: [contract, ...impls], names: new Set(offered.map(s => s.name)) });
   }
 
   // One harvest for every name at once: one per contract cost 112 s on a
   // 6000-file project.
   const wanted = new Set<string>();
-  for (const { funNames } of pending) {
-    for (const n of funNames) { wanted.add(n); const bare = bareProperty(n); if (bare) wanted.add(bare); }
+  for (const { names } of pending) {
+    for (const n of names) {
+      wanted.add(n);
+      const bare = bareProperty(n);
+      if (bare) wanted.add(bare);
+      for (const a of accessorNames(n)) wanted.add(a);
+    }
   }
   const harvest = wanted.size > 0 ? harvestMentions(input.sources, wanted, input.testSourceSets) : undefined;
 
   const out: UnusedContract[] = [];
-  for (const { contract, holders, funNames } of pending) {
+  const count = (n: string) => (harvest!.main.get(n) ?? 0) + (harvest!.test.get(n) ?? 0);
+  for (const { contract, holders, names } of pending) {
     const f = contract.file;
     const name = contract.decl.name;
-    for (const n of funNames) {
-      const decls = holders.flatMap(h => h.funs.filter(s => s.name === n).map(s => ({ h, s })));
-      const mentions = (harvest!.main.get(n) ?? 0) + (harvest!.test.get(n) ?? 0);
-      if (mentions !== decls.length) continue;
+    for (const n of names) {
+      const decls = holders.flatMap(h => h.members.filter(s => s.name === n).map(s => ({ h, s })));
+      if (count(n) !== decls.length) continue;
+      const isProperty = decls.some(({ s }) => s.kind !== 'fun');
+      if (isProperty && decls.some(({ s }) => s.kind === 'fun')) continue;
+      // Reached under another spelling: a Java accessor, a data-binding name.
+      if (isProperty && accessorNames(n).some(a => a !== n && count(a) > 0)) continue;
       const bare = bareProperty(n);
-      if (bare && bare !== n && ((harvest!.main.get(bare) ?? 0) + (harvest!.test.get(bare) ?? 0)) > 0) continue;
+      if (!isProperty && bare && bare !== n && count(bare) > 0) continue;
       if (decls.some(({ h, s }) => annotationNames(h.file, s).some(a => !benign(a)))) continue;
       if (decls.some(({ h, s }) => /\b(?:external|native)\b/.test(h.file.clean.slice(h.file.lineStarts[s.line], h.file.lineStarts[s.line] + s.character)))) continue;
 

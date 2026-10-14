@@ -171,6 +171,8 @@ export const SUPPRESS_NAMES = new Set(['Suppress', 'SuppressLint', 'SuppressWarn
  * as a word character and so blocks the short match.
  */
 export function suppressesDiagnostic(args: string, diagnostics: readonly string[]): boolean {
+  // An empty list is a family no directive opts out of, `"all"` included (G59).
+  if (diagnostics.length === 0) return false;
   return [...diagnostics, ...SUPPRESS_EVERYTHING].some(d => new RegExp(`(?:^|[^\\w])${d}(?![\\w])`, 'i').test(args));
 }
 
@@ -312,18 +314,25 @@ export function fileOptsOut(text: string, diagnostics: readonly string[]): boole
   return false;
 }
 
-/** Opts out of "nothing references this declaration" everywhere in the family. */
-export const UNUSED_DECLARATION = ['unused', 'UnusedDeclaration'] as const;
 /**
- * …plus the detekt rules that say the same thing about PRIVATE declarations.
+ * The directives that opt a DECLARATION out of « nothing references this »:
+ * none, since G59.
  *
- * A detector of private declarations is their exact counterpart, and a project
- * that runs detekt writes `@Suppress("UnusedPrivateMember")` far more often
- * than `"unused"`. The whole name is matched, so `UnusedParameter` stays out.
+ * Until 1.42.321 `"unused"`, `"UnusedDeclaration"`, `"all"` and detekt's
+ * `UnusedPrivate*` rules protected the declaration, its class, or the whole
+ * file through `@file:Suppress`. Kevin decided otherwise on 2026-10-14, after
+ * removing by hand, on AND-2340, nine members KJ had kept for that reason
+ * alone: a directive that silences a warning says nothing about whether the
+ * code is reachable, and dead code under it is still dead. Asked twice, the
+ * answer was « everywhere, files included ».
+ *
+ * Parameters and locals keep their lists: `UNUSED_PARAMETER` is how a
+ * signature imposed from outside (`onClick(view: View)` named by an XML
+ * `android:onClick`) is written down, not a claim about dead code.
  */
-export const UNUSED_PRIVATE_DECLARATION = [
-  'unused', 'UnusedDeclaration', 'UnusedPrivateMember', 'UnusedPrivateProperty', 'UnusedPrivateFunction', 'UnusedPrivateClass',
-] as const;
+export const UNUSED_DECLARATION = [] as const;
+/** Same answer for the private-declaration detectors. */
+export const UNUSED_PRIVATE_DECLARATION = [] as const;
 /** …plus the compiler warning a parameter detector is the counterpart of. */
 export const UNUSED_PARAMETER = ['unused', 'UNUSED_PARAMETER'] as const;
 /** …plus the ones a local-variable detector is the counterpart of. */

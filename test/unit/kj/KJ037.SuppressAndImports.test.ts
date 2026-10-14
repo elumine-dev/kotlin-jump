@@ -14,6 +14,10 @@ import { collectAnnotationTargets, sanitizeForUsageScan } from '../../../src/uti
  *    compilateur sur un paramètre désactivait au passage la détection de code
  *    mort sur tout son contenu.
  *
+ *    G59 (2026-10-14) : la directive unused ne protege plus aucune declaration,
+ *    fichier compris ; ces cas en sont les temoins. `"unused"` tait encore les
+ *    paramètres et les locales.
+ *
  * 2. La moisson jetait la ligne d'import entière. Or `import p.Outer.Nested`
  *    nomme `Outer` structurellement : le fichier casse si `Outer` disparaît,
  *    même si son corps n'écrit jamais que `Nested`. Sept types vivants du
@@ -29,8 +33,9 @@ const why = (sources: any[], name: string) =>
   explainSymbols({ sources, testSourceSets: TEST_SETS }).filter(e => e.name === name).map(e => e.outcome);
 
 describe('suppressesDiagnostic distingue les diagnostics', () => {
-  it('« unused » est l’opt-out de tout le monde', () => {
-    for (const set of [UNUSED_DECLARATION, UNUSED_PARAMETER, UNUSED_VARIABLE]) {
+  it('« unused » tait les paramètres et les locales, plus les déclarations', () => {
+    expect(suppressesDiagnostic('"unused"', UNUSED_DECLARATION)).toBe(false);
+    for (const set of [UNUSED_PARAMETER, UNUSED_VARIABLE]) {
       expect(suppressesDiagnostic('"unused"', set)).toBe(true);
     }
   });
@@ -46,14 +51,20 @@ describe('suppressesDiagnostic distingue les diagnostics', () => {
     expect(suppressesDiagnostic('"UNUSED_VARIABLE"', UNUSED_DECLARATION)).toBe(false);
     expect(suppressesDiagnostic('"UNUSED_EXPRESSION"', UNUSED_DECLARATION)).toBe(false);
     expect(suppressesDiagnostic('"unusedThing"', UNUSED_DECLARATION)).toBe(false);
+    // Contre une famille qui accepte encore « unused », le seul test qui porte.
+    expect(suppressesDiagnostic('"UNUSED_VARIABLE"', UNUSED_PARAMETER)).toBe(false);
+    expect(suppressesDiagnostic('"UNUSED_EXPRESSION"', UNUSED_PARAMETER)).toBe(false);
+    expect(suppressesDiagnostic('"unusedThing"', UNUSED_PARAMETER)).toBe(false);
   });
 
-  it('un argument parmi plusieurs suffit', () => {
-    expect(suppressesDiagnostic('"TooManyFunctions", "unused"', UNUSED_DECLARATION)).toBe(true);
+  it('un argument parmi plusieurs suffit aux paramètres, jamais aux déclarations', () => {
+    expect(suppressesDiagnostic('"TooManyFunctions", "unused"', UNUSED_DECLARATION)).toBe(false);
+    expect(suppressesDiagnostic('"TooManyFunctions", "unused"', UNUSED_PARAMETER)).toBe(true);
   });
 
-  it('la casse ne compte pas', () => {
-    expect(suppressesDiagnostic('"UNUSED"', UNUSED_DECLARATION)).toBe(true);
+  it('la casse ne compte pas, et ne rend rien aux déclarations', () => {
+    expect(suppressesDiagnostic('"UNUSED"', UNUSED_DECLARATION)).toBe(false);
+    expect(suppressesDiagnostic('"UNUSED"', UNUSED_PARAMETER)).toBe(true);
   });
 });
 
@@ -91,15 +102,15 @@ describe('@Suppress au niveau déclaration', () => {
     expect(names(decl('@Suppress("UNUSED_PARAMETER")'))).toEqual(['ghost']);
   });
 
-  it('@Suppress("unused") reste un opt-out explicite', () => {
-    expect(names(decl('@Suppress("unused")'))).toEqual([]);
-    expect(why(decl('@Suppress("unused")'), 'ghost')).toEqual(['F12:suppress-unused']);
+  it('@Suppress("unused") ne protège plus la déclaration non plus', () => {
+    expect(names(decl('@Suppress("unused")'))).toEqual(['ghost']);
+    expect(why(decl('@Suppress("unused")'), 'ghost')).toEqual(['unreferenced']);
   });
 
-  it('@SuppressWarnings("unused") vaut pareil côté Java', () => {
+  it('@SuppressWarnings("unused") ne protège pas plus côté Java', () => {
     const sources = [j('/w/a/src/main/java/G.java',
       'package a;\n\n@SuppressWarnings("unused")\npublic class Ghost {\n}\n')];
-    expect(names(sources)).toEqual([]);
+    expect(names(sources)).toEqual(['Ghost']);
   });
 
   it('une annotation de framework protège toujours', () => {
@@ -107,17 +118,17 @@ describe('@Suppress au niveau déclaration', () => {
   });
 });
 
-describe('@file:Suppress ne fait taire que ce qu’il nomme', () => {
+describe('@file:Suppress ne cache aucune déclaration morte', () => {
   it('« UNUSED_PARAMETER » au niveau fichier ne cache plus le code mort', () => {
     const sources = [j('/w/a/src/main/kotlin/A.kt',
       '@file:Suppress("UNUSED_PARAMETER")\n\npackage a\n\nclass Ghost\n')];
     expect(names(sources)).toEqual(['Ghost']);
   });
 
-  it('« unused » au niveau fichier tait toujours tout le fichier', () => {
+  it('« unused » au niveau fichier ne cache plus le code mort non plus', () => {
     const sources = [j('/w/a/src/main/kotlin/A.kt',
       '@file:Suppress("unused", "TooManyFunctions")\n\npackage a\n\nclass Ghost\n')];
-    expect(names(sources)).toEqual([]);
+    expect(names(sources)).toEqual(['Ghost']);
   });
 });
 

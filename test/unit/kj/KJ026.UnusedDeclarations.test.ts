@@ -4,13 +4,17 @@ import { fixture, importOrNull } from './harness';
 const mod: any = await importOrNull('src/providers/UnusedDeclarationProvider');
 const demo = () => fixture('src/main/kotlin/com/example/kj/g5deadweight/UnusedDeclarationsDemo.kt');
 
+// G59 (2026-10-14) : la directive unused ne protege plus aucune declaration,
+// fichier compris ; ces cas en sont les temoins. `keptForDebug`, que seul son
+// `@Suppress("unused")` gardait, est desormais flaggee.
+
 describe.skipIf(!mod)('KJ-026 — fixture réelle', () => {
-  it('flague exactement staleCache, legacyFormat, countdown, LegacyEncoder et compute', () => {
+  it('flague exactement staleCache, legacyFormat, countdown, LegacyEncoder, compute et keptForDebug', () => {
     const names = mod.findUnusedDeclarations(demo()).map((u: any) => u.name).sort();
-    expect(names).toEqual(['LegacyEncoder', 'compute', 'countdown', 'legacyFormat', 'staleCache']);
+    expect(names).toEqual(['LegacyEncoder', 'compute', 'countdown', 'keptForDebug', 'legacyFormat', 'staleCache']);
   });
 
-  it('kinds corrects pour les cinq morts', () => {
+  it('kinds corrects pour les six morts', () => {
     const byName = Object.fromEntries(mod.findUnusedDeclarations(demo()).map((u: any) => [u.name, u.kind]));
     expect(byName).toEqual({
       staleCache: 'val',
@@ -18,12 +22,13 @@ describe.skipIf(!mod)('KJ-026 — fixture réelle', () => {
       countdown: 'fun',
       LegacyEncoder: 'class',
       compute: 'fun',
+      keptForDebug: 'fun',
     });
   });
 
   it('les pièges vivants ne sont jamais flaggés', () => {
     const names = mod.findUnusedDeclarations(demo()).map((u: any) => u.name);
-    for (const alive of ['label', 'handler', 'invoke', 'keptForDebug', 'SHARED', 'mirror', 'parse', 'helper', 'pageSize', 'buildPage']) {
+    for (const alive of ['label', 'handler', 'invoke', 'SHARED', 'mirror', 'parse', 'helper', 'pageSize', 'buildPage']) {
       expect(names, `« ${alive} » ne doit pas être flaggé`).not.toContain(alive);
     }
   });

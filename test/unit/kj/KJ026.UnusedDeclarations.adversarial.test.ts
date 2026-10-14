@@ -2,7 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { expectFasterThan } from '../perfBudget';
 import { findUnusedDeclarations } from '../../../src/providers/UnusedDeclarationProvider';
 
-/** KJ-026 — tentatives de casse de la DÉTECTION au-delà du contrat. */
+/**
+ * KJ-026 — tentatives de casse de la DÉTECTION au-delà du contrat.
+ *
+ * G59 (2026-10-14) : la directive unused ne protege plus aucune declaration,
+ * fichier compris ; ces cas en sont les temoins.
+ */
 
 const names = (text: string) => findUnusedDeclarations(text).map(u => u.name);
 
@@ -94,9 +99,9 @@ describe('KJ-026 adversarial — détection', () => {
     expect(removed).toContain('override fun run()');
   });
 
-  it('@file:Suppress("unused") → rien ; @Suppress décl-level → skippée', () => {
-    expect(names('@file:Suppress("unused")\nprivate fun gone() = 1\n')).toEqual([]);
-    expect(names('@Suppress("unused")\nprivate fun kept() = 1\nfun main() { println(1) }\n')).toEqual([]);
+  it('@file:Suppress("unused") et @Suppress décl-level : flaggées quand même', () => {
+    expect(names('@file:Suppress("unused")\nprivate fun gone() = 1\n')).toEqual(['gone']);
+    expect(names('@Suppress("unused")\nprivate fun kept() = 1\nfun main() { println(1) }\n')).toEqual(['kept']);
   });
 
   it('grab bag jamais flaggé : backticks, _prefixe, main, serialVersionUID, expect/actual/external/abstract, point-virgule, braces cassées', () => {

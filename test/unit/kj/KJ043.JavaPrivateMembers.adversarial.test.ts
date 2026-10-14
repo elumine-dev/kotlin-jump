@@ -13,6 +13,9 @@ import { sweepFile } from '../../../src/providers/DeadCodeSweep';
  * de son propre fichier ne nomme. Les gardes se traduisent directement, et un
  * constructeur privé est neutralisé gratuitement par la règle 6 : son nom est
  * celui de la classe, que la déclaration de classe compte déjà.
+ *
+ * G59 (2026-10-14) : la directive unused ne protege plus aucune declaration,
+ * fichier compris ; ces cas en sont les temoins.
  */
 
 const java = (text: string) => findUnusedDeclarations(text, 'java');
@@ -157,7 +160,7 @@ describe('les gardes traduites', () => {
     expect(names(text)).toEqual(['hook']);
   });
 
-  it('@SuppressWarnings("unused") au niveau fichier tait tout', () => {
+  it('@SuppressWarnings("unused") sur le membre ne le tait plus', () => {
     const text = [
       'package p;',
       'public class A {',
@@ -165,8 +168,8 @@ describe('les gardes traduites', () => {
       '    private String ghost() { return ""; }',
       '}',
     ].join('\n');
-    // L'annotation sur le membre le protège (garde annotations non bénignes).
-    expect(names(text)).toEqual([]);
+    // Avant G59, l'annotation sur le membre le protégeait.
+    expect(names(text)).toEqual(['ghost']);
   });
 });
 

@@ -2,8 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { collecterUnePasse } from '../../../src/commands/RemoveEverythingUnused';
 
 /**
- * Un ilot mort ne part pas s il contient une declaration qui demande a rester.
+ * Un ilot mort part meme s il contient une declaration qui demande a rester.
  *
+ * G59 (2026-10-14) : la directive unused ne protege plus aucune declaration,
+ * fichier compris ; ces cas en sont les temoins.
+ *
+ * Historique, avant G59 :
  * Au premier niveau, `@Suppress("unused")` sur une fonction en fait une racine
  * vivante, et l ilot qu elle forme avec ses voisines est garde. Dans une
  * classe, non : les mentions du corps du membre marque tombent aussi dans
@@ -33,7 +37,7 @@ const deuxClasses = (dansIle: string) =>
   `package com.x\n\nclass Ile {\n${dansIle}}\nclass Autre {\n    fun b(): Int = Ile().a()\n}\nfun vivante() = 3\n`;
 const A = '    fun a(): Int = Autre().b()\n';
 
-describe('l ilot garde ce qui demande a rester', () => {
+describe('l ilot part avec ce qui demande a rester', () => {
   it('temoin : les deux classes qui ne s appellent qu entre elles partent', () => {
     const r = reste(deuxClasses(A));
     expect(r).not.toContain('class Ile');
@@ -45,10 +49,10 @@ describe('l ilot garde ce qui demande a rester', () => {
     ['membre public marque en ligne', '    @Suppress("unused") ' + A.trimStart()],
     ['SuppressWarnings', '    @SuppressWarnings("unused")\n' + A],
   ] as Array<[string, string]>) {
-    it(`${nom} : il reste, et ce qu il appelle reste avec lui`, () => {
+    it(`${nom} : il part, et ce qu il appelle part avec lui`, () => {
       const r = reste(deuxClasses(dansIle));
-      expect(r).toContain('fun a()');
-      expect(r).toContain('class Autre');
+      expect(r).not.toContain('fun a()');
+      expect(r).not.toContain('class Autre');
     });
   }
 
@@ -57,13 +61,12 @@ describe('l ilot garde ce qui demande a rester', () => {
     ['regle detekt sur un membre prive', A + '    @Suppress("UnusedPrivateMember")\n    private fun garde() = 1\n'],
     ['compagnon anonyme marque', A + '    @Suppress("unused")\n    companion object {\n        fun garde() = 1\n    }\n'],
   ] as Array<[string, string]>) {
-    it(`${nom} : la classe qui le porte reste, avec lui`, () => {
-      // `a` et `Autre` ne s appellent qu entre eux et personne n a demande a
-      // les garder : qu ils partent est juste. Ce qui ne doit pas partir,
-      // c est `garde`, et donc la classe qui le contient.
+    it(`${nom} : la classe qui le porte part, avec lui`, () => {
+      // `a` et `Autre` ne s appellent qu entre eux ; `garde` n est appele par
+      // personne, la directive ne le rend pas vivant.
       const r = reste(deuxClasses(dansIle));
-      expect(r).toContain('class Ile');
-      expect(r).toContain('fun garde()');
+      expect(r).not.toContain('class Ile');
+      expect(r).not.toContain('fun garde()');
     });
   }
 
@@ -75,9 +78,9 @@ describe('l ilot garde ce qui demande a rester', () => {
     expect(reste(deuxClasses('    // @Suppress("unused")\n' + A))).not.toContain('class Ile');
   });
 
-  it('au premier niveau, deja respecte', () => {
+  it('au premier niveau non plus, la directive ne garde rien', () => {
     const src = 'package com.x\n\n@Suppress("unused")\nfun a(): Int = b()\nfun b(): Int = a()\nfun vivante() = 3\n';
-    expect(reste(src)).toContain('fun a()');
+    expect(reste(src)).not.toContain('fun a()');
   });
 
   it('une demande de silence AILLEURS dans le fichier ne garde pas l ilot', () => {
@@ -123,9 +126,9 @@ describe('une locale ou un parametre sous silence ne garde pas l ilot', () => {
     expect(partent('package com.x\n\nclass Ile {\n    val a: Int = run {\n        @Suppress("unused") val tmp = 1\n        Autre().b()\n    }\n}\nclass Autre {\n    fun b(): Int = Ile().a\n}\nfun vivante() = 3\n')).toBe(true);
   });
 
-  it('le membre de classe sous silence, lui, garde toujours sa classe', () => {
+  it('le membre de classe sous silence ne garde pas non plus sa classe', () => {
     const r = reste(deuxClasses(A + '    @Suppress("unused")\n    fun garde() = 1\n'));
-    expect(r).toContain('fun garde()');
+    expect(r).not.toContain('fun garde()');
   });
 
   it('methode sans corps : son parametre sous silence ne garde pas l interface', () => {

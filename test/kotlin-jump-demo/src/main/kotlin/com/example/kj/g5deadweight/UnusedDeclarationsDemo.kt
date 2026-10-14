@@ -39,7 +39,7 @@ class Traps {
     private operator fun invoke(): Int = 0 // alive: operator convention
 
     @Suppress("unused")
-    private fun keptForDebug() = Unit // alive: explicit opt-out
+    private fun keptForDebug() = Unit // dead: opt-out ignored (G59)
 
     fun sharedTotal() = SHARED
 

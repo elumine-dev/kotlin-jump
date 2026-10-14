@@ -3,9 +3,13 @@ import { findUnusedMembers } from '../../../src/providers/unusedMembers';
 import { collecterUnePasse } from '../../../src/commands/RemoveEverythingUnused';
 
 /**
- * Un membre marque `@Suppress("unused")`, ou dont la classe l est, n est ni
- * signale ni supprime.
+ * Un membre marque `@Suppress("unused")`, ou dont la classe l est, est signale
+ * et supprime comme les autres.
  *
+ * G59 (2026-10-14) : la directive unused ne protege plus aucune declaration,
+ * fichier compris ; ces cas en sont les temoins.
+ *
+ * Historique, avant G59 :
  * `@Suppress` a ete range parmi les annotations benignes, celles qui ne
  * rendent rien atteignable, avec pour contrepartie un controle du diagnostic
  * NOMME. Le detecteur des declarations de haut niveau a recu ce controle.
@@ -32,30 +36,31 @@ const supprimes = (src: string) =>
 const classe = (annoClasse: string, annoMembre: string) =>
   `package com.x\n\n${annoClasse}class C {\n    ${annoMembre}fun garde() = 2\n    fun vivante() = 3\n}\n`;
 
-describe('le membre respecte la demande de silence', () => {
+describe('le membre mort sort malgre la demande de silence', () => {
   it('temoin : sans annotation le membre mort sort et part', () => {
     expect(signales(classe('', ''))).toEqual(['garde']);
     expect(supprimes(classe('', ''))).toEqual(['fun garde() = 2']);
   });
 
-  for (const [nom, annoClasse, annoMembre] of [
-    ['sur le membre', '', '@Suppress("unused")\n    '],
-    ['sur le membre, en ligne', '', '@Suppress("unused") '],
-    ['sur la classe', '@Suppress("unused")\n', ''],
-    ['sur la classe, Java style', '@SuppressWarnings("unused")\n', ''],
-    ['nom qualifie', '@kotlin.Suppress("unused")\n', ''],
-    ['parmi d autres diagnostics', '@Suppress("MagicNumber", "unused")\n', ''],
-  ] as Array<[string, string, string]>) {
-    it(`${nom} : ni signale, ni supprime`, () => {
+  // Derniere ligne de la coupe : l annotation du membre part avec lui.
+  for (const [nom, annoClasse, annoMembre, coupe] of [
+    ['sur le membre', '', '@Suppress("unused")\n    ', '    fun garde() = 2'],
+    ['sur le membre, en ligne', '', '@Suppress("unused") ', '@Suppress("unused") fun garde() = 2'],
+    ['sur la classe', '@Suppress("unused")\n', '', 'fun garde() = 2'],
+    ['sur la classe, Java style', '@SuppressWarnings("unused")\n', '', 'fun garde() = 2'],
+    ['nom qualifie', '@kotlin.Suppress("unused")\n', '', 'fun garde() = 2'],
+    ['parmi d autres diagnostics', '@Suppress("MagicNumber", "unused")\n', '', 'fun garde() = 2'],
+  ] as Array<[string, string, string, string]>) {
+    it(`${nom} : signale et supprime quand meme`, () => {
       const src = classe(annoClasse, annoMembre);
-      expect(signales(src)).toEqual([]);
-      expect(supprimes(src)).toEqual([]);
+      expect(signales(src)).toEqual(['garde']);
+      expect(supprimes(src)).toEqual([coupe]);
     });
   }
 
-  it('une classe englobante plus haut dans la chaine suffit', () => {
+  it('une classe englobante plus haut dans la chaine ne protege pas non plus', () => {
     const src = 'package com.x\n\n@Suppress("unused")\nclass C {\n    class D {\n        fun garde() = 2\n    }\n    fun vivante() = 3\n}\n';
-    expect(signales(src)).toEqual([]);
+    expect(signales(src)).toEqual(['garde']);
   });
 
   for (const anno of ['@Suppress("MagicNumber")\n', '@Suppress("UnusedPrivateMember")\n', '@Suppress("UNUSED_PARAMETER")\n']) {
@@ -76,7 +81,7 @@ describe('le membre respecte la demande de silence', () => {
  * `@Suppress("unused") companion object { fun garde() }` laissait `garde`
  * partir. Le compagnon NOMME, lui, etait couvert, ce qui masquait le trou.
  */
-describe('le compagnon anonyme sous silence protege ses membres', () => {
+describe('le compagnon anonyme sous silence ne protege plus ses membres', () => {
   const avec = (annoCompagnon: string, nom = '') =>
     `package com.x\n\nclass C {\n    ${annoCompagnon}companion object${nom} {\n        fun garde() = 1\n    }\n    fun vivante() = 3\n}\n`;
 
@@ -91,30 +96,30 @@ describe('le compagnon anonyme sous silence protege ses membres', () => {
     ['avec un modificateur', '@Suppress("unused")\n    internal '],
     ['SuppressWarnings', '@SuppressWarnings("unused")\n    '],
   ] as Array<[string, string]>) {
-    it(`${nom} : ni signale, ni supprime`, () => {
-      expect(signales(avec(anno))).toEqual([]);
-      expect(supprimes(avec(anno))).toEqual([]);
+    it(`${nom} : signale et supprime quand meme`, () => {
+      expect(signales(avec(anno))).toEqual(['garde']);
+      expect(supprimes(avec(anno))).toEqual(['fun garde() = 1']);
     });
   }
 
-  it('le compagnon nomme reste couvert', () => {
-    expect(signales(avec('@Suppress("unused")\n    ', ' Usine'))).toEqual([]);
+  it('le compagnon nomme n est pas couvert non plus', () => {
+    expect(signales(avec('@Suppress("unused")\n    ', ' Usine'))).toEqual(['garde']);
   });
 
   it('un autre diagnostic sur le compagnon ne vaut pas silence', () => {
     expect(signales(avec('@Suppress("MagicNumber")\n    '))).toEqual(['garde']);
   });
 
-  it('le silence d un compagnon ne deborde pas sur les membres de la classe', () => {
+  it('le membre du compagnon sous silence et celui de la classe sortent tous deux', () => {
     const src = 'package com.x\n\nclass C {\n    @Suppress("unused")\n    companion object {\n        fun calme() = 1\n    }\n    fun morte() = 2\n    fun vivante() = 3\n}\n';
-    expect(signales(src)).toEqual(['morte']);
+    expect(signales(src)).toEqual(['calme', 'morte']);
   });
 
-  it('l annotation du membre juste au dessus n est pas celle du compagnon', () => {
-    // La fenetre s arrete a la ligne du compagnon : lue plus haut, elle
-    // prenait le silence demande pour `calme` et l etendait a tout le compagnon.
+  it('le membre sous silence juste au dessus du compagnon et celui du compagnon sortent tous deux', () => {
+    // Avant G59, la fenetre s arretait a la ligne du compagnon : lue plus haut,
+    // elle prenait le silence demande pour `calme` et l etendait a tout le compagnon.
     const src = 'package com.x\n\nclass C {\n    @Suppress("unused")\n    fun calme() = 0\n    companion object {\n        fun morte() = 1\n    }\n    fun vivante() = 3\n}\n';
-    expect(signales(src)).toEqual(['morte']);
+    expect(signales(src)).toEqual(['calme', 'morte']);
   });
 });
 

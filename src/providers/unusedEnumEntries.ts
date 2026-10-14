@@ -495,6 +495,32 @@ function sansTrancherUnBloc(
   return i === -1 ? fin : i;
 }
 
+/**
+ * Le debut des annotations qui precedent l'entree SUR SA LIGNE :
+ * `ON, @Deprecated OFF` ou `ON, @SerializedName("off") OFF`. Celles des lignes
+ * au dessus, `debutAvecAnnotations` les prend deja ; il ne remonte que des
+ * lignes faites d'annotations seules, et celle ci porte aussi la voisine.
+ */
+function annotationsEnLigne(clean: string, nameStart: number): number {
+  let debut = nameStart;
+  for (;;) {
+    let j = debut - 1;
+    while (j >= 0 && (clean[j] === ' ' || clean[j] === '\t')) j--;
+    if (clean[j] === ')') {
+      let profondeur = 0;
+      for (; j >= 0; j--) {
+        if (clean[j] === ')') profondeur++;
+        else if (clean[j] === '(' && --profondeur === 0) break;
+      }
+      j--;
+    }
+    let k = j;
+    while (k >= 0 && /[\w.]/.test(clean[k])) k--;
+    if (k < j && clean[k] === '@') { debut = k; continue; }
+    return debut;
+  }
+}
+
 function entryExtent(
   text: string,
   lineStarts: readonly number[],
@@ -536,7 +562,10 @@ function entryExtent(
   if (clean[apres] !== ';' && clean[apres] !== '}' && apres < clean.length) {
     return { removeStart: -1, removeEnd: -1 };
   }
-  let avant = nameStart - 1;
+  // G60 : la virgule se cherche avant les ANNOTATIONS de l'entree, pas avant
+  // son nom. `ON, @Deprecated OFF` tombait sur le `d` de l'annotation, et la
+  // derniere entree annotee etait trouvee sans jamais pouvoir etre coupee.
+  let avant = debutAvecAnnotations(clean, lineStarts, annotationsEnLigne(clean, nameStart)) - 1;
   while (avant >= 0 && /\s/.test(clean[avant])) avant--;
   if (clean[avant] !== ',') return { removeStart: -1, removeEnd: -1 };
   // `finDeLEntree` stops after the blanks of the line but before its newline,

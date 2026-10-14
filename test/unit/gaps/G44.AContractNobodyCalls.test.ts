@@ -197,6 +197,63 @@ describe('G44, la paire contrat et surcharge, coupee ensemble', () => {
   });
 });
 
+describe('G44 v2, classes et proprietes', () => {
+  const B = '/w/app/src/main/java/b';
+
+  it('une methode de classe surchargee par les sous classes, que personne n appelle', () => {
+    // LaPresse : PinchBehavior.setResetSmallAnimScale et ses trois Behavior.
+    const base = src(`${B}/PinchBehavior.java`, 'package b;', '', 'public abstract class PinchBehavior {', '\tpublic abstract void apply();', '', '\tpublic void setResetSmallAnimScale(float s) {', '\t}', '}');
+    const a = src(`${B}/SimpleBehavior.java`, 'package b;', '', 'public class SimpleBehavior extends PinchBehavior {', '\t@Override', '\tpublic void apply() {}', '', '\t@Override', '\tpublic void setResetSmallAnimScale(float s) {', '\t\tSystem.out.println(s);', '\t}', '}');
+    const main = src(`${B}/Main.java`, 'package b;', '', 'public class Main {', '\tpublic static void main(String[] x) {', '\t\tPinchBehavior p = new SimpleBehavior();', '\t\tp.apply();', '\t}', '}');
+    expect(found([base, a, main])).toEqual(['PinchBehavior.setResetSmallAnimScale']);
+    const out = applied([base, a, main]);
+    expect(out.get(base.path)).not.toContain('setResetSmallAnimScale');
+    expect(out.get(a.path)).not.toContain('setResetSmallAnimScale');
+    expect(out.get(a.path)).toContain('public void apply() {}');
+  });
+
+  it('une propriete d interface que personne ne lit, et ses surcharges', () => {
+    const i = src(`${B}/Player.kt`, 'package b', '', 'interface Player {', '    val isPlaying: Boolean', '    val videoCurrentPosition: Long?', '    fun play()', '}');
+    const impl = src(`${B}/AdPlayer.kt`, 'package b', '', 'class AdPlayer : Player {', '    override val isPlaying: Boolean = true', '    override val videoCurrentPosition: Long?', '        get() = 3L', '', '    override fun play() {}', '}');
+    const main = src(`${B}/Run.kt`, 'package b', '', 'fun main() {', '    val p: Player = AdPlayer()', '    p.play()', '    println(p.isPlaying)', '}');
+    expect(found([i, impl, main])).toEqual(['Player.videoCurrentPosition']);
+    const out = applied([i, impl, main]);
+    expect(out.get(i.path)).not.toContain('videoCurrentPosition');
+    expect(out.get(impl.path)).not.toContain('videoCurrentPosition');
+    expect(out.get(impl.path)).not.toContain('get() = 3L');
+    expect(out.get(impl.path)).toContain('override val isPlaying: Boolean = true');
+  });
+
+  it('garde : une propriete surchargee par un parametre de constructeur', () => {
+    const i = src(`${B}/Player.kt`, 'package b', '', 'interface Player {', '    val videoCurrentPosition: Long?', '    fun play()', '}');
+    const impl = src(`${B}/AdPlayer.kt`, 'package b', '', 'class AdPlayer(override val videoCurrentPosition: Long?) : Player {', '    override fun play() {}', '}');
+    const main = src(`${B}/Run.kt`, 'package b', '', 'fun main() {', '    val p: Player = AdPlayer(1L)', '    p.play()', '}');
+    expect(found([i, impl, main])).toEqual([]);
+  });
+
+  it('garde : une propriete lue par Java sous son accesseur', () => {
+    const i = src(`${B}/Player.kt`, 'package b', '', 'interface Player {', '    val videoCurrentPosition: Long?', '    fun play()', '}');
+    const impl = src(`${B}/AdPlayer.kt`, 'package b', '', 'class AdPlayer : Player {', '    override val videoCurrentPosition: Long? = 1L', '    override fun play() {}', '}');
+    const java = src(`${B}/Reader.java`, 'package b;', '', 'class Reader {', '\tLong read(Player p) { return p.getVideoCurrentPosition(); }', '}');
+    expect(found([i, impl, java])).not.toContain('Player.videoCurrentPosition');
+  });
+
+  it('garde : la methode de classe que la sous classe appelle par super', () => {
+    const base = src(`${B}/PinchBehavior.java`, 'package b;', '', 'public abstract class PinchBehavior {', '\tpublic void reset() {}', '}');
+    const a = src(`${B}/SimpleBehavior.java`, 'package b;', '', 'public class SimpleBehavior extends PinchBehavior {', '\t@Override', '\tpublic void reset() {', '\t\tsuper.reset();', '\t}', '}');
+    expect(found([base, a])).toEqual([]);
+  });
+
+  it('garde : une methode de classe qui en surcharge une autre n est pas la racine', () => {
+    const top = src(`${B}/Top.java`, 'package b;', '', 'public interface Top {', '\tvoid a();', '\tvoid b();', '}');
+    const mid = src(`${B}/Mid.java`, 'package b;', '', 'public abstract class Mid implements Top {', '\t@Override', '\tpublic void a() {}', '}');
+    const leaf = src(`${B}/Leaf.java`, 'package b;', '', 'public class Leaf extends Mid {', '\t@Override', '\tpublic void a() {}', '\t@Override', '\tpublic void b() {}', '}');
+    const main = src(`${B}/M.java`, 'package b;', '', 'public class M {', '\tpublic static void main(String[] x) { Top t = new Leaf(); t.b(); }', '}');
+    // `a` meurt avec Top.a (contrat d interface), une seule fois, pas aussi comme contrat de Mid.
+    expect(found([top, mid, leaf, main])).toEqual(['Top.a']);
+  });
+});
+
 describe('G44 dans Find Everything Unused', () => {
   afterEach(() => { vi.restoreAllMocks(); delete (vscodeMock.workspace as any).workspaceFolders; });
 

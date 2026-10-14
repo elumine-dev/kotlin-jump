@@ -2,7 +2,11 @@
  * Replays Remove All on the parent of a hand-written deletion commit, and
  * scores it against what the commit removed.
  *
- *   node scripts/oracle-commit.mts <repo> <sha> [--keep]
+ *   node scripts/oracle-commit.mts <repo> <sha> [--keep] [--until=<sha2>]
+ *
+ * `--until` compares with everything removed from `<sha>~1` to `<sha2>`, so
+ * the cuts Remove All makes on a branch's base can be checked against the
+ * whole branch: a cut Kevin never made is a candidate false positive.
  *
  * WHY. Kevin's cleanup commits are the only ground truth the gaps have: each
  * says "this was dead, and here is how much of it". Scoring a detector on its
@@ -27,8 +31,9 @@ const OUT = process.env.KJ_ORACLE_DIR ?? path.join(os.homedir(), 'Desktop/work/k
 
 const args = process.argv.slice(2);
 const [target, sha] = args.filter(a => !a.startsWith('--'));
-if (!target || !sha) { console.error('usage: node scripts/oracle-commit.mts <repo> <sha> [--keep]'); process.exit(2); }
+if (!target || !sha) { console.error('usage: node scripts/oracle-commit.mts <repo> <sha> [--keep] [--until=<sha2>]'); process.exit(2); }
 const keep = args.includes('--keep');
+const until = args.find(a => a.startsWith('--until='))?.slice('--until='.length);
 
 function run(cmd: string, argv: string[], log?: string, env?: NodeJS.ProcessEnv) {
   const r = spawnSync(cmd, argv, { cwd: REPO, encoding: 'utf8', maxBuffer: 512 * 1024 * 1024, env: { ...process.env, ...env } });
@@ -83,7 +88,8 @@ try {
   const left = /round 1: (\d+) found/.exec(second.out)?.[1] ?? '0';
   console.log(`seconde passe : ${left} trouvaille(s) restante(s)${left === '0' ? '' : `, voir ${logs}/${short}-pass2.log`}\n`);
 
-  const report = run('node', [units, target, full, wt], path.join(logs, `${short}-oracle.txt`));
+  const untilFull = until === undefined ? [] : [git(target, 'rev-parse', until).out.trim()];
+  const report = run('node', [units, target, full, wt, ...untilFull], path.join(logs, `${short}${until ? `-until-${until.slice(0, 10)}` : ''}-oracle.txt`));
   console.log(report.out);
   if (report.code !== 0) code = 1;
 } catch (e) {

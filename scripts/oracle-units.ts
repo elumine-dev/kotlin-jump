@@ -123,8 +123,8 @@ function unitsOf(d: FileDiff, parentText: string): Unit[] {
 }
 
 function main(): void {
-  const [repo, sha, wt] = process.argv.slice(2);
-  if (!repo || !sha || !wt) { console.error('usage: oracle-units.cjs <repo> <sha> <worktree>'); process.exit(2); }
+  const [repo, sha, wt, until = sha] = process.argv.slice(2);
+  if (!repo || !sha || !wt) { console.error('usage: oracle-units.cjs <repo> <sha> <worktree> [until]'); process.exit(2); }
 
   const parentText = new Map<string, string>();
   const textOf = (p: string) => {
@@ -136,7 +136,10 @@ function main(): void {
     for (const d of parseDiff(diff)) for (const u of unitsOf(d, textOf(d.path))) m.set(u.key, u);
     return m;
   };
-  const oracle = collect(git(repo, 'diff', ...DIFF, `${sha}~1`, sha));
+  // `until` widens the oracle to everything the branch removed up to it: the
+  // precision question, « of what Remove All cuts here, how much did Kevin
+  // end up cutting by hand ? ».
+  const oracle = collect(git(repo, 'diff', ...DIFF, `${sha}~1`, until));
   const kj = collect(git(wt, 'diff', ...DIFF, 'HEAD'));
 
   const found = [...oracle.values()].filter(u => kj.has(u.key));
@@ -188,7 +191,7 @@ function main(): void {
   };
   const show = (u: Unit) => `${u.path}:${u.line + 1}  ${u.kind} ${u.name}`;
 
-  console.log(`ORACLE ${sha}  ${oracle.size} unités (${byKind([...oracle.values()])})`);
+  console.log(`ORACLE ${sha}${until === sha ? '' : `~1..${until}`}  ${oracle.size} unités (${byKind([...oracle.values()])})`);
   console.log(`TROUVÉ  ${found.length}/${oracle.size}  (${byKind(found)})`);
   const roots = [...oracle.values()].filter(u => u.root);
   const missedRoots = missed.filter(u => u.root).sort((a, b) => a.key.localeCompare(b.key));

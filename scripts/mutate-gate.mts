@@ -61,7 +61,10 @@ function onlyComments(h: Hunk): boolean {
   return changed.every(l => l === '' || l.startsWith('//') || l.startsWith('*') || l.startsWith('/*'));
 }
 
-const all = hunks(git('diff', base, '--', 'src/'));
+// Fixed prefixes: with `diff.mnemonicprefix`, a work tree diff reads `c/` and
+// `w/`, the file name parsed from ` b/` came out empty, and no
+// `--equivalent=<file>:<line>` could ever match (G57, 2026-10-14).
+const all = hunks(git('diff', '--src-prefix=a/', '--dst-prefix=b/', '--no-ext-diff', '--no-color', base, '--', 'src/'));
 const candidates = all.filter(h => !onlyComments(h));
 if (candidates.length === 0) { console.log(`0 mutant : aucun bloc de code dans git diff ${base} -- src/`); process.exit(all.length === 0 ? 2 : 0); }
 

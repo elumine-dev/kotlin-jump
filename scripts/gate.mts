@@ -315,11 +315,11 @@ const gained: string[] = [];
 for (const [k, n] of Object.entries(baseline.keys)) for (let i = keys.get(k) ?? 0; i < n; i++) lost.push(k);
 for (const [k, n] of keys) for (let i = baseline.keys[k] ?? 0; i < n; i++) gained.push(k);
 const lostBad = lost.filter(k => !allowed.some(a => k.includes(a)));
+/** One line per key, `×n` when a key repeats (a test file shared by several groups). */
+const tally = (l: string[], x: (k: string) => string) => [...new Set(l)].map(k => { const n = l.filter(y => y === k).length; return `${k}\t${x(k)}${n > 1 ? `\t×${n}` : ''}`; }).join('\n');
 fs.writeFileSync(path.join(LOGS, `${stamp}-ecart.txt`), `PERDUS (${lost.length})\n${tally(lost, k => baseline.extraits?.[k] ?? '')}\n\nGAGNÉS (${gained.length})\n${tally(gained, k => extraits.get(k) ?? '')}\n`);
 const label = (k: string) => { const [p, why] = k.split('\t'); const x = extraits.get(k) ?? baseline.extraits?.[k]; return `${path.basename(p)} ${why === 'cut' && x ? `« ${x} »` : why}`; };
 const show = (l: string[]) => [...new Set(l)].slice(0, 3).map(label).join(' ; ');
-/** One line per key, `×n` when a key repeats (a test file shared by several groups). */
-const tally = (l: string[], x: (k: string) => string) => [...new Set(l)].map(k => { const n = l.filter(y => y === k).length; return `${k}\t${x(k)}${n > 1 ? `\t×${n}` : ''}`; }).join('\n');
 if (!fixedPoint) line('KO', 'retirable', `pas de point fixe en 16 rondes, voir ${applyLog}`);
 else line('OK', 'retirable', 'Remove All atteint le point fixe');
 if (lostBad.length > 0) line('KO', 'reel', `${lostBad.length} trouvaille(s) PERDUE(S) : ${show(lostBad)}`);

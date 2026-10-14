@@ -8,6 +8,7 @@ import { findUnusedSymbols } from '../providers/unusedSymbols';
 import { findUnusedMembers } from '../providers/unusedMembers';
 import { scanEnums } from '../providers/unusedEnumEntries';
 import { findIdleImplementations } from '../providers/idleImplementations';
+import { findUnusedContracts } from '../providers/unusedContracts';
 import { findDeadIslands } from '../providers/deadIslands';
 import { sweepFile, planFileEdits } from '../providers/DeadCodeSweep';
 import { findMemberImports, memberKey } from '../util/memberImports';
@@ -249,6 +250,13 @@ export function collecterUnePasse(
     }
   }
 
+  // G44 : une methode d'interface que rien n'appelle, et chaque surcharge.
+  // Coupe liee : la declaration et toutes les surcharges, ou rien (voir la
+  // passe de chevauchement plus bas).
+  for (const k of findUnusedContracts({ sources, testSourceSets: segs })) {
+    for (const c of k.cuts) ajoute(c.path, c.start, c.end, '', 'contrats', `${k.interfaceFqn}.${k.name}`);
+  }
+
   // Cles de Remote Config que rien ne lit.
   //
   // Une trouvaille porte un NOM et la liste de ses declarations, une par
@@ -325,20 +333,39 @@ export function collecterUnePasse(
   // n'etait vu par personne, chaque detecteur cherchant des declarations.
   for (const f of findEmptySourceFiles({ sources })) fichiersMorts.add(f.path);
 
-  // Chevauchements : la premiere gagne, comme chez chaque fournisseur.
+  const parFichier = sansChevauchement(brut);
+  return { parFichier, fichiersMorts, tally: compteLesFamilles(parFichier), orphelins };
+}
+
+/**
+ * Chevauchements : la premiere coupe gagne, comme chez chaque fournisseur.
+ *
+ * G44 : une coupe de contrat entierement contenue dans une autre part avec
+ * elle, rien a craindre. Une coupe de contrat qui ne tombe qu'A MOITIE
+ * laisserait une surcharge sans declaration, ou l'inverse, et le module ne
+ * compilerait plus : tout le contrat est alors retire, dans tous les fichiers.
+ */
+export function sansChevauchement(brut: ReadonlyMap<string, Coupe[]>): Map<string, Coupe[]> {
   const parFichier = new Map<string, Coupe[]>();
+  const contratsRompus = new Set<string>();
   for (const [p, l] of brut) {
-    l.sort((a, b) => a.start - b.start || b.end - a.end);
+    const triees = [...l].sort((a, b) => a.start - b.start || b.end - a.end);
     const gardees: Coupe[] = [];
     let fin = -1;
-    for (const c of l) {
-      if (c.start < fin) continue;
+    for (const c of triees) {
+      if (c.start < fin) {
+        if (c.famille === 'contrats' && c.end > fin) contratsRompus.add(c.quoi);
+        continue;
+      }
       fin = c.end;
       gardees.push(c);
     }
     parFichier.set(p, gardees);
   }
-  return { parFichier, fichiersMorts, tally: compteLesFamilles(parFichier), orphelins };
+  if (contratsRompus.size > 0) {
+    for (const [p, l] of parFichier) parFichier.set(p, l.filter(c => !(c.famille === 'contrats' && contratsRompus.has(c.quoi))));
+  }
+  return parFichier;
 }
 
 /**
@@ -359,7 +386,7 @@ export function compteLesFamilles(parFichier: ReadonlyMap<string, Coupe[]>): Tal
     // cet objet, `tally[famille]++` valait NaN et la phrase du compte rendu
     // annoncait `NaN resource keys`.
     alias: 0, evenements: 0, remoteconfig: 0, cles: 0, ressources: 0,
-    parametres: 0, arguments: 0, baseline: 0, vides: 0, enums: 0, injections: 0, implementations: 0,
+    parametres: 0, arguments: 0, baseline: 0, vides: 0, enums: 0, injections: 0, implementations: 0, contrats: 0,
   };
   for (const l of parFichier.values()) {
     for (const c of l) tally[c.famille === 'balayage' && c.texte !== '' ? 'renommages' : c.famille]++;
@@ -534,7 +561,7 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
     symboles: 0, membres: 0, entrees: 0, ilots: 0, balayage: 0, renommages: 0,
     imports: 0, fichiers: 0, bouges: 0,
     alias: 0, evenements: 0, remoteconfig: 0, cles: 0, ressources: 0,
-    parametres: 0, arguments: 0, baseline: 0, vides: 0, enums: 0, injections: 0, implementations: 0,
+    parametres: 0, arguments: 0, baseline: 0, vides: 0, enums: 0, injections: 0, implementations: 0, contrats: 0,
   };
   const ajouteTally = (t: Tally) => { for (const k of Object.keys(t)) cumul[k] = (cumul[k] ?? 0) + t[k]; };
   /** Les fichiers ecartes, par chemin : la boucle repasse sur les memes. */
@@ -802,6 +829,8 @@ export function resumeDesFamilles(cumul: Tally): string {
     // KJ-072. Le compte porte sur les PLACES, clause et inscription comprises,
     // parce que c'est ce que l'edition envoie.
     cumul.implementations > 0 ? `${plural(cumul.implementations, 'place')} of an interface implemented for nothing` : '',
+    // G44. Une coupe par declaration : le contrat et chaque surcharge.
+    cumul.contrats > 0 ? `${plural(cumul.contrats, 'declaration')} of interface methods nobody calls` : '',
   ].filter(Boolean).join(', ');
 }
 

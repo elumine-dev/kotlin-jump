@@ -28,6 +28,7 @@ import { findStaleBaselineEntries } from '../providers/staleBaselineEntries';
 import { findEmptySourceFiles } from '../providers/emptySourceFiles';
 import { planFileEdits } from '../providers/DeadCodeSweep';
 import { findIdleImplementations } from '../providers/idleImplementations';
+import { findUnusedContracts } from '../providers/unusedContracts';
 import { UnheardEventProvider, findUnheardEvents } from '../providers/UnheardEventProvider';
 import { UnusedEnumEntryProvider, scanEnums } from '../providers/UnusedEnumEntryProvider';
 import { UnusedRemoteConfigKeyProvider, findUnusedRemoteConfigKeys } from '../providers/UnusedRemoteConfigKeyProvider';
@@ -217,6 +218,24 @@ export async function findEverythingUnusedCommand(
           one: 'interface implemented for nothing',
           count: idles.length,
           detail: places > 0 ? `${plural(places, 'place')} to cut` : undefined,
+        });
+      }
+
+      // ── 2c. Interface methods nobody calls, overrides included (G44) ─────
+      if (!data.sourcesTruncated) {
+        const contracts = findUnusedContracts({
+          sources: data.sources,
+          testSourceSets: cfg.get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS),
+        });
+        for (const k of contracts) {
+          for (const c of k.cuts) noteEtendue(c.path, c.start, c.end);
+        }
+        const declarations = contracts.reduce((n, k) => n + k.cuts.length, 0);
+        sections.push({
+          label: 'interface methods nobody calls',
+          one: 'interface method nobody calls',
+          count: contracts.length,
+          detail: declarations > 0 ? `${plural(declarations, 'declaration')} to cut, overrides included` : undefined,
         });
       }
 

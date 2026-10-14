@@ -618,7 +618,7 @@ function analyze(input: DeadIslandScanInput): Analysis {
 /** Extent of a bodyless fun: name through the end of the closing-paren line.
  *  Under-approximates by construction — it can never grab a neighbor's body,
  *  which is what declarationSpan risks when no `[{=]` follows the signature. */
-function signatureOnlySpan(
+export function signatureOnlySpan(
   clean: string,
   lineStarts: readonly number[],
   nameOffset: number,

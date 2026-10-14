@@ -689,7 +689,7 @@ function memberRejectionReason(
 }
 
 /** Une declaration de type du corpus, avec de quoi resoudre ce qu elle nomme. */
-interface TypeDecl {
+export interface TypeDecl {
   name: string;
   fqn: string;
   paquet: string;
@@ -729,7 +729,7 @@ interface Portee {
  * d etre gardees, et cinq ilots morts apparaissaient sur des rappels que
  * Firebase appelle. Les notifications push seraient parties avec.
  */
-function resoudreType(
+export function resoudreType(
   bare: string,
   depuis: Portee,
   typesByName: ReadonlyMap<string, TypeDecl[]>,

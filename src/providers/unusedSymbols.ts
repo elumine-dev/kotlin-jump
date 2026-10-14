@@ -536,8 +536,16 @@ const OUVRE_UNE_DECLARATION_RE = new RegExp(
 export const COMMENCE_UNE_SUITE_RE =
   /^\s*(?:\?:|\?\.|\.(?!\.)|::|\+|&&|\|\||==|!=|<=|>=|->|,|\)|\]|else\b|in\b|is\b|as\b)/;
 
-/** Une ligne qui se termine sur un operateur appelle une suite. */
-export const FINIT_SUR_UN_OPERATEUR_RE = /(?:[+\-*/,.&|?:=(]|->)$/;
+/**
+ * Une ligne qui se termine sur un operateur appelle une suite.
+ *
+ * Sans `?` : seul en fin de ligne, c est un type nullable, jamais un
+ * operateur (`?:` et `?.` finissent sur `:` et `.`, deja dans la classe).
+ * `fun toolbarElevation(): Float?` se lisait comme une expression inachevee,
+ * et la coupe de G44 emportait `fun setToolbarElevation` sur la ligne d en
+ * dessous : rubicon:app ne compilait plus.
+ */
+export const FINIT_SUR_UN_OPERATEUR_RE = /(?:[+\-*/,.&|:=(]|->)$/;
 
 /**
  * Where a declaration's expression body really ends.

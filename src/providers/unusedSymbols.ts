@@ -339,6 +339,15 @@ interface Candidate {
   selfInSpan: number;
   /** Mentions anywhere in its declaring file (comments stripped). */
   selfInFile: number;
+  /**
+   * `selfInSpan` counted the way `selfInFile` counts, strings included.
+   *
+   * G57: `selfInFile - selfInSpan` was read as « named elsewhere in its own
+   * file », but the left side counts strings and the right side blanks them.
+   * `AvailableSpaceDetector` logged its own name twice inside its body and
+   * stayed `alive:same-file` with no mention outside its extent.
+   */
+  selfInSpanAsInFile: number;
   removeStart: number;
   removeEnd: number;
   /** Simple annotation names attached to this declaration. */
@@ -1065,6 +1074,7 @@ export function collectTopLevelCandidates(
     const lastLine = lineStarts.length - 1;
     const annotations = collectAnnotationTargets(file.clean);
     const keptText = stripImportLines(stripKotlinComments(file.text));
+    const keptBlanked = blankImportLines(stripKotlinComments(file.text));
 
     for (const sym of file.syms) {
       const nameOffset = lineStarts[sym.line] + sym.character;
@@ -1103,6 +1113,7 @@ export function collectTopLevelCandidates(
         path: file.path,
         selfInSpan: countWord(file.clean.slice(span.scanStart, span.scanEnd), sym.name),
         selfInFile: countWord(keptText, sym.name),
+        selfInSpanAsInFile: countWord(keptBlanked.slice(span.scanStart, span.scanEnd), sym.name),
         // Une seule copie sans commentaires par FICHIER, et seulement si un
         // symbole mort y demande son etendue.
         ...removalExtent(file.text, file.clean, lineStarts, lastLine, sym, span,
@@ -1914,7 +1925,7 @@ export function explainSymbols(input: UnusedSymbolScanInput): SymbolExplanation[
       // Les deux sorties se contredisaient sur la même déclaration.
       const residu = mainMentions - c.selfInFile;
       const dansSonFichier = !ctx.unmentionedDuplicates.has(c.name)
-        && c.selfInFile - c.selfInSpan > 0;
+        && c.selfInFile - c.selfInSpanAsInFile > 0;
       if (!ctx.unmentionedDuplicates.has(c.name) && residu !== 0) {
         const sites = injectionOnlyMentions(c, residu, harvest, ctx, textesExplain);
         if (sites === undefined) outcome = 'alive:main';
@@ -2061,7 +2072,7 @@ export function findUnusedSymbols(input: UnusedSymbolScanInput): UnusedSymbol[] 
     // Same reasoning as above for a twin declared in the SAME file: the group
     // check already proved the only mentions are the declarations themselves.
     if (!ctx.unmentionedDuplicates.has(c.name)
-      && c.selfInFile - c.selfInSpan > 0) continue;   // used elsewhere in its own file
+      && c.selfInFile - c.selfInSpanAsInFile > 0) continue;   // used elsewhere in its own file
 
     // A resolved bearer was proven unmentioned by tests too; the bag's test
     // count belongs to its twins. A test component's `inject` declaration is

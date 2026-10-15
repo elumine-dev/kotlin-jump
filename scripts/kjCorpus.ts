@@ -7,6 +7,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { FileResourceIndex } from '../src/indexer/FileResourceIndex';
+import { androidApi, AndroidApi, AndroidApiIndex } from '../src/util/androidApi';
 
 /** What the detectors read as text. */
 const SOURCE_RE = /\.(kt|kts|java|xml|gradle|pro|properties|toml)$|[\\/]nitro\.json$/;
@@ -76,3 +77,18 @@ export function readCorpus(root: string): Corpus {
   };
 }
 
+
+/**
+ * G61: the bundled platform index, as the command loads it. Read from the
+ * repository (`bundled/android-api-36.json`, or KJ_ANDROID_API), relative to
+ * the working directory and not to `__dirname`, which a bundle moves.
+ * Missing, the scripts measure the cautious behaviour, and say so.
+ */
+export function readAndroidApi(): AndroidApi | undefined {
+  const file = process.env.KJ_ANDROID_API ?? path.join(process.cwd(), 'bundled', 'android-api-36.json');
+  if (!fs.existsSync(file)) {
+    console.error(`android api: ${file} absent, ancestry outside the corpus stays opaque`);
+    return undefined;
+  }
+  return androidApi(JSON.parse(fs.readFileSync(file, 'utf8')) as AndroidApiIndex);
+}

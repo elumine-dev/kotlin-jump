@@ -1,4 +1,5 @@
 import { parse } from '../indexer/KotlinParser';
+import { AndroidApi } from '../util/androidApi';
 import { parseJava } from '../indexer/JavaParser';
 import { RawSymbol } from '../indexer/KotlinParser';
 import {
@@ -66,6 +67,8 @@ import { explainMembers } from './unusedMembers';
 export interface DeadIslandScanInput {
   sources: readonly SymbolSource[];
   testSourceSets: readonly string[];
+  /** G61 : passe a `explainMembers`, pour que les deux familles jugent pareil. */
+  androidApi?: AndroidApi;
   /** An incomplete corpus cannot prove absence, so it produces nothing. */
   truncated?: boolean;
   /** `Name` or `Container.Name` globs never reported; one hit silences its island. */
@@ -194,7 +197,7 @@ function analyze(input: DeadIslandScanInput): Analysis {
   const base = { sources: input.sources, testSourceSets: input.testSourceSets };
   const rows = [
     ...explainSymbols(base).map(r => ({ ...r, container: null as string | null })),
-    ...explainMembers(base).map(r => ({ ...r, container: r.container as string | null })),
+    ...explainMembers({ ...base, androidApi: input.androidApi }).map(r => ({ ...r, container: r.container as string | null })),
   ];
   // U+0000 as the separator: it cannot occur in a path or an identifier, so
   // two distinct rows can never collide on one key. Written as an escape and

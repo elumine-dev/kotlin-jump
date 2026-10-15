@@ -1,4 +1,5 @@
 import { parse, RawSymbol } from '../indexer/KotlinParser';
+import { AndroidApi } from '../util/androidApi';
 import { parseJava } from '../indexer/JavaParser';
 import {
   CONVENTION_FUN_NAMES,
@@ -78,6 +79,11 @@ export type UnusedMemberVerdict = 'unreferenced' | 'testOnly' | 'selfOnly';
 export interface UnusedMemberScanInput {
   sources: readonly SymbolSource[];
   testSourceSets: readonly string[];
+  /**
+   * G61 : ce que la plateforme Android declare vraiment. Absent, une chaine
+   * qui sort du corpus reste invisible, comme avant.
+   */
+  androidApi?: AndroidApi;
   /** An incomplete corpus cannot prove absence, so it produces nothing. */
   truncated?: boolean;
   ignoreNames?: readonly string[];
@@ -162,6 +168,15 @@ interface MemberCandidate {
   /** KJ-073 : toute la chaine d ancetres se resout dans le corpus. */
   chainVisible: boolean;
   /**
+   * G61 : la chaine n est visible que grace a l index de la plateforme. Un
+   * membre debloque ainsi peut encore etre atteint par reflexion sous son nom
+   * nu (`ObjectAnimator.ofFloat(v, "alpha")`) : ce nom compte aussi dans le
+   * code, pas seulement dans le XML.
+   */
+  viaPlatform?: boolean;
+  /** G61 : un accesseur debloque par la plateforme, nomme en litteral (`"cellAlpha"`). */
+  reflectedByName?: boolean;
+  /**
    * KJ-073 : des declarations de ce nom qui ne sont NI la sienne NI celle d un
    * ancetre. La recolte compte par nom : une soeur qui porte le meme nom rend
    * toute mention inattribuable, et M2 reste la seule reponse honnete.
@@ -213,6 +228,8 @@ interface MemberCandidate {
   /** Modifiers read from the raw declaration line, belts for parser flags. */
   hasOverrideModifier: boolean;
   hasExternalModifier: boolean;
+  /** A Java `static` method: it implements nothing, so M3 cannot hold it. */
+  isJavaStatic: boolean;
 }
 
 interface EnclosingInfo {
@@ -240,6 +257,7 @@ interface EnclosingInfo {
 export function collectMemberCandidates(
   sources: readonly SymbolSource[],
   testSourceSets: readonly string[],
+  api?: AndroidApi,
 ): {
   candidates: MemberCandidate[];
   /** Every named declaration of the corpus, all kinds, all depths. */
@@ -520,6 +538,7 @@ export function collectMemberCandidates(
         // MODIFIER position only: a Java parameter named `external`
         // (`totalSpace(final boolean external)`) is not a native method.
         hasExternalModifier: /(?:^|\s)external\s+(?:\w+\s+)*(?:fun|val|var)\b/.test(rawLines[sym.line] ?? ''),
+        isJavaStatic: isJava && /\bstatic\b/.test((rawLines[sym.line] ?? '').slice(0, sym.character)),
       });
     }
   }
@@ -529,12 +548,28 @@ export function collectMemberCandidates(
   // La resolution passe par les IMPORTS du fichier, pas par le nom nu : un
   // homonyme de bibliotheque ferait passer une chaine etrangere pour visible.
   for (const c of candidates) {
-    const ancetres = chaineResolue(c.supersDirects, c.portee, typesByName);
+    let ancetres = chaineResolue(c.supersDirects, c.portee, typesByName);
+    // G61 : une chaine qui sort du corpus par la plateforme, et dont aucun
+    // type de la plateforme ne declare ce nom (ni ses accesseurs pour une
+    // propriete), ne cache aucune surcharge.
+    if (ancetres === null && api !== undefined) {
+      const r = chaineAvecPlateforme(c.supersDirects, c.portee, typesByName, api);
+      const noms = c.sym.kind === 'fun' ? [c.name] : [c.name, ...accessorNames(c.name)];
+      if (r !== null && !noms.some(n => r.platformNames.has(n))) {
+        ancetres = r.decls;
+        c.viaPlatform = true;
+      }
+    }
     if (ancetres === null) continue;
     c.chainVisible = true;
     c.ancestorDecls = ancetres.filter(t => t.members.has(c.name)).length;
     c.boundByContract = ancetres.some(t => t.bindingMembers.has(c.name));
     c.homonyms = Math.max(0, (declNameCounts.get(c.name) ?? 1) - 1 - c.ancestorDecls);
+  }
+  const quoted = harvestQuotedPlatformNames(sources, candidates);
+  for (const c of candidates) {
+    const bare = c.viaPlatform ? bareAccessorTarget(c) : undefined;
+    if (bare && (quoted.get(bare) ?? 0) > 0) c.reflectedByName = true;
   }
 
   return { candidates, declNameCounts, supertypesByName, scopeAnnotations };
@@ -587,6 +622,11 @@ function rejectEnclosingChain(
  */
 function javaInheritanceReason(c: MemberCandidate): string | null {
   if (!c.isJava) return null;
+  // A static method implements no interface and overrides nothing: there is
+  // no unmarked implementation for M3 to fear. Without this, the two static
+  // factories of `PriorityExecutor` came back M3 once its real parent
+  // (`ThreadPoolExecutor`) was read, and a finding was lost (G61).
+  if (c.isJavaStatic) return null;
   // A declaration line that never reached its `{` may hide the very clause
   // M3 looks for, so an unread inheritance counts as inheritance.
   if (c.enclosingDeclTruncated) return 'M3:java-decl-truncated';
@@ -639,6 +679,10 @@ function memberRejectionReason(
   // paire est la vraie trouvaille, et elle demande une coupe liee que la
   // famille ne sait pas encore porter.
   if (surcharge && c.boundByContract) return 'M11:bound-by-contract';
+  // G61 : une GARDE et non une mention. Les ilots raisonnent sur un graphe
+  // d'identifiants ou `"cellAlpha"` n'est pas une arete : compte comme mention,
+  // le setter vivait pour les membres et mourait dans un ilot.
+  if (c.reflectedByName) return 'M13:reflected-by-name';
 
   // M6 AVANT M4, et l'ordre porte du sens depuis KJ-075. Les deux ecartent le
   // membre, donc aucune trouvaille ne change ici : c'est l'ETIQUETTE qui
@@ -784,6 +828,49 @@ function chaineResolue(
   return frontier.length === 0 ? out : null;
 }
 
+/**
+ * G61 : la meme chaine, quand un maillon sort du corpus vers la plateforme.
+ *
+ * Un maillon etranger que l index Android connait ne coupe plus la marche :
+ * ses noms rejoignent `platformNames`, et on ne monte pas plus haut que lui,
+ * l index portant deja tout ce qu il herite. Un maillon que l index ne connait
+ * pas (AndroidX, une bibliotheque), ou ambigu, rend null comme avant.
+ */
+function chaineAvecPlateforme(
+  supertypes: readonly string[],
+  depuis: Portee,
+  typesByName: ReadonlyMap<string, TypeDecl[]>,
+  api: AndroidApi,
+): { decls: TypeDecl[]; platformNames: Set<string> } | null {
+  const decls: TypeDecl[] = [];
+  const platformNames = new Set<string>();
+  const vus = new Set<string>();
+  let frontier: { bare: string; depuis: Portee }[] =
+    supertypes.map(t => t.replace(/<.*/, '').trim()).filter(Boolean).map(b => ({ bare: b, depuis }));
+
+  for (let depth = 0; depth < 8 && frontier.length > 0; depth++) {
+    const next: { bare: string; depuis: Portee }[] = [];
+    for (const { bare, depuis: portee } of frontier) {
+      if (bare === 'Any' || bare === 'Object') continue;
+      const decl = resoudreType(bare, portee, typesByName);
+      if (decl === undefined) return null;
+      if (decl === null) {
+        const fqn = api.resolve(bare, portee.imports);
+        const noms = fqn === undefined ? undefined : api.declared(fqn);
+        if (noms === undefined) return null;
+        for (const n of noms) platformNames.add(n);
+        continue;
+      }
+      if (vus.has(decl.fqn)) continue;
+      vus.add(decl.fqn);
+      decls.push(decl);
+      for (const parent of decl.supertypes) next.push({ bare: parent, depuis: decl });
+    }
+    frontier = next;
+  }
+  return frontier.length === 0 ? { decls, platformNames } : null;
+}
+
 /** The supertype chain the framework walk starts from: the enclosing classes'. */
 function supertypesFor(
   c: MemberCandidate,
@@ -840,7 +927,7 @@ export function findUnusedMembers(input: UnusedMemberScanInput): UnusedMember[] 
   if (input.truncated) return [];                                     // contract rule 2
 
   const { candidates, declNameCounts, supertypesByName, scopeAnnotations } =
-    collectMemberCandidates(input.sources, input.testSourceSets);
+    collectMemberCandidates(input.sources, input.testSourceSets, input.androidApi);
   if (candidates.length === 0) return [];
 
   const deadByPath = new Map<string, { removeStart: number; removeEnd: number }[]>();
@@ -1001,6 +1088,35 @@ function mentionsOf(
   return n;
 }
 
+/**
+ * G61: `"overlayColor"` written as a string literal anywhere in code, for the
+ * accessors the platform index unlocked. Feeds the M13 guard.
+ *
+ * `ObjectAnimator.ofFloat(this, "cellAlpha", 1F, 0F)` calls `setCellAlpha` by
+ * reflection. The mention harvest blanks string bodies, so it never saw it,
+ * and on LaPresse the first G61 run cut that live setter. Read on the RAW
+ * text, quotes included, so an identifier that merely shares the name is not
+ * counted: only a literal that spells it whole.
+ */
+function harvestQuotedPlatformNames(
+  sources: readonly SymbolSource[],
+  candidates: readonly MemberCandidate[],
+): Map<string, number> {
+  const names = new Set<string>();
+  for (const c of candidates) {
+    const bare = c.viaPlatform ? bareAccessorTarget(c) : undefined;
+    if (bare) names.add(bare);
+  }
+  const out = new Map<string, number>();
+  if (names.size === 0) return out;
+  const re = new RegExp(`"(${[...names].join('|')})"`, 'g');
+  for (const src of sources) {
+    if (!/\.(?:kt|java)$/.test(src.path)) continue;
+    for (const m of src.text.matchAll(re)) out.set(m[1], (out.get(m[1]) ?? 0) + 1);
+  }
+  return out;
+}
+
 /** Bare accessor names counted over the XML sources alone (H9 reversed). */
 function harvestBareXmlMentions(
   sources: readonly SymbolSource[],
@@ -1102,7 +1218,7 @@ function unmentionedDuplicateMembers(
 
 export function explainMembers(input: UnusedMemberScanInput): MemberExplanation[] {
   const { candidates, declNameCounts, supertypesByName, scopeAnnotations } =
-    collectMemberCandidates(input.sources, input.testSourceSets);
+    collectMemberCandidates(input.sources, input.testSourceSets, input.androidApi);
 
   const deadByPath = new Map<string, { removeStart: number; removeEnd: number }[]>();
   for (const d of input.deadDeclarations ?? []) {

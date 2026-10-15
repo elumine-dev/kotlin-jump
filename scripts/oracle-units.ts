@@ -21,7 +21,7 @@
  */
 import * as path from 'path';
 import { spawnSync } from 'child_process';
-import { readCorpus } from './kjCorpus';
+import { readAndroidApi, readCorpus } from './kjCorpus';
 import { DEFAULT_TEST_SEGMENTS } from '../src/util/testPaths';
 import { parse } from '../src/indexer/KotlinParser';
 import { parseJava } from '../src/indexer/JavaParser';
@@ -148,7 +148,7 @@ function main(): void {
 
   // The after state, as the last round of Remove All saw it.
   const corpus = readCorpus(wt);
-  const base = { sources: corpus.sources, testSourceSets: DEFAULT_TEST_SEGMENTS } as any;
+  const base = { sources: corpus.sources, testSourceSets: DEFAULT_TEST_SEGMENTS, androidApi: readAndroidApi() } as any;
   const abs = (p: string) => path.join(wt, p);
   const missedPaths = new Set(missed.map(u => abs(u.path)));
   const symbols = explainSymbols(base).filter(r => missedPaths.has(r.path));

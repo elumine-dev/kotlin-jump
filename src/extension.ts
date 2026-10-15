@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { androidApiLoader } from './kotlin/AndroidApiLoader';
 import { DEFAULT_EXCLUDE_PATTERNS } from './util/pathExclusion';
 import { SymbolIndex } from './indexer/SymbolIndex';
 import { FileScanner } from './indexer/FileScanner';
@@ -214,6 +215,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const log   = new Logger('Kotlin Jump');
   const version = context.extension.packageJSON.version as string ?? '?';
   log.info(`Extension activated — v${version}`);
+  // G61 : l index de la plateforme Android, lu au premier scan de code mort.
+  const loadAndroidApi = androidApiLoader(context.extensionUri, m => log.warn(m));
 
   // ── First install / update handling ─────────────────────────────────────
   const lastSeen = context.globalState.get<string>('lastSeenVersion');
@@ -1548,6 +1551,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         gradleDependencyProvider,
         unusedMemberProvider,
         deadIslandProvider,
+        loadAndroidApi,
       ),
     ),
     vscode.commands.registerCommand('kotlin-jump.removeTestOnlyCode', () =>
@@ -1567,7 +1571,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       makeSelfOnlyPrivateCommand(resourceCorpus),
     ),
     vscode.commands.registerCommand('kotlin-jump.removeEverythingUnused', () =>
-      removeEverythingUnusedCommand(resourceCorpus),
+      removeEverythingUnusedCommand(resourceCorpus, loadAndroidApi),
     ),
     corpusWatcher,
     vscode.workspace.onDidCreateFiles(() => resourceCorpus.invalidate()),

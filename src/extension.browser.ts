@@ -16,6 +16,7 @@
 // Move File, and bundled Kotlin stdlib navigation (a prebuilt JSON index,
 // see src/kotlin/BundledStdlibProvider.ts, not the raw JAR).
 import * as vscode from 'vscode';
+import { androidApiLoader } from './kotlin/AndroidApiLoader';
 import { DEFAULT_EXCLUDE_PATTERNS } from './util/pathExclusion';
 import { StringXmlHoverProvider } from './providers/StringXmlHoverProvider';
 import { ResourceShadowingProvider } from './providers/ResourceShadowingProvider';
@@ -212,6 +213,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const log   = new Logger('Kotlin Jump');
   const version = context.extension.packageJSON.version as string ?? '?';
   log.info(`Extension activated — v${version}`);
+  // G61 : l index de la plateforme Android, lu au premier scan de code mort.
+  const loadAndroidApi = androidApiLoader(context.extensionUri, m => log.warn(m));
 
   const lastSeen = context.globalState.get<string>('lastSeenVersion');
   if (!lastSeen) {
@@ -1070,7 +1073,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       makeSelfOnlyPrivateCommand(resourceCorpusWeb),
     ),
     vscode.commands.registerCommand('kotlin-jump.removeEverythingUnused', () =>
-      removeEverythingUnusedCommand(resourceCorpusWeb),
+      removeEverythingUnusedCommand(resourceCorpusWeb, loadAndroidApi),
     ),
     unusedSymbolProviderWeb,
     vscode.languages.registerCodeActionsProvider(
@@ -1217,6 +1220,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         gradleDependencyProviderWeb,
         unusedMemberProviderWeb,
         deadIslandProviderWeb,
+        loadAndroidApi,
       ),
     ),
   );

@@ -69,6 +69,18 @@ describe('Java supertypes', () => {
   it('no supertypes for plain class', () => {
     expect(find('public class Foo {}', 'Foo')!.supertypes).toBeUndefined();
   });
+
+  // The bound of a type parameter is not a parent. Read first, it filed
+  // PriorityExecutor under Runnable and lost ThreadPoolExecutor (G61).
+  it('a bounded type parameter does not steal the extends clause', () => {
+    expect(find('public class P<T extends Runnable> extends ThreadPoolExecutor {}', 'P')!.supertypes)
+      .toEqual(['ThreadPoolExecutor']);
+  });
+
+  it('nor the implements clause, nested bounds included', () => {
+    expect(find('class T<R extends Comparable<R>> extends FutureTask<R> implements Comparable<T<R>> {}', 'T')!.supertypes)
+      .toEqual(['FutureTask', 'Comparable']);
+  });
 });
 
 // ── Package ───────────────────────────────────────────────────────────────────

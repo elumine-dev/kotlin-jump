@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { AndroidApi } from '../util/androidApi';
 import { DEFAULT_TEST_SEGMENTS } from '../util/testPaths';
 import {
   ResourceCorpus,
@@ -72,6 +73,8 @@ export async function findEverythingUnusedCommand(
   gradleProvider: UnusedGradleDependencyProvider,
   memberProvider: UnusedMemberProvider,
   islandProvider: DeadIslandProvider,
+  /** G61 : l index de la plateforme, charge a la demande. */
+  loadAndroidApi?: () => Promise<AndroidApi | undefined>,
 ): Promise<void> {
   if (!vscode.workspace.workspaceFolders?.length) {
     void vscode.window.showWarningMessage('Open a folder before scanning.');
@@ -132,6 +135,7 @@ export async function findEverythingUnusedCommand(
       // ── one corpus read for the three workspace detectors ────────────────
       progress.report({ message: 'reading the workspace…' });
       const corpusData = await corpus.get(token);
+      const api = await loadAndroidApi?.();
       if (token.isCancellationRequested) return;
 
       // ── KJ-055, before anything reads the corpus ─────────────────────────
@@ -226,6 +230,7 @@ export async function findEverythingUnusedCommand(
         const contracts = findUnusedContracts({
           sources: data.sources,
           testSourceSets: cfg.get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS),
+          androidApi: api,
         });
         for (const k of contracts) {
           for (const c of k.cuts) noteEtendue(c.path, c.start, c.end);
@@ -415,6 +420,7 @@ export async function findEverythingUnusedCommand(
             includeTestOnly: cfg.get<boolean>('unusedSymbolsIncludeTestOnly', true),
             includeSelfOnly: cfg.get<boolean>('unusedMembersSelfOnly', true),
             deadDeclarations: dead,
+            androidApi: api,
           });
           for (const f of members) {
             if (f.verdict === 'unreferenced') noteEtendue(f.path, f.removeStart, f.removeEnd);
@@ -446,6 +452,7 @@ export async function findEverythingUnusedCommand(
             ignoreNames: cfg.get<string[]>('deadIslandsIgnoreNames', []),
             includeTestOnly: cfg.get<boolean>('unusedSymbolsIncludeTestOnly', true),
             maxIslandSize: cfg.get<number>('deadIslandsMaxSize', 8),
+            androidApi: api,
           });
           for (const i of islands) {
             if (i.verdict !== 'unreferenced' || !i.fixable) continue;

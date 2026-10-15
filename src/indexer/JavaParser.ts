@@ -532,10 +532,16 @@ function extractJavaSupertypes(line: string, quals?: string[]): string[] {
       }
     }
   };
-  const extendsMatch = /\bextends\s+(.+?)(?:\bimplements\b|\{|$)/.exec(line);
-  if (extendsMatch) collect(stripGenerics(extendsMatch[1]));
-  const implMatch = /\bimplements\s+(.+?)(?:\{|$)/.exec(line);
-  if (implMatch) collect(stripGenerics(implMatch[1]));
+  // Generics go BEFORE the keyword search: in
+  // `class PriorityExecutor<T extends Runnable> extends ThreadPoolExecutor`
+  // the first `extends` is the bound of `T`, and the class was filed under
+  // `Runnable` with `ThreadPoolExecutor` lost. Read through the platform index
+  // (G61), that made `newTaskFor`, a real framework override, look dead.
+  const header = stripGenerics(line);
+  const extendsMatch = /\bextends\s+(.+?)(?:\bimplements\b|\{|$)/.exec(header);
+  if (extendsMatch) collect(extendsMatch[1]);
+  const implMatch = /\bimplements\s+(.+?)(?:\{|$)/.exec(header);
+  if (implMatch) collect(implMatch[1]);
   if (quals) {
     const kept = quals.filter(q => !finals.has(q));
     quals.length = 0;

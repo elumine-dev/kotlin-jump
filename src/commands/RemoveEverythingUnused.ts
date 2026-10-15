@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { AndroidApi } from '../util/androidApi';
 import { DEFAULT_TEST_SEGMENTS } from '../util/testPaths';
 import { ResourceCorpus } from '../indexer/ResourceCorpus';
 import { corpusUri } from '../util/corpusUri';
@@ -55,6 +56,11 @@ export type Tally = Record<string, number>;
  * tait au lieu de rendre zero constat, ce qui ressemblerait a un succes.
  */
 export interface ContexteDePasse {
+  /**
+   * G61 : ce que la plateforme Android declare. Sans lui, une chaine qui sort
+   * du corpus reste invisible aux membres et aux contrats, comme avant.
+   */
+  androidApi?: AndroidApi;
   /** Repertoires de module portant du .kt ou .java. Sans eux, pas de cles. */
   modulesWithCode?: readonly string[];
   libraryModules?: readonly string[];
@@ -118,7 +124,7 @@ export function collecterUnePasse(
     const ecartes = new Set(orphelins.flatMap(o => o.files));
     sources = sources.filter(s => !ecartes.has(s.path));
   }
-  const base = { sources, testSourceSets: segs } as any;
+  const base = { sources, testSourceSets: segs, androidApi: ctx.androidApi } as any;
   const syms = findUnusedSymbols(base) as any[];
   const membres = findUnusedMembers({
     ...base, includeSelfOnly: false,
@@ -253,7 +259,7 @@ export function collecterUnePasse(
   // G44 : une methode d'interface que rien n'appelle, et chaque surcharge.
   // Coupe liee : la declaration et toutes les surcharges, ou rien (voir la
   // passe de chevauchement plus bas).
-  for (const k of findUnusedContracts({ sources, testSourceSets: segs })) {
+  for (const k of findUnusedContracts({ sources, testSourceSets: segs, androidApi: ctx.androidApi })) {
     for (const c of k.cuts) ajoute(c.path, c.start, c.end, '', 'contrats', `${k.interfaceFqn}.${k.name}`);
   }
 
@@ -516,7 +522,11 @@ export function coupesRetenues(
   return { retenu, bouges };
 }
 
-export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Promise<void> {
+export async function removeEverythingUnusedCommand(
+  corpus: ResourceCorpus,
+  /** G61 : l index de la plateforme, charge a la demande. */
+  loadAndroidApi?: () => Promise<AndroidApi | undefined>,
+): Promise<void> {
   if (!vscode.workspace.workspaceFolders?.length) {
     void vscode.window.showWarningMessage('Open a folder before scanning.');
     return;
@@ -524,6 +534,7 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
   const segs = vscode.workspace.getConfiguration('kotlinJump')
     .get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS);
 
+  const api = await loadAndroidApi?.();
   const premier = await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: 'Looking for everything unused…', cancellable: true },
     async (_p, token) => {
@@ -532,7 +543,7 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
       // Le MEME contexte que les rondes suivantes. Sans lui, la premiere passe
       // taisait les familles de ressources et le dialogue d'ouverture
       // annoncait moins que ce que la commande allait retirer.
-      return { data, ...collecterUnePasse(data.sources, segs, contexteDuCorpus(data)) };
+      return { data, ...collecterUnePasse(data.sources, segs, { ...contexteDuCorpus(data), androidApi: api }) };
     },
   );
   if (!premier) {
@@ -630,7 +641,7 @@ export async function removeEverythingUnusedCommand(corpus: ResourceCorpus): Pro
       // Le corpus porte deja tout ce que les familles de ressources demandent.
       // Sans ce contexte elles se taisaient, et `Find` les rapportait quand
       // meme : c'est l'ecart que cette version supprime.
-      const contexte = contexteDuCorpus(data);
+      const contexte = { ...contexteDuCorpus(data), androidApi: api };
       const { parFichier, fichiersMorts } = n === 0 && data === premier.data
         ? { parFichier: premier.parFichier, fichiersMorts: premier.fichiersMorts }
         : collecterUnePasse(data.sources, segs, contexte);

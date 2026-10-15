@@ -28,7 +28,11 @@ export type { Snapshot, SnapshotFile };
 // bumped to 27: a primary constructor written under its class header is now
 // read, so 37 properties appear on a real project that a v26 snapshot would
 // keep hiding until each of those 13 files happened to be edited.
-export const SNAPSHOT_VERSION = 27;
+// bumped to 28: a Java class header with a bounded type parameter
+// (`class P<T extends Runnable> extends ThreadPoolExecutor`) filed the class
+// under the BOUND and lost its real superclass. Every such file kept the wrong
+// supertypes in its snapshot until edited.
+export const SNAPSHOT_VERSION = 28;
 const SNAPSHOT_FILENAME = 'kotlin-jump-index.json'; // historical name; content is gzip from v19+
 
 const gzip   = promisify(zlib.gzip);

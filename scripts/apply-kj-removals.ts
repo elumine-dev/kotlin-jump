@@ -32,7 +32,7 @@ import {
 } from '../src/commands/RemoveEverythingUnused';
 import { planCascade } from '../src/providers/removalCascade';
 import { orphanSummary } from '../src/providers/orphanSourceSets';
-import { readCorpus } from './kjCorpus';
+import { readAndroidApi, readCorpus } from './kjCorpus';
 import { scanTestOnly } from '../src/commands/RemoveTestOnlyCode';
 
 /** Line starts, to turn a `Position` back into an offset. */
@@ -74,6 +74,7 @@ async function main(): Promise<void> {
     console.log(`tests: ${scan?.groups.length ?? 0} group(s), ${coupes.length} test cut(s) planned`);
   }
 
+  const api = readAndroidApi();
   const manifest: { round: number; path: string; start: number; end: number; why: string; extrait?: string }[] = [];
   const cumul = new Map<string, number>();
   const bump = (k: string, n = 1) => cumul.set(k, (cumul.get(k) ?? 0) + n);
@@ -86,6 +87,7 @@ async function main(): Promise<void> {
       console.log(`sources ${corpus.sources.length}  modules ${corpus.modulesWithCode.length} with code, ${corpus.libraryModules.length} library  resource names ${corpus.resourceEntries.length}  assets ${corpus.assets.length}`);
     }
     const { parFichier, fichiersMorts, tally, orphelins } = collecterUnePasse(corpus.sources, segs, {
+      androidApi: api,
       modulesWithCode: corpus.modulesWithCode,
       libraryModules: corpus.libraryModules,
       moduleDirs: corpus.moduleDirs,

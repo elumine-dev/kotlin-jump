@@ -11,6 +11,7 @@ import {
   accessorNames, BENIGN_TOPLEVEL_ANNOTATIONS, harvestMentions, removalExtent, scopeAnnotationsOf, SymbolSource,
 } from './unusedSymbols';
 import { resoudreType, TypeDecl } from './unusedMembers';
+import { AndroidApi } from '../util/androidApi';
 import { signatureOnlySpan } from './deadIslands';
 
 /**
@@ -64,6 +65,8 @@ export interface ContractScanInput {
   sources: readonly SymbolSource[];
   testSourceSets: readonly string[];
   truncated?: boolean;
+  /** G61 : un ancetre de la plateforme connu n interdit plus le contrat. */
+  androidApi?: AndroidApi;
 }
 
 const IGNORE_MARKER = 'kotlin-jump:ignore unused-member';
@@ -104,9 +107,14 @@ const annotationNames = (f: FileInfo, sym: RawSymbol): string[] => {
  * Unlike `chaineResolue`, a foreign link does not stop the walk: the caller
  * must know both that the contract is reached AND that nothing else is.
  */
-function ancestry(t: TypeInfo, typesByName: ReadonlyMap<string, TypeDecl[]>): { reached: Set<TypeDecl>; complete: boolean; ambiguous: string[] } {
+function ancestry(
+  t: TypeInfo,
+  typesByName: ReadonlyMap<string, TypeDecl[]>,
+  api: AndroidApi | undefined,
+): { reached: Set<TypeDecl>; complete: boolean; ambiguous: string[]; platformNames: Set<string> } {
   const reached = new Set<TypeDecl>();
   const ambiguous: string[] = [];
+  const platformNames = new Set<string>();
   let complete = true;
   let frontier = t.decl.supertypes.map(b => ({ bare: b, depuis: t.decl as TypeDecl }));
   for (let depth = 0; depth < 8 && frontier.length > 0; depth++) {
@@ -115,7 +123,15 @@ function ancestry(t: TypeInfo, typesByName: ReadonlyMap<string, TypeDecl[]>): { 
       if (bare === 'Any' || bare === 'Object') continue;
       const decl = resoudreType(bare, depuis, typesByName);
       if (decl === undefined) { complete = false; ambiguous.push(bare); continue; }
-      if (decl === null) { complete = false; continue; }
+      if (decl === null) {
+        // G61 : a platform type the index knows is not a blind spot, only the
+        // names it declares are.
+        const fqn = api?.resolve(bare, depuis.imports);
+        const noms = fqn === undefined ? undefined : api!.declared(fqn);
+        if (noms === undefined) complete = false;
+        else for (const n of noms) platformNames.add(n);
+        continue;
+      }
       if (reached.has(decl)) continue;
       reached.add(decl);
       for (const parent of decl.supertypes) next.push({ bare: parent, depuis: decl });
@@ -123,7 +139,7 @@ function ancestry(t: TypeInfo, typesByName: ReadonlyMap<string, TypeDecl[]>): { 
     frontier = next;
   }
   if (frontier.length > 0) complete = false;
-  return { reached, complete, ambiguous };
+  return { reached, complete, ambiguous, platformNames };
 }
 
 /** True when the declaration has a body: `{` or `=` after its parameters. */
@@ -236,7 +252,7 @@ export function findUnusedContracts(input: ContractScanInput): UnusedContract[] 
   }
 
   const ancestries = new Map<TypeInfo, ReturnType<typeof ancestry>>();
-  for (const t of types) if (t.decl.supertypes.length > 0) ancestries.set(t, ancestry(t, typesByName));
+  for (const t of types) if (t.decl.supertypes.length > 0) ancestries.set(t, ancestry(t, typesByName, input.androidApi));
 
   // Every type implemented anonymously somewhere, in ONE pass over the corpus:
   // `object : A, B {` (Kotlin) and `new A() {` (Java). No class to cut in.
@@ -248,7 +264,7 @@ export function findUnusedContracts(input: ContractScanInput): UnusedContract[] 
     for (const m of f.clean.matchAll(/\bnew\s+(?:[\w]+\.)*([A-Za-z_]\w*)\s*(?:<[^>]*>)?\s*\([^)]*\)\s*\{/g)) anonymous.add(m[1]);
   }
   /** The contracts left once structure is checked, judged after ONE harvest. */
-  const pending: { contract: TypeInfo; holders: TypeInfo[]; names: Set<string> }[] = [];
+  const pending: { contract: TypeInfo; holders: TypeInfo[]; names: Set<string>; platformNames: Set<string> }[] = [];
   const headOf = (t: { file: FileInfo }, s: RawSymbol) => t.file.clean.slice(t.file.lineStarts[s.line], t.file.lineStarts[s.line] + s.character);
   /** A member that overrides something is not the root of its contract: the root is higher. */
   const overrides = (t: TypeInfo, s: RawSymbol) => /\boverride\b/.test(headOf(t, s)) || annotationNames(t.file, s).includes('Override');
@@ -297,7 +313,9 @@ export function findUnusedContracts(input: ContractScanInput): UnusedContract[] 
     const offered = isInterface ? abstractMembers
       : own_.filter(s => impls.some(i => i.members.some(m => m.name === s.name && m.kind === s.kind)));
     if (offered.length === 0) continue;
-    pending.push({ contract, holders: [contract, ...impls], names: new Set(offered.map(s => s.name)) });
+    const platformNames = new Set<string>([...(own?.platformNames ?? [])]);
+    for (const i of impls) for (const n of ancestries.get(i)!.platformNames) platformNames.add(n);
+    pending.push({ contract, holders: [contract, ...impls], names: new Set(offered.map(s => s.name)), platformNames });
   }
 
   // One harvest for every name at once: one per contract cost 112 s on a
@@ -315,11 +333,14 @@ export function findUnusedContracts(input: ContractScanInput): UnusedContract[] 
 
   const out: UnusedContract[] = [];
   const count = (n: string) => (harvest!.main.get(n) ?? 0) + (harvest!.test.get(n) ?? 0);
-  for (const { contract, holders, names } of pending) {
+  for (const { contract, holders, names, platformNames } of pending) {
     const f = contract.file;
     const name = contract.decl.name;
     for (const n of names) {
       const decls = holders.flatMap(h => h.members.filter(s => s.name === n).map(s => ({ h, s })));
+      // G61 : the platform declares this name for one of the classes involved,
+      // so the framework may call it.
+      if (platformNames.has(n) || accessorNames(n).some(a => platformNames.has(a))) continue;
       if (count(n) !== decls.length) continue;
       const isProperty = decls.some(({ s }) => s.kind !== 'fun');
       if (isProperty && decls.some(({ s }) => s.kind === 'fun')) continue;

@@ -1,50 +1,42 @@
 {
-  "version": "1.43.0",
+  "version": "1.44.0",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Filters that judge instead of skipping",
-  "summary": "Find Everything Unused now reports dead files under assets/, and nine filters that used to skip declarations without judging them now let the counting decide.",
+  "tagline": "Sharper dead code removal, fewer false keeps",
+  "summary": "Remove Everything Unused now cuts interface methods nobody calls together with their overrides, trusts what Android declares, and stops keeping code alive on weak signals. Several removals that cut too much or too little are fixed.",
   "highlights": [
     {
-      "title": "Dead assets reported",
-      "description": "Files under src/main/assets/ that nothing opens are now reported, with their path relative to the assets root.",
-      "kind": "feature"
+      "title": "Unused interface methods removed",
+      "kind": "feature",
+      "description": "An interface method that nothing calls is now cut together with every override, so a cleanup no longer leaves half a contract behind."
     },
     {
-      "title": "Framework filters now judge",
-      "description": "A class the framework filter used to skip no longer keeps its neighbours alive, so a copied in library of nine files becomes visible.",
-      "kind": "improvement"
+      "title": "Android platform awareness",
+      "kind": "improvement",
+      "description": "Custom view methods that no one calls are now reported, because the scan knows which names the Android platform declares itself."
     },
     {
-      "title": "Remote Config keys removed",
-      "description": "Remove Everything Unused now cuts every declaration of an unread Remote Config key instead of silently cutting none.",
-      "kind": "fix"
+      "title": "Safer test code removal",
+      "kind": "fix",
+      "description": "Remove Test Only Code now cuts the single assertion on dead code instead of deleting a whole test file that still checks live behavior."
     }
   ],
   "sections": [
     {
-      "heading": "New Detections",
+      "heading": "Improvements",
       "bullets": [
-        "Reports files under src/main/assets/ that nothing opens. A file counts as used when its relative path, or a trailing part of it, appears in code, in a layout or in another asset. Binary assets can be reported but never keep anything alive. Three were reported on the reference project.",
-        "Leaves an asset alone when code builds its path by concatenation, such as \"fonts/\" plus a value: everything under that directory stays, because a static scan cannot tell which files are reached. Template files ending in .sample or .CHANGE_ME are also left alone.",
-        "Reports a resource declared in several modules when no copy is named anywhere. The guard against overlays protects against an ambiguity of resolution, and there is nothing to resolve when nobody asks for the name."
+        "Reported interface methods that nothing calls, and cut the declaration and every override as one unit, all or nothing. On the reference project this matches what a manual cleanup did, such as `SystemInfoService.getCurrentMemoryUsage()` and its `@Override`. Find Everything Unused lists them and Remove Everything Unused counts the declarations.",
+        "Added a bundled index of the names each public Android platform type declares. Methods of custom views and of classes implementing `ComponentCallbacks2` that nobody calls (about thirty on the reference project) are no longer kept just because an ancestor outside the workspace might declare the same name. Ancestors the index does not know, such as AndroidX, keep the cautious behavior.",
+        "Stopped the `unused` suppression directive, such as `@SuppressWarnings(\"unused\")` or a file level `@Suppress`, from protecting declarations. A directive that silences a warning says nothing about whether code is reachable. Parameters keep their protection, since their signature is imposed from outside."
       ]
     },
     {
-      "heading": "Filters That Blinded The Detectors",
+      "heading": "Fixes",
       "bullets": [
-        "A class extending View, ViewGroup or RecyclerView is judged like any other. The XML tag that inflates it is not invisible to this scanner, which reads XML, so the filter was covering a blind spot that does not exist.",
-        "Scope annotations the project declares with @Scope are recognised when looking for dead islands: they say how many instances to keep, never who creates one. Ten more islands on the reference project.",
-        "A parent is only spared by an annotated subtype when the annotation really denotes construction by a framework, such as serialization, Parcelable or Room. It used to accept any annotation at all.",
-        "A private top level declaration and three build variants of the same class no longer count as homonyms, so the duplicate name filter stops hiding what it cannot attribute.",
-        "An override whose whole supertype chain is declared in the workspace is judged, and the parent declaration stops counting as a call. Supertypes are resolved through imports, so a library type and a project type of the same simple name are no longer confused."
-      ]
-    },
-    {
-      "heading": "Removal Fixes",
-      "bullets": [
-        "Remove Everything Unused ignored unused Remote Config keys. A finding carries one declaration per build variant, and the removal read it as a single flat cut, so it cut nothing. Every declaration is now cut.",
-        "The Gradle root file counted as a library module when a plugin is written .apply(false), including when the formatter moves the call to the next line. A root listing a publishing plugin that way could have silenced the dead symbol detector across the whole workspace.",
-        "Two unheard event posts sharing one removal range produced two quick fixes for the same edit, and applying the second acted on text the first had changed. One finding per range now."
+        "Fixed Remove Test Only Code deleting a whole test file for one line. A file such as `ListAggregatorV4DOTest.java` went entirely because of a single `Assert.assertEquals(ListAggregatorV4DO.TYPE_LIST, ...)`, although the rest checked live parsing. Now only the assertion is cut, and `Assert.assertEquals(...)` is recognized as an assertion.",
+        "Fixed a class that writes its own name inside a string, such as `Timber.d(\"Creating AvailableSpaceDetector\")`, staying alive forever. A mention of itself inside its own body no longer keeps a class alive, while a mention outside its body or in another file (`Class.forName(\"p.Foo\")`) still does.",
+        "Fixed a Remote Config reader of all keys in one app hiding unused keys of another app. A screen in one app can no longer silence 25 keys declared in a different app. When the Gradle layout cannot be read, the previous repository wide behavior is kept.",
+        "Fixed the last annotated enum entry, as in `enum Mode { ON, @Deprecated OFF }`, being found but never removed.",
+        "Fixed Java class headers with a bounded type parameter, such as `class P<T extends Runnable> extends ThreadPoolExecutor`, losing their real superclass. Snapshots from earlier versions are rebuilt so the correct supertypes are used."
       ]
     }
   ],

@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.44.0
+
+Remove Everything Unused now cuts interface methods nobody calls together with their overrides, trusts what Android declares, and stops keeping code alive on weak signals. Several removals that cut too much or too little are fixed.
+
+### Improvements
+- Reported interface methods that nothing calls, and cut the declaration and every override as one unit, all or nothing. On the reference project this matches what a manual cleanup did, such as `SystemInfoService.getCurrentMemoryUsage()` and its `@Override`. Find Everything Unused lists them and Remove Everything Unused counts the declarations.
+- Added a bundled index of the names each public Android platform type declares. Methods of custom views and of classes implementing `ComponentCallbacks2` that nobody calls (about thirty on the reference project) are no longer kept just because an ancestor outside the workspace might declare the same name. Ancestors the index does not know, such as AndroidX, keep the cautious behavior.
+- Stopped the `unused` suppression directive, such as `@SuppressWarnings("unused")` or a file level `@Suppress`, from protecting declarations. A directive that silences a warning says nothing about whether code is reachable. Parameters keep their protection, since their signature is imposed from outside.
+
+### Fixes
+- Fixed Remove Test Only Code deleting a whole test file for one line. A file such as `ListAggregatorV4DOTest.java` went entirely because of a single `Assert.assertEquals(ListAggregatorV4DO.TYPE_LIST, ...)`, although the rest checked live parsing. Now only the assertion is cut, and `Assert.assertEquals(...)` is recognized as an assertion.
+- Fixed a class that writes its own name inside a string, such as `Timber.d("Creating AvailableSpaceDetector")`, staying alive forever. A mention of itself inside its own body no longer keeps a class alive, while a mention outside its body or in another file (`Class.forName("p.Foo")`) still does.
+- Fixed a Remote Config reader of all keys in one app hiding unused keys of another app. A screen in one app can no longer silence 25 keys declared in a different app. When the Gradle layout cannot be read, the previous repository wide behavior is kept.
+- Fixed the last annotated enum entry, as in `enum Mode { ON, @Deprecated OFF }`, being found but never removed.
+- Fixed Java class headers with a bounded type parameter, such as `class P<T extends Runnable> extends ThreadPoolExecutor`, losing their real superclass. Snapshots from earlier versions are rebuilt so the correct supertypes are used.
+
 ## 1.43.0
 
 Find Everything Unused now reports dead files under assets/, and nine filters that used to skip declarations without judging them now let the counting decide.

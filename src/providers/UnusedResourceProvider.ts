@@ -8,6 +8,7 @@ import {
   collectStringLiterals,
   collectXmlResourceRefs,
   dynamicallyLookedUpKinds,
+  dynamicResourceLookups,
   collectKeepGlobs,
   SHRINKER_RULES_RE,
 } from '../util/xmlRefs';
@@ -251,6 +252,8 @@ export function findUnusedResources(input: ScanInput): UnusedResource[] {
   let manifestHasPlaceholder = false;
   /** Kinds reached by dynamic lookup; `null` once any call is unreadable. */
   let dynamicKinds: Set<string> | null = new Set<string>();
+  /** G54 : sorte -> prefixes litteraux des noms cherches dynamiquement. */
+  const dynamicPrefixes = new Map<string, Set<string>>();
   const keepGlobs: RegExp[] = [];
   const shrinkerRuleFiles = new Set<string>();
 
@@ -259,9 +262,12 @@ export function findUnusedResources(input: ScanInput): UnusedResource[] {
       codeText.push(src.text);
       // Guard 1: dynamic lookup, narrowed to the kinds it can actually reach.
       if (dynamicKinds !== null) {
-        const kinds = dynamicallyLookedUpKinds(src.text);
-        if (kinds === null) dynamicKinds = null;
-        else for (const k of kinds) dynamicKinds.add(k);
+        const lookups = dynamicResourceLookups(src.text);
+        if (lookups === null) dynamicKinds = null;
+        else {
+          for (const k of lookups.kinds) dynamicKinds.add(k);
+          for (const [k, ps] of lookups.prefixes) for (const p of ps) (dynamicPrefixes.get(k) ?? dynamicPrefixes.set(k, new Set()).get(k)!).add(p);
+        }
       }
       for (const r of collectCodeResourceRefs(src.text, SUPPORTED_KINDS)) {
         referenced.add(`${r.kind}/${r.name}`);
@@ -325,6 +331,7 @@ export function findUnusedResources(input: ScanInput): UnusedResource[] {
     const kind = entry.kind as Exclude<UnusedResourceKind, 'asset'>;
     if (!SUPPORTED_KINDS.includes(kind)) continue;
     if (dynamicKinds.has(kind)) continue;
+    if ([...(dynamicPrefixes.get(kind) ?? [])].some(p => entry.name.startsWith(p))) continue;
     if (manifestHasPlaceholder && REVIEW_ONLY_KINDS.has(kind)) continue;
     if (MANIFEST_CRITICAL.some(re => re.test(entry.name))) continue;
     if (LIBRARY_PREFIXES.some(p => entry.name.startsWith(p))) continue;

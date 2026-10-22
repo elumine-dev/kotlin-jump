@@ -22,7 +22,7 @@ import {
   normalizeResourceName,
   styleParentClosure,
   styleableCovers,
-  dynamicallyLookedUpKinds,
+  dynamicResourceLookups,
 } from '../util/xmlRefs';
 import { isBuildArtifactPath, isVendorOwnedName } from '../util/resourceAllowlists';
 import { ResourceSource } from './UnusedResourceProvider';
@@ -178,13 +178,18 @@ export function findUnusedResourceKeys(input: UnusedKeyScanInput): UnusedResourc
   // Inherited from KJ-029: a key looked up by a computed name
   // (`getIdentifier(key, "string", pkg)`) has no reference to find, and the
   // fix deleted a string the server picked at runtime.
+  // G54 : un nom a prefixe litteral n eteint que ce prefixe.
   const dynamic = new Set<string>();
+  const dynamicPrefixes = new Map<string, Set<string>>();
   for (const s of input.sources) {
     if (!/\.(kt|kts|java)$/.test(s.path) || isBuildArtifactPath(s.path)) continue;
-    const kinds = dynamicallyLookedUpKinds(s.text);
-    if (kinds === null) return [];
-    for (const k of kinds) dynamic.add(k);
+    const lookups = dynamicResourceLookups(s.text);
+    if (lookups === null) return [];
+    for (const k of lookups.kinds) dynamic.add(k);
+    for (const [k, ps] of lookups.prefixes) for (const p of ps) (dynamicPrefixes.get(k) ?? dynamicPrefixes.set(k, new Set()).get(k)!).add(p);
   }
+  const lookedUp = (kind: string, name: string) =>
+    [...(dynamicPrefixes.get(kind) ?? [])].some(p => name.startsWith(p));
 
   // Files that opted out entirely.
   const exempt = new Set(
@@ -241,6 +246,7 @@ export function findUnusedResourceKeys(input: UnusedKeyScanInput): UnusedResourc
     if (first.kind === 'attr' && styleableMembers.has(first.name)) continue;
 
     if (dynamic.has(first.kind) || (dynamic.has('array') && /array$/.test(first.kind))) continue;
+    if (lookedUp(first.kind, first.name) || (/array$/.test(first.kind) && lookedUp('array', first.name))) continue;
 
     if (isReferenced(first, alive, implicitStyleParents)) continue;
 

@@ -394,20 +394,78 @@ const GET_IDENTIFIER_RE = /\bgetIdentifier\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g
 const REFLECTION_RE = /\bR(?:\.\w+)?::class\s*\.\s*java|\bR(?:\.\w+)?\.class\b/;
 
 export function dynamicallyLookedUpKinds(code: string): Set<string> | null {
+  const lookups = dynamicResourceLookups(code);
+  if (lookups === null) return null;
+  return new Set([...lookups.kinds, ...lookups.prefixes.keys()]);
+}
+
+/**
+ * G54 : ce qu un `getIdentifier(nom, type, paquet)` atteint vraiment.
+ *
+ * Ne lire que le type eteignait toute la sorte : sur LaPresse,
+ * `getIdentifier("crosswords_settings_faq_q" + i, "string", pkg)` tenait les
+ * 1541 strings du projet en vie, dont 175 mortes, et deux appels au paquet
+ * `"android"` tous les dimens, dont 59 morts.
+ *
+ * `kinds` : sortes dont n importe quel nom peut etre cherche (nom calcule).
+ * `prefixes` : sortes dont seuls les noms qui commencent ainsi le peuvent.
+ * Un nom entierement litteral n ajoute rien, la recolte des litteraux le
+ * garde deja ; un appel au paquet `"android"` vise le systeme. `null` : un
+ * type calcule, ou `R` lu par reflexion, et plus aucune sorte n est sure.
+ */
+export function dynamicResourceLookups(code: string): { kinds: Set<string>; prefixes: Map<string, Set<string>> } | null {
   if (REFLECTION_RE.test(code)) return null;
-  const affected = new Set<string>();
+  const kinds = new Set<string>();
+  const prefixes = new Map<string, Set<string>>();
   GET_IDENTIFIER_RE.lastIndex = 0;
   let m: RegExpExecArray | null;
   while ((m = GET_IDENTIFIER_RE.exec(code)) !== null) {
     const args = m[1].trim();
     if (args === '') continue; // business getter, not Resources.getIdentifier
-    const parts = args.split(',');
+    const parts = topLevelArguments(args);
     if (parts.length < 3) continue; // not the (name, type, package) overload
-    const typeLiteral = /^\s*"(\w+)"\s*$/.exec(parts[1]);
+    if (/^"android"$/.test(parts[2])) continue;
+    const typeLiteral = /^"(\w+)"$/.exec(parts[1]);
     if (!typeLiteral) return null; // type computed: every kind is at risk
-    affected.add(typeLiteral[1]);
+    const kind = typeLiteral[1];
+    if (/^"\w+"$/.test(parts[0])) continue;
+    const prefixe = literalNamePrefix(parts[0]);
+    if (prefixe) (prefixes.get(kind) ?? prefixes.set(kind, new Set()).get(kind)!).add(prefixe);
+    else kinds.add(kind);
   }
-  return affected;
+  return { kinds, prefixes };
+}
+
+/** Les arguments d un appel, coupes aux virgules de premier niveau. */
+function topLevelArguments(args: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let inString = false;
+  let start = 0;
+  for (let i = 0; i < args.length; i++) {
+    const c = args[i];
+    if (inString) {
+      if (c === '\\') i++;
+      else if (c === '"') inString = false;
+      continue;
+    }
+    if (c === '"') inString = true;
+    else if (c === '(' || c === '[' || c === '{') depth++;
+    else if (c === ')' || c === ']' || c === '}') depth--;
+    else if (c === ',' && depth === 0) { out.push(args.slice(start, i).trim()); start = i + 1; }
+  }
+  out.push(args.slice(start).trim());
+  return out;
+}
+
+/**
+ * Le debut litteral d un nom construit : `"faq_q" + i`, `"faq_q$i"`,
+ * `"faq_q${i}"`, `String.format("faq_q%d", i)`, `"faq_q%d".format(i)`.
+ * Vide quand rien de litteral ne le precede.
+ */
+function literalNamePrefix(expr: string): string {
+  const m = /^(?:String\.format\s*\(\s*)?"(\w*)(?:"\s*\+|\$|%)/.exec(expr);
+  return m ? m[1] : '';
 }
 
 /**

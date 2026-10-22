@@ -29,7 +29,7 @@ import {
   removalExtent,
   blankImportLines,
   stripImportLines,
-  scopeAnnotationsOf,
+  benignWorkspaceAnnotationsOf,
 } from './unusedSymbols';
 
 /**
@@ -230,6 +230,8 @@ interface MemberCandidate {
   hasExternalModifier: boolean;
   /** A Java `static` method: it implements nothing, so M3 cannot hold it. */
   isJavaStatic: boolean;
+  /** G65 : un accesseur JavaBean, le seul genre de methode que Jackson lit. */
+  isBeanAccessor: boolean;
 }
 
 interface EnclosingInfo {
@@ -267,7 +269,7 @@ export function collectMemberCandidates(
   /** KJ-070: the workspace's own DI scopes, benign like `@Singleton`. */
   scopeAnnotations: Set<string>;
 } {
-  const scopeAnnotations = scopeAnnotationsOf(sources);
+  const scopeAnnotations = benignWorkspaceAnnotationsOf(sources);
   const candidates: MemberCandidate[] = [];
   const declNameCounts = new Map<string, number>();
   const supertypesByName = new Map<string, string[]>();
@@ -299,7 +301,7 @@ export function collectMemberCandidates(
       if (CLASS_LIKE_KINDS.has(s.kind)) {
         const decl: TypeDecl = {
           name: s.name,
-          fqn: parsed.packageName ? `${parsed.packageName}.${s.name}` : s.name,
+          fqn: nestedFqn(parsed.packageName, proprietaires.map(o => o.name), s.name),
           paquet: parsed.packageName,
           imports: parsed.imports,
           isInterface: s.kind === 'interface',
@@ -539,6 +541,7 @@ export function collectMemberCandidates(
         // (`totalSpace(final boolean external)`) is not a native method.
         hasExternalModifier: /(?:^|\s)external\s+(?:\w+\s+)*(?:fun|val|var)\b/.test(rawLines[sym.line] ?? ''),
         isJavaStatic: isJava && /\bstatic\b/.test((rawLines[sym.line] ?? '').slice(0, sym.character)),
+        isBeanAccessor: isBeanAccessor(sym.name, (rawLines[sym.line] ?? '').slice(sym.character)),
       });
     }
   }
@@ -579,6 +582,24 @@ export function collectMemberCandidates(
 
 /** A name the mention harvest can actually look for. */
 const BARE_IDENTIFIER_RE = /^[A-Za-z_]\w*$/;
+
+/**
+ * G65 : `getX()` et `isX()` sans parametre, `setX(v)` avec un seul. Un
+ * `getPageExternalUid(PageUid uid)` n est pas un accesseur. Des parentheses
+ * qui ne se ferment pas sur la ligne comptent comme un accesseur, par
+ * prudence.
+ */
+function isBeanAccessor(name: string, fromName: string): boolean {
+  const prefixe = /^(get|is|set)[A-Z_]/.exec(name)?.[1];
+  if (prefixe === undefined) return false;
+  const params = /^\w+\s*\(([^)]*)\)/.exec(fromName);
+  if (params === null) return true;
+  const n = params[1].trim() === '' ? 0 : params[1].split(',').length;
+  return prefixe === 'set' ? n === 1 : n === 0;
+}
+
+/** Les methodes que la serialisation Java appelle par leur nom (G65). */
+const JAVA_SERIALIZATION_HOOKS = new Set(['readObject', 'writeObject', 'readObjectNoData', 'readResolve', 'writeReplace']);
 
 /**
  * KJ-070 traverse ici.
@@ -701,7 +722,23 @@ function memberRejectionReason(
 
   const framework = frameworkAncestor(
     supertypesFor(c, supertypesByName), supertypesByName);
-  if (framework) return `M4:${framework}`;
+  // G63 : le cadre n appelle un membre qu a travers un type qu il connait.
+  // Quand l index de G61 a resolu toute la chaine et qu aucun ancetre ne
+  // declare ce nom, il n a aucun contrat pour l atteindre :
+  // `EditionContainer.stopBlinkLiveButton()` restait garde par son `ViewGroup`.
+  // F7 seulement : sous F6, une bibliotheque de serialisation lit les getters
+  // par convention de nom, sans contrat de type a consulter. Et seulement si
+  // M3 laisse passer ensuite : la famille des ilots absorbe une etiquette F7,
+  // pas une M3, et `ViewPagerWithMargin.setPageMarginDrawable` (deux
+  // surcharges) se perdait en changeant d etiquette.
+  const contratLeve = framework?.startsWith('F7:') === true && c.chainVisible && c.ancestorDecls === 0
+    && javaInheritanceReason(c) === null;
+  // G65 : sous F6, une bibliotheque ne lit que des champs, des accesseurs
+  // JavaBean (Jackson) ou les crochets de la serialisation Java. Une methode
+  // d un autre nom, comme `ObituaryModel.hasTitle()`, n est lue par aucune.
+  const nomQuAucunSerialiseurNeLit = framework?.startsWith('F6:') === true && c.sym.kind === 'fun'
+    && !c.isBeanAccessor && !JAVA_SERIALIZATION_HOOKS.has(c.name);
+  if (framework && !contratLeve && !nomQuAucunSerialiseurNeLit) return `M4:${framework}`;
 
   const inherited = javaInheritanceReason(c);
   if (inherited) return inherited;
@@ -733,6 +770,17 @@ function memberRejectionReason(
 }
 
 /** Une declaration de type du corpus, avec de quoi resoudre ce qu elle nomme. */
+/**
+ * G66 : le nom complet d un type imbrique est `paquet.Outer.Inner`, celui
+ * qu un import ecrit. Range sous `paquet.Inner`, il ne correspondait a aucun
+ * import, et toute classe qui implemente une interface imbriquee importee
+ * (`CirclePageWithMarginIndicator`) avait une chaine d ancetres invisible.
+ */
+export function nestedFqn(paquet: string, englobants: readonly string[], nom: string): string {
+  const chemin = [...englobants, nom].join('.');
+  return paquet ? `${paquet}.${chemin}` : chemin;
+}
+
 export interface TypeDecl {
   name: string;
   fqn: string;

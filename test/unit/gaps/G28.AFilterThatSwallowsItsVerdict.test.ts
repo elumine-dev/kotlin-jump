@@ -143,11 +143,12 @@ describe.skipIf(!mod)('chaque filtre, sur le motif qui le declenche', () => {
    * 290 declarations. L exemple etait `OverlayView : View`, et KJ-080 a retire
    * les VUES de F7 : ce scanner lit le XML, donc la balise qui les instancie
    * n est pas invisible. Le filtre garde ce dont le contrat d instanciation
-   * passe par un nom que le corpus ne contient pas forcement.
+   * passe par un nom que le corpus ne contient pas forcement. Plus le
+   * Fragment depuis G62 : seule une Activity sert encore d exemple.
    */
   it('F7, une classe qui prolonge un type de cadre', () => {
-    expect(verdict('Ecran', f('Ecran.kt', 'package com.x\n\nclass Ecran : Fragment\n')))
-      .toMatchObject({ outcome: 'F7:Fragment' });
+    expect(verdict('Ecran', f('Ecran.kt', 'package com.x\n\nclass Ecran : Activity\n')))
+      .toMatchObject({ outcome: 'F7:Activity' });
   });
 
   /** Et une VUE n y est plus : elle redescend dans le comptage ordinaire. */
@@ -254,10 +255,10 @@ describe.skipIf(!mod)('ce qu un doublement du verdict ne doit pas changer', () =
       ['ViewSpacing', [f('ViewSpacing.kt', 'package com.x\n\nclass ViewSpacing : Serializable\n')]],
       ['Par', [f('Par.kt', 'package com.x\n\nclass Par : Parcelable\n')]],
       // `OverlayView : View` etait ici. KJ-080 l a retiree de F7 : ce scanner
-      // lit le XML, donc rien d invisible ne protege plus une vue. C est un
-      // Fragment qui tient sa place, dont le contrat d instanciation passe par
-      // un nom range dans un Bundle.
-      ['Ecran', [f('Ecran.kt', 'package com.x\n\nclass Ecran : Fragment\n')]],
+      // lit le XML, donc rien d invisible ne protege plus une vue. Le Fragment
+      // qui l avait remplacee est parti a son tour (G62) : c est une Activity,
+      // instanciee par le manifeste, qui tient la place.
+      ['Ecran', [f('Ecran.kt', 'package com.x\n\nclass Ecran : Activity\n')]],
       ['Sup', [f('Sup.kt', 'package com.x\n\n@Suppress("unused")\nclass Sup\n')]],
     ];
     for (const [nom, sources] of cas) {

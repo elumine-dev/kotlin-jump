@@ -205,7 +205,8 @@ describe.skipIf(!iles)('la decouverte devrait traverser ici aussi', () => {
    * `@UnstableApi` ecarte sept declarations ici et 394 membres en G29. C est
    * un marqueur de stabilite, il ne dit rien de qui appelle.
    */
-  it.fails('un marqueur de stabilite ne devrait rien ecarter non plus', () => {
+  // Ferme par G64.
+  it('un marqueur de stabilite ne devrait rien ecarter non plus', () => {
     expect(ilots([...paire('@UnstableApi'), VIVANT])).toHaveLength(1);
   });
 });

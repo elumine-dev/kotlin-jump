@@ -281,12 +281,13 @@ describe.skipIf(!memb)('G38, le temoin ecarte', () => {
     expect(membres(porteur(''), APPELANT)).toContain('witness');
   });
 
-  it.fails('avec elle, le temoin devrait l etre encore', () => {
+  // Ferme par G64 : `@Nullable` ne fait plus d un temoin une ancre.
+  it('avec elle, le temoin devrait l etre encore', () => {
     expect(membres(porteur('@Nullable'), APPELANT)).toContain('witness');
   });
 
-  it('aujourd hui, plus rien n est rapporte', () => {
-    expect(membres(porteur('@Nullable'), APPELANT)).toEqual([]);
+  it('et lui seul : helper reste couvert par son temoin', () => {
+    expect(membres(porteur('@Nullable'), APPELANT)).toEqual(['witness']);
   });
 });
 

@@ -151,7 +151,9 @@ describe.skipIf(!memb)('aujourd hui, un membre ecarte tient son voisin en vie', 
    * appelle. C est le seul groupe d annotations ou la relache se justifierait.
    */
   it('un pur marqueur de type produit exactement le meme effet', () => {
-    expect(verdict('anchor', porteur('@Nullable'), VIVANT)).toMatchObject({ outcome: 'M6:@Nullable' });
+    // G64 juge desormais l ancre `@Nullable` ; son voisin reste selfOnly tant
+    // que G38 laisse un temoin mort prouver selfOnly.
+    expect(verdict('anchor', porteur('@Nullable'), VIVANT)).toMatchObject({ outcome: 'unreferenced' });
     expect(verdict('helper', porteur('@Nullable'), VIVANT)).toMatchObject({ outcome: 'selfOnly' });
   });
 });
@@ -181,7 +183,8 @@ describe.skipIf(!memb)('la relache, la ou elle se justifie', () => {
    * Et l ancre elle meme, tant qu a faire : une methode `@Nullable` que
    * personne n appelle est aussi morte que si elle n etait pas annotee.
    */
-  it.fails('et l ancre @Nullable elle meme devrait partir', () => {
+  // Ferme par G64.
+  it('et l ancre @Nullable elle meme devrait partir', () => {
     expect(morts(porteur('@Nullable'), VIVANT)).toContain('Holder.anchor');
   });
 });

@@ -175,9 +175,10 @@ const CONSTRUCTEUR = f(`${APP}/src/main/java/com/x/Panel.java`, [
 ].join('\n'));
 
 /**
- * Un Fragment, dont le contrat d instanciation est different : le
- * `FragmentManager` le reconstruit apres une rotation a partir de son nom de
- * classe conserve dans le `Bundle`, que le corpus ne contient nulle part.
+ * Un Fragment. G20 le gardait sous F7 : le `FragmentManager` le reconstruit
+ * apres une rotation a partir du nom conserve dans le `Bundle`. G62 a montre
+ * que ce nom vient d une instance deja ajoutee, nee d une voie que la recolte
+ * lit, et l a fait redescendre dans le comptage comme les vues.
  */
 const FRAGMENT = f(`${APP}/src/main/java/com/x/LoginContainerFragment.kt`, [
   'package com.x',
@@ -314,13 +315,14 @@ describe.skipIf(!mod)('ce que la relache ne doit pas emporter', () => {
   });
 
   /**
-   * La garde qui delimite le trou. Un Fragment se reconstruit a partir d un
-   * nom de classe range dans un `Bundle` a la rotation, et ce nom n est ecrit
-   * nulle part dans le corpus. L argument « aucune balise, aucun appel, donc
-   * mort » ne vaut pas pour lui.
+   * Ce test gardait un Fragment orphelin. G62 l a retourne : l argument du
+   * `Bundle` ne cree aucune voie que la recolte ne lise deja. Il reste ici
+   * pour que la frontiere de G20 se lise en un seul endroit.
    */
-  it('un Fragment, dont le contrat d instanciation est ailleurs', () => {
-    epargne(morts(FRAGMENT, CANARI, VIVANT), 'LoginContainerFragment');
+  it('un Fragment que rien ne nomme est juge depuis G62', () => {
+    const noms = morts(FRAGMENT, CANARI, VIVANT);
+    expect(noms).toContain('CanaryGone');
+    expect(noms).toContain('LoginContainerFragment');
   });
 
   it('une Activity, meme sans manifeste dans le corpus', () => {

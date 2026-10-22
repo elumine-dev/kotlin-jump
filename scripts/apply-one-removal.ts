@@ -39,6 +39,7 @@ import { DEFAULT_TEST_SEGMENTS } from '../src/util/testPaths';
 import { collecterUnePasse, coupesRetenues, plagesDuFichier } from '../src/commands/RemoveEverythingUnused';
 import { planCascade } from '../src/providers/removalCascade';
 import { FileResourceIndex } from '../src/indexer/FileResourceIndex';
+import { readAndroidApi } from './kjCorpus';
 
 const SOURCE_RE = /\.(kt|kts|java|xml|gradle|pro|properties|toml)$|[\\/]nitro\.json$/;
 const RES_RE = /\.(xml|png|webp|svg|jpg|jpeg|gif|bmp|json|txt|mp3|mp4|ogg|wav|ttf|otf|lottie)$/i;
@@ -151,7 +152,10 @@ function main(): void {
   const corpus = readCorpus(root);
   console.log(`sources ${corpus.sources.length}  modules ${corpus.modulesWithCode.length}  ressources ${corpus.resourceEntries.length}`);
 
+  // Comme Remove All et apply-kj-removals : sans l index G61, les membres des
+  // vues et des modeles restaient gardes ici alors que la commande les coupe.
   const { parFichier, fichiersMorts, tally } = collecterUnePasse(corpus.sources, segs, {
+    androidApi: readAndroidApi(),
     modulesWithCode: corpus.modulesWithCode,
     libraryModules: corpus.libraryModules,
     moduleDirs: corpus.moduleDirs,
@@ -196,8 +200,14 @@ function main(): void {
   let vus = 0;
   for (const [p, list] of parFichier) {
     if (sousChemin && !p.includes(sousChemin)) continue;
+    const texteDuFichier = corpus.sources.find(s => s.path === p)?.text ?? '';
     const kept = list.filter(c => {
-      if (!noms.includes(c.quoi)) return false;
+      // L'import perime d'une cible arrive sans nom (`quoi` vide, famille
+      // balayage) : le filtre par nom le perdait, et le composant Dagger
+      // gardait `import ...AdVideoMedia3Fragment` apres la coupe (G62).
+      const importDUneCible = c.quoi === '' && c.famille === 'balayage'
+        && noms.some(n => new RegExp(`^\\s*import\\s+(?:static\\s+)?[\\w.]*\\b${n}\\b`).test(texteDuFichier.slice(c.start, c.end)));
+      if (!noms.includes(c.quoi) && !importDUneCible) return false;
       if (famille && c.famille !== famille) return false;
       return true;
     });

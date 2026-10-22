@@ -27,6 +27,7 @@ const args = process.argv.slice(2);
 const base = args.find(a => a.startsWith('--base='))?.slice('--base='.length) ?? 'main';
 const equivalents = args.filter(a => a.startsWith('--equivalent=')).map(a => a.slice('--equivalent='.length));
 const tests = new Set(args.filter(a => !a.startsWith('--')));
+const explicit = new Set(tests);
 
 const git = (...argv: string[]) => spawnSync('git', ['--no-pager', ...argv], { cwd: REPO, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).stdout;
 
@@ -83,6 +84,21 @@ try {
       : spawnSync('npx', ['vitest', 'run', ...cfg, ...fs_], { cwd: copy, encoding: 'utf8', timeout: 15 * 60_000 }).status ?? 1;
     return run(['--config', 'vitest.gaps.config.ts'], gaps) || run([], rest);
   };
+
+  // Un test modifie que la base fait deja echouer ne peut rien juger : G28
+  // (deux lignes rouges sur main) rendait la ligne « dents » KO a chaque trou
+  // depuis G62, sans qu un seul mutant soit essaye. On l ecarte, en le disant,
+  // seulement s il est aussi rouge une fois TOUT le correctif retire. Un
+  // temoin passe en argument n est jamais ecarte.
+  if (vitest([...tests]) !== 0) {
+    const rouges = [...tests].filter(t => !explicit.has(t) && vitest([t]) !== 0);
+    const fullPatch = path.join(copy, '.full.patch');
+    fs.writeFileSync(fullPatch, git('diff', '--src-prefix=a/', '--dst-prefix=b/', '--no-ext-diff', '--no-color', base, '--', 'src/'));
+    const retire = spawnSync('git', ['apply', '-R', fullPatch], { cwd: copy, encoding: 'utf8' }).status === 0;
+    const dejaRouges = retire ? rouges.filter(t => vitest([t]) !== 0) : [];
+    if (retire) spawnSync('git', ['apply', fullPatch], { cwd: copy });
+    for (const t of dejaRouges) { tests.delete(t); console.log(`ECARTE ${t} (deja rouge sur ${base})`); }
+  }
 
   if (vitest([...tests]) !== 0) { console.log('les tests sont déjà rouges sans mutation : rien à juger'); exitCode = 1; }
   else {

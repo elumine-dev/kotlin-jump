@@ -15,7 +15,7 @@ import {
   explainSymbols,
   matchesGlob,
   removalExtent,
-  scopeAnnotationsOf,
+  benignWorkspaceAnnotationsOf,
   SymbolSource,
 } from './unusedSymbols';
 import { explainMembers } from './unusedMembers';
@@ -190,7 +190,7 @@ function analyze(input: DeadIslandScanInput): Analysis {
   if (input.truncated) return { islands: [], explanations: [] };     // I1
 
   const maxIslandSize = input.maxIslandSize ?? DEFAULT_MAX_ISLAND_SIZE;
-  const scopeAnnotations = scopeAnnotationsOf(input.sources);
+  const scopeAnnotations = benignWorkspaceAnnotationsOf(input.sources);
 
   // ── Eligibility: the underlying detectors' own explain surfaces, so this
   // detector can never disagree with them about a guard.

@@ -176,7 +176,9 @@ describe.skipIf(!memb)('aujourd hui, le temoin n a pas besoin d etre vivant', ()
    * G27 : une declaration que personne n a jugee sert de temoin.
    */
   it('un utilisateur ecarte par un filtre fait le meme effet', () => {
-    expect(verdict('filtered', TEMOIN_ECARTE, APPELANT)).toMatchObject({ outcome: 'M6:@Nullable' });
+    // `@Nullable` n ecarte plus rien depuis G64 : le temoin est juge mort,
+    // et il prouve toujours selfOnly, ce qui est le defaut de G38.
+    expect(verdict('filtered', TEMOIN_ECARTE, APPELANT)).toMatchObject({ outcome: 'unreferenced' });
     expect(verdict('helper', TEMOIN_ECARTE, APPELANT)).toMatchObject({ outcome: 'selfOnly' });
   });
 });

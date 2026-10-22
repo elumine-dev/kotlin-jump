@@ -67,7 +67,7 @@ describe.skipIf(!mod)('KJ-032 sur le projet de démo', () => {
   });
 
   it('la chaîne d’héritage est suivie jusqu’au type du framework', () => {
-    expect(flagged('GhostScreen')).toBe(false);        // : DemoBaseFragment : Fragment
+    expect(flagged('GhostScreen')).toBe(false);        // : DemoBaseActivity : Activity
   });
 
   it('les formes de référence qu’un scan par symbole raterait', () => {

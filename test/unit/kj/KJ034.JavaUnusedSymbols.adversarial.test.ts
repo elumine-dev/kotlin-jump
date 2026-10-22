@@ -99,8 +99,13 @@ describe('les gardes héritées valent aussi pour Java', () => {
     expect(flagged([ghost('public class Ghost implements Serializable {\n}')], 'Ghost')).toBe(false);
   });
 
-  it('extends Fragment rend vivant', () => {
-    expect(flagged([ghost('public class Ghost extends Fragment {\n}')], 'Ghost')).toBe(false);
+  it('extends Activity rend vivant', () => {
+    expect(flagged([ghost('public class Ghost extends Activity {\n}')], 'Ghost')).toBe(false);
+  });
+
+  // G62 : un Fragment que rien ne construit ni ne nomme est jugé.
+  it('extends Fragment ne rend plus vivant', () => {
+    expect(flagged([ghost('public class Ghost extends Fragment {\n}')], 'Ghost')).toBe(true);
   });
 
   it('un nom déclaré des deux côtés de la frontière : le paquet tranche', () => {

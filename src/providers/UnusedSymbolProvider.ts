@@ -222,8 +222,38 @@ export async function buildSymbolRemovalEdit(
     }
   };
 
-  const perFile = new Map<string, UnusedSymbol[]>();
+  // G62 : une trouvaille par injection (KJ-067) emporte ses declarations
+  // `inject(target: X)`, sinon le composant nomme une classe qui n existe
+  // plus. Toutes ou aucune, comme Remove All : un site qui a bouge depuis le
+  // scan retire la trouvaille entiere de cette edition.
+  const injectionSitesByPath = new Map<string, { start: number; end: number }[]>();
+  const retained: UnusedSymbol[] = [];
   for (const f of findings) {
+    const sites = f.via === 'injection' ? f.injectionSites ?? [] : [];
+    let intact = true;
+    for (const s of sites) {
+      const text = (await textOf(s.path)) ?? '';
+      const segment = text.slice(s.removeStart, s.removeEnd);
+      // Des lignes entieres, sinon un texte decale de quelques caracteres
+      // contient encore `inject(` et le nom, et la coupe tombe a cote.
+      const lignesEntieres = (s.removeStart === 0 || text[s.removeStart - 1] === '\n')
+        && (s.removeEnd === text.length || text[s.removeEnd - 1] === '\n');
+      if (!lignesEntieres || !/\binject\s*\(/.test(segment) || !new RegExp(`\\b${f.name}\\b`).test(segment)) {
+        intact = false;
+        break;
+      }
+    }
+    if (!intact) continue;
+    retained.push(f);
+    for (const s of sites) {
+      const list = injectionSitesByPath.get(s.path) ?? [];
+      list.push({ start: s.removeStart, end: s.removeEnd });
+      injectionSitesByPath.set(s.path, list);
+    }
+  }
+
+  const perFile = new Map<string, UnusedSymbol[]>();
+  for (const f of retained) {
     const list = perFile.get(f.path) ?? [];
     list.push(f);
     perFile.set(f.path, list);
@@ -243,15 +273,18 @@ export async function buildSymbolRemovalEdit(
   // answer BEFORE any range edit is written, because a WorkspaceEdit that both
   // deletes a URI and edits a range in it is rejected whole, and in silence.
   const rangesByPath = new Map<string, { start: number; end: number }[]>();
-  for (const [p, group] of perFile) {
+  const declarationRanges = new Map<string, number>();
+  for (const p of new Set([...perFile.keys(), ...injectionSitesByPath.keys()])) {
     if (deleted.has(p)) continue;
     const text = await textOf(p);
     if (text === undefined) continue;
-    const ranges = group
+    const declarationsHere = (perFile.get(p) ?? [])
       .filter(f => f.removeStart !== -1)
       .map(f => currentRemovalExtent(p, text, f.name, f.kind, f.line))
       .filter((e): e is { removeStart: number; removeEnd: number } => e !== undefined && e.removeStart !== -1)
-      .map(e => wholeLineExtent(text, e.removeStart, e.removeEnd))
+      .map(e => wholeLineExtent(text, e.removeStart, e.removeEnd));
+    declarationRanges.set(p, declarationsHere.length);
+    const ranges = [...declarationsHere, ...(injectionSitesByPath.get(p) ?? [])]
       .sort((a, b) => a.start - b.start);
     const kept: { start: number; end: number }[] = [];
     let previousEnd = -1;
@@ -273,10 +306,11 @@ export async function buildSymbolRemovalEdit(
   // compte du scan, qui ignore ce qui a bouge depuis.
   let declarations = 0;
   for (const [p2, group] of perFile) {
-    declarations += doomed.has(p2) ? group.length : (rangesByPath.get(p2)?.length ?? 0);
+    declarations += doomed.has(p2) ? group.length : (declarationRanges.get(p2) ?? 0);
   }
 
-  for (const [p, group] of perFile) {
+  for (const p of new Set([...perFile.keys(), ...injectionSitesByPath.keys()])) {
+    const group = perFile.get(p) ?? [];
     const text = await textOf(p);
     if (text === undefined) continue;
 
@@ -319,6 +353,12 @@ export async function buildSymbolRemovalEdit(
         const line = importText.split('\n')[stale.line];
         // Re-verify: an import that moved since the scan is skipped, not guessed.
         if (line === undefined || !new RegExp(`^\\s*import\\s+[\\w.]*\\b${f.name}\\b`).test(line)) continue;
+        // G62 : la cascade voit aussi les fichiers des sites d injection, et
+        // y retire le meme import. Deux plages qui se chevauchent font rejeter
+        // tout le WorkspaceEdit par VS Code.
+        const debut = lineStartsOf(importText)[stale.line];
+        const fin = debut + line.length + 1;
+        if ((cascade.imports.get(stale.path) ?? []).some(c => c.start < fin && debut < c.end)) continue;
         edit.delete(
           corpusUri(stale.path),
           new vscode.Range(stale.line, 0, stale.line + 1, 0),

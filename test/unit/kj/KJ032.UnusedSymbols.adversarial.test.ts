@@ -151,8 +151,10 @@ describe.skipIf(!mod)('F6 à F9 — supertypes, main', () => {
     }
   });
 
+  // Plus `Fragment` (G62) : le FragmentManager ne recree qu un Fragment deja
+  // construit par une voie que la recolte lit.
   it('F7 : un supertype instancié par le framework rend vivant', () => {
-    for (const t of ['Application', 'Activity', 'Fragment', 'Service', 'BroadcastReceiver', 'Worker']) {
+    for (const t of ['Application', 'Activity', 'Service', 'BroadcastReceiver', 'Worker']) {
       expect(find([ghost(`class Ghost : ${t}()`)])).toEqual([]);
     }
   });
@@ -163,9 +165,9 @@ describe.skipIf(!mod)('F6 à F9 — supertypes, main', () => {
 
   it('F7 : la garde suit la chaîne d’héritage, pas seulement le parent direct', () => {
     // `class Screen : BaseScreen()` ne nomme que BaseScreen à la déclaration.
-    // S'arrêter au premier niveau signalerait un Fragment vivant comme mort.
+    // S'arrêter au premier niveau signalerait une Activity vivante comme morte.
     const sources = [
-      kt(`${MAIN}/Base.kt`, 'package com.x\n\nabstract class BaseScreen : Fragment()\n'),
+      kt(`${MAIN}/Base.kt`, 'package com.x\n\nabstract class BaseScreen : Activity()\n'),
       kt(`${MAIN}/Screen.kt`, 'package com.x\n\nclass Ghost : BaseScreen()\n'),
     ];
     expect(flagged(sources, 'Ghost')).toBe(false);

@@ -27,7 +27,8 @@ class GhostKept {
 }
 
 // Alive: extends a framework type through a base class of this project, so
-// the guard has to walk the inheritance chain to see it.
-class GhostScreen : DemoBaseFragment()
+// the guard has to walk the inheritance chain to see it. An Activity, since
+// the manifest instantiates it; a Fragment no longer qualifies (G62).
+class GhostScreen : DemoBaseActivity()
 
-abstract class DemoBaseFragment : Fragment()
+abstract class DemoBaseActivity : Activity()

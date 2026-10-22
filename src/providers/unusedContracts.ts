@@ -8,9 +8,9 @@ import { stripKotlinComments } from '../util/xmlRefs';
 import { isBuildArtifactPath, isGeneratedSource } from '../util/resourceAllowlists';
 import { isTestSourceSet } from '../util/testPaths';
 import {
-  accessorNames, BENIGN_TOPLEVEL_ANNOTATIONS, harvestMentions, removalExtent, scopeAnnotationsOf, SymbolSource,
+  accessorNames, BENIGN_TOPLEVEL_ANNOTATIONS, harvestMentions, removalExtent, benignWorkspaceAnnotationsOf, SymbolSource,
 } from './unusedSymbols';
-import { resoudreType, TypeDecl } from './unusedMembers';
+import { nestedFqn, resoudreType, TypeDecl } from './unusedMembers';
 import { AndroidApi } from '../util/androidApi';
 import { signatureOnlySpan } from './deadIslands';
 
@@ -202,7 +202,7 @@ function bareProperty(name: string): string | undefined {
 
 export function findUnusedContracts(input: ContractScanInput): UnusedContract[] {
   if (input.truncated) return [];
-  const scopes = scopeAnnotationsOf(input.sources);
+  const scopes = benignWorkspaceAnnotationsOf(input.sources);
   const benign = (n: string) => BENIGN.has(n) || scopes.has(n);
 
   const files: FileInfo[] = [];
@@ -231,7 +231,7 @@ export function findUnusedContracts(input: ContractScanInput): UnusedContract[] 
       if (CLASS_LIKE.has(s.kind)) {
         const decl: TypeDecl = {
           name: s.name,
-          fqn: parsed.packageName ? `${parsed.packageName}.${s.name}` : s.name,
+          fqn: nestedFqn(parsed.packageName, stack.map(o => o.sym.name), s.name),
           paquet: parsed.packageName,
           imports: parsed.imports,
           isInterface: s.kind === 'interface',

@@ -206,6 +206,11 @@ export const BENIGN_TOPLEVEL_ANNOTATIONS = new Set([
   // Compose contract annotations: they promise something about the type's
   // behaviour, they do not make it reachable from anywhere.
   'Stable', 'Immutable', 'NonRestartableComposable', 'ReadOnlyComposable',
+  // G64 : nullabilite et marqueur d opt-in de media3. Ils parlent au
+  // compilateur ; `ExoUtil` entiere restait vivante sous `@UnstableApi`.
+  'Nullable', 'NonNull', 'NotNull', 'UnstableApi',
+  // Fil d execution : une promesse sur le fil, rien sur l appelant (G23).
+  'UiThread', 'MainThread', 'WorkerThread', 'AnyThread', 'BinderThread',
 ]);
 
 /**
@@ -243,6 +248,33 @@ export function scopeAnnotationsOf(sources: readonly SymbolSource[]): Set<string
   return out;
 }
 
+/**
+ * G64 : les annotations du projet qui ne creent aucune reference, plus les
+ * portees de KJ-070. Deux sortes se lisent dans le corpus :
+ *
+ * - celles qu un build donne aux plugins Kotlin `allOpen` et `noArg`, qui
+ *   retirent `final` ou ajoutent un constructeur a la compilation ;
+ *   `@OpenClassForTest` gardait les 16 membres d `AppLifecycleObserver` ;
+ * - celles que le projet declare avec `@RequiresOptIn`, des marqueurs d API.
+ */
+export function benignWorkspaceAnnotationsOf(sources: readonly SymbolSource[]): Set<string> {
+  const out = scopeAnnotationsOf(sources);
+  for (const src of sources) {
+    if (/build\.gradle(\.kts)?$/.test(src.path)) {
+      if (!/\b(?:allOpen|noArg)\b/.test(src.text)) continue;
+      for (const bloc of src.text.matchAll(/\b(?:allOpen|noArg)\s*\{([^}]*)\}/g)) {
+        for (const nom of bloc[1].matchAll(/["']([\w.]+)["']/g)) out.add(nom[1].split('.').pop()!);
+      }
+    } else if (/\.(kt|java)$/.test(src.path) && src.text.includes('RequiresOptIn')) {
+      const clean = stripKotlinComments(src.text);
+      for (const m of clean.matchAll(/@RequiresOptIn\b[^}]{0,400}?(?:\bannotation\s+class|@interface)\s+([A-Za-z_]\w*)/g)) {
+        out.add(m[1]);
+      }
+    }
+  }
+  return out;
+}
+
 /** Supertypes whose instances the framework creates; nothing names the class. */
 /**
  * Les supertypes dont la seule voie d'instanciation invisible au CODE est une
@@ -253,10 +285,24 @@ export function scopeAnnotationsOf(sources: readonly SymbolSource[]): Set<string
  */
 const VIEW_SUPERTYPES = new Set(['View', 'ViewGroup', 'RecyclerView']);
 
-/** Le verdict de `frameworkAncestor` designe-t-il une vue ? */
-function estUneVue(verdict: string): boolean {
+/**
+ * G62 : les Fragments rejoignent les vues. Le `FragmentManager` ne recree
+ * apres une rotation qu un Fragment qu il a deja ajoute, donc construit par
+ * du code, un layout, un graphe de navigation ou un nom en chaine : quatre
+ * voies que la recolte lit. `AdVideoMedia3Fragment`, que seul le composant
+ * Dagger nommait, restait ainsi hors de portee de KJ-067.
+ */
+const FRAGMENT_SUPERTYPES = new Set([
+  'Fragment', 'DialogFragment', 'BottomSheetDialogFragment', 'PreferenceFragmentCompat',
+]);
+
+/** Les supertypes dont le cadre n instancie une sous classe que sous un nom que le corpus ecrit. */
+const SPELLED_INSTANTIATION_SUPERTYPES = new Set([...VIEW_SUPERTYPES, ...FRAGMENT_SUPERTYPES]);
+
+/** Le verdict de `frameworkAncestor` designe-t-il une vue ou un Fragment ? */
+function instanciationEcrite(verdict: string): boolean {
   const m = /^F7:([A-Za-z_]\w*)/.exec(verdict);
-  return m !== null && VIEW_SUPERTYPES.has(m[1]);
+  return m !== null && SPELLED_INSTANTIATION_SUPERTYPES.has(m[1]);
 }
 
 export const FRAMEWORK_SUPERTYPES = new Set([
@@ -1386,8 +1432,10 @@ export function frameworkAncestor(
  * the corpus writes it. `frameworkAncestor` cannot answer this, it returns
  * null both for a chain that ends clean and for a parent it could not follow.
  *
- * `Any` and `Object` end a chain. Anything else the corpus does not declare
- * withholds the finding.
+ * `Any` and `Object` end a chain. So does a view or Fragment type the corpus
+ * does not declare (G62): the framework only builds one from a name the
+ * corpus writes. Anything else the corpus does not declare withholds the
+ * finding.
  */
 function chainResolvedInCorpus(
   supertypes: readonly string[],
@@ -1401,7 +1449,10 @@ function chainResolvedInCorpus(
       if (seen.has(bare)) continue;
       seen.add(bare);
       if (bare === 'Any' || bare === 'Object') continue;
-      if (!ctx.topLevelNameCounts.has(bare)) return false;
+      if (!ctx.topLevelNameCounts.has(bare)) {
+        if (SPELLED_INSTANTIATION_SUPERTYPES.has(bare)) continue;
+        return false;
+      }
       for (const parent of ctx.supertypesByName.get(bare) ?? []) {
         const clean = parent.replace(/<.*/, '').trim();
         if (clean) next.push(clean);
@@ -1705,11 +1756,11 @@ function rejectionReason(
   // famille des ilots de son gibier : les quatre `StickyRecyclerHeaders*`
   // forment un ilot mort que F7 ecartait un par un.
   //
-  // Rien de tel pour un `Fragment`, une `Activity` ou un `Worker` : leur
-  // contrat d'instanciation passe par un nom de classe que le corpus ne
-  // contient pas forcement, un `Fragment` se reconstruisant apres une rotation
-  // a partir du nom range dans son `Bundle`.
-  if (framework && !estUneVue(framework)) return framework;
+  // G62 : le `Fragment` suit. Le nom que son `Bundle` garde pour la rotation
+  // vient d une instance deja ajoutee, nee d une voie que la recolte lit.
+  // Une `Activity` ou un `Worker` restent sous F7 : le manifeste et
+  // l ordonnanceur les instancient par un contrat que ce scanner ne suit pas.
+  if (framework && !instanciationEcrite(framework)) return framework;
   if (parentsOfAnnotatedSubtypes.has(c.name)) return 'F8:annotated-subtype';
   // An interface is never instantiated by a framework, so the name belt must
   // not apply to one: `interface OnboardingService` is not an Android Service.
@@ -1888,7 +1939,7 @@ function buildContext(
       collected.candidates, collected.topLevelNameCounts, harvest, unmentionedDuplicates),
     resolvedSingles: singlesResolvedByPackage(
       collected.candidates, collected.topLevelNameCounts, harvest, input.testSourceSets),
-    scopeAnnotations: scopeAnnotationsOf(input.sources),
+    scopeAnnotations: benignWorkspaceAnnotationsOf(input.sources),
   };
 }
 

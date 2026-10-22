@@ -186,12 +186,13 @@ describe.skipIf(!memb || !symb)('aujourd hui, la decouverte ne traverse pas', ()
       .toMatchObject({ outcome: 'F5:@ScopeApplication' });
   });
 
-  it('un marqueur de stabilite ecarte lui aussi tous les membres', () => {
+  // G64 : le marqueur ne compte plus.
+  it('un marqueur de stabilite n ecarte plus rien', () => {
     expect(membre('neverCalled', service('@UnstableApi'), APPELANT))
-      .toMatchObject({ outcome: 'M4:@UnstableApi' });
+      .toMatchObject({ outcome: 'unreferenced' });
   });
 
-  it('et une classe serialisable ecarte les siens', () => {
+  it('et une classe serialisable n ecarte plus ses methodes ordinaires', () => {
     const serialisable = f('Service.kt', [
       'package com.x',
       '',
@@ -203,8 +204,10 @@ describe.skipIf(!memb || !symb)('aujourd hui, la decouverte ne traverse pas', ()
       '}',
       '',
     ].join('\n'));
+    // G65 : `neverCalled` n est pas un accesseur JavaBean, aucun
+    // serialiseur ne la lit. Un `getX` resterait sous F6.
     expect(membre('neverCalled', serialisable, APPELANT))
-      .toMatchObject({ outcome: 'M4:F6:Serializable' });
+      .toMatchObject({ outcome: 'unreferenced' });
   });
 });
 
@@ -224,7 +227,8 @@ describe.skipIf(!memb)('la decouverte devrait traverser', () => {
  * Motif reel:. Une annotation
    * qui parle de la STABILITE d une API ne dit rien de qui l appelle.
    */
-  it.fails('un marqueur de stabilite ne devrait rien ecarter', () => {
+  // Ferme par G64.
+  it('un marqueur de stabilite ne devrait rien ecarter', () => {
     expect(morts(service('@UnstableApi'), APPELANT)).toContain('neverCalled');
   });
 
@@ -232,7 +236,8 @@ describe.skipIf(!memb)('la decouverte devrait traverser', () => {
    * La bibliotheque de serialisation fabrique l objet et lit ses champs ; elle
    * n appelle pas ses methodes. 385 membres du corpus dependent de ce point.
    */
-  it.fails('une classe serialisable ne devrait pas proteger ses methodes', () => {
+  // Ferme par G65 pour les methodes qui ne sont pas des accesseurs JavaBean.
+  it('une classe serialisable ne devrait pas proteger ses methodes', () => {
     const serialisable = f('Service.kt', [
       'package com.x',
       '',

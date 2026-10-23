@@ -1,42 +1,42 @@
 {
-  "version": "1.44.0",
+  "version": "1.44.1",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Sharper dead code removal, fewer false keeps",
-  "summary": "Remove Everything Unused now cuts interface methods nobody calls together with their overrides, trusts what Android declares, and stops keeping code alive on weak signals. Several removals that cut too much or too little are fixed.",
+  "tagline": "Fewer false keeps, cleaner Fragment removal",
+  "summary": "Find Everything Unused now reports dead code that five overcautious filters kept alive, and one getIdentifier call no longer protects a whole kind of resource. Removing a Fragment also removes the Dagger lines that name it.",
   "highlights": [
     {
-      "title": "Unused interface methods removed",
-      "kind": "feature",
-      "description": "An interface method that nothing calls is now cut together with every override, so a cleanup no longer leaves half a contract behind."
-    },
-    {
-      "title": "Android platform awareness",
-      "kind": "improvement",
-      "description": "Custom view methods that no one calls are now reported, because the scan knows which names the Android platform declares itself."
-    },
-    {
-      "title": "Safer test code removal",
+      "title": "Dynamic resource lookups read in full",
       "kind": "fix",
-      "description": "Remove Test Only Code now cuts the single assertion on dead code instead of deleting a whole test file that still checks live behavior."
+      "description": "A getIdentifier call used to keep every resource of its kind alive. The name and the package are now read too, so a literal prefix protects only the names that start with it."
+    },
+    {
+      "title": "Fragments named only by Dagger",
+      "kind": "improvement",
+      "description": "A Fragment whose only outside mentions are a Dagger import and an inject(target) method is now reported, and removing it cuts those lines too, so the project still compiles."
+    },
+    {
+      "title": "Marker annotations keep nothing alive",
+      "kind": "improvement",
+      "description": "@Nullable, @UiThread, @UnstableApi and project annotations declared with @RequiresOptIn call no code, and they no longer keep a dead class or member."
     }
   ],
   "sections": [
     {
       "heading": "Improvements",
       "bullets": [
-        "Reported interface methods that nothing calls, and cut the declaration and every override as one unit, all or nothing. On the reference project this matches what a manual cleanup did, such as `SystemInfoService.getCurrentMemoryUsage()` and its `@Override`. Find Everything Unused lists them and Remove Everything Unused counts the declarations.",
-        "Added a bundled index of the names each public Android platform type declares. Methods of custom views and of classes implementing `ComponentCallbacks2` that nobody calls (about thirty on the reference project) are no longer kept just because an ancestor outside the workspace might declare the same name. Ancestors the index does not know, such as AndroidX, keep the cautious behavior.",
-        "Stopped the `unused` suppression directive, such as `@SuppressWarnings(\"unused\")` or a file level `@Suppress`, from protecting declarations. A directive that silences a warning says nothing about whether code is reachable. Parameters keep their protection, since their signature is imposed from outside."
+        "Reported Fragments that only a Dagger component names, through an import and an `inject(target: ...)` method. Removing such a Fragment now also removes its inject declarations in every component, all of them or none, so the component never names a class that is gone.",
+        "Reported methods of custom views that nobody calls, such as `stopBlinkLiveButton()` on a `ViewGroup` subclass. When the bundled Android index shows that no ancestor declares the name, the framework cannot call it, and the method is no longer kept.",
+        "Stopped marker annotations from keeping dead code: `@Nullable`, `@NonNull`, `@UnstableApi`, thread annotations such as `@UiThread`, and project annotations declared with `@RequiresOptIn` or listed in an `allOpen` or `noArg` Gradle block. On the reference project they kept a whole unused utility class and 16 members of another one.",
+        "Reported methods that no serializer reads on classes kept for serialization. Fields, JavaBean accessors (`getX`, `isX`, `setX`) and Java serialization hooks stay protected, but a `hasTitle()` with no caller is now reported."
       ]
     },
     {
       "heading": "Fixes",
       "bullets": [
-        "Fixed Remove Test Only Code deleting a whole test file for one line. A file such as `ListAggregatorV4DOTest.java` went entirely because of a single `Assert.assertEquals(ListAggregatorV4DO.TYPE_LIST, ...)`, although the rest checked live parsing. Now only the assertion is cut, and `Assert.assertEquals(...)` is recognized as an assertion.",
-        "Fixed a class that writes its own name inside a string, such as `Timber.d(\"Creating AvailableSpaceDetector\")`, staying alive forever. A mention of itself inside its own body no longer keeps a class alive, while a mention outside its body or in another file (`Class.forName(\"p.Foo\")`) still does.",
-        "Fixed a Remote Config reader of all keys in one app hiding unused keys of another app. A screen in one app can no longer silence 25 keys declared in a different app. When the Gradle layout cannot be read, the previous repository wide behavior is kept.",
-        "Fixed the last annotated enum entry, as in `enum Mode { ON, @Deprecated OFF }`, being found but never removed.",
-        "Fixed Java class headers with a bounded type parameter, such as `class P<T extends Runnable> extends ThreadPoolExecutor`, losing their real superclass. Snapshots from earlier versions are rebuilt so the correct supertypes are used."
+        "Fixed one `getIdentifier` call protecting a whole kind of resource. A name with a literal prefix now protects only that prefix, a lookup in the `\"android\"` package protects nothing in the project, and a fully literal name adds nothing. On the reference project this uncovered 175 dead strings and 59 dead dimens.",
+        "Fixed classes that implement an imported nested interface, such as an `OnPageChangeListener` declared inside another class. Their ancestry was never resolved, so their dead methods were kept.",
+        "Fixed Explain disagreeing with Find Unused Members. On the reference project, 136 members were explained as dead while Find kept them, because a test names them or their only caller is not proven dead. Explain now gives the reason Find uses, and Find Dead Islands follows the same rule.",
+        "Fixed a removal that deleted the same import twice when a class and its injection sites were cut together, which made VS Code reject the whole edit."
       ]
     }
   ],

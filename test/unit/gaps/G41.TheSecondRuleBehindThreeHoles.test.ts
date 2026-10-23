@@ -329,3 +329,81 @@ describe.skipIf(!symb)('et les formes ordinaires de symboles', () => {
     })).toHaveLength(0);
   });
 });
+
+/**
+ * Le quatrieme site, mesure le 2026-10-22 sur LaPresse : 136 membres sortaient
+ * `selfOnly` dans `explainMembers` et n etaient pas rapportes par
+ * `findUnusedMembers`. `find` exige deux choses de plus : aucun test ne nomme
+ * le membre (le rendre prive casserait leur compilation), et le temoin qui
+ * l appelle est vivant (KJ-076). La famille des ilots lit `explain` : elle
+ * prenait ces membres pour morts un par un, s effacait (`I6:subsumed`), et
+ * personne ne les coupait.
+ */
+describe.skipIf(!memb)('selfOnly : explain dit ce que find decide', () => {
+  const SEGS = ['/src/test/'];
+  const M = '/w/app/src/main/java/com/x';
+  const f = (path: string, text: string) => ({ path, text });
+  const accord = (nom: string, ...sources: { path: string; text: string }[]) => {
+    const explique = (memb.explainMembers({ sources, testSourceSets: SEGS }) as any[]).find(r => r.name === nom);
+    const rapporte = (memb.findUnusedMembers({ sources, testSourceSets: SEGS }) as any[]).find(r => r.name === nom);
+    return { explique: explique?.outcome, rapporte: rapporte?.verdict };
+  };
+  const porteur = (temoin: string) => f(`${M}/Holder.kt`, [
+    'package com.x',
+    '',
+    'class Holder {',
+    '    fun used() = 1',
+    '',
+    `    fun ${temoin}() = helper()`,
+    '',
+    '    fun helper() = 2',
+    '}',
+    '',
+  ].join('\n'));
+
+  it('temoin vivant : selfOnly des deux cotes', () => {
+    const appelant = f(`${M}/Main.kt`, 'package com.x\n\nfun main() {\n    Holder().used()\n    Holder().caller()\n}\n');
+    expect(accord('helper', porteur('caller'), appelant)).toEqual({ explique: 'selfOnly', rapporte: 'selfOnly' });
+  });
+
+  it('temoin mort : ni l un ni l autre ne dit selfOnly', () => {
+    const appelant = f(`${M}/Main.kt`, 'package com.x\n\nfun main() {\n    Holder().used()\n}\n');
+    const r = accord('helper', porteur('deadCaller'), appelant);
+    expect(r.rapporte).toBeUndefined();
+    expect(r.explique).toBe('same-file:dead-witness');
+  });
+
+  it('un test qui nomme le membre : ni l un ni l autre ne dit selfOnly', () => {
+    const appelant = f(`${M}/Main.kt`, 'package com.x\n\nfun main() {\n    Holder().used()\n    Holder().caller()\n}\n');
+    const test = f('/w/app/src/test/java/com/x/HolderTest.kt', 'package com.x\n\nfun t() = Holder().helper()\n');
+    const r = accord('helper', porteur('caller'), appelant, test);
+    expect(r.rapporte).toBeUndefined();
+    expect(r.explique).toBe('alive:test');
+  });
+});
+
+describe.skipIf(!memb)('selfOnly : un temoin garde par un filtre', () => {
+  it('n est ni mort ni vivant : unproven-witness', () => {
+    const M = '/w/app/src/main/java/com/x';
+    const holder = { path: `${M}/Holder.kt`, text: 'package com.x\n\nclass Holder {\n    fun used() = 1\n\n    @Subscribe\n    fun onEvent(e: Any) = helper()\n\n    fun helper() = 2\n}\n' };
+    const appelant = { path: `${M}/Main.kt`, text: 'package com.x\n\nfun main() {\n    Holder().used()\n}\n' };
+    const r = (memb.explainMembers({ sources: [holder, appelant], testSourceSets: ['/src/test/'] }) as any[]).find(x => x.name === 'helper');
+    expect(r.outcome).toBe('same-file:unproven-witness');
+  });
+});
+
+/**
+ * La famille des ilots lit explain. Un membre dont tous les temoins sont morts
+ * part avec eux : elle doit le compter mort a lui seul, comme un selfOnly, et
+ * s effacer devant la classe morte qui l emporte (I6), au lieu d en faire un
+ * ilot en double.
+ */
+describe('selfOnly : la famille des ilots lit dead-witness comme une mort', () => {
+  it('une classe morte et sa constante : I6, pas d ilot en double', async () => {
+    const { explainIslands } = await import('../../../src/providers/deadIslands');
+    const M = '/w/app/src/main/java/com/x';
+    const holder = { path: `${M}/Holder.kt`, text: 'package com.x\n\nclass Holder {\n    fun stamp() = MARK\n\n    companion object {\n        const val MARK = "HOLDER"\n    }\n}\n' };
+    const r = (explainIslands({ sources: [holder], testSourceSets: ['/src/test/'] }) as any[]).filter(x => x.name === 'MARK').map(x => x.outcome);
+    expect(r).toEqual(['I6:subsumed']);
+  });
+});

@@ -554,7 +554,10 @@ function analyze(input: DeadIslandScanInput): Analysis {
 
   const nodesByName = new Map<string, PoolNode[]>();
   for (const n of nodes) (nodesByName.get(n.name) ?? nodesByName.set(n.name, []).get(n.name)!).push(n);
-  const isIndividuallyDead = (n: PoolNode) => /^(unreferenced|testOnly|selfOnly)$/.test(n.outcome);
+  // G41 : un membre dont tous les temoins sont morts part avec eux, il est
+  // aussi mort a lui seul que s il etait `selfOnly`.
+  const isIndividuallyDead = (n: PoolNode) =>
+    /^(unreferenced|testOnly|selfOnly|same-file:dead-witness)$/.test(n.outcome);
   const keptAliveByOf = (name: string): string[] =>
     [...edges.entries()].filter(([o, t]) => o !== name && t.has(name) && deadSet.has(o)).map(([o]) => o).sort();
 

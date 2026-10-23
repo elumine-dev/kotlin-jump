@@ -6,9 +6,9 @@ import { androidApi } from '../../../src/util/androidApi';
 /**
  * G66 — un supertype imbrique que la chaine d ancetres ne retrouvait pas.
  *
- * Audit de dix fichiers LaPresse, 2026-10-21 :
+ * Audit de dix fichiers du projet de reference, 2026-10-21 :
  * `CirclePageWithMarginIndicator extends View implements OnPageChangeListener`,
- * avec `import nuglif.custom.view.ViewPagerWithMargin.OnPageChangeListener`.
+ * avec `import com.example.view.ViewPagerWithMargin.OnPageChangeListener`.
  * `setCentered` n a ni appelant ni homonyme dans tout le depot, et sortait
  * pourtant `M4:F7:View` : la chaine n etait pas visible, donc G63 ne pouvait
  * pas lever M4.
@@ -32,8 +32,8 @@ const API = androidApi({
 });
 const src = (path: string, ...lines: string[]) => ({ path: `/w/app/src/main/java/${path}`, text: lines.join('\n') + '\n' });
 
-const PAGER = src('nuglif/custom/view/ViewPagerWithMargin.java',
-  'package nuglif.custom.view;',
+const PAGER = src('com/example/view/ViewPagerWithMargin.java',
+  'package com.example.view;',
   '',
   'public class ViewPagerWithMargin {',
   '\tpublic interface OnPageChangeListener {',
@@ -59,8 +59,8 @@ const indicateur = (entete: string, imp: string) => src('com/x/CirclePageWithMar
   '}',
 );
 
-const IMPORTEE = indicateur('OnPageChangeListener', 'import nuglif.custom.view.ViewPagerWithMargin.OnPageChangeListener;');
-const QUALIFIEE = indicateur('ViewPagerWithMargin.OnPageChangeListener', 'import nuglif.custom.view.ViewPagerWithMargin;');
+const IMPORTEE = indicateur('OnPageChangeListener', 'import com.example.view.ViewPagerWithMargin.OnPageChangeListener;');
+const QUALIFIEE = indicateur('ViewPagerWithMargin.OnPageChangeListener', 'import com.example.view.ViewPagerWithMargin;');
 
 const MAIN = src('com/x/Main.java',
   'package com.x;',
@@ -92,8 +92,8 @@ describe('G66 — ce qui reste garde', () => {
   });
 
   it('une interface imbriquee que l interface declare aussi sous ce nom', () => {
-    const pager = src('nuglif/custom/view/ViewPagerWithMargin.java',
-      'package nuglif.custom.view;',
+    const pager = src('com/example/view/ViewPagerWithMargin.java',
+      'package com.example.view;',
       '',
       'public class ViewPagerWithMargin {',
       '\tpublic interface OnPageChangeListener {',

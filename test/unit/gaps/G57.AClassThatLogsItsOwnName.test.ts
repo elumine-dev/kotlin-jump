@@ -4,7 +4,7 @@ import { importOrNull } from '../kj/harness';
 /**
  * G57, une classe qui ecrit son propre nom dans une chaine reste en vie.
  *
- * Oracle : `7d356324a0` sur LaPresse (AND-2037) supprime a la main
+ * Oracle : `7d356324a0` sur le projet de reference supprime a la main
  * `AvailableSpaceDetector.java`, que plus rien ne nomme depuis develop. Remove
  * All la laissait : `alive:same-file`, alors que ses quatre mentions sont
  * toutes dans son propre corps, dont deux dans des chaines de log :

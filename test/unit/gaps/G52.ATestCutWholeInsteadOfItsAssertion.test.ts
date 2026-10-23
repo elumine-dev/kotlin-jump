@@ -4,10 +4,10 @@ import { importOrNull } from '../kj/harness';
 /**
  * G52, un test coupe entier au lieu de son assertion.
  *
- * Sur LaPresse, v1.43.0 supprimait `ListAggregatorV4DOTest.java` entier pour
+ * Sur le projet de reference, v1.43.0 supprimait `ListAggregatorV4DOTest.java` entier pour
  * la seule ligne `Assert.assertEquals(ListAggregatorV4DO.TYPE_LIST, ...)` ;
  * le reste du fichier verifiait du parsing vivant. Meme chose pour
- * `LayoutMetadataHelperTest` et `ReplicaConstTest`.
+ * `LayoutMetadataHelperTest` et `AppConstTest`.
  *
  * Deux defauts dans `testCoRemovalClosure.ts` :
  *   1. la coupe d assertion n etait tentee que si une AUTRE fonction du

@@ -5,8 +5,8 @@
  *   npx tsx scripts/build-android-api-index.ts [~/Library/Android/sdk/platforms/android-36/android.jar]
  *
  * WHY. A member of a class whose ancestry leaves the corpus was never judged:
- * the framework type might declare the same name and call it. On LaPresse
- * that kept ~20 dead methods of custom views (`setOverlayColor` on an
+ * the framework type might declare the same name and call it. On the reference
+ * project that kept ~20 dead methods of custom views (`setOverlayColor` on an
  * `ImageButton` subclass) and every service implementing `ComponentCallbacks2`.
  * Knowing what `android.widget.LinearLayout` really declares answers the
  * question for the platform. AndroidX is deliberately absent: its versions

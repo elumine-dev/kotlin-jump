@@ -7,7 +7,7 @@ import { findUnusedResources } from '../../../src/providers/UnusedResourceProvid
 /**
  * G54 — un seul `getIdentifier` eteignait toute une sorte de ressources.
  *
- * `dynamicallyLookedUpKinds` ne lisait que le TYPE de l appel. Sur LaPresse :
+ * `dynamicallyLookedUpKinds` ne lisait que le TYPE de l appel. Sur le projet de reference :
  *
  *   CrosswordsSettingsView.java:132
  *     getIdentifier("crosswords_settings_faq_q" + i, "string", pkg)
@@ -56,7 +56,7 @@ describe('G54 — lire le nom et le paquet', () => {
     expect(morts(NAV_BAR)).toContain('dimen/dead_margin');
   });
 
-  it('les deux ensemble, comme sur LaPresse', () => {
+  it('les deux ensemble, comme sur le projet de reference', () => {
     expect(morts(CROSSWORDS, NAV_BAR)).toEqual(['string/dead_label', 'dimen/dead_margin'].sort());
   });
 

@@ -4,7 +4,7 @@ import { collecterUnePasse } from '../../../src/commands/RemoveEverythingUnused'
 /**
  * G59, la directive `unused` ne protege plus aucune declaration.
  *
- * Oracle : `9b514d8dc2` sur LaPresse (AND-2340). Kevin y retire a la main neuf
+ * Oracle : `9b514d8dc2` sur le projet de reference. Kevin y retire a la main neuf
  * membres que KJ gardait pour une seule raison, `F12:suppress-unused`, dont
  * `getFillColor`, `getPageColor` et `isCentered` de
  * `CirclePageWithMarginIndicator.java`, classe marquee

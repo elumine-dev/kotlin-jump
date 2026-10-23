@@ -20,7 +20,7 @@ import { signatureOnlySpan } from './deadIslands';
  * Neither half is visible to the member detector. An interface method has no
  * body, so no extent, so it is never a candidate (F16). Its overrides are
  * held by M2, M3 and M11: an override may be called through its contract, and
- * removing it alone leaves a class that no longer compiles. On LaPresse the
+ * removing it alone leaves a class that no longer compiles. On the reference project the
  * cleanup commit 9b514d8dc2 removed dozens of such pairs by hand, among them
  * `SystemInfoService.getCurrentMemoryUsage()` and its `@Override`.
  *

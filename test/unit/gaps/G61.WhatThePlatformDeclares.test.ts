@@ -10,10 +10,10 @@ import { androidApi, AndroidApiIndex } from '../../../src/util/androidApi';
 /**
  * G61, ce que la plateforme Android declare vraiment.
  *
- * Oracle : `9b514d8dc2` sur LaPresse (AND-2340). Kevin y retire une trentaine
+ * Oracle : `9b514d8dc2` sur le projet de reference. Kevin y retire une trentaine
  * de methodes de vues personnalisees que personne n appelle
  * (`OverlayImageButton.setOverlayColor`, `DossierCarouselContainer.getViewDarken`,
- * `ReplicaHorizontalScrollView.setSmoothScrollingEnabled`...) et les methodes
+ * `PagedHorizontalScrollView.setSmoothScrollingEnabled`...) et les methodes
  * de `ImageService` dont l implementation implemente aussi
  * `ComponentCallbacks2`. KJ les gardait toutes (M3, M2) : un ancetre hors du
  * corpus pouvait declarer le meme nom.
@@ -134,7 +134,7 @@ describe('G61, les contrats', () => {
   });
 });
 
-describe('G61, ce que la porte a attrape sur LaPresse', () => {
+describe('G61, ce que la porte a attrape sur le projet de reference', () => {
   it('un setter appele par ObjectAnimator sous son nom nu ne part pas, meme en ilot', () => {
     // CrossFadeBackgroundCellAnimator.setCellAlpha, seul appelant de
     // GridCell.setHighlightAlpha : compte comme mention, le setter vivait pour

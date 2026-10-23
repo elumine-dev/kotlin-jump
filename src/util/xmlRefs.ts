@@ -402,7 +402,7 @@ export function dynamicallyLookedUpKinds(code: string): Set<string> | null {
 /**
  * G54 : ce qu un `getIdentifier(nom, type, paquet)` atteint vraiment.
  *
- * Ne lire que le type eteignait toute la sorte : sur LaPresse,
+ * Ne lire que le type eteignait toute la sorte : sur le projet de reference,
  * `getIdentifier("crosswords_settings_faq_q" + i, "string", pkg)` tenait les
  * 1541 strings du projet en vie, dont 175 mortes, et deux appels au paquet
  * `"android"` tous les dimens, dont 59 morts.

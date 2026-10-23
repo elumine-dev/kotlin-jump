@@ -7,7 +7,7 @@ import { collecterUnePasse, sansChevauchement, resumeDesFamilles } from '../../.
 /**
  * G44, une methode d interface que personne n appelle, et ses surcharges.
  *
- * Oracle : `9b514d8dc2` sur LaPresse (AND-2340). Kevin y retire a la main la
+ * Oracle : `9b514d8dc2` sur le projet de reference. Kevin y retire a la main la
  * declaration d interface ET la surcharge, par exemple
  * `SystemInfoService.getCurrentMemoryUsage()` et `@Override` dans
  * `SystemInfoServiceImpl`, que rien n appelle. KJ ne voyait ni l une (un membre
@@ -177,8 +177,8 @@ describe('G44, la paire contrat et surcharge, coupee ensemble', () => {
   });
 
   it('une signature qui finit sur un type nullable ne mange pas la suivante', () => {
-    // LaPresse, ToolbarContainerController : la coupe de `toolbarElevation(): Float?`
-    // emportait `setToolbarElevation`, et rubicon:app ne compilait plus. Un `?`
+    // Projet de reference, ToolbarContainerController : la coupe de `toolbarElevation(): Float?`
+    // emportait `setToolbarElevation`, et portal:app ne compilait plus. Un `?`
     // seul en fin de ligne est un type nullable, jamais un operateur.
     const k = '/w/app/src/main/java/k';
     const i = src(`${k}/S.kt`, 'package k', '', 'interface S {', '    fun expand()', '    fun toolbarElevation(): Float?', '    fun setToolbarElevation(elevation: Float)', '}');
@@ -201,7 +201,7 @@ describe('G44 v2, classes et proprietes', () => {
   const B = '/w/app/src/main/java/b';
 
   it('une methode de classe surchargee par les sous classes, que personne n appelle', () => {
-    // LaPresse : PinchBehavior.setResetSmallAnimScale et ses trois Behavior.
+    // Projet de reference : PinchBehavior.setResetSmallAnimScale et ses trois Behavior.
     const base = src(`${B}/PinchBehavior.java`, 'package b;', '', 'public abstract class PinchBehavior {', '\tpublic abstract void apply();', '', '\tpublic void setResetSmallAnimScale(float s) {', '\t}', '}');
     const a = src(`${B}/SimpleBehavior.java`, 'package b;', '', 'public class SimpleBehavior extends PinchBehavior {', '\t@Override', '\tpublic void apply() {}', '', '\t@Override', '\tpublic void setResetSmallAnimScale(float s) {', '\t\tSystem.out.println(s);', '\t}', '}');
     const main = src(`${B}/Main.java`, 'package b;', '', 'public class Main {', '\tpublic static void main(String[] x) {', '\t\tPinchBehavior p = new SimpleBehavior();', '\t\tp.apply();', '\t}', '}');

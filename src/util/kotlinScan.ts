@@ -321,7 +321,7 @@ export function fileOptsOut(text: string, diagnostics: readonly string[]): boole
  * Until 1.42.321 `"unused"`, `"UnusedDeclaration"`, `"all"` and detekt's
  * `UnusedPrivate*` rules protected the declaration, its class, or the whole
  * file through `@file:Suppress`. Kevin decided otherwise on 2026-10-14, after
- * removing by hand, on AND-2340, nine members KJ had kept for that reason
+ * removing by hand, on the reference project, nine members KJ had kept for that reason
  * alone: a directive that silences a warning says nothing about whether the
  * code is reachable, and dead code under it is still dead. Asked twice, the
  * answer was « everywhere, files included ».

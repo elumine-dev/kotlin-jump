@@ -24,10 +24,12 @@
  *                expects the witness to turn red
  *   7 perf       a warning when the fix touches the parser or the index
  *
- * Environment: KJ_GATE_WORKTREE (default ~/Desktop/work/lapresse-kj-clean), a
- * worktree this script owns and resets; KJ_GATE_DIR (default
- * ~/Desktop/work/kj-gate) for the baseline and the logs, outside the repository
- * so a publish never packages them.
+ * Project: doc/gate.json (local, never committed) names the worktree this
+ * script owns and resets, and the Gradle tasks of step 5:
+ *   { "worktree": "~/work/app-clean", "gradleTasks": [":app:compileReleaseSources"] }
+ * KJ_GATE_WORKTREE overrides the worktree. KJ_GATE_DIR (default
+ * ~/Desktop/work/kj-gate) holds the baseline and the logs, outside the
+ * repository so a publish never packages them.
  */
 
 import * as fs from 'node:fs';
@@ -36,31 +38,23 @@ import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const REPO = path.resolve(import.meta.dirname, '..');
-const WORKTREE = process.env.KJ_GATE_WORKTREE ?? path.join(os.homedir(), 'Desktop/work/lapresse-kj-clean');
+const CONFIG_PATH = path.join(REPO, 'doc/gate.json');
+const CONFIG: { worktree?: string; gradleTasks?: string[] } = fs.existsSync(CONFIG_PATH) ? JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) : {};
+const expandHome = (p: string) => p.replace(/^~(?=\/|$)/, os.homedir());
+const WORKTREE = expandHome(process.env.KJ_GATE_WORKTREE ?? CONFIG.worktree ?? '');
 const OUT = process.env.KJ_GATE_DIR ?? path.join(os.homedir(), 'Desktop/work/kj-gate');
 const LOGS = path.join(OUT, 'logs');
 const BASELINE = path.join(OUT, 'baseline.json');
 const QUEUE = path.join(REPO, 'doc/gaps-queue.json');
 
 /**
- * Compile tasks, not assemble: `replicaBuild` assembles release variants,
+ * Compile tasks, not assemble: a full build assembles release variants,
  * which minifies and uploads Crashlytics mappings on every run. Compiling the
  * four source sets catches what a cut breaks without either side effect.
  * `assembleDebug` alone misses test, release and staging sources, a third of
  * the risk (reference_delete_and_build_audit).
  */
-const GRADLE_TASKS = [
-  'compileDebugUnitTestSources',
-  'compileReleaseSources',
-  ':replica:app:compileReplicaLaPresseDebugUnitTestSources',
-  ':replica:app:compileAdPreflightLaPresseDebugUnitTestSources',
-  ':replica:app:compileReplicaLaPresseReleaseSources',
-  ':replica:app:compileReplicaLaPresseStagingSources',
-  ':replica:app:compileAdPreflightLaPresseStagingSources',
-  ':replica:app:compileAdPreflightLaPresseReleaseSources',
-  ':replica:shell:compileLaPresseDebugUnitTestSources',
-  ':rubicon:app:compileStagingSources',
-];
+const GRADLE_TASKS = CONFIG.gradleTasks ?? [];
 
 interface Entry {
   id: string;
@@ -162,7 +156,7 @@ function gradle(): { ok: boolean; errors: string[]; logPath: string } {
   const argv = ['--continue', '--console=plain', '-q', ...GRADLE_TASKS];
   let r = run('./gradlew', argv, { cwd: WORKTREE, log: 'gradle', timeoutMin: 60 });
   // A stale incremental KSP cache fails after large deletions and is not the
-  // cut's fault (reference_lapresse_build_after_cleanup): clear it, retry once.
+  // cut's fault (reference_build_after_cleanup): clear it, retry once.
   if (r.code !== 0 && /ksp/i.test(r.out)) {
     const found = spawnSync('find', [WORKTREE, '-maxdepth', '5', '-type', 'd', '-name', 'kspCaches', '-path', '*/build/*'], { encoding: 'utf8' });
     for (const d of found.stdout.split('\n').filter(Boolean)) fs.rmSync(d, { recursive: true, force: true });
@@ -212,8 +206,14 @@ function rapport(): { counts: Record<string, number>; logPath: string; retenues:
 
 // ---------------------------------------------------------------------------
 
+// An empty path would run git in the current directory: the reset below would
+// then wipe this repository instead of the gate worktree.
+if (!path.isAbsolute(WORKTREE) || path.resolve(WORKTREE) === REPO || GRADLE_TASKS.length === 0) {
+  console.error(`doc/gate.json doit nommer un worktree absolu hors de ce depot et ses gradleTasks (lu : « ${WORKTREE} », ${GRADLE_TASKS.length} tache(s))`);
+  process.exit(2);
+}
 if (git(WORKTREE, 'rev-parse', '--is-inside-work-tree') !== 'true') {
-  console.error(`pas de worktree de porte a ${WORKTREE} (KJ_GATE_WORKTREE)`);
+  console.error(`pas de worktree de porte a ${WORKTREE} (doc/gate.json ou KJ_GATE_WORKTREE)`);
   process.exit(2);
 }
 if (git(WORKTREE, 'status', '--porcelain') !== '') resetWorktree();
@@ -340,14 +340,14 @@ console.log(`    détail : ${LOGS}/${stamp}-ecart.txt`);
 // 5. build -----------------------------------------------------------------
 const moved = lost.length + gained.length > 0;
 if (failed || flag('--no-gradle') || (!moved && !flag('--gradle'))) {
-  line('--', 'build', failed ? 'sauté : déjà rouge' : moved ? 'sauté (--no-gradle)' : 'sauté : aucun écart sur LaPresse');
+  line('--', 'build', failed ? 'sauté : déjà rouge' : moved ? 'sauté (--no-gradle)' : 'sauté : aucun écart sur le projet');
 } else {
-  // Compared with the baseline: develop itself may not compile (the adPreflight
-  // unit tests have been broken since #1274), and that is not the cut's doing.
+  // Compared with the baseline: develop itself may not compile (some of its
+  // unit tests may have been broken for months), and that is not the cut's doing.
   const g = gradle();
   const known = new Set(baseline.gradleErrors);
   const fresh = g.errors.filter(e => !known.has(e));
-  if (g.ok) line('OK', 'build', 'LaPresse compile après Remove All (main, test, release, staging)');
+  if (g.ok) line('OK', 'build', 'le projet compile après Remove All (main, test, release, staging)');
   else if (fresh.length === 0 && baseline.gradleOk === false) line('!!', 'build', `mêmes ${g.errors.length} erreur(s) que la référence, aucune nouvelle`);
   else line('KO', 'build', `${fresh[0] ?? g.errors[0] ?? 'échec'}  (+${Math.max(0, fresh.length - 1)} nouvelle(s)), voir ${g.logPath}`);
 }

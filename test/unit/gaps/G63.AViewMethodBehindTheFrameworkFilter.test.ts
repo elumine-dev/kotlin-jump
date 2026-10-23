@@ -5,7 +5,7 @@ import { androidApi, AndroidApiIndex } from '../../../src/util/androidApi';
 /**
  * G63 — une methode de vue que G61 savait juger, et que M4 ne lui laissait pas.
  *
- * Trouve par la meme revue humaine que G62 (PR LaPresse #1337, AND-2340) :
+ * Trouve par la meme revue humaine que G62 (meme PR) :
  * `EditionContainer.stopBlinkLiveButton()` n a aucun appelant. KJ la gardait
  * sous `M4:F7:ViewGroup`.
  *
@@ -174,7 +174,7 @@ describe('G63 — ce qui reste garde', () => {
   });
 
   /**
-   * F6 n est pas F7. Sur LaPresse, la premiere version levait aussi
+   * F6 n est pas F7. Sur le projet de reference, la premiere version levait aussi
    * `M4:F6:Serializable` et emportait `SectionDO.getBillingCode` : Jackson lit
    * les getters par leur nom. (Un `hasTitle`, que Jackson ne lit pas, est
    * l affaire de G65.)

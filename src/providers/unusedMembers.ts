@@ -1172,7 +1172,7 @@ function mentionsOf(
  *
  * `ObjectAnimator.ofFloat(this, "cellAlpha", 1F, 0F)` calls `setCellAlpha` by
  * reflection. The mention harvest blanks string bodies, so it never saw it,
- * and on LaPresse the first G61 run cut that live setter. Read on the RAW
+ * and on the reference project the first G61 run cut that live setter. Read on the RAW
  * text, quotes included, so an identifier that merely shares the name is not
  * counted: only a literal that spells it whole.
  */

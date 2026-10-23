@@ -217,10 +217,10 @@ export function filesReadingEveryKey(sources: readonly SymbolSource[]): string[]
  * G58: the sweeper that blinds this declaration, or null.
  *
  * A sweeper only reads the keys of the applications it is packaged in: a
- * replica admin screen dumping `remoteConfig.all` never sees a key of rubicon,
+ * kiosk admin screen dumping `remoteConfig.all` never sees a key of portal,
  * another app with its own Firebase project. Judged per DECLARATION, not per
- * key: on LaPresse, 24 keys were declared in both apps, and blinding the key
- * whole kept rubicon's copy that nothing in rubicon reads. Without a readable
+ * key: on the reference project, 24 keys were declared in both apps, and blinding the key
+ * whole kept portal's copy that nothing in portal reads. Without a readable
  * module graph, or when either side's applications are unknown, every
  * sweeper blinds every declaration, the workspace-wide reading this replaced.
  */

@@ -6,11 +6,11 @@ import { findUnusedMembers, explainMembers } from '../../../src/providers/unused
 /**
  * G64 — une annotation de marquage tenait du code mort en vie.
  *
- * Audit de dix fichiers LaPresse apres la revue de la PR #1337 (AND-2340),
+ * Audit de dix fichiers du projet de reference apres cette revue,
  * 2026-10-21. Trois marqueurs ne creent aucun appel et gardaient pourtant
  * tout ce qu ils touchent :
  *
- *   `@UnstableApi` (media3)    `ExoUtil` entiere, morte depuis AND-2204 :
+ *   `@UnstableApi` (media3)    `ExoUtil` entiere, morte depuis longtemps :
  *                              F5 sur la classe, M4 sur ses 19 membres
  *   `@OpenClassForTest`        quatre methodes mortes d `AppLifecycleObserver`,
  *                              M4 sur ses 16 membres

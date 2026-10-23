@@ -2,7 +2,7 @@
  * Which Android applications package a given file, read from the Gradle files
  * of the corpus.
  *
- * G58: a `remoteConfig.all` in replica silenced every unread key of rubicon,
+ * G58: a `remoteConfig.all` in kiosk silenced every unread key of portal,
  * two applications that share no module and no Firebase project. Scoping such
  * a guard needs to know which applications a module ends up in.
  *

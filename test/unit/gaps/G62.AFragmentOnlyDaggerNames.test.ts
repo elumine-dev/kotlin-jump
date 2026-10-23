@@ -6,12 +6,12 @@ import { buildSymbolRemovalEdit } from '../../../src/providers/UnusedSymbolProvi
 /**
  * G62 — un Fragment que seul le composant Dagger nomme.
  *
- * Trouve par une revue humaine de la PR LaPresse #1337 (AND-2340), que Kotlin
+ * Trouve par une revue humaine d une PR du projet de reference, que Kotlin
  * Jump n avait pas vu. `AdVideoMedia3Fragment` a une fabrique `newInstance`
  * que personne n appelle, et ses seules mentions hors de son fichier sont :
  *
- *   ReplicaMainActivityComponent       import + fun inject(target: AdVideoMedia3Fragment)
- *   EmptyReplicaMainActivityComponent  import + override fun inject(target: …) {}
+ *   MainActivityComponent       import + fun inject(target: AdVideoMedia3Fragment)
+ *   EmptyMainActivityComponent  import + override fun inject(target: …) {}
  *
  * Exactement le motif de KJ-067. Deux gardes empilees le retenaient, chacune
  * suffisante :
@@ -82,7 +82,7 @@ const fragment = (supertype = 'Fragment()') => f(`${MAIN}/AdVideoMedia3Fragment.
   '',
   '    override fun onAttach(context: Context) {',
   '        super.onAttach(context)',
-  '        GraphReplica.ui(context).inject(this)',
+  '        Graph.ui(context).inject(this)',
   '    }',
   '',
   '    companion object {',
@@ -104,25 +104,25 @@ const BACKABLE = f(`${MAIN}/BackableFragment.kt`, [
   '',
 ].join('\n'));
 
-const COMPOSANT = f(`${MAIN}/ReplicaMainActivityComponent.kt`, [
+const COMPOSANT = f(`${MAIN}/MainActivityComponent.kt`, [
   'package com.x',
   '',
   'import com.x.AdVideoMedia3Fragment',
   'import dagger.Subcomponent',
   '',
   '@Subcomponent',
-  'interface ReplicaMainActivityComponent {',
+  'interface MainActivityComponent {',
   '    fun inject(target: AdVideoMedia3Fragment)',
   '}',
   '',
 ].join('\n'));
 
-const FAUX_COMPOSANT = f(`${MAIN}/EmptyReplicaMainActivityComponent.kt`, [
+const FAUX_COMPOSANT = f(`${MAIN}/EmptyMainActivityComponent.kt`, [
   'package com.x',
   '',
   'import com.x.AdVideoMedia3Fragment',
   '',
-  'class EmptyReplicaMainActivityComponent : ReplicaMainActivityComponent {',
+  'class EmptyMainActivityComponent : MainActivityComponent {',
   '    override fun inject(target: AdVideoMedia3Fragment) {}',
   '}',
   '',
@@ -246,8 +246,8 @@ describe.skipIf(!mod)('G62 — ce qui le garde en vie', () => {
  * (KJ-067), mais `buildSymbolRemovalEdit`, derriere l ampoule et Find Unused
  * Symbols, ne retirait que la classe et ses imports : les deux
  * `inject(target: AdVideoMedia3Fragment)` restaient, et le projet ne
- * compilait plus. G62 rend le cas courant, puisque presque tout Fragment de
- * LaPresse est injecte par membres.
+ * compilait plus. G62 rend le cas courant, puisque presque tout Fragment du
+ * projet de reference est injecte par membres.
  */
 describe.skipIf(!mod)('G62 — le quick fix emporte les sites d injection', () => {
   const ouvrir = (s: { path: string; text: string }) => {
@@ -299,8 +299,8 @@ describe.skipIf(!mod)('G62 — le quick fix emporte les sites d injection', () =
     for (const c of [COMPOSANT, FAUX_COMPOSANT]) {
       expect(apres.get(c.path)).not.toContain('AdVideoMedia3Fragment');
     }
-    expect(apres.get(COMPOSANT.path)).toContain('interface ReplicaMainActivityComponent {');
-    expect(apres.get(FAUX_COMPOSANT.path)).toContain('class EmptyReplicaMainActivityComponent');
+    expect(apres.get(COMPOSANT.path)).toContain('interface MainActivityComponent {');
+    expect(apres.get(FAUX_COMPOSANT.path)).toContain('class EmptyMainActivityComponent');
   });
 
   it('ne touche pas un site qui a bouge depuis le scan, ni la classe', async () => {

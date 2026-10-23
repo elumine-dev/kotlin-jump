@@ -5,7 +5,7 @@ import { androidApi } from '../../../src/util/androidApi';
 /**
  * G65 — une methode qu aucun serialiseur ne lit, gardee comme s il la lisait.
  *
- * Audit de dix fichiers LaPresse, 2026-10-21 : `ObituaryModel.hasTitle()` n a
+ * Audit de dix fichiers du projet de reference, 2026-10-21 : `ObituaryModel.hasTitle()` n a
  * aucun appelant, et KJ la gardait sous `M4:F6:Serializable`.
  *
  * F6 dit « une bibliotheque fabrique l objet et lit ce qu il expose ». Ce
@@ -19,7 +19,7 @@ import { androidApi } from '../../../src/util/androidApi';
  *
  * Une methode dont le nom n est ni un accesseur JavaBean ni un crochet de la
  * serialisation Java n est donc lue par aucune. Elle redescend dans le
- * comptage. Les champs et les accesseurs gardent F6 : LaPresse passe une
+ * comptage. Les champs et les accesseurs gardent F6 : le projet de reference passe une
  * vingtaine d objets a Jackson (`jsonService.toJson`), dont certains par un
  * parametre generique, et rien ne prouve qu un getter n y passe pas.
  */

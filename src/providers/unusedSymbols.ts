@@ -589,7 +589,7 @@ export const COMMENCE_UNE_SUITE_RE =
  * operateur (`?:` et `?.` finissent sur `:` et `.`, deja dans la classe).
  * `fun toolbarElevation(): Float?` se lisait comme une expression inachevee,
  * et la coupe de G44 emportait `fun setToolbarElevation` sur la ligne d en
- * dessous : rubicon:app ne compilait plus.
+ * dessous : portal:app ne compilait plus.
  */
 export const FINIT_SUR_UN_OPERATEUR_RE = /(?:[+\-*/,.&|:=(]|->)$/;
 

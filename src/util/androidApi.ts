@@ -2,7 +2,7 @@
  * G61: what the Android platform really declares, from `android.jar`.
  *
  * A member of a class whose ancestry leaves the corpus was never judged, since
- * the framework type might declare the same name and call it. On LaPresse that
+ * the framework type might declare the same name and call it. On the reference project that
  * kept ~20 dead methods of custom views and every service that also
  * implements `ComponentCallbacks2`. The bundled index
  * (`bundled/android-api-36.json`, built by `scripts/build-android-api-index.ts`)

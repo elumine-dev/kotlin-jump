@@ -331,7 +331,7 @@ describe.skipIf(!symb)('et les formes ordinaires de symboles', () => {
 });
 
 /**
- * Le quatrieme site, mesure le 2026-10-22 sur LaPresse : 136 membres sortaient
+ * Le quatrieme site, mesure le 2026-10-22 sur le projet de reference : 136 membres sortaient
  * `selfOnly` dans `explainMembers` et n etaient pas rapportes par
  * `findUnusedMembers`. `find` exige deux choses de plus : aucun test ne nomme
  * le membre (le rendre prive casserait leur compilation), et le temoin qui

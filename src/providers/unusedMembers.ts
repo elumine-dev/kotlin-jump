@@ -955,20 +955,69 @@ function supertypesFor(
  * initialiseur de propriete, un bloc `init`) compte comme un temoin valable.
  * Ne pas savoir n autorise pas a conclure, dans un sens comme dans l autre.
  */
+/**
+ * KJ-076 : de quoi savoir qui porte un temoin de `selfOnly`, et ce que ce
+ * porteur vaut. `mortsProbables` est calcule AVANT la boucle des verdicts sur
+ * la seule regle qui ne depend pas d'elle : plus aucune mention hors de sa
+ * propre declaration. C'est exactement ce que la boucle appellera
+ * `unreferenced` ou `testOnly`. Partage par find et explain (G41).
+ */
+function contexteDesTemoins(
+  candidates: readonly MemberCandidate[],
+  kept: readonly MemberCandidate[],
+  harvest: ReturnType<typeof harvestMentions>,
+  unmentioned: ReadonlySet<string>,
+  bareXml: ReadonlyMap<string, number>,
+  bareKotlin: ReadonlyMap<string, number>,
+): { parFichier: Map<string, MemberCandidate[]>; ecartes: Set<MemberCandidate>; mortsProbables: Set<MemberCandidate> } {
+  const gardes = new Set(kept);
+  const ecartes = new Set(candidates.filter(c => !gardes.has(c)));
+  const parFichier = new Map<string, MemberCandidate[]>();
+  for (const c of candidates) {
+    const l = parFichier.get(c.path) ?? [];
+    l.push(c);
+    parFichier.set(c.path, l);
+  }
+  const mortsProbables = new Set<MemberCandidate>();
+  for (const c of kept) {
+    if (harvest.aliased.has(c.name)) continue;
+    const dehors = unmentioned.has(c.name)
+      ? 0 : mentionsOf(harvest.main, c, bareXml, bareKotlin) - c.selfInFile - c.ancestorDecls;
+    const dedans = unmentioned.has(c.name) ? 0 : c.selfInFile - c.selfInSpan;
+    if (dehors === 0 && dedans <= 0) mortsProbables.add(c);
+  }
+  return { parFichier, ecartes, mortsProbables };
+}
+
 function temoinVivant(
   c: MemberCandidate,
   parFichier: ReadonlyMap<string, readonly MemberCandidate[]>,
   ecartes: ReadonlySet<MemberCandidate>,
   mortsProbables: ReadonlySet<MemberCandidate>,
 ): boolean {
+  return statutDesTemoins(c, parFichier, ecartes, mortsProbables) === 'vivant';
+}
+
+/**
+ * G41 : `mort` quand tous les temoins sont morts (le membre part avec eux),
+ * `ecarte` quand l un au moins n a pas ete juge (un filtre l a garde).
+ */
+function statutDesTemoins(
+  c: MemberCandidate,
+  parFichier: ReadonlyMap<string, readonly MemberCandidate[]>,
+  ecartes: ReadonlySet<MemberCandidate>,
+  mortsProbables: ReadonlySet<MemberCandidate>,
+): 'vivant' | 'mort' | 'ecarte' {
   const voisins = parFichier.get(c.path) ?? [];
+  let unEcarte = false;
   for (const at of c.codeInsideClassAt) {
     const porteur = voisins.find(
       v => v !== c && v.removeStart >= 0 && at >= v.removeStart && at < v.removeEnd);
-    if (porteur === undefined) return true;              // inattribuable : on ne conclut pas
-    if (!ecartes.has(porteur) && !mortsProbables.has(porteur)) return true;
+    if (porteur === undefined) return 'vivant';          // inattribuable : on ne conclut pas
+    if (!ecartes.has(porteur) && !mortsProbables.has(porteur)) return 'vivant';
+    if (ecartes.has(porteur)) unEcarte = true;
   }
-  return false;
+  return unEcarte ? 'ecarte' : 'mort';
 }
 
 export function findUnusedMembers(input: UnusedMemberScanInput): UnusedMember[] {
@@ -1002,27 +1051,8 @@ export function findUnusedMembers(input: UnusedMemberScanInput): UnusedMember[] 
   const bareKotlin = harvestBareKotlinMentions(input.sources, kept);
   const unmentioned = unmentionedDuplicateMembers(kept, declNameCounts, harvest);
 
-  // KJ-076 : de quoi savoir qui porte un temoin de `selfOnly`, et ce que ce
-  // porteur vaut. `mortsProbables` est calcule AVANT la boucle des verdicts
-  // sur la seule regle qui ne depend pas d'elle : plus aucune mention hors de
-  // sa propre declaration. C'est exactement ce que la boucle appellera
-  // `unreferenced` ou `testOnly`.
-  const gardes = new Set(kept);
-  const ecartes = new Set(candidates.filter(c => !gardes.has(c)));
-  const parFichier = new Map<string, MemberCandidate[]>();
-  for (const c of candidates) {
-    const l = parFichier.get(c.path) ?? [];
-    l.push(c);
-    parFichier.set(c.path, l);
-  }
-  const mortsProbables = new Set<MemberCandidate>();
-  for (const c of kept) {
-    if (harvest.aliased.has(c.name)) continue;
-    const dehors = unmentioned.has(c.name)
-      ? 0 : mentionsOf(harvest.main, c, bareXml, bareKotlin) - c.selfInFile - c.ancestorDecls;
-    const dedans = unmentioned.has(c.name) ? 0 : c.selfInFile - c.selfInSpan;
-    if (dehors === 0 && dedans <= 0) mortsProbables.add(c);
-  }
+  const { parFichier, ecartes, mortsProbables } =
+    contexteDesTemoins(candidates, kept, harvest, unmentioned, bareXml, bareKotlin);
 
   const out: UnusedMember[] = [];
   for (const c of kept) {
@@ -1286,10 +1316,11 @@ export function explainMembers(input: UnusedMemberScanInput): MemberExplanation[
   const harvest = harvestMentions(input.sources, wanted, input.testSourceSets);
   const bareXml = harvestBareXmlMentions(input.sources, candidates);
   const bareKotlin = harvestBareKotlinMentions(input.sources, candidates);
-  const unmentioned = unmentionedDuplicateMembers(
-    candidates.filter(c =>
-      memberRejectionReason(c, input, supertypesByName, deadByPath, scopeAnnotations) === null),
-    declNameCounts, harvest);
+  const kept = candidates.filter(c =>
+    memberRejectionReason(c, input, supertypesByName, deadByPath, scopeAnnotations) === null);
+  const unmentioned = unmentionedDuplicateMembers(kept, declNameCounts, harvest);
+  const { parFichier, ecartes, mortsProbables } =
+    contexteDesTemoins(candidates, kept, harvest, unmentioned, bareXml, bareKotlin);
 
   return candidates.map(c => {
     const rejected = memberRejectionReason(c, input, supertypesByName, deadByPath, scopeAnnotations);
@@ -1301,9 +1332,18 @@ export function explainMembers(input: UnusedMemberScanInput): MemberExplanation[
                 - c.selfInFile - c.ancestorDecls !== 0) {
       outcome = 'alive:main';
     } else if (!unmentioned.has(c.name) && c.selfInFile - c.selfInSpan > 0) {
-      const selfOnly = c.stringMentions === 0 && c.codeOutsideSpan > 0
+      // G41 : les deux conditions que findUnusedMembers ajoute. Sans elles, la
+      // famille des ilots lisait 136 membres « morts un par un » que personne
+      // ne rapportait, et s effacait devant eux.
+      const forme = c.stringMentions === 0 && c.codeOutsideSpan > 0
         && c.codeOutsideSpan === c.codeInsideClass;
-      outcome = selfOnly ? 'selfOnly' : 'alive:same-file';
+      if (!forme) outcome = 'alive:same-file';
+      else if (mentionsOf(harvest.test, c) > 0) outcome = 'alive:test';
+      else {
+        const statut = statutDesTemoins(c, parFichier, ecartes, mortsProbables);
+        outcome = statut === 'vivant' ? 'selfOnly'
+          : statut === 'mort' ? 'same-file:dead-witness' : 'same-file:unproven-witness';
+      }
     } else {
       outcome = mentionsOf(harvest.test, c) > 0 ? 'testOnly' : 'unreferenced';
     }

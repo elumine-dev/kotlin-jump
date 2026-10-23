@@ -158,14 +158,14 @@ describe.skipIf(!memb)('aujourd hui, le temoin n a pas besoin d etre vivant', ()
    */
   it('le seul utilisateur est rapporte mort dans le meme appel', () => {
     expect(morts(TEMOIN_MORT, APPELANT)).toContain('dead');
-    expect(verdict('helper', TEMOIN_MORT, APPELANT)).toMatchObject({ outcome: 'selfOnly' });
+    // G41 : explain suit find, qui ne rapporte plus helper.
+    expect(verdict('helper', TEMOIN_MORT, APPELANT)).toMatchObject({ outcome: 'same-file:dead-witness' });
   });
 
   /**
-   * Corrige par KJ-076 : la commande ne recoit plus `helper`. `explainMembers`
-   * dit toujours `selfOnly`, parce que la forme est bien celle la ; ce qui a
-   * change, c est que `findUnusedMembers` ne la RAPPORTE plus, donc aucune
-   * transformation n est proposee sur un temoin qui meurt.
+   * Corrige par KJ-076 : la commande ne recoit plus `helper`. Depuis G41,
+   * `explainMembers` le dit aussi (`same-file:dead-witness`) : helper part
+   * avec la methode morte qui l appelle.
    */
   it('mais la commande ne recoit plus helper a privatiser', () => {
     expect(aRendrePrives(TEMOIN_MORT, APPELANT)).not.toContain('helper');
@@ -179,7 +179,7 @@ describe.skipIf(!memb)('aujourd hui, le temoin n a pas besoin d etre vivant', ()
     // `@Nullable` n ecarte plus rien depuis G64 : le temoin est juge mort,
     // et il prouve toujours selfOnly, ce qui est le defaut de G38.
     expect(verdict('filtered', TEMOIN_ECARTE, APPELANT)).toMatchObject({ outcome: 'unreferenced' });
-    expect(verdict('helper', TEMOIN_ECARTE, APPELANT)).toMatchObject({ outcome: 'selfOnly' });
+    expect(verdict('helper', TEMOIN_ECARTE, APPELANT)).toMatchObject({ outcome: 'same-file:dead-witness' });
   });
 });
 

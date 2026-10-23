@@ -138,7 +138,8 @@ describe.skipIf(!memb)('aujourd hui, un membre ecarte tient son voisin en vie', 
    */
   it('le voisin passe de unreferenced a selfOnly selon la presence de l ancre', () => {
     expect(verdict('helper', porteur(null), VIVANT)).toMatchObject({ outcome: 'unreferenced' });
-    expect(verdict('helper', porteur('@Inject'), VIVANT)).toMatchObject({ outcome: 'selfOnly' });
+    // G41 : explain dit ce que find decide, un temoin ecarte ne prouve pas selfOnly.
+    expect(verdict('helper', porteur('@Inject'), VIVANT)).toMatchObject({ outcome: 'same-file:unproven-witness' });
   });
 
   it('et l ancre elle meme sort bien en M6', () => {
@@ -154,7 +155,7 @@ describe.skipIf(!memb)('aujourd hui, un membre ecarte tient son voisin en vie', 
     // G64 juge desormais l ancre `@Nullable` ; son voisin reste selfOnly tant
     // que G38 laisse un temoin mort prouver selfOnly.
     expect(verdict('anchor', porteur('@Nullable'), VIVANT)).toMatchObject({ outcome: 'unreferenced' });
-    expect(verdict('helper', porteur('@Nullable'), VIVANT)).toMatchObject({ outcome: 'selfOnly' });
+    expect(verdict('helper', porteur('@Nullable'), VIVANT)).toMatchObject({ outcome: 'same-file:dead-witness' });
   });
 });
 

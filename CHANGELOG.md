@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.44.1
+
+Find Everything Unused now reports dead code that five overcautious filters kept alive, and one getIdentifier call no longer protects a whole kind of resource. Removing a Fragment also removes the Dagger lines that name it.
+
+### Improvements
+- Reported Fragments that only a Dagger component names, through an import and an `inject(target: ...)` method. Removing such a Fragment now also removes its inject declarations in every component, all of them or none, so the component never names a class that is gone.
+- Reported methods of custom views that nobody calls, such as `stopBlinkLiveButton()` on a `ViewGroup` subclass. When the bundled Android index shows that no ancestor declares the name, the framework cannot call it, and the method is no longer kept.
+- Stopped marker annotations from keeping dead code: `@Nullable`, `@NonNull`, `@UnstableApi`, thread annotations such as `@UiThread`, and project annotations declared with `@RequiresOptIn` or listed in an `allOpen` or `noArg` Gradle block. On the reference project they kept a whole unused utility class and 16 members of another one.
+- Reported methods that no serializer reads on classes kept for serialization. Fields, JavaBean accessors (`getX`, `isX`, `setX`) and Java serialization hooks stay protected, but a `hasTitle()` with no caller is now reported.
+
+### Fixes
+- Fixed one `getIdentifier` call protecting a whole kind of resource. A name with a literal prefix now protects only that prefix, a lookup in the `"android"` package protects nothing in the project, and a fully literal name adds nothing. On the reference project this uncovered 175 dead strings and 59 dead dimens.
+- Fixed classes that implement an imported nested interface, such as an `OnPageChangeListener` declared inside another class. Their ancestry was never resolved, so their dead methods were kept.
+- Fixed Explain disagreeing with Find Unused Members. On the reference project, 136 members were explained as dead while Find kept them, because a test names them or their only caller is not proven dead. Explain now gives the reason Find uses, and Find Dead Islands follows the same rule.
+- Fixed a removal that deleted the same import twice when a class and its injection sites were cut together, which made VS Code reject the whole edit.
+
 ## 1.44.0
 
 Remove Everything Unused now cuts interface methods nobody calls together with their overrides, trusts what Android declares, and stops keeping code alive on weak signals. Several removals that cut too much or too little are fixed.

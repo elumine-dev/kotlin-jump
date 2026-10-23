@@ -178,7 +178,7 @@ describe('G44, la paire contrat et surcharge, coupee ensemble', () => {
 
   it('une signature qui finit sur un type nullable ne mange pas la suivante', () => {
     // Projet de reference, ApricotContainerController : la coupe de `toolbarElevation(): Float?`
-    // emportait `setToolbarElevation`, et saffron:app ne compilait plus. Un `?`
+    // emportait `setToolbarElevation`, et portal:app ne compilait plus. Un `?`
     // seul en fin de ligne est un type nullable, jamais un operateur.
     const k = '/w/app/src/main/java/k';
     const i = src(`${k}/S.kt`, 'package k', '', 'interface S {', '    fun expand()', '    fun toolbarElevation(): Float?', '    fun setToolbarElevation(elevation: Float)', '}');

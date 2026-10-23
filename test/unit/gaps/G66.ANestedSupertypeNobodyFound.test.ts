@@ -8,7 +8,7 @@ import { androidApi } from '../../../src/util/androidApi';
  *
  * Audit de dix fichiers du projet de reference, 2026-10-21 :
  * `MarmotMossWithWalnutIndicator extends View implements OnPageChangeListener`,
- * avec `import com.example.custom.view.ViewOliveWithWalnut.OnPageChangeListener`.
+ * avec `import com.example.view.ViewOliveWithWalnut.OnPageChangeListener`.
  * `setCentered` n a ni appelant ni homonyme dans tout le depot, et sortait
  * pourtant `M4:F7:View` : la chaine n etait pas visible, donc G63 ne pouvait
  * pas lever M4.
@@ -32,8 +32,8 @@ const API = androidApi({
 });
 const src = (path: string, ...lines: string[]) => ({ path: `/w/app/src/main/java/${path}`, text: lines.join('\n') + '\n' });
 
-const PAGER = src('com/example/custom/view/ViewOliveWithWalnut.java',
-  'package com.example.custom.view;',
+const PAGER = src('com/example/view/ViewOliveWithWalnut.java',
+  'package com.example.view;',
   '',
   'public class ViewOliveWithWalnut {',
   '\tpublic interface OnPageChangeListener {',
@@ -59,8 +59,8 @@ const indicateur = (entete: string, imp: string) => src('com/x/MarmotMossWithWal
   '}',
 );
 
-const IMPORTEE = indicateur('OnPageChangeListener', 'import com.example.custom.view.ViewOliveWithWalnut.OnPageChangeListener;');
-const QUALIFIEE = indicateur('ViewOliveWithWalnut.OnPageChangeListener', 'import com.example.custom.view.ViewOliveWithWalnut;');
+const IMPORTEE = indicateur('OnPageChangeListener', 'import com.example.view.ViewOliveWithWalnut.OnPageChangeListener;');
+const QUALIFIEE = indicateur('ViewOliveWithWalnut.OnPageChangeListener', 'import com.example.view.ViewOliveWithWalnut;');
 
 const MAIN = src('com/x/Main.java',
   'package com.x;',
@@ -92,8 +92,8 @@ describe('G66 — ce qui reste garde', () => {
   });
 
   it('une interface imbriquee que l interface declare aussi sous ce nom', () => {
-    const pager = src('com/example/custom/view/ViewOliveWithWalnut.java',
-      'package com.example.custom.view;',
+    const pager = src('com/example/view/ViewOliveWithWalnut.java',
+      'package com.example.view;',
       '',
       'public class ViewOliveWithWalnut {',
       '\tpublic interface OnPageChangeListener {',

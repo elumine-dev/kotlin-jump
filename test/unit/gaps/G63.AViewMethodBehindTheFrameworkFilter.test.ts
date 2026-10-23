@@ -5,7 +5,7 @@ import { androidApi, AndroidApiIndex } from '../../../src/util/androidApi';
 /**
  * G63 — une methode de vue que G61 savait juger, et que M4 ne lui laissait pas.
  *
- * Trouve par la meme revue humaine que G62 (PR du projet de reference) :
+ * Trouve par la meme revue humaine que G62 (meme PR) :
  * `RedwoodContainer.stopBlinkLiveButton()` n a aucun appelant. KJ la gardait
  * sous `M4:F7:ViewGroup`.
  *

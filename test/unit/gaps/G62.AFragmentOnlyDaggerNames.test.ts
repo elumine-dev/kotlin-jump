@@ -10,8 +10,8 @@ import { buildSymbolRemovalEdit } from '../../../src/providers/UnusedSymbolProvi
  * Jump n avait pas vu. `OxBasilLemon3Fragment` a une fabrique `newInstance`
  * que personne n appelle, et ses seules mentions hors de son fichier sont :
  *
- *   JuniperMainActivityComponent       import + fun inject(target: OxBasilLemon3Fragment)
- *   EmptyJuniperMainActivityComponent  import + override fun inject(target: …) {}
+ *   MainActivityComponent       import + fun inject(target: OxBasilLemon3Fragment)
+ *   EmptyMainActivityComponent  import + override fun inject(target: …) {}
  *
  * Exactement le motif de KJ-067. Deux gardes empilees le retenaient, chacune
  * suffisante :
@@ -82,7 +82,7 @@ const fragment = (supertype = 'Fragment()') => f(`${MAIN}/OxBasilLemon3Fragment.
   '',
   '    override fun onAttach(context: Context) {',
   '        super.onAttach(context)',
-  '        GraphJuniper.ui(context).inject(this)',
+  '        Graph.ui(context).inject(this)',
   '    }',
   '',
   '    companion object {',
@@ -104,25 +104,25 @@ const BACKABLE = f(`${MAIN}/PrimroseFragment.kt`, [
   '',
 ].join('\n'));
 
-const COMPOSANT = f(`${MAIN}/JuniperMainActivityComponent.kt`, [
+const COMPOSANT = f(`${MAIN}/MainActivityComponent.kt`, [
   'package com.x',
   '',
   'import com.x.OxBasilLemon3Fragment',
   'import dagger.Subcomponent',
   '',
   '@Subcomponent',
-  'interface JuniperMainActivityComponent {',
+  'interface MainActivityComponent {',
   '    fun inject(target: OxBasilLemon3Fragment)',
   '}',
   '',
 ].join('\n'));
 
-const FAUX_COMPOSANT = f(`${MAIN}/EmptyJuniperMainActivityComponent.kt`, [
+const FAUX_COMPOSANT = f(`${MAIN}/EmptyMainActivityComponent.kt`, [
   'package com.x',
   '',
   'import com.x.OxBasilLemon3Fragment',
   '',
-  'class EmptyJuniperMainActivityComponent : JuniperMainActivityComponent {',
+  'class EmptyMainActivityComponent : MainActivityComponent {',
   '    override fun inject(target: OxBasilLemon3Fragment) {}',
   '}',
   '',
@@ -299,8 +299,8 @@ describe.skipIf(!mod)('G62 — le quick fix emporte les sites d injection', () =
     for (const c of [COMPOSANT, FAUX_COMPOSANT]) {
       expect(apres.get(c.path)).not.toContain('OxBasilLemon3Fragment');
     }
-    expect(apres.get(COMPOSANT.path)).toContain('interface JuniperMainActivityComponent {');
-    expect(apres.get(FAUX_COMPOSANT.path)).toContain('class EmptyJuniperMainActivityComponent');
+    expect(apres.get(COMPOSANT.path)).toContain('interface MainActivityComponent {');
+    expect(apres.get(FAUX_COMPOSANT.path)).toContain('class EmptyMainActivityComponent');
   });
 
   it('ne touche pas un site qui a bouge depuis le scan, ni la classe', async () => {

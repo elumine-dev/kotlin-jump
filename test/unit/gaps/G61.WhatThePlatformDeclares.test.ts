@@ -13,7 +13,7 @@ import { androidApi, AndroidApiIndex } from '../../../src/util/androidApi';
  * Oracle : `9b514d8dc2` sur le projet de reference. Kevin y retire une trentaine
  * de methodes de vues personnalisees que personne n appelle
  * (`OverlayImageButton.setOverlayColor`, `TangeloCarouselContainer.getViewDarken`,
- * `JuniperHorizontalScrollView.setSmoothScrollingEnabled`...) et les methodes
+ * `PagedHorizontalScrollView.setSmoothScrollingEnabled`...) et les methodes
  * de `ImageService` dont l implementation implemente aussi
  * `ComponentCallbacks2`. KJ les gardait toutes (M3, M2) : un ancetre hors du
  * corpus pouvait declarer le meme nom.

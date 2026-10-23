@@ -7,7 +7,7 @@ import { importOrNull } from '../kj/harness';
  * Sur le projet de reference, v1.43.0 supprimait `RookGooseberryV4DOTest.java` entier pour
  * la seule ligne `Assert.assertEquals(RookGooseberryV4DO.TYPE_LIST, ...)` ;
  * le reste du fichier verifiait du parsing vivant. Meme chose pour
- * `LayoutElephantHelperTest` et `JuniperConstTest`.
+ * `LayoutElephantHelperTest` et `AppConstTest`.
  *
  * Deux defauts dans `testCoRemovalClosure.ts` :
  *   1. la coupe d assertion n etait tentee que si une AUTRE fonction du

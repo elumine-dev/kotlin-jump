@@ -227,6 +227,36 @@ function subjectOf(text: string): string | undefined {
   return m ? m[1].replace(/`/g, '') : undefined;
 }
 
+/**
+ * G52b: the line that opens the call `lineNo` sits inside, or undefined.
+ *
+ *   assertEquals(        <- this line
+ *       Foo.DEAD,        <- the mention
+ *       foo.type
+ *   );
+ *
+ * Started from the mention, the statement read `Foo.DEAD,` with subject `Foo`,
+ * no assertion was recognised, and the whole test file left. Only `(` and `[`
+ * open a call; a line ending on `{`, `}` or `;` closes the search.
+ */
+function enclosingCallLine(lines: readonly string[], lineNo: number): number | undefined {
+  let open = 0;
+  for (let k = lineNo - 1; k >= 0 && lineNo - k <= 64; k--) {
+    const line = lines[k] ?? '';
+    let quote = '';
+    for (let i = line.length - 1; i >= 0; i--) {
+      const c = line[i];
+      if (quote !== '') { if (c === quote && line[i - 1] !== '\\') quote = ''; continue; }
+      if (c === '"' || c === "'") quote = c;
+      else if (c === '(' || c === '[') open++;
+      else if (c === ')' || c === ']') open--;
+    }
+    if (open > 0) return k;
+    if (/[{};]\s*$/.test(line)) return undefined;
+  }
+  return undefined;
+}
+
 function standaloneStatementExtent(
   lines: readonly string[],
   lineNo: number,
@@ -600,6 +630,7 @@ export function planClosure(
    * statement whose subject is a verifying call.
    */
   const ASSERTION_RE = /^(?:verify|coVerify|verifyOrder|verifySequence|verifyAll|confirmVerified|assert\w*|check|expect\w*|should\w*|require\w*)$/;
+  const INNER_ASSERTION_RE = /\b(?:verify|coVerify|verifyOrder|verifySequence|verifyAll|confirmVerified|assert\w*|check|expect\w*|should\w*|require\w*)\s*[({]/;
   /** True when at least one @Test function of the file names nothing that leaves. */
   const testsOtherThings = (src: Src, funs: readonly { start: number; end: number }[]): boolean => {
     const text = clean(src);
@@ -619,8 +650,20 @@ export function planClosure(
     const lineStarts = buildLineStarts(clean(src));
     const lines = src.text.split('\n');
     const ln = offsetToPos(lineStarts as number[], offset).line;
-    const ext = standaloneStatementExtent(lines, ln, name);
+    // On the blanked copy: `// legacy :(` above an assertion opened a call
+    // that does not exist, and the whole test file left.
+    const blank = clean(src).split('\n');
+    const opener = enclosingCallLine(blank, ln);
+    const ext = standaloneStatementExtent(lines, opener ?? ln, name);
     if (!ext) return undefined;
+    // `assertAll(() -> assertEquals(1, live), () -> mustHold(DEAD))` groups
+    // checks: cut whole, it takes the live ones along. Only plain arguments
+    // are cut, read from the opening line on, where a live check may sit too.
+    if (opener !== undefined) {
+      const body = blank.slice(ext.first, ext.last + 1).join('\n');
+      const args = body.slice(body.indexOf('(') + 1);
+      if (/->|[{}]/.test(args) || INNER_ASSERTION_RE.test(args)) return undefined;
+    }
     const subject = assertionHead(lines.slice(ext.first, ext.last + 1).join('\n').trim());
     if (subject === undefined || !ASSERTION_RE.test(subject)) return undefined;
     // Another assertion must survive, and it must name nothing that leaves.

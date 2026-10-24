@@ -163,3 +163,140 @@ describe.skipIf(!mod)('G52, gardes', () => {
     expect(test.text.slice(cuts[0].start, cuts[1].end)).not.toContain('isPointInsideBounds');
   });
 });
+
+/**
+ * G52b — l assertion ecrite sur plusieurs lignes.
+ *
+ * Trouve par la refutation de G52 : `standaloneStatementExtent` partait de la
+ * ligne de la MENTION, `Foo.DEAD,`, et non de `assertEquals(`. Le sujet lu
+ * etait `Foo`, aucune assertion n etait reconnue, et le fichier de test
+ * partait entier alors qu il verifiait encore `foo.type`.
+ *
+ * Limite assumee, non traitee : `assertTrue(MORT && vivant)` part en entier.
+ */
+describe.skipIf(!mod)('G52b, une assertion sur plusieurs lignes', () => {
+  it('assertEquals coupe sur trois lignes : l appel part, pas le fichier', () => {
+    const test = fooTest('static', [
+      'Foo foo = new Foo();',
+      'assertEquals(',
+      '\tFoo.DEAD,',
+      '\tfoo.type',
+      ');',
+      'assertNotNull(foo.type);',
+    ]);
+    const plan = planFoo(test);
+    expect(plan.withheld).toBeUndefined();
+    expect(plan.files).not.toContain(test.path);
+    expect(cutTexts(plan, test)).toEqual(['\t\tassertEquals(\n\t\t\tFoo.DEAD,\n\t\t\tfoo.type\n\t\t);\n']);
+  });
+
+  it('garde : sur plusieurs lignes, sans autre assertion vivante, le fichier part', () => {
+    const test = fooTest('static', [
+      'assertEquals(',
+      '\t"list",',
+      '\tFoo.DEAD',
+      ');',
+    ]);
+    const plan = planFoo(test);
+    expect(plan.files).toEqual([test.path]);
+  });
+
+  it('garde : un appel qui n est pas une assertion ne devient pas une coupe', () => {
+    const test = fooTest('static', [
+      'Foo foo = new Foo();',
+      'String s = String.join(',
+      '\tFoo.DEAD,',
+      '\tfoo.type',
+      ');',
+      'assertNotNull(foo.type);',
+    ]);
+    const plan = planFoo(test);
+    expect(cutTexts(plan, test)).toEqual([]);
+  });
+
+  it('garde : la remontee s arrete sur une instruction finie, le bloc vivant reste', () => {
+    const test = fooTest('static', [
+      'Foo foo = new Foo();',
+      'assertNotNull(foo.type);',
+      'assertThrows(Exception.class, () -> {',
+      '\tfoo.type.length();',
+      '\tassertEquals(Foo.DEAD, foo.type);',
+      '});',
+    ]);
+    expect(cutTexts(planFoo(test), test)).toEqual(['\t\t\tassertEquals(Foo.DEAD, foo.type);\n']);
+  });
+
+  it('garde : une parenthese dans une chaine ne ferme pas l appel', () => {
+    const test = fooTest('static', [
+      'Foo foo = new Foo();',
+      'assertNotNull(foo.type);',
+      'assertEquals(',
+      '\t"x)",',
+      '\tFoo.DEAD',
+      ');',
+    ]);
+    const plan = planFoo(test);
+    expect(plan.files).not.toContain(test.path);
+    expect(cutTexts(plan, test)).toEqual(['\t\tassertEquals(\n\t\t\t"x)",\n\t\t\tFoo.DEAD\n\t\t);\n']);
+  });
+
+  // Confirmes par refuter-un-correctif sur la premiere version de G52b.
+  it.each([
+    ['// legacy :(', 'un commentaire de ligne'],
+    ['/* see (below */', 'un commentaire de bloc'],
+    ['foo.type.trim(); // warm up (cache', 'un commentaire en fin de ligne'],
+  ])('garde : %s au dessus (%s) n ouvre aucun appel', (ligne) => {
+    const test = fooTest('static', [
+      'Foo foo = new Foo();',
+      ligne,
+      'assertEquals(Foo.DEAD, foo.type);',
+      'assertNotNull(foo.type);',
+    ]);
+    const plan = planFoo(test);
+    expect(plan.files).not.toContain(test.path);
+    expect(cutTexts(plan, test)).toEqual(['\t\tassertEquals(Foo.DEAD, foo.type);\n']);
+  });
+
+  it('garde : assertAll regroupe une assertion vivante, il ne part pas entier', () => {
+    const test = fooTest('static', [
+      'Foo foo = new Foo();',
+      'assertAll(',
+      '\t() -> assertEquals(1, foo.hashCode()),',
+      '\t() -> assertEquals(Foo.DEAD, foo.type)',
+      ');',
+      'assertNotNull(foo);',
+    ]);
+    const coupes = cutTexts(planFoo(test), test).join('');
+    expect(coupes).not.toContain('foo.hashCode()');
+  });
+
+  // Confirmes par la seconde refutation : le controle vivant sur la ligne
+  // d ouverture, ou sans mot d assertion.
+  it.each([
+    [['assertAll(() -> assertEquals(1, foo.type.length()),', '\t() -> consume(Foo.DEAD));'], 'foo.type.length()'],
+    [['assertAll(', '\t() -> mustHold(foo.type),', '\t() -> mustHold(Foo.DEAD)', ');'], 'mustHold(foo.type)'],
+    [['assertAll(() -> assertEquals(2, foo.type.length()), () -> assertEquals(', '\tFoo.DEAD, foo.type));'], 'foo.type.length()'],
+  ])('garde : un appel qui regroupe des controles ne part pas entier (%#)', (corps, vivant) => {
+    const test = fooTest('static', ['Foo foo = new Foo();', ...corps, 'assertNotNull(foo);']);
+    expect(cutTexts(planFoo(test), test).join('')).not.toContain(vivant);
+  });
+
+  it('garde : des arguments simples sur plusieurs lignes restent coupables', () => {
+    const test = fooTest('static', [
+      'Foo foo = new Foo();',
+      'assertEquals(foo.type.indexOf(',
+      '\tFoo.DEAD), 0);',
+      'assertNotNull(foo.type);',
+    ]);
+    expect(cutTexts(planFoo(test), test)).toEqual(['\t\tassertEquals(foo.type.indexOf(\n\t\t\tFoo.DEAD), 0);\n']);
+  });
+
+  it('garde : une instruction finie au dessus arrete la remontee', () => {
+    const test = fooTest('static', [
+      'Foo foo = new Foo();',
+      'assertNotNull(foo.type);',
+      'assertEquals(Foo.DEAD, foo.type);',
+    ]);
+    expect(cutTexts(planFoo(test), test)).toEqual(['\t\tassertEquals(Foo.DEAD, foo.type);\n']);
+  });
+});

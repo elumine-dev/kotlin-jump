@@ -24,6 +24,15 @@ function blancs(text: string, i: number, n: number): string {
 /** Blanks out comments and string contents while PRESERVING the code inside
  *  `${…}` templates (lengths and line count are kept). */
 export function sanitizeForUsageScan(text: string): string {
+  return blanchir(text, true);
+}
+
+/** The same copy for Java, where `"${"` is three characters, not a template. */
+export function sanitizeJavaForUsageScan(text: string): string {
+  return blanchir(text, false);
+}
+
+function blanchir(text: string, templates: boolean): string {
   const out: string[] = [];
   let i = 0;
   let mode: 'code' | 'line-comment' | 'block-comment' | 'string' | 'raw' = 'code';
@@ -80,8 +89,8 @@ export function sanitizeForUsageScan(text: string): string {
           i++;
           continue;
         }
-        if (two === '${') { templateDepth = 1; out.push('  '); i += 2; continue; }
-        if (ch === '$' && /[A-Za-z_]/.test(text[i + 1] ?? '')) {
+        if (templates && two === '${') { templateDepth = 1; out.push('  '); i += 2; continue; }
+        if (templates && ch === '$' && /[A-Za-z_]/.test(text[i + 1] ?? '')) {
           // simple template "$name": the identifier IS code, keep it scannable
           out.push('$');
           i++;
@@ -100,6 +109,9 @@ export function sanitizeForUsageScan(text: string): string {
           }
           if (ch === '"') { mode = 'code'; out.push(' '); i++; continue; }
           if (ch === '\n') { mode = 'code'; out.push('\n'); i++; continue; }
+        } else if (!templates && ch === '\\') {
+          // A Java text block escapes, `\"""` included; a Kotlin raw string does not.
+          out.push(blancs(text, i, 2)); i += 2; continue;
         } else if (three === '"""') {
           // A raw string closes on the LAST three quotes of the run, so a
           // content ending in a quote (`"""URI="x""""`) keeps the extra ones.

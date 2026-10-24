@@ -4,9 +4,11 @@ import { plural } from '../util/plural';
 import { corpusUri } from '../util/corpusUri';
 import { ResourceCorpus } from '../indexer/ResourceCorpus';
 import {
+  KeysHiddenBySweeper,
   UnusedRemoteConfigKey,
   UnusedRemoteConfigKeyProvider,
   findUnusedRemoteConfigKeys,
+  keysHiddenBySweepers,
 } from '../providers/UnusedRemoteConfigKeyProvider';
 
 /** KJ-040 commands. Shares the corpus read with the other workspace scans. */
@@ -14,6 +16,55 @@ import {
 export function remoteConfigSettings() {
   const cfg = vscode.workspace.getConfiguration('kotlinJump');
   return { ignoreNames: cfg.get<string[]>('unusedRemoteConfigKeysIgnoreNames', []) };
+}
+
+const SWEEP_MARKER = '// kotlin-jump:ignore unused-remote-config-key';
+
+const fileName = (path: string) => path.split(/[\\/]/).pop() ?? path;
+
+/** G35: the keys a sweeper hides from `find`, with the file that hides them. */
+export function hiddenKeysNote(hidden: readonly KeysHiddenBySweeper[]): string | undefined {
+  if (hidden.length === 0) return undefined;
+  const keys = hidden.reduce((n, h) => n + h.keys, 0);
+  const files = hidden.map(h => fileName(h.sweeper)).join(', ');
+  return `${plural(keys, 'Remote Config key')} that no code names ${keys === 1 ? 'is' : 'are'} hidden by ${files}, `
+    + `which ${hidden.length === 1 ? 'reads' : 'read'} every key`;
+}
+
+/**
+ * « Every Remote Config default is read somewhere » was said while an admin
+ * screen hid 29 keys no code names: the sweep is now named, with the marker
+ * that lifts it.
+ */
+export function resultMessage(found: readonly UnusedRemoteConfigKey[], hidden: readonly KeysHiddenBySweeper[]): string {
+  const note = hiddenKeysNote(hidden);
+  const one = hidden.length === 1;
+  const wayOut = note
+    ? ` ${note}. If ${one ? 'it only displays' : 'they only display'} the values, add ${SWEEP_MARKER} to ${one ? 'it' : 'each of them'}.`
+    : '';
+  if (found.length === 0) {
+    return note ? `No Remote Config key can be proven unread.${wayOut}` : 'Every Remote Config default is read somewhere.';
+  }
+  const declarations = found.reduce((n, k) => n + k.declarations.length, 0);
+  return `${found.length} Remote Config key${found.length > 1 ? 's' : ''} nothing reads`
+    + `, across ${declarations} declaration${declarations > 1 ? 's' : ''}.${wayOut}`;
+}
+
+/** Writes the marker on top of each sweeper, then scans again. */
+async function markSweepers(
+  hidden: readonly KeysHiddenBySweeper[],
+  corpus: ResourceCorpus,
+  provider: UnusedRemoteConfigKeyProvider,
+): Promise<void> {
+  const edit = new vscode.WorkspaceEdit();
+  for (const h of hidden) edit.insert(corpusUri(h.sweeper), new vscode.Position(0, 0), `${SWEEP_MARKER}\n`);
+  const applied = await vscode.workspace.applyEdit(edit);
+  if (!applied) {
+    void vscode.window.showWarningMessage('Nothing was applied.');
+    return;
+  }
+  void vscode.window.showInformationMessage(`Marked ${hidden.map(h => fileName(h.sweeper)).join(', ')}. Scanning again.`);
+  await findUnusedRemoteConfigKeysCommand(corpus, provider);
 }
 
 export async function findUnusedRemoteConfigKeysCommand(
@@ -43,18 +94,22 @@ export async function findUnusedRemoteConfigKeysCommand(
         return;
       }
 
-      const found = findUnusedRemoteConfigKeys({ sources: data.sources, ...remoteConfigSettings() });
+      const input = { sources: data.sources, ...remoteConfigSettings() };
+      const found = findUnusedRemoteConfigKeys(input);
       provider.setFindings(found);
 
-      if (found.length === 0) {
-        void vscode.window.showInformationMessage('Every Remote Config default is read somewhere.');
+      const hidden = keysHiddenBySweepers(input);
+      const message = resultMessage(found, hidden);
+      if (hidden.length === 0) {
+        void vscode.window.showInformationMessage(message);
         return;
       }
-      const declarations = found.reduce((n, k) => n + k.declarations.length, 0);
-      void vscode.window.showInformationMessage(
-        `${found.length} Remote Config key${found.length > 1 ? 's' : ''} nothing reads`
-        + `, across ${declarations} declaration${declarations > 1 ? 's' : ''}.`,
-      );
+      const MARK = hidden.length === 1 ? 'Mark File and Scan Again' : 'Mark Files and Scan Again';
+      const OPEN = 'Open File';
+      void vscode.window.showInformationMessage(message, MARK, OPEN).then(choice => {
+        if (choice === MARK) void markSweepers(hidden, corpus, provider);
+        else if (choice === OPEN) void vscode.window.showTextDocument(corpusUri(hidden[0].sweeper));
+      });
     },
   );
 }

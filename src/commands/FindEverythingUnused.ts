@@ -32,7 +32,14 @@ import { findIdleImplementations } from '../providers/idleImplementations';
 import { findUnusedContracts } from '../providers/unusedContracts';
 import { UnheardEventProvider, findUnheardEvents } from '../providers/UnheardEventProvider';
 import { UnusedEnumEntryProvider, scanEnums } from '../providers/UnusedEnumEntryProvider';
-import { UnusedRemoteConfigKeyProvider, findUnusedRemoteConfigKeys } from '../providers/UnusedRemoteConfigKeyProvider';
+import {
+  RemoteConfigKeyScanInput,
+  UnusedRemoteConfigKey,
+  UnusedRemoteConfigKeyProvider,
+  findUnusedRemoteConfigKeys,
+  keysHiddenBySweepers,
+} from '../providers/UnusedRemoteConfigKeyProvider';
+import { hiddenKeysNote } from './FindUnusedRemoteConfigKeys';
 import { UnusedGradleDependencyProvider, findUnusedGradleDependencies } from '../providers/UnusedGradleDependencyProvider';
 import { UnusedMemberProvider, findUnusedMembers } from '../providers/UnusedMemberProvider';
 import { DeadIslandProvider, findDeadIslands } from '../providers/DeadIslandProvider';
@@ -52,6 +59,25 @@ import { plural } from '../util/plural';
  * They share one `ResourceCorpus` read, so running them together costs barely
  * more than running the most expensive one alone.
  */
+
+/**
+ * KJ-040 in the summary. G35: a sweep that hides keys is said, or the
+ * section reads 0 as if every key were read.
+ */
+export function remoteConfigSummary(input: RemoteConfigKeyScanInput): { keys: UnusedRemoteConfigKey[]; section: Section; hiddenNote?: string } {
+  const keys = findUnusedRemoteConfigKeys(input);
+  const decls = keys.reduce((n, k) => n + k.declarations.length, 0);
+  return {
+    keys,
+    section: {
+      label: 'Remote Config keys',
+      one: 'Remote Config key',
+      count: keys.length,
+      detail: decls > keys.length ? plural(decls, 'declaration') : undefined,
+    },
+    hiddenNote: hiddenKeysNote(keysHiddenBySweepers(input)),
+  };
+}
 
 export interface Section {
   /** Plural form of the label, and the singular the count may need. */
@@ -363,18 +389,13 @@ export async function findEverythingUnusedCommand(
         if (data.sourcesTruncated) {
           skipped.push('Remote Config keys (workspace too large to prove absence)');
         } else {
-          const keys = findUnusedRemoteConfigKeys({
+          const rc = remoteConfigSummary({
             sources: data.sources,
             ignoreNames: cfg.get<string[]>('unusedRemoteConfigKeysIgnoreNames', []),
           });
-          remoteConfigProvider.setFindings(keys);
-          const decls = keys.reduce((n, k) => n + k.declarations.length, 0);
-          sections.push({
-            label: 'Remote Config keys',
-            one: 'Remote Config key',
-            count: keys.length,
-            detail: decls > keys.length ? plural(decls, 'declaration') : undefined,
-          });
+          remoteConfigProvider.setFindings(rc.keys);
+          sections.push(rc.section);
+          if (rc.hiddenNote) skipped.push(rc.hiddenNote);
         }
       } else {
         skipped.push('Remote Config keys');

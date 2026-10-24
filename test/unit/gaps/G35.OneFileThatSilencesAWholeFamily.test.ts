@@ -310,3 +310,187 @@ describe.skipIf(!rc)('un balayage marque ne fait plus taire la famille', () => {
       .toEqual(['enable_dark_mode']);
   });
 });
+
+// ── La famille eteinte doit etre annoncee ───────────────────────────────────
+
+/**
+ * Mesure du 2026-10-23 sur le projet de reference, apres G58 : 95
+ * declarations (29 cles que rien ne nomme) restent `R4`, toutes par UN seul
+ * fichier, l ecran d administration `RemoteConfigListScreen.kt` de la meme
+ * application. La garde est juste, le marqueur ci dessus rend les cles. Mais
+ * personne ne pouvait le savoir : la commande repondait « Every Remote Config
+ * default is read somewhere. », ce qui est faux pour ces 29 cles, et le resume
+ * de Find Everything Unused comptait 0 sans rien dire.
+ *
+ * Le compte vient d `explain`, pour ne jamais contredire `find`.
+ */
+const cmd: any = await importOrNull('src/commands/FindUnusedRemoteConfigKeys');
+
+describe.skipIf(!rc || !cmd)('la famille eteinte est annoncee avec le fichier qui balaye', () => {
+  const ADMIN = '/w/app/src/main/java/com/x/RemoteConfigListScreen.kt';
+  const ecran = (entete = '') => f(ADMIN, [
+    'package com.x',
+    '',
+    entete,
+    'fun dump() = remoteConfig.all.map { (k, v) -> "$k=$v" }',
+    '',
+  ].join('\n'));
+  const cachees = (...sources: { path: string; text: string }[]) => rc.keysHiddenBySweepers?.(base(sources));
+
+  it('le compte nomme le fichier, les cles et les declarations', () => {
+    expect(cachees(DEFAUTS, PARAMETRES, ecran())).toEqual([{ sweeper: ADMIN, keys: 1, declarations: 1 }]);
+  });
+
+  it('une cle nommee ailleurs n est pas cachee, elle est vivante', () => {
+    const lue = f('/w/app/src/main/java/com/x/Lit.kt', 'package com.x\n\nval k = "enable_dark_mode"\n');
+    expect(cachees(DEFAUTS, PARAMETRES, ecran(), lue)).toEqual([]);
+  });
+
+  it('un balayage marque ne cache rien', () => {
+    expect(cachees(DEFAUTS, PARAMETRES, ecran('// kotlin-jump:ignore unused-remote-config-key'))).toEqual([]);
+  });
+
+  it('une cle ignoree par reglage n est pas comptee', () => {
+    expect(rc.keysHiddenBySweepers?.({ ...base([DEFAUTS, PARAMETRES, ecran()]), ignoreNames: ['enable_*'] })).toEqual([]);
+  });
+
+  it('un corpus tronque ne cache rien : il ne prouve rien du tout', () => {
+    expect(rc.keysHiddenBySweepers?.({ ...base([DEFAUTS, PARAMETRES, ecran()]), truncated: true })).toEqual([]);
+  });
+
+  it('le message ne dit plus que tout est lu, il nomme le fichier et le marqueur', () => {
+    const hidden = cachees(DEFAUTS, PARAMETRES, ecran());
+    const texte: string = cmd.resultMessage?.([], hidden) ?? '';
+    expect(texte).not.toMatch(/read somewhere/);
+    expect(texte).toContain('RemoteConfigListScreen.kt');
+    expect(texte).toContain('1 Remote Config key ');
+    expect(texte).toContain('kotlin-jump:ignore unused-remote-config-key');
+  });
+
+  it('sans balayage, le message reste le meme', () => {
+    expect(cmd.resultMessage?.([], [])).toBe('Every Remote Config default is read somewhere.');
+  });
+
+  it('des cles trouvees ET des cles cachees : les deux sont dites', () => {
+    const trouvee = [{ name: 'a', declarations: [{}, {}] }];
+    const texte: string = cmd.resultMessage?.(trouvee, [{ sweeper: ADMIN, keys: 29, declarations: 95 }]) ?? '';
+    expect(texte).toMatch(/^1 Remote Config key nothing reads, across 2 declarations\./);
+    expect(texte).toContain('29 Remote Config keys');
+  });
+});
+
+const tout: any = await importOrNull('src/commands/FindEverythingUnused');
+
+describe.skipIf(!rc || !tout)('le resume de Find Everything Unused le dit aussi', () => {
+  const ecran = f('/w/app/src/main/java/com/x/RemoteConfigListScreen.kt',
+    'package com.x\n\nfun dump() = remoteConfig.all.map { (k, v) -> "$k=$v" }\n');
+
+  it('la section compte 0 et la note nomme le fichier', () => {
+    const r = tout.remoteConfigSummary(base([DEFAUTS, PARAMETRES, ecran]));
+    expect(r.section.count).toBe(0);
+    expect(r.hiddenNote).toBe('1 Remote Config key that no code names is hidden by RemoteConfigListScreen.kt, which reads every key');
+    expect(tout.resumeTout([r.section], 3, [r.hiddenNote])).toContain('Skipped: 1 Remote Config key that no code names is hidden by RemoteConfigListScreen.kt');
+  });
+
+  it('sans balayage, aucune note', () => {
+    const r = tout.remoteConfigSummary(base([DEFAUTS, PARAMETRES]));
+    expect(r.section.count).toBe(1);
+    expect(r.hiddenNote).toBeUndefined();
+  });
+});
+
+/**
+ * Le bouton de la notification : il pose le marqueur, relance, et la cle
+ * cachee sort. Une edition refusee le dit, au mot de la maison.
+ */
+const vscodeMock: any = await importOrNull('test/unit/__mocks__/vscode');
+const { vi, afterEach } = await import('vitest');
+
+describe.skipIf(!cmd || !vscodeMock)('le bouton marque le fichier et relance', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  async function clique(accepte: boolean) {
+    const ADMIN = '/w/app/src/main/java/com/x/RemoteConfigListScreen.kt';
+    const sources = [DEFAUTS, PARAMETRES, f(ADMIN, 'package com.x\n\nfun dump() = remoteConfig.all.map { (k, v) -> "$k=$v" }\n')];
+    (vscodeMock.workspace as any).workspaceFolders = [{ uri: vscodeMock.Uri.file('/w'), path: '/w' }];
+    vi.spyOn(vscodeMock.workspace, 'getConfiguration').mockReturnValue({ get: (_k: string, d: any) => d } as any);
+    (vscodeMock.workspace as any).applyEdit = async (edit: any) => {
+      if (!accepte) return false;
+      for (const e of edit._entries) {
+        const s = sources.find(x => x.path === e.uri.fsPath)!;
+        sources[sources.indexOf(s)] = f(s.path, e.newText + s.text);
+      }
+      return true;
+    };
+    const infos: string[] = [];
+    const alertes: string[] = [];
+    let premier = true;
+    vi.spyOn(vscodeMock.window, 'showInformationMessage').mockImplementation((async (m: string, ...items: string[]) => {
+      infos.push(m);
+      if (premier && items.length > 0) { premier = false; return items[0]; }
+      return undefined;
+    }) as any);
+    vi.spyOn(vscodeMock.window, 'showWarningMessage').mockImplementation((async (m: string) => { alertes.push(m); return undefined; }) as any);
+    const corpus: any = { get: async () => ({ sources: [...sources], sourcesTruncated: false }) };
+    const provider = { setFindings: vi.fn() };
+    await cmd.findUnusedRemoteConfigKeysCommand(corpus, provider);
+    for (let i = 0; i < 10; i++) await new Promise(r => setTimeout(r, 0));
+    return { infos, alertes, sources };
+  }
+
+  it('acceptee : le marqueur est pose et la cle cachee est rapportee', async () => {
+    const r = await clique(true);
+    expect(r.sources[2].text.startsWith('// kotlin-jump:ignore unused-remote-config-key\npackage com.x')).toBe(true);
+    expect(r.infos).toContain('Marked RemoteConfigListScreen.kt. Scanning again.');
+    expect(r.infos.at(-1)).toBe('1 Remote Config key nothing reads, across 1 declaration.');
+  });
+
+  it('refusee : rien n est annonce comme fait', async () => {
+    const r = await clique(false);
+    expect(r.alertes).toEqual(['Nothing was applied.']);
+    expect(r.infos.join(' ')).not.toContain('Marked');
+  });
+});
+
+/** La commande entiere, pas seulement sa fonction : c est elle que lit l utilisateur. */
+describe.skipIf(!tout || !vscodeMock)('Find Everything Unused annonce le balayage', () => {
+  async function resume(...sources: { path: string; text: string }[]) {
+    const w = vscodeMock.workspace as any;
+    const win = vscodeMock.window as any;
+    const avant = { info: win.showInformationMessage, warn: win.showWarningMessage, prog: win.withProgress };
+    w.workspaceFolders = [{ uri: vscodeMock.Uri.file('/w'), path: '/w' }];
+    vi.spyOn(w, 'getConfiguration').mockReturnValue({ get: (_k: string, d: any) => d } as any);
+    win.withProgress = (_o: any, t: any) => t({ report: () => {} }, { isCancellationRequested: false });
+    const messages: string[] = [];
+    win.showInformationMessage = async (m: string) => { messages.push(m); return undefined; };
+    win.showWarningMessage = async (m: string) => { messages.push(m); return undefined; };
+    const corpus: any = {
+      invalidate: () => {},
+      get: async () => ({
+        sources, moduleDirs: [], modulesWithCode: [], libraryModules: [],
+        index: { entries: () => [] }, truncated: false, sourcesTruncated: false,
+      }),
+    };
+    const stub: any = { setFindings: () => {}, setUnreadable: () => {}, setScan: () => {} };
+    try {
+      await tout.findEverythingUnusedCommand(corpus, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, async () => undefined);
+    } finally {
+      Object.assign(win, { showInformationMessage: avant.info, showWarningMessage: avant.warn, withProgress: avant.prog });
+      vi.restoreAllMocks();
+    }
+    return messages.join(' | ');
+  }
+
+  it('le resume nomme le fichier qui cache la cle', async () => {
+    const ecran = f('/w/app/src/main/java/com/x/RemoteConfigListScreen.kt',
+      'package com.x\n\nfun dump() = remoteConfig.all.map { (k, v) -> "$k=$v" }\n');
+    expect(await resume(DEFAUTS, PARAMETRES, ecran))
+      .toContain('1 Remote Config key that no code names is hidden by RemoteConfigListScreen.kt, which reads every key');
+  });
+
+  it('sans balayage, la cle est comptee et rien n est annonce', async () => {
+    const texte = await resume(DEFAUTS, PARAMETRES);
+    expect(texte).toContain('1 Remote Config key');
+    expect(texte).not.toContain('hidden by');
+  });
+});

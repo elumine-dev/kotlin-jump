@@ -314,13 +314,16 @@ describe.skipIf(!rc)('un balayage marque ne fait plus taire la famille', () => {
 // ── La famille eteinte doit etre annoncee ───────────────────────────────────
 
 /**
- * Mesure du 2026-10-23 sur le projet de reference, apres G58 : 95
- * declarations (29 cles que rien ne nomme) restent `R4`, toutes par UN seul
+ * Mesure du 2026-10-23 sur le projet de reference, apres G58 : 70
+ * declarations (28 cles que rien ne nomme) restent `R4`, toutes par UN seul
  * fichier, l ecran d administration `RemoteConfigListScreen.kt` de la meme
  * application. La garde est juste, le marqueur ci dessus rend les cles. Mais
  * personne ne pouvait le savoir : la commande repondait « Every Remote Config
- * default is read somewhere. », ce qui est faux pour ces 29 cles, et le resume
+ * default is read somewhere. », ce qui est faux pour ces 28 cles, et le resume
  * de Find Everything Unused comptait 0 sans rien dire.
+ *
+ * (Le « 95 declarations » plus haut vient d avant G58, et d un harnais qui
+ * passait des chemins relatifs : le graphe de modules y etait illisible.)
  *
  * Le compte vient d `explain`, pour ne jamais contredire `find`.
  */

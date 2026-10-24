@@ -45,7 +45,16 @@ function walk(d: string, hit: (f: string) => void): void {
 /** Celles dont une suppression porte sur des lignes entieres. */
 const LIGNES_ENTIERES = new Set(['symboles', 'membres', 'ilots']);
 
-const FAMILLES_DE_PASSE = ['symboles', 'membres', 'entrees', 'ilots', 'balayage', 'renommages'];
+/**
+ * G56 : la somme de TOUTES les familles que la passe compte. Une liste recopiee
+ * ici (six familles) ignorait les posts, alias, cles Remote Config, entrees de
+ * baseline, methodes d'injection et contrats ajoutes depuis : le controle
+ * annoncait 220 la ou la phrase et l'edition disaient 342, et l'ecart passait
+ * pour une dette du compte rendu.
+ */
+export function sommeDesFamilles(tally: Readonly<Record<string, number>>): number {
+  return Object.values(tally).reduce((n, v) => n + (v ?? 0), 0);
+}
 
 function main(): void {
   const racine = process.argv[2];
@@ -65,7 +74,7 @@ function main(): void {
   );
 
   const applique = compteLesFamilles(retenu);
-  const sommeFamilles = FAMILLES_DE_PASSE.reduce((n, k) => n + (applique[k] ?? 0), 0);
+  const sommeFamilles = sommeDesFamilles(applique);
 
   let plages = 0;
   let dansFichiersEffaces = 0;
@@ -123,7 +132,7 @@ function main(): void {
   // familles a 15 et l'une retiree, « 15 » est toujours la et l'invariant se
   // tait. Mettre la famille a zero doit changer la phrase, c'est la seule
   // formulation qui ne depende ni des libelles ni des valeurs.
-  for (const f of FAMILLES_DE_PASSE) {
+  for (const f of Object.keys(applique)) {
     if ((applique[f] ?? 0) === 0) continue;
     if (resumeDesFamilles({ ...applique, [f]: 0 }) === phrase) {
       compte.phrase++;
@@ -153,4 +162,5 @@ function main(): void {
   for (const x of fautes) console.log('  ' + x);
 }
 
-main();
+// Importable par le temoin sans lancer le balayage d'un projet.
+if (/verify-report-matches-edit|gate-rapport|rapport\.cjs/.test(process.argv[1] ?? '')) main();

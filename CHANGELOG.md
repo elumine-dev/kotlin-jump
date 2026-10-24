@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.44.2
+
+Find Unused Remote Config Keys now says when one file hides keys, and offers to lift it in one click. Remove Test Only Code cuts a multiline assertion alone instead of deleting the whole test file.
+
+### Improvements
+- Added two buttons to the Remote Config notification when a file hides keys: Mark File and Scan Again, and Open File. The first writes `// kotlin-jump:ignore unused-remote-config-key` at the top of the hiding file and scans again, so the hidden keys are reported. If VS Code refuses the edit, a warning says nothing was applied.
+
+### Fixes
+- Fixed Find Unused Remote Config Keys answering "Every Remote Config default is read somewhere." while an admin screen that reads every key hid keys that no code names. On the reference project, one screen hid 28 keys across 70 declarations. The result now says how many keys are hidden and which file hides them.
+- Fixed Find Everything Unused reporting 0 Remote Config keys with no explanation in the same situation. The summary now names the hidden keys and the file responsible.
+- Fixed Remove Test Only Code deleting a whole test file when the dead mention sat inside an assertion written over several lines, such as `assertEquals(` on one line, `Foo.DEAD,` on the next and `foo.type` after it. The file still checked `foo.type`. Only that assertion is cut now. A call that groups several checks, such as `assertAll(...)` with lambdas, is left to the previous behavior.
+
+### Notes
+- Known limit: an assertion such as `assertTrue(DEAD && live)` still goes entirely, since the live part cannot be separated from the dead one.
+
 ## 1.44.1
 
 Find Everything Unused now reports dead code that five overcautious filters kept alive, and one getIdentifier call no longer protects a whole kind of resource. Removing a Fragment also removes the Dagger lines that name it.

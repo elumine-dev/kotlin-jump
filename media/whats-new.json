@@ -1,42 +1,44 @@
 {
-  "version": "1.44.1",
+  "version": "1.44.2",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Fewer false keeps, cleaner Fragment removal",
-  "summary": "Find Everything Unused now reports dead code that five overcautious filters kept alive, and one getIdentifier call no longer protects a whole kind of resource. Removing a Fragment also removes the Dagger lines that name it.",
+  "tagline": "Hidden keys named, multiline assertions cut alone",
+  "summary": "Find Unused Remote Config Keys now says when one file hides keys, and offers to lift it in one click. Remove Test Only Code cuts a multiline assertion alone instead of deleting the whole test file.",
   "highlights": [
     {
-      "title": "Dynamic resource lookups read in full",
+      "title": "Hidden Remote Config keys named",
       "kind": "fix",
-      "description": "A getIdentifier call used to keep every resource of its kind alive. The name and the package are now read too, so a literal prefix protects only the names that start with it."
+      "description": "When a screen that reads every key hides the keys no code names, the result says how many are hidden and which file hides them, instead of claiming every key is read."
     },
     {
-      "title": "Fragments named only by Dagger",
+      "title": "Mark the file and scan again",
       "kind": "improvement",
-      "description": "A Fragment whose only outside mentions are a Dagger import and an inject(target) method is now reported, and removing it cuts those lines too, so the project still compiles."
+      "description": "One button writes the ignore marker at the top of the hiding file and rescans, so the hidden keys come back as findings."
     },
     {
-      "title": "Marker annotations keep nothing alive",
-      "kind": "improvement",
-      "description": "@Nullable, @UiThread, @UnstableApi and project annotations declared with @RequiresOptIn call no code, and they no longer keep a dead class or member."
+      "title": "Multiline assertions cut alone",
+      "kind": "fix",
+      "description": "An assertion written over several lines that names dead code is now removed by itself, and the rest of the test file stays."
     }
   ],
   "sections": [
     {
       "heading": "Improvements",
       "bullets": [
-        "Reported Fragments that only a Dagger component names, through an import and an `inject(target: ...)` method. Removing such a Fragment now also removes its inject declarations in every component, all of them or none, so the component never names a class that is gone.",
-        "Reported methods of custom views that nobody calls, such as `stopBlinkLiveButton()` on a `ViewGroup` subclass. When the bundled Android index shows that no ancestor declares the name, the framework cannot call it, and the method is no longer kept.",
-        "Stopped marker annotations from keeping dead code: `@Nullable`, `@NonNull`, `@UnstableApi`, thread annotations such as `@UiThread`, and project annotations declared with `@RequiresOptIn` or listed in an `allOpen` or `noArg` Gradle block. On the reference project they kept a whole unused utility class and 16 members of another one.",
-        "Reported methods that no serializer reads on classes kept for serialization. Fields, JavaBean accessors (`getX`, `isX`, `setX`) and Java serialization hooks stay protected, but a `hasTitle()` with no caller is now reported."
+        "Added two buttons to the Remote Config notification when a file hides keys: Mark File and Scan Again, and Open File. The first writes `// kotlin-jump:ignore unused-remote-config-key` at the top of the hiding file and scans again, so the hidden keys are reported. If VS Code refuses the edit, a warning says nothing was applied."
       ]
     },
     {
       "heading": "Fixes",
       "bullets": [
-        "Fixed one `getIdentifier` call protecting a whole kind of resource. A name with a literal prefix now protects only that prefix, a lookup in the `\"android\"` package protects nothing in the project, and a fully literal name adds nothing. On the reference project this uncovered 175 dead strings and 59 dead dimens.",
-        "Fixed classes that implement an imported nested interface, such as an `OnPageChangeListener` declared inside another class. Their ancestry was never resolved, so their dead methods were kept.",
-        "Fixed Explain disagreeing with Find Unused Members. On the reference project, 136 members were explained as dead while Find kept them, because a test names them or their only caller is not proven dead. Explain now gives the reason Find uses, and Find Dead Islands follows the same rule.",
-        "Fixed a removal that deleted the same import twice when a class and its injection sites were cut together, which made VS Code reject the whole edit."
+        "Fixed Find Unused Remote Config Keys answering \"Every Remote Config default is read somewhere.\" while an admin screen that reads every key hid keys that no code names. On the reference project, one screen hid 28 keys across 70 declarations. The result now says how many keys are hidden and which file hides them.",
+        "Fixed Find Everything Unused reporting 0 Remote Config keys with no explanation in the same situation. The summary now names the hidden keys and the file responsible.",
+        "Fixed Remove Test Only Code deleting a whole test file when the dead mention sat inside an assertion written over several lines, such as `assertEquals(` on one line, `Foo.DEAD,` on the next and `foo.type` after it. The file still checked `foo.type`. Only that assertion is cut now. A call that groups several checks, such as `assertAll(...)` with lambdas, is left to the previous behavior."
+      ]
+    },
+    {
+      "heading": "Notes",
+      "bullets": [
+        "Known limit: an assertion such as `assertTrue(DEAD && live)` still goes entirely, since the live part cannot be separated from the dead one."
       ]
     }
   ],

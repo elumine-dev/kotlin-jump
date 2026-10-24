@@ -363,6 +363,33 @@ export function explainRemoteConfigKeys(
   return out;
 }
 
+/** Keys no code names that a sweeper keeps from being reported. */
+export interface KeysHiddenBySweeper {
+  sweeper: string;
+  keys: number;
+  declarations: number;
+}
+
+/**
+ * G35: what the `R4` guard hides, per sweeper. A command that only showed
+ * `find` said « every key is read » while one admin screen hid 29 keys no code
+ * names, and the marker that lifts the guard was undiscoverable. Built from
+ * `explain`, so it can never disagree with `find`.
+ */
+export function keysHiddenBySweepers(input: RemoteConfigKeyScanInput): KeysHiddenBySweeper[] {
+  const PREFIX = 'R4:every-key-read:';
+  const by = new Map<string, { keys: Set<string>; declarations: number }>();
+  for (const e of explainRemoteConfigKeys(input)) {
+    if (!e.outcome.startsWith(PREFIX)) continue;
+    const sweeper = e.outcome.slice(PREFIX.length);
+    const entry = by.get(sweeper) ?? { keys: new Set<string>(), declarations: 0 };
+    entry.keys.add(e.name);
+    entry.declarations++;
+    by.set(sweeper, entry);
+  }
+  return [...by].map(([sweeper, e]) => ({ sweeper, keys: e.keys.size, declarations: e.declarations }));
+}
+
 export function messageFor(key: UnusedRemoteConfigKey): string {
   const n = key.declarations.length;
   const variants = n > 1 ? `, declared in ${n} variants` : '';

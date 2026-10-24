@@ -14,6 +14,7 @@ import {
   UnusedResourceKeyProvider,
   findUnusedResourceKeys,
 } from '../providers/UnusedResourceKeyProvider';
+import { expandToWholeLines } from '../providers/unusedResourceKeys';
 import {
   UnusedResourceProvider,
   findUnusedResources,
@@ -288,6 +289,17 @@ export async function findEverythingUnusedCommand(
             ignorePrefixes: cfg.get<string[]>('unusedResourceKeysIgnorePrefixes', []),
           });
           keyProvider.setFindings(keys);
+          // G47 : la cascade doit voir ce que Remove coupe dans les values,
+          // sinon le fichier vide de sa derniere cle part sans etre annonce.
+          const textes = new Map(data.sources.map(s => [s.path, s.text]));
+          for (const k of keys) {
+            for (const v of k.variants) {
+              const t = textes.get(v.path);
+              if (t === undefined) continue;
+              const w = expandToWholeLines(t, v.start, v.end);
+              noteEtendue(v.path, w.start, w.end);
+            }
+          }
           sections.push({ label: 'resource keys', one: 'resource key', count: keys.length });
         }
       } else {

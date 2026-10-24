@@ -1,5 +1,6 @@
 import { findUnusedImports } from './unusedImports';
 import { fileBecomesEmpty, wholeLineExtent } from './unusedSymbols';
+import { VALUES_FILE_RE, valuesFileDeclaresNothing } from './emptySourceFiles';
 
 /**
  * KJ-048: what a removal leaves behind.
@@ -113,7 +114,12 @@ export function cascadeAfterRemoval(
     // and gating it on the extension left every emptied Java file standing as
     // a shell. The import half followed on the day the detector learned the
     // Java forms (KJ-068); `.kts` stays out, a build script imports plugins.
-    if (fileBecomesEmpty(text, [...cuts])) cascade.emptyFiles.push(path);
+    // G47: a values file knows no `package` line, its emptiness is an empty
+    // `<resources>`. Read on the text the cuts leave.
+    const empty = VALUES_FILE_RE.test(path)
+      ? valuesFileDeclaresNothing(applyCuts(text, cuts))
+      : fileBecomesEmpty(text, [...cuts]);
+    if (empty) cascade.emptyFiles.push(path);
     if (!/\.(?:kt|java)$/.test(path)) continue;
 
     const before = new Set(findUnusedImports(text).map(i => i.statement.trim()));

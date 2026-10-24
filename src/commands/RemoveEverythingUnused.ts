@@ -27,6 +27,7 @@ import { findUnusedResources } from '../providers/UnusedResourceProvider';
 import type { FileResEntry } from '../indexer/FileResourceIndex';
 import { addCascadePlan } from '../providers/applyCascade';
 import { stillTheMeasuredText } from '../util/measuredText';
+import { UnusedSettings, readUnusedSettings } from '../util/unusedSettings';
 
 /**
  * One command for the whole family.
@@ -78,6 +79,11 @@ export interface ContexteDePasse {
    * n'est ecarte et les familles comptent ce qu'un source set orphelin nomme.
    */
   moduleDirs?: readonly string[];
+  /**
+   * G43 : les exclusions de l'utilisateur, celles que Find Everything Unused
+   * applique. Sans elles, Remove supprimait ce que le rapport avait tu.
+   */
+  reglages?: Partial<UnusedSettings>;
 }
 
 /**
@@ -124,14 +130,24 @@ export function collecterUnePasse(
     const ecartes = new Set(orphelins.flatMap(o => o.files));
     sources = sources.filter(s => !ecartes.has(s.path));
   }
+  const r = ctx.reglages ?? {};
   const base = { sources, testSourceSets: segs, androidApi: ctx.androidApi } as any;
-  const syms = findUnusedSymbols(base) as any[];
+  const syms = findUnusedSymbols({
+    ...base, ignoreNames: r.symbolsIgnoreNames, ignorePaths: r.symbolsIgnorePaths,
+    includeTestOnly: r.includeTestOnly, frameworkNameSuffixes: r.frameworkNameSuffixes,
+  }) as any[];
   const membres = findUnusedMembers({
     ...base, includeSelfOnly: false,
+    ignoreNames: r.membersIgnoreNames, ignorePaths: r.symbolsIgnorePaths, includeTestOnly: r.includeTestOnly,
     deadDeclarations: syms.map(f => ({ path: f.path, removeStart: f.removeStart, removeEnd: f.removeEnd })),
   } as any) as any[];
-  const { entries: entrees, emptied: enumsVides } = scanEnums(base) as any;
-  const iles = findDeadIslands({ ...base, maxIslandSize: 8 } as any) as any[];
+  const { entries: entrees, emptied: enumsVides } = scanEnums({
+    ...base, ignoreNames: r.enumEntriesIgnoreNames, includeTestOnly: r.enumEntriesIncludeTestOnly,
+  }) as any;
+  const iles = findDeadIslands({
+    ...base, maxIslandSize: r.islandsMaxSize ?? 8,
+    ignoreNames: r.islandsIgnoreNames, includeTestOnly: r.includeTestOnly,
+  } as any) as any[];
 
   const brut = new Map<string, Coupe[]>();
   // `renommages` a part : le balayage ne fait pas que supprimer, il rebaptise
@@ -220,7 +236,7 @@ export function collecterUnePasse(
   //    Chacune garde la regle de son fournisseur, aucune n'est relachee ici.
 
   // Alias du catalogue Gradle, et la version devenue orpheline avec l'alias.
-  for (const g of findUnusedGradleDependencies({ sources } as any) as any[]) {
+  for (const g of findUnusedGradleDependencies({ sources, ignoreNames: r.gradleIgnoreNames } as any) as any[]) {
     ajoute(g.path, g.removeStart, g.removeEnd, '', 'alias', g.name);
     if (g.orphanedVersion) {
       ajoute(g.path, g.orphanedVersion.removeStart, g.orphanedVersion.removeEnd, '', 'alias', g.orphanedVersion.name);
@@ -230,7 +246,9 @@ export function collecterUnePasse(
   // Posts que personne n'ecoute. Un seul abonnement illisible retire la
   // famille entiere : le fournisseur raisonne par soustraction, et une
   // soustraction sur un corpus incomplet ne prouve aucune absence.
-  const scanEvenements = findUnheardEvents({ sources, testSourceSets: segs } as any) as any;
+  const scanEvenements = findUnheardEvents({
+    sources, testSourceSets: segs, ignoreNames: r.eventsIgnoreNames, assumeSubscribed: r.eventsAssumeSubscribed,
+  } as any) as any;
   if ((scanEvenements.unreadable?.length ?? 0) === 0) {
     for (const e of (scanEvenements.events ?? []) as any[]) {
       if (e.verdict !== 'unheard') continue;
@@ -271,7 +289,7 @@ export function collecterUnePasse(
   // et `removeEnd` indefinis, et `ajoute` les rangeait sous la clef
   // `undefined`. Invisible jusqu'ici parce que le coupe circuit de la famille
   // rendait zero trouvaille sur le projet de reference.
-  for (const k of findUnusedRemoteConfigKeys({ sources } as any) as any[]) {
+  for (const k of findUnusedRemoteConfigKeys({ sources, ignoreNames: r.remoteConfigIgnoreNames } as any) as any[]) {
     for (const d of k.declarations as any[]) {
       ajoute(d.path, d.removeStart, d.removeEnd, '', 'remoteconfig', k.name);
     }
@@ -306,6 +324,7 @@ export function collecterUnePasse(
     const cles = findUnusedResourceKeys({
       declarations, sources,
       modulesWithCode: ctx.modulesWithCode, libraryModules: ctx.libraryModules,
+      ignorePrefixes: r.resourceKeysIgnorePrefixes,
     } as any) as any[];
     for (const k of cles) {
       for (const v of k.variants as any[]) {
@@ -531,8 +550,9 @@ export async function removeEverythingUnusedCommand(
     void vscode.window.showWarningMessage('Open a folder before scanning.');
     return;
   }
-  const segs = vscode.workspace.getConfiguration('kotlinJump')
-    .get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS);
+  const cfg = vscode.workspace.getConfiguration('kotlinJump');
+  const segs = cfg.get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS);
+  const reglages = readUnusedSettings((key, fallback) => cfg.get(key, fallback));
 
   const api = await loadAndroidApi?.();
   const premier = await vscode.window.withProgress(
@@ -543,7 +563,7 @@ export async function removeEverythingUnusedCommand(
       // Le MEME contexte que les rondes suivantes. Sans lui, la premiere passe
       // taisait les familles de ressources et le dialogue d'ouverture
       // annoncait moins que ce que la commande allait retirer.
-      return { data, ...collecterUnePasse(data.sources, segs, { ...contexteDuCorpus(data), androidApi: api }) };
+      return { data, ...collecterUnePasse(data.sources, segs, { ...contexteDuCorpus(data), androidApi: api, reglages }) };
     },
   );
   if (!premier) {
@@ -641,7 +661,7 @@ export async function removeEverythingUnusedCommand(
       // Le corpus porte deja tout ce que les familles de ressources demandent.
       // Sans ce contexte elles se taisaient, et `Find` les rapportait quand
       // meme : c'est l'ecart que cette version supprime.
-      const contexte = { ...contexteDuCorpus(data), androidApi: api };
+      const contexte = { ...contexteDuCorpus(data), androidApi: api, reglages };
       const { parFichier, fichiersMorts } = n === 0 && data === premier.data
         ? { parFichier: premier.parFichier, fichiersMorts: premier.fichiersMorts }
         : collecterUnePasse(data.sources, segs, contexte);

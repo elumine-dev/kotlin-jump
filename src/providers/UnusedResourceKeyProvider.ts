@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { estLeFichier } from '../util/measuredText';
 import { corpusUri } from '../util/corpusUri';
+import { VALUES_FILE_RE, valuesFileDeclaresNothing } from './emptySourceFiles';
 import {
   ValueKeyDeclaration,
   collectValueKeyDeclarations,
@@ -200,11 +201,31 @@ export async function buildRemovalEdit(
     }
 
     ranges.sort((a, b) => a.start - b.start);
-    let previousEnd = -1;
-    const lineStarts = buildLineStarts(text);
+    const kept: typeof ranges = [];
     for (const r of ranges) {
-      if (r.start < previousEnd) continue; // overlapping entries: keep the first
-      previousEnd = r.end;
+      if (r.start < (kept[kept.length - 1]?.end ?? -1)) continue; // overlapping entries: keep the first
+      kept.push(r);
+    }
+    // G47: the last key takes its file along. A `<resources/>` shell was left
+    // behind, and the hand correction was always « Remove the file ». Only
+    // when a key of ours goes: a file found empty because its key moved away
+    // since the scan is not ours to delete.
+    if (VALUES_FILE_RE.test(p) && kept.length > 0) {
+      let after = text;
+      for (const r of [...kept].reverse()) after = after.slice(0, r.start) + after.slice(r.end);
+      if (valuesFileDeclaresNothing(after)) {
+        edit.deleteFile(corpusUri(p), { ignoreIfNotExists: true }, {
+          needsConfirmation: confirm,
+          label: `Delete ${p.split(/[\\/]/).pop()}, no resource left`,
+        });
+        edits++;
+        for (const r of kept) cles.add(r.cle);
+        touches.add(p);
+        continue;
+      }
+    }
+    const lineStarts = buildLineStarts(text);
+    for (const r of kept) {
       edit.replace(
         corpusUri(p),
         new vscode.Range(offsetToPosition(lineStarts, r.start), offsetToPosition(lineStarts, r.end)),

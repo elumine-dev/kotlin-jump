@@ -62,7 +62,9 @@ async function lance(bougeB: boolean) {
   };
   await removeAllUnusedResourceKeysCommand(corpus, new UnusedResourceKeyProvider());
   const e = editions[0];
-  return { messages: messages.join(' | '), remplacements: e ? e._entries.length : 0 };
+  // G47 : un fichier de valeurs vide de sa derniere cle part entier, et ce
+  // depart compte comme une operation.
+  return { messages: messages.join(' | '), remplacements: e ? e._entries.length + e._fileDeletes.length : 0 };
 }
 
 describe('le rapport compte ce qui est parti', () => {

@@ -43,10 +43,34 @@ export function declaresNothing(text: string): boolean {
   return true;
 }
 
+/** G47: a `res/values*` resource file, where emptiness means an empty `<resources>`. */
+export const VALUES_FILE_RE = /[\\/]res[\\/]values[^\\/]*[\\/][^\\/]+\.xml$/;
+
+/**
+ * G47: true when a values file's `<resources>` holds no element. The prologue,
+ * comments (a commented `<color>` included) and `xmlns:*` do not count. A
+ * `tools:keep`, `tools:discard` or `tools:shrinkMode` on it is an instruction
+ * to the shrinker, and keeps the file.
+ */
+export function valuesFileDeclaresNothing(text: string): boolean {
+  const t = text.replace(/<!--[\s\S]*?-->/g, '').replace(/<\?xml[\s\S]*?\?>/, '');
+  const open = /<resources\b([^>]*?)(\/?)>/.exec(t);
+  if (!open) return false;
+  if (/\btools:(?:keep|discard|shrinkMode)\s*=/.test(open[1])) return false;
+  if (open[2] === '/') return t.slice(open.index + open[0].length).trim() === '';
+  const close = t.indexOf('</resources>', open.index);
+  if (close === -1) return false;
+  return t.slice(open.index + open[0].length, close).trim() === '' && t.slice(close + '</resources>'.length).trim() === '';
+}
+
 export function findEmptySourceFiles(input: EmptySourceScanInput): EmptySourceFile[] {
   if (input.truncated) return [];
   const out: EmptySourceFile[] = [];
   for (const s of input.sources) {
+    if (VALUES_FILE_RE.test(s.path)) {
+      if (valuesFileDeclaresNothing(s.text)) out.push({ path: s.path, lines: s.text.split('\n').length });
+      continue;
+    }
     if (!SOURCE_RE.test(s.path) || EXEMPT_RE.test(s.path)) continue;
     // A `.kts` build script runs top-level statements; it is code by nature.
     if (s.path.endsWith('.kts')) continue;

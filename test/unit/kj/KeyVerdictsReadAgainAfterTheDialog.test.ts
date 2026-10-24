@@ -58,7 +58,9 @@ function poser(avant: { path: string; text: string }[], apres: { path: string; t
   const editions: any[] = [];
   w.applyEdit = async (e: any) => { editions.push(e); return true; };
   /** Le texte que les coupes emportent, lu sur le fichier d origine. */
-  const emporte = (source: string) => editions.flatMap((e: any) => e.entries()
+  // G47 : un fichier vide de sa derniere cle part entier ; il emporte alors
+  // tout son texte.
+  const emporte = (source: string) => editions.flatMap((e: any) => (e._fileDeletes ?? []).map(() => source)).join('\n') + editions.flatMap((e: any) => e.entries()
     // Borne EXCLUSIVE : `expandToWholeLines` termine au debut de la ligne
     // suivante, donc `end.line + 1` emportait une ligne de trop et le test
     // aurait pu passer, ou echouer, pour une raison qui n est pas la sienne.

@@ -73,6 +73,8 @@ export interface DeadIslandScanInput {
   truncated?: boolean;
   /** `Name` or `Container.Name` globs never reported; one hit silences its island. */
   ignoreNames?: readonly string[];
+  /** G43b: path globs never reported (`unusedSymbolsIgnorePaths`); one member under one silences its island. */
+  ignorePaths?: readonly string[];
   includeTestOnly?: boolean;
   /** A component larger than this is more likely an attribution bug than a
    *  forty-symbol corpse; it is withheld, never partially reported. */
@@ -563,7 +565,8 @@ function analyze(input: DeadIslandScanInput): Analysis {
 
   const ignored = (m: PoolNode): boolean =>
     (input.ignoreNames ?? []).some(g =>
-      matchesGlob(m.name, g) || (m.container !== null && matchesGlob(`${m.container}.${m.name}`, g)));
+      matchesGlob(m.name, g) || (m.container !== null && matchesGlob(`${m.container}.${m.name}`, g)))
+    || (input.ignorePaths ?? []).some(g => matchesGlob(m.path, g));
 
   const islands: DeadIsland[] = [];
   const componentOutcome = new Map<string, string>();                     // name -> outcome

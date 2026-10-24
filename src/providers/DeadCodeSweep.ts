@@ -7,6 +7,7 @@ import { findUnusedParameters } from './unusedParameters';
 import { findUnusedDeclarations } from './unusedDeclarations';
 import { findUnusedLocals } from './unusedLocals';
 import { findWriteOnlyVariables } from './writeOnlyVariables';
+import { findJavaWriteOnlyFields } from './javaWriteOnlyFields';
 
 /**
  * Aggregates every Kotlin dead-code detector into one list, and turns their
@@ -53,7 +54,8 @@ function lineStartsOf(text: string): number[] {
 /**
  * Every finding of every detector for one file, in document order.
  *
- * For Java the imports and the declarations run: the other three carry Kotlin
+ * For Java the imports, the declarations and the write-only private fields
+ * (G50) run: the other three carry Kotlin
  * grammar assumptions (scope functions, lambda parameters, `var` locals) and
  * running them on Java would trade correctness for coverage. Imports left
  * that list on the day they learned `import a.b.C;` (KJ-068): the body scan
@@ -85,6 +87,17 @@ export function sweepFile(text: string, lang: 'kotlin' | 'java' = 'kotlin'): Swe
         name: d.name,
         message: `Declaration '${d.name}' is never used`,
         edits: d.removeStart === -1 ? [] : [{ start: d.removeStart, end: d.removeEnd, text: '' }],
+      });
+    }
+    // G50: KJ-028 for private Java fields; the Kotlin detector reads `var`.
+    for (const w of findJavaWriteOnlyFields(text)) {
+      out.push({
+        detector: 'writeOnly',
+        line: w.line,
+        character: w.character,
+        name: w.name,
+        message: `Field '${w.name}' is assigned but never read`,
+        edits: w.edits,
       });
     }
     return out.sort((a, b) => a.line - b.line || a.character - b.character);

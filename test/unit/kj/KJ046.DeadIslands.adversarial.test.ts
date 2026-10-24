@@ -351,7 +351,9 @@ describe('les gardes', () => {
     expect(why([island], 'ringB', { ignoreNames: ['ringA'] })).toEqual(['I2:ignored-name']);
   });
 
-  it('I8 : au-delà de maxIslandSize, on retient tout, jamais un morceau', () => {
+  // G13 : au-dela de la limite, l ilot n est plus tu. Il sort ENTIER, jamais
+  // un morceau, et sans correctif.
+  it('I8 : au-delà de maxIslandSize, l ilot sort entier et sans correctif', () => {
     const chain = f(`${MAIN}/Chain.kt`, [
       'package com.x',
       '',
@@ -365,7 +367,9 @@ describe('les gardes', () => {
       '    hopA()',
       '}',
     ].join('\n'));
-    expect(islands([chain], { maxIslandSize: 2 })).toEqual([]);
+    expect(islands([chain], { maxIslandSize: 2 })).toEqual([['hopA', 'hopB', 'hopC']]);
+    const trop = findDeadIslands({ sources: [chain], testSourceSets: ['/src/test/'], maxIslandSize: 2 } as any) as any[];
+    expect(trop.map(i => [i.oversized, i.fixable])).toEqual([[true, false]]);
     expect(why([chain], 'hopB', { maxIslandSize: 2 })).toEqual(['I8:max-size']);
     expect(islands([chain], { maxIslandSize: 3 })).toEqual([['hopA', 'hopB', 'hopC']]);
   });

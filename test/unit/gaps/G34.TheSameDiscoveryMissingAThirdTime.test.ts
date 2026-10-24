@@ -148,7 +148,9 @@ describe.skipIf(!iles)('la limite de taille, mesuree', () => {
    * ilot : elle fonctionne, elle ne sert simplement a rien ici.
    */
   it('mais elle mord quand on la descend sous la taille de l ilot', () => {
-    expect(ilots([...paire(''), VIVANT], 2)).toEqual([]);
+    // Depuis G13, l ilot trop grand sort entier mais sans correctif.
+    const trop = iles.findDeadIslands(base([...paire(''), VIVANT], 2)) as any[];
+    expect(trop.map(i => [i.oversized, i.fixable])).toEqual([[true, false]]);
   });
 });
 

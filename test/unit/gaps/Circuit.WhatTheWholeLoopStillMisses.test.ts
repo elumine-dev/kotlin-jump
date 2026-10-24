@@ -286,15 +286,20 @@ describe('la limite des ilots n est pas la falaise que G13 decrit', () => {
    * passes trop tot sur le projet de reference, seize laisse de la marge
  * (RemoveEverythingUnused).
    */
-  it('une chaine de vingt depasse le plafond, et la commande le dit', () => {
+  /**
+   * Depuis G13 (limite a 32), la chaine de vingt ne bute plus sur le plafond
+   * de rondes : les ilots en emportent quinze d un coup, et tout part en six
+   * rondes au lieu de seize suivies d un « run it again ».
+   */
+  it('une chaine de vingt part entiere, en six rondes', () => {
     const r = circuit([...chaine(20), VIVANT]);
-    expect(r.rondes).toBe(16);
-    expect(r.fichiers).toHaveLength(6);
+    expect(r.rondes).toBe(6);
+    expect(r.fichiers).toEqual(['Main.kt']);
   });
 
-  it('un cycle de douze se defait par le milieu, par ses membres non lus', () => {
+  it('un cycle de douze part entier, comme ilot', () => {
     const r = circuit([...cycleMuet(12), VIVANT]);
-    expect(r.coupes.filter(c => c === 'membres:go')).toHaveLength(12);
+    expect(r.coupes.filter(c => c.startsWith('ilots:'))).toHaveLength(12);
     expect(r.fichiers).toEqual(['Main.kt']);
   });
 
@@ -308,37 +313,39 @@ describe('la limite des ilots n est pas la falaise que G13 decrit', () => {
 
 describe('la forme que le circuit ne sait pas defaire', () => {
   /**
-   * Cinq classes, une methode chacune, toutes lues : dix declarations, deux de
-   * plus que la limite. Rien du dehors ne les nomme. Le circuit ne bouge pas.
+   * Cinq classes, une methode chacune, toutes lues : dix declarations. Avant
+   * G13 c etait deux de plus que la limite de 8, et le circuit ne bougeait
+   * pas. A 32, ces deux cas partent.
    */
-  it.fails('un cycle de cinq dont chaque methode est lue devrait partir', () => {
+  it('un cycle de cinq dont chaque methode est lue part', () => {
     const r = circuit([...cycleLu(5), VIVANT]);
     expect(r.fichiers).toEqual(['Main.kt']);
   });
 
-  it.fails('un cycle de huit dont chaque methode est lue devrait partir', () => {
+  it('un cycle de huit dont chaque methode est lue part', () => {
     const r = circuit([...cycleLu(8), VIVANT]);
     expect(r.fichiers).toEqual(['Main.kt']);
   });
 
   /**
-   * La sentinelle de cette forme. Elle fixe l etat mesure : pas une coupe,
-   * pas une ronde. Elle tombera le jour ou la limite saura se signaler.
+   * La sentinelle de cette forme. Vingt classes lues entre elles font quarante
+   * declarations, au dela de 32 : le circuit ne coupe rien. Depuis G13, Find
+   * le SIGNALE (ilot `oversized`), il ne le tait plus.
    */
-  it('aujourd hui, ce cycle ne declenche aucune ronde', () => {
-    const r = circuit([...cycleLu(5), VIVANT]);
+  it('aujourd hui, un cycle de vingt ne declenche aucune ronde', () => {
+    const r = circuit([...cycleLu(20), VIVANT]);
     expect(r.rondes).toBe(0);
-    expect(r.fichiers).toHaveLength(6);
+    expect(r.fichiers).toHaveLength(21);
   });
 
   /**
-   * La falaise tombe a CINQ, pas a neuf : la limite compte les declarations,
-   * et une classe qui porte une methode en vaut deux. Ce test fixe les deux
-   * bords de la marche, pour qu un changement de limite se voie ici.
+   * La limite compte les declarations, et une classe qui porte une methode en
+   * vaut deux : a 32, la marche est entre seize et dix-sept classes. Ce test
+   * fixe les deux bords, pour qu un changement de limite se voie ici.
    */
-  it('la marche se situe entre quatre et cinq classes, pas entre huit et neuf', () => {
-    expect(circuit([...cycleLu(4), VIVANT]).rondes).toBeGreaterThan(0);
-    expect(circuit([...cycleLu(5), VIVANT]).rondes).toBe(0);
+  it('la marche se situe entre seize et dix-sept classes', () => {
+    expect(circuit([...cycleLu(16), VIVANT]).rondes).toBeGreaterThan(0);
+    expect(circuit([...cycleLu(17), VIVANT]).rondes).toBe(0);
   });
 });
 

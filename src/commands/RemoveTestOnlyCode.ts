@@ -140,7 +140,7 @@ export async function scanTestOnly(
   });
   const islands = findDeadIslands({
     sources: data.sources, testSourceSets: segs, ignorePaths, includeTestOnly: true,
-    maxIslandSize: cfg.get<number>('deadIslandsMaxSize', 8),
+    maxIslandSize: cfg.get<number>('deadIslandsMaxSize', 32),
   });
   const entries = findUnusedEnumEntries({ sources: data.sources, testSourceSets: segs, includeTestOnly: true });
 

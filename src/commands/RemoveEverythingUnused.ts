@@ -145,7 +145,7 @@ export function collecterUnePasse(
     ...base, ignoreNames: r.enumEntriesIgnoreNames, includeTestOnly: r.enumEntriesIncludeTestOnly,
   }) as any;
   const iles = findDeadIslands({
-    ...base, maxIslandSize: r.islandsMaxSize ?? 8,
+    ...base, maxIslandSize: r.islandsMaxSize,
     ignoreNames: islandIgnoreNames(r as UnusedSettings), ignorePaths: r.symbolsIgnorePaths, includeTestOnly: r.includeTestOnly,
   } as any) as any[];
 

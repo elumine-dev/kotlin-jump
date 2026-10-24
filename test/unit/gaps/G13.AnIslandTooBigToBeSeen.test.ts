@@ -72,6 +72,15 @@ import { importOrNull } from '../kj/harness';
  * devrait ressortir en signalement, avec son nombre de membres, pour qu un
  * humain sache qu il existe. Un detecteur qui se tait sur les plus gros cas
  * est pire qu un detecteur qui les rapporte imparfaitement.
+ *
+ * ## Corrige le 2026-10-24
+ *
+ * Sur le projet de reference, la limite de 8 cachait UN ilot : une copie
+ * abandonnee de StickyRecyclerHeaders, 17 declarations dans 9 fichiers que
+ * rien ne nomme hors de leur dossier. Sans limite du tout, il n en sort aucun
+ * autre, et le temps ne bouge pas (12,9 s a 8, 13,6 s a 32, 15,9 s sans
+ * limite, dans le bruit). La limite passe a 32, et un ilot plus grand sort
+ * entier, marque `oversized`, sans correctif.
  */
 
 const mod: any = await importOrNull('src/providers/deadIslands');
@@ -111,36 +120,46 @@ describe.skipIf(!mod)('G13 — le corpus de test est lisible', () => {
   });
 
   /**
-   * SENTINELLE. Elle fixe la falaise mesuree. Si ces deux lignes bougent, la
-   * limite a change et l entree G13 du document doit etre relue.
+   * SENTINELLE, retournee par le correctif de G13. Au dela de la limite,
+   * l ilot sort entier, marque `oversized`, et aucune commande ne le coupe.
    */
-  it('aujourd hui, un ilot de neuf disparait entierement', () => {
-    expect(iles(chaine(8))).toHaveLength(1);
-    expect(iles(chaine(9))).toHaveLength(0);
-    expect(iles(chaine(12))).toHaveLength(0);
+  it('au dela de la limite, l ilot sort entier mais sans correctif', () => {
+    expect(iles(chaine(8)).map(i => i.fixable)).toEqual([true]);
+    expect(iles(chaine(9)).map(i => [i.oversized, i.fixable])).toEqual([[true, false]]);
+    expect(iles(chaine(12)).map(i => [i.oversized, i.fixable])).toEqual([[true, false]]);
+  });
+
+  it('la limite par defaut est 32 : un ilot de vingt est reparable', () => {
+    const vingt = mod.findDeadIslands({ sources: [chaine(20)], testSourceSets: ['/src/test/'] }) as any[];
+    expect(vingt.map(i => [i.names.length, i.fixable])).toEqual([[20, true]]);
+  });
+
+  it('le message dit pourquoi aucun correctif n est propose', () => {
+    expect(mod.messageFor(iles(chaine(9))[0])).toMatch(/Too large to remove automatically/);
+    expect(mod.messageFor(iles(chaine(8))[0])).not.toMatch(/Too large/);
   });
 });
 
 describe.skipIf(!mod)('G13 — l ilot que sa taille rend invisible', () => {
-  it.fails('rapporte un ilot de neuf classes entierement mort', () => {
+  it('rapporte un ilot de neuf classes entierement mort', () => {
     expect(noms(iles(chaine(9)))).toEqual(
       expect.arrayContaining(['C0', 'C8']));
   });
 
-  it.fails('rapporte un ilot de douze, ou signale au moins son existence', () => {
+  it('rapporte un ilot de douze, ou signale au moins son existence', () => {
     // La forme exacte du signalement est libre : une entree avec un compte,
     // un drapeau `truncated`, peu importe. Ce qui ne va pas est le silence.
     expect(iles(chaine(12))).not.toHaveLength(0);
   });
 
-  it.fails('dit combien de membres l ilot ecarte comptait', () => {
+  it('dit combien de membres l ilot ecarte comptait', () => {
     const trouves = iles(chaine(12));
     const total = trouves.reduce(
       (n: number, x: any) => n + (x.size ?? x.names?.length ?? 0), 0);
     expect(total).toBeGreaterThanOrEqual(12);
   });
 
-  it.fails('rapporte deux ilots distincts quand le second depasse la limite', () => {
+  it('rapporte deux ilots distincts quand le second depasse la limite', () => {
     // Un fichier peut porter un petit ilot et un gros. Aujourd hui seul le
     // petit ressort, et rien ne dit que l autre a ete vu puis ecarte.
     const melange = {
@@ -208,12 +227,16 @@ describe.skipIf(!mod)('G13 — les gardes, qui passent des maintenant', () => {
   /**
    * Ces gardes tiennent DES AUJOURD HUI et devront tenir apres : relever la
    * limite ne doit pas faire sortir un ilot dont une declaration est vivante.
+   *
+   * Leur premiere version ancrait la chaine sur `fun entryPoint(c: C0)`, que
+   * personne n appelle : mort lui aussi, il rejoignait l ilot, et seule la
+   * limite de 8 les faisait passer. `main` est une vraie racine.
    */
 
   it('ne touche pas un ilot dont une declaration est nommee ailleurs', () => {
     const lie = {
       path: `${MAIN}/Linked.kt`,
-      text: chaine(9).text + '\nfun entryPoint(c: C0) = c.next()\n',
+      text: chaine(9).text + '\nfun main() = C0().next()\n',
     };
     expect(noms(iles(lie))).not.toContain('C0');
   });
@@ -221,7 +244,7 @@ describe.skipIf(!mod)('G13 — les gardes, qui passent des maintenant', () => {
   it('ne touche pas un ilot de huit dont une declaration est vivante', () => {
     const lie = {
       path: `${MAIN}/Linked8.kt`,
-      text: chaine(8).text + '\nfun entryPoint(c: C0) = c.next()\n',
+      text: chaine(8).text + '\nfun main() = C0().next()\n',
     };
     expect(noms(iles(lie))).not.toContain('C0');
   });
@@ -241,5 +264,31 @@ describe.skipIf(!mod)('G13 — les gardes, qui passent des maintenant', () => {
       sources: [chaine(3)], testSourceSets: ['/src/test/'],
       maxIslandSize: 8, truncated: true,
     })).toHaveLength(0);
+  });
+});
+
+// ── Les deux autres endroits ou la limite par defaut est ecrite ────────────
+
+import { vi, afterEach } from 'vitest';
+import * as vscodeMock from '../__mocks__/vscode';
+import { readUnusedSettings } from '../../../src/util/unusedSettings';
+import { scanTestOnly } from '../../../src/commands/RemoveTestOnlyCode';
+
+describe.skipIf(!mod)('G13 — 32 partout, pas seulement dans le fournisseur', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('le lecteur de reglages donne 32 par defaut', () => {
+    expect(readUnusedSettings((_k, d) => d).islandsMaxSize).toBe(32);
+  });
+
+  it('Remove Test Only Code propose un ilot de douze classes que seul un test nomme', async () => {
+    vi.spyOn(vscodeMock.workspace, 'getConfiguration').mockReturnValue({ get: (_k: string, d: any) => d } as any);
+    const sources = [
+      chaine(12),
+      { path: '/w/app/src/test/java/com/x/C0Test.kt', text: 'package com.x\n\nclass C0Test {\n    @Test\n    fun go() { check(C0().next() != null) }\n}\n' },
+    ];
+    const corpus: any = { get: async () => ({ sources, moduleDirs: [], modulesWithCode: [], libraryModules: [], truncated: false, sourcesTruncated: false }) };
+    const scan = await scanTestOnly(corpus, undefined, true);
+    expect((scan?.groups ?? []).flatMap(g => g.group.names)).toEqual(expect.arrayContaining(['C0', 'C11']));
   });
 });

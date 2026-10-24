@@ -1467,8 +1467,8 @@
         },
         "kotlinJump.deadIslandsMaxSize": {
           "type": "number",
-          "default": 8,
-          "markdownDescription": "Islands larger than this are withheld whole: a giant component is more likely an analysis gap than a forty-symbol corpse. Raise it after reviewing a few reports."
+          "default": 32,
+          "markdownDescription": "Islands larger than this are still reported, but never removed: a giant component is more likely an analysis gap than a corpse. Raise it after reviewing a few reports."
         },
         "kotlinJump.unusedGradleDependencies": {
           "type": "boolean",

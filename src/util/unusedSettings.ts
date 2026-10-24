@@ -34,7 +34,7 @@ const KEYS: { [K in keyof UnusedSettings]: [string, UnusedSettings[K]] } = {
   enumEntriesIgnoreNames: ['unusedEnumEntriesIgnoreNames', []],
   enumEntriesIncludeTestOnly: ['unusedEnumEntriesIncludeTestOnly', true],
   islandsIgnoreNames: ['deadIslandsIgnoreNames', []],
-  islandsMaxSize: ['deadIslandsMaxSize', 8],
+  islandsMaxSize: ['deadIslandsMaxSize', 32],
   eventsIgnoreNames: ['unheardEventsIgnoreNames', []],
   eventsAssumeSubscribed: ['unheardEventsAssumeSubscribed', []],
   resourceKeysIgnorePrefixes: ['unusedResourceKeysIgnorePrefixes', []],

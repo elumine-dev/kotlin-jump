@@ -108,6 +108,12 @@ export interface DeadIsland {
   testMentions: number;
   /** Every member has a removal extent: the fix is island-atomic or absent. */
   fixable: boolean;
+  /**
+   * G13: larger than `maxIslandSize`. Reported whole so the island is seen,
+   * never fixable: a giant component is more likely an analysis gap than a
+   * corpse, and no command deletes it on that guess.
+   */
+  oversized?: boolean;
   /** Import lines that would dangle after deletion. Imports never keep a
    *  symbol alive (family rule), so they must fall with the island. */
   staleImports: { path: string; line: number; name: string }[];
@@ -120,12 +126,18 @@ export interface IslandExplanation {
   path: string;
   line: number;
   /** An F-family or M-family guard, an I2/I3 pool rejection, an `alive:...`
-   *  reason, `I6:subsumed`, `I8:max-size`, or `island#k` when it ships. */
+   *  reason, `I6:subsumed`, `island#k` when it ships, or `I8:max-size` when
+   *  it ships too large to fix (G13). */
   outcome: string;
 }
 
 const IGNORE_MARKER = 'kotlin-jump:ignore dead-island';
-const DEFAULT_MAX_ISLAND_SIZE = 8;
+/**
+ * G13: 8 hid a whole abandoned module of 17 declarations on the reference
+ * project, and 32 costs nothing measurable there (12.9 s at 8, 13.6 s at 32,
+ * 15.9 s with no limit at all, within noise).
+ */
+const DEFAULT_MAX_ISLAND_SIZE = 32;
 const WORD_RE = /[A-Za-z_][A-Za-z0-9_]*/g;
 
 /**
@@ -578,7 +590,9 @@ function analyze(input: DeadIslandScanInput): Analysis {
     const mark = (outcome: string) => { for (const n of names) componentOutcome.set(n, outcome); };
     if (members.length === 0) { mark('I6:subsumed'); continue; }
     if (members.every(isIndividuallyDead)) { mark('I6:subsumed'); continue; }
-    if (members.length > maxIslandSize) { mark('I8:max-size'); continue; }
+    // G13: an island above the limit used to vanish without a word. It is
+    // reported whole, and never fixable.
+    const oversized = members.length > maxIslandSize;
     if (members.some(ignored)) { mark('I2:ignored-name'); continue; }
     const testMentions = names.reduce((a, n) => a + (testCounts.get(n) ?? 0), 0);
     const verdict: DeadIslandVerdict = testMentions > 0 ? 'testOnly' : 'unreferenced';
@@ -594,7 +608,8 @@ function analyze(input: DeadIslandScanInput): Analysis {
       names: [...names].sort(),
       verdict,
       testMentions,
-      fixable: members.every(m => m.removeStart >= 0),                    // I5
+      fixable: !oversized && members.every(m => m.removeStart >= 0),      // I5, I8
+      ...(oversized ? { oversized: true } : {}),
       staleImports: [...names]
         .flatMap(n => (importPostings.get(n) ?? []).map(p => ({ ...p, name: n })))
         .sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line),
@@ -602,7 +617,9 @@ function analyze(input: DeadIslandScanInput): Analysis {
   }
   islands.sort((a, b) => b.members.length - a.members.length
     || a.members[0].path.localeCompare(b.members[0].path) || a.members[0].line - b.members[0].line);
-  islands.forEach((isl, i) => { for (const n of isl.names) componentOutcome.set(n, `island#${i + 1}`); });
+  islands.forEach((isl, i) => {
+    for (const n of isl.names) componentOutcome.set(n, isl.oversized ? 'I8:max-size' : `island#${i + 1}`);
+  });
 
   // ── Explanations: every raw candidate accounted for, sharing the exact
   // objects the verdict used, so the two surfaces cannot disagree.
@@ -787,10 +804,13 @@ export function messageFor(island: DeadIsland): string {
   const base = n > 1
     ? `Dead island: ${n} declarations ${ou} reference only each other and are referenced by nothing else`
     : 'Dead island: 1 declaration in 1 file, referenced by nothing else';
+  const trop = island.oversized
+    ? '. Too large to remove automatically: review it, then raise kotlinJump.deadIslandsMaxSize'
+    : '';
   if (island.verdict === 'testOnly') {
-    return `${base} (referenced only from tests: ${island.testMentions} reference${island.testMentions > 1 ? 's' : ''})`;
+    return `${base} (referenced only from tests: ${island.testMentions} reference${island.testMentions > 1 ? 's' : ''})${trop}`;
   }
-  return base;
+  return base + trop;
 }
 
 export function deleteTitleFor(island: DeadIsland): string {

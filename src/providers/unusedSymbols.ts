@@ -20,6 +20,7 @@ import { declarationSpan } from '../util/declarationSpan';
 import { isTestSourceSet } from '../util/testPaths';
 import { isBuildArtifactPath, isGeneratedSource } from '../util/resourceAllowlists';
 import { stripKotlinComments, stripXmlComments } from '../util/xmlRefs';
+import { reflectiveClassPrefixes } from '../util/reflectiveClassNames';
 
 /**
  * KJ-032: top-level Kotlin declarations that nothing in the workspace
@@ -1706,6 +1707,9 @@ interface ScanContext {
   resolvedSingles: ReadonlyMap<Candidate, UnusedSymbolVerdict>;
   /** KJ-070: the workspace's own DI scope annotations, which reach nothing. */
   scopeAnnotations: ReadonlySet<string>;
+  /** G68: `Class.forName("com.x.Plugin" + n)` prefixes, and the package of each file when any exists. */
+  reflectivePrefixes: readonly string[];
+  packageByPath: ReadonlyMap<string, string>;
 }
 
 /** A name the mention harvest can actually look for. */
@@ -1771,6 +1775,10 @@ function rejectionReason(
 
   if ((c.kind === 'fun' || c.kind === 'composable') && c.name === 'main') return 'F9:main';
   if (sym.isOperator) return 'F10:operator';
+  if (ctx.reflectivePrefixes.length > 0 && isClassLike(c)) {
+    const fqn = `${ctx.packageByPath.get(c.path) ?? ''}.${c.name}`;
+    if (ctx.reflectivePrefixes.some(p => fqn.startsWith(p))) return 'F19:reflective-prefix';
+  }
   if (CONVENTION_FUN_NAMES.has(c.name)) return 'F10:convention';
   if (/^component\d+$/.test(c.name)) return 'F10:destructuring';
   if (exemptFiles.has(c.path)) return 'F12:ignore-marker';
@@ -1940,7 +1948,20 @@ function buildContext(
     resolvedSingles: singlesResolvedByPackage(
       collected.candidates, collected.topLevelNameCounts, harvest, input.testSourceSets),
     scopeAnnotations: benignWorkspaceAnnotationsOf(input.sources),
+    ...reflectiveLookups(input.sources),
   };
+}
+
+/** G68: the prefixes, and the packages only when a prefix makes them matter. */
+function reflectiveLookups(sources: readonly SymbolSource[]): Pick<ScanContext, 'reflectivePrefixes' | 'packageByPath'> {
+  const code = sources.filter(s => /\.(kt|java)$/.test(s.path));
+  const reflectivePrefixes = code.flatMap(s =>
+    /forName|loadClass/.test(s.text) ? reflectiveClassPrefixes(stripKotlinComments(s.text)) : []);
+  const packageByPath = new Map<string, string>();
+  if (reflectivePrefixes.length > 0) {
+    for (const s of code) packageByPath.set(s.path, packageOf(stripKotlinComments(s.text)));
+  }
+  return { reflectivePrefixes, packageByPath };
 }
 
 export function explainSymbols(input: UnusedSymbolScanInput): SymbolExplanation[] {

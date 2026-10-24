@@ -3,6 +3,7 @@ import { DEFAULT_TEST_SEGMENTS } from '../util/testPaths';
 import { ResourceCorpus } from '../indexer/ResourceCorpus';
 import { DeadIslandProvider, findDeadIslands } from '../providers/DeadIslandProvider';
 import { plural } from '../util/plural';
+import { islandIgnoreNames, readUnusedSettings } from '../util/unusedSettings';
 
 /**
  * KJ-046 command.
@@ -13,11 +14,13 @@ import { plural } from '../util/plural';
 
 export function islandSettings() {
   const cfg = vscode.workspace.getConfiguration('kotlinJump');
+  const s = readUnusedSettings((key, fallback) => cfg.get(key, fallback));
   return {
     testSourceSets: cfg.get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS),
-    ignoreNames: cfg.get<string[]>('deadIslandsIgnoreNames', []),
-    includeTestOnly: cfg.get<boolean>('unusedSymbolsIncludeTestOnly', true),
-    maxIslandSize: cfg.get<number>('deadIslandsMaxSize', 8),
+    ignoreNames: islandIgnoreNames(s),
+    ignorePaths: s.symbolsIgnorePaths,
+    includeTestOnly: s.includeTestOnly,
+    maxIslandSize: s.islandsMaxSize,
   };
 }
 

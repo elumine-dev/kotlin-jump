@@ -27,7 +27,7 @@ import { findUnusedResources } from '../providers/UnusedResourceProvider';
 import type { FileResEntry } from '../indexer/FileResourceIndex';
 import { addCascadePlan } from '../providers/applyCascade';
 import { stillTheMeasuredText } from '../util/measuredText';
-import { UnusedSettings, readUnusedSettings } from '../util/unusedSettings';
+import { UnusedSettings, islandIgnoreNames, readUnusedSettings } from '../util/unusedSettings';
 
 /**
  * One command for the whole family.
@@ -146,7 +146,7 @@ export function collecterUnePasse(
   }) as any;
   const iles = findDeadIslands({
     ...base, maxIslandSize: r.islandsMaxSize ?? 8,
-    ignoreNames: r.islandsIgnoreNames, includeTestOnly: r.includeTestOnly,
+    ignoreNames: islandIgnoreNames(r as UnusedSettings), ignorePaths: r.symbolsIgnorePaths, includeTestOnly: r.includeTestOnly,
   } as any) as any[];
 
   const brut = new Map<string, Coupe[]>();

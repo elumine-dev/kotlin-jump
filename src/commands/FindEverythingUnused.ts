@@ -40,6 +40,7 @@ import {
   keysHiddenBySweepers,
 } from '../providers/UnusedRemoteConfigKeyProvider';
 import { hiddenKeysNote } from './FindUnusedRemoteConfigKeys';
+import { islandSettings } from './FindDeadIslands';
 import { UnusedGradleDependencyProvider, findUnusedGradleDependencies } from '../providers/UnusedGradleDependencyProvider';
 import { UnusedMemberProvider, findUnusedMembers } from '../providers/UnusedMemberProvider';
 import { DeadIslandProvider, findDeadIslands } from '../providers/DeadIslandProvider';
@@ -467,14 +468,9 @@ export async function findEverythingUnusedCommand(
         if (data.sourcesTruncated) {
           skipped.push('dead islands (workspace too large to prove absence)');
         } else {
-          const islands = findDeadIslands({
-            sources: data.sources,
-            testSourceSets: cfg.get<string[]>('testSourceSets', DEFAULT_TEST_SEGMENTS),
-            ignoreNames: cfg.get<string[]>('deadIslandsIgnoreNames', []),
-            includeTestOnly: cfg.get<boolean>('unusedSymbolsIncludeTestOnly', true),
-            maxIslandSize: cfg.get<number>('deadIslandsMaxSize', 8),
-            androidApi: api,
-          });
+          // G43b : la commande des ilots et celle-ci jugent avec les memes
+          // exclusions, celles de toutes les familles qu un ilot emporte.
+          const islands = findDeadIslands({ sources: data.sources, ...islandSettings(), androidApi: api });
           for (const i of islands) {
             if (i.verdict !== 'unreferenced' || !i.fixable) continue;
             for (const mem of i.members) noteEtendue(mem.path, mem.removeStart, mem.removeEnd);

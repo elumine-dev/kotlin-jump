@@ -139,7 +139,7 @@ export async function scanTestOnly(
     deadDeclarations: symbols.map(f => ({ path: f.path, removeStart: f.removeStart, removeEnd: f.removeEnd })),
   });
   const islands = findDeadIslands({
-    sources: data.sources, testSourceSets: segs, includeTestOnly: true,
+    sources: data.sources, testSourceSets: segs, ignorePaths, includeTestOnly: true,
     maxIslandSize: cfg.get<number>('deadIslandsMaxSize', 8),
   });
   const entries = findUnusedEnumEntries({ sources: data.sources, testSourceSets: segs, includeTestOnly: true });

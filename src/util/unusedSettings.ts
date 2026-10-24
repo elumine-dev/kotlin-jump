@@ -50,3 +50,11 @@ export function readUnusedSettings(get: <T>(key: string, fallback: T) => T): Unu
   for (const [field, [key, fallback]] of Object.entries(KEYS)) out[field] = get(key, fallback);
   return out as unknown as UnusedSettings;
 }
+
+/**
+ * G43b: what the island family must not report. An island is cut whole, so a
+ * name excluded from the symbols or the members would leave with it.
+ */
+export function islandIgnoreNames(s: Pick<UnusedSettings, 'islandsIgnoreNames' | 'symbolsIgnoreNames' | 'membersIgnoreNames'>): string[] {
+  return [...new Set([...(s.islandsIgnoreNames ?? []), ...(s.symbolsIgnoreNames ?? []), ...(s.membersIgnoreNames ?? [])])];
+}

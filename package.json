@@ -256,6 +256,21 @@
         "category": "Kotlin Jump"
       },
       {
+        "command": "kotlin-jump.planCleanup",
+        "title": "Plan a Dead Code Cleanup",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.openCleanupPlan",
+        "title": "Open the Cleanup Plan",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.applyCleanupBatch",
+        "title": "Apply a Cleanup Batch",
+        "category": "Kotlin Jump"
+      },
+      {
         "command": "kotlin-jump.removeTestOnlyCode",
         "title": "Remove Code Used Only by Tests, With Its Tests",
         "category": "Kotlin Jump"
@@ -1469,6 +1484,27 @@
           "type": "number",
           "default": 32,
           "markdownDescription": "Islands larger than this are still reported, but never removed: a giant component is more likely an analysis gap than a corpse. Raise it after reviewing a few reports."
+        },
+        "kotlinJump.cleanup.maxFilesPerBatch": {
+          "type": "number",
+          "default": 40,
+          "markdownDescription": "**Plan a Dead Code Cleanup**: the most files one batch may touch. A group of cuts that must go together and exceeds this forms its own batch, marked oversized."
+        },
+        "kotlinJump.cleanup.maxLinesPerBatch": {
+          "type": "number",
+          "default": 1000,
+          "markdownDescription": "**Plan a Dead Code Cleanup**: the most removed lines one batch may hold. Whole asset files are counted apart and grouped in their own batches."
+        },
+        "kotlinJump.cleanup.groupBy": {
+          "type": "string",
+          "enum": ["module", "cause"],
+          "default": "module",
+          "markdownDescription": "**Plan a Dead Code Cleanup**: `module` packs batches by Gradle module, the compile and review boundary, and names a batch after its cause of death when one cause covers most of it. `cause` packs by cause first, the pull request or ticket that removed the last caller, with the module as fallback."
+        },
+        "kotlinJump.cleanup.gitFacts": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "**Plan a Dead Code Cleanup**: read git, `git log -S` on each dead name, to say which pull request removed its last user or added it dead. Read only, on demand, about half a second per dead name on a ten thousand commit history, six names at a time; cancelling keeps what was found. Off, the plan groups by module and says nothing about causes."
         },
         "kotlinJump.unusedGradleDependencies": {
           "type": "boolean",

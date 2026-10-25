@@ -67,6 +67,8 @@ import { removeTestOnlyCodeCommand } from './commands/RemoveTestOnlyCode';
 import { findDormantCodeCommand } from './commands/FindDormantCode';
 import { makeSelfOnlyPrivateCommand } from './commands/MakeSelfOnlyPrivate';
 import { removeEverythingUnusedCommand } from './commands/RemoveEverythingUnused';
+import { applyCleanupBatchCommand, openCleanupPlanCommand, planCleanupCommand, stockageDe } from './commands/PlanCleanup';
+import { GitFacts } from './git/GitFacts';
 import {
   createEventSubscriberCommand,
   findUnheardEventsCommand,
@@ -217,6 +219,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   log.info(`Extension activated — v${version}`);
   // G61 : l index de la plateforme Android, lu au premier scan de code mort.
   const loadAndroidApi = androidApiLoader(context.extensionUri, m => log.warn(m));
+  /** Git facts for the cleanup plan, read from the first workspace folder; the setting decides whether they are used. */
+  const faitsGit = (): GitFacts | undefined => {
+    const racine = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    return racine ? new GitFacts(racine, vscode.workspace.getConfiguration('git').get<string>('path') || 'git') : undefined;
+  };
 
   // ── First install / update handling ─────────────────────────────────────
   const lastSeen = context.globalState.get<string>('lastSeenVersion');
@@ -1572,6 +1579,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand('kotlin-jump.removeEverythingUnused', () =>
       removeEverythingUnusedCommand(resourceCorpus, loadAndroidApi),
+    ),
+    // The cleanup campaign: a plan of reviewable batches, applied one at a
+    // time through the same loop. Git is read, never written.
+    vscode.commands.registerCommand('kotlin-jump.planCleanup', () =>
+      planCleanupCommand({ corpus: resourceCorpus, loadAndroidApi, stockage: stockageDe(context.storageUri), git: faitsGit() }),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.openCleanupPlan', () =>
+      openCleanupPlanCommand(stockageDe(context.storageUri)),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.applyCleanupBatch', () =>
+      applyCleanupBatchCommand({ corpus: resourceCorpus, loadAndroidApi, stockage: stockageDe(context.storageUri), git: faitsGit() }),
     ),
     corpusWatcher,
     vscode.workspace.onDidCreateFiles(() => resourceCorpus.invalidate()),

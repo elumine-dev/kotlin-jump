@@ -115,6 +115,7 @@ import { removeTestOnlyCodeCommand } from './commands/RemoveTestOnlyCode';
 import { findDormantCodeCommand } from './commands/FindDormantCode';
 import { makeSelfOnlyPrivateCommand } from './commands/MakeSelfOnlyPrivate';
 import { removeEverythingUnusedCommand } from './commands/RemoveEverythingUnused';
+import { applyCleanupBatchCommand, openCleanupPlanCommand, planCleanupCommand, stockageDe } from './commands/PlanCleanup';
 import {
   findUnusedSymbolsCommand,
   removeAllUnusedSymbolsCommand,
@@ -1074,6 +1075,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand('kotlin-jump.removeEverythingUnused', () =>
       removeEverythingUnusedCommand(resourceCorpusWeb, loadAndroidApi),
+    ),
+    // The cleanup campaign, without git facts: the web build has no git, so
+    // the plan groups by module and says nothing about causes.
+    vscode.commands.registerCommand('kotlin-jump.planCleanup', () =>
+      planCleanupCommand({ corpus: resourceCorpusWeb, loadAndroidApi, stockage: stockageDe(context.storageUri) }),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.openCleanupPlan', () =>
+      openCleanupPlanCommand(stockageDe(context.storageUri)),
+    ),
+    vscode.commands.registerCommand('kotlin-jump.applyCleanupBatch', () =>
+      applyCleanupBatchCommand({ corpus: resourceCorpusWeb, loadAndroidApi, stockage: stockageDe(context.storageUri) }),
     ),
     unusedSymbolProviderWeb,
     vscode.languages.registerCodeActionsProvider(

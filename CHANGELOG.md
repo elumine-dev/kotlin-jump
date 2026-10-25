@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.44.3
+
+Remove Everything Unused now respects your exclusions, and private Java fields that are assigned but never read are reported and removed.
+
+### Improvements
+- Reported private Java fields that are assigned and never read, such as a `private final` field set once in the constructor from its same name parameter. The fix removes the field and its assignment, and a call on the right side stays as a statement. Files that serialize or use reflection, annotated fields, data carrier classes and fields assigned from `new` are left alone.
+- Reported dead islands larger than the size limit instead of hiding them. They show as too large to remove automatically and are never fixable, with a hint to review them and raise `kotlinJump.deadIslandsMaxSize`.
+- Raised the default `kotlinJump.deadIslandsMaxSize` from 8 to 32. On the reference project, 8 hid an abandoned copy of a library, 17 declarations in 9 files, and 32 showed no measurable cost in scan time (12.9 s at 8, 13.6 s at 32, within noise).
+- Deleted a values file together with its last resource key when Remove takes that key, and reported already empty values files as dead files. A `res/values` file left as an empty `<resources/>` shell no longer needs a manual "Remove the file" cleanup. A `tools:keep`, `tools:discard` or `tools:shrinkMode` attribute keeps the file.
+
+### Fixes
+- Fixed Remove Everything Unused deleting what Find Everything Unused had left out of its report because you excluded it, such as names in `unusedSymbolsIgnoreNames` or `unusedRemoteConfigKeysIgnoreNames`. Even with no setting, the default `unusedSymbolsIgnorePaths` (`buildSrc`, `build-logic`) was not applied.
+- Fixed dead islands ignoring excluded paths and the names excluded for other families. A plugin and its helper under `buildSrc/` left as an island, and a member excluded by `unusedMembersIgnoreNames` was removed with its class. Find and Remove now judge islands with the same exclusions.
+- Fixed classes loaded through a built name, such as `Class.forName("com.x.plugins.Plugin" + n)`, being cut although they are loaded at runtime. The literal start of the name now protects what it can reach. A fully computed name stays undetectable.
+
+### Notes
+- Known limit: a private Java field read by a serializer in another file, such as Gson behind Retrofit, can still be reported if its class has methods.
+
 ## 1.44.2
 
 Find Unused Remote Config Keys now says when one file hides keys, and offers to lift it in one click. Remove Test Only Code cuts a multiline assertion alone instead of deleting the whole test file.

@@ -356,6 +356,21 @@
         "category": "Kotlin Jump"
       },
       {
+        "command": "kotlin-jump.checkDependencyUpgrades",
+        "title": "Check Dependency Upgrades",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.refreshDependencyVersions",
+        "title": "Refresh Dependency Versions",
+        "category": "Kotlin Jump"
+      },
+      {
+        "command": "kotlin-jump.clearDependencyUpgrades",
+        "title": "Clear Dependency Upgrade Findings",
+        "category": "Kotlin Jump"
+      },
+      {
         "command": "kotlin-jump.findUnusedRemoteConfigKeys",
         "title": "Find Unread Remote Config Keys",
         "category": "Kotlin Jump"
@@ -1521,6 +1536,54 @@
           },
           "default": [],
           "markdownDescription": "Catalog alias names, globs allowed, that are never reported."
+        },
+        "kotlinJump.upgrades.check": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "on",
+            "off"
+          ],
+          "enumDescriptions": [
+            "Ask once per workspace before checking Maven Central, Google Maven and the Gradle plugin portal for newer versions.",
+            "Check newer versions whenever a version catalog, a build file or the Gradle wrapper is open, with answers cached for a day.",
+            "Never check. Nothing is sent, nothing is underlined."
+          ],
+          "default": "ask",
+          "markdownDescription": "Whether Kotlin Jump may look up newer versions of the dependencies declared in `gradle/libs.versions.toml`, build files and the Gradle wrapper. Only group and artifact names are sent, over HTTPS, to the repositories the build declares. **Kotlin Jump: Check Dependency Upgrades** always counts as consent for its own run."
+        },
+        "kotlinJump.upgrades.policy": {
+          "type": "string",
+          "enum": [
+            "preferStable",
+            "stable",
+            "latest"
+          ],
+          "enumDescriptions": [
+            "Offer the latest stable version. A dependency already on a preview is offered the newer preview and the stable it skipped.",
+            "Offer stable versions only, never a preview.",
+            "Offer the newest version, previews included."
+          ],
+          "default": "preferStable",
+          "markdownDescription": "Which newer version a dependency upgrade offers."
+        },
+        "kotlinJump.upgrades.ignore": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Dependencies never reported as upgradable: `group:artifact`, `group:*`, a catalog alias or a `[versions]` key. A `# @pin` comment on the line does the same for one entry."
+        },
+        "kotlinJump.upgrades.badges": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show the newer version at the end of the line, next to the underline, in version catalogs and build files."
+        },
+        "kotlinJump.upgrades.customRepositories": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Also ask the custom Maven repositories the build declares (`maven { url = uri(\"...\") }`) when Maven Central, Google Maven and the plugin portal do not know a dependency. Only HTTPS repositories without credentials, and only in a trusted workspace."
         },
         "kotlinJump.unusedRemoteConfigKeys": {
           "type": "boolean",

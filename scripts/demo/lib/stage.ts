@@ -1031,6 +1031,12 @@ export class Stage {
         // reverse-string-map : la valeur retapée à l'écran revient à l'original.
         ['CHARGE!', 'A wild battle cry appears!'],
       ],
+      // dependency-upgrades : les trois versions que la demo fait bouger.
+      'gradle/libs.versions.toml': [
+        ['compose = "1.7.0"', 'compose = "1.6.2"'],
+        ['navigation = "2.7.7"', 'navigation = "2.7.6"'],
+        ['compose-material3 = "1.2.1"', 'compose-material3 = "1.2.0"'],
+      ],
     };
 
     for (const [rel, rules] of Object.entries(RESTORE)) {

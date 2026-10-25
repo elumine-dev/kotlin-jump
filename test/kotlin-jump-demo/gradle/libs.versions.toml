@@ -39,7 +39,7 @@ koin = "3.5.3"
 
 # Image loading
 coil = "2.5.0"
-glide = "4.16.0"
+glide = "4.16.0" # @pin
 
 # Testing
 junit = "4.13.2"

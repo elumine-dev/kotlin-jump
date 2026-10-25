@@ -99,6 +99,20 @@ import { DispatcherLensProvider } from './providers/DispatcherLensProvider';
 import { RoomMigrationProvider } from './providers/RoomMigrationProvider';
 import { ResourceUsageBadgeProvider } from './providers/ResourceUsageBadgeProvider';
 import { DependencyUsageBadgeProvider } from './providers/DependencyUsageBadgeProvider';
+import { DependencyUpgradeProvider } from './providers/DependencyUpgradeProvider';
+import { DependencyUpgradeBadgeProvider } from './providers/DependencyUpgradeBadgeProvider';
+import { UpgradeSession } from './providers/UpgradeSession';
+import { UpgradeEngine, fileKindOf } from './upgrades/UpgradeEngine';
+import { DiskCacheStore } from './upgrades/node/DiskCacheStore';
+import { nodeMetadataFetcher } from './upgrades/node/NodeMetadataFetcher';
+import agpGradleMatrix from './data/agp-gradle-matrix.json';
+import {
+  DECISION_KEY, applyDependencyUpgrades, checkDependencyUpgradesCommand, openGradleFile, publishOpenDocuments, seedDependencyVersions,
+  type CommandContext,
+} from './commands/CheckDependencyUpgrades';
+import type { CheckMode } from './upgrades/consent';
+import type { Policy } from './upgrades/model';
+import { estLeFichier } from './util/measuredText';
 import { ManifestNecessityProvider } from './providers/ManifestNecessityProvider';
 import { StringXmlHoverProvider } from './providers/StringXmlHoverProvider';
 import { DeadWeightActionProvider } from './providers/DeadWeightActionProvider';
@@ -2076,6 +2090,98 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       vscode.languages.registerReferenceProvider(
         VERSION_CATALOG_SELECTOR, new CatalogTomlReferenceProvider()),
     );
+  })();
+
+  // ── KJ-082: dependency upgrades ───────────────────────────────────────────
+  // The engine is pure and reads memory only when a file opens; the two Node
+  // adapters (disk cache under the global storage, https fetcher) are handed
+  // in here, desktop only. Nothing is fetched before the user said yes once.
+  (() => {
+    const upgradesConfig = () => {
+      const c = vscode.workspace.getConfiguration('kotlinJump.upgrades');
+      return {
+        check: c.get<CheckMode>('check', 'ask'),
+        policy: c.get<Policy>('policy', 'preferStable'),
+        ignore: c.get<string[]>('ignore', []),
+        badges: c.get<boolean>('badges', true),
+        customRepositories: c.get<boolean>('customRepositories', false),
+      };
+    };
+    const engine = new UpgradeEngine({
+      store: new DiskCacheStore(path.join(context.globalStorageUri.fsPath, 'upgrades')),
+      fetcher: nodeMetadataFetcher,
+      policy: () => upgradesConfig().policy,
+      consent: () => ({
+        mode: upgradesConfig().check,
+        workspaceDecision: context.workspaceState.get<'granted' | 'denied'>(DECISION_KEY),
+        sessionGrant: false,
+        trusted: vscode.workspace.isTrusted,
+        customReposOptIn: upgradesConfig().customRepositories,
+      }),
+      ignore: () => upgradesConfig().ignore,
+      matrix: agpGradleMatrix,
+    });
+    const GRADLE_GLOB = '{**/*.versions.toml,**/settings.gradle,**/settings.gradle.kts,**/*.gradle,**/*.gradle.kts,**/gradle/wrapper/gradle-wrapper.properties}';
+    const session = new UpgradeSession(engine, {
+      list: async folder => {
+        const uris = await vscode.workspace.findFiles(
+          new vscode.RelativePattern(vscode.Uri.file(folder), GRADLE_GLOB),
+          excludeGlob([...excludeList, '**/build/**', '**/.gradle/**', '**/node_modules/**']),
+        );
+        return uris.map(u => u.fsPath);
+      },
+      read: async p => {
+        try { return new TextDecoder().decode(await vscode.workspace.fs.readFile(vscode.Uri.file(p))); } catch { return undefined; }
+      },
+    }, { trusted: () => vscode.workspace.isTrusted });
+    const textOfNow = (p: string) => vscode.workspace.textDocuments.find(estLeFichier(p))?.getText() ?? session.textOf(p);
+    const provider: DependencyUpgradeProvider = new DependencyUpgradeProvider({
+      policy: () => upgradesConfig().policy,
+      bump: (f, to, o) => engine.bumpEdits(f, to, textOfNow, o),
+      wrapperRequirement: (f, to) => engine.wrapperRequirement(
+        { findings: provider.files().flatMap(p => provider.findingsFor(p)?.findings ?? []), rails: [], pendingKeys: [], catalogUnparsed: false }, f, to, textOfNow),
+      textOf: textOfNow,
+    });
+    const badges = new DependencyUpgradeBadgeProvider(provider, () => upgradesConfig().badges);
+    const folders = () => (vscode.workspace.workspaceFolders ?? []).map(f => f.uri.fsPath);
+    const upgradesCtx: CommandContext = {
+      engine, session, provider, folders,
+      config: () => ({ check: upgradesConfig().check, policy: upgradesConfig().policy }),
+      setCheck: mode => vscode.workspace.getConfiguration('kotlinJump.upgrades').update('check', mode, vscode.ConfigurationTarget.Global),
+      workspaceState: context.workspaceState,
+    };
+    const isGradleDoc = (d: vscode.TextDocument) => d.uri.scheme === 'file' && fileKindOf(d.uri.fsPath) !== undefined;
+    const openIfGradle = (d: vscode.TextDocument | undefined) => { if (d && isGradleDoc(d)) void openGradleFile(upgradesCtx, d).catch(() => {}); };
+    const republish = () => { for (const folder of folders()) void publishOpenDocuments(upgradesCtx, folder).catch(() => {}); };
+    const UPGRADE_FILES: vscode.DocumentSelector = [
+      { scheme: 'file', pattern: '**/*.versions.toml' },
+      { scheme: 'file', pattern: '**/*.gradle' },
+      { scheme: 'file', pattern: '**/*.gradle.kts' },
+      { scheme: 'file', pattern: '**/gradle-wrapper.properties' },
+    ];
+    const upgradeFilesWatcher = vscode.workspace.createFileSystemWatcher(GRADLE_GLOB);
+    upgradeFilesWatcher.onDidCreate(() => session.invalidate());
+    upgradeFilesWatcher.onDidDelete(u => { session.invalidate(); provider.forget(u.fsPath); });
+    context.subscriptions.push(
+      provider, badges, upgradeFilesWatcher,
+      engine.onDidChange(() => republish()),
+      vscode.languages.registerCodeActionsProvider(UPGRADE_FILES, provider, { providedCodeActionKinds: DependencyUpgradeProvider.providedCodeActionKinds }),
+      vscode.languages.registerHoverProvider(UPGRADE_FILES, provider),
+      vscode.workspace.onDidOpenTextDocument(d => openIfGradle(d)),
+      vscode.window.onDidChangeActiveTextEditor(e => openIfGradle(e?.document)),
+      vscode.workspace.onDidSaveTextDocument(d => { if (isGradleDoc(d)) { session.invalidate(d.uri.fsPath); republish(); } }),
+      vscode.workspace.onDidChangeConfiguration(e => {
+        if (!e.affectsConfiguration('kotlinJump.upgrades')) return;
+        if (upgradesConfig().check === 'off') provider.clear(); else republish();
+      }),
+      vscode.commands.registerCommand('kotlin-jump.checkDependencyUpgrades', () => checkDependencyUpgradesCommand(upgradesCtx)),
+      vscode.commands.registerCommand('kotlin-jump.refreshDependencyVersions', () => checkDependencyUpgradesCommand(upgradesCtx, { refresh: true })),
+      vscode.commands.registerCommand('kotlin-jump.clearDependencyUpgrades', () => provider.clear()),
+      vscode.commands.registerCommand('kotlin-jump.applyDependencyUpgrades',
+        (file: string, tier: 'patch' | 'minor' | 'patchAndMinor', opts?: { confirmed?: boolean }) => applyDependencyUpgrades(upgradesCtx, file, tier, opts)),
+      vscode.commands.registerCommand('kotlin-jump._seedDependencyVersions', (fixture: string) => seedDependencyVersions(upgradesCtx, fixture)),
+    );
+    openIfGradle(vscode.window.activeTextEditor?.document);
   })();
 
   // ── Sprint 2: override/implement gutter icons ──────────────────────────────

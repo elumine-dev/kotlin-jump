@@ -24,7 +24,7 @@ const KJ = [
   'named-arguments', 'postfix-completion', 'live-templates', 'surround-with',
   'smart-join-lines', 'extract-string-resource', 'screen-flow-map', 'udf-xray',
   'compose-outline', 'lifecycle-pairing', 'dispatcher-lens', 'room-migration-drift',
-  'unused-imports', 'resource-usage-badges', 'dependency-usage-badges',
+  'unused-imports', 'resource-usage-badges', 'dependency-usage-badges', 'dependency-upgrades',
   'manifest-necessity', 'resource-shadowing', 'reverse-string-map',
   'method-separators', 'android-project-view', 'recent-locations',
 ];

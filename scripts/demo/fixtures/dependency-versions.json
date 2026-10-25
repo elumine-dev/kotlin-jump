@@ -1,0 +1,15 @@
+{
+  "comment": "Recorded answers for the dependency-upgrades demo (KJ-082): cache entries by key, served to the engine by kotlin-jump._seedDependencyVersions so no network is touched while recording. Six entries of the demo catalog light up: retrofit (3 behind, major), compose (shared by four libraries, minor), navigation and compose-material3 (patch), gson and appcompat (minor). Everything else stays quiet.",
+  "entries": {
+    "google/_master": { "v": 1, "url": "fixture", "fetchedAt": 0, "status": "ok", "groups": ["androidx.compose.ui", "androidx.compose.foundation", "androidx.compose.material3", "androidx.navigation", "androidx.navigation.safeargs.kotlin", "androidx.appcompat"] },
+    "google/androidx/compose/ui/_group": { "v": 1, "url": "fixture", "fetchedAt": 0, "status": "ok", "artifacts": { "ui": ["1.6.2", "1.6.8", "1.7.0"], "ui-tooling": ["1.6.2", "1.6.8", "1.7.0"], "ui-tooling-preview": ["1.6.2", "1.6.8", "1.7.0"] } },
+    "google/androidx/compose/foundation/_group": { "v": 1, "url": "fixture", "fetchedAt": 0, "status": "ok", "artifacts": { "foundation": ["1.6.2", "1.6.8", "1.7.0"] } },
+    "google/androidx/compose/material3/_group": { "v": 1, "url": "fixture", "fetchedAt": 0, "status": "ok", "artifacts": { "material3": ["1.2.0", "1.2.1"] } },
+    "google/androidx/navigation/_group": { "v": 1, "url": "fixture", "fetchedAt": 0, "status": "ok", "artifacts": { "navigation-fragment-ktx": ["2.7.6", "2.7.7"], "navigation-ui-ktx": ["2.7.6", "2.7.7"] } },
+    "google/androidx/navigation/safeargs/kotlin/_group": { "v": 1, "url": "fixture", "fetchedAt": 0, "status": "ok", "artifacts": { "androidx.navigation.safeargs.kotlin.gradle.plugin": ["2.7.6", "2.7.7"] } },
+    "google/androidx/appcompat/_group": { "v": 1, "url": "fixture", "fetchedAt": 0, "status": "ok", "artifacts": { "appcompat": ["1.6.1", "1.7.0"] } },
+    "central/com/squareup/retrofit2/retrofit": { "v": 1, "url": "fixture", "fetchedAt": 0, "status": "ok", "versions": ["2.9.0", "2.10.0", "2.11.0", "3.0.0"], "lastUpdated": "20250527101500" },
+    "central/com/squareup/retrofit2/converter-gson": { "v": 1, "url": "fixture", "fetchedAt": 0, "status": "ok", "versions": ["2.9.0", "2.10.0", "2.11.0", "3.0.0"], "lastUpdated": "20250527101500" },
+    "central/com/google/code/gson/gson": { "v": 1, "url": "fixture", "fetchedAt": 0, "status": "ok", "versions": ["2.10.1", "2.11.0"], "lastUpdated": "20240819120000" }
+  }
+}

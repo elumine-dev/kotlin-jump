@@ -53,6 +53,7 @@ Kotlin Jump skips all of that. **No LSP. No JVM. No waiting.**
 
 ## ✨ Recent
 
+- **⬆️ Dependency upgrades.** Versions behind their latest stable underlined in the catalog, the build files and the wrapper, the bump one lightbulb away, and a report for the pull request.
 - **⚡ Fast editing.** Named arguments, postfix completion, live templates, surround with, smart join: the IntelliJ gestures, in the lightbulb.
 - **🧭 Structure views.** Compose Outline and the Android project view in their own activity-bar container, full height.
 - **🧹 Dead weight.** Usage badges on resources, dependencies and manifest entries. Everything flagged unused offers its removal.
@@ -311,6 +312,16 @@ Permissions and components checked against real code: `no usage found` badges, r
 <p align="center">
   <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/manifest-necessity.webp" width="720" />
 </p>
+
+---
+
+## ⬆️ Dependency Upgrades
+
+Open `gradle/libs.versions.toml` and every version behind its latest stable is underlined, with the newer version at the end of the line. The hover says how many versions behind, when the latest shipped, which libraries share the entry, and links the release notes. The lightbulb bumps one entry, or every patch version in the file after one confirmation. `Check Dependency Upgrades` scans the whole workspace, build files and Gradle wrapper included, and writes a markdown table you can paste into a pull request.
+
+Versions come from the repositories your build declares (Maven Central, Google Maven, the Gradle plugin portal) over plain HTTPS, after you say yes once. Nothing runs Gradle, nothing is sent but group and artifact names. Answers are cached for a day; `Refresh Dependency Versions` asks again.
+
+What stays quiet: `# @pin`, rich versions, versions a BOM manages, and anything the repositories did not answer for. A dynamic version such as `4.+` gets a hint and a fix that pins the resolved stable. A KSP that no longer matches your Kotlin is offered in the matching pair, and an Android Gradle plugin bump brings the Gradle wrapper it needs. Set `kotlinJump.upgrades.policy` to `latest` to see previews too.
 
 ---
 

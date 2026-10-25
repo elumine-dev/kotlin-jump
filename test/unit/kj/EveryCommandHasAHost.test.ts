@@ -52,6 +52,10 @@ const HORS_NAVIGATEUR = new Map<RegExp, string>([
   [/^kotlinJump\.logcat\./, 'Logcat'],
   [/^kotlin-jump\.(diagnoseGradleDetection|resetGradleProject|pickGradleProject)$/, 'detection Gradle locale'],
   [/^kotlin-jump\.sources\./, 'scan des JAR de sources'],
+  // KJ-082 : le moteur est pur, mais ses adaptateurs (https, cache disque) ne
+  // le sont pas, et Maven Central, Google Maven et le Plugin Portal n envoient
+  // aucun en-tete CORS : un hote web ne pourrait pas lire leurs metadata.
+  [/^kotlin-jump\.(checkDependencyUpgrades|refreshDependencyVersions|clearDependencyUpgrades)$/, 'mises a niveau des dependances'],
 ]);
 
 const contenu = (fichiers: Set<string>): Map<string, string> =>

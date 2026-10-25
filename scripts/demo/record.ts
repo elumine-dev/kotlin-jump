@@ -264,6 +264,9 @@ CGWarpMouseCursorPosition(CGPoint(x: b.maxX - 4, y: b.maxY - 4))'`,
       KJ_DEMO_START:     startMarker,
       KJ_DEMO_DONE:      doneMarker,
       KJ_DEMO_PROGRESS:  progressLog,
+      // Opens the demo only doors: logcat's recorded stream, the seeded
+      // dependency versions of dependency-upgrades.
+      KJ_DEMO_MODE:      '1',
     },
   }).catch(err => { log(`✗ VS Code exited with error: ${err?.message ?? err}`); throw err; });
 

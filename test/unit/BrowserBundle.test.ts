@@ -59,6 +59,11 @@ const FORBIDDEN_SYMBOLS = [
   'node:zlib',
   'node:util',
   'node:crypto',
+  // KJ-082: the dependency upgrade engine is pure, its two Node adapters are
+  // desktop only. Maven Central, Google Maven and the plugin portal send no
+  // CORS header, so the web build registers none of it.
+  'nodeMetadataFetcher',
+  'DiskCacheStore',
 ];
 
 describe('Web bundle: no Node-only leakage into dist/extension.browser.js', () => {

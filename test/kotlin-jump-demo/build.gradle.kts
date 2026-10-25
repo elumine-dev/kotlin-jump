@@ -40,8 +40,8 @@ plugins {
     // Kotlin pinned to 1.9.24 (max version supported by Compose Multiplatform
     // 1.6.11). Bumping above this requires a matching Compose bump — see
     // https://github.com/JetBrains/compose-multiplatform/blob/master/VERSIONING.md#kotlin-compatibility
-    kotlin("jvm") version "1.9.24"
-    id("org.jetbrains.compose") version "1.6.11"
+    kotlin("jvm") version "1.9.24" // kotlin-jump:ignore dependency-upgrade
+    id("org.jetbrains.compose") version "1.6.11" // kotlin-jump:ignore dependency-upgrade
     idea
     application
 }

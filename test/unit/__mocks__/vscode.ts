@@ -429,6 +429,11 @@ export const window = {
 export const env = {
   uriScheme: 'vscode' as string,
   openExternal: async (_target: any): Promise<boolean> => true,
+  clipboard: {
+    _text: '' as string,
+    writeText: async (text: string): Promise<void> => { env.clipboard._text = text; },
+    readText: async (): Promise<string> => env.clipboard._text,
+  },
 };
 
 export const commands = {

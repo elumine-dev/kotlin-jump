@@ -1,44 +1,47 @@
 {
-  "version": "1.44.2",
+  "version": "1.44.3",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Hidden keys named, multiline assertions cut alone",
-  "summary": "Find Unused Remote Config Keys now says when one file hides keys, and offers to lift it in one click. Remove Test Only Code cuts a multiline assertion alone instead of deleting the whole test file.",
+  "tagline": "Safer removals, honoring your exclusions",
+  "summary": "Remove Everything Unused now respects your exclusions, and private Java fields that are assigned but never read are reported and removed.",
   "highlights": [
     {
-      "title": "Hidden Remote Config keys named",
+      "title": "Exclusions reach Remove All",
       "kind": "fix",
-      "description": "When a screen that reads every key hides the keys no code names, the result says how many are hidden and which file hides them, instead of claiming every key is read."
+      "description": "Remove Everything Unused no longer deletes what you excluded from the Find report, so ignored names and the default buildSrc and build-logic paths are now respected."
     },
     {
-      "title": "Mark the file and scan again",
+      "title": "Java write only fields",
+      "kind": "feature",
+      "description": "A private Java field that is assigned but never read is now reported and removed together with its assignment."
+    },
+    {
+      "title": "Oversized islands reported",
       "kind": "improvement",
-      "description": "One button writes the ignore marker at the top of the hiding file and rescans, so the hidden keys come back as findings."
-    },
-    {
-      "title": "Multiline assertions cut alone",
-      "kind": "fix",
-      "description": "An assertion written over several lines that names dead code is now removed by itself, and the rest of the test file stays."
+      "description": "Dead islands larger than the limit are now shown instead of vanishing, and the default limit rises from 8 to 32."
     }
   ],
   "sections": [
     {
       "heading": "Improvements",
       "bullets": [
-        "Added two buttons to the Remote Config notification when a file hides keys: Mark File and Scan Again, and Open File. The first writes `// kotlin-jump:ignore unused-remote-config-key` at the top of the hiding file and scans again, so the hidden keys are reported. If VS Code refuses the edit, a warning says nothing was applied."
+        "Reported private Java fields that are assigned and never read, such as a `private final` field set once in the constructor from its same name parameter. The fix removes the field and its assignment, and a call on the right side stays as a statement. Files that serialize or use reflection, annotated fields, data carrier classes and fields assigned from `new` are left alone.",
+        "Reported dead islands larger than the size limit instead of hiding them. They show as too large to remove automatically and are never fixable, with a hint to review them and raise `kotlinJump.deadIslandsMaxSize`.",
+        "Raised the default `kotlinJump.deadIslandsMaxSize` from 8 to 32. On the reference project, 8 hid an abandoned copy of a library, 17 declarations in 9 files, and 32 showed no measurable cost in scan time (12.9 s at 8, 13.6 s at 32, within noise).",
+        "Deleted a values file together with its last resource key when Remove takes that key, and reported already empty values files as dead files. A `res/values` file left as an empty `<resources/>` shell no longer needs a manual \"Remove the file\" cleanup. A `tools:keep`, `tools:discard` or `tools:shrinkMode` attribute keeps the file."
       ]
     },
     {
       "heading": "Fixes",
       "bullets": [
-        "Fixed Find Unused Remote Config Keys answering \"Every Remote Config default is read somewhere.\" while an admin screen that reads every key hid keys that no code names. On the reference project, one screen hid 28 keys across 70 declarations. The result now says how many keys are hidden and which file hides them.",
-        "Fixed Find Everything Unused reporting 0 Remote Config keys with no explanation in the same situation. The summary now names the hidden keys and the file responsible.",
-        "Fixed Remove Test Only Code deleting a whole test file when the dead mention sat inside an assertion written over several lines, such as `assertEquals(` on one line, `Foo.DEAD,` on the next and `foo.type` after it. The file still checked `foo.type`. Only that assertion is cut now. A call that groups several checks, such as `assertAll(...)` with lambdas, is left to the previous behavior."
+        "Fixed Remove Everything Unused deleting what Find Everything Unused had left out of its report because you excluded it, such as names in `unusedSymbolsIgnoreNames` or `unusedRemoteConfigKeysIgnoreNames`. Even with no setting, the default `unusedSymbolsIgnorePaths` (`buildSrc`, `build-logic`) was not applied.",
+        "Fixed dead islands ignoring excluded paths and the names excluded for other families. A plugin and its helper under `buildSrc/` left as an island, and a member excluded by `unusedMembersIgnoreNames` was removed with its class. Find and Remove now judge islands with the same exclusions.",
+        "Fixed classes loaded through a built name, such as `Class.forName(\"com.x.plugins.Plugin\" + n)`, being cut although they are loaded at runtime. The literal start of the name now protects what it can reach. A fully computed name stays undetectable."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "Known limit: an assertion such as `assertTrue(DEAD && live)` still goes entirely, since the live part cannot be separated from the dead one."
+        "Known limit: a private Java field read by a serializer in another file, such as Gson behind Retrofit, can still be reported if its class has methods."
       ]
     }
   ],

@@ -382,11 +382,15 @@ export const workspace = {
      * qui est ce que repond un hote pour un schema qu'il ne connait pas.
      */
     isWritableFileSystem: (_scheme: string): boolean | undefined => undefined,
+    writeFile: async (_uri: any, _contenu: Uint8Array): Promise<void> => {},
+    createDirectory: async (_uri: any): Promise<void> => {},
+    stat: async (_uri: any): Promise<any> => { throw new Error('not found'); },
   },
 };
 
 /** Real API shape, so a command that reports progress can be exercised. */
 export const ProgressLocation = { SourceControl: 1, Window: 10, Notification: 15 };
+export const ViewColumn = { Active: -1, Beside: -2, One: 1, Two: 2, Three: 3 };
 
 export const window = {
   activeTextEditor: undefined as any,
@@ -412,6 +416,7 @@ export const window = {
   showInformationMessage: async (_message: string, ..._items: string[]): Promise<string | undefined> => undefined,
   showWarningMessage: async (_message: string, ..._items: string[]): Promise<string | undefined> => undefined,
   showErrorMessage: async (_message: string, ..._items: string[]): Promise<string | undefined> => undefined,
+  showQuickPick: async (_items: any, _options?: any): Promise<any> => undefined,
   /**
    * Forme reelle : la barre de progression n'est qu'un decor, le corps est
    * execute et son resultat rendu. Sans elle, aucune commande de la famille

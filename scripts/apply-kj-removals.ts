@@ -2,9 +2,17 @@
  * Applies, on disk, exactly what `Remove Everything Unused` applies.
  *
  *   npx vite-node scripts/apply-kj-removals.ts <project-root> [--apply] [--only=a,b] [--max=16]
+ *   npx vite-node scripts/apply-kj-removals.ts <project-root> --apply --plan=<plan.json> --batch=<id>
  *
  * Without `--apply` it runs ONE round and prints the plan. With `--apply` it
  * loops to the fixed point, the same 16-round ceiling the command uses.
+ *
+ * `--plan` and `--batch` apply ONE batch of a cleanup plan (`plan.json`, written
+ * by `plan-cleanup.ts` or by « Plan a Dead Code Cleanup »), through the same
+ * key filter « Apply a Cleanup Batch » uses, and end with the keys the batch
+ * promised against the keys the rounds applied. Compiling the result is the
+ * proof the plan owes: a batch is a promise that the tree still builds once
+ * only its cuts are gone.
  *
  * WHY IT CALLS THE COMMAND'S OWN COLLECTION FUNCTION. This script used to wire
  * nine detector families by hand, one pass, no cascade. Three wirings existed
@@ -26,10 +34,12 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
+import { execFileSync } from 'child_process';
 import { DEFAULT_TEST_SEGMENTS } from '../src/util/testPaths';
 import {
-  collecterUnePasse, coupesRetenues, plagesDuFichier, compteLesFamilles,
+  collecterUnePasse, coupesRetenues, plagesDuFichier, compteLesFamilles, selonLeFiltre,
 } from '../src/commands/RemoveEverythingUnused';
+import { baseDe, cleDeBase, cleDImportOrphelin, cleDuFichierMort } from '../src/cleanup/cles';
 import { planCascade } from '../src/providers/removalCascade';
 import { orphanSummary } from '../src/providers/orphanSourceSets';
 import { readAndroidApi, readCorpus } from './kjCorpus';
@@ -52,6 +62,22 @@ async function main(): Promise<void> {
   const only = args.find(a => a.startsWith('--only='))?.slice('--only='.length).split(',');
   const max = doApply ? Number(args.find(a => a.startsWith('--max='))?.slice('--max='.length) ?? 16) : 1;
   const segs = DEFAULT_TEST_SEGMENTS as readonly string[];
+
+  // One batch of a cleanup plan: the base keys it promised, nothing else.
+  const planPath = args.find(a => a.startsWith('--plan='))?.slice('--plan='.length);
+  const batchId = args.find(a => a.startsWith('--batch='))?.slice('--batch='.length);
+  if ((planPath === undefined) !== (batchId === undefined)) { console.error('--plan and --batch go together'); process.exit(2); }
+  let filtre: Set<string> | undefined;
+  if (planPath !== undefined && batchId !== undefined) {
+    const plan = JSON.parse(fs.readFileSync(planPath, 'utf8')) as { head?: string; batches: { id: number; slug: string; cuts: { cle: string }[] }[] };
+    const lot = plan.batches.find(b => String(b.id) === batchId);
+    if (!lot) { console.error(`no batch ${batchId} in ${planPath}; ids: ${plan.batches.map(b => b.id).join(', ')}`); process.exit(2); }
+    filtre = new Set(lot.cuts.map(c => baseDe(c.cle)));
+    const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+    if (plan.head && !head.startsWith(plan.head)) console.log(`WARNING: the plan was written at ${plan.head}, the project is at ${head.slice(0, 10)}: keys may not be found`);
+    console.log(`batch ${lot.id} (${lot.slug}): ${filtre.size} promised key(s)`);
+  }
+  const appliquees = new Set<string>();
 
   // `--tests`: what « Remove Test Only Code » would offer in review mode (every
   // group, closure plans included), measured on the untouched project and
@@ -103,12 +129,14 @@ async function main(): Promise<void> {
     // inputs the other families see: `findUnusedMembers` takes the dead
     // declarations `findUnusedSymbols` found, so a plan with symbols off is
     // not the plan minus symbols.
-    const garde = new Map<string, typeof parFichier extends Map<string, infer C> ? C : never>();
+    let garde = new Map<string, typeof parFichier extends Map<string, infer C> ? C : never>();
     for (const [p, list] of parFichier) {
       const kept = only === undefined ? list : list.filter(c => only.includes(c.famille));
       if (kept.length > 0) garde.set(p, kept as any);
     }
-    const morts = only === undefined || only.includes('ressources') ? fichiersMorts : new Set<string>();
+    let morts = only === undefined || only.includes('ressources') ? fichiersMorts : new Set<string>();
+    const textes = new Map(corpus.sources.map(s => [s.path, s.text]));
+    if (filtre) ({ parFichier: garde, fichiersMorts: morts } = selonLeFiltre({ parFichier: garde, fichiersMorts: morts }, textes, filtre));
 
     const found = [...garde.values()].reduce((n, l) => n + l.length, 0);
     if (found === 0 && morts.size === 0) { console.log(`round ${round + 1}: nothing found, fixed point`); break; }
@@ -118,7 +146,6 @@ async function main(): Promise<void> {
       if (fichiersMorts.size > 0) console.log(`  ${String(fichiersMorts.size).padStart(5)}  ressources (whole files)`);
     }
 
-    const textes = new Map(corpus.sources.map(s => [s.path, s.text]));
     const { retenu, bouges } = coupesRetenues(garde as any, textes);
     if (bouges.length > 0) bump('skipped (moved on disk)', bouges.length);
     if (retenu.size === 0 && morts.size === 0) { console.log(`round ${round + 1}: ${found} found, none kept`); break; }
@@ -128,6 +155,14 @@ async function main(): Promise<void> {
       textes,
       morts,
     );
+    if (filtre) {
+      // The same accounting as the command's `appliquees`: what the batch
+      // promised is compared with what the rounds really did.
+      for (const [p, l] of retenu) for (const c of l) appliquees.add(cleDeBase(c, p, textes.get(p)!));
+      for (const p of morts) appliquees.add(cleDuFichierMort(p));
+      for (const p of cascade.deleteFiles) appliquees.add(`fichiers\t${p}\tfile`);
+      for (const [p, l] of cascade.imports) for (const e of l) appliquees.add(cleDImportOrphelin(p, textes.get(p)!.slice(e.start, e.end)));
+    }
 
     let cutThisRound = 0, linesThisRound = 0;
     for (const p of new Set([...retenu.keys(), ...cascade.imports.keys()])) {
@@ -177,6 +212,14 @@ async function main(): Promise<void> {
     for (const [k, n] of [...cumul].sort()) console.log(`  ${String(n).padStart(5)}  ${k}`);
   }
   console.log(`\n${totalCut} cut(s), ${deleted.size} file(s) deleted, ${totalLines} line(s)`);
+  if (filtre) {
+    const tenues = [...filtre].filter(k => appliquees.has(k));
+    const manquees = [...filtre].filter(k => !appliquees.has(k));
+    const enPlus = [...appliquees].filter(k => !filtre!.has(k));
+    console.log(`\nbatch ${batchId}: ${tenues.length} key(s) applied of ${filtre.size} promised`);
+    if (manquees.length > 0) { console.log(`  not found (${manquees.length}):`); for (const k of manquees) console.log(`    ${k.replace(/\t/g, '  ').replace(root + '/', '')}`); }
+    if (enPlus.length > 0) { console.log(`  applied beyond the promise (${enPlus.length}):`); for (const k of enPlus) console.log(`    ${k.replace(/\t/g, '  ').replace(root + '/', '')}`); }
+  }
   const out = process.env.KJ_MANIFEST;
   if (out) fs.writeFileSync(out, JSON.stringify(manifest, null, 1));
 }

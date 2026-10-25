@@ -279,6 +279,9 @@ Layouts, menus, anims and raw files nothing in the project references. The quick
 ### The whole sweep
 `Find Dead Code` runs every check above across the workspace in one pass, on the files you do not have open. `Clean Dead Code in the Workspace` clears everything with a safe fix in a single preview.
 
+### Cleanup campaign
+`Plan a Dead Code Cleanup` simulates the whole sweep to its fixed point without touching a file, then cuts the result into batches a reviewer can read: wave 1 holds what has zero references today, wave 2 what dies once wave 1 lands, each cut naming the earlier cut that orphaned it. Batches follow module boundaries and stay under a size budget; when git says one pull request removed the last callers of most of a batch, the batch is named after it. Every batch comes with a commit body, one proof line per cut, and a `rg` command the reviewer can run, with the files it will list and what each one is doing there. `Apply a Cleanup Batch` then removes exactly that batch through the same loop as the sweep. Git is read, never written.
+
 ### Unreferenced symbols
 The classes, objects and functions that nothing in the project references, found across files rather than within one. The fix removes the declaration, the imports it leaves dangling elsewhere, and the file itself when nothing else is in it. Symbols only the tests reference get their own category, without a removal.
 

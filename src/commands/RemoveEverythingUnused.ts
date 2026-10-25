@@ -11,7 +11,7 @@ import { scanEnums } from '../providers/unusedEnumEntries';
 import { findIdleImplementations } from '../providers/idleImplementations';
 import { findUnusedContracts } from '../providers/unusedContracts';
 import { findDeadIslands } from '../providers/deadIslands';
-import { sweepFile, planFileEdits } from '../providers/DeadCodeSweep';
+import { sweepFile, planFileEdits, SweepEdit, SweepFinding } from '../providers/DeadCodeSweep';
 import { findMemberImports, memberKey } from '../util/memberImports';
 import { planCascade } from '../providers/removalCascade';
 import { findOrphanSourceSets, OrphanSourceSet } from '../providers/orphanSourceSets';
@@ -28,6 +28,8 @@ import type { FileResEntry } from '../indexer/FileResourceIndex';
 import { addCascadePlan } from '../providers/applyCascade';
 import { stillTheMeasuredText } from '../util/measuredText';
 import { UnusedSettings, islandIgnoreNames, readUnusedSettings } from '../util/unusedSettings';
+import type { Preuve } from '../cleanup/preuve';
+import { baseDe, cleDeBase, cleDImportOrphelin, cleDuFichierMort, estUnFichierVide } from '../cleanup/cles';
 
 /**
  * One command for the whole family.
@@ -43,7 +45,11 @@ import { UnusedSettings, islandIgnoreNames, readUnusedSettings } from '../util/u
  * resolved the way every provider resolves them: the first one wins.
  */
 
-export interface Coupe { start: number; end: number; texte: string; famille: string; quoi: string }
+export interface Coupe {
+  start: number; end: number; texte: string; famille: string; quoi: string;
+  /** What the cut can say for itself; absent on cuts built before the campaign existed. */
+  preuve?: Preuve;
+}
 
 export type Tally = Record<string, number>;
 
@@ -159,10 +165,10 @@ export function collecterUnePasse(
   // exception attrapee, et sur le projet de reference 38 des 41 sont des
   // exceptions. Les appeler des parametres etait faux dans le cas ordinaire,
   // pas dans un cas de bord.
-  const ajoute = (p: string, start: number, end: number, texte: string, famille: string, quoi: string) => {
+  const ajoute = (p: string, start: number, end: number, texte: string, famille: string, quoi: string, preuve?: Preuve) => {
     if (start < 0 || end <= start) return;
     const l = brut.get(p) ?? [];
-    l.push({ start, end, texte, famille, quoi });
+    l.push(preuve ? { start, end, texte, famille, quoi, preuve } : { start, end, texte, famille, quoi });
     brut.set(p, l);
   };
 
@@ -185,11 +191,13 @@ export function collecterUnePasse(
     const nl = texte.indexOf('\n', debut);
     const fin = nl === -1 ? texte.length : nl + 1;
     if (!new RegExp(`^\\s*import\\s+(?:static\\s+)?[\\w.]*\\b${nom}\\b`).test(texte.slice(debut, fin))) return;
-    ajoute(imp.path, debut, fin, '', 'balayage', '');
+    // The statement itself is the cut's name: two long imports of one file
+    // must never share a key once the text is shortened.
+    ajoute(imp.path, debut, fin, '', 'balayage', '', { verdict: 'cascade', suit: nom, nom: texte.slice(debut, fin).trim() });
   };
   for (const s of syms) {
     if (s.verdict !== 'unreferenced') continue;
-    ajoute(s.path, s.removeStart, s.removeEnd, '', 'symboles', s.name);
+    ajoute(s.path, s.removeStart, s.removeEnd, '', 'symboles', s.name, preuveDuSymbole(s));
     if (s.removeStart >= 0) for (const imp of s.staleImports ?? []) importPerime(imp, s.name);
     // KJ-067 : les declarations `inject(target: X)` qui nommaient la classe.
     // Toutes ou aucune : couper la ligne du composant sans l'`override` du
@@ -197,18 +205,18 @@ export function collecterUnePasse(
     // deja d'un bloc, ou pas du tout.
     if (s.removeStart >= 0) {
       for (const site of s.injectionSites ?? []) {
-        ajoute(site.path, site.removeStart, site.removeEnd, '', 'injections', s.name);
+        ajoute(site.path, site.removeStart, site.removeEnd, '', 'injections', s.name, { verdict: 'cascade', suit: s.name });
       }
     }
   }
-  for (const m of membres) if (m.verdict === 'unreferenced') { ajoute(m.path, m.removeStart, m.removeEnd, '', 'membres', m.name); }
-  for (const e of entrees) if (e.verdict === 'unreferenced') { ajoute(e.path, e.removeStart, e.removeEnd, '', 'entrees', e.name); }
+  for (const m of membres) if (m.verdict === 'unreferenced') { ajoute(m.path, m.removeStart, m.removeEnd, '', 'membres', m.name, nonReference(m)); }
+  for (const e of entrees) if (e.verdict === 'unreferenced') { ajoute(e.path, e.removeStart, e.removeEnd, '', 'entrees', e.name, nonReference(e)); }
   // KJ-066 : un enum imbrique dont toutes les entrees partent et dont rien
   // n'ecrit le nom s'en va entier, au lieu de laisser `enum OrderBy {\n\n}`.
   // Sa coupe commence avant celles de ses entrees, donc la passe de
   // chevauchement plus bas les fait tomber d'elles-memes.
   for (const e of enumsVides) {
-    ajoute(e.path, e.removeStart, e.removeEnd, '', 'enums', `enum ${e.enumName}`);
+    ajoute(e.path, e.removeStart, e.removeEnd, '', 'enums', `enum ${e.enumName}`, { verdict: 'emptied' });
   }
 
   // Same for class members and enum entries, which Java reaches through a
@@ -216,16 +224,27 @@ export function collecterUnePasse(
   const membresRetires = new Set<string>();
   for (const m of membres) if (m.verdict === 'unreferenced' && m.removeStart >= 0) membresRetires.add(memberKey(m.container ?? '', m.name));
   for (const e of entrees) if (e.verdict === 'unreferenced' && e.removeStart >= 0) membresRetires.add(`${e.enumName}.${e.name}`);
-  for (const imp of findMemberImports(sources, membresRetires)) ajoute(imp.path, imp.start, imp.end, '', 'balayage', '');
+  for (const imp of findMemberImports(sources, membresRetires)) ajoute(imp.path, imp.start, imp.end, '', 'balayage', '', { verdict: 'cascade' });
   for (const i of iles) {
     if (i.verdict !== 'unreferenced' || !i.fixable) continue;
-    for (const m of i.members) ajoute(m.path, m.removeStart, m.removeEnd, '', 'ilots', m.name);
+    for (const m of i.members) {
+      ajoute(m.path, m.removeStart, m.removeEnd, '', 'ilots', m.name,
+        { verdict: 'island', mentions: { tests: i.testMentions }, gardePar: m.keptAliveBy });
+    }
     for (const imp of i.staleImports ?? []) importPerime(imp, imp.name);
   }
   for (const src of sources) {
     if (!/\.(kt|java)$/.test(src.path)) continue;
-    const plan = planFileEdits(sweepFile(src.text, src.path.endsWith('.java') ? 'java' : 'kotlin'));
-    for (const e of plan) ajoute(src.path, e.start, e.end, e.text, 'balayage', '');
+    const trouvailles = sweepFile(src.text, src.path.endsWith('.java') ? 'java' : 'kotlin');
+    // `planFileEdits` keeps the edit objects themselves, so each kept edit
+    // still knows the finding it came from, and its detector names the proof.
+    const origine = new Map<SweepEdit, SweepFinding>();
+    for (const t of trouvailles) for (const e of t.edits) origine.set(e, t);
+    for (const e of planFileEdits(trouvailles)) {
+      const t = origine.get(e);
+      ajoute(src.path, e.start, e.end, e.text, 'balayage', '',
+        { verdict: t?.detector === 'writeOnly' ? 'write-only' : 'unreferenced', ...(t ? { nom: t.name } : {}) });
+    }
   }
 
   // ── Les cinq familles que `FindEverythingUnused` rapportait sans que cette
@@ -237,9 +256,10 @@ export function collecterUnePasse(
 
   // Alias du catalogue Gradle, et la version devenue orpheline avec l'alias.
   for (const g of findUnusedGradleDependencies({ sources, ignoreNames: r.gradleIgnoreNames } as any) as any[]) {
-    ajoute(g.path, g.removeStart, g.removeEnd, '', 'alias', g.name);
+    ajoute(g.path, g.removeStart, g.removeEnd, '', 'alias', g.name, { verdict: 'unreferenced' });
     if (g.orphanedVersion) {
-      ajoute(g.path, g.orphanedVersion.removeStart, g.orphanedVersion.removeEnd, '', 'alias', g.orphanedVersion.name);
+      ajoute(g.path, g.orphanedVersion.removeStart, g.orphanedVersion.removeEnd, '', 'alias', g.orphanedVersion.name,
+        { verdict: 'cascade', suit: g.name });
     }
   }
 
@@ -254,13 +274,13 @@ export function collecterUnePasse(
       if (e.verdict !== 'unheard') continue;
       // `removeStart` vaut -1 quand la coupe changerait la structure, un post
       // seul dans sa branche par exemple. `ajoute` l'ecarte de lui meme.
-      ajoute(e.path, e.removeStart, e.removeEnd, '', 'evenements', e.name);
+      ajoute(e.path, e.removeStart, e.removeEnd, '', 'evenements', e.name, { verdict: 'unheard' });
       // KJ-069 : le post seul dans un `finally` sans `catch` remonte le corps
       // du `try` au lieu de laisser un bloc vide. C'est un REMPLACEMENT, et il
       // voyage dans ses propres champs pour qu'un consommateur qui ne sait que
       // supprimer ne supprime pas le corps.
       if (e.rewriteText !== undefined) {
-        ajoute(e.path, e.rewriteStart, e.rewriteEnd, e.rewriteText, 'evenements', e.name);
+        ajoute(e.path, e.rewriteStart, e.rewriteEnd, e.rewriteText, 'evenements', e.name, { verdict: 'unheard' });
       }
     }
   }
@@ -270,7 +290,7 @@ export function collecterUnePasse(
   // ne compile pas sans sa clause, et l'inverse non plus.
   for (const impl of findIdleImplementations({ sources, testSourceSets: segs } as any)) {
     for (const c of impl.cuts) {
-      ajoute(impl.path, c.start, c.end, c.replacement, 'implementations', `${impl.interfaceName} de ${impl.className}`);
+      ajoute(impl.path, c.start, c.end, c.replacement, 'implementations', `${impl.interfaceName} de ${impl.className}`, { verdict: 'unreferenced' });
     }
   }
 
@@ -278,7 +298,7 @@ export function collecterUnePasse(
   // Coupe liee : la declaration et toutes les surcharges, ou rien (voir la
   // passe de chevauchement plus bas).
   for (const k of findUnusedContracts({ sources, testSourceSets: segs, androidApi: ctx.androidApi })) {
-    for (const c of k.cuts) ajoute(c.path, c.start, c.end, '', 'contrats', `${k.interfaceFqn}.${k.name}`);
+    for (const c of k.cuts) ajoute(c.path, c.start, c.end, '', 'contrats', `${k.interfaceFqn}.${k.name}`, { verdict: 'unreferenced' });
   }
 
   // Cles de Remote Config que rien ne lit.
@@ -291,7 +311,7 @@ export function collecterUnePasse(
   // rendait zero trouvaille sur le projet de reference.
   for (const k of findUnusedRemoteConfigKeys({ sources, ignoreNames: r.remoteConfigIgnoreNames } as any) as any[]) {
     for (const d of k.declarations as any[]) {
-      ajoute(d.path, d.removeStart, d.removeEnd, '', 'remoteconfig', k.name);
+      ajoute(d.path, d.removeStart, d.removeEnd, '', 'remoteconfig', k.name, { verdict: 'unreferenced', variantes: k.declarations.length });
     }
   }
 
@@ -301,9 +321,10 @@ export function collecterUnePasse(
   // meme compte faux que celui des renommages, corrige plus haut.
   for (const p of findUnusedConstructorParameters({ sources })) {
     ajoute(p.path, p.removeStart, p.removeEnd, '', 'parametres',
-      `constructor parameter ${p.name} of ${p.className}, nothing reads it`);
+      `constructor parameter ${p.name} of ${p.className}, nothing reads it`, { verdict: 'unreferenced' });
     for (const s of p.sites) {
-      ajoute(s.path, s.removeStart, s.removeEnd, '', 'arguments', `argument ${p.name}, the parameter is gone`);
+      ajoute(s.path, s.removeStart, s.removeEnd, '', 'arguments', `argument ${p.name}, the parameter is gone`,
+        { verdict: 'cascade', suit: p.name });
     }
   }
 
@@ -312,7 +333,7 @@ export function collecterUnePasse(
   // pointe jamais sur la ligne. La passe suivante de la boucle voit les
   // fichiers que celle-ci supprime : aucun couplage avec les autres familles.
   for (const e of findStaleBaselineEntries({ sources })) {
-    ajoute(e.path, e.removeStart, e.removeEnd, '', 'baseline', `stale baseline entry for ${e.file}, which no longer exists`);
+    ajoute(e.path, e.removeStart, e.removeEnd, '', 'baseline', `stale baseline entry for ${e.file}, which no longer exists`, { verdict: 'stale' });
   }
 
   // Cles de values/, toutes leurs variantes de qualificatif. Les offsets sont
@@ -334,7 +355,7 @@ export function collecterUnePasse(
           .find(d => d.kind === k.kind && d.name === k.name);
         if (!frais) continue;
         const w = expandToWholeLines(texte, frais.start, frais.end);
-        ajoute(v.path, w.start, w.end, '', 'cles', `${k.kind}/${k.name}`);
+        ajoute(v.path, w.start, w.end, '', 'cles', `${k.kind}/${k.name}`, { verdict: 'unreferenced', variantes: k.variants.length });
       }
     }
   }
@@ -360,6 +381,26 @@ export function collecterUnePasse(
 
   const parFichier = sansChevauchement(brut);
   return { parFichier, fichiersMorts, tally: compteLesFamilles(parFichier), orphelins };
+}
+
+/** The proof a symbol cut carries: verdict, channel, and the files it takes lines from. */
+function preuveDuSymbole(s: {
+  testMentions: number; via?: 'visibility' | 'injection';
+  staleImports?: readonly { path: string; line: number }[];
+  injectionSites?: readonly { path: string; line: number }[];
+}): Preuve {
+  const emporte = [...(s.staleImports ?? []), ...(s.injectionSites ?? [])].map(e => ({ path: e.path, line: e.line }));
+  const preuve: Preuve = { verdict: 'unreferenced', mentions: { tests: s.testMentions } };
+  if (s.via) preuve.via = s.via;
+  if (emporte.length > 0) preuve.emporte = emporte;
+  return preuve;
+}
+
+/** The proof of a plain unreferenced finding, with its test mentions when the detector counts them. */
+function nonReference(x: { testMentions?: number }): Preuve {
+  return typeof x.testMentions === 'number'
+    ? { verdict: 'unreferenced', mentions: { tests: x.testMentions } }
+    : { verdict: 'unreferenced' };
 }
 
 /**
@@ -588,6 +629,78 @@ export async function removeEverythingUnusedCommand(
   );
   if (choix === 'cancel') return;
 
+  const bilan = await executerLesRondes({ corpus, segs, api, reglages, choix, premier });
+  if (bilan.refuse) { void vscode.window.showWarningMessage('Nothing was applied.'); return; }
+  void vscode.window.showInformationMessage(phraseDuBilan(bilan, choix));
+}
+
+/** The closing sentence of a run, from what the rounds did. Exported for the batch command. */
+export function phraseDuBilan(bilan: BilanDesRondes, choix: 'apply' | 'review'): string {
+  const { cumul, ecartes, annule, restait, incomplet } = bilan;
+
+  cumul.bouges = ecartes.size;
+  const fait = resumeDesFamilles(cumul);
+  const bouges = cumul.bouges > 0
+    ? `${plural(cumul.bouges, 'file')} changed since the scan and ${cumul.bouges > 1 ? 'were' : 'was'} left alone.`
+    : '';
+  // En relecture, le compte decrit ce qui a ete PROPOSE. Ce que le lecteur a
+  // coche dans l'apercu ne revient pas jusqu'ici, et annoncer « Removed » sur
+  // une base qu'on n'a pas serait un chiffre invente.
+  const verbe = choix === 'review' ? 'Sent' : 'Removed';
+  const queue = choix === 'review' ? ' to the preview.' : '.';
+  return compteRendu(fait, { verbe, queue, annule, restait, bouges, incomplet });
+}
+
+export interface OptionsDeRondes {
+  corpus: ResourceCorpus;
+  segs: readonly string[];
+  api?: AndroidApi;
+  reglages: Partial<UnusedSettings>;
+  choix: 'apply' | 'review';
+  /** The progress title; the command's own by default. */
+  titre?: string;
+  /** The command's first pass, reused when the corpus object has not changed. */
+  premier?: { data: unknown; parFichier: Map<string, Coupe[]>; fichiersMorts: Set<string> };
+  /** Base keys (see `cleDeBase`) the rounds may apply. Everything else stays. */
+  filtre?: ReadonlySet<string>;
+}
+
+export interface BilanDesRondes {
+  cumul: Tally;
+  ecartes: Set<string>;
+  annule: boolean;
+  restait: boolean;
+  refuse: boolean;
+  incomplet: boolean;
+  /** Base keys of every cut and whole file the rounds applied. */
+  appliquees: Set<string>;
+}
+
+/** The pass reduced to the keys a batch names. Exported for the delete-and-build harness, which applies one batch the same way. */
+export function selonLeFiltre(
+  passe: { parFichier: Map<string, Coupe[]>; fichiersMorts: Set<string> },
+  textes: ReadonlyMap<string, string>,
+  filtre: ReadonlySet<string>,
+): { parFichier: Map<string, Coupe[]>; fichiersMorts: Set<string> } {
+  const parFichier = new Map<string, Coupe[]>();
+  for (const [p, l] of passe.parFichier) {
+    const texte = textes.get(p);
+    if (texte === undefined) continue;
+    const gardees = l.filter(c => filtre.has(baseDe(cleDeBase(c, p, texte))));
+    if (gardees.length > 0) parFichier.set(p, gardees);
+  }
+  const fichiersMorts = new Set([...passe.fichiersMorts].filter(p => filtre.has(cleDuFichierMort(p))));
+  return { parFichier, fichiersMorts };
+}
+
+/**
+ * The fixed point loop of Remove Everything Unused: a round, a re-read, again
+ * until a round finds nothing. Exported for the cleanup campaign, which applies
+ * a batch through this very loop with a filter on, so that offsets are fresh at
+ * each round, the cascade is the real one and the moved files guard holds.
+ */
+export async function executerLesRondes(o: OptionsDeRondes): Promise<BilanDesRondes> {
+  const { corpus, segs, api, reglages, choix, filtre } = o;
   const cumul: Tally = {
     symboles: 0, membres: 0, entrees: 0, ilots: 0, balayage: 0, renommages: 0,
     imports: 0, fichiers: 0, bouges: 0,
@@ -597,6 +710,8 @@ export async function removeEverythingUnusedCommand(
   const ajouteTally = (t: Tally) => { for (const k of Object.keys(t)) cumul[k] = (cumul[k] ?? 0) + t[k]; };
   /** Les fichiers ecartes, par chemin : la boucle repasse sur les memes. */
   const ecartes = new Set<string>();
+  /** Base keys of what the rounds applied, for a batch to compare with what it promised. */
+  const appliquees = new Set<string>();
 
   // Une seule passe en relecture : l'utilisateur choisit quoi accepter, et
   // repasser derriere lui sans savoir ce qu'il a garde serait une devinette.
@@ -627,7 +742,7 @@ export async function removeEverythingUnusedCommand(
   // Annulable aussi : entre deux passes l'espace de travail est dans un
   // etat coherent, c'est le seul endroit ou s'arreter est sans danger.
   await vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: 'Removing everything unused…', cancellable: true },
+    { location: vscode.ProgressLocation.Notification, title: o.titre ?? 'Removing everything unused…', cancellable: true },
     async (progress, jeton) => {
     for (let n = 0; n < passes; n++) {
         if (jeton.isCancellationRequested) { annule = true; break; }
@@ -662,13 +777,16 @@ export async function removeEverythingUnusedCommand(
       // Sans ce contexte elles se taisaient, et `Find` les rapportait quand
       // meme : c'est l'ecart que cette version supprime.
       const contexte = { ...contexteDuCorpus(data), androidApi: api, reglages };
-      const { parFichier, fichiersMorts } = n === 0 && data === premier.data
-        ? { parFichier: premier.parFichier, fichiersMorts: premier.fichiersMorts }
+      const passe = n === 0 && o.premier && data === o.premier.data
+        ? { parFichier: o.premier.parFichier, fichiersMorts: o.premier.fichiersMorts }
         : collecterUnePasse(data.sources, segs, contexte);
+      const textes = new Map(data.sources.map(s => [s.path, s.text]));
+      // A batch names its cuts by key. What it does not name stays where it
+      // is, and a key it names that the pass no longer finds is simply not
+      // applied: the caller compares `appliquees` with what was promised.
+      const { parFichier, fichiersMorts } = filtre ? selonLeFiltre(passe, textes, filtre) : passe;
       const combien = [...parFichier.values()].reduce((a, l) => a + l.length, 0);
       if (combien === 0 && fichiersMorts.size === 0) break;
-
-      const textes = new Map(data.sources.map(s => [s.path, s.text]));
 
       // Les fichiers qui ont bouge sont ecartes AVANT de planifier la cascade.
       // La calculer sur toutes les coupes puis n'en appliquer qu'une partie
@@ -678,6 +796,8 @@ export async function removeEverythingUnusedCommand(
       const { retenu, bouges } = coupesRetenues(parFichier, textes);
       for (const p of bouges) ecartes.add(p);
       if (retenu.size === 0 && fichiersMorts.size === 0) break;
+      for (const [p, l] of retenu) for (const c of l) appliquees.add(cleDeBase(c, p, textes.get(p)!));
+      for (const p of fichiersMorts) appliquees.add(cleDuFichierMort(p));
 
       // `fichiersMorts` passe en troisieme argument : la cascade ne doit pas
       // compter une deuxieme fois un fichier que la famille des ressources
@@ -687,6 +807,10 @@ export async function removeEverythingUnusedCommand(
         textes,
         fichiersMorts,
       );
+      // What the cascade takes is applied too, and a batch promises it under
+      // the same keys the simulation gave it.
+      for (const p of cascade.deleteFiles) appliquees.add(`fichiers\t${p}\tfile`);
+      for (const [p, l] of cascade.imports) for (const e of l) appliquees.add(cleDImportOrphelin(p, textes.get(p)!.slice(e.start, e.end)));
       const edit = new vscode.WorkspaceEdit();
       for (const [p, l] of retenu) {
         if (cascade.deleteFiles.has(p) || fichiersMorts.has(p)) continue;
@@ -706,7 +830,7 @@ export async function removeEverythingUnusedCommand(
       for (const chemin of fichiersMorts) {
         // Un fichier source vide n'est pas « nomme par personne », il ne
         // declare rien : l'etiquette dit lequel des deux.
-        const vide = /\.(kt|java)$/.test(chemin);
+        const vide = estUnFichierVide(chemin);
         edit.deleteFile(
           corpusUri(chemin),
           { ignoreIfNotExists: true },
@@ -745,21 +869,7 @@ export async function removeEverythingUnusedCommand(
     },
   );
 
-  if (refuse) { void vscode.window.showWarningMessage('Nothing was applied.'); return; }
-
-  cumul.bouges = ecartes.size;
-  const fait = resumeDesFamilles(cumul);
-  const bouges = cumul.bouges > 0
-    ? `${plural(cumul.bouges, 'file')} changed since the scan and ${cumul.bouges > 1 ? 'were' : 'was'} left alone.`
-    : '';
-  // En relecture, le compte decrit ce qui a ete PROPOSE. Ce que le lecteur a
-  // coche dans l'apercu ne revient pas jusqu'ici, et annoncer « Removed » sur
-  // une base qu'on n'a pas serait un chiffre invente.
-  const verbe = choix === 'review' ? 'Sent' : 'Removed';
-  const queue = choix === 'review' ? ' to the preview.' : '.';
-  void vscode.window.showInformationMessage(
-    compteRendu(fait, { verbe, queue, annule, restait, bouges, incomplet }),
-  );
+  return { cumul, ecartes, annule, restait, refuse, incomplet, appliquees };
 }
 
 /**

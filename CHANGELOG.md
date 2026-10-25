@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.46.0
+
+Kotlin Jump now underlines outdated Gradle dependencies in your build files, offers the version bump as a quick fix, and produces a report you can paste into a pull request.
+
+### Improvements
+- Underlined dependencies that have a newer version, in version catalogs (`libs.versions.toml`), `build.gradle(.kts)` and `settings.gradle(.kts)`, and in `gradle-wrapper.properties`, with an end of line badge such as `↑ 3.0.0` and a hover that says how far behind the entry is and, when the repository dates it, when the latest version shipped. Dynamic versions such as `4.+` get a `pin 4.12.0` badge and a pin suggestion instead of a bump. Up to date, pinned, rich and BOM managed entries stay quiet and only answer in the hover. The `kotlinJump.upgrades.badges` setting turns the badges off.
+- Added the bump as a quick fix. It replaces only the bare version literal, so quotes, spacing and comments survive, and a shared `[versions]` entry says how many libraries move before you click. The other underlines stay in place after one line is bumped, and if the editor refuses the edit, a warning says nothing was changed instead of announcing a bump.
+- Warned about bumps that would break the build. A KSP version is checked against the Kotlin version it was built for, the Android Gradle plugin against the minimum Gradle version it requires, and the Kotlin companion plugins against the Kotlin version. The fix then offers the compatible version, or the pair together. A bump that needs a new wrapper checksum is left to Check Dependency Upgrades, which fetches the checksum before writing it.
+- Added Check Dependency Upgrades and Refresh Dependency Versions. They check every Gradle folder of the workspace under a cancellable progress, then offer to apply all patch bumps, all minor bumps, or both through one confirmation, and build a markdown report you can open or copy into a pull request description. A run with nothing to update says so, with the counts of libraries and plugins checked. Clear Dependency Upgrade Findings removes what the command published.
+- Respected stability by default: a project on `2.4.21` is not offered `2.5.0-Beta2`, while a project already on an alpha is offered the next alpha. The `kotlinJump.upgrades.policy` setting changes this rule. A shared `[versions]` entry is only bumped to a version that exists for every library reading it, and a batch of bumps is applied back to front so no edit shifts another.
+
+### Notes
+- Checks are opt in: the first time, Kotlin Jump asks once per workspace (Check now, Always, Never). Only group and artifact names are sent, over HTTPS, and answers are cached for a day. Custom repositories need `kotlinJump.upgrades.customRepositories`, a trusted workspace, https and no credentials.
+- Silence an entry with a `# @pin` comment (the same one the `version-catalog-update` plugin reads) or with `kotlin-jump:ignore dependency-upgrade`. Requests are paced per host, and a host that answers 429 or 403 is left alone for the time it asks. If the machine is offline, nothing is sent for ten minutes.
+
 ## 1.45.0
 
 Plan a Dead Code Cleanup turns the whole dead code sweep into reviewable batches, each cut with its proof and the commit that orphaned it, and Apply a Cleanup Batch removes one batch at a time.

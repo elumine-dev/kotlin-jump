@@ -25,7 +25,7 @@ import {
   dynamicResourceLookups,
 } from '../util/xmlRefs';
 import { isBuildArtifactPath, isVendorOwnedName } from '../util/resourceAllowlists';
-import { ResourceSource } from './UnusedResourceProvider';
+import { ResourceSource } from './unusedResources';
 
 /**
  * KJ-031: entries in `res/values*​/*.xml` that nothing references.

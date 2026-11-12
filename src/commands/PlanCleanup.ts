@@ -9,6 +9,7 @@ import { planifier, nomDe, aUneCause, Cause } from '../cleanup/planner';
 import { plural } from '../util/plural';
 import { lotMarkdown, planJson, planMarkdown } from '../cleanup/exports';
 import { baseDe } from '../cleanup/cles';
+import { stillTheMeasuredText } from '../util/measuredText';
 import type { GitFacts } from '../git/GitFacts';
 
 /**
@@ -138,7 +139,11 @@ export async function planCleanupCommand(deps: Dependances): Promise<void> {
         },
         r.segs,
         { androidApi: api, reglages: r.reglages },
-        { estAnnule: () => token.isCancellationRequested, surRonde: n => progress.report({ message: `round ${n}…` }) },
+        {
+          estAnnule: () => token.isCancellationRequested,
+          surRonde: n => progress.report({ message: `round ${n}…` }),
+          encoreMesure: (p, texte) => stillTheMeasuredText(p, texte) !== undefined,
+        },
       );
       if (token.isCancellationRequested && simulation.coupes.length === 0) return undefined;
 

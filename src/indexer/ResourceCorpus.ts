@@ -4,7 +4,7 @@ import { mapBatched } from '../util/batched';
 import { rememberCorpusUri } from '../util/corpusUri';
 import { makeExclusionMatcher } from '../util/pathExclusion';
 import { FileResourceIndex } from './FileResourceIndex';
-import { ResourceSource } from '../providers/UnusedResourceProvider';
+import { ResourceSource } from '../providers/unusedResources';
 import { excludeGlob } from '../util/pathExclusion';
 
 /**

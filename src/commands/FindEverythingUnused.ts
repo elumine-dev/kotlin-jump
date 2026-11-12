@@ -452,7 +452,9 @@ export async function findEverythingUnusedCommand(
             ignoreNames: cfg.get<string[]>('unusedMembersIgnoreNames', []),
             ignorePaths: cfg.get<string[]>('unusedSymbolsIgnorePaths', ['**/buildSrc/**', '**/build-logic/**']),
             includeTestOnly: cfg.get<boolean>('unusedSymbolsIncludeTestOnly', true),
-            includeSelfOnly: cfg.get<boolean>('unusedMembersSelfOnly', true),
+            // A member that could be private is over-exposed, not unused: it
+            // belongs to Find Unreferenced Members, never to this report.
+            includeSelfOnly: false,
             deadDeclarations: dead,
             androidApi: api,
           });
@@ -461,13 +463,11 @@ export async function findEverythingUnusedCommand(
           }
           memberProvider.setFindings(members);
           const unref = members.filter(m => m.verdict === 'unreferenced').length;
-          const selfOnly = members.filter(m => m.verdict === 'selfOnly').length;
           keptAliveByTests += members.filter(m => m.verdict === 'testOnly').length;
           sections.push({
             label: 'class members',
             one: 'class member',
             count: unref,
-            detail: selfOnly > 0 ? `${selfOnly} could be private` : undefined,
           });
         }
       } else {

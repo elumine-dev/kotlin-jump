@@ -1,0 +1,405 @@
+import { FileResEntry, FileResKind, FileResourceIndex } from '../indexer/FileResourceIndex';
+import {
+  bindingClassTokens,
+  bindingStemOf,
+  collectCodeResourceRefs,
+  collectStringLiterals,
+  collectXmlResourceRefs,
+  dynamicallyLookedUpKinds,
+  dynamicResourceLookups,
+  collectKeepGlobs,
+  SHRINKER_RULES_RE,
+} from '../util/xmlRefs';
+
+/**
+ * KJ-029: Android resource FILES nothing references.
+ *
+ * THE CONTRACT — a finding means: no textual reference to this resource name
+ * exists anywhere we can read. It does NOT mean the build has no other
+ * consumer. Every rule below exists to make the first sentence true with zero
+ * false positives, at the cost of accepted false negatives:
+ *
+ *  1. Any occurrence we cannot classify counts as a usage.
+ *  2. A TRUNCATED corpus produces zero findings — if we could not read
+ *     everything, the one reference that matters may be what we missed.
+ *  3. The delete quick fix always goes through the Refactor Preview.
+ *  4. No reachability analysis: two layouts that include each other are both
+ *     alive. Cycles are where these detectors grow bugs.
+ *
+ * Kinds never covered, on purpose: `xml/` (manifest and library driven),
+ * `navigation/` (referenced from the manifest and NavHost), `font/`,
+ * `transition/`, `values*` (KJ-021's territory).
+ */
+
+export type UnusedResourceKind =
+  | Extract<FileResKind, 'layout' | 'menu' | 'anim' | 'animator' | 'raw' | 'drawable' | 'mipmap'>
+  // KJ-081 : `assets/` est le SECOND endroit ou un projet Android range des
+  // fichiers, et il n'a jamais eu de representation. Ce n'est pas une sorte de
+  // `res/` : son nom est le chemin RELATIF a la racine `assets/`, parce que
+  // c'est ce que `AssetManager.open` prend, et un depot range volontiers
+  // plusieurs `feed.json` dans des modules differents.
+  | 'asset';
+
+const SUPPORTED_KINDS: UnusedResourceKind[] = [
+  'layout', 'menu', 'anim', 'animator', 'raw', 'drawable', 'mipmap',
+];
+/** `@+id/foo`, an id a resource file DECLARES. */
+const ID_DECL_RE = /@\+id\/([A-Za-z_]\w*)/g;
+/** `R.id.foo` or ButterKnife's `R2.id.foo`, an id code READS. */
+const ID_READ_RE = /\bR2?\.id\.([A-Za-z_]\w*)/g;
+/** `@id/foo` in another XML file: a constraint, an include, a binding. */
+const ID_XML_READ_RE = /@id\/([A-Za-z_]\w*)/g;
+
+/** Reported but not deletable unless `includeDrawables` is on. */
+const REVIEW_ONLY_KINDS = new Set<UnusedResourceKind>(['drawable', 'mipmap']);
+
+/** Names the manifest or the toolchain reaches without ever naming them in code. */
+const MANIFEST_CRITICAL = [
+  /^ic_launcher/, /^ic_notification/, /^network_security_config$/, /^file_paths$/,
+  /^provider_paths$/, /^backup_rules$/, /^data_extraction_rules$/, /^shortcuts$/,
+  /^splash/, /^app_widget/, /^ic_shortcut/,
+  // `res/raw/keep.xml`: the shrinker's keep-list, read by the build only.
+  /^keep$/,
+];
+
+/** Prefixes owned by AndroidX / Material / Play libraries: an overlay we must not touch. */
+// Moved to src/util/resourceAllowlists.ts so KJ-031 shares the same list.
+// Re-exported: the KJ-029 suites import it from here.
+export { LIBRARY_PREFIXES } from '../util/resourceAllowlists';
+import { LIBRARY_PREFIXES, isBuildArtifactPath } from '../util/resourceAllowlists';
+
+export interface ResourceSource {
+  path: string;
+  text: string;
+}
+
+export interface ScanInput {
+  entries: FileResEntry[];
+  sources: ResourceSource[];
+  /** Module directories that contain at least one .kt/.java file. */
+  modulesWithCode: readonly string[];
+  /** Module directories declaring com.android.library. */
+  libraryModules?: readonly string[];
+  /** True when the corpus could not be read in full: forces zero findings. */
+  truncated?: boolean;
+  includeDrawables?: boolean;
+  /**
+   * KJ-081 : les fichiers de `src/main/assets/`, dans leur PROPRE canal.
+   *
+   * Surtout pas dans `sources`. Un asset est souvent un bloc de donnees, et
+   * son texte donne a la recolte generale garde en vie n'importe quelle
+   * declaration dont le nom y figure par hasard : mesure faite, une extension
+   * `observe` cessait d'etre rapportee parce qu'un JSON de bouchon contenait
+   * le mot. C'est exactement l'avertissement que le corpus porte deja sur les
+   * `.txt` de R8, ou R8 ecrit tous les noms du build.
+   *
+   * Ici, le texte d'un asset ne sert qu'a decider de la vie d'un AUTRE asset.
+   * Un binaire entre avec un texte vide : present comme candidat, muet comme
+   * citant.
+   */
+  assets?: readonly ResourceSource[];
+}
+
+export interface UnusedResource {
+  kind: UnusedResourceKind;
+  name: string;
+  /** Every file backing this name: density and configuration variants. */
+  paths: string[];
+  isLibraryModule: boolean;
+  /** False for drawables/mipmaps while `includeDrawables` is off. */
+  deletable: boolean;
+}
+
+/** `<!-- kotlin-jump:ignore unused-resource -->` anywhere in the file. */
+const IGNORE_RE = /kotlin-jump:ignore\s+unused-resource/;
+
+/**
+ * `Resources.getIdentifier(name, type, pkg)` builds a resource name at
+ * runtime, so anything of that TYPE becomes unprovable.
+ *
+ * Two traps this had to learn from a real codebase: a no-argument
+ * `article.getIdentifier()` is an ordinary business getter and means nothing
+ * here, and when the type argument is a literal only THAT kind is affected —
+ * disabling every kind because one call looks up a string made the whole
+ * feature silent on a 3400-file project.
+ */
+// Lives in util/xmlRefs so KJ-031 (vscode-free) shares it; re-exported here
+// for the callers that import it from the provider.
+export { dynamicallyLookedUpKinds };
+
+function isCodePath(path: string): boolean {
+  return /\.(kt|kts|java)$/.test(path);
+}
+
+/**
+ * `<module>/src/main/assets/<relatif>` : la racine, et ce qui la suit.
+ *
+ * `main` SEULEMENT, et c'est mesure. Un `src/<autre>/assets/` appartient a un
+ * source set que la variante courante ne construit pas forcement, et ce qui le
+ * nomme vit souvent dans le meme source set, que le corpus peut ne pas porter.
+ * Sur le projet de reference, ouvrir la regle a tous les source sets faisait
+ * sortir 40 assets au lieu de 12 : vingt `.zip` de
+ * un source set d'essais qu'aucune variante
+ * Gradle ne construit, et les bouchons de `src/debug/assets/1-fake-server/`.
+ */
+const ASSET_RE = /^(.*)[\\/]src[\\/]main[\\/]assets[\\/](.+)$/;
+
+/**
+ * Un prefixe de repertoire construit par concatenation : `"fonts/" + value`.
+ *
+ * C'est la garde qui compte le plus, et celle qui a fait tomber la mesure de
+ * 83 assets morts a 8. Deux appels du projet de reference construisent leur
+ * chemin, et tout ce qu'ils atteignent echappe a l'analyse statique :
+ *
+ *   KiteServiceImpl.java:32    Typeface.createFromAsset(a, "fonts/" + value + ".otf")
+ *   PeppermintParser.java:46   am.open("devAssets/" + path)
+ *
+ * La famille connait deja cette idee pour `res/`, sous le nom de
+ * `dynamicallyLookedUpKinds`. La nuance ici : un acces construit eteint le
+ * REPERTOIRE qu'il atteint, pas un fichier.
+ */
+const PREFIXE_CONSTRUIT_RE = /"([^"\n]*\/)"\s*\+/g;
+
+/** Les suffixes qui disent « copiez-moi sous un autre nom ». */
+const GABARIT_RE = /\.(CHANGE_ME|sample|template|example|dist)$/i;
+
+/**
+ * Les assets que rien n'ouvre (KJ-081, G19).
+ *
+ * Un asset est vivant des qu'un SUFFIXE de son chemin relatif, coupe sur un
+ * `/`, apparait ailleurs que dans lui meme. Le suffixe et pas seulement le
+ * chemin entier, parce qu'un asset en cite souvent un autre relativement a LUI
+ * et non a la racine : `assets/css/fonts.css` ecrit
+ * `url("../fonts/Calluna-Regular.otf")` et tient ainsi les soixante polices du
+ * dossier voisin. Accepter les suffixes retient des assets vivants, ce qui est
+ * le bon sens de l'erreur.
+ */
+function assetsQueRienNOuvre(
+  fichiers: readonly { path: string; text: string }[],
+  sources: readonly { path: string; text: string }[],
+  libraryModules: ReadonlySet<string>,
+): UnusedResource[] {
+  const assets: { path: string; module: string; relatif: string }[] = [];
+  for (const s of fichiers) {
+    if (isBuildArtifactPath(s.path)) continue;
+    const m = ASSET_RE.exec(s.path);
+    if (m) assets.push({ path: s.path, module: m[1], relatif: m[2].replace(/\\/g, '/') });
+  }
+  if (assets.length === 0) return [];
+
+  const eteints: string[] = [];
+  for (const s of sources) {
+    if (!/\.(kt|kts|java)$/.test(s.path)) continue;
+    PREFIXE_CONSTRUIT_RE.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = PREFIXE_CONSTRUIT_RE.exec(s.text)) !== null) eteints.push(m[1]);
+  }
+
+  const texteDe = new Map(fichiers.map(s => [s.path, s.text]));
+  const suffixesDe = (relatif: string) => {
+    const parts = relatif.split('/');
+    return parts.map((_, i) => parts.slice(i).join('/'));
+  };
+
+  const out: UnusedResource[] = [];
+  for (const a of assets) {
+    if (eteints.some(p => a.relatif.startsWith(p))) continue;
+    if (IGNORE_RE.test(texteDe.get(a.path) ?? '')) continue;
+    // Un GABARIT n'est pas nomme par construction : on le copie sous un autre
+    // nom. `developer.properties.CHANGE_ME` est le motif reel, et le code
+    // nomme `developer.properties`, pas lui.
+    if (GABARIT_RE.test(a.relatif)) continue;
+    // Un asset qui NOMME d'autres assets est un referent, pas une feuille :
+    // `assets/css/fonts.css` tient les soixante polices du dossier voisin. Le
+    // retirer les orphelinerait toutes, et sa propre atteinte passe par une
+    // URL `file:///android_asset/` construite, que rien ne permet de lire.
+    const texteA = texteDe.get(a.path) ?? '';
+    if (texteA !== '' && assets.some(
+      b => b.path !== a.path && suffixesDe(b.relatif).some(x => texteA.includes(x)))) continue;
+
+    // Chaque suffixe coupe sur un `/`, du chemin entier au nom de base. Le
+    // code, les layouts et les AUTRES assets comptent tous comme citants.
+    const suffixes = suffixesDe(a.relatif);
+    const nomme = [...sources, ...fichiers].some(
+      s => s.path !== a.path && suffixes.some(x => s.text.includes(x)));
+    if (nomme) continue;
+
+    out.push({
+      kind: 'asset',
+      name: a.relatif,
+      paths: [a.path],
+      isLibraryModule: libraryModules.has(a.module),
+      deletable: true,
+    });
+  }
+  return out.sort((x, y) => x.name.localeCompare(y.name));
+}
+
+export function findUnusedResources(input: ScanInput): UnusedResource[] {
+  // Guard 8: an incomplete corpus can never prove absence.
+  if (input.truncated) return [];
+
+  const codeText: string[] = [];
+  const referenced = new Set<string>();
+  const literals = new Set<string>();
+  const bindings = new Set<string>();
+  /** KJ-071: `@+id/foo` declared by each XML file, and who reads `R.id.foo`. */
+  const idsDeclaredByPath = new Map<string, Set<string>>();
+  const idsRead = new Map<string, Set<string>>();
+  let manifestHasPlaceholder = false;
+  /** Kinds reached by dynamic lookup; `null` once any call is unreadable. */
+  let dynamicKinds: Set<string> | null = new Set<string>();
+  /** G54 : sorte -> prefixes litteraux des noms cherches dynamiquement. */
+  const dynamicPrefixes = new Map<string, Set<string>>();
+  const keepGlobs: RegExp[] = [];
+  const shrinkerRuleFiles = new Set<string>();
+
+  for (const src of input.sources) {
+    if (isCodePath(src.path)) {
+      codeText.push(src.text);
+      // Guard 1: dynamic lookup, narrowed to the kinds it can actually reach.
+      if (dynamicKinds !== null) {
+        const lookups = dynamicResourceLookups(src.text);
+        if (lookups === null) dynamicKinds = null;
+        else {
+          for (const k of lookups.kinds) dynamicKinds.add(k);
+          for (const [k, ps] of lookups.prefixes) for (const p of ps) (dynamicPrefixes.get(k) ?? dynamicPrefixes.set(k, new Set()).get(k)!).add(p);
+        }
+      }
+      for (const r of collectCodeResourceRefs(src.text, SUPPORTED_KINDS)) {
+        referenced.add(`${r.kind}/${r.name}`);
+      }
+      for (const s of collectStringLiterals(src.text)) literals.add(s);
+      for (const b of bindingClassTokens(src.text)) bindings.add(b);
+      for (const m of src.text.matchAll(ID_READ_RE)) {
+        (idsRead.get(m[1]) ?? idsRead.set(m[1], new Set()).get(m[1])!).add(src.path);
+      }
+      continue;
+    }
+    if (/\.xml$/.test(src.path)) {
+      const declares = new Set<string>();
+      for (const m of src.text.matchAll(ID_DECL_RE)) declares.add(m[1]);
+      if (declares.size > 0) idsDeclaredByPath.set(src.path, declares);
+      for (const m of src.text.matchAll(ID_XML_READ_RE)) {
+        (idsRead.get(m[1]) ?? idsRead.set(m[1], new Set()).get(m[1])!).add(src.path);
+      }
+      for (const r of collectXmlResourceRefs(src.text, SUPPORTED_KINDS)) {
+        referenced.add(`${r.kind}/${r.name}`);
+      }
+      for (const s of collectStringLiterals(src.text)) literals.add(s);
+      keepGlobs.push(...collectKeepGlobs(src.text));
+      if (SHRINKER_RULES_RE.test(src.text)) shrinkerRuleFiles.add(src.path);
+      // Guard 3: a manifest placeholder resolves to a name we cannot know.
+      if (/AndroidManifest\.xml$/.test(src.path) && /\$\{[^}]+\}/.test(src.text)) {
+        manifestHasPlaceholder = true;
+      }
+      continue;
+    }
+    // Gradle scripts: resValue, manifestPlaceholders, bare literals
+    if (/\.(gradle|gradle\.kts|toml|pro|properties)$/.test(src.path)) {
+      for (const r of collectXmlResourceRefs(src.text, SUPPORTED_KINDS)) {
+        referenced.add(`${r.kind}/${r.name}`);
+      }
+      for (const s of collectStringLiterals(src.text)) literals.add(s);
+    }
+  }
+
+  // A lookup whose type we could not read puts every kind out of reach.
+  if (dynamicKinds === null) return [];
+
+  const libraryModules = new Set(input.libraryModules ?? []);
+  const withCode = new Set(input.modulesWithCode);
+  const includeDrawables = input.includeDrawables ?? false;
+
+  // Guard 5: a name defined in several modules is an overlay; the consumer of
+  // one is the consumer of the other.
+  const moduleCountByKey = new Map<string, Set<string>>();
+  for (const e of input.entries) {
+    const key = FileResourceIndex.key(e.kind, e.name);
+    const set = moduleCountByKey.get(key) ?? new Set<string>();
+    for (const v of e.variants) set.add(v.moduleDir);
+    moduleCountByKey.set(key, set);
+  }
+
+  const findings: UnusedResource[] = [
+    ...assetsQueRienNOuvre(input.assets ?? [], input.sources, libraryModules)];
+
+  for (const entry of input.entries) {
+    const kind = entry.kind as Exclude<UnusedResourceKind, 'asset'>;
+    if (!SUPPORTED_KINDS.includes(kind)) continue;
+    if (dynamicKinds.has(kind)) continue;
+    if ([...(dynamicPrefixes.get(kind) ?? [])].some(p => entry.name.startsWith(p))) continue;
+    if (manifestHasPlaceholder && REVIEW_ONLY_KINDS.has(kind)) continue;
+    if (MANIFEST_CRITICAL.some(re => re.test(entry.name))) continue;
+    if (LIBRARY_PREFIXES.some(p => entry.name.startsWith(p))) continue;
+    if (keepGlobs.some(g => g.test(`${kind}/${entry.name}`))) continue;
+    if (entry.variants.some(v => shrinkerRuleFiles.has(v.path))) continue;
+
+    const key = FileResourceIndex.key(kind, entry.name);
+    // KJ-078 : la garde 5 protege d'une ambiguite de RESOLUTION, laquelle des
+    // copies le consommateur atteint. Quand PERSONNE ne demande le nom, il n'y
+    // a rien a resoudre et les deux copies sont mortes.
+    //
+    // Elle s'appliquait avant meme de regarder les references, donc elle
+    // couvrait aussi ce cas la. Sur le projet de reference : 75 noms definis
+    // dans plusieurs modules, 271 fichiers, et UN seul que rien ne nomme,
+    // un layout present dans deux modules applicatifs.
+    const nommeQuelquePart = referenced.has(key)
+      || literals.has(entry.name)
+      || bindings.has(bindingStemOf(entry.name));
+    if ((moduleCountByKey.get(key)?.size ?? 0) > 1 && nommeQuelquePart) continue;
+
+    // Guard 4: a module with no code cannot be the consumer of its own files.
+    const moduleDir = entry.variants[0]?.moduleDir ?? '';
+    if (moduleDir && !withCode.has(moduleDir)) continue;
+
+    if (referenced.has(key)) continue;
+    if (literals.has(entry.name)) continue;
+    if (bindings.has(bindingStemOf(entry.name))) continue;
+
+    // The escape hatch, and self-references: a file naming itself is not a use.
+    const ownPaths = new Set(entry.variants.map(v => v.path));
+
+    // Guard 9: the file declares an id that something else still reads.
+    //
+    // Deleting a layout takes the `@+id/foo` it declares with it, and every
+    // surviving `R.id.foo` stops resolving: javac says `cannot find symbol,
+    // location: class id`. Seen on the reference project the day a dead
+    // controller freed its panel layout, while the panel VIEW, alive, kept
+    // reading two ids of that layout. A reader in a file this entry owns does
+    // not count, it goes with the file.
+    const lit = [...ownPaths].flatMap(p => [...(idsDeclaredByPath.get(p) ?? [])]);
+    if (lit.some(id => [...(idsRead.get(id) ?? [])].some(p => !ownPaths.has(p)))) continue;
+
+    const ignored = input.sources.some(s => ownPaths.has(s.path) && IGNORE_RE.test(s.text));
+    if (ignored) continue;
+
+    findings.push({
+      kind,
+      name: entry.name,
+      paths: entry.variants.map(v => v.path).sort(),
+      isLibraryModule: libraryModules.has(moduleDir),
+      deletable: !REVIEW_ONLY_KINDS.has(kind) || includeDrawables,
+    });
+  }
+
+  return findings.sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name));
+}
+
+/** Message shown in the Problems panel. */
+export function messageFor(finding: UnusedResource, bytes?: number): string {
+  const noun = finding.kind[0].toUpperCase() + finding.kind.slice(1);
+  const size = bytes !== undefined && bytes > 0 ? `, ${(bytes / 1024).toFixed(1)} KB` : '';
+  if (finding.isLibraryModule) {
+    return `${noun} '${finding.name}' is not referenced anywhere in this workspace (library module, an external consumer may use it)`;
+  }
+  return `${noun} '${finding.name}' is never referenced${size}`;
+}
+
+/** Quick fix title; says how many files go when the name has variants. */
+export function deleteTitleFor(finding: UnusedResource): string {
+  const base = `Delete unused ${finding.kind} ${finding.name}`;
+  const files = finding.paths.length > 1 ? ` (${finding.paths.length} files)` : '';
+  const caution = finding.isLibraryModule ? ' (library module, check external consumers)' : '';
+  return `${base}${files}${caution}`;
+}

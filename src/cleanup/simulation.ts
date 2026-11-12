@@ -2,7 +2,7 @@ import type { AndroidApi } from '../util/androidApi';
 import type { FileResEntry } from '../indexer/FileResourceIndex';
 import type { UnusedSettings } from '../util/unusedSettings';
 import type { Preuve } from './preuve';
-import { collecterUnePasse, coupesRetenues, sansTrouDeLignesVides, Coupe } from '../commands/RemoveEverythingUnused';
+import { collecterUnePasse, coupesRetenues, sansTrouDeLignesVides, Coupe } from './passe';
 import { planCascade } from '../providers/removalCascade';
 import { sanitizeForUsageScan, sanitizeJavaForUsageScan } from '../util/kotlinScan';
 import { collectValueResourceRefs, normalizeResourceName, stripXmlComments } from '../util/xmlRefs';
@@ -45,6 +45,11 @@ export interface OptionsDeSimulation {
   /** Read before every round; a cancelled simulation keeps what it has. */
   estAnnule?: () => boolean;
   surRonde?: (ronde: number) => void;
+  /**
+   * Whether a file still holds the text the first round read. The editor
+   * knows about open documents; without it every file is taken as read.
+   */
+  encoreMesure?: (path: string, texte: string) => boolean;
 }
 
 export interface CoupePlanifiee {
@@ -282,7 +287,7 @@ export async function simulerLePointFixe(
     let retenu: Map<string, Coupe[]> = passe.parFichier;
     if (ronde === 1) {
       for (const o of passe.orphelins) for (const f of o.files) orphelinsGradle.add(f);
-      const r = coupesRetenues(passe.parFichier, textes);
+      const r = coupesRetenues(passe.parFichier, textes, options.encoreMesure);
       retenu = r.retenu;
       ecartes.push(...r.bouges);
       for (const p of r.bouges) exclus.add(p);

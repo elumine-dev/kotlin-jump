@@ -64,6 +64,17 @@ describe('T5, Plan a Dead Code Cleanup', () => {
     expect(m.messages.join(' | ')).toMatch(/batch/);
   });
 
+  it('leaves out a file whose open document no longer matches what was read', async () => {
+    const m = monde([[MORT_A, MORT_B, RACINE]]);
+    vi.spyOn(vscodeMock.workspace, 'textDocuments', 'get').mockReturnValue(
+      [{ uri: vscodeMock.Uri.file(MORT_A.path), isDirty: true, getText: () => MORT_A.text + '\n// edited\n' }] as any);
+    const stockage = stockageEnMemoire();
+    await planCleanupCommand({ corpus: m.corpus, stockage });
+    const plan = (await stockage.lire('cleanup/latest/plan.json'))!;
+    expect(plan).toContain('MortB');
+    expect(plan).not.toContain('MortA');
+  });
+
   it('n ecrit rien dans l espace de travail', async () => {
     const m = monde([[MORT_A, MORT_B, RACINE]]);
     await planCleanupCommand({ corpus: m.corpus, stockage: stockageEnMemoire() });

@@ -1,4 +1,4 @@
-import type { Coupe } from '../commands/RemoveEverythingUnused';
+import type { Coupe } from './passe';
 
 /**
  * The key a cut travels under, from the plan to the batch that applies it.

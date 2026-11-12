@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as vscodeMock from '../__mocks__/vscode';
 import { simulerLePointFixe } from '../../../src/cleanup/simulation';
+import { stillTheMeasuredText } from '../../../src/util/measuredText';
 
 /**
  * Campagne de nettoyage, T2 : le point fixe simule en memoire.
@@ -86,7 +87,9 @@ describe('T2, ce que la simulation sait dire d un fichier et d un nom', () => {
       [{ uri: vscodeMock.Uri.file(DEAD.path), isDirty: true, getText: () => DEAD.text + '\n// edited\n' }] as any);
     // Une autre classe morte fait tourner une ronde 2, ou DeadScreen serait retrouvee si rien ne l excluait.
     const AUTRE = f('/w/app/src/main/java/com/example/kiosk/Other.kt', 'package com.example.kiosk\n\nclass Other\n');
-    const sim = await simulerLePointFixe({ ...corpus(), sources: [GRADLE, MAIN, DEAD, STRINGS, AUTRE] }, SEGS, {});
+    // The simulation knows no editor: the caller hands it the question, as Plan Cleanup does.
+    const sim = await simulerLePointFixe({ ...corpus(), sources: [GRADLE, MAIN, DEAD, STRINGS, AUTRE] }, SEGS, {},
+      { encoreMesure: (p, texte) => stillTheMeasuredText(p, texte) !== undefined });
     expect(sim.ecartes).toEqual([DEAD.path]);
     expect(sim.coupes.filter(c => c.path === DEAD.path)).toEqual([]);
     expect(sim.coupes.find(c => c.quoi === 'Other')?.round).toBe(1);

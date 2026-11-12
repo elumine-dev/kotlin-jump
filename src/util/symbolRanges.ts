@@ -1,11 +1,13 @@
-import { SymbolEntry } from '../indexer/SymbolIndex';
 import { isInsideCommentOrString } from './textUtils';
+
+interface LineAndDepth { line: number; depth: number }
 
 // For symbol at index i (depth d), returns the last line of its body.
 // Scans forward for the next symbol at depth ≤ d (next sibling or parent's sibling)
 // and uses the line before it. Falls back to document last line.
-// Pick<> so RawSymbol[] (KotlinParser) is accepted as well as SymbolEntry[].
-export function rangeEndLine(entries: readonly Pick<SymbolEntry, 'line' | 'depth'>[], index: number, lastLine: number): number {
+// Structural, so RawSymbol[] (KotlinParser) is accepted as well as SymbolEntry[],
+// and this file never has to know the index or the editor behind it.
+export function rangeEndLine(entries: readonly LineAndDepth[], index: number, lastLine: number): number {
   const depth = entries[index].depth;
   const line = entries[index].line;
   for (let j = index + 1; j < entries.length; j++) {
@@ -61,7 +63,7 @@ const CLASS_HEAD_RE = /^(?:@[\w.:]+(?:\s*\([^)]*\))?\s+)*(?:(?:public|private|in
  */
 export function bodyEndLine(
   lines: readonly string[],
-  entries: readonly Pick<SymbolEntry, 'line' | 'depth'>[],
+  entries: readonly LineAndDepth[],
   index: number,
   lastLine: number,
 ): number {

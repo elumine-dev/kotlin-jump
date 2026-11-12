@@ -1472,7 +1472,7 @@
         "kotlinJump.unusedMembersSelfOnly": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Also report members referenced only from inside their own class, with a **Make private** fix. Once private, the file-local checks track them in real time."
+          "markdownDescription": "In **Kotlin Jump: Find Unreferenced Members**, also report members referenced only from inside their own class, with a **Make private** fix. Once private, the file-local checks track them in real time. **Find Everything Unused** never reports them: a member that could be private is still used."
         },
         "kotlinJump.unusedMembersIgnoreNames": {
           "type": "array",

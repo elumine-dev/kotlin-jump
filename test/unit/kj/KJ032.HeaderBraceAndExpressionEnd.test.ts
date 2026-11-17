@@ -72,6 +72,19 @@ describe.skipIf(!mod)('l accolade du corps et la fin d un corps d expression', (
     expect(coupe(t, 'mort')).toBe('fun mort(f: Boolean): String = if (f) {\n    "on"\n} else {\n    "off"\n}\n');
   });
 
+  // Vu sur une app open source : la branche else ouvre sur une declaration
+  // locale, et la ligne suivante se lisait comme une declaration fraiche. La
+  // coupe s arretait sur `} else {` et le fichier ne se lisait plus.
+  it('branche else qui commence par un val local : la coupe va jusqu au bout', () => {
+    const t = 'package com.x\n\nfun Window.ratio() = if (a) {\n    (b.height() / b.width().toFloat())\n} else {\n    val size = Point()\n    size.y / size.x.toFloat()\n}\n\nclass Vivant\n';
+    expect(reste(t, 'ratio')).toBe('package com.x\n\n\nclass Vivant\n');
+  });
+
+  it('lambda suivi d un .also qui commence par un val local : idem', () => {
+    const t = 'package com.x\n\nfun mort(s: Scope) = s.launch {\n    go()\n}.also {\n    val n = it\n    log(n)\n}\n\nclass Vivant\n';
+    expect(reste(t, 'mort')).toBe('package com.x\n\n\nclass Vivant\n');
+  });
+
   it('lambda suivi d un .also : idem', () => {
     const t = 'package com.x\n\nfun mort(s: Scope) = s.launch {\n    go()\n}.also {\n    log(it)\n}\n\nclass Vivant\n';
     expect(coupe(t, 'mort')).toBe('fun mort(s: Scope) = s.launch {\n    go()\n}.also {\n    log(it)\n}\n');

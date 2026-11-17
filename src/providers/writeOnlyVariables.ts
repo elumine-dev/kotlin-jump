@@ -117,6 +117,29 @@ function atStatementEnd(clean: string, i: number): boolean {
   return j >= clean.length || clean[j] === '\n' || clean[j] === ';' || clean[j] === '}';
 }
 
+/**
+ * True when the block around `offset` hands its last expression on as a value:
+ * a lambda, a `when` branch, an `if` read as an expression. A loop, a function
+ * or accessor body, `try`, `init`, a statement `if` and an `else` do not.
+ *
+ * Only `x++` and `++x` ask, since an assignment is no expression in Kotlin. A
+ * `{ counter++ }` handed to a constructor expecting an `Int` result lost its
+ * value with the write and stopped compiling.
+ */
+function blockYieldsItsLastExpression(clean: string, blocks: Block[], offset: number): boolean {
+  const i = innermostBlockAt(blocks, offset);
+  if (i === -1) return false;
+  const header = clean.slice(blocks[i].headerStart, blocks[i].open).replace(/\s+$/, '');
+  if (/\b(?:for|while|catch)\s*\([^{}]*\)$/.test(header)) return false;
+  if (/(?:^|[^\w.])(?:do|try|finally|init|else)$/.test(header)) return false;
+  if (/\b(?:get|set)\s*\([^{}]*\)$/.test(header)) return false;
+  // `fun f(x: Int = 0): Unit` ends on its parameters or its return type; `fun f() = run` ends on a call.
+  if (/\bfun\b[^{}]*\)(?:\s*:\s*[\w.<>?, ]+)?$/.test(header) && !/\)\s*=/.test(header.slice(header.lastIndexOf('fun')))) return false;
+  const statementIf = /\bif\s*\([^{}]*\)$/.exec(header);
+  if (statementIf) return /(?:[=(,:?]|->|\breturn)$/.test(header.slice(0, statementIf.index).replace(/\s+$/, ''));
+  return true;
+}
+
 /** True when the occurrence sits inside a lambda that rebinds `this`. */
 function insideReceiverScope(clean: string, blocks: Block[], offset: number): boolean {
   for (let i = innermostBlockAt(blocks, offset); i !== -1; i = blocks[i].parent) {
@@ -147,12 +170,19 @@ export function classifyOccurrence(
   if (parenAt(offset) !== baseParenDepth) return 'read';
   // W1: `foo.apply { x = 1 }` may be assigning the receiver's property
   if (insideReceiverScope(clean, blocks, offset)) {
-    return classifyStatement(clean, offset, name) === 'write' ? 'opaqueWrite' : 'read';
+    return classifyStatement(clean, blocks, offset, name) === 'write' ? 'opaqueWrite' : 'read';
   }
-  return classifyStatement(clean, offset, name);
+  return classifyStatement(clean, blocks, offset, name);
 }
 
-function classifyStatement(clean: string, offset: number, name: string): 'read' | 'write' {
+/** True when only blanks separate `i` from a `}`: the statement is the last of its block. */
+function lastOfItsBlock(clean: string, i: number): boolean {
+  let j = i;
+  while (j < clean.length && /\s/.test(clean[j])) j++;
+  return clean[j] === '}';
+}
+
+function classifyStatement(clean: string, blocks: Block[], offset: number, name: string): 'read' | 'write' {
 
   // W2: statement start, after an optional `this.`
   const beforeQualifier = peelThis(clean, offset - 1);
@@ -162,10 +192,8 @@ function classifyStatement(clean: string, offset: number, name: string): 'read' 
       clean.slice(beforeQualifier - 1, beforeQualifier + 1) === '--');
   if (prefixIncr) {
     // `++x` as a whole statement
-    return atStatementStart(clean, skipSpaceBack(clean, beforeQualifier - 2)) &&
-      atStatementEnd(clean, offset + name.length)
-      ? 'write'
-      : 'read';
+    if (!atStatementStart(clean, skipSpaceBack(clean, beforeQualifier - 2)) || !atStatementEnd(clean, offset + name.length)) return 'read';
+    return lastOfItsBlock(clean, offset + name.length) && blockYieldsItsLastExpression(clean, blocks, offset) ? 'read' : 'write';
   }
   if (!atStatementStart(clean, beforeQualifier)) return 'read';
 
@@ -177,7 +205,8 @@ function classifyStatement(clean: string, offset: number, name: string): 'read' 
   if (c === '=') return next === '=' ? 'read' : 'write';
   if ('+-*/%'.includes(c) && next === '=' && clean[j + 2] !== '=') return 'write';
   if ((c === '+' && next === '+') || (c === '-' && next === '-')) {
-    return atStatementEnd(clean, j + 2) ? 'write' : 'read';
+    if (!atStatementEnd(clean, j + 2)) return 'read';
+    return lastOfItsBlock(clean, j + 2) && blockYieldsItsLastExpression(clean, blocks, offset) ? 'read' : 'write';
   }
   return 'read';
 }

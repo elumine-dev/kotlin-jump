@@ -14,6 +14,31 @@ describe('KJ-028 adversarial — classification', () => {
     expect(names('fun f() {\n  var n = 0\n  g(n++)\n}\n')).toEqual([]);
   });
 
+  // Vu sur une app open source : `SyncedAction<Unit, Int> { counter++ }`. La
+  // valeur de `counter++` est le resultat de la lambda ; la retirer laissait
+  // une lambda Unit la ou un Int etait attendu, et le test ne compilait plus.
+  it('x++ en derniere expression d une lambda ou d une branche est sa valeur : une lecture', () => {
+    expect(names('fun f() {\n  var n = 0\n  val a = Action<Int> { n++ }\n  a.run()\n}\n')).toEqual([]);
+    expect(names('fun f() {\n  var n = 0\n  val a = Action<Int> {\n    log()\n    ++n\n  }\n  a.run()\n}\n')).toEqual([]);
+    expect(names('fun f(k: Int) {\n  var n = 0\n  val y = when (k) {\n    1 -> { n++ }\n    else -> 0\n  }\n  println(y)\n}\n')).toEqual([]);
+    expect(names('fun f(c: Boolean) {\n  var n = 0\n  val y = if (c) { n++ } else 0\n  println(y)\n}\n')).toEqual([]);
+    // Une fonction a corps d expression rend la valeur de la lambda qui suit l appel.
+    expect(names('class C {\n  private var n = 0\n  fun next() = compute(1) { n++ }\n}\n')).toEqual([]);
+  });
+
+  it('x++ en fin de corps d accesseur reste une ecriture', () => {
+    expect(names('class C {\n  private var n = 0\n  var v: Int = 0\n    set(value) {\n      field = value\n      n++\n    }\n}\n')).toEqual(['n']);
+  });
+
+  it('x++ en fin de boucle, de fonction, de try ou d un if instruction reste une ecriture', () => {
+    expect(names('fun f(l: List<Int>) {\n  var n = 0\n  for (x in l) { n++ }\n}\n')).toEqual(['n']);
+    expect(names('fun f(l: List<Int>) {\n  var n = 0\n  while (g()) {\n    n++\n  }\n}\n')).toEqual(['n']);
+    expect(names('class C {\n  private var n = 0\n  fun tick() { n++ }\n}\n')).toEqual(['n']);
+    expect(names('class C {\n  private var n = 0\n  fun tick(step: Int = 1): Unit { n++ }\n}\n')).toEqual(['n']);
+    expect(names('fun f() {\n  var n = 0\n  try { n++ } finally { n-- }\n}\n')).toEqual(['n']);
+    expect(names('fun f(c: Boolean) {\n  var n = 0\n  if (c) { n++ } else { n-- }\n}\n')).toEqual(['n']);
+  });
+
   it('préfixe ++x seul est une écriture, dans une expression c’est une lecture', () => {
     expect(names('fun f() {\n  var n = 0\n  ++n\n  println(1)\n}\n')).toEqual(['n']);
     expect(names('fun f() {\n  var n = 0\n  g(++n)\n}\n')).toEqual([]);

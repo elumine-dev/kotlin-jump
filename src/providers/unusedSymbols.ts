@@ -840,8 +840,23 @@ export function removalExtent(
   // l'OPERATEUR juste en dessous veut le brut, lui, parce que le nettoyeur
   // vide les chaines et que `val x = "done"` se lirait sur son `=`.
   const termine = finBlanchie >= 0 && clean[finBlanchie] === ';';
+  // Un crochet que la declaration laisse ouvert dit a lui seul que l expression
+  // continue, quoi que commence la ligne suivante. `} else {` suivi de
+  // `val size = Point()` se lisait comme une fin, la ligne d apres ouvrant une
+  // declaration, et la coupe laissait la branche else orpheline.
+  // Compte jusqu a la fin de la LIGNE : c est elle que la coupe emporte, `else {` compris.
+  const resteOuvert = (): boolean => {
+    let d = 0;
+    const jusqu = lineEndOf(offsetToPos(lineStarts as number[], Math.max(endOffset - 1, 0)).line);
+    for (let i = lineStarts[sym.line] ?? 0; i < jusqu; i++) {
+      const c = clean.charCodeAt(i);
+      if (c === 40 || c === 91 || c === 123) d++;
+      else if (c === 41 || c === 93 || c === 125) d--;
+    }
+    return d > 0;
+  };
   const continues = span.lineBasedEnd && !termine
-    && (FINIT_SUR_UN_OPERATEUR_RE.test(trailingSansCommentaire()) || !nextStartsFresh());
+    && (FINIT_SUR_UN_OPERATEUR_RE.test(trailingSansCommentaire()) || !nextStartsFresh() || resteOuvert());
   // Une accolade de lambda n est pas forcement la fin de l expression, et la
   // portee s y arrete quand meme. La suite evidente repond la ou `lineBasedEnd`
   // se tait, sans jamais elargir les cas que la garde couvrait deja.

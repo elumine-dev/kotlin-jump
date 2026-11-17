@@ -13,8 +13,7 @@
  * suppress a warning, never create one.
  *
  * Knowingly missed (do not "fix" these without a test proving safety):
- * `if (c) x = 1`, `x = x + 1`, writes inside `apply`/`run`/`with`, and writes
- * at non-zero paren depth. Each trades recall for the zero-false-positive
+ * `if (c) x = 1`, `x = x + 1`, and writes at non-zero paren depth. Each trades recall for the zero-false-positive
  * property the whole family is built on.
  *
  * The VS Code layer stays in `./WriteOnlyProvider`. Nothing here may import
@@ -73,7 +72,12 @@ const RECEIVER_SCOPES = new Set(['apply', 'run', 'with', 'buildString', 'buildLi
 const VAR_DECL_RE =
   /(?:^[ \t]*|[{;]\s*|->\s*)(?:@\w+(?:\([^()]*\))?\s+)*(var)\s+([A-Za-z_]\w*)\s*(?=[:=]|\bby\b)/gm;
 
-type Role = 'read' | 'write';
+/**
+ * `opaqueWrite`: an assignment inside a lambda that rebinds `this`. It writes
+ * our variable or the receiver's property of the same name, and either way it
+ * reads nothing: the finding stands, but no removal can be offered.
+ */
+type Role = 'read' | 'write' | 'opaqueWrite';
 
 /** Skips spaces and tabs backwards from `i`, returning the new index. */
 function skipSpaceBack(clean: string, i: number): number {
@@ -142,7 +146,13 @@ export function classifyOccurrence(
   // W0: a named argument (`build(\n  x = 1,\n)`) sits deeper in parens
   if (parenAt(offset) !== baseParenDepth) return 'read';
   // W1: `foo.apply { x = 1 }` may be assigning the receiver's property
-  if (insideReceiverScope(clean, blocks, offset)) return 'read';
+  if (insideReceiverScope(clean, blocks, offset)) {
+    return classifyStatement(clean, offset, name) === 'write' ? 'opaqueWrite' : 'read';
+  }
+  return classifyStatement(clean, offset, name);
+}
+
+function classifyStatement(clean: string, offset: number, name: string): 'read' | 'write' {
 
   // W2: statement start, after an optional `this.`
   const beforeQualifier = peelThis(clean, offset - 1);
@@ -223,7 +233,7 @@ export function findWriteOnlyVariables(text: string): WriteOnlyVar[] {
   const lineStarts = buildLineStarts(text);
   const lastLine = lines.length - 1;
   const { blocks, parenAt } = scanStructure(clean);
-  const suppressed = suppressedRegions(clean, blocks, lineStarts);
+  const suppressed = suppressedRegions(clean, blocks, lineStarts, text, UNUSED_VARIABLE);
   const isSuppressed = (offset: number) => suppressed.some(r => offset >= r.from && offset < r.to);
   const lineEndOf = (line: number) => (line + 1 < lineStarts.length ? lineStarts[line + 1] : text.length);
 
@@ -312,14 +322,16 @@ export function findWriteOnlyVariables(text: string): WriteOnlyVar[] {
     const re = new RegExp(`\\b${escapeName(c.name)}\\b`, 'g');
     re.lastIndex = c.regionStart;
     const writes: number[] = [];
+    let opaque = 0;
     let dead = true;
     let occ: RegExpExecArray | null;
     while ((occ = re.exec(masked)) !== null && occ.index < c.regionEnd) {
       const role = classifyOccurrence(clean, blocks, parenAt, occ.index, c.name, c.baseParenDepth);
       if (role === 'read') { dead = false; break; }
-      writes.push(occ.index);
+      if (role === 'opaqueWrite') opaque++;
+      else writes.push(occ.index);
     }
-    if (!dead || writes.length === 0) continue;
+    if (!dead || writes.length + opaque === 0) continue;
 
     const pos = offsetToPos(lineStarts, c.nameOffset);
     result.push({
@@ -327,8 +339,8 @@ export function findWriteOnlyVariables(text: string): WriteOnlyVar[] {
       name: c.name,
       line: pos.line,
       character: pos.character,
-      writeCount: writes.length,
-      edits: computeEdits(text, clean, lineStarts, lineEndOf, c, writes),
+      writeCount: writes.length + opaque,
+      edits: opaque > 0 ? [] : computeEdits(text, clean, lineStarts, lineEndOf, c, writes),
       suppressLine: c.suppressLine,
       suppressIndent: /^[ \t]*/.exec(lines[c.declLine])?.[0] ?? '',
     });

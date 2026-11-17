@@ -23,6 +23,7 @@ import {
   fileOptsOut,
   UNUSED_VARIABLE,
   SUPPRESS_NAMES,
+  suppressesDiagnostic,
   sanitizeForUsageScan,
 } from '../util/kotlinScan';
 import { coupeUnBloc, debutDuBloc } from '../util/blocDeCommentaire';
@@ -239,11 +240,23 @@ export function enclosingBody(clean: string, blocks: Block[], offset: number): n
   return -1;
 }
 
-/** Regions covered by a `@Suppress`-family annotation. */
-export function suppressedRegions(clean: string, blocks: Block[], lineStarts: number[]): { from: number; to: number }[] {
+/**
+ * Regions covered by a `@Suppress`-family annotation that NAMES one of
+ * `diagnostics`. `@Suppress("TooManyFunctions")` on a class says nothing about
+ * its unread fields. Arguments are read from the RAW text: the sanitized copy
+ * blanks string contents.
+ */
+export function suppressedRegions(
+  clean: string,
+  blocks: Block[],
+  lineStarts: number[],
+  text: string,
+  diagnostics: readonly string[],
+): { from: number; to: number }[] {
   const out: { from: number; to: number }[] = [];
   for (const anno of collectAnnotationTargets(clean)) {
-    if (!SUPPRESS_NAMES.has(anno.name)) continue;
+    if (!SUPPRESS_NAMES.has(anno.name) || anno.argStart < 0) continue;
+    if (!suppressesDiagnostic(text.slice(anno.argStart, anno.argEnd), diagnostics)) continue;
     const { line } = offsetToPos(lineStarts, anno.target);
     const from = lineStarts[line];
     // the annotation covers the declaration it introduces, body included
@@ -302,7 +315,7 @@ export function findUnusedLocals(text: string): UnusedLocal[] {
   const clean = sanitizeForUsageScan(text);
   const lineStarts = buildLineStarts(text);
   const { blocks, parenAt } = scanStructure(clean);
-  const suppressed = suppressedRegions(clean, blocks, lineStarts);
+  const suppressed = suppressedRegions(clean, blocks, lineStarts, text, UNUSED_VARIABLE);
   const isSuppressed = (offset: number) => suppressed.some(r => offset >= r.from && offset < r.to);
 
   const lineEndOf = (line: number) => (line + 1 < lineStarts.length ? lineStarts[line + 1] : text.length);

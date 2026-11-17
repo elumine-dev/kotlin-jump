@@ -46,11 +46,24 @@ describe('KJ-028 adversarial — classification', () => {
     expect(names('class C {\n  private var n = 0\n  fun a(o: C) { o.n = 1 }\n}\n')).toEqual([]);
   });
 
-  it('écriture dans un apply/run/with : receveur possible, donc lecture', () => {
-    expect(names('fun f(o: O) {\n  var count = 0\n  o.apply { count = 1 }\n}\n')).toEqual([]);
-    expect(names('fun f(o: O) {\n  var count = 0\n  with(o) { count = 1 }\n}\n')).toEqual([]);
+  it('écriture dans un apply/run/with : la nôtre ou celle du receveur, jamais une lecture', () => {
+    // Signalée, puisque rien ne lit la variable ; sans correctif, puisque
+    // retirer l’affectation retirerait peut-être celle du receveur.
+    for (const text of [
+      'fun f(o: O) {\n  var count = 0\n  o.apply { count = 1 }\n}\n',
+      'fun f(o: O) {\n  var count = 0\n  with(o) { count = 1 }\n}\n',
+      'class C {\n  private var on = false\n  fun a(o: O) {\n    o?.apply {\n      listen { on = true }\n    }\n    on = false\n  }\n}\n',
+    ]) {
+      const found = findWriteOnlyVariables(text);
+      expect(found.map(v => v.name), text).toHaveLength(1);
+      expect(found[0].edits, text).toEqual([]);
+    }
+    // Une LECTURE dans la même portée garde la variable vivante.
+    expect(names('fun f(o: O) {\n  var count = 0\n  o.apply { count = 1\n    println(count) }\n}\n')).toEqual([]);
+    expect(names('class C {\n  private var on = false\n  fun a(o: O) {\n    o.apply { if (on) go() }\n    on = true\n  }\n}\n')).toEqual([]);
     // let/also lient `it`, pas un receveur : l’écriture reste la nôtre
     expect(names('fun f(o: O) {\n  var count = 0\n  o.let { count = 1 }\n}\n')).toEqual(['count']);
+    expect(findWriteOnlyVariables('fun f(o: O) {\n  var count = 0\n  o.let { count = 1 }\n}\n')[0].edits.length).toBeGreaterThan(0);
   });
 
   it('argument nommé sur sa propre ligne n’est pas une écriture', () => {
@@ -147,9 +160,12 @@ describe('KJ-028 adversarial — classification', () => {
     expect(names('class T {\n  override fun run() {\n    var n = 0\n    n = 1\n    println(2)\n  }\n}\n')).toEqual(['n']);
   });
 
-  it('mais un vrai run { } garde le silence', () => {
-    expect(names('fun f() {\n  var n = 0\n  thing.run {\n    n = 1\n  }\n  println(2)\n}\n')).toEqual([]);
-    expect(names('fun f() {\n  var n = 0\n  thing.apply {\n    n = 1\n  }\n  println(2)\n}\n')).toEqual([]);
+  it('mais un vrai run { } ne propose aucun correctif', () => {
+    for (const scope of ['run', 'apply']) {
+      const found = findWriteOnlyVariables(`fun f() {\n  var n = 0\n  thing.${scope} {\n    n = 1\n  }\n  println(2)\n}\n`);
+      expect(found.map(v => v.name)).toEqual(['n']);
+      expect(found[0].edits).toEqual([]);
+    }
   });
 
   it('gros fichier : 300 classes < 300 ms', () => {

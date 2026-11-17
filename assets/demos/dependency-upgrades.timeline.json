@@ -1,0 +1,27 @@
+[
+  {
+    "type": "caption",
+    "label": "Six dependencies behind, known before any Gradle run",
+    "duration": 2400,
+    "t": 300
+  },
+  {
+    "type": "keystroke",
+    "label": "⌘ + K  ⌘ + I",
+    "sublabel": "Show Hover",
+    "duration": 2500,
+    "t": 2700
+  },
+  {
+    "type": "caption",
+    "label": "The hover: 3 versions behind, latest published May 2025",
+    "duration": 2200,
+    "t": 4251
+  },
+  {
+    "type": "caption",
+    "label": "One shared version, four libraries move together",
+    "duration": 2400,
+    "t": 9208
+  }
+]

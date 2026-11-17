@@ -57,7 +57,7 @@ import { reflectiveClassPrefixes } from '../util/reflectiveClassNames';
 
 export type UnusedSymbolKind = Extract<
   SymbolKind,
-  'class' | 'interface' | 'object' | 'enum' | 'dataClass' | 'sealedClass' | 'fun' | 'composable' | 'val' | 'var'
+  'class' | 'interface' | 'object' | 'enum' | 'dataClass' | 'sealedClass' | 'annotation' | 'fun' | 'composable' | 'val' | 'var'
 >;
 
 export type UnusedSymbolVerdict = 'unreferenced' | 'testOnly';
@@ -145,11 +145,11 @@ export interface InjectionCut {
   removeEnd: number;
 }
 
-/** Kinds this detector reasons about. `typealias` and `annotation` are v2. */
+/** Kinds this detector reasons about. `typealias` is v2. */
 // Declaration keywords: a line holding one is a declaration of its own.
 const DECL_KEYWORD_RE = /\b(?:val|var|fun|class|object|interface|typealias|const|enum|companion)\b/;
 const CANDIDATE_KINDS = new Set<string>([
-  'class', 'interface', 'object', 'enum', 'dataClass', 'sealedClass',
+  'class', 'interface', 'object', 'enum', 'dataClass', 'sealedClass', 'annotation',
   'fun', 'composable', 'val', 'var',
 ]);
 
@@ -401,6 +401,8 @@ interface Candidate {
   annoNames: string[];
   /** `@Suppress("unused")` on the declaration itself: an explicit opt-out. */
   optsOutUnused: boolean;
+  /** An annotation class reflection may look up: nobody writing it proves nothing. */
+  readAtRuntime: boolean;
 }
 
 export interface Harvest {
@@ -1160,19 +1162,33 @@ export function collectTopLevelCandidates(
         (a.name === 'Suppress' || a.name === 'SuppressWarnings') && a.argStart >= 0
         && suppressesDiagnostic(file.text.slice(a.argStart, a.argEnd), UNUSED_DECLARATION));
 
+      // Une seule copie sans commentaires par FICHIER, et seulement si un
+      // symbole mort y demande son etendue.
+      const extent = removalExtent(file.text, file.clean, lineStarts, lastLine, sym, span,
+        () => (file.sc ??= stripKotlinComments(file.text)));
+      // An annotation class lists its own constants in its own meta-annotation,
+      // `@IntDef(Mode.A, Mode.B) annotation class Mode`: that header is part of
+      // the declaration and leaves with it.
+      const selfStart = sym.kind === 'annotation' && extent.removeStart !== -1
+        ? Math.min(span.scanStart, extent.removeStart) : span.scanStart;
+      // `RUNTIME` keeps the annotation for reflection, in code this corpus may
+      // never read. A Java `@interface` with no `@Retention` written is left
+      // alone too: code generators read those markers.
+      const retention = own.find(a => a.name === 'Retention');
+      const readAtRuntime = sym.kind === 'annotation' && (retention
+        ? retention.argStart >= 0 && /\bRUNTIME\b/.test(file.text.slice(retention.argStart, retention.argEnd))
+        : file.path.endsWith('.java'));
       candidates.push({
         optsOutUnused,
+        readAtRuntime,
         sym,
         name: sym.name,
         kind: sym.kind as UnusedSymbolKind,
         path: file.path,
-        selfInSpan: countWord(file.clean.slice(span.scanStart, span.scanEnd), sym.name),
+        selfInSpan: countWord(file.clean.slice(selfStart, span.scanEnd), sym.name),
         selfInFile: countWord(keptText, sym.name),
-        selfInSpanAsInFile: countWord(keptBlanked.slice(span.scanStart, span.scanEnd), sym.name),
-        // Une seule copie sans commentaires par FICHIER, et seulement si un
-        // symbole mort y demande son etendue.
-        ...removalExtent(file.text, file.clean, lineStarts, lastLine, sym, span,
-          () => (file.sc ??= stripKotlinComments(file.text))),
+        selfInSpanAsInFile: countWord(keptBlanked.slice(selfStart, span.scanEnd), sym.name),
+        ...extent,
         annoNames,
       });
     }
@@ -1742,9 +1758,12 @@ function rejectionReason(
   }
   if (sym.isExpect || sym.isActual) return 'F4:kmp';
 
-  const foreign = c.annoNames.find(a =>
+  // What sits on an annotation class describes the annotation (`@Retention`,
+  // `@Qualifier`, `@IntDef`): no framework reaches one nobody writes.
+  const foreign = c.kind === 'annotation' ? undefined : c.annoNames.find(a =>
     !BENIGN_TOPLEVEL_ANNOTATIONS.has(a) && !ctx.scopeAnnotations.has(a));
   if (foreign) return `F5:@${foreign}`;
+  if (c.readAtRuntime) return 'F20:runtime-annotation';
 
   const framework = frameworkAncestor(c.sym.supertypes ?? [], supertypesByName);
   // KJ-080 : F7 ne s'applique plus aux VUES.
@@ -2213,7 +2232,7 @@ export function findUnusedSymbols(input: UnusedSymbolScanInput): UnusedSymbol[] 
 
 const KIND_LABEL: Record<string, string> = {
   class: 'Class', dataClass: 'Class', sealedClass: 'Class', enum: 'Enum',
-  interface: 'Interface', object: 'Object',
+  interface: 'Interface', object: 'Object', annotation: 'Annotation',
   fun: 'Function', composable: 'Composable', val: 'Property', var: 'Property',
 };
 

@@ -318,9 +318,9 @@ describe.skipIf(!mod)('F11 à F17 — opt-outs et périmètre', () => {
     expect(found[0].isLibraryModule).toBe(true);
   });
 
-  it('F15 : typealias et annotation class sont hors périmètre en v1', () => {
+  it('F15 : typealias est hors périmètre en v1 ; annotation class ne l’est plus', () => {
     expect(find([kt(`${MAIN}/T.kt`, 'package com.x\n\ntypealias Ghost = String\n')])).toEqual([]);
-    expect(find([kt(`${MAIN}/A.kt`, 'package com.x\n\nannotation class Ghost\n')])).toEqual([]);
+    expect(flagged([kt(`${MAIN}/A.kt`, 'package com.x\n\nannotation class Ghost\n')], 'Ghost')).toBe(true);
   });
 
   it('F15 : un membre de classe est hors périmètre, KJ-026 et KJ-032 v2 s’en occupent', () => {

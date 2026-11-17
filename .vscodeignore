@@ -11,6 +11,8 @@ doc/**
 .vscode-test.mjs
 tsconfig.json
 vitest.config.ts
+vitest.gaps.config.ts
+vite.config.ts
 esbuild.js
 
 # Build outputs that exist only for development. esbuild.js calls the perf and

@@ -69,6 +69,8 @@ const DEV_SEULEMENT = [
   'src/extension.ts',
   'test/unit/setup.ts',
   'esbuild.js',
+  'vitest.gaps.config.ts',
+  'vite.config.ts',
   'CLAUDE.md',
 ];
 

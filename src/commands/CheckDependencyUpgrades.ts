@@ -54,7 +54,7 @@ const prompted = new Set<string>();
 /** Tests run several sessions in one process. */
 export function resetConsentPrompts(): void { prompted.clear(); }
 
-/** Under `ask`, one prompt per workspace and per session; `on` and `off` answer at once. */
+/** Under `ask`, one prompt per workspace and per session, none once the session holds consent; `on` and `off` answer at once. */
 export async function ensureConsent(ctx: CommandContext, folder: string): Promise<boolean> {
   const { check } = ctx.config();
   if (check === 'on') return true;
@@ -62,6 +62,7 @@ export async function ensureConsent(ctx: CommandContext, folder: string): Promis
   const decision = ctx.workspaceState.get<'granted' | 'denied'>(DECISION_KEY);
   if (decision === 'granted') return true;
   if (decision === 'denied') return false;
+  if (ctx.engine.sessionGranted) return true;
   if (prompted.has(folder)) return false;
   prompted.add(folder);
   const answer = await vscode.window.showInformationMessage(CONSENT_MESSAGE, CHECK_NOW, ALWAYS, NEVER);

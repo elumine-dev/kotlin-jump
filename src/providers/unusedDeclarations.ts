@@ -84,7 +84,7 @@ const BENIGN_DECL_ANNOTATIONS = new Set(['Composable']);
  * qui ne sert a rien, et le test qui croyait l eprouver passait en realite
  * grace au collecteur.
  */
-const DIRECTIVES_DE_COMPILATION = new Set(['Suppress', 'SuppressWarnings', 'OptIn']);
+const DIRECTIVES_DE_COMPILATION = new Set(['Suppress', 'SuppressWarnings', 'SuppressLint', 'OptIn']);
 
 /**
  * Sauf quand la directive dit justement de se taire.
@@ -96,9 +96,26 @@ const DIRECTIVES_DE_COMPILATION = new Set(['Suppress', 'SuppressWarnings', 'OptI
  * explicitement garde. Chaque detecteur passe la liste qu il honore deja pour
  * `@file:Suppress`, pour que la classe et le fichier disent la meme chose.
  */
+/**
+ * Class annotations that hand no PRIVATE member to anyone.
+ *
+ * A Dagger or Hilt scope says how long the instance lives, and the injector
+ * cannot reach a private member at all. The threading and API-level markers
+ * only speak to lint. On the reference project a `@ScopeForgetmenot` view
+ * model kept a `Job` field alive that five assignments wrote and nothing read.
+ */
+const SANS_LECTEUR = new Set([
+  'Singleton', 'Reusable', 'HiltViewModel', 'AndroidEntryPoint', 'HiltAndroidApp',
+  'Deprecated', 'RequiresApi', 'TargetApi', 'MainThread', 'UiThread', 'WorkerThread', 'AnyThread',
+]);
+/** `@ActivityScoped`, `@ScopeForgetmenot`, `@FragmentScope`: scopes are named after what they are. */
+const PORTEE_RE = /^(?:[A-Z]\w*Scoped?|Scope[A-Z]\w*)$/;
+
 function protege(a: { name: string; args: string }, diagnostics: readonly string[]): boolean {
+  if (SANS_LECTEUR.has(a.name) || PORTEE_RE.test(a.name)) return false;
   if (!DIRECTIVES_DE_COMPILATION.has(a.name)) return true;
-  return a.name !== 'OptIn' && suppressesDiagnostic(a.args, diagnostics);
+  // `@SuppressLint` parle a Android Lint, dont aucun identifiant n est le notre.
+  return (a.name === 'Suppress' || a.name === 'SuppressWarnings') && suppressesDiagnostic(a.args, diagnostics);
 }
 
 

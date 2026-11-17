@@ -66,8 +66,8 @@ const pourquoi = (nom: string, ...sources: { path: string; text: string }[]) =>
 
 /**
  * Le canari : une annotation morte de facon evidente, que rien n applique.
- * Aujourd hui le detecteur ne la rapporte pas, donc les gardes sont ROUGES,
- * ce qui est le verdict honnete : rien n est protege tant que rien n est juge.
+ * Une garde qui ne le voit pas rapporte ne prouve rien : rien n est protege
+ * tant que rien n est juge.
  */
 const CANARI = f(`${MAIN}/CanaryAnnotation.kt`, [
   'package com.x',
@@ -144,19 +144,21 @@ describe.skipIf(!mod)('G5 — le corpus de test est lisible', () => {
   });
 
   /**
-   * SENTINELLE. Meme nom, meme corpus, deux sortes, deux verdicts. C est la
-   * demonstration que le trou est la SORTE et rien d autre. Si ce test se met
-   * a echouer, `CANDIDATE_KINDS` a bouge et l entree G5 du document, comme
-   * G6, doit etre relue.
+   * SENTINELLE. Meme nom, meme corpus, deux sortes : depuis que `annotation`
+   * est dans `CANDIDATE_KINDS`, les deux sont jugees et rendent le meme
+   * verdict. Si ce test se met a echouer, la sorte a ete retiree et toutes les
+   * gardes plus bas redeviennent vraies par vacuite.
    */
-  it('aujourd hui, une annotation n est jamais un candidat', () => {
+  it('une annotation est un candidat, juge comme la classe du meme nom', () => {
     expect(pourquoi('ComputationScheduler', CLASSE_TEMOIN))
       .toMatchObject({ kind: 'class', outcome: 'unreferenced' });
-    expect(pourquoi('ComputationScheduler', ANNOTATIONS)).toBeUndefined();
-    expect(pourquoi('UIScheduler', ANNOTATIONS)).toBeUndefined();
+    expect(pourquoi('ComputationScheduler', ANNOTATIONS))
+      .toMatchObject({ kind: 'annotation', outcome: 'unreferenced' });
+    expect(pourquoi('UIScheduler', ANNOTATIONS))
+      .toMatchObject({ kind: 'annotation', outcome: 'unreferenced' });
   });
 
-  it('aujourd hui, un @interface Java n est jamais un candidat non plus', () => {
+  it('un @interface Java sans retention ecrite est candidat, et ecarte par son propre filtre', () => {
     const java = f(`${MAIN}/CellSelectionType.java`, [
       'package com.x;',
       '',
@@ -164,15 +166,16 @@ describe.skipIf(!mod)('G5 — le corpus de test est lisible', () => {
       '}',
       '',
     ].join('\n'));
-    expect(pourquoi('CellSelectionType', java)).toBeUndefined();
+    expect(JSON.stringify(pourquoi('CellSelectionType', java))).toContain('F20:runtime-annotation');
   });
 });
 
 describe.skipIf(!mod)('G5 — le qualificateur que plus aucune fourniture ne porte', () => {
-  it.fails('rapporte une annotation class que rien n applique', () => {
+  it('rapporte une annotation class que rien n applique', () => {
     expect(nomme(symboles(ANNOTATIONS), 'ComputationScheduler')).toBe(true);
   });
 
+  // Ouvert a dessein : sans `@Retention` ecrite, la garde plus bas l emporte et on ne tranche pas.
   it.fails('rapporte un @interface Java que rien n applique', () => {
     const java = f(`${MAIN}/Unused.java`, [
       'package com.x;',
@@ -184,7 +187,7 @@ describe.skipIf(!mod)('G5 — le qualificateur que plus aucune fourniture ne por
     expect(nomme(symboles(java), 'UnusedMarker')).toBe(true);
   });
 
-  it.fails('ronde deux : rapporte le qualificateur dont la fourniture vient d etre coupee', () => {
+  it('ronde deux : rapporte le qualificateur dont la fourniture vient d etre coupee', () => {
     // Le corpus est donne SANS `SchedulersModule` : c est exactement ce que la
     // boucle de point fixe lit au tour d apres, une fois G1 applique. Les
     // deux annotations sont alors orphelines.
@@ -221,12 +224,11 @@ describe.skipIf(!mod)('G5 — le qualificateur que plus aucune fourniture ne por
   });
 });
 
-describe.skipIf(!mod)('G5 — les gardes, en echec tant que G5 n est pas fait', () => {
+describe.skipIf(!mod)('G5 — les gardes, vertes depuis que les annotations sont jugees', () => {
   /**
-   * Chacune passe par `epargne`, qui exige le canari. Elles sont ROUGES
-   * aujourd hui : aucune annotation n etant jugee, « ne rapporte pas X »
-   * serait vrai par vacuite. Elles verdiront avec l implementation et diront
-   * alors si elle emporte une annotation vivante.
+   * Chacune passe par `epargne`, qui exige le canari : sans lui, « ne rapporte
+   * pas X » serait vrai par vacuite. Elles etaient rouges tant qu aucune
+   * annotation n etait jugee.
    */
 
   it('ne touche pas un qualificateur qu une fourniture vivante porte', () => {

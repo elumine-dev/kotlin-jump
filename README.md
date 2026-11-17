@@ -319,6 +319,10 @@ Permissions and components checked against real code: `no usage found` badges, r
 
 Open `gradle/libs.versions.toml` and every version behind its latest stable is underlined, with the newer version at the end of the line. The hover says how many versions behind, when the latest shipped, which libraries share the entry, and links the release notes. The lightbulb bumps one entry, or every patch version in the file after one confirmation. `Check Dependency Upgrades` scans the whole workspace, build files and Gradle wrapper included, and writes a markdown table you can paste into a pull request.
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/elumine-dev/kotlin-jump/main/assets/demos/dependency-upgrades.webp" width="720" />
+</p>
+
 Versions come from the repositories your build declares (Maven Central, Google Maven, the Gradle plugin portal) over plain HTTPS, after you say yes once. Nothing runs Gradle, nothing is sent but group and artifact names. Answers are cached for a day; `Refresh Dependency Versions` asks again.
 
 What stays quiet: `# @pin`, rich versions, versions a BOM manages, and anything the repositories did not answer for. A dynamic version such as `4.+` gets a hint and a fix that pins the resolved stable. A KSP that no longer matches your Kotlin is offered in the matching pair, and an Android Gradle plugin bump brings the Gradle wrapper it needs. Set `kotlinJump.upgrades.policy` to `latest` to see previews too.

@@ -250,7 +250,7 @@ export function collecterUnePasse(
     for (const e of planFileEdits(trouvailles)) {
       const t = origine.get(e);
       ajoute(src.path, e.start, e.end, e.text, 'balayage', '',
-        { verdict: t?.detector === 'writeOnly' ? 'write-only' : 'unreferenced', ...(t ? { nom: t.name } : {}) });
+        { verdict: t?.detector === 'writeOnly' ? 'write-only' : 'unreferenced', ...(t ? { nom: t.name, detecteur: t.detector } : {}) });
     }
   }
 

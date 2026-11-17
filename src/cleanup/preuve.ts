@@ -46,4 +46,6 @@ export interface Preuve {
   homonyme?: boolean;
   /** The detector's own name for the finding, when the cut's `quoi` is left empty. */
   nom?: string;
+  /** Which sweep detector found it: the family alone cannot tell an import from a private method. */
+  detecteur?: 'imports' | 'declarations' | 'locals' | 'parameters' | 'writeOnly';
 }

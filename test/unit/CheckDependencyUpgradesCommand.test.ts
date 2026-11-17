@@ -103,6 +103,14 @@ describe('KJ-082 command: gates', () => {
     expect(await ensureConsent(ctx, '/w')).toBe(true);
     expect(spy).not.toHaveBeenCalled();
   });
+
+  it('ask: a session that already holds consent, as after the demo seeder, is not asked when a catalog opens', async () => {
+    const { ctx } = harness('ask', UPGRADES);
+    ctx.engine.grantConsentForSession();
+    const spy = info();
+    expect(await ensureConsent(ctx, '/w')).toBe(true);
+    expect(spy).not.toHaveBeenCalled();
+  });
 });
 
 describe('KJ-082 command: the check', () => {

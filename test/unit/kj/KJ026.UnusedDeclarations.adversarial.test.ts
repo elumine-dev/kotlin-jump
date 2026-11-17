@@ -64,9 +64,12 @@ describe('KJ-026 adversarial — détection', () => {
     expect(names(text)).toEqual(['compute']);
   });
 
-  it('@Composable morte flaggée (bénigne) ; @Deprecated morte jamais', () => {
+  it('@Composable et @Deprecated mortes flaggées (bénignes) ; @Keep morte jamais', () => {
     expect(names('@Composable\nprivate fun DeadChip() { Text("x") }\nfun main() { println(1) }\n')).toEqual(['DeadChip']);
-    expect(names('@Deprecated("old")\nprivate fun legacy() = 1\nfun main() { println(1) }\n')).toEqual([]);
+    // Déprécier ne fait appeler personne : sur la référence, une méthode privée
+    // `@Deprecated(since = "AND-1407")` sans un seul appel restait invisible.
+    expect(names('@Deprecated("old")\nprivate fun legacy() = 1\nfun main() { println(1) }\n')).toEqual(['legacy']);
+    expect(names('@Keep\nprivate fun legacy() = 1\nfun main() { println(1) }\n')).toEqual([]);
   });
 
   it('companions : membre de companion anonyme utilisé depuis la classe = vivant ; companion nommé jamais nommé = jamais flaggé', () => {

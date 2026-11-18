@@ -407,7 +407,8 @@ export function findUnusedLocals(text: string): UnusedLocal[] {
       if (/(?:(?<!\+)\+|(?<!-)-|[=*/%.,]|&&|\|\||\?:|\?\.)$/.test(fin)) return true;
       const l = offsetToPos(lineStarts, Math.max(extentEnd - 1, 0)).line + 1;
       if (l >= lineStarts.length || lineStarts[l] >= body.close) return false;
-      return /^\s*(?:\?\.|\.(?!\.)|\?:|&&|\|\||as\??\s)/.test(clean.slice(lineStarts[l], lineEndOf(l)));
+      // Strings kept here too: `"x".format(min)` read on `clean` opened on `.format`.
+      return /^\s*(?:\?\.|\.(?!\.)|\?:|&&|\|\||as\??\s)/.test(sansCommentaires().slice(lineStarts[l], lineEndOf(l)));
     };
     let guard = 0;
     while (guard++ < 200) {

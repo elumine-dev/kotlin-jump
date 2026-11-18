@@ -31,6 +31,8 @@ export interface CorpusSimule {
   modulesWithCode?: readonly string[];
   libraryModules?: readonly string[];
   moduleDirs?: readonly string[];
+  /** Git submodules: other repositories, left out of every round. */
+  submoduleDirs?: readonly string[];
   resourceEntries?: readonly FileResEntry[];
 }
 
@@ -275,7 +277,7 @@ export async function simulerLePointFixe(
     const ctx = {
       androidApi: extras.androidApi, reglages: extras.reglages,
       modulesWithCode: corpus.modulesWithCode, libraryModules: corpus.libraryModules, moduleDirs: corpus.moduleDirs,
-      assets, resourceEntries: entries,
+      submoduleDirs: corpus.submoduleDirs, assets, resourceEntries: entries,
     };
     const passe = collecterUnePasse(sources, segs, ctx);
     const textes = new Map(sources.map(s => [s.path, s.text]));

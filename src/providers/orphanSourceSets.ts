@@ -140,6 +140,11 @@ interface Algebra {
   wired: Set<string>;
   /** Modules to skip: unreadable build file, or source sets named by target. */
   skip: Set<string>;
+  /**
+   * Flavours or build types declared in CODE, a convention plugin rather than
+   * a build file: names this reader cannot know, so no name is unexplained.
+   */
+  ouverte: boolean;
 }
 
 /** Everything every build file of the project declares, pooled. */
@@ -149,11 +154,18 @@ export function readAlgebra(
 ): Algebra {
   const algebra: Algebra = {
     flavourDimension: new Map(), dimensions: [], buildTypes: new Set(IMPLICIT_BUILD_TYPES),
-    wired: new Set(), skip: new Set(),
+    wired: new Set(), skip: new Set(), ouverte: false,
   };
   const seen = new Set<string>();
   for (const src of sources) {
-    if (!/[\\/](?:build|settings)\.gradle(?:\.kts)?$/.test(src.path)) continue;
+    // Now in Android declares `demo` and `prod` in a convention plugin, from an
+    // enum (`productFlavors { create(it.name) }`). Read from build files only,
+    // `src/demo` and `src/prod` were orphans, their Hilt modules stopped
+    // voting, and the two classes they bind were cut: KSP failed.
+    if (!/[\\/](?:build|settings)\.gradle(?:\.kts)?$/.test(src.path)) {
+      if (/\.(?:kt|java|groovy)$/.test(src.path) && /\b(?:productFlavors|buildTypes)\b/.test(src.text)) algebra.ouverte = true;
+      continue;
+    }
     const dir = src.path.replace(/[\\/](?:build|settings)\.gradle(?:\.kts)?$/, '');
     seen.add(dir);
     if (MULTIPLATFORM_RE.test(src.text)) algebra.skip.add(dir);
@@ -245,6 +257,7 @@ export function findOrphanSourceSets(input: OrphanSourceSetScanInput): OrphanSou
   if (input.truncated) return [];
 
   const algebra = readAlgebra(input.sources, input.moduleDirs);
+  if (algebra.ouverte) return [];
   const legal = legalSourceSetNames(algebra);
   // Longest module path first: a nested module claims its own `src/`.
   const modules = [...input.moduleDirs].sort((a, b) => b.length - a.length);

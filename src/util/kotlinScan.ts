@@ -543,6 +543,10 @@ export const CONVENTION_FUN_NAMES = new Set([
   'plus', 'minus', 'times', 'div', 'rem', 'mod', 'get', 'set',
   'inc', 'dec', 'unaryPlus', 'unaryMinus', 'not',
   'plusAssign', 'minusAssign', 'timesAssign', 'divAssign', 'remAssign',
+  // The assignment plugin: `prop = value` on a Gradle `Property` calls
+  // `org.gradle.kotlin.dsl.assign`, never written. Its import, read as unused
+  // and removed, broke the build logic of an open source app.
+  'assign',
 ]);
 
 /**

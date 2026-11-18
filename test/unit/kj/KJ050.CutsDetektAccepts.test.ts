@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { collecterUnePasse, sansTrouDeLignesVides, Coupe } from '../../../src/commands/RemoveEverythingUnused';
 import { findUnusedLocals } from '../../../src/providers/unusedLocals';
+import { findUnusedImports } from '../../../src/providers/unusedImports';
+import { findOrphanSourceSets } from '../../../src/providers/orphanSourceSets';
 import { findEmptyBodies, findEmptyCompanions, findStrayEnumSemicolons } from '../../../src/providers/emptyCompanions';
 import { planCascade } from '../../../src/providers/removalCascade';
 
@@ -356,5 +358,48 @@ describe('the continuation rule does not swallow the next statement', () => {
 
   it('control: a trailing comment stays where it was', () => {
     expect(fixOf('fun f() {\n    val x = compute() // note\n    go()\n}\n', 'x')).toBe('fun f() {\n    compute() // note\n    go()\n}\n');
+  });
+});
+
+describe('Now in Android: an implicit operator import, and a template outside src/', () => {
+  it('`import org.gradle.kotlin.dsl.assign` is used by `=` on a Property: kept', () => {
+    const t = 'package a\n\nimport org.gradle.api.provider.Property\nimport org.gradle.kotlin.dsl.assign\n\nabstract class Task {\n    abstract val name: Property<String>\n    fun f() {\n        name = "x"\n    }\n}\n';
+    expect(findUnusedImports(t).map((i: any) => i.statement.trim())).not.toContain('import org.gradle.kotlin.dsl.assign');
+  });
+
+  it('control: an import nothing uses still goes', () => {
+    const t = 'package a\n\nimport org.gradle.kotlin.dsl.register\n\nfun f() = 1\n';
+    expect(findUnusedImports(t).map((i: any) => i.statement.trim())).toContain('import org.gradle.kotlin.dsl.register');
+  });
+
+  it('a `.kt` under no src/ is not compiled: the Spotless licence template stays', () => {
+    const template = { path: '/w/spotless/copyright.kt', text: '/*\n * Copyright $YEAR The Android Open Source Project\n */\n' };
+    const r = collecterUnePasse([template, { path: '/w/app/src/main/kotlin/a/M.kt', text: 'package a\n\nfun main() = 1\n' }], ['test/java']);
+    expect([...r.fichiersMorts, ...r.parFichier.keys()]).not.toContain('/w/spotless/copyright.kt');
+  });
+
+  it('control: the same comment-only file under src/ is deleted', () => {
+    const r = collecterUnePasse([{ path: '/w/app/src/main/kotlin/a/Gone.kt', text: '/*\n * Header\n */\n' }, { path: '/w/app/src/main/kotlin/a/M.kt', text: 'package a\n\nfun main() = 1\n' }], ['test/java']);
+    expect([...r.fichiersMorts]).toContain('/w/app/src/main/kotlin/a/Gone.kt');
+  });
+});
+
+describe('flavours declared by a convention plugin (Now in Android)', () => {
+  const app = [
+    { path: '/w/app/build.gradle.kts', text: 'plugins { id("nowinandroid.android.application.flavors") }\n' },
+    { path: '/w/app/src/main/kotlin/a/Notifier.kt', text: 'package a\n\nimport javax.inject.Inject\n\ninterface Notifier\n\ninternal class NoOpNotifier @Inject constructor() : Notifier\n' },
+    { path: '/w/app/src/main/kotlin/a/Feed.kt', text: 'package a\n\nimport javax.inject.Inject\n\nclass Feed @Inject constructor(private val notifier: Notifier) {\n    fun go() = notifier.toString()\n}\n' },
+    { path: '/w/app/src/demo/kotlin/a/NotificationsModule.kt', text: 'package a\n\nimport dagger.Binds\nimport dagger.Module\nimport dagger.hilt.InstallIn\nimport dagger.hilt.components.SingletonComponent\n\n@Module\n@InstallIn(SingletonComponent::class)\ninternal abstract class NotificationsModule {\n    @Binds\n    abstract fun bindNotifier(notifier: NoOpNotifier): Notifier\n}\n' },
+  ];
+  const plugin = { path: '/w/build-logic/convention/src/main/kotlin/NiaFlavor.kt', text: 'enum class NiaFlavor { demo, prod }\n\nfun configure(ext: Any) {\n    productFlavors { NiaFlavor.values().forEach { create(it.name) } }\n}\n' };
+
+  it('src/demo is not an orphan: the class it binds stays', () => {
+    expect(findOrphanSourceSets({ sources: [...app, plugin], moduleDirs: ['/w/app'] })).toEqual([]);
+    const r = collecterUnePasse([...app, plugin], ['test/java'], { moduleDirs: ['/w/app', '/w/build-logic/convention'] });
+    expect([...r.fichiersMorts, ...r.parFichier.keys()].filter(p => p.endsWith('Notifier.kt'))).toEqual([]);
+  });
+
+  it('control: without the plugin, src/demo is an orphan', () => {
+    expect(findOrphanSourceSets({ sources: app, moduleDirs: ['/w/app'] }).map(o => o.name)).toEqual(['demo']);
   });
 });

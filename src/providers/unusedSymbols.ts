@@ -1,4 +1,6 @@
 import { matchesGlob } from '../util/glob';
+import { declaresNothing } from './emptySourceFiles';
+import { SECTION_MARKER_RE } from '../util/declarationSpan';
 import { coupeUnBloc } from '../util/blocDeCommentaire';
 import { parse, RawSymbol, SymbolKind } from '../indexer/KotlinParser';
 import { parseJava } from '../indexer/JavaParser';
@@ -765,6 +767,10 @@ export function removalExtent(
     if (trimmed.startsWith('@') && !DECL_KEYWORD_RE.test(afterAnnotations(trimmed))) { firstLine = l; continue; }
     const annoStart = multiLineAnnotationStart(lines, l);
     if (annoStart !== -1) { firstLine = annoStart; l = annoStart; continue; }
+    // A `//` comment written right above the declaration speaks of it, and
+    // stayed behind alone once it went, with a blank line under it. A section
+    // marker is not about the declaration: `// region` would lose its pair.
+    if (trimmed.startsWith('//') && !SECTION_MARKER_RE.test(trimmed)) { firstLine = l; continue; }
     // Same walk as unusedDeclarations.ts: only through comment-only lines.
     // `val cache = … /* warm */` also ends with `*/`, and the walk used to
     // climb from there to the licence header and delete the whole file top.
@@ -824,10 +830,28 @@ export function removalExtent(
   // sur `} else {`.
   const suivanteEstDuCommentaire = (): boolean => nextNonBlank <= lastLine
     && sc().slice(lineStarts[nextNonBlank], lineEndOf(nextNonBlank)).trim() === '';
-  const nextStartsFresh = (): boolean =>
-    nextNonBlank > lastLine ||
-    OUVRE_UNE_DECLARATION_RE.test(lines[nextNonBlank] ?? '') ||
-    suivanteEstDuCommentaire();
+  // A property's accessor may sit under a comment of its own:
+  //   private val method: String
+  //       /** doc */
+  //       get() = ...
+  // Read as fresh, the cut took the `val` line alone and left the getter
+  // orphaned; an open source app no longer parsed.
+  const accesseurApresCommentaire = (): boolean => {
+    if (sym.kind !== 'val' && sym.kind !== 'var') return false;
+    const s = sc();
+    for (let l = nextNonBlank; l <= lastLine; l++) {
+      const code = s.slice(lineStarts[l], lineEndOf(l)).trim();
+      if (code === '') continue;
+      return /^(?:@\w+(?:\([^)]*\))?\s+)*(?:(?:private|protected|internal|public)\s+)?(?:get|set)\b/.test(code);
+    }
+    return false;
+  };
+  const nextStartsFresh = (): boolean => {
+    if (nextNonBlank > lastLine) return true;
+    // A KDoc reads as the start of the next declaration, unless an accessor follows it.
+    if (suivanteEstDuCommentaire()) return !accesseurApresCommentaire();
+    return OUVRE_UNE_DECLARATION_RE.test(lines[nextNonBlank] ?? '');
+  };
   // A trailing `;` closes the statement, in Java as in Kotlin. Without this the
   // freshness test decides, and its keyword list is Kotlin only: a Java field
   // starts with its TYPE (`int`, `String`), never with `val` or `fun`, so the
@@ -2082,6 +2106,14 @@ export function wholeLineExtent(
   if (text.slice(lineStart, start).trim() !== '' || text.slice(end, lineEnd).trim() !== '') {
     return { start, end };
   }
+  // Nothing follows but a closing bracket or the end of the file: the blank
+  // line above would be stranded against it (detekt NoBlankLineBeforeRbrace,
+  // or a trailing blank line). Same rule as the merged pass.
+  const reste = text.slice(lineEnd);
+  if (lineStart > 0 && (reste.trim() === '' || /^[ \t]*[}\])]/.test(reste))) {
+    const avantDebut = text.lastIndexOf('\n', lineStart - 2) + 1;
+    if (text.slice(avantDebut, lineStart - 1).trim() === '') return { start: avantDebut, end: lineEnd };
+  }
   return { start: lineStart, end: lineEnd };
 }
 
@@ -2124,10 +2156,10 @@ export function fileBecomesEmpty(
     const w = wholeLineExtent(out, e.start, e.end);
     out = out.slice(0, w.start) + out.slice(w.end);
   }
-  // Comments carry no code, so they do not count as remaining content.
-  return sanitizeForUsageScan(out)
-    .split('\n')
-    .every(l => l.trim() === '' || /^\s*(package\s|import\s|@file:)/.test(l));
+  // One rule for "nothing left", the one KJ-060 applies to files already
+  // empty: this copy did not know a `@file:Suppress(` over several lines, and
+  // a file holding nothing else stayed on disk.
+  return declaresNothing(out);
 }
 
 export function findUnusedSymbols(input: UnusedSymbolScanInput): UnusedSymbol[] {

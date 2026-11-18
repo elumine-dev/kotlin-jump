@@ -120,7 +120,9 @@ function protege(a: { name: string; args: string }, diagnostics: readonly string
 
 
 const MODIFIER_GUARD_RE = /\b(?:override|operator|expect|actual|external|abstract|native|default)\b/;
-const CANDIDATE_KINDS = new Set(['fun', 'composable', 'val', 'var', 'class', 'sealedClass', 'object', 'interface']);
+// `dataClass` and `enum` were missing: a `private data class` DTO nothing reads
+// stayed behind once its last user went, and detekt reported it (UnusedPrivateClass).
+const CANDIDATE_KINDS = new Set(['fun', 'composable', 'val', 'var', 'class', 'dataClass', 'enum', 'sealedClass', 'object', 'interface']);
 const CLASS_LIKE = new Set(['class', 'sealedClass', 'dataClass', 'object', 'interface', 'enum', 'annotation']);
 /** Characters legal inside a class header between name and body brace. */
 
@@ -288,7 +290,10 @@ export function findUnusedDeclarations(text: string, lang: 'kotlin' | 'java' = '
     if (sym.isPrimaryCtorParam) continue;
     if (sym.isOverride || sym.isOperator || sym.isAbstract || sym.isExpect || sym.isActual) continue;
     if (MODIFIER_GUARD_RE.test(declLine.slice(0, sym.character))) continue; // inline-body path: flags partial
-    if (sym.name === 'main' || sym.name === 'serialVersionUID' || sym.name.startsWith('_')) continue;
+    // `_` alone says "unused on purpose". `_toggleMid` is a backing property:
+    // once its public `ToggleMid` was cut, it stayed behind, read by nobody,
+    // and detekt reported it (UnusedPrivateProperty spares `_` only).
+    if (sym.name === 'main' || sym.name === 'serialVersionUID' || /^_+$/.test(sym.name)) continue;
     if (text[nameOffset - 1] === '`') continue;
     if (isFun && (CONVENTION_FUN_NAMES.has(sym.name) || /^component\d+$/.test(sym.name))) continue;
     // A compiler or lint directive makes nothing read the declaration: it only

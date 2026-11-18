@@ -12,6 +12,7 @@ import { isCopiedNotCompiled } from '../util/testPaths';
 import { isUnderAny } from '../util/gitSubmodules';
 import { findStaleBaselineEntries } from '../providers/staleBaselineEntries';
 import { findEmptySourceFiles } from '../providers/emptySourceFiles';
+import { findEmptyBodies, findEmptyCompanions, findStrayEnumSemicolons } from '../providers/emptyCompanions';
 import { findUnusedGradleDependencies } from '../providers/unusedGradleDependencies';
 import { findUnheardEvents } from '../providers/unheardEvents';
 import { findUnusedRemoteConfigKeys } from '../providers/unusedRemoteConfigKeys';
@@ -414,6 +415,12 @@ export function collecterUnePasse(
   // fichier qu'elle VIDE dans la ronde ; celui qui etait deja vide au depart
   // n'etait vu par personne, chaque detecteur cherchant des declarations.
   for (const f of findEmptySourceFiles({ sources })) fichiersMorts.add(f.path);
+  // Un compagnon que ses membres ont quitte. La ronde qui retire le dernier
+  // membre le laisse vide, la suivante le prend.
+  for (const c of findEmptyCompanions(sources)) ajoute(c.path, c.start, c.end, '', 'symboles', `${c.owner}.Companion`, { verdict: 'emptied' });
+  // Et le corps `{}` qu une classe garde quand ses membres sont partis.
+  for (const b of findEmptyBodies(sources)) ajoute(b.path, b.start, b.end, '', 'balayage', `${b.name} {}`, { verdict: 'emptied' });
+  for (const s of findStrayEnumSemicolons(sources)) ajoute(s.path, s.start, s.end, '', 'balayage', `${s.name};`, { verdict: 'emptied' });
 
   const parFichier = sansChevauchement(brut);
   // An island tests keep can hold a declaration nothing calls at all: that one
@@ -556,21 +563,62 @@ export function sansTrouDeLignesVides(
     ...triees.filter(c => c.texte === '' && entieres(c.start, c.end)),
     ...autres.filter(a => entieres(a.start, a.end)),
   ];
-  return triees.map((c, i) => {
+  // The END the previous cut really reaches, once widened: compared with its
+  // original end, two neighbours both took the blank line between them, the
+  // overlap shifted the second removal by one character, and a `}` went.
+  const sorties: Coupe[] = [];
+  const precedente = (i: number): number => (i > 0 ? sorties[i - 1].end : 0);
+  for (const [i, c] of triees.entries()) sorties.push(elargie(c, i));
+  return sorties;
+
+  function elargie(c: Coupe, i: number): Coupe {
     if (c.texte !== '' || !entieres(c.start, c.end)) return c;
     let debut = c.start;
     for (let r = retirees.find(x => x.end === debut); r; r = retirees.find(x => x.end === debut)) debut = r.start;
+    let fin = c.end;
+    for (let r = retirees.find(x => x.start === fin); r; r = retirees.find(x => x.start === fin)) fin = r.end;
     // La ligne juste avant le trou.
     const avantFin = debut - 1;
     if (avantFin < 0) return c;
     const avantDebut = texte.lastIndexOf('\n', avantFin - 1) + 1;
-    if (!ligneVide(avantDebut, avantFin)) return c;
-    // La ligne juste apres.
+    const avant = texte.slice(avantDebut, avantFin);
+    // La ligne juste apres la coupe, et celle apres tout le trou.
     const apresFin = texte.indexOf('\n', c.end);
-    if (apresFin === -1 || !ligneVide(c.end, apresFin)) return c;
-    const etendu = apresFin + 1;
-    return etendu <= suivante(i) ? { ...c, end: etendu } : c;
-  });
+    const ligneApresTrou = texte.slice(fin, texte.indexOf('\n', fin) === -1 ? texte.length : texte.indexOf('\n', fin));
+    if (avant.trim() === '') {
+      if (apresFin !== -1 && ligneVide(c.end, apresFin)) {
+        const etendu = apresFin + 1;
+        return etendu <= suivante(i) ? { ...c, end: etendu } : c;
+      }
+      // Le trou ferme un bloc, ou finit le fichier : la ligne vide d avant
+      // collait au `}` (detekt NoBlankLineBeforeRbrace) ou restait en fin de
+      // fichier. La coupe qui ouvre le trou la prend.
+      const fermeOuFinit = /^\s*[}\])]/.test(ligneApresTrou) || texte.slice(fin).trim() === '';
+      const libre = avantDebut >= precedente(i) && !autres.some(a => a.start < debut && a.end > avantDebut);
+      if (debut === c.start && fermeOuFinit && libre) return { ...c, start: avantDebut };
+      // The blank line above was taken by the previous cut (each member of a
+      // chain takes the one under it): the chain's FIRST cut takes the blank
+      // line above itself, or it would end up against the `}`.
+      if (fermeOuFinit && debut === c.start && i > 0 && sorties[i - 1].end > avantDebut && sorties[i - 1].texte === '') {
+        let j = i - 1;
+        while (j > 0 && sorties[j - 1].texte === '' && sorties[j - 1].end >= sorties[j].start) j--;
+        const tete = sorties[j];
+        const finAvant = tete.start - 1;
+        if (finAvant >= 0 && (tete.start === 0 || texte[tete.start - 1] === '\n')) {
+          const debutAvant = texte.lastIndexOf('\n', finAvant - 1) + 1;
+          if (ligneVide(debutAvant, finAvant) && debutAvant >= (j > 0 ? sorties[j - 1].end : 0)) sorties[j] = { ...tete, start: debutAvant };
+        }
+      }
+      return c;
+    }
+    // Le trou ouvre un bloc et une ligne vide le suit : le bloc commencerait
+    // par elle. La coupe qui ferme le trou la prend.
+    if (fin === c.end && /[{(\[]\s*$/.test(avant) && apresFin !== -1 && ligneVide(c.end, apresFin)) {
+      const etendu = apresFin + 1;
+      return etendu <= suivante(i) ? { ...c, end: etendu } : c;
+    }
+    return c;
+  }
 }
 
 /**

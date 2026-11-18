@@ -36,11 +36,34 @@ const NOTHING_RE = /^\s*(?:package\b[^\n]*|import\b[^\n]*|@file\s*:[^\n]*|;)?\s*
 
 /** True when `text` holds no code once comments and strings are gone. */
 export function declaresNothing(text: string): boolean {
-  const clean = sanitizeForUsageScan(text);
+  const clean = sansAnnotationsDeFichier(sanitizeForUsageScan(text));
   for (const line of clean.split('\n')) {
     if (!NOTHING_RE.test(line)) return false;
   }
   return true;
+}
+
+/**
+ * `@file:` annotations blanked whole, arguments included. Line by line, the
+ * second line of `@file:Suppress(\n    "unused",\n)` read as code and a file
+ * holding nothing else stayed on disk after its last declaration went.
+ * Strings are already blanked here, so a `)` inside one cannot close early.
+ */
+function sansAnnotationsDeFichier(clean: string): string {
+  let out = clean;
+  for (const m of clean.matchAll(/@file\s*:\s*[\w.]+\s*/g)) {
+    let fin = (m.index ?? 0) + m[0].length;
+    if (clean[fin] === '(') {
+      let profondeur = 0;
+      for (; fin < clean.length; fin++) {
+        if (clean[fin] === '(') profondeur++;
+        else if (clean[fin] === ')' && --profondeur === 0) { fin++; break; }
+      }
+    }
+    // Same length, same line breaks: only what is not a newline is blanked.
+    out = out.slice(0, m.index) + out.slice(m.index, fin).replace(/[^\n]/g, ' ') + out.slice(fin);
+  }
+  return out;
 }
 
 /** G47: a `res/values*` resource file, where emptiness means an empty `<resources>`. */

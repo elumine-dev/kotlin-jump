@@ -396,6 +396,19 @@ export function findUnusedLocals(text: string): UnusedLocal[] {
     // declaration extent: extend while brackets are unbalanced
     const declLine = offsetToPos(lineStarts, declStart).line;
     let extentEnd = Math.min(lineEndOf(declLine), body.close);
+    // Balanced brackets do not end an expression that goes on: a line ending on
+    // an operator, or a next line opening on `.map {`. `val project =
+    // projectAndReward` over `.map { it.first }` lost its first line only, and
+    // the `.map` left behind attached itself to the statement above.
+    const seContinue = (): boolean => {
+      // Read with the strings kept: blanked, `val prefix = "p"` ended on `=`.
+      const fin = sansCommentaires().slice(declStart, extentEnd).trimEnd();
+      // `idCounter++` ends the statement: a postfix `++` or `--` is no operator waiting.
+      if (/(?:(?<!\+)\+|(?<!-)-|[=*/%.,]|&&|\|\||\?:|\?\.)$/.test(fin)) return true;
+      const l = offsetToPos(lineStarts, Math.max(extentEnd - 1, 0)).line + 1;
+      if (l >= lineStarts.length || lineStarts[l] >= body.close) return false;
+      return /^\s*(?:\?\.|\.(?!\.)|\?:|&&|\|\||as\??\s)/.test(clean.slice(lineStarts[l], lineEndOf(l)));
+    };
     let guard = 0;
     while (guard++ < 200) {
       const slice = clean.slice(declStart, extentEnd);
@@ -403,7 +416,7 @@ export function findUnusedLocals(text: string): UnusedLocal[] {
         (slice.match(/\(/g)?.length ?? 0) === (slice.match(/\)/g)?.length ?? 0) &&
         (slice.match(/\{/g)?.length ?? 0) === (slice.match(/\}/g)?.length ?? 0) &&
         (slice.match(/\[/g)?.length ?? 0) === (slice.match(/\]/g)?.length ?? 0);
-      if (balanced) break;
+      if (balanced && !seContinue()) break;
       // `extentEnd` sits at the START of the next line, so ask for the line of
       // its last character: using `extentEnd` directly skips one line per
       // round and blanks code past the declaration (false positives).
@@ -467,13 +480,20 @@ function computeLocalFix(
   if (eq === -1) return none; // declared without an initializer
 
   let initStart = eq + 1;
-  while (initStart < extentEnd && /[ \t]/.test(text[initStart])) initStart++;
+  // Across the line break too: `val serverId =` above its initializer left a
+  // line of indentation alone (detekt NoTrailingSpaces). Cut to the first
+  // character of the initializer, which takes the place of `val`.
+  while (initStart < text.length && /\s/.test(text[initStart])) initStart++;
   // Cut a trailing comment, but keep string literals intact: a comment is
   // blanked in `clean` while its `//` is still in `text`, which tells the two
   // apart. Trimming on `clean` alone would eat `"draft"` down to nothing.
   let initEnd = extentEnd;
+  // On the copy WITHOUT comments, where strings stay: `clean` blanks a string
+  // too, so the `//` of `"https://..."` read as a comment and cut the
+  // initializer in the middle of its literal.
+  const sc = sansCommentaires();
   for (let i = initStart; i < extentEnd - 1; i++) {
-    if (text[i] === '/' && text[i + 1] === '/' && clean[i] === ' ' && clean[i + 1] === ' ') {
+    if (text[i] === '/' && text[i + 1] === '/' && sc[i] === ' ' && sc[i + 1] === ' ') {
       initEnd = i;
       break;
     }
@@ -493,6 +513,23 @@ function computeLocalFix(
     return { fix: 'deleteLine', fixStart: lineStarts[declLine], fixEnd: fin, fixText: '' };
   }
   // keep whatever the initializer does, drop only `val name =`
+  // Written under its `val`, one step deeper, the initializer now takes the
+  // place of `val`: its next lines come back by that same step, or they kept
+  // the old depth (detekt Indentation). Never through a raw string, whose
+  // content would change.
+  if (text.slice(eq + 1, initStart).includes('\n')) {
+    const pas = text.slice(text.lastIndexOf('\n', initStart - 1) + 1, initStart);
+    const base = text.slice(text.lastIndexOf('\n', declStart - 1) + 1, declStart);
+    const corps = text.slice(initStart, initEnd);
+    if (/^[ \t]*$/.test(base) && pas.startsWith(base) && pas.length > base.length && !corps.includes('"""')) {
+      const extra = pas.slice(base.length);
+      const lignes = corps.split('\n');
+      if (lignes.length > 1 && lignes.slice(1).every(l => l.trim() === '' || l.startsWith(extra))) {
+        const fixText = [lignes[0], ...lignes.slice(1).map(l => (l.startsWith(extra) ? l.slice(extra.length) : l))].join('\n');
+        return { fix: 'keepCall', fixStart: declStart, fixEnd: initEnd, fixText };
+      }
+    }
+  }
   return { fix: 'keepCall', fixStart: declStart, fixEnd: initStart, fixText: '' };
 }
 

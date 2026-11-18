@@ -347,6 +347,13 @@ describe('the continuation rule does not swallow the next statement', () => {
       .toBe('fun f() {\n    launch {\n        Intent(VIEW).apply {\n            setData("https://example.com/v.mp4")\n        }\n        go()\n    }\n}\n');
   });
 
+  // Seen on an open source utility app: the next line opened on a string,
+  // blanked it read `.format(hour, min)`, the extent swallowed the line that
+  // reads `min`, and the app no longer compiled.
+  it('a next line opening on a string literal is a new statement', () => {
+    expect(fixOf('fun f() {\n    val min = cal.get(MINUTE)\n    "%02d:%02d".format(hour, min)\n}\n', 'min')).toBeUndefined();
+  });
+
   it('control: a trailing comment stays where it was', () => {
     expect(fixOf('fun f() {\n    val x = compute() // note\n    go()\n}\n', 'x')).toBe('fun f() {\n    compute() // note\n    go()\n}\n');
   });

@@ -3,7 +3,7 @@ import { AndroidApi } from '../util/androidApi';
 import { parseJava } from '../indexer/JavaParser';
 import { RawSymbol } from '../indexer/KotlinParser';
 import {
-  buildLineStarts, sanitizeForUsageScan, findMatchingParen,
+  buildLineStarts, offsetToPos, sanitizeForUsageScan, findMatchingParen,
   collectAnnotationTargets, suppressesDiagnostic, UNUSED_PRIVATE_DECLARATION,
 } from '../util/kotlinScan';
 import { declarationSpan, SpanKind } from '../util/declarationSpan';
@@ -398,10 +398,13 @@ function analyze(input: DeadIslandScanInput): Analysis {
   const aliased = new Set<string>();
   const importPostings = new Map<string, { path: string; line: number }[]>();
 
-  const addRoot = (name: string, where: string, isTest: boolean) => {
+  // `where` is only read for the FIRST main root of a name, so a line number is
+  // computed lazily: counting newlines from the top of the file at every root
+  // mention took a quarter of a whole pass on an 18 MB project.
+  const addRoot = (name: string, where: string | (() => string), isTest: boolean) => {
     if (!eligibleNames.has(name)) return;
     if (isTest) testCounts.set(name, (testCounts.get(name) ?? 0) + 1);
-    else if (!rootMain.has(name)) rootMain.set(name, where);
+    else if (!rootMain.has(name)) rootMain.set(name, typeof where === 'string' ? where : where());
   };
 
   for (const src of input.sources) {
@@ -410,6 +413,7 @@ function analyze(input: DeadIslandScanInput): Analysis {
     const isTest = isTestSourceSet(src.path, input.testSourceSets);
     const isCode = /\.(kt|kts|java)$/.test(src.path);
     const isXml = /\.xml$/.test(src.path);
+    let lineStarts: number[] | undefined;
 
     // H6: for a ServiceLoader entry the SPI name is the file name itself.
     if (/[\\/]META-INF[\\/]services[\\/]/.test(src.path)) {
@@ -519,7 +523,7 @@ function analyze(input: DeadIslandScanInput): Analysis {
           if (!set) { set = new Set(); edges.set(owner.name, set); }
           set.add(name);
         } else {
-          addRoot(name, `${src.path}:${offsetToLineNumber(src.text, offset) + 1}`, isTest);
+          addRoot(name, () => `${src.path}:${offsetToPos(lineStarts ??= buildLineStarts(src.text), offset).line + 1}`, isTest);
         }
       }
     }
@@ -786,12 +790,6 @@ function foreignAnnotationFor(
     if (!BENIGN_ANNOTATIONS.has(a.name) && !scopeAnnotations.has(a.name)) foreign = a.name;
   }
   return foreign;
-}
-
-function offsetToLineNumber(text: string, offset: number): number {
-  let line = 0;
-  for (let i = 0; i < offset && i < text.length; i++) if (text[i] === '\n') line++;
-  return line;
 }
 
 export function messageFor(island: DeadIsland): string {

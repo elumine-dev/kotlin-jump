@@ -135,6 +135,7 @@ export function parse(uriString: string, text: string): ParsedFile {
   // further down: three lines cover an annotation or a comment in between.
   let ctorAttenteDepth  = -1;
   let ctorAttenteLignes = 0;
+  let ctorAttenteSym: RawSymbol | undefined;
 
   // 3-line sliding window for @Composable detection before fun
   const annotationWindow: string[] = [];
@@ -280,7 +281,8 @@ export function parse(uriString: string, text: string): ParsedFile {
       const isExpect        = /\bexpect\b/.test(preClass)   || undefined;
       const isActual        = /\bactual\b/.test(preClass)   || undefined;
 
-      symbols.push({ name, kind, line: lineNum, character: nameStart, isComposable: false, depth: braceDepth, supertypes: supertypes.length > 0 ? supertypes : undefined, superQualifiers: superQuals.length > 0 ? superQuals : undefined, isAbstract, isPrivate, isHiltViewModel, isDeprecated, isTestClass, isExpect, isActual });
+      const classSym: RawSymbol = { name, kind, line: lineNum, character: nameStart, isComposable: false, depth: braceDepth, supertypes: supertypes.length > 0 ? supertypes : undefined, superQualifiers: superQuals.length > 0 ? superQuals : undefined, isAbstract, isPrivate, isHiltViewModel, isDeprecated, isTestClass, isExpect, isActual };
+      symbols.push(classSym);
 
       if (kind === 'enum') enumBraceDepth = braceDepth;
 
@@ -342,7 +344,7 @@ export function parse(uriString: string, text: string): ParsedFile {
       if (parenDepth > 0) { ctorParamsActive = true; ctorBraceDepth = braceDepth; }
       // Neither a paren nor a body on the header line: the constructor is on
       // one of the next lines, and only the branch below can arm the tracking.
-      else if (ctorOpen === -1 && raw.indexOf('{', nameStart) === -1) { ctorAttenteDepth = braceDepth; ctorAttenteLignes = 3; }
+      else if (ctorOpen === -1 && raw.indexOf('{', nameStart) === -1) { ctorAttenteDepth = braceDepth; ctorAttenteLignes = 3; ctorAttenteSym = classSym; }
       annotationWindow.length = 0;
       if (lineTripleQuotes % 2 !== 0) inRawString = true;
       pos = nl + 1; lineNum++; continue;
@@ -357,6 +359,26 @@ export function parse(uriString: string, text: string): ParsedFile {
     // Find Usages.
     if (ctorAttenteDepth !== -1 && RE_CTOR_HEAD.test(raw)) {
       const depart = ctorAttenteDepth;
+      // The supertype list follows THIS constructor, not the class name:
+      // `class S` / `@Inject` / `constructor() : Serializer<P> {` is how ktlint
+      // wraps it. Read from the name, the class had no supertype, so its
+      // chain looked fully visible and the member scan let both `override`s
+      // of an AndroidX interface go: the app no longer compiled.
+      if (ctorAttenteSym && !ctorAttenteSym.supertypes) {
+        const quals: string[] = [];
+        const at = raw.search(/\bconstructor\b/) + 'constructor'.length;
+        let st = extractSupertypes(raw, at, quals);
+        if (st.length === 0 && hasUnclosedParen(raw, at)) {
+          quals.length = 0;
+          st = lookAheadSupertypes(text, nl + 1, quals, unclosedParenDepth(raw, at));
+        } else if (st.length === 0 && headerContinues(raw, at)) {
+          quals.length = 0;
+          st = extractSupertypes(raw + ' ' + collectHeaderContinuation(text, nl + 1), at, quals);
+        }
+        if (st.length > 0) ctorAttenteSym.supertypes = st;
+        if (quals.length > 0) ctorAttenteSym.superQualifiers = quals;
+      }
+      ctorAttenteSym = undefined;
       emitCtorParams(raw, raw.indexOf('('), lineNum, depart + 1, symbols);
       ctorAttenteDepth = -1; ctorAttenteLignes = 0;
       advance(nl);
@@ -756,7 +778,9 @@ function lookAheadSupertypes(text: string, start: number, quals?: string[], depa
   let p = start;
   const lire = (brut: string, suite: number): string[] => {
     let rest = stripTrailingLineComment(brut).trimEnd();
-    if (!rest.includes('{') && (rest.endsWith(',') || rest.endsWith(':'))) rest += ' ' + collectHeaderContinuation(text, suite);
+    // `) :` alone on its line: the whole list is below. Read as empty, the
+    // class lost its parent and the member scan cut an `override` of it.
+    if (!rest.includes('{') && (rest.trim() === '' || rest.endsWith(',') || rest.endsWith(':'))) rest += ' ' + collectHeaderContinuation(text, suite);
     return parseTypeNames(rest, quals);
   };
   for (let i = 0; i < 20 && p < text.length; i++) {

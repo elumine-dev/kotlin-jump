@@ -8,6 +8,7 @@ import { findDeadIslands } from '../providers/deadIslands';
 import { sweepFile, planFileEdits, SweepEdit, SweepFinding } from '../providers/DeadCodeSweep';
 import { findMemberImports, memberKey } from '../util/memberImports';
 import { findOrphanSourceSets, OrphanSourceSet } from '../providers/orphanSourceSets';
+import { isCopiedNotCompiled } from '../util/testPaths';
 import { findStaleBaselineEntries } from '../providers/staleBaselineEntries';
 import { findEmptySourceFiles } from '../providers/emptySourceFiles';
 import { findUnusedGradleDependencies } from '../providers/unusedGradleDependencies';
@@ -128,6 +129,9 @@ export function collecterUnePasse(
   // Rien n'est supprime ici : les fichiers restent sur le disque et les
   // dossiers sont RAPPORTES. Ce qui change, c'est que le code de production
   // qu'ils nomment devient trouvable.
+  // Meme raison pour le code range dans `resources/` ou `assets/` : copie dans
+  // l artefact, jamais compile (voir isCopiedNotCompiled).
+  if (sources.some(s => isCopiedNotCompiled(s.path))) sources = sources.filter(s => !isCopiedNotCompiled(s.path));
   const orphelins = ctx.moduleDirs === undefined ? []
     : findOrphanSourceSets({ sources, moduleDirs: ctx.moduleDirs });
   if (orphelins.length > 0) {

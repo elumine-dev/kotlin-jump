@@ -1049,7 +1049,7 @@ export function findUnusedMembers(input: UnusedMemberScanInput): UnusedMember[] 
   const harvest = harvestMentions(input.sources, wanted, input.testSourceSets);
   const bareXml = harvestBareXmlMentions(input.sources, kept);
   const bareKotlin = harvestBareKotlinMentions(input.sources, kept);
-  const unmentioned = unmentionedDuplicateMembers(kept, declNameCounts, harvest);
+  const unmentioned = unmentionedDuplicateMembers(kept, declNameCounts, harvest, bareXml, bareKotlin);
 
   const { parFichier, ecartes, mortsProbables } =
     contexteDesTemoins(candidates, kept, harvest, unmentioned, bareXml, bareKotlin);
@@ -1247,6 +1247,8 @@ function unmentionedDuplicateMembers(
   candidates: readonly MemberCandidate[],
   declNameCounts: ReadonlyMap<string, number>,
   harvest: Harvest,
+  bareXml: ReadonlyMap<string, number>,
+  bareKotlin: ReadonlyMap<string, number>,
 ): Set<string> {
   const byName = new Map<string, MemberCandidate[]>();
   for (const c of candidates) {
@@ -1265,6 +1267,13 @@ function unmentionedDuplicateMembers(
     // a ViewModel's `exportReport` delegating to a logger's `exportReport()`
     // inside its body, and subtracting it as "self" reported the CALLED one.
     if (group.some(c => c.selfInSpan !== 1)) continue;
+    // H9 reversed: a bare `x` reaches `getX()` and is never spelled at a
+    // declaration, so any count is a use. Seen on an open source KMP app: two
+    // hidden API stubs each declared `getHardwareBuffer()`, Kotlin read both
+    // as `buffer.hardwareBuffer`, and this group rule, blind to that spelling,
+    // cut both getters. The app no longer compiled.
+    if (group.some(c => (bareXml.get(bareAccessorTarget(c) ?? '') ?? 0) > 0
+      || (c.isJava && bareKotlinTargets(c).some(t => (bareKotlin.get(t) ?? 0) > 0)))) continue;
 
     let mentions = harvest.main.get(name) ?? 0;
     if (group.some(c => c.sym.kind === 'val' || c.sym.kind === 'var')) {
@@ -1318,7 +1327,7 @@ export function explainMembers(input: UnusedMemberScanInput): MemberExplanation[
   const bareKotlin = harvestBareKotlinMentions(input.sources, candidates);
   const kept = candidates.filter(c =>
     memberRejectionReason(c, input, supertypesByName, deadByPath, scopeAnnotations) === null);
-  const unmentioned = unmentionedDuplicateMembers(kept, declNameCounts, harvest);
+  const unmentioned = unmentionedDuplicateMembers(kept, declNameCounts, harvest, bareXml, bareKotlin);
   const { parFichier, ecartes, mortsProbables } =
     contexteDesTemoins(candidates, kept, harvest, unmentioned, bareXml, bareKotlin);
 

@@ -342,7 +342,10 @@ export function findUnusedLocals(text: string): UnusedLocal[] {
     const catchMatch = CATCH_HEADER_RE.exec(header);
     if (catchMatch) {
       const name = catchMatch[1];
-      const nameOffset = block.headerStart + catchMatch.index + catchMatch[0].indexOf(name);
+      // The name right after `(`: `indexOf(name)` found the `t` of `catch` in
+      // `catch (t: Throwable)` and the rename to `_` wrote `ca_ch`.
+      const paren = /\(\s*/.exec(catchMatch[0])!;
+      const nameOffset = block.headerStart + catchMatch.index + paren.index + paren[0].length;
       if (!name.startsWith('_') && !isSuppressed(nameOffset) && text[nameOffset - 1] !== '`') {
         const body = clean.slice(block.open, block.close);
         if (!isUsedIn(body, name)) {

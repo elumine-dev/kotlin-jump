@@ -239,3 +239,6 @@ function accoladeDuCorps(
 function ouvreUnObjetAnonyme(clean: string, from: number, brace: number): boolean {
   return /\bobject\b[^{}]*$/.test(clean.slice(from, brace));
 }
+
+/** `// region`, `// endregion`, `// MARK:`, a rule of dashes or equals: a section, not a comment on the next declaration. */
+export const SECTION_MARKER_RE = /^\/\/\s*(?:#?(?:end)?region\b|MARK\b|[-=*#]{3,})/i;

@@ -71,7 +71,8 @@ describe.skipIf(!mod)('étendue de la déclaration', () => {
     const f = only([kt(`${MAIN}/M.kt`, text)], 'ghostly');
     expect(f).toBeDefined();
     expect(text.slice(f.removeStart, f.removeEnd)).toBe('val ghostly = listOf(\n  1,\n  2,\n)\n');
-    expect(removed(text, f)).toBe('package com.x\n\n');
+    // Nothing follows: the blank line under `package` goes too, no trailing blank line.
+    expect(removed(text, f)).toBe('package com.x\n');
   });
 
   it('un corps-expression à la ligne suivante, une chaîne, un if else à blocs', () => {

@@ -1,4 +1,5 @@
 import { parse, RawSymbol, SymbolKind } from '../indexer/KotlinParser';
+import { SECTION_MARKER_RE } from '../util/declarationSpan';
 import { stripKotlinComments } from '../util/xmlRefs';
 import { coupeUnBloc, debutDuBloc } from '../util/blocDeCommentaire';
 import { parseJava } from '../indexer/JavaParser';
@@ -1057,17 +1058,42 @@ export function scanEnums(input: UnusedEnumEntryScanInput): {
     if (e.removeStart < 0) continue;
     (parFichier.get(e.path) ?? parFichier.set(e.path, []).get(e.path)!).push(e);
   }
-  for (const liste of parFichier.values()) {
+  for (const [chemin, liste] of parFichier) {
+    const texte = textByPath.get(chemin) ?? '';
+    // The comma just before `debut`, blanks skipped, or -1.
+    const virguleAvant = (debut: number): number => {
+      let k = debut - 1;
+      while (k >= 0 && /\s/.test(texte[k])) k--;
+      return texte[k] === ',' ? k : -1;
+    };
+    // `j` becomes a trailing cut too: it gives its comma after to the next one
+    // and takes the comma before itself, up the chain while neighbours overlap.
+    const rendreTrainante = (j: number): boolean => {
+      const virgule = virguleAvant(liste[j].removeStart);
+      if (virgule === -1) return false;
+      const avant = { removeStart: liste[j].removeStart, removeEnd: liste[j].removeEnd };
+      liste[j].removeEnd = liste[j + 1].removeStart;
+      liste[j].removeStart = virgule;
+      if (j > 0 && liste[j - 1].removeEnd > virgule && !rendreTrainante(j - 1)) {
+        Object.assign(liste[j], avant);
+        return false;
+      }
+      return true;
+    };
     liste.sort((a, b) => a.removeStart - b.removeStart);
     for (let i = 1; i < liste.length; i++) {
       const precedent = liste[i - 1];
       const courant = liste[i];
-      if (courant.removeStart < precedent.removeEnd) {
-        courant.removeStart = precedent.removeEnd;
-        if (courant.removeEnd <= courant.removeStart) {
-          courant.removeStart = -1;
-          courant.removeEnd = -1;
-        }
+      if (courant.removeStart >= precedent.removeEnd) continue;
+      // The last entry starts on the comma it shares with the dead entry
+      // before it. Yielding that comma left `{ EVENT, TEAM,  }` when LEAGUE and
+      // COMPETITOR both went (detekt NoMultipleSpaces); the one before turns
+      // trailing instead, and the list closes on `TEAM }`.
+      if (texte[courant.removeStart] === ',' && rendreTrainante(i - 1)) continue;
+      courant.removeStart = precedent.removeEnd;
+      if (courant.removeEnd <= courant.removeStart) {
+        courant.removeStart = -1;
+        courant.removeEnd = -1;
       }
     }
   }
@@ -1133,6 +1159,14 @@ function avecAnnotations(
     && text.slice(extent.removeEnd, finDeLigne === -1 ? text.length : finDeLigne).trim() !== '';
   if (survit) {
     while (removeStart < extent.removeStart && (text[removeStart] === ' ' || text[removeStart] === '\t')) removeStart++;
+  } else if (removeStart === 0 || text[removeStart - 1] === '\n') {
+    // The `//` lines right above the entry speak of it: they stayed alone,
+    // stuck to the next entry, once it went. A section marker stays.
+    for (let l = lineStarts.indexOf(removeStart) - 1; l >= 0; l--) {
+      const ligne = text.slice(lineStarts[l], lineStarts[l + 1]).trim();
+      if (!ligne.startsWith('//') || SECTION_MARKER_RE.test(ligne)) break;
+      removeStart = lineStarts[l];
+    }
   }
   return { ...extent, removeStart };
 }

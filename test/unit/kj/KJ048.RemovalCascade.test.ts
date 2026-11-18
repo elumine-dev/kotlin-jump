@@ -1,3 +1,4 @@
+import { wholeLineExtent } from '../../../src/providers/unusedSymbols';
 import { describe, it, expect } from 'vitest';
 import { importOrNull } from './harness';
 
@@ -93,8 +94,12 @@ describe.skipIf(!mod)('cascadeAfterRemoval', () => {
     const texte = ['package com.x;', '', 'import java.io.File;', '', 'class A { File f; }'].join(NL);
     const c = cascade('a/A.java', texte, [{ start: texte.indexOf('class A'), end: texte.length }]);
     const e = (c.imports.get('a/A.java') ?? [])[0];
-    // La ligne vide qui suivait part avec, comme du cote Kotlin.
-    expect(texte.slice(e.start, e.end)).toBe('import java.io.File;' + NL + NL);
+    expect(texte.slice(e.start, e.end)).toBe('import java.io.File;' + NL);
+    // The blank line under it is now claimed by the class cut, which ends the
+    // file; applied together, one blank line goes, once.
+    const classe = wholeLineExtent(texte, texte.indexOf('class A'), texte.length);
+    const apres = [classe, e].sort((a, b) => b.start - a.start).reduce((s, r) => s.slice(0, r.start) + s.slice(r.end), texte);
+    expect(apres).toBe('package com.x;' + NL + NL);
   });
 
   it('temoin : un import Java encore utilise reste', () => {

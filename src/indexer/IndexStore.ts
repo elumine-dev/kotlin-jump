@@ -37,7 +37,11 @@ export type { Snapshot, SnapshotFile };
 // ktlint wraps it) are now read from the constructor line, and a header whose
 // `) :` ends the line reads the list below. Over 8 projects, 96 + 37 classes
 // had no parent at all in a v28 snapshot.
-export const SNAPSHOT_VERSION = 29;
+// bumped to 30: a property with no type whose accessor follows its name
+// (`private val Cycle.labelRes get() = ...`, or `val x` over its `get()`) was
+// not indexed at all: over 6 projects, about a thousand properties absent from
+// Outline, Go to Definition and the dead code scan.
+export const SNAPSHOT_VERSION = 30;
 const SNAPSHOT_FILENAME = 'kotlin-jump-index.json'; // historical name; content is gzip from v19+
 
 const gzip   = promisify(zlib.gzip);

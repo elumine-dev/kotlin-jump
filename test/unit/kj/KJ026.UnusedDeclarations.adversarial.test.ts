@@ -107,9 +107,11 @@ describe('KJ-026 adversarial — détection', () => {
     expect(names('@Suppress("unused")\nprivate fun kept() = 1\nfun main() { println(1) }\n')).toEqual(['kept']);
   });
 
-  it('grab bag jamais flaggé : backticks, _prefixe, main, serialVersionUID, expect/actual/external/abstract, point-virgule, braces cassées', () => {
+  it('grab bag jamais flaggé : backticks, main, serialVersionUID, expect/actual/external/abstract, point-virgule, braces cassées', () => {
     expect(names('private fun `weird name`() = 1\n')).toEqual([]);
-    expect(names('private val _internal = 1\n')).toEqual([]);
+    // `_internal` is a backing property name, not "unused on purpose": read by
+    // nobody, it is dead, and detekt says so (UnusedPrivateProperty spares `_`).
+    expect(names('private val _internal = 1\n')).toEqual(['_internal']);
     expect(names('private fun main() { println(1) }\n')).toEqual([]);
     expect(names('class A { private val serialVersionUID = 1L }\n')).toEqual([]);
     expect(names('private external fun nat(): Int\nfun main() { println(1) }\n')).toEqual([]);

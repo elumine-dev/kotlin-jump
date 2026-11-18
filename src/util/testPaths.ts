@@ -139,3 +139,18 @@ const GRADLE_TEST_SOURCE_SET_RE = /[\\/]src[\\/][^\\/]*[Tt]est[^\\/]*[\\/]/;
 export function isTestSourceSet(uriPath: string, segments: readonly string[]): boolean {
   return isTestPath(uriPath, segments) || GRADLE_TEST_SOURCE_SET_RE.test(uriPath);
 }
+
+/**
+ * A `.kt` or `.java` file under `src/<set>/resources/` or `src/<set>/assets/`
+ * is DATA: Gradle copies it into the artifact and never compiles it. An open
+ * source app kept boundary fixtures there, files that break its architecture
+ * rules on purpose so a build task can check its own checker. Read as code,
+ * their imports were "unused", the cleanup removed them, and the five
+ * boundary checks failed. Not compiled means not a declaration, not a use,
+ * and never edited.
+ */
+const COPIED_CODE_RE = /[\\/]src[\\/][^\\/]+[\\/](?:resources|assets)[\\/].*\.(?:kt|kts|java)$/;
+
+export function isCopiedNotCompiled(path: string): boolean {
+  return COPIED_CODE_RE.test(path);
+}

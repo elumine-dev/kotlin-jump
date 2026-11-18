@@ -32,7 +32,12 @@ export type { Snapshot, SnapshotFile };
 // (`class P<T extends Runnable> extends ThreadPoolExecutor`) filed the class
 // under the BOUND and lost its real superclass. Every such file kept the wrong
 // supertypes in its snapshot until edited.
-export const SNAPSHOT_VERSION = 28;
+// bumped to 29: the supertypes of a class whose primary constructor sits under
+// its header (`class S` / `@Inject` / `constructor() : Serializer<P>`, the way
+// ktlint wraps it) are now read from the constructor line, and a header whose
+// `) :` ends the line reads the list below. Over 8 projects, 96 + 37 classes
+// had no parent at all in a v28 snapshot.
+export const SNAPSHOT_VERSION = 29;
 const SNAPSHOT_FILENAME = 'kotlin-jump-index.json'; // historical name; content is gzip from v19+
 
 const gzip   = promisify(zlib.gzip);

@@ -149,8 +149,15 @@ export function isTestSourceSet(uriPath: string, segments: readonly string[]): b
  * boundary checks failed. Not compiled means not a declaration, not a use,
  * and never edited.
  */
+/**
+ * A `.kt` or `.java` file under no `src/` directory at all: no source set
+ * compiles it unless a build script says so. `spotless/copyright.kt` is the
+ * licence header Spotless pastes into every file, a comment and nothing else;
+ * read as an empty source file, it was deleted and Spotless lost its template.
+ */
+const OUTSIDE_SOURCE_SETS_RE = /^(?!.*[\\/]src[\\/]).*\.(?:kt|java)$/;
 const COPIED_CODE_RE = /[\\/]src[\\/][^\\/]+[\\/](?:resources|assets)[\\/].*\.(?:kt|kts|java)$/;
 
 export function isCopiedNotCompiled(path: string): boolean {
-  return COPIED_CODE_RE.test(path);
+  return COPIED_CODE_RE.test(path) || OUTSIDE_SOURCE_SETS_RE.test(path);
 }

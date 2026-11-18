@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { submoduleDirsOf } from '../util/gitSubmodules';
 import { DEFAULT_EXCLUDE_PATTERNS } from '../util/pathExclusion';
 import { mapBatched } from '../util/batched';
 import { rememberCorpusUri } from '../util/corpusUri';
@@ -128,6 +129,8 @@ export interface Corpus {
   assets: ResourceSource[];
   /** Module directories, for callers that need the module layout. */
   moduleDirs: string[];
+  /** Git submodule directories of each workspace folder: other repositories, never cut. */
+  submoduleDirs: string[];
 }
 
 export class ResourceCorpus {
@@ -296,8 +299,18 @@ export class ResourceCorpus {
       sources.some(s => s.path.startsWith(`${dir}/build.gradle`) && declaresLibraryPlugin(s.text)),
     );
 
+    const submoduleDirs: string[] = [];
+    for (const folder of token?.isCancellationRequested ? [] : vscode.workspace.workspaceFolders ?? []) {
+      try {
+        const text = decoder.decode(await vscode.workspace.fs.readFile(vscode.Uri.joinPath(folder.uri, '.gitmodules')));
+        submoduleDirs.push(...submoduleDirsOf(folder.uri.fsPath, text));
+      } catch {
+        // no `.gitmodules`: no submodule
+      }
+    }
+
     return {
-      sources, assets, index, modulesWithCode, libraryModules, moduleDirs,
+      sources, assets, index, modulesWithCode, libraryModules, moduleDirs, submoduleDirs,
       truncated: truncated || readFailed,
       sourcesTruncated: sourcesCapped || readFailed,
     };

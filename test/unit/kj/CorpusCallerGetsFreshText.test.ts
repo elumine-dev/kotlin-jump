@@ -38,7 +38,9 @@ function disque(contenu: () => string, barriere?: Promise<void>) {
   vi.spyOn(vscodeMock.workspace, 'textDocuments', 'get').mockReturnValue([] as any);
   (vscodeMock.workspace as any).workspaceFolders = [{ uri: vscodeMock.Uri.file('/w'), path: '/w' }];
   (vscodeMock.workspace as any).fs = {
-    readFile: async () => {
+    readFile: async (u?: { path?: string }) => {
+      // `.gitmodules` is read once per scan; the count measures source reads.
+      if (u?.path?.endsWith('/.gitmodules')) throw new Error('ENOENT');
       lectures++;
       const octets = Buffer.from(contenu(), 'utf8');
       signaler?.();

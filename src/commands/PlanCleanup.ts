@@ -134,7 +134,7 @@ export async function planCleanupCommand(deps: Dependances): Promise<void> {
       const simulation = await simulerLePointFixe(
         {
           sources: data.sources, assets: data.assets, modulesWithCode: data.modulesWithCode,
-          libraryModules: data.libraryModules, moduleDirs: data.moduleDirs,
+          libraryModules: data.libraryModules, moduleDirs: data.moduleDirs, submoduleDirs: data.submoduleDirs,
           resourceEntries: typeof data.index?.entries === 'function' ? data.index.entries() : undefined,
         },
         r.segs,

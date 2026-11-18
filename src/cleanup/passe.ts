@@ -9,6 +9,7 @@ import { sweepFile, planFileEdits, SweepEdit, SweepFinding } from '../providers/
 import { findMemberImports, memberKey } from '../util/memberImports';
 import { findOrphanSourceSets, OrphanSourceSet } from '../providers/orphanSourceSets';
 import { isCopiedNotCompiled } from '../util/testPaths';
+import { isUnderAny } from '../util/gitSubmodules';
 import { findStaleBaselineEntries } from '../providers/staleBaselineEntries';
 import { findEmptySourceFiles } from '../providers/emptySourceFiles';
 import { findUnusedGradleDependencies } from '../providers/unusedGradleDependencies';
@@ -85,6 +86,11 @@ export interface ContexteDePasse {
    */
   moduleDirs?: readonly string[];
   /**
+   * Dossiers des sous-modules git, absolus. Un autre depot : rien de ce qui
+   * vit dessous n est lu ni coupe (voir util/gitSubmodules).
+   */
+  submoduleDirs?: readonly string[];
+  /**
    * G43 : les exclusions de l'utilisateur, celles que Find Everything Unused
    * applique. Sans elles, Remove supprimait ce que le rapport avait tu.
    */
@@ -104,6 +110,7 @@ export function contexteDuCorpus(data: {
   modulesWithCode?: readonly string[];
   libraryModules?: readonly string[];
   moduleDirs?: readonly string[];
+  submoduleDirs?: readonly string[];
   assets?: readonly { path: string; text: string }[];
   index?: { entries?: () => FileResEntry[] };
 }): ContexteDePasse {
@@ -111,6 +118,7 @@ export function contexteDuCorpus(data: {
     modulesWithCode: data.modulesWithCode,
     libraryModules: data.libraryModules,
     moduleDirs: data.moduleDirs,
+    submoduleDirs: data.submoduleDirs,
     assets: data.assets,
     resourceEntries: typeof data.index?.entries === 'function' ? data.index.entries() : undefined,
   };
@@ -132,6 +140,20 @@ export function collecterUnePasse(
   // Meme raison pour le code range dans `resources/` ou `assets/` : copie dans
   // l artefact, jamais compile (voir isCopiedNotCompiled).
   if (sources.some(s => isCopiedNotCompiled(s.path))) sources = sources.filter(s => !isCopiedNotCompiled(s.path));
+  // Un sous-module git est un autre depot : ni lu, ni coupe. Sortent avec ses
+  // sources ce qui peut etre supprime : ses fichiers de ressources et ses assets.
+  const sousModules = ctx.submoduleDirs ?? [];
+  if (sousModules.length > 0) {
+    const dedans = (p: string) => isUnderAny(p, sousModules);
+    sources = sources.filter(s => !dedans(s.path));
+    ctx = {
+      ...ctx,
+      assets: ctx.assets?.filter(a => !dedans(a.path)),
+      resourceEntries: ctx.resourceEntries
+        ?.map(e => ({ ...e, variants: e.variants.filter(v => !dedans(v.path)) }))
+        .filter(e => e.variants.length > 0),
+    };
+  }
   const orphelins = ctx.moduleDirs === undefined ? []
     : findOrphanSourceSets({ sources, moduleDirs: ctx.moduleDirs });
   if (orphelins.length > 0) {

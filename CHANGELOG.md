@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.46.1
+
+Remove Everything Unused now leaves code that compiles, with unit tests unchanged, on 17 open source apps, and no longer writes into git submodules.
+
+### Improvements
+- Removed code no longer leaves the detekt findings it used to: empty class bodies and companions, a stray enum semicolon, blank lines where a declaration was, comments above a removed function. Judged on 17 open source apps with detekt 1.23.8 (every rule, ktlint formatting): every cut tree compiled and ran its unit tests with the same results as the original.
+- A file whose namesake class is cut now takes the name of the class left in it. If `DueSection.kt` held `DueSection` and `LegacyDueSection` and the first goes, the file becomes `LegacyDueSection.kt`, which clears two detekt reports. A file whose name or `Kt` facade is written elsewhere, or that multiplatform reads, keeps its name.
+- Stopped a Dagger scope annotation such as `@ScopeApplication` from keeping a field alive that was written five times and never read. A `@Suppress` or `@SuppressLint` now silences only the diagnostic it names, not the whole class.
+- Reported annotation classes that nobody writes, such as an `@IntDef` class named only by its own meta-annotation. Find Everything Unused also no longer lists members that could be private, even with `kotlinJump.unusedMembersSelfOnly` on.
+
+### Fixes
+- Fixed Remove Everything Unused rewriting a catch binding wrongly. For `catch (t: Throwable)` it wrote `} ca_ch (t: Throwable) {`, and the module no longer parsed. Any name that is a substring of `catch` was hit.
+- Fixed a typealias such as `typealias BitwardenString = com.bitwarden.ui.R.string` hiding resource references. Files that import only the alias were read as never using the strings, so 82 414 cuts were proposed across the translations and the UI module no longer compiled. The alias is now followed.
+- Fixed classes losing their parents when ktlint wraps the constructor below the class header (`@Inject constructor() : Serializer<AppPreferences>`). Methods that implement an AndroidX interface were cut as unreferenced. 96 classes over 8 projects had lost their parents this way, in the type hierarchy too.
+- Fixed Remove Everything Unused cutting into git submodules. On one reader app it found 2602 cuts inside two vendored UI libraries, with no way for you to commit them. A submodule is now treated as another repository and is neither read nor cut.
+- Fixed Kotlin files under `resources/` or `assets/` being read as code. Their imports were removed, and Gradle tasks that check those fixtures failed with "fixtures are not detected". Those folders are copied into the artifact and compile nothing, so they are now skipped.
+
+### Notes
+- Indexed properties whose accessor follows the name directly, such as `val binding get() = _binding!!`. About a thousand properties over six projects were missing from Outline and Go to Definition.
+- Code that only tests name, and drawables nothing names, are listed for review and never removed by the pass.
+
 ## 1.46.0
 
 Kotlin Jump now underlines outdated Gradle dependencies in your build files, offers the version bump as a quick fix, and produces a report you can paste into a pull request.

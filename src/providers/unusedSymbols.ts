@@ -760,6 +760,18 @@ export function removalExtent(
   let firstLine = sym.line;
   for (let l = sym.line - 1; l >= 0; l--) {
     const trimmed = (lines[l] ?? '').trim();
+    // A line that CLOSES a block comment opened higher up: commented out
+    // annotations, `/*@Preview(...)` over `@Preview(...)*/`. Read as an
+    // annotation because it starts with `@`, the cut began on it and left the
+    // `/*` open: the file no longer parsed. The whole comment goes with the
+    // declaration, or the climb stops below it, never inside.
+    if (trimmed.endsWith('*/') && !trimmed.includes('/*')) {
+      let k = l - 1;
+      while (k >= 0 && !(lines[k] ?? '').includes('/*')) k--;
+      const ouvre = k >= 0 && (lines[k] ?? '').trim().startsWith('/*');
+      if (ouvre && sc().slice(lineStarts[k], lineEndOf(l)).trim() === '') { firstLine = k; l = k; continue; }
+      break;
+    }
     // An annotation line that declares something of its own
     // (`@Inject lateinit var analytics`) is a neighbour, not ours. The test
     // runs on what FOLLOWS the annotation: `@Deprecated("Use the val")` read

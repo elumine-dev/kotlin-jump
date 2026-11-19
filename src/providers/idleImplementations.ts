@@ -206,6 +206,10 @@ export function findIdleImplementations(
 
   /** Interfaces this workspace declares, with the methods they demand. */
   const interfaceMethods = new Map<string, Set<string>>();
+  // Interfaces that declare a PROPERTY. The class overrides it too, and
+  // guard 1 only reads methods: `override val userData = flowOf(...)` stayed
+  // once the clause went, overriding nothing, and the module stopped compiling.
+  const interfacesWithProperties = new Set<string>();
   for (const src of input.sources) {
     if (!/\.(kt|java)$/.test(src.path) || isBuildArtifactPath(src.path)) continue;
     if (!src.text.includes('interface')) continue;
@@ -215,6 +219,7 @@ export function findIdleImplementations(
       const noms = new Set<string>();
       for (const m of parsed.symbols) {
         if (m.kind === 'fun' && m.depth === sym.depth + 1 && m.line > sym.line) noms.add(m.name);
+        if ((m.kind === 'val' || m.kind === 'var') && m.depth === sym.depth + 1 && m.line > sym.line) interfacesWithProperties.add(sym.name);
       }
       interfaceMethods.set(sym.name, noms);
     }
@@ -267,7 +272,7 @@ export function findIdleImplementations(
         let concernees: Methode[];
         if (connue !== undefined) {
           // Guard 1a: the workspace declares it, so its demands are readable.
-          if (connue.size === 0) continue;
+          if (connue.size === 0 || interfacesWithProperties.has(simple)) continue;
           concernees = methodes.filter(m => connue.has(m.sym.name));
           if (concernees.length !== connue.size) continue;
         } else {

@@ -3,6 +3,7 @@ import { collecterUnePasse, sansTrouDeLignesVides, Coupe } from '../../../src/co
 import { findUnusedLocals } from '../../../src/providers/unusedLocals';
 import { findUnusedImports } from '../../../src/providers/unusedImports';
 import { findOrphanSourceSets } from '../../../src/providers/orphanSourceSets';
+import { findIdleImplementations } from '../../../src/providers/idleImplementations';
 import { findEmptyBodies, findEmptyCompanions, findStrayEnumSemicolons } from '../../../src/providers/emptyCompanions';
 import { planCascade } from '../../../src/providers/removalCascade';
 
@@ -401,5 +402,49 @@ describe('flavours declared by a convention plugin (Now in Android)', () => {
 
   it('control: without the plugin, src/demo is an orphan', () => {
     expect(findOrphanSourceSets({ sources: app, moduleDirs: ['/w/app'] }).map(o => o.name)).toEqual(['demo']);
+  });
+});
+
+describe('an idle implementation whose interface declares a property (pokedex-compose)', () => {
+  const P = '/w/core/data/src/main/kotlin/a/';
+  const iface = { path: `${P}UserDataRepository.kt`, text: 'package a\n\ninterface UserDataRepository {\n\n  val userData: Flow<UserData>\n\n  suspend fun setUiTheme(uiTheme: UiTheme)\n}\n' };
+  const fake = { path: `${P}FakeUserDataRepository.kt`, text: 'package a\n\nclass FakeUserDataRepository : UserDataRepository {\n  override val userData: Flow<UserData> = flowOf(UserData())\n\n  override suspend fun setUiTheme(uiTheme: UiTheme) {\n  }\n}\n' };
+  const use = { path: `${P}Use.kt`, text: 'package a\n\nfun f() = FakeUserDataRepository().userData\n' };
+
+  // Guard 1 read methods only: the clause and `setUiTheme` went, and
+  // `override val userData` stayed, overriding nothing.
+  it('the clause stays: the property override would override nothing', () => {
+    expect(findIdleImplementations({ sources: [iface, fake, use], testSourceSets: ['/src/test/'] } as any)).toEqual([]);
+  });
+
+  it('control: the same interface without the property is still an idle implementation', () => {
+    const sansPropriete = { ...iface, text: iface.text.replace('  val userData: Flow<UserData>\n\n', '') };
+    const fakeSans = { ...fake, text: fake.text.replace('  override val userData: Flow<UserData> = flowOf(UserData())\n\n', '') };
+    expect(findIdleImplementations({ sources: [sansPropriete, fakeSans], testSourceSets: ['/src/test/'] } as any)).toHaveLength(1);
+  });
+});
+
+describe('commented out annotations above a removed declaration (Seal)', () => {
+  const P = '/w/app/src/main/kotlin/a/';
+  const passe = (t: string) => {
+    const r = collecterUnePasse([{ path: `${P}F.kt`, text: t }, { path: `${P}M.kt`, text: 'package a\n\nfun main() = live() + live2()\n' }], ['test/java']);
+    const cuts = r.parFichier.get(`${P}F.kt`) ?? [];
+    return sansTrouDeLignesVides(t, cuts).sort((a, b) => b.start - a.start).reduce((s, c) => s.slice(0, c.start) + s.slice(c.end), t);
+  };
+
+  // `@Preview(...)*/` starts with `@`: read as an annotation, the cut began on
+  // it and left `/*@Preview(...)` open. The file no longer parsed.
+  it('the whole block comment goes with the declaration, `@OptIn` above it too', () => {
+    const t = 'package a\n\nfun live() = 1\n\n@OptIn(ExperimentalMaterial3Api::class)\n/*@Preview(name = "Dark")\n@Preview(name = "Light")*/\n@Composable\nprivate fun ConfigurePagePreview() {\n    live()\n}\n\nfun live2() = 2\n';
+    const out = passe(t);
+    expect(out).toBe('package a\n\nfun live() = 1\n\nfun live2() = 2\n');
+    expect((out.match(/\/\*/g) ?? []).length).toBe((out.match(/\*\//g) ?? []).length);
+  });
+
+  it('control: a `*/` closing a comment that opens after code stops the climb below it', () => {
+    const t = 'package a\n\nfun live() = 1 /* keep\n   this */\nprivate fun dead() = 2\n\nfun live2() = 2\n';
+    const out = passe(t);
+    expect(out).toContain('fun live() = 1 /* keep\n   this */\n');
+    expect(out).not.toContain('dead');
   });
 });

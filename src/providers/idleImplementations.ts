@@ -205,6 +205,12 @@ export function findIdleImplementations(
   const out: IdleImplementation[] = [];
 
   /** Interfaces this workspace declares, with the methods they demand. */
+  const copies = new Map<string, string>();
+  const propre = (s: { path: string; text: string }): string => {
+    let c = copies.get(s.path);
+    if (c === undefined) { c = sanitizeForUsageScan(s.text); copies.set(s.path, c); }
+    return c;
+  };
   const interfaceMethods = new Map<string, Set<string>>();
   // Interfaces that declare a PROPERTY. The class overrides it too, and
   // guard 1 only reads methods: `override val userData = flowOf(...)` stayed
@@ -301,6 +307,14 @@ export function findIdleImplementations(
           s.path !== src.path && /\.(kt|java)$/.test(s.path)
           && wordCount(s.text, cls.name) > 0 && wordCount(s.text, simple) > 0);
         if (vuAilleurs) continue;
+        // Guard 3b: no other file CONSTRUCTS the class. An instance built there
+        // can be handed to a parameter of the interface's type without the
+        // type ever being written: `SettingsViewModel(userDataRepository =
+        // FakeUserDataRepository())` in a preview. Detached, the fake no longer
+        // fits that parameter, and its `override val` overrode nothing.
+        const construitAilleurs = new RegExp(`(?<![\\w.])(?:new\\s+)?${cls.name}\\s*\\(`);
+        if (input.sources.some(s => s.path !== src.path && /\.(kt|java)$/.test(s.path)
+          && s.text.includes(cls.name) && construitAilleurs.test(propre(s)))) continue;
 
         // Guard 5: a header the rewrite can put back together.
         const nouvelle = headerWithout(entete, ecrit);

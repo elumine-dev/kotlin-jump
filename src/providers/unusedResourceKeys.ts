@@ -22,8 +22,7 @@ import {
   normalizeResourceName,
   styleParentClosure,
   styleableCovers,
-  dynamicResourceLookups,
-} from '../util/xmlRefs';
+  dynamicResourceLookups, resourceTypeAliases } from '../util/xmlRefs';
 import { isBuildArtifactPath, isVendorOwnedName } from '../util/resourceAllowlists';
 import { ResourceSource } from './unusedResources';
 
@@ -94,6 +93,7 @@ function harvest(sources: readonly ResourceSource[]): AliveSet {
     styleItemAttrs: new Set(),
   };
 
+  const aliases = resourceTypeAliases(sources);
   for (const src of sources) {
     // G2: R8 writes every resource name of the build into seeds/usage/mapping.
     // Reading one as evidence marks the entire project alive (80 keys).
@@ -104,7 +104,7 @@ function harvest(sources: readonly ResourceSource[]): AliveSet {
     const isBuildScript = /\.(gradle|kts|toml|pro|properties)$/.test(src.path);
 
     if (isCode || isXml) {
-      for (const ref of collectValueResourceRefs(src.text, src.path, ALL_KINDS)) {
+      for (const ref of collectValueResourceRefs(src.text, src.path, ALL_KINDS, aliases)) {
         alive.byKind.get(ref.kind)!.add(normalizeResourceName(ref.name));
       }
     }

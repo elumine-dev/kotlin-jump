@@ -8,8 +8,7 @@ import {
   dynamicallyLookedUpKinds,
   dynamicResourceLookups,
   collectKeepGlobs,
-  SHRINKER_RULES_RE,
-} from '../util/xmlRefs';
+  SHRINKER_RULES_RE, resourceTypeAliases } from '../util/xmlRefs';
 
 /**
  * KJ-029: Android resource FILES nothing references.
@@ -254,6 +253,7 @@ export function findUnusedResources(input: ScanInput): UnusedResource[] {
   const keepGlobs: RegExp[] = [];
   const shrinkerRuleFiles = new Set<string>();
 
+  const aliases = resourceTypeAliases(input.sources);
   for (const src of input.sources) {
     if (isCodePath(src.path)) {
       codeText.push(src.text);
@@ -266,7 +266,7 @@ export function findUnusedResources(input: ScanInput): UnusedResource[] {
           for (const [k, ps] of lookups.prefixes) for (const p of ps) (dynamicPrefixes.get(k) ?? dynamicPrefixes.set(k, new Set()).get(k)!).add(p);
         }
       }
-      for (const r of collectCodeResourceRefs(src.text, SUPPORTED_KINDS)) {
+      for (const r of collectCodeResourceRefs(src.text, SUPPORTED_KINDS, aliases)) {
         referenced.add(`${r.kind}/${r.name}`);
       }
       for (const s of collectStringLiterals(src.text)) literals.add(s);

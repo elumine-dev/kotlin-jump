@@ -27,8 +27,9 @@ import { baseDe, cleDeBase, cleDImportOrphelin, cleDuFichierMort, estUnFichierVi
 
 import {
   Coupe, Tally, collecterUnePasse, compteLesFamilles, contexteDuCorpus, debutsDeLigne,
-  sansTrouDeLignesVides, coupesRetenues as coupesRetenuesSelon,
+  sansTrouDeLignesVides, texteApresCoupes, coupesRetenues as coupesRetenuesSelon,
 } from '../cleanup/passe';
+import { fileRenameAfterCut } from '../cleanup/fileRenameAfterCut';
 
 export {
   collecterUnePasse, compteLesFamilles, sansChevauchement, sansTrouDeLignesVides,
@@ -207,13 +208,15 @@ export async function executerLesRondes(o: OptionsDeRondes): Promise<BilanDesRon
     symboles: 0, membres: 0, entrees: 0, ilots: 0, balayage: 0, renommages: 0,
     imports: 0, fichiers: 0, bouges: 0,
     alias: 0, evenements: 0, remoteconfig: 0, cles: 0, ressources: 0,
-    parametres: 0, arguments: 0, baseline: 0, vides: 0, enums: 0, injections: 0, implementations: 0, contrats: 0,
+    parametres: 0, arguments: 0, baseline: 0, vides: 0, enums: 0, injections: 0, implementations: 0, contrats: 0, fichiersRenommes: 0,
   };
   const ajouteTally = (t: Tally) => { for (const k of Object.keys(t)) cumul[k] = (cumul[k] ?? 0) + t[k]; };
   /** Les fichiers ecartes, par chemin : la boucle repasse sur les memes. */
   const ecartes = new Set<string>();
   /** Base keys of what the rounds applied, for a batch to compare with what it promised. */
   const appliquees = new Set<string>();
+  /** Files renamed so far and still there: a later round can delete one. */
+  const renommes = new Set<string>();
 
   // Une seule passe en relecture : l'utilisateur choisit quoi accepter, et
   // repasser derriere lui sans savoir ce qu'il a garde serait une devinette.
@@ -282,7 +285,8 @@ export async function executerLesRondes(o: OptionsDeRondes): Promise<BilanDesRon
       const passe = n === 0 && o.premier && data === o.premier.data
         ? { parFichier: o.premier.parFichier, fichiersMorts: o.premier.fichiersMorts }
         : collecterUnePasse(data.sources, segs, contexte);
-      const textes = new Map(data.sources.map(s => [s.path, s.text]));
+      const sources = data.sources;
+      const textes = new Map(sources.map(s => [s.path, s.text]));
       // A batch names its cuts by key. What it does not name stays where it
       // is, and a key it names that the pass no longer finds is simply not
       // applied: the caller compares `appliquees` with what was promised.
@@ -323,6 +327,23 @@ export async function executerLesRondes(o: OptionsDeRondes): Promise<BilanDesRon
             { needsConfirmation: choix === 'review', label: r.quoi ? `Remove ${r.quoi}` : 'Remove dead code' });
         }
       }
+      // After the text edits of the same WorkspaceEdit, which applies in
+      // order. Not in review: the reader may untick the cut that made it.
+      if (choix === 'apply') {
+        let pris: Set<string> | undefined;
+        const prend = (t: string) => (pris ??= new Set(sources.map(s => s.path.toLowerCase()))).has(t.toLowerCase());
+        for (const [p, l] of retenu) {
+          if (cascade.deleteFiles.has(p) || fichiersMorts.has(p)) continue;
+          const avant = textes.get(p)!;
+          const to = fileRenameAfterCut(p, avant, texteApresCoupes(avant, l, cascade.imports.get(p)).texte, sources, prend);
+          if (!to) continue;
+          pris!.add(to.toLowerCase());
+          renommes.delete(p);
+          renommes.add(to);
+          edit.renameFile(corpusUri(p), corpusUri(to), { overwrite: false, ignoreIfExists: true },
+            { needsConfirmation: false, label: `Rename ${p.split(/[\\/]/).pop()} after the class left in it` });
+        }
+      }
       const swept = addCascadePlan(edit, cascade, textes, choix === 'review');
       // Etiquette distincte de celle de la cascade : un fichier de ressources
       // n'est pas vide, il n'est nomme par personne. Dire « nothing is left in
@@ -359,6 +380,8 @@ export async function executerLesRondes(o: OptionsDeRondes): Promise<BilanDesRon
       applique.vides += videsSupprimes;
       ajouteTally(applique);
 
+      for (const p of [...cascade.deleteFiles, ...fichiersMorts]) renommes.delete(p);
+
       const ok = await vscode.workspace.applyEdit(edit);
       if (!ok) { refuse = true; break; }
       corpus.invalidate();
@@ -371,6 +394,7 @@ export async function executerLesRondes(o: OptionsDeRondes): Promise<BilanDesRon
     },
   );
 
+  cumul.fichiersRenommes = renommes.size;
   return { cumul, ecartes, annule, restait, refuse, incomplet, appliquees };
 }
 
@@ -474,6 +498,9 @@ export function resumeDesFamilles(cumul: Tally): string {
     cumul.implementations > 0 ? `${plural(cumul.implementations, 'place')} of an interface implemented for nothing` : '',
     // G44. Une coupe par declaration : le contrat et chaque surcharge.
     cumul.contrats > 0 ? `${plural(cumul.contrats, 'declaration')} of interface methods nobody calls` : '',
+    // Not a removal, but a change git shows: the file now bears the name of
+    // the class its namesake left alone in it.
+    cumul.fichiersRenommes > 0 ? `${plural(cumul.fichiersRenommes, 'file')} renamed after the class left in it` : '',
   ].filter(Boolean).join(', ');
 }
 

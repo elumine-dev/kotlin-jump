@@ -152,10 +152,35 @@ export function importedResourcePrefixes(code: string): { prefix: string; kind?:
   return out;
 }
 
-/** Every `<prefix>.<name>` an imported R class makes a resource reference. */
-function importedRRefs(clean: string, kinds: readonly string[], namePattern: string): ResourceRef[] {
+/** A name that stands for an R class, or for one of its kinds, project wide. */
+export interface ResourceAlias { prefix: string; kind?: string }
+
+/**
+ * `typealias BitwardenString = com.bitwarden.ui.R.string`, declared once and
+ * used everywhere as `BitwardenString.log_out` by files that import the ALIAS,
+ * not R. Read per file from imports, every one of those strings looked
+ * unreferenced: 82 414 cuts across the translations of an open source password
+ * manager, and its UI module no longer compiled. Collected over the whole
+ * corpus, then handed to every file.
+ */
+export function resourceTypeAliases(sources: readonly { path: string; text: string }[]): ResourceAlias[] {
+  const out: ResourceAlias[] = [];
+  const re = /^[ \t]*(?:(?:public|internal|private)[ \t]+)?typealias[ \t]+([A-Za-z_]\w*)[ \t]*=[ \t]*([\w.]*?)\bR2?(?:\.([a-z]\w*))?[ \t]*$/gm;
+  for (const s of sources) {
+    if (!s.path.endsWith('.kt') || !s.text.includes('typealias')) continue;
+    for (const m of s.text.matchAll(re)) {
+      if (/^android\.$/.test(m[2])) continue;
+      out.push(m[3] ? { prefix: m[1], kind: m[3] } : { prefix: m[1] });
+    }
+  }
+  return out;
+}
+
+/** Every `<prefix>.<name>` an imported R class, or a project alias of one, makes a resource reference. */
+function importedRRefs(clean: string, kinds: readonly string[], namePattern: string, aliases: readonly ResourceAlias[]): ResourceRef[] {
   const out: ResourceRef[] = [];
-  for (const { prefix, kind } of importedResourcePrefixes(clean)) {
+  const prefixes = [...importedResourcePrefixes(clean), ...(aliases ?? []).filter(a => clean.includes(`${a.prefix}.`))];
+  for (const { prefix, kind } of prefixes) {
     if (kind === undefined) {
       const re = new RegExp(`\\b${prefix}\\.(${kinds.join('|')})\\.(${namePattern})\\b`, 'g');
       let m: RegExpExecArray | null;
@@ -170,13 +195,13 @@ function importedRRefs(clean: string, kinds: readonly string[], namePattern: str
   return out;
 }
 
-export function collectCodeResourceRefs(code: string, kinds: readonly string[]): ResourceRef[] {
+export function collectCodeResourceRefs(code: string, kinds: readonly string[], aliases: readonly ResourceAlias[]): ResourceRef[] {
   const clean = stripKotlinComments(code);
   const re = new RegExp(`\\bR2?\\.(${kinds.join('|')})\\.([A-Za-z_]\\w*)\\b`, 'g');
   const out: ResourceRef[] = [];
   let m: RegExpExecArray | null;
   while ((m = re.exec(clean)) !== null) out.push({ kind: m[1], name: m[2] });
-  out.push(...importedRRefs(clean, kinds, '[A-Za-z_]\\w*'));
+  out.push(...importedRRefs(clean, kinds, '[A-Za-z_]\\w*', aliases));
   return out;
 }
 
@@ -239,6 +264,7 @@ export function collectValueResourceRefs(
   text: string,
   path: string,
   kinds: readonly string[],
+  aliases: readonly ResourceAlias[],
 ): ResourceRef[] {
   const out: ResourceRef[] = [];
   const group = kinds.join('|');
@@ -255,7 +281,7 @@ export function collectValueResourceRefs(
     // La branche XML plus bas garde les points : un nom de style en contient.
     const re = new RegExp(`\\bR2?\\.(${group})\\.([A-Za-z_]\\w*)\\b`, 'g');
     while ((m = re.exec(clean)) !== null) out.push({ kind: m[1], name: m[2] });
-    out.push(...importedRRefs(clean, kinds, '[A-Za-z_]\\w*'));
+    out.push(...importedRRefs(clean, kinds, '[A-Za-z_]\\w*', aliases));
     return out;
   }
 

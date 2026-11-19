@@ -297,6 +297,11 @@ export function findUnusedContracts(input: ContractScanInput): UnusedContract[] 
     const impls: TypeInfo[] = [];
     let blocked = false;
     for (const [t, a] of ancestries) {
+      // A class is never its own implementation. `private class Editor :
+      // SharedPreferences.Editor` resolved the bare `Editor` back to itself,
+      // counted its own member twice, and the call three lines up read as the
+      // second declaration: a live private helper was cut.
+      if (t === contract) continue;
       const reaches = a.reached.has(contract.decl);
       if (!reaches) {
         if (a.ambiguous.includes(name)) { blocked = true; break; }

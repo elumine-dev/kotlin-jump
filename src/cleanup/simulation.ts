@@ -5,7 +5,7 @@ import type { Preuve } from './preuve';
 import { collecterUnePasse, coupesRetenues, sansTrouDeLignesVides, Coupe } from './passe';
 import { planCascade } from '../providers/removalCascade';
 import { sanitizeForUsageScan, sanitizeJavaForUsageScan } from '../util/kotlinScan';
-import { collectValueResourceRefs, normalizeResourceName, stripXmlComments } from '../util/xmlRefs';
+import { collectValueResourceRefs, normalizeResourceName, resourceTypeAliases, stripXmlComments } from '../util/xmlRefs';
 import { cleDImportOrphelin, cleDeBase, estUnFichierVide, nomImporte, normalise } from './cles';
 import { estCascade, nomDe, nomIndexe, IDENTIFIANT_RE, SANS_VERIFICATION } from './planner';
 
@@ -163,6 +163,7 @@ export function indexerLesMentions(sources: readonly Source[], coupes: readonly 
     s.add(path);
   };
   const cleDe = (kind: string, name: string) => `${kind}/${normalizeResourceName(name)}`;
+  const aliases = resourceTypeAliases(sources);
   for (const s of sources) {
     let touche = false;
     for (const m of s.text.matchAll(TOKEN_RE)) if (mots.has(m[0])) { note(brut, m[0], s.path); touche = true; }
@@ -177,7 +178,7 @@ export function indexerLesMentions(sources: readonly Source[], coupes: readonly 
     if (!touche) continue;
     for (const m of sansCommentairesNiChaines(s.path, s.text).matchAll(TOKEN_RE)) if (mots.has(m[0])) note(code, m[0], s.path);
     if (cles.size > 0) {
-      for (const r of collectValueResourceRefs(s.text, s.path, kinds)) { const k = cleDe(r.kind, r.name); if (cles.has(k)) note(code, k, s.path); }
+      for (const r of collectValueResourceRefs(s.text, s.path, kinds, aliases)) { const k = cleDe(r.kind, r.name); if (cles.has(k)) note(code, k, s.path); }
     }
     if (/\.(kt|java)$/.test(s.path)) for (const m of s.text.matchAll(DECLARATION_RE)) if (mots.has(m[1])) note(declare, m[1], s.path);
   }

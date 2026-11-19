@@ -1,9 +1,12 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'fs';
+import { androidApi } from '../../../src/util/androidApi';
 import { collecterUnePasse, sansTrouDeLignesVides, Coupe } from '../../../src/commands/RemoveEverythingUnused';
 import { findUnusedLocals } from '../../../src/providers/unusedLocals';
 import { findUnusedImports } from '../../../src/providers/unusedImports';
 import { findOrphanSourceSets } from '../../../src/providers/orphanSourceSets';
 import { findIdleImplementations } from '../../../src/providers/idleImplementations';
+import { findUnusedContracts } from '../../../src/providers/unusedContracts';
 import { findEmptyBodies, findEmptyCompanions, findStrayEnumSemicolons } from '../../../src/providers/emptyCompanions';
 import { planCascade } from '../../../src/providers/removalCascade';
 
@@ -409,12 +412,12 @@ describe('an idle implementation whose interface declares a property (pokedex-co
   const P = '/w/core/data/src/main/kotlin/a/';
   const iface = { path: `${P}UserDataRepository.kt`, text: 'package a\n\ninterface UserDataRepository {\n\n  val userData: Flow<UserData>\n\n  suspend fun setUiTheme(uiTheme: UiTheme)\n}\n' };
   const fake = { path: `${P}FakeUserDataRepository.kt`, text: 'package a\n\nclass FakeUserDataRepository : UserDataRepository {\n  override val userData: Flow<UserData> = flowOf(UserData())\n\n  override suspend fun setUiTheme(uiTheme: UiTheme) {\n  }\n}\n' };
-  const use = { path: `${P}Use.kt`, text: 'package a\n\nfun f() = FakeUserDataRepository().userData\n' };
 
   // Guard 1 read methods only: the clause and `setUiTheme` went, and
   // `override val userData` stayed, overriding nothing.
   it('the clause stays: the property override would override nothing', () => {
-    expect(findIdleImplementations({ sources: [iface, fake, use], testSourceSets: ['/src/test/'] } as any)).toEqual([]);
+    // Built nowhere else, so only this guard stands in the way.
+    expect(findIdleImplementations({ sources: [iface, fake], testSourceSets: ['/src/test/'] } as any)).toEqual([]);
   });
 
   it('control: the same interface without the property is still an idle implementation', () => {
@@ -446,5 +449,42 @@ describe('commented out annotations above a removed declaration (Seal)', () => {
     const out = passe(t);
     expect(out).toContain('fun live() = 1 /* keep\n   this */\n');
     expect(out).not.toContain('dead');
+  });
+});
+
+describe('an implementation built in another file can be passed as the interface (pokedex-compose)', () => {
+  const P = '/w/core/data/src/main/kotlin/a/';
+  const iface = { path: `${P}UserDataRepository.kt`, text: 'package a\n\ninterface UserDataRepository {\n  suspend fun setUiTheme(uiTheme: UiTheme)\n}\n' };
+  const fake = { path: `${P}FakeUserDataRepository.kt`, text: 'package a\n\nclass FakeUserDataRepository : UserDataRepository {\n  override suspend fun setUiTheme(uiTheme: UiTheme) {\n  }\n}\n' };
+  const preview = { path: '/w/feature/settings/src/main/kotlin/b/PokedexSettings.kt', text: 'package b\n\nimport a.FakeUserDataRepository\n\nfun preview() = SettingsViewModel(userDataRepository = FakeUserDataRepository())\n' };
+
+  // The preview hands the fake to a parameter of the interface's type and never
+  // writes that type: guard 3 looked for both names and saw nothing.
+  it('the clause stays when another file constructs the class', () => {
+    expect(findIdleImplementations({ sources: [iface, fake, preview], testSourceSets: ['/src/test/'] } as any)).toEqual([]);
+  });
+
+  it('control: built nowhere else, it is still an idle implementation', () => {
+    expect(findIdleImplementations({ sources: [iface, fake], testSourceSets: ['/src/test/'] } as any)).toHaveLength(1);
+  });
+});
+
+describe('a class that implements a qualified platform interface of the same simple name (Bitwarden)', () => {
+  const API = androidApi(JSON.parse(readFileSync('bundled/android-api-36.json', 'utf8')));
+  const P = '/w/data/src/main/kotlin/a/';
+  const file = { path: `${P}KeystoreEncryptedSharedPreferences.kt`, text: 'package a\n\nimport android.content.SharedPreferences\n\nclass Store(private val prefs: SharedPreferences) {\n    fun edit(): SharedPreferences.Editor = Editor(prefs.edit())\n}\n\nprivate class Editor(private val editor: SharedPreferences.Editor) : SharedPreferences.Editor {\n    override fun putString(key: String, value: String?): SharedPreferences.Editor = encryptAndPut(key, value)\n\n    private fun encryptAndPut(key: String, value: String?): SharedPreferences.Editor {\n        editor.putString(key, value)\n        return this\n    }\n}\n' };
+
+  // Through the platform chain, `SharedPreferences.Editor` resolved its bare
+  // `Editor` to the class itself: counted twice, the call above read as the
+  // second declaration, and a live private helper was cut.
+  it('a private helper called inside the class is not an unused contract', () => {
+    const r = findUnusedContracts({ sources: [file], testSourceSets: ['test/java'], androidApi: API } as any) as any[];
+    expect(r.map(c => c.name)).toEqual([]);
+  });
+
+  it('the same with a public helper: the class is not its own implementation', () => {
+    const pub = { ...file, text: file.text.replace('    private fun encryptAndPut(', '    fun encryptAndPut(') };
+    const r = findUnusedContracts({ sources: [pub], testSourceSets: ['test/java'], androidApi: API } as any) as any[];
+    expect(r.map(c => c.name)).toEqual([]);
   });
 });

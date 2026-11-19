@@ -529,6 +529,25 @@ export function debutsDeLigne(text: string): number[] {
 }
 
 /**
+ * The text a file has once its cuts and the cascade's imports are applied:
+ * the very ranges the CLI writes and the editor command sends.
+ */
+export function texteApresCoupes(
+  texte: string,
+  coupes: readonly Coupe[],
+  imports: readonly { start: number; end: number }[] = [],
+): { texte: string; operations: number } {
+  const plages = [
+    ...sansTrouDeLignesVides(texte, coupes, imports),
+    ...imports.map(e => ({ start: e.start, end: e.end, texte: '' })),
+  ];
+  // From the end, so every offset still points into the text it was measured on.
+  let out = texte;
+  for (const r of plages.sort((a, b) => b.start - a.start)) out = out.slice(0, r.start) + r.texte + out.slice(r.end);
+  return { texte: out, operations: plages.length };
+}
+
+/**
  * The cuts, each grown by the blank line it would otherwise strand.
  *
  * A declaration almost always has a blank line on either side of it. Take the

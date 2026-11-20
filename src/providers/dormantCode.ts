@@ -44,6 +44,13 @@ export interface DormantFinding {
   removeEnd: number;
   /** Lines the extent spans. */
   lines: number;
+  /**
+   * Commented code only: every line reads as code and none as a sentence, and
+   * the block is not a file header. What a report lists on a likeness, a
+   * removal needs for sure: on an open source app the likeness took the GPL
+   * header of 276 files, whose sentences carry `;` and parentheses.
+   */
+  certain?: boolean;
 }
 
 export interface DormantScanInput {
@@ -76,6 +83,22 @@ function readsAsCode(s: string): boolean | undefined {
 function readsAsProse(s: string): boolean {
   const t = s.trim();
   return PROSE_RE.test(t) && !CODE_PUNCT_RE.test(t);
+}
+
+const CODE_END_RE = /(?:[;{}(),=]|->|&&|\|\||\+|\?:)\s*$/;
+
+/** Every line is code by its shape, and none carries a sentence's words without it. */
+export function commentedRunIsSurelyCode(inner: readonly string[]): boolean {
+  let code = 0;
+  for (const l of inner) {
+    const t = l.replace(/\/\/.*$/, '').trim();
+    if (t === '') continue;
+    const shaped = CODE_KEYWORD_RE.test(t) || CODE_END_RE.test(t) || /^[)}\]]/.test(t) || /^\.?\w+(?:\.\w+)*\(.*\)$/.test(t);
+    if (!shaped) return false;
+    if (PROSE_RE.test(t) && !CODE_KEYWORD_RE.test(t) && /[.:!?]$|\b\w+ \w+ \w+ \w+\b(?![^(]*\))/.test(t) && !/[={]/.test(t)) return false;
+    code++;
+  }
+  return code >= 3;
 }
 
 /** True when a run of comment lines is, by its content, code and not notes. */
@@ -150,7 +173,7 @@ export function findDormantCode(input: DormantScanInput): DormantFinding[] {
     // ── commented-out code, `//` runs ───────────────────────────────────
     let run: number[] = [];
     const flush = () => {
-      if (run.length >= minLines) {
+      if (run.length >= minLines && !insideRawString(src.text, lineStarts[run[0]])) {
         const inner = run.map(i => (lines[i] ?? '').replace(/^\s*\/\//, ''));
         if (commentedRunIsCode(inner)) {
           const first = run[0], last = run[run.length - 1];
@@ -163,6 +186,7 @@ export function findDormantCode(input: DormantScanInput): DormantFinding[] {
             removeStart: lineStarts[first],
             removeEnd: last + 1 < lineStarts.length ? lineStarts[last + 1] : src.text.length,
             lines: run.length,
+            certain: !beforePackage(src.text, lineStarts[first]) && commentedRunIsSurelyCode(inner),
           });
         }
       }
@@ -176,9 +200,14 @@ export function findDormantCode(input: DormantScanInput): DormantFinding[] {
     flush();
 
     // ── commented-out code, `/* … */` blocks (never KDoc `/**`) ─────────
-    const blockRe = /^[ \t]*\/\*(?!\*)([\s\S]*?)\*\/[ \t]*$/gm;
+    // The body holds no `*/`: `/* minBufferMs */ 10_000,` closes on its own line
+    // with code after it, and a lazy match ran on to the NEXT block's closing,
+    // fifty live lines further on an open source app. Nothing showed while the
+    // family was only listed; `kdead remove --all` cut the lot.
+    const blockRe = /^[ \t]*\/\*(?!\*)((?:(?!\*\/)[\s\S])*)\*\/[ \t]*$/gm;
     let bm: RegExpExecArray | null;
     while ((bm = blockRe.exec(src.text)) !== null) {
+      if (insideRawString(src.text, bm.index)) continue;
       const startLine = offsetToPos(lineStarts as number[], bm.index).line;
       const endLine = offsetToPos(lineStarts as number[], bm.index + bm[0].length - 1).line;
       const count = endLine - startLine + 1;
@@ -194,11 +223,25 @@ export function findDormantCode(input: DormantScanInput): DormantFinding[] {
         removeStart: lineStarts[startLine],
         removeEnd: endLine + 1 < lineStarts.length ? lineStarts[endLine + 1] : src.text.length,
         lines: count,
+        certain: !beforePackage(src.text, bm.index) && commentedRunIsSurelyCode(inner),
       });
     }
   }
 
   return out.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : a.line - b.line));
+}
+
+/** A comment above the `package` line is the file's header, a licence most of the time. */
+function beforePackage(text: string, offset: number): boolean {
+  const p = text.search(/^[ \t]*package\b/m);
+  return p === -1 ? false : offset < p;
+}
+
+/** True inside a `"""` string: its lines are text, whatever they open with. */
+function insideRawString(text: string, offset: number): boolean {
+  let n = 0;
+  for (let i = text.indexOf('"""'); i !== -1 && i < offset; i = text.indexOf('"""', i + 3)) n++;
+  return n % 2 === 1;
 }
 
 /** The one line a report ends on. Exported for the witness. */

@@ -50,6 +50,16 @@ export interface TestCoRemovalPlan {
 
 const IMPORT_RE = /^\s*import\s+/;
 
+/**
+ * What an import line brings in BEYOND `name`: `mockInfo` for
+ * `import a.MockUtil.mockInfo`, `*` for `import a.MockUtil.*`, undefined when
+ * the line imports `name` itself (an `as` alias included).
+ */
+export function importedMemberOf(line: string, name: string): string | undefined {
+  const m = new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\.\\s*(\\*|\\w+)`).exec(line.replace(/\/\/.*$/, ''));
+  return m?.[1];
+}
+
 /** Whole-line extent around `[start, end)`, so no orphan blank line is left. */
 function wholeLines(text: string, start: number, end: number): { start: number; end: number } {
   let from = text.lastIndexOf('\n', Math.max(start - 1, 0));
@@ -174,6 +184,16 @@ export function planTestCoRemoval(
       const at = m.index;
       const line = offsetToPos(lineStarts as number[], at).line;
       if (IMPORT_RE.test(lines[line] ?? '')) {
+        // `import a.MockUtil.mockPokemonInfo` brings a member in under its own
+        // name: the import going leaves `mockPokemonInfo()` behind, which this
+        // planner does not chase. Three test files of an open source app lost
+        // the line and kept the calls.
+        const membre = importedMemberOf(lines[line] ?? '', m[0]);
+        if (membre !== undefined && !names.includes(membre)) {
+          plan.unresolved.push({ path: src.path, line, reason: `the import brings in a member of ${m[0]} under the member's own name` });
+          unresolved = true;
+          continue;
+        }
         if (lignesImportees.has(line)) continue;
         lignesImportees.add(line);
         const w = wholeLines(src.text, lineStarts[line], lineStarts[line] + (lines[line] ?? '').length + 1);

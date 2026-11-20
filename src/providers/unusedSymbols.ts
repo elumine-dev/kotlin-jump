@@ -719,6 +719,13 @@ function finDeLExpression(
     let suivante = l + 1;
     while (suivante <= lastLine && (lines[suivante] ?? '').trim() === '') suivante++;
     if (suivante <= lastLine && !OUVRE_UNE_DECLARATION_RE.test(lines[suivante] ?? '')) continue;
+    // A comment between two links of a chain: `.sortedBy { }`, a `//` note,
+    // then `.map { }`. The note read as the start of what follows, and the cut
+    // left `.map { }` alone under it on an open source app. The first line
+    // that holds code decides, and a comment holds none in the blanked copy.
+    let code = suivante;
+    while (code <= lastLine && clean.slice(lineStarts[code], lineEndOf(code)).trim() === '') code++;
+    if (code > suivante && code <= lastLine && /^\s*(?:\.|\?\.|\?:)/.test(clean.slice(lineStarts[code], lineEndOf(code)))) continue;
     return lineEndOf(l);
   }
   return -1;

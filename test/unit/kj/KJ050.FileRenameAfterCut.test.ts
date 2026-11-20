@@ -95,4 +95,18 @@ describe('KJ050 a file renamed after the class a cut left in it', () => {
     expect(fileRenameAfterCut('/a/DueSection.java', BEFORE, AFTER, [], none)).toBeUndefined();
     expect(fileRenameAfterCut('/a/DueSection.kts', BEFORE, AFTER, [], none)).toBeUndefined();
   });
+
+  it('takes the name of the last class of a file that held several under a common name', () => {
+    const p = '/app/src/main/java/a/DispatcherAnnotations.kt';
+    const before = 'package a\n\n@Qualifier\nannotation class IoDispatcher\n\n@Qualifier\nannotation class MainDispatcher\n';
+    const after = 'package a\n\n@Qualifier\nannotation class IoDispatcher\n';
+    expect(fileRenameAfterCut(p, before, after, [], none)).toBe('/app/src/main/java/a/IoDispatcher.kt');
+  });
+
+  it('keeps a file that held one class under another name before the cut', () => {
+    const p = '/app/src/main/java/a/Annotations.kt';
+    const before = 'package a\n\nannotation class IoDispatcher\n\nfun helper() = 1\n';
+    const after = 'package a\n\nannotation class IoDispatcher\n';
+    expect(fileRenameAfterCut(p, before, after, [], none)).toBeUndefined();
+  });
 });

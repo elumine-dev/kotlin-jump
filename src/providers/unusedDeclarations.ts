@@ -294,7 +294,10 @@ export function findUnusedDeclarations(text: string, lang: 'kotlin' | 'java' = '
     // once its public `ToggleMid` was cut, it stayed behind, read by nobody,
     // and detekt reported it (UnusedPrivateProperty spares `_` only).
     if (sym.name === 'main' || sym.name === 'serialVersionUID' || /^_+$/.test(sym.name)) continue;
-    if (text[nameOffset - 1] === '`') continue;
+    // A backtick name with a space is a test title, which no regex below can
+    // find written. One made of word characters is an ordinary name a rule
+    // forbade spelling plainly: `private const val \`50_MEGS_IN_BYTES\``.
+    if (text[nameOffset - 1] === '`' && !/^\w+$/.test(sym.name)) continue;
     if (isFun && (CONVENTION_FUN_NAMES.has(sym.name) || /^component\d+$/.test(sym.name))) continue;
     // A compiler or lint directive makes nothing read the declaration: it only
     // protects when it names the diagnostic this detector is the counterpart

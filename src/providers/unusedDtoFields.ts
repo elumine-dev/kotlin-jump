@@ -245,6 +245,26 @@ export function findUnusedDtoFields(input: UnusedDtoFieldScanInput): UnusedDtoFi
   const declCount = new Map<string, number>();
   for (const c of candidates) declCount.set(c.name, (declCount.get(c.name) ?? 0) + 1);
 
+  // Java reads a Kotlin property through its accessor: `card.getAuthorName()`
+  // never spells `authorName`. Three fields of an open source app were cut
+  // under eighteen such calls. Tests included: either way a caller is there.
+  const javaAccessed = new Set<string>();
+  for (const src of input.sources) {
+    if (!src.path.endsWith('.java')) continue;
+    for (const m of src.text.matchAll(/\b(?:get|set|is)([A-Z]\w*)\s*\(/g)) {
+      javaAccessed.add(m[1][0].toLowerCase() + m[1].slice(1));
+      javaAccessed.add(`is${m[1]}`);
+    }
+  }
+
+  const textByPath = new Map(input.sources.map(s => [s.path, s.text]));
+  const builtAndNeverDecodedHere = (path: string, className: string): boolean => {
+    const text = textByPath.get(path) ?? '';
+    if (!new RegExp(`\\bprivate\\s+(?:data\\s+)?class\\s+${className}\\b`).test(text)) return false;
+    if (/\b(?:decodeFrom\w+|fromJson|readValue)\s*[<(]/.test(text)) return false;
+    return new RegExp(`(?<![\\w.])${className}\\s*\\(`).test(text.replace(new RegExp(`class\\s+${className}\\s*\\(`), ''));
+  };
+
   const ignored = new Set(input.ignoreNames ?? []);
   const out: UnusedDtoField[] = [];
   for (const c of candidates) {
@@ -258,12 +278,18 @@ export function findUnusedDtoFields(input: UnusedDtoFieldScanInput): UnusedDtoFi
     // D5 keeps the verdict for a hand-built ConfigDO (the fixture's rule);
     // a request body is the one shape the app never deserializes.
     if (/(?:Request|Payload)$/.test(c.className) && constructedInMain.has(c.className)) continue;
+    // Same producer, without the name: a `private` class its own file builds
+    // and never decodes. `TokenizationParameters(val gateway: String = "stripe")`
+    // is what a payment request SENDS; nothing reads `gateway` because the
+    // serializer does.
+    if (constructedInMain.has(c.className) && builtAndNeverDecodedHere(c.path, c.className)) continue;
     if (ignored.has(c.className) || ignored.has(`${c.className}.${c.name}`)) continue;
 
     // Every mention beyond the declarations themselves keeps every bearer
     // alive: the field name in another DTO, a local, an XML attribute.
     const mainMentions = harvest.main.get(c.name) ?? 0;
     if (mainMentions !== (declCount.get(c.name) ?? 0)) continue;
+    if (javaAccessed.has(c.name)) continue;
 
     const testMentions = harvest.test.get(c.name) ?? 0;
     const verdict: DtoFieldVerdict = testMentions > 0 ? 'testOnly' : 'unreferenced';
@@ -365,12 +391,16 @@ function constructionGuard(
     if (isBuildArtifactPath(src.path)) continue;
     const clean = sanitizeForUsageScan(src.text);
     for (const name of classNames) {
-      const re = new RegExp(`(?<![A-Za-z0-9_.])(?:new\\s+)?${name}\\s*\\(`, 'g');
+      // A dot may precede: `Instance.Configuration.MediaAttachments(0, 0, 0)` builds
+      // the nested class by position, and a field cut there shifted the rest.
+      const re = new RegExp(`(?<![A-Za-z0-9_])(?:new\\s+)?${name}\\s*\\(`, 'g');
       let m: RegExpExecArray | null;
       while ((m = re.exec(clean)) !== null) {
         // The declaration itself (`data class Name(`) is not a construction.
         const before = clean.slice(Math.max(0, m.index - 40), m.index);
         if (/\bclass\s*$/.test(before)) continue;
+        // `Name()` passes nothing: no argument can shift when a parameter goes.
+        if (/^\s*\)/.test(clean.slice(m.index + m[0].length, m.index + m[0].length + 40))) continue;
         out.add(name);
         break;
       }

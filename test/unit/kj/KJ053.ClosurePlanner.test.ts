@@ -907,10 +907,14 @@ describe.skipIf(!mod)('planClosure : la reecriture refuse ce que la fermeture ne
     ], ['import org.junit.Before', 'import org.junit.Test']);
     const plan = mod.planClosure(['setOther'], [prod, LIVE, LIVE_USER, test], SEGS, [setterExtent(prod.text)]);
     expect(rewrites(plan)).toEqual([]);
-    // Sans reecriture, la mention retombe sur le chemin d avant : hors de
-    // toute fonction de test, le fichier part entier, et cela compile.
+    // Sans reecriture, la mention retombe sur le chemin d avant. Depuis que
+    // l etendue d une fonction a expression couvre son corps, la mention est
+    // DANS `prime` : la fonction part, son appel aussi, le reste du fichier tient.
     expect(mod.isClosed(plan)).toBe(true);
-    expect(plan.files).toEqual([test.path]);
+    const apres = [...plan.cuts].filter((c: any) => c.path === test.path).sort((a: any, b: any) => b.start - a.start)
+      .reduce((t: string, c: any) => t.slice(0, c.start) + (c.replacement ?? '') + t.slice(c.end), test.text);
+    expect(plan.files.includes(test.path) || !/setOther|prime/.test(apres)).toBe(true);
+    if (!plan.files.includes(test.path)) expect(apres).toContain('fun keepsSize()');
   });
 
   it('un appel dont la chaine continue sur la ligne du dessous n est pas reecrit', () => {
@@ -1225,5 +1229,123 @@ describe.skipIf(!mod)('un fichier de test dedie part entier, meme si chaque test
     expect(plan.withheld).toBeUndefined();
     expect(plan.files).toEqual([test.path]);
     expect(plan.cuts.filter((c: any) => c.path === test.path)).toEqual([]);
+  });
+});
+
+/**
+ * `void inject(MyrtleModelDOTest target);` in a test component. On the
+ * reference project this one line made a dedicated test file read as shared
+ * infrastructure, and withheld two groups that `kdead remove --all` could
+ * otherwise close: the declaration holds no instance, it goes with the test.
+ */
+describe('KJ053 a test named by a members injection declaration', () => {
+  const test = { path: 'app/src/test/java/com/x/ResizeTest.kt', text: 'package com.x\n\nimport org.junit.Test\n\nclass ResizeTest {\n    @Test\n    fun doubles() {\n        Resize().go(1)\n    }\n}\n' };
+  const component = (line: string) => ({
+    path: 'app/src/test/java/com/x/di/TestComponent.java',
+    text: `package com.x.di;\n\nimport com.x.ResizeTest;\n\npublic interface TestComponent {\n\tvoid inject(OtherTest target);\n${line}}\n`,
+  });
+
+  it('the test file goes, and the declaration with its import', () => {
+    const c = component('\tvoid inject(ResizeTest target);\n');
+    const plan = closure(['Resize'], [{ path: PROD_PATH, text: PROD_TEXT }, test, c]);
+    expect(mod.isClosed(plan)).toBe(true);
+    expect(plan.files).toEqual([test.path]);
+    const cuts = plan.cuts.filter((x: any) => x.path === c.path).sort((a: any, b: any) => b.start - a.start);
+    const after = cuts.reduce((t: string, x: any) => t.slice(0, x.start) + t.slice(x.end), c.text);
+    expect(after).not.toContain('ResizeTest');
+    expect(after).toContain('void inject(OtherTest target);');
+  });
+
+  it('any other use is not a declaration: the component is then part of what leaves', () => {
+    const c = component('\tResizeTest make();\n');
+    const plan = closure(['Resize'], [{ path: PROD_PATH, text: PROD_TEXT }, test, c]);
+    expect(plan.files.includes(c.path) || !mod.isClosed(plan)).toBe(true);
+  });
+});
+
+/**
+ * `import com.x.MockUtil.mockInfo`, then `mockInfo()` in the tests. On an open
+ * source app the object went, three test files lost that import line and kept
+ * the calls: seven compiler errors. The member is chased like the name.
+ */
+describe('KJ053 a member imported under its own name', () => {
+  const util = { path: 'core/test/src/main/kotlin/com/x/MockUtil.kt', text: 'package com.x\n\nobject MockUtil {\n    fun mockInfo() = 1\n}\n' };
+  const extent = { path: util.path, start: util.text.indexOf('object'), end: util.text.length };
+  const test = (imp: string) => ({ path: 'app/src/test/java/com/x/RepoTest.kt', text: `package com.x\n\n${imp}\nimport org.junit.Test\n\nclass RepoTest {\n    @Test\n    fun reads() {\n        check(mockInfo() == 1)\n    }\n\n    @Test\n    fun other() {\n        check(true)\n    }\n}\n` });
+
+  it('the test that calls the member goes with the import', () => {
+    const t = test('import com.x.MockUtil.mockInfo');
+    const plan = closure(['MockUtil'], [util, t], [extent]);
+    expect(mod.isClosed(plan)).toBe(true);
+    const cuts = plan.cuts.filter((x: any) => x.path === t.path).sort((a: any, b: any) => b.start - a.start);
+    const after = cuts.reduce((s: string, x: any) => s.slice(0, x.start) + s.slice(x.end), t.text);
+    expect(after).not.toContain('mockInfo');
+    expect(after).toContain('fun other()');
+  });
+
+  it('a star import withholds: its names cannot be listed', () => {
+    expect(mod.isClosed(closure(['MockUtil'], [util, test('import com.x.MockUtil.*')], [extent]))).toBe(false);
+  });
+});
+
+/**
+ * `private fun request(url: String) = factory.build(` with its arguments on
+ * the next lines. Cutting the helper took the header and left the arguments.
+ */
+describe('KJ053 a helper whose expression body runs over several lines', () => {
+  it('goes whole, down to its closing parenthesis', () => {
+    const t = { path: 'app/src/test/java/com/x/ResizeTest.kt', text: 'package com.x\n\nimport org.junit.Test\n\nclass ResizeTest {\n    @Test\n    fun doubles() {\n        check(request(1) == 2)\n    }\n\n    @Test\n    fun other() {\n        check(true)\n    }\n\n    private fun request(\n        a: Int,\n    ) = Resize().go(\n        a = a,\n    )\n}\n' };
+    const plan = closure(['Resize'], [{ path: PROD_PATH, text: PROD_TEXT }, t]);
+    expect(mod.isClosed(plan)).toBe(true);
+    const cuts = plan.cuts.filter((x: any) => x.path === t.path).sort((a: any, b: any) => b.start - a.start);
+    const after = cuts.reduce((s: string, x: any) => s.slice(0, x.start) + s.slice(x.end), t.text);
+    expect(after).not.toContain('a = a');
+    expect(after).not.toContain('Resize()');
+    expect(after.trimEnd().endsWith('}')).toBe(true);
+    expect(after).toContain('fun other()');
+  });
+});
+
+/**
+ * A test made of two statements that both name what leaves: each was cut on
+ * its own and the test stayed as `fun x() { }`, which still runs and passes.
+ */
+describe('KJ053 a test emptied statement by statement', () => {
+  it('goes whole instead of staying as an empty shell', () => {
+    const t = { path: 'app/src/test/java/com/x/ResizeTest.kt', text: 'package com.x\n\nimport org.junit.Test\n\nclass ResizeTest {\n    @Test\n    fun other() {\n        check(true)\n    }\n\n    @Test\n    fun twice() {\n        check(\n            Resize().go(1) == 2\n        )\n\n        check(\n            Resize().go(2) == 4\n        )\n    }\n}\n' };
+    const plan = closure(['Resize'], [{ path: PROD_PATH, text: PROD_TEXT }, t]);
+    expect(mod.isClosed(plan)).toBe(true);
+    const cuts = plan.cuts.filter((x: any) => x.path === t.path).sort((a: any, b: any) => b.start - a.start);
+    const after = cuts.reduce((s: string, x: any) => s.slice(0, x.start) + s.slice(x.end), t.text);
+    expect(after).not.toContain('twice');
+    expect(after).toContain('fun other()');
+    for (let i = 1; i < cuts.length; i++) expect(cuts[i].end).toBeLessThanOrEqual(cuts[i - 1].start);
+  });
+});
+
+describe('KJ053 an expression body that goes on after a comment line', () => {
+  it('the helper goes with the link below the comment', () => {
+    const t = { path: 'app/src/test/java/com/x/ResizeTest.kt', text: 'package com.x\n\nimport org.junit.Test\n\nclass ResizeTest {\n    @Test\n    fun other() {\n        check(true)\n    }\n\n    private fun rows(): List<Int> = listOf(Resize().go(1))\n        // Identities deliberately include the provider.\n        .map { it + 1 }\n}\n' };
+    const plan = closure(['Resize'], [{ path: PROD_PATH, text: PROD_TEXT }, t]);
+    const cuts = plan.cuts.filter((x: any) => x.path === t.path).sort((a: any, b: any) => b.start - a.start);
+    const after = cuts.reduce((s: string, x: any) => s.slice(0, x.start) + s.slice(x.end), t.text);
+    expect(mod.isClosed(plan)).toBe(true);
+    expect(after).not.toContain('.map');
+    expect(after).toContain('fun other()');
+  });
+});
+
+/**
+ * `@ParameterizedRobolectricTestRunner.Parameters fun params() = listOf(...)`:
+ * the runner calls it, no code does. One of its rows named what left, the
+ * function was cut alone, and the class failed at initialisation.
+ */
+describe('KJ053 the parameters of a parameterized test', () => {
+  it('are never cut alone: the file is the unit', () => {
+    const t = { path: 'app/src/test/java/com/x/ResizeTest.kt', text: 'package com.x\n\nimport org.junit.Test\n\nclass ResizeTest(private val expected: Int, private val input: Any) {\n    @Test\n    fun matches() {\n        check(expected == 2)\n    }\n\n    companion object {\n        @JvmStatic\n        @ParameterizedRobolectricTestRunner.Parameters\n        fun params() = listOf(\n            arrayOf(2, Resize().go(1)),\n            arrayOf(2, 2),\n        )\n    }\n}\n' };
+    const plan = closure(['Resize'], [{ path: PROD_PATH, text: PROD_TEXT }, t]);
+    const left = plan.cuts.filter((x: any) => x.path === t.path);
+    expect(plan.files.includes(t.path) || !mod.isClosed(plan)).toBe(true);
+    if (plan.files.includes(t.path)) expect(left).toEqual([]);
   });
 });

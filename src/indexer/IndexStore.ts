@@ -41,7 +41,7 @@ export type { Snapshot, SnapshotFile };
 // (`private val Cycle.labelRes get() = ...`, or `val x` over its `get()`) was
 // not indexed at all: over 6 projects, about a thousand properties absent from
 // Outline, Go to Definition and the dead code scan.
-export const SNAPSHOT_VERSION = 30;
+export const SNAPSHOT_VERSION = 31;
 const SNAPSHOT_FILENAME = 'kotlin-jump-index.json'; // historical name; content is gzip from v19+
 
 const gzip   = promisify(zlib.gzip);

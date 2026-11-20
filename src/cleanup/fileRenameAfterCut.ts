@@ -9,12 +9,13 @@ import { parse } from '../indexer/KotlinParser';
  * Seen on three open source apps. The fix is the rename a developer would
  * make: the file takes the name of the class left in it.
  *
- * Only a mismatch the cut created is fixed. The file must have been named
- * after a class of its own before the cut, so a file the project named
- * otherwise on purpose stays as it is.
+ * Only a mismatch the cut created is fixed. Before the cut the file bore the
+ * name of one of its classes, or held several visible ones, which detekt
+ * accepts under any name. A file the project named otherwise on purpose,
+ * around a single class, stays as it is.
  *
  * Kept where a rename could break something:
- * - `Foo.android.kt`, which multiplatform reads: no class bears that name;
+ * - `Foo.android.kt` and other dotted names, which multiplatform reads;
  * - a file whose `FooKt` facade is spelled somewhere (Java, ProGuard), unless
  *   `@file:JvmName` fixes the facade name;
  * - a file whose name is spelled somewhere (a Gradle exclude, a baseline);
@@ -27,14 +28,17 @@ export function fileRenameAfterCut(
   others: readonly { path: string; text: string }[],
   taken: (path: string) => boolean,
 ): string | undefined {
-  const m = /^(.*[\\/])?([^\\/]+)\.kt$/.exec(path);
+  const m = /^(.*[\\/])?([^\\/.]+)\.kt$/.exec(path);
   if (!m) return undefined;
   const dir = m[1] ?? '';
   const base = m[2];
-  // Before any parse: almost every cut leaves the namesake where it was.
-  const namesake = new RegExp(`\\b(?:class|object|interface)\\s+${base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
-  if (!namesake.test(before) || namesake.test(after)) return undefined;
-  if (!topLevel(path, before).some(s => CLASS_KINDS.has(s.kind) && s.name === base)) return undefined;
+  // Before any parse: almost every cut leaves several classes, or none.
+  if ((after.match(VISIBLE_CLASS_RE) ?? []).length !== 1) return undefined;
+  // Only a mismatch the cut created. Before it, detekt said nothing: the file
+  // bore the name of one of its classes, or held several (`DispatcherAnnotations.kt`
+  // with three annotation classes, of which the cut left one).
+  const avant = topLevel(path, before).filter(s => CLASS_KINDS.has(s.kind) && !s.isPrivate);
+  if (avant.length < 2 && !avant.some(s => s.name === base)) return undefined;
 
   const decls = topLevel(path, after);
   const classes = decls.filter(s => CLASS_KINDS.has(s.kind) && !s.isPrivate);
@@ -56,6 +60,9 @@ export function fileRenameAfterCut(
   }
   return to;
 }
+
+/** A top-level class a file shows, as a line: the cheap count before the parser's. */
+const VISIBLE_CLASS_RE = /^(?:(?:public|internal|data|sealed|enum|annotation|abstract|open|value|fun|final)\s+)*(?:class|object|interface)\s+\w/gm;
 
 const CLASS_KINDS = new Set(['class', 'dataClass', 'sealedClass', 'enum', 'interface', 'object', 'annotation']);
 

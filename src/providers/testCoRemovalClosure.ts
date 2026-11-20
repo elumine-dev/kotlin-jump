@@ -4,7 +4,7 @@ import { parseJava } from '../indexer/JavaParser';
 import { buildLineStarts, offsetToPos, sanitizeForUsageScan } from '../util/kotlinScan';
 import { isTestSourceSet } from '../util/testPaths';
 import { declarationSpan, SpanKind } from '../util/declarationSpan';
-import { TestCoRemovalPlan, TestCut, testFunctionsOf } from './testCoRemoval';
+import { importedMemberOf, TestCoRemovalPlan, TestCut, testFunctionsOf } from './testCoRemoval';
 
 /**
  * KJ-053: the CLOSURE planner behind `Remove Code Used Only by Tests: Unproven
@@ -54,6 +54,17 @@ const CLASS_LIKE = new Set(['class', 'dataClass', 'sealedClass', 'object', 'inte
 /** Cascading whole-file deletions is where over-deletion hides; this stops at one. */
 const MAX_ROUNDS = 8;
 
+/**
+ * `void inject(ServerModelDOTest target);` in a test component: a members
+ * injection declaration holds no instance of the test it names. It goes with
+ * that test, as KJ-067 does for a production class, instead of making a
+ * dedicated test file look like shared infrastructure. On the reference
+ * project two groups were withheld by exactly this line.
+ */
+function isInjectionOf(line: string, type: string): boolean {
+  return new RegExp(String.raw`^\s*(?:(?:public|abstract|override)\s+)*(?:void|fun)\s+\w+\s*\(\s*(?:\w+\s*:\s*)?${escape(type)}(?:\s+\w+)?\s*\)\s*(?::\s*Unit\s*)?;?\s*(?:\{\s*\})?\s*$`).test(line);
+}
+
 function escape(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -102,7 +113,10 @@ interface Decl {
  * catches: on the reference project, `ServerModelDOTest` lost its `@Before
  * setUp()` and its surviving tests threw NullPointerException at line 43.
  */
-const LIFECYCLE_RE = /^\s*@(?:get:|set:)?(?:Before|BeforeEach|BeforeTest|BeforeClass|BeforeAll|After|AfterEach|AfterTest|AfterClass|AfterAll|Rule|ClassRule)\b/;
+// `@Parameters` too, under any qualifier: the runner calls `params()` to feed
+// every test of the class. Cut on its own, on the reference project, it left
+// `WebVideoControllerTest` failing at initialisation, which no compiler sees.
+const LIFECYCLE_RE = /^\s*@(?:get:|set:)?(?:(?:Before|BeforeEach|BeforeTest|BeforeClass|BeforeAll|After|AfterEach|AfterTest|AfterClass|AfterAll|Rule|ClassRule)\b|(?:[\w.]+\.)?Parameters\b)/;
 
 /** Annotations and comments directly above a declaration belong to it. */
 function withHeader(lines: readonly string[], lineStarts: readonly number[], firstLine: number): { start: number; lifecycle: boolean } {
@@ -143,7 +157,12 @@ function declarationsOf(path: string, text: string): Decl[] {
       kind, name: sym.name, line: sym.line, nameOffset: lineStarts[sym.line] + sym.character, lastLine,
     });
     if (!span) continue;
-    const endLine = offsetToPos(lineStarts as number[], Math.max(span.scanEnd - 1, 0)).line;
+    // An expression body can run on: `) = factory.build(` and its arguments on
+    // the lines below. The span stops at the first line end, which is right
+    // for what it scans and wrong for what a cut takes: on an open source app
+    // a helper lost its header and kept its arguments, a syntax error.
+    const scanEnd = span.lineBasedEnd && !path.endsWith('.java') ? expressionEnd(clean, lineStarts[sym.line] + sym.character, span.scanEnd) : span.scanEnd;
+    const endLine = offsetToPos(lineStarts as number[], Math.max(scanEnd - 1, 0)).line;
     const header = withHeader(lines, lineStarts, sym.line);
     out.push({
       name: sym.name, kind,
@@ -154,6 +173,26 @@ function declarationsOf(path: string, text: string): Decl[] {
     });
   }
   return out;
+}
+
+/**
+ * Where a statement that began at `from` really ends, at or after `atLeast`:
+ * the first line end outside every bracket, when the line does not end on an
+ * operator and the next one does not open on one.
+ */
+function expressionEnd(clean: string, from: number, atLeast: number): number {
+  let depth = 0;
+  for (let i = from; i < clean.length; i++) {
+    const c = clean[i];
+    if (c === '(' || c === '[' || c === '{') depth++;
+    else if (c === ')' || c === ']' || c === '}') { if (--depth < 0) return Math.max(i, atLeast); }
+    else if (c === '\n' && depth === 0 && i + 1 >= atLeast
+      && !/(?:[=,.+\-*/&|?:<]|\b(?:else|in|is|as|to))\s*$/.test(clean.slice(Math.max(from, i - 120), i))
+      // The next line that holds anything: a comment between two links of a
+      // chain is blanked here, and eighty characters did not reach `.map {`.
+      && !/^(?:[.?:=+\-*/&|]|\?\.|else\b|as\b|to\b)/.test(clean.slice(i + 1).trimStart().slice(0, 8))) return i + 1;
+  }
+  return clean.length;
 }
 
 /** The innermost declaration holding `offset`, or undefined at file level. */
@@ -584,6 +623,8 @@ export function planClosure(
   const cutsByPath = new Map<string, TestCut[]>();
   const cutKeys = new Set<string>();
   const removedTypes = new Set<string>();
+  /** Members of what leaves that a test imported under their own name. */
+  const importedMembers = new Set<string>();
   const cleanCache = new Map<string, string>();
   const clean = (s: Src) => cleanCache.get(s.path) ?? cleanCache.set(s.path, sanitizeForUsageScan(s.text)).get(s.path)!;
 
@@ -901,7 +942,11 @@ export function planClosure(
         if (hits.length === 0) continue;
         const os = buildLineStarts(oc);
         const ol = other.text.split('\n');
-        if (hits.some(h => !IMPORT_RE.test(ol[offsetToPos(os as number[], h).line] ?? ''))) return other.path;
+        const otherIsTest = isTestSourceSet(other.path, testSourceSets);
+        if (hits.some(h => {
+          const l = ol[offsetToPos(os as number[], h).line] ?? '';
+          return !IMPORT_RE.test(l) && !(otherIsTest && isInjectionOf(l, t));
+        })) return other.path;
       }
     }
     return undefined;
@@ -1003,7 +1048,12 @@ export function planClosure(
         // mention of `Resize` inside a @Before, and took the lifecycle path.
         if (insidePlannedCut(src.path, o)) continue;
         const line = offsetToPos(lineStarts as number[], o).line;
-        if (IMPORT_RE.test(lines[line] ?? '')) {
+        if (IMPORT_RE.test(lines[line] ?? '') || (!isProductionName && isInjectionOf(lines[line] ?? '', name))) {
+          // A member imported under its own name is chased like the name
+          // itself; a star import brings in names nothing here can list.
+          const member = IMPORT_RE.test(lines[line] ?? '') ? importedMemberOf(lines[line] ?? '', name) : undefined;
+          if (member === '*') return withhold(`every member of ${name} is imported by ${src.path}`);
+          if (member !== undefined && !wanted.includes(member)) { importedMembers.add(member); queue.push(member); }
           const w = wholeLines(src.text, lineStarts[line], lineStarts[line] + (lines[line] ?? '').length + 1);
           addCut(src.path, w.start, w.end, name, 'import');
           continue;
@@ -1214,7 +1264,7 @@ export function planClosure(
       const ls = buildLineStarts(text); const ln = src.text.split('\n');
       for (const o of mentionOffsets(t, text)) {
         const l = offsetToPos(ls as number[], o).line;
-        if (!IMPORT_RE.test(ln[l] ?? '')) return withhold(`${t} still used by ${src.path}`);
+        if (!IMPORT_RE.test(ln[l] ?? '') && !(isTestSourceSet(src.path, testSourceSets) && isInjectionOf(ln[l] ?? '', t))) return withhold(`${t} still used by ${src.path}`);
         const w = wholeLines(src.text, ls[l], ls[l] + (ln[l] ?? '').length + 1);
         addCut(src.path, w.start, w.end, t, 'import');
       }
@@ -1222,7 +1272,7 @@ export function planClosure(
   }
 
   // ── Simulation, then the closure check that gives this planner its name ──
-  const closureNames = [...wanted, ...removedTypes];
+  const closureNames = [...wanted, ...removedTypes, ...importedMembers];
   for (const src of sources) {
     if (deleted.has(src.path)) continue;
     if (!/\.(kt|kts|java)$/.test(src.path)) continue;
@@ -1244,6 +1294,33 @@ export function planClosure(
     if (cut.kind !== 'rewrite' || cut.replacement === undefined) continue;
     const n = mentionedIn(cut.replacement, leaving);
     if (n !== undefined) return withhold(`${n} still mentioned in the rewritten ${cut.path}`);
+  }
+
+  // A test whose every statement was cut one by one is an empty shell that
+  // still runs and passes: `fun \`live casts start at zero\`() { }` on an open
+  // source app. The function goes instead, as if it had been cut whole.
+  for (const [p, list] of cutsByPath) {
+    const src = byPath.get(p);
+    if (!src || deleted.has(p) || !isTestSourceSet(p, testSourceSets)) continue;
+    const text = clean(src);
+    for (const f of testFunctionsOf(p, src.text)) {
+      if (list.some(c => c.kind === 'function' && c.start <= f.start && c.end >= f.end)) continue;
+      const inside = list.filter(c => c.kind !== 'rewrite' && c.start >= f.start && c.end <= f.end);
+      if (inside.length === 0) continue;
+      const open = text.indexOf('{', f.start);
+      const close = text.lastIndexOf('}', f.end - 1);
+      if (open < 0 || close <= open) continue;
+      let body = text.slice(open + 1, close);
+      for (const c of [...inside].sort((a, b) => b.start - a.start)) {
+        const a = Math.max(c.start - open - 1, 0), b = Math.min(c.end - open - 1, body.length);
+        if (a < b) body = body.slice(0, a) + body.slice(b);
+      }
+      if (body.trim() !== '') continue;
+      addCut(p, f.start, f.end, f.name, 'function');
+      const kept = (cutsByPath.get(p) ?? []).filter(c => !inside.includes(c));
+      cutsByPath.set(p, kept);
+      plan.cutFunctions++;
+    }
   }
 
   plan.files = [...deleted].sort();

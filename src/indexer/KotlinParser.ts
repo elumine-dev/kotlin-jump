@@ -99,7 +99,7 @@ const RE_ANON_OBJECT = /\bobject\s*:/;
 const RE_FUN        = new RegExp(String.raw`^\s*${ANNOT}(?:(?:public|private|protected|internal|override|final|abstract|open|actual|expect|suspend|inline|noinline|crossinline|infix|operator|tailrec|external)\s+)*fun\s+${RECV_ANNOT}(?:<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>\s+)?(?:(?:\w+(?:<(?:[^<>]|<[^<>]*>)*>)?[?]?\.)+)?([\p{L}\p{N}_]+|\x60[^\x60]+\x60)(?=\s*[(<])`, 'u'); // \x60 = backtick (String.raw keeps the backslash of \`)
 // Group 1 = val/var, group 2 = extension receiver (`List<Int>.`), group 3 = name.
 // The trailer is a lookahead so the match ends on the name (see RE_CLASS).
-const RE_PROP       = new RegExp(String.raw`^\s*${ANNOT}(?:(?:public|private|protected|internal|override|open|final|abstract|actual|expect|lateinit|const|inline|external)\s+)*(val|var)\s+${RECV_ANNOT}(?:<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>\s+)?((?:\w+(?:<(?:[^<>]|<[^<>]*>)*>)?[?]?\.)+)?([\p{L}\p{N}_]+)(?=\s*(?:[=:(<]|\bby\b|\bget\b|\bset\b|$))`, 'u');
+const RE_PROP       = new RegExp(String.raw`^\s*${ANNOT}(?:(?:public|private|protected|internal|override|open|final|abstract|actual|expect|lateinit|const|inline|external)\s+)*(val|var)\s+${RECV_ANNOT}(?:<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>\s+)?((?:\w+(?:<(?:[^<>]|<[^<>]*>)*>)?[?]?\.)+)?([\p{L}\p{N}_]+|\x60[^\x60]+\x60)(?=\s*(?:[=:(<]|\bby\b|\bget\b|\bset\b|$))`, 'u'); // a backtick name too: `private const val \x6050_MEGS_IN_BYTES\x60` stayed alone in its file once its last user went
 const RE_TYPEALIAS  = /^\s*(?:(?:public|private|internal|actual)\s+)?typealias\s+([\p{L}\p{N}_]+)(?:<[^>]*>)?\s*=\s*(.+)/u;
 // Enum entries may be SCREAMING_CASE or UpperCamelCase (both are legal and
 // idiomatic Kotlin). The name must exhaust the identifier: requiring a
@@ -520,8 +520,9 @@ export function parse(uriString: string, text: string): ParsedFile {
     const pm = RE_PROP.exec(raw);
     const isPrimaryCtorParam = parenDepth === 1 && ctorParamsActive && braceDepth === ctorBraceDepth;
     if (pm && (parenDepth === 0 || isPrimaryCtorParam)) {
-      const propName     = pm[3];
-      const nameStart    = pm[0].length - propName.length;
+      // Stored without its backticks, the column on the name itself, as for a fun.
+      const propName     = pm[3].startsWith('`') ? pm[3].slice(1, -1) : pm[3];
+      const nameStart    = pm[0].length - pm[3].length + (pm[3].startsWith('`') ? 1 : 0);
       const propDepth    = isPrimaryCtorParam ? braceDepth + 1 : braceDepth;
       const propPre      = raw.slice(0, nameStart);
       const isConst      = /\bconst\b/.test(propPre)    || undefined;
@@ -1012,10 +1013,11 @@ function emitInlineBodySymbols(
     if (pm) {
       const propPre  = seg.slice(0, pm[0].length - pm[3].length);
       const isConst  = /\bconst\b/.test(propPre) || undefined;
+      const tick     = pm[3].startsWith('`');
       symbols.push({
-        name: pm[3], kind: pm[1] === 'val' ? 'val' : 'var',
+        name: tick ? pm[3].slice(1, -1) : pm[3], kind: pm[1] === 'val' ? 'val' : 'var',
         line: lineNum,
-        character: offset + pm[0].length - pm[3].length,
+        character: offset + pm[0].length - pm[3].length + (tick ? 1 : 0),
         isComposable: false, depth: memberDepth,
         isExtension: pm[2] ? true : undefined,
         isConst,

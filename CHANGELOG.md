@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.46.2
+
+Remove Everything Unused no longer breaks builds in several cases seen on 17 projects: a commented argument cut fifty live lines, imports were left dangling, and a backtick constant stayed alone.
+
+### Improvements
+- Indexed `val` and `var` names written between backticks, such as a constant named 50_MEGS_IN_BYTES. On the reference project this constant stayed alone in two files after its last reader was removed, and detekt reported it as unused. The scan skipped every backtick name before; it now reports those made of word characters.
+- Stopped reporting the fields of a class the app builds and serializes itself, such as a payment request: the serializer is what reads them. A Kotlin field that Java reads through its accessor, `card.getAuthorName()`, is no longer reported either; three such fields were cut under eighteen calls on an open source app.
+- Stopped a single line like `void inject(ServerModelDOTest target);` in a test component from making a dedicated test file look like shared infrastructure. Two groups that were withheld can now be removed.
+- Renamed a file after a cut in more cases. A file that held several visible classes before the cut now takes the name of the one left, and dotted names such as `Foo.android.kt` are left untouched.
+
+### Fixes
+- Fixed Remove Everything Unused cutting about fifty live lines on an open source app. An argument comment such as `/* minBufferMs */ 10_000,` was read as the start of a commented out block running to the next KDoc, and the module stopped compiling on 122 errors.
+- Fixed the import of a removed member leaving seven compiler errors. After `import com.x.MockUtil.mockInfo`, the object went and three test files lost the import line but kept the `mockInfo()` calls. The member is now followed like the name.
+- Fixed a helper such as `private fun request(url: String) = factory.build(` with its arguments on the next lines. Cutting it took the header and left the arguments behind. The whole expression is now cut.
+- Fixed a removal stopping in the middle of a call chain. With `.sortedBy { }`, a `//` note, then `.map { }`, the cut ended above the note and left `.map { }` alone under it: two compiler errors on an open source app. A test whose every statement was cut is also removed whole now, where it stayed as an empty `fun x() { }` that still passed.
+- Fixed a `@ParameterizedRobolectricTestRunner.Parameters` function being cut alone when one of its rows named removed code. The runner calls it, so the class then failed at initialisation.
+
+### Notes
+- The index snapshot version changed, so projects reindex once after updating. This is needed to pick up backtick names.
+
 ## 1.46.1
 
 Remove Everything Unused now leaves code that compiles, with unit tests unchanged, on 17 open source apps, and no longer writes into git submodules.

@@ -1,50 +1,49 @@
 {
-  "version": "1.46.1",
+  "version": "1.46.2",
   "title": "What's New in Kotlin Jump",
-  "tagline": "Safer cuts for Remove Everything Unused",
-  "summary": "Remove Everything Unused now leaves code that compiles, with unit tests unchanged, on 17 open source apps, and no longer writes into git submodules.",
+  "tagline": "Safer cuts across 17 real projects",
+  "summary": "Remove Everything Unused no longer breaks builds in several cases seen on 17 projects: a commented argument cut fifty live lines, imports were left dangling, and a backtick constant stayed alone.",
   "highlights": [
+    {
+      "title": "Live code no longer cut",
+      "kind": "fix",
+      "description": "A comment like /* minBufferMs */ 10_000, inside an argument list was read as a commented out block and cost fifty live lines, leaving a module with 122 compile errors; a block now ends at its first closing."
+    },
     {
       "title": "Cuts that still compile",
       "kind": "fix",
-      "description": "Removals no longer corrupt code or delete live declarations: a catch binding is no longer rewritten into `ca_ch`, a typealias to `R` keeps its resources, and classes with a constructor below the header keep their interfaces."
+      "description": "Removing test only code now chases imported members, multiline helper functions and parameterized test runner functions, so tests no longer keep calls or imports to code that was removed."
     },
     {
-      "title": "Git submodules left alone",
-      "kind": "fix",
-      "description": "Remove Everything Unused no longer reads or cuts anything inside a git submodule, so your parent repository is not left pointing at a commit that no longer matches."
-    },
-    {
-      "title": "Cleaner cuts for detekt",
+      "title": "Backtick names handled",
       "kind": "improvement",
-      "description": "A cut tree no longer gains the detekt findings it used to, such as an empty class body or a file left named after a class that was just removed."
+      "description": "Properties named between backticks, such as private const val `50_MEGS_IN_BYTES`, are now indexed and reported, so they no longer stay alone in a file once their last user is gone."
     }
   ],
   "sections": [
     {
       "heading": "Fixes",
       "bullets": [
-        "Fixed Remove Everything Unused rewriting a catch binding wrongly. For `catch (t: Throwable)` it wrote `} ca_ch (t: Throwable) {`, and the module no longer parsed. Any name that is a substring of `catch` was hit.",
-        "Fixed a typealias such as `typealias BitwardenString = com.bitwarden.ui.R.string` hiding resource references. Files that import only the alias were read as never using the strings, so 82 414 cuts were proposed across the translations and the UI module no longer compiled. The alias is now followed.",
-        "Fixed classes losing their parents when ktlint wraps the constructor below the class header (`@Inject constructor() : Serializer<AppPreferences>`). Methods that implement an AndroidX interface were cut as unreferenced. 96 classes over 8 projects had lost their parents this way, in the type hierarchy too.",
-        "Fixed Remove Everything Unused cutting into git submodules. On one reader app it found 2602 cuts inside two vendored UI libraries, with no way for you to commit them. A submodule is now treated as another repository and is neither read nor cut.",
-        "Fixed Kotlin files under `resources/` or `assets/` being read as code. Their imports were removed, and Gradle tasks that check those fixtures failed with \"fixtures are not detected\". Those folders are copied into the artifact and compile nothing, so they are now skipped."
+        "Fixed Remove Everything Unused cutting about fifty live lines on an open source app. An argument comment such as `/* minBufferMs */ 10_000,` was read as the start of a commented out block running to the next KDoc, and the module stopped compiling on 122 errors.",
+        "Fixed the import of a removed member leaving seven compiler errors. After `import com.x.MockUtil.mockInfo`, the object went and three test files lost the import line but kept the `mockInfo()` calls. The member is now followed like the name.",
+        "Fixed a helper such as `private fun request(url: String) = factory.build(` with its arguments on the next lines. Cutting it took the header and left the arguments behind. The whole expression is now cut.",
+        "Fixed a removal stopping in the middle of a call chain. With `.sortedBy { }`, a `//` note, then `.map { }`, the cut ended above the note and left `.map { }` alone under it: two compiler errors on an open source app. A test whose every statement was cut is also removed whole now, where it stayed as an empty `fun x() { }` that still passed.",
+        "Fixed a `@ParameterizedRobolectricTestRunner.Parameters` function being cut alone when one of its rows named removed code. The runner calls it, so the class then failed at initialisation."
       ]
     },
     {
       "heading": "Improvements",
       "bullets": [
-        "Removed code no longer leaves the detekt findings it used to: empty class bodies and companions, a stray enum semicolon, blank lines where a declaration was, comments above a removed function. Judged on 17 open source apps with detekt 1.23.8 (every rule, ktlint formatting): every cut tree compiled and ran its unit tests with the same results as the original.",
-        "A file whose namesake class is cut now takes the name of the class left in it. If `DueSection.kt` held `DueSection` and `LegacyDueSection` and the first goes, the file becomes `LegacyDueSection.kt`, which clears two detekt reports. A file whose name or `Kt` facade is written elsewhere, or that multiplatform reads, keeps its name.",
-        "Stopped a Dagger scope annotation such as `@ScopeApplication` from keeping a field alive that was written five times and never read. A `@Suppress` or `@SuppressLint` now silences only the diagnostic it names, not the whole class.",
-        "Reported annotation classes that nobody writes, such as an `@IntDef` class named only by its own meta-annotation. Find Everything Unused also no longer lists members that could be private, even with `kotlinJump.unusedMembersSelfOnly` on."
+        "Indexed `val` and `var` names written between backticks, such as a constant named 50_MEGS_IN_BYTES. On the reference project this constant stayed alone in two files after its last reader was removed, and detekt reported it as unused. The scan skipped every backtick name before; it now reports those made of word characters.",
+        "Stopped reporting the fields of a class the app builds and serializes itself, such as a payment request: the serializer is what reads them. A Kotlin field that Java reads through its accessor, `card.getAuthorName()`, is no longer reported either; three such fields were cut under eighteen calls on an open source app.",
+        "Stopped a single line like `void inject(ServerModelDOTest target);` in a test component from making a dedicated test file look like shared infrastructure. Two groups that were withheld can now be removed.",
+        "Renamed a file after a cut in more cases. A file that held several visible classes before the cut now takes the name of the one left, and dotted names such as `Foo.android.kt` are left untouched."
       ]
     },
     {
       "heading": "Notes",
       "bullets": [
-        "Indexed properties whose accessor follows the name directly, such as `val binding get() = _binding!!`. About a thousand properties over six projects were missing from Outline and Go to Definition.",
-        "Code that only tests name, and drawables nothing names, are listed for review and never removed by the pass."
+        "The index snapshot version changed, so projects reindex once after updating. This is needed to pick up backtick names."
       ]
     }
   ],

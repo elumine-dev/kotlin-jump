@@ -386,24 +386,25 @@ function constructionGuard(
   classNames: ReadonlySet<string>,
 ): Set<string> {
   const out = new Set<string>();
+  // One expression for the corpus: one per file and per class was most of the scan.
+  const re = /(?<![A-Za-z0-9_])(?:new\s+)?([A-Za-z_]\w*)\s*\(/g;
   for (const src of sources) {
     if (!/\.(kt|kts|java)$/.test(src.path)) continue;
     if (isBuildArtifactPath(src.path)) continue;
     const clean = sanitizeForUsageScan(src.text);
-    for (const name of classNames) {
-      // A dot may precede: `Instance.Configuration.MediaAttachments(0, 0, 0)` builds
-      // the nested class by position, and a field cut there shifted the rest.
-      const re = new RegExp(`(?<![A-Za-z0-9_])(?:new\\s+)?${name}\\s*\\(`, 'g');
-      let m: RegExpExecArray | null;
-      while ((m = re.exec(clean)) !== null) {
-        // The declaration itself (`data class Name(`) is not a construction.
-        const before = clean.slice(Math.max(0, m.index - 40), m.index);
-        if (/\bclass\s*$/.test(before)) continue;
-        // `Name()` passes nothing: no argument can shift when a parameter goes.
-        if (/^\s*\)/.test(clean.slice(m.index + m[0].length, m.index + m[0].length + 40))) continue;
-        out.add(name);
-        break;
-      }
+    re.lastIndex = 0;
+    // A dot may precede: `Instance.Configuration.MediaAttachments(0, 0, 0)` builds
+    // the nested class by position, and a field cut there shifted the rest.
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(clean)) !== null) {
+      const name = m[1];
+      if (!classNames.has(name) || out.has(name)) continue;
+      // The declaration itself (`data class Name(`) is not a construction.
+      const before = clean.slice(Math.max(0, m.index - 40), m.index);
+      if (/\bclass\s*$/.test(before)) continue;
+      // `Name()` passes nothing: no argument can shift when a parameter goes.
+      if (/^\s*\)/.test(clean.slice(m.index + m[0].length, m.index + m[0].length + 40))) continue;
+      out.add(name);
     }
   }
   return out;

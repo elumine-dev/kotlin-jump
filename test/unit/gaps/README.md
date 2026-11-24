@@ -6,7 +6,7 @@ charges exécutable, comme les suites `test/unit/kj/`.
 
 ## En deux minutes
 
-Ce dossier contient **quarante-et-un fichiers de tests** décrivant des trous de détection
+Ce dossier contient **soixante-deux fichiers de tests** décrivant des trous de détection
 mesurés sur le projet de référence. Ils décrivent le comportement **voulu**, pas l'actuel :
 la plupart des cas positifs échouent, et c'est leur raison d'être.
 
@@ -78,8 +78,8 @@ deviendront vertes. Les deux mouvements vont ensemble.
 
 ## État
 
-Verdict au 2026-09-20, sur `npm run test:gaps` :
-**511 verts, 26 rouges, 104 it.fails, 15 skippés = 656 cas**
+Verdict au 2026-11-24, sur `npm run test:gaps` :
+**851 verts, 22 rouges, 91 it.fails, 15 skippés = 979 cas**
 
 Tableau régénéré depuis le run réel, pas saisi à la main.
 
@@ -88,11 +88,11 @@ Les huit trous du document ont leur fichier, plus G10, première piste ouverte i
 
 | Trou | Fichier | Verts | Rouges | `it.fails()` | Skippés |
 |---|---|---|---|---|---|
-| Circuit | `Circuit.WhatTheWholeLoopStillMisses.test.ts` | 16 | 0 | 6 |  |
-| G1 | `G01.AProvisionNobodyRequests.test.ts` | 4 | 9 | 8 |  |
+| Circuit | `Circuit.WhatTheWholeLoopStillMisses.test.ts` | 18 | 0 | 4 |  |
+| G1 | `G01.AProvisionNobodyRequests.test.ts` | 3 | 9 | 9 |  |
 | G2 | `G02.AModuleNobodyInstalls.test.ts` | 6 | 5 | 2 |  |
 | G4 | `G04.AnInterfaceThatOnlyServesADeadBinding.test.ts` | 15 | 0 | 4 |  |
-| G5 | `G05.AQualifierWhoseProvisionsAllDied.test.ts` | 7 | 6 | 5 |  |
+| G5 | `G05.AQualifierWhoseProvisionsAllDied.test.ts` | 15 | 0 | 3 |  |
 | G6 | `G06.AKindTheDetectorNeverConsiders.test.ts` | 5 | 6 | 4 |  |
 | G7 | `G07.AnInterfaceWhoseMethodsNobodyCalls.test.ts` | 17 | 0 | 5 |  |
 | G8 | `G08.AViewOnlyADeadLayoutNames.test.ts` | 11 | 0 | 4 |  |
@@ -100,7 +100,7 @@ Les huit trous du document ont leur fichier, plus G10, première piste ouverte i
 | G10 | `G10.ASealedBranchNestedOutOfSight.test.ts` | 10 | 0 | 4 |  |
 | G11 | `G11.ABuildConfigFieldNobodyReads.test.ts` | 2 | 0 | 1 | 10 |
 | G12 | `G12.ANestedDeclarationNobodyJudgesWhole.test.ts` | 11 | 0 | 6 |  |
-| G13 | `G13.AnIslandTooBigToBeSeen.test.ts` | 10 | 0 | 4 |  |
+| G13 | `G13.AnIslandTooBigToBeSeen.test.ts` | 18 | 0 | 0 |  |
 | G14 | `G14.AnUnappliedPluginWithParentheses.test.ts` | 27 | 0 | 2 |  |
 | G15 | `G15.AnEntryHiddenByALibraryHomonym.test.ts` | 8 | 0 | 4 |  |
 | G16 | `G16.ASymbolHiddenByALibraryHomonym.test.ts` | 8 | 0 | 4 |  |
@@ -110,25 +110,46 @@ Les huit trous du document ont leur fichier, plus G10, première piste ouverte i
 | G20 | `G20.AViewNoXmlNamesAnyMore.test.ts` | 16 | 0 | 0 |  |
 | G21 | `G21.ALibraryCopiedInAndForgotten.test.ts` | 16 | 0 | 0 |  |
 | G22 | `G22.AScopeAnnotationThatAnchorsItsNeighbours.test.ts` | 11 | 0 | 4 |  |
-| G23 | `G23.AnAnchorThatIsAReadEntryPoint.test.ts` | 15 | 0 | 4 |  |
+| G23 | `G23.AnAnchorThatIsAReadEntryPoint.test.ts` | 16 | 0 | 3 |  |
 | G24 | `G24.APrivateHomonymIsNotAHomonym.test.ts` | 15 | 0 | 0 |  |
 | G25 | `G25.ResolutionThatOnlyWorksOneWay.test.ts` | 14 | 0 | 1 |  |
 | G26 | `G26.ThreeSourceSetsAreNotThreeClasses.test.ts` | 12 | 0 | 0 |  |
 | G27 | `G27.AnUnjudgedSubtypeVouchesForItsParent.test.ts` | 12 | 0 | 2 |  |
-| G28 | `G28.AFilterThatSwallowsItsVerdict.test.ts` | 22 | 0 | 0 |  |
-| G29 | `G29.ADiscoveryThatStopsAtTheFamilyBorder.test.ts` | 16 | 0 | 2 |  |
+| G28 | `G28.AFilterThatSwallowsItsVerdict.test.ts` | 20 | 2 | 0 |  |
+| G29 | `G29.ADiscoveryThatStopsAtTheFamilyBorder.test.ts` | 18 | 0 | 0 |  |
 | G30 | `G30.AnOverrideWhoseWholeChainIsVisible.test.ts` | 14 | 0 | 4 |  |
 | G31 | `G31.AMemberNoSupertypeDeclares.test.ts` | 11 | 0 | 1 |  |
 | G32 | `G32.AnOverlayThatCoversNothing.test.ts` | 14 | 0 | 0 |  |
 | G33 | `G33.AWalkThatOnlyATestTakes.test.ts` | 11 | 0 | 3 |  |
-| G34 | `G34.TheSameDiscoveryMissingAThirdTime.test.ts` | 15 | 0 | 1 |  |
-| G35 | `G35.OneFileThatSilencesAWholeFamily.test.ts` | 16 | 0 | 0 |  |
+| G34 | `G34.TheSameDiscoveryMissingAThirdTime.test.ts` | 16 | 0 | 0 |  |
+| G35 | `G35.OneFileThatSilencesAWholeFamily.test.ts` | 30 | 0 | 0 |  |
 | G36 | `G36.WhenTwoAnswersDisagree.test.ts` | 18 | 0 | 0 |  |
-| G37 | `G37.TwoFindingsOneEdit.test.ts` | 10 | 0 | 0 |  |
+| G37 | `G37.TwoFindingsOneEdit.test.ts` | 5 | 0 | 0 | 5 |
 | G38 | `G38.AVerdictBuiltOnUnjudgedWitnesses.test.ts` | 12 | 0 | 1 |  |
 | G39 | `G39.AHolderNobodyRuns.test.ts` | 11 | 0 | 3 |  |
-| G40 | `G40.OneRuleBehindSixHoles.test.ts` | 19 | 0 | 2 |  |
-| G41 | `G41.TheSecondRuleBehindThreeHoles.test.ts` | 18 | 0 | 0 |  |
+| G40 | `G40.OneRuleBehindSixHoles.test.ts` | 20 | 0 | 1 |  |
+| G41 | `G41.TheSecondRuleBehindThreeHoles.test.ts` | 23 | 0 | 0 |  |
+| G43 | `G43.SettingsDoNotReachRemoveAll.test.ts` | 30 | 0 | 0 |  |
+| G43b | `G43b.IslandsIgnoreTheExclusions.test.ts` | 12 | 0 | 0 |  |
+| G44 | `G44.AContractNobodyCalls.test.ts` | 22 | 0 | 0 |  |
+| G47 | `G47.AValuesFileLeftAsAShell.test.ts` | 15 | 0 | 0 |  |
+| G50 | `G50.AJavaFieldWrittenNeverRead.test.ts` | 60 | 0 | 0 |  |
+| G52 | `G52.ATestCutWholeInsteadOfItsAssertion.test.ts` | 18 | 0 | 0 |  |
+| G54 | `G54.OneLookupSilencesAKind.test.ts` | 15 | 0 | 0 |  |
+| G56 | `G56.TheCheckCountedSixFamilies.test.ts` | 3 | 0 | 0 |  |
+| G57 | `G57.AClassThatLogsItsOwnName.test.ts` | 6 | 0 | 0 |  |
+| G58 | `G58.ASweeperInAnotherApp.test.ts` | 9 | 0 | 0 |  |
+| G59 | `G59.TheUnusedDirectiveProtectsNothing.test.ts` | 4 | 0 | 0 |  |
+| G60 | `G60.TheLastAnnotatedEntry.test.ts` | 4 | 0 | 0 |  |
+| G61 | `G61.WhatThePlatformDeclares.test.ts` | 16 | 0 | 0 |  |
+| G62 | `G62.AFragmentOnlyDaggerNames.test.ts` | 13 | 0 | 0 |  |
+| G63 | `G63.AViewMethodBehindTheFrameworkFilter.test.ts` | 14 | 0 | 0 |  |
+| G64 | `G64.AMarkerThatCallsNobody.test.ts` | 14 | 0 | 0 |  |
+| G65 | `G65.ANameNoSerializerReads.test.ts` | 8 | 0 | 0 |  |
+| G66 | `G66.ANestedSupertypeNobodyFound.test.ts` | 7 | 0 | 0 |  |
+| G68 | `G68.AClassLoadedByABuiltName.test.ts` | 13 | 0 | 0 |  |
+| G69 | `G69.AViewAndItsLayoutHoldingEachOther.test.ts` | 12 | 0 | 0 |  |
+| G70 | `G70.AKotlinSetterHeldByABareName.test.ts` | 5 | 0 | 0 |  |
 
 ## Ce qui est déjà corrigé
 
@@ -153,6 +174,8 @@ parce que chaque cas attendu-en-échec est devenu vert.
 | G32 | la garde de recouvrement ne s'applique que si quelqu'un nomme la ressource | `UnusedResourceProvider.ts` | 0 trouvaille, et la mesure de G32 était fausse |
 | G20 | `F7` ne s'applique plus aux VUES : ce scanner lit le XML | `unusedSymbols.ts` | **+5 symboles**, compilés sur les deux apps |
 | G19 | `assets/` gagne une représentation, dans son propre canal | `UnusedResourceProvider.ts`, `ResourceCorpus.ts` | **+3 assets**, 33 Ko, compilé |
+| G69 | l'index de la plateforme dit ce qui est une vue, et la passe juge une vue et son layout ensemble | `unusedSymbols.ts`, `androidApi.ts`, `unusedResources.ts`, `passe.ts` | non mesuré |
+| G70 | entre fichiers Kotlin, le nom nu d'un `getX`/`setX` de contrat ne se cherche que dans le XML | `unusedContracts.ts` | non mesuré |
 
 **G35 mérite un mot, parce que son chiffre ne s'est pas réalisé tel quel.** Le
 coupe-circuit voyait trois sites, et deux étaient des tables de correspondance : un
@@ -428,14 +451,14 @@ supertype HORS workspace      -> alive:main, non rapportée
 aucun supertype               -> unreferenced, via=injection, 2 sites
 ```
 
-**Ce dossier est hors de la porte `npm test`.** Vingt-six de ses cas sont rouges par
+**Ce dossier est hors de la porte `npm test`.** Vingt-deux de ses cas sont rouges par
 conception, et le resteront tant que les trous correspondants ne seront pas bouchés. Les
 laisser dans la porte la rendrait rouge en permanence, donc muette : une suite qui échoue
 toujours ne dit plus rien quand elle échoue.
 
 ```
-npm test            8420 verts, la porte
-npm run test:gaps    511 verts, 26 rouges, 104 it.fails
+npm test            9024 verts, la porte
+npm run test:gaps    851 verts, 22 rouges, 91 it.fails
 ```
 
 L'exclusion vit dans `vitest.config.ts`, le dossier a sa propre config dans

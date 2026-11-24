@@ -1020,11 +1020,32 @@ function statutDesTemoins(
   return unEcarte ? 'ecarte' : 'mort';
 }
 
-export function findUnusedMembers(input: UnusedMemberScanInput): UnusedMember[] {
+/** The member candidates of a corpus, the same for every scan of it (see `SymbolCorpus`). */
+export interface MemberCorpus {
+  readonly sources: readonly SymbolSource[];
+  readonly testSourceSets: readonly string[];
+  readonly androidApi?: AndroidApi;
+  readonly collected: ReturnType<typeof collectMemberCandidates>;
+}
+
+export function readMemberCorpus(
+  sources: readonly SymbolSource[], testSourceSets: readonly string[], androidApi?: AndroidApi,
+): MemberCorpus {
+  return { sources, testSourceSets, androidApi, collected: collectMemberCandidates(sources, testSourceSets, androidApi) };
+}
+
+/** The handed candidates when they were read from this very input, a fresh read otherwise. */
+function collectedOf(input: UnusedMemberScanInput, handed?: MemberCorpus): MemberCorpus['collected'] {
+  return handed !== undefined && handed.sources === input.sources
+    && handed.testSourceSets === input.testSourceSets && handed.androidApi === input.androidApi
+    ? handed.collected
+    : collectMemberCandidates(input.sources, input.testSourceSets, input.androidApi);
+}
+
+export function findUnusedMembers(input: UnusedMemberScanInput, corpus?: MemberCorpus): UnusedMember[] {
   if (input.truncated) return [];                                     // contract rule 2
 
-  const { candidates, declNameCounts, supertypesByName, scopeAnnotations } =
-    collectMemberCandidates(input.sources, input.testSourceSets, input.androidApi);
+  const { candidates, declNameCounts, supertypesByName, scopeAnnotations } = collectedOf(input, corpus);
   if (candidates.length === 0) return [];
 
   const deadByPath = new Map<string, { removeStart: number; removeEnd: number }[]>();
@@ -1303,9 +1324,8 @@ function unmentionedDuplicateMembers(
   return out;
 }
 
-export function explainMembers(input: UnusedMemberScanInput): MemberExplanation[] {
-  const { candidates, declNameCounts, supertypesByName, scopeAnnotations } =
-    collectMemberCandidates(input.sources, input.testSourceSets, input.androidApi);
+export function explainMembers(input: UnusedMemberScanInput, corpus?: MemberCorpus): MemberExplanation[] {
+  const { candidates, declNameCounts, supertypesByName, scopeAnnotations } = collectedOf(input, corpus);
 
   const deadByPath = new Map<string, { removeStart: number; removeEnd: number }[]>();
   for (const d of input.deadDeclarations ?? []) {

@@ -1,10 +1,10 @@
 import type { AndroidApi } from '../util/androidApi';
-import { findUnusedSymbols, collectTopLevelCandidates, accessorNames } from '../providers/unusedSymbols';
-import { findUnusedMembers } from '../providers/unusedMembers';
+import { findUnusedSymbols, readSymbolCorpus, accessorNames } from '../providers/unusedSymbols';
+import { findUnusedMembers, readMemberCorpus } from '../providers/unusedMembers';
 import { scanEnums } from '../providers/unusedEnumEntries';
 import { findIdleImplementations } from '../providers/idleImplementations';
 import { findUnusedContracts } from '../providers/unusedContracts';
-import { findDeadIslands } from '../providers/deadIslands';
+import { findDeadIslands, IslandCorpus } from '../providers/deadIslands';
 import { sweepFile, planFileEdits, SweepEdit, SweepFinding } from '../providers/DeadCodeSweep';
 import { findMemberImports, memberKey } from '../util/memberImports';
 import { findOrphanSourceSets, OrphanSourceSet } from '../providers/orphanSourceSets';
@@ -163,10 +163,13 @@ export function collecterUnePasse(
   }
   const r = ctx.reglages ?? {};
   const base = { sources, testSourceSets: segs, androidApi: ctx.androidApi } as any;
+  // Candidates and mentions, read once: both scans and the islands start from the same ones.
+  const corpus: IslandCorpus = { symbols: readSymbolCorpus(sources, segs), members: readMemberCorpus(sources, segs, ctx.androidApi) };
+  const candidats = corpus.symbols!.collected.candidates;
   const syms = findUnusedSymbols({
     ...base, ignoreNames: r.symbolsIgnoreNames, ignorePaths: r.symbolsIgnorePaths,
     includeTestOnly: r.includeTestOnly, frameworkNameSuffixes: r.frameworkNameSuffixes,
-  }) as any[];
+  }, corpus.symbols) as any[];
   // The same scan with some files set aside: what would die if they went.
   const symbolesSans = (absents: ReadonlySet<string>) => findUnusedSymbols({
     ...base, sources: sources.filter(s => !absents.has(s.path)),
@@ -177,14 +180,16 @@ export function collecterUnePasse(
     ...base, includeSelfOnly: false,
     ignoreNames: r.membersIgnoreNames, ignorePaths: r.symbolsIgnorePaths, includeTestOnly: r.includeTestOnly,
     deadDeclarations: syms.map(f => ({ path: f.path, removeStart: f.removeStart, removeEnd: f.removeEnd })),
-  } as any) as any[];
+  } as any, corpus.members) as any[];
   const { entries: entrees, emptied: enumsVides } = scanEnums({
     ...base, ignoreNames: r.enumEntriesIgnoreNames, includeTestOnly: r.enumEntriesIncludeTestOnly,
   }) as any;
   const iles = findDeadIslands({
     ...base, maxIslandSize: r.islandsMaxSize,
     ignoreNames: islandIgnoreNames(r as UnusedSettings), ignorePaths: r.symbolsIgnorePaths, includeTestOnly: r.includeTestOnly,
-  } as any) as any[];
+  } as any, corpus) as any[];
+  // Nothing below reads the mentions, the heavy half: only the candidates stay.
+  corpus.symbols = corpus.members = undefined;
 
   const aRevoir: ARevoir[] = [];
   for (const [famille, liste] of [['symboles', syms], ['membres', membres], ['entrees', entrees]] as const) {
@@ -224,10 +229,10 @@ export function collecterUnePasse(
   // its `getX` then counts for both.
   const nommeUnLecteur = (fichiers: readonly string[], lecteurs: readonly string[]): boolean => {
     const mots = new Set(fichiers.flatMap(p => textes.get(p)?.match(/[A-Za-z_][A-Za-z0-9_]*/g) ?? []));
-    return collectTopLevelCandidates(sources.filter(s => lecteurs.includes(s.path)), segs).candidates
+    return candidats.filter(c => lecteurs.includes(c.path))
       .some(c => mots.has(c.name) || accessorNames(c.name).some(a => mots.has(a)));
   };
-  const importPerime = (imp:{ path: string; line: number }, nom: string) => {
+  const importPerime = (imp: { path: string; line: number }, nom: string) => {
     const texte = textes.get(imp.path);
     if (texte === undefined) return;
     let debut = 0;

@@ -2003,6 +2003,32 @@ function wantedNames(candidates: readonly Candidate[]): Set<string> {
 type Collected = ReturnType<typeof collectTopLevelCandidates>;
 
 /**
+ * What a scan reads from the corpus before it judges anything: the candidates
+ * and their mentions. Two scans of the same sources read the same thing, so a
+ * caller that runs several reads it once and hands it to each.
+ */
+export interface SymbolCorpus {
+  readonly sources: readonly SymbolSource[];
+  readonly testSourceSets: readonly string[];
+  readonly collected: Collected;
+  readonly harvest: Harvest;
+}
+
+export function readSymbolCorpus(sources: readonly SymbolSource[], testSourceSets: readonly string[]): SymbolCorpus {
+  const collected = collectTopLevelCandidates(sources, testSourceSets);
+  const harvest = harvestMentions(sources, wantedNames(collected.candidates), testSourceSets,
+    duplicateTokens(collected.candidates, collected.topLevelNameCounts));
+  return { sources, testSourceSets, collected, harvest };
+}
+
+/** The handed corpus when it was read from this very input, a fresh read otherwise. */
+function corpusOf(input: UnusedSymbolScanInput, handed?: SymbolCorpus): SymbolCorpus {
+  return handed !== undefined && handed.sources === input.sources && handed.testSourceSets === input.testSourceSets
+    ? handed
+    : readSymbolCorpus(input.sources, input.testSourceSets);
+}
+
+/**
  * The harvest has to run BEFORE the guards, because one of them (F3) now needs
  * to know whether the corpus mentions a duplicated name at all. Harvest cost is
  * O(corpus text) and independent of how many names it watches, so widening the
@@ -2047,11 +2073,9 @@ function reflectiveLookups(sources: readonly SymbolSource[]): Pick<ScanContext, 
   return { reflectivePrefixes, packageByPath };
 }
 
-export function explainSymbols(input: UnusedSymbolScanInput): SymbolExplanation[] {
-  const collected = collectTopLevelCandidates(input.sources, input.testSourceSets);
+export function explainSymbols(input: UnusedSymbolScanInput, corpus?: SymbolCorpus): SymbolExplanation[] {
+  const { collected, harvest } = corpusOf(input, corpus);
   const { candidates } = collected;
-  const harvest = harvestMentions(input.sources, wantedNames(candidates), input.testSourceSets,
-    duplicateTokens(candidates, collected.topLevelNameCounts));
   const ctx = buildContext(input, collected, harvest);
   const countIn = (bag: Map<string, number>, c: Candidate) => {
     let n = bag.get(c.name) ?? 0;
@@ -2187,16 +2211,14 @@ export function fileBecomesEmpty(
   return declaresNothing(out);
 }
 
-export function findUnusedSymbols(input: UnusedSymbolScanInput): UnusedSymbol[] {
+export function findUnusedSymbols(input: UnusedSymbolScanInput, corpus?: SymbolCorpus): UnusedSymbol[] {
   // Contract rule 2.
   if (input.truncated) return [];
 
-  const collected = collectTopLevelCandidates(input.sources, input.testSourceSets);
+  const { collected, harvest } = corpusOf(input, corpus);
   const { candidates } = collected;
   if (candidates.length === 0) return [];
 
-  const harvest = harvestMentions(input.sources, wantedNames(candidates), input.testSourceSets,
-    duplicateTokens(candidates, collected.topLevelNameCounts));
   const ctx = buildContext(input, collected, harvest);
 
   const kept = candidates.filter(c => rejectionReason(c, input, ctx) === null);

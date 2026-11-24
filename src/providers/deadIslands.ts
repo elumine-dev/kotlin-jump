@@ -16,9 +16,10 @@ import {
   matchesGlob,
   removalExtent,
   benignWorkspaceAnnotationsOf,
+  SymbolCorpus,
   SymbolSource,
 } from './unusedSymbols';
-import { explainMembers } from './unusedMembers';
+import { explainMembers, MemberCorpus } from './unusedMembers';
 
 /**
  * KJ-046: dead islands — groups of declarations that reference only each
@@ -192,15 +193,21 @@ interface Analysis {
   explanations: IslandExplanation[];
 }
 
-export function findDeadIslands(input: DeadIslandScanInput): DeadIsland[] {
-  return analyze(input).islands;
+/** What the caller already read for the two scans this detector leans on. */
+export interface IslandCorpus {
+  symbols?: SymbolCorpus;
+  members?: MemberCorpus;
+}
+
+export function findDeadIslands(input: DeadIslandScanInput, corpus?: IslandCorpus): DeadIsland[] {
+  return analyze(input, corpus).islands;
 }
 
 export function explainIslands(input: DeadIslandScanInput): IslandExplanation[] {
   return analyze(input).explanations;
 }
 
-function analyze(input: DeadIslandScanInput): Analysis {
+function analyze(input: DeadIslandScanInput, corpus?: IslandCorpus): Analysis {
   if (input.truncated) return { islands: [], explanations: [] };     // I1
 
   const maxIslandSize = input.maxIslandSize ?? DEFAULT_MAX_ISLAND_SIZE;
@@ -210,8 +217,8 @@ function analyze(input: DeadIslandScanInput): Analysis {
   // detector can never disagree with them about a guard.
   const base = { sources: input.sources, testSourceSets: input.testSourceSets };
   const rows = [
-    ...explainSymbols(base).map(r => ({ ...r, container: null as string | null })),
-    ...explainMembers({ ...base, androidApi: input.androidApi }).map(r => ({ ...r, container: r.container as string | null })),
+    ...explainSymbols(base, corpus?.symbols).map(r => ({ ...r, container: null as string | null })),
+    ...explainMembers({ ...base, androidApi: input.androidApi }, corpus?.members).map(r => ({ ...r, container: r.container as string | null })),
   ];
   // U+0000 as the separator: it cannot occur in a path or an identifier, so
   // two distinct rows can never collide on one key. Written as an escape and

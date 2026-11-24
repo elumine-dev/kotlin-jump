@@ -1,5 +1,5 @@
 import type { AndroidApi } from '../util/androidApi';
-import { findUnusedSymbols } from '../providers/unusedSymbols';
+import { findUnusedSymbols, collectTopLevelCandidates, accessorNames } from '../providers/unusedSymbols';
 import { findUnusedMembers } from '../providers/unusedMembers';
 import { scanEnums } from '../providers/unusedEnumEntries';
 import { findIdleImplementations } from '../providers/idleImplementations';
@@ -167,6 +167,12 @@ export function collecterUnePasse(
     ...base, ignoreNames: r.symbolsIgnoreNames, ignorePaths: r.symbolsIgnorePaths,
     includeTestOnly: r.includeTestOnly, frameworkNameSuffixes: r.frameworkNameSuffixes,
   }) as any[];
+  // The same scan with some files set aside: what would die if they went.
+  const symbolesSans = (absents: ReadonlySet<string>) => findUnusedSymbols({
+    ...base, sources: sources.filter(s => !absents.has(s.path)),
+    ignoreNames: r.symbolsIgnoreNames, ignorePaths: r.symbolsIgnorePaths,
+    includeTestOnly: r.includeTestOnly, frameworkNameSuffixes: r.frameworkNameSuffixes,
+  }) as any[];
   const membres = findUnusedMembers({
     ...base, includeSelfOnly: false,
     ignoreNames: r.membersIgnoreNames, ignorePaths: r.symbolsIgnorePaths, includeTestOnly: r.includeTestOnly,
@@ -213,7 +219,13 @@ export function collecterUnePasse(
   // stopped on it. Both readings now find the same line, and the duplicate
   // collapses in the overlap pass below.
   const textes = new Map(sources.map(src => [src.path, src.text]));
-  const importPerime = (imp: { path: string; line: number }, nom: string) => {
+  // Does one of these files write a word the symbol scan judges a reader by?
+  const nommeUnLecteur = (fichiers: readonly string[], lecteurs: readonly string[]): boolean => {
+    const mots = new Set(fichiers.flatMap(p => textes.get(p)?.match(/[A-Za-z_][A-Za-z0-9_]*/g) ?? []));
+    return collectTopLevelCandidates(sources.filter(s => lecteurs.includes(s.path)), segs).candidates
+      .some(c => mots.has(c.name) || ((c.kind === 'val' || c.kind === 'var') && accessorNames(c.name).some(a => mots.has(a))));
+  };
+  const importPerime = (imp:{ path: string; line: number }, nom: string) => {
     const texte = textes.get(imp.path);
     if (texte === undefined) return;
     let debut = 0;
@@ -229,8 +241,8 @@ export function collecterUnePasse(
     // must never share a key once the text is shortened.
     ajoute(imp.path, debut, fin, '', 'balayage', '', { verdict: 'cascade', suit: nom, nom: texte.slice(debut, fin).trim() });
   };
-  for (const s of syms) {
-    if (s.verdict !== 'unreferenced') continue;
+  const coupeLeSymbole = (s: any) => {
+    if (s.verdict !== 'unreferenced') return;
     ajoute(s.path, s.removeStart, s.removeEnd, '', 'symboles', s.name, preuveDuSymbole(s));
     if (s.removeStart >= 0) for (const imp of s.staleImports ?? []) importPerime(imp, s.name);
     // KJ-067 : les declarations `inject(target: X)` qui nommaient la classe.
@@ -242,7 +254,8 @@ export function collecterUnePasse(
         ajoute(site.path, site.removeStart, site.removeEnd, '', 'injections', s.name, { verdict: 'cascade', suit: s.name });
       }
     }
-  }
+  };
+  for (const s of syms) coupeLeSymbole(s);
   for (const m of membres) if (m.verdict === 'unreferenced') { ajoute(m.path, m.removeStart, m.removeEnd, '', 'membres', m.name, nonReference(m)); }
   for (const e of entrees) if (e.verdict === 'unreferenced') { ajoute(e.path, e.removeStart, e.removeEnd, '', 'entrees', e.name, nonReference(e)); }
   // KJ-066 : un enum imbrique dont toutes les entrees partent et dont rien
@@ -401,9 +414,20 @@ export function collecterUnePasse(
     const trouves = findUnusedResources({
       entries: ctx.resourceEntries as any, sources, assets: ctx.assets ?? [],
       modulesWithCode: ctx.modulesWithCode, libraryModules: ctx.libraryModules,
-      includeDrawables: false,
+      includeDrawables: false, reportHeldByIds: true,
     } as any) as any[];
     for (const r of trouves) {
+      if (r.idReaders) {
+        // The file and its readers can hold each other: the tag names the
+        // class, the class reads the ids. Judge the readers with the file set aside.
+        // Setting it aside frees only what it names: when it names nothing its
+        // readers declare, the first scan already holds their verdicts.
+        const partent = (nommeUnLecteur(r.paths, r.idReaders) ? symbolesSans(new Set<string>(r.paths)) : syms)
+          .filter(s => s.verdict === 'unreferenced' && s.fileBecomesEmpty && r.idReaders.includes(s.path));
+        // Every reader goes whole, or an `R.id` read outlives its declaration.
+        if (!r.deletable || !r.idReaders.every((p: string) => partent.some(s => s.path === p))) continue;
+        for (const s of partent) coupeLeSymbole(s);
+      }
       if (!r.deletable) {
         for (const chemin of r.paths as string[]) aRevoir.push({ path: chemin, line: 0, famille: 'ressources', quoi: `${r.kind}/${r.name}`, raison: 'reviewOnly' });
         continue;

@@ -1,4 +1,5 @@
 import { matchesGlob } from '../util/glob';
+import type { AndroidApi } from '../util/androidApi';
 import { declaresNothing } from './emptySourceFiles';
 import { SECTION_MARKER_RE } from '../util/declarationSpan';
 import { coupeUnBloc } from '../util/blocDeCommentaire';
@@ -82,6 +83,8 @@ export interface UnusedSymbolScanInput {
   includeTestOnly?: boolean;
   /** Set false to disable the conventional-name belt (F7b). */
   frameworkNameSuffixes?: boolean;
+  /** What the platform declares: `FrameLayout` is a view without being spelled in a list. */
+  androidApi?: AndroidApi;
 }
 
 export interface UnusedSymbol {
@@ -1525,7 +1528,7 @@ function chainResolvedInCorpus(
       seen.add(bare);
       if (bare === 'Any' || bare === 'Object') continue;
       if (!ctx.topLevelNameCounts.has(bare)) {
-        if (SPELLED_INSTANTIATION_SUPERTYPES.has(bare)) continue;
+        if (SPELLED_INSTANTIATION_SUPERTYPES.has(bare) || ctx.platformViews.has(bare)) continue;
         return false;
       }
       for (const parent of ctx.supertypesByName.get(bare) ?? []) {
@@ -1784,6 +1787,8 @@ interface ScanContext {
   /** G68: `Class.forName("com.x.Plugin" + n)` prefixes, and the package of each file when any exists. */
   reflectivePrefixes: readonly string[];
   packageByPath: ReadonlyMap<string, string>;
+  /** Platform classes extending `android.view.View`, by simple name. */
+  platformViews: ReadonlySet<string>;
 }
 
 /** A name the mention harvest can actually look for. */
@@ -2026,6 +2031,7 @@ function buildContext(
       collected.candidates, collected.topLevelNameCounts, harvest, input.testSourceSets),
     scopeAnnotations: benignWorkspaceAnnotationsOf(input.sources),
     ...reflectiveLookups(input.sources),
+    platformViews: input.androidApi?.subclassNames('android.view.View') ?? new Set(),
   };
 }
 

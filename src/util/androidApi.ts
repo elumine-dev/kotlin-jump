@@ -25,6 +25,8 @@ export interface AndroidApi {
   declared(fqn: string): ReadonlySet<string> | undefined;
   /** The platform type a bare supertype name designates from this file, or undefined. */
   resolve(bare: string, imports: readonly string[]): string | undefined;
+  /** Simple names of the platform classes that are `ancestor` or extend it. */
+  subclassNames(ancestor: string): ReadonlySet<string>;
 }
 
 export function androidApi(index: AndroidApiIndex): AndroidApi {
@@ -45,7 +47,20 @@ export function androidApi(index: AndroidApiIndex): AndroidApi {
     memo.set(fqn, out);
     return out;
   };
+  const subclasses = new Map<string, Set<string>>();
   return {
+    subclassNames(ancestor) {
+      let out = subclasses.get(ancestor);
+      if (out) return out;
+      out = new Set<string>();
+      for (const fqn of Object.keys(index.types)) {
+        for (let t: string | null = fqn, depth = 0; t && depth < 32; t = index.types[t]?.[0] ?? null, depth++) {
+          if (t === ancestor) { out.add(fqn.slice(fqn.lastIndexOf('.') + 1)); break; }
+        }
+      }
+      subclasses.set(ancestor, out);
+      return out;
+    },
     declared: fqn => declared(fqn) ?? undefined,
     resolve(bare, imports) {
       if (bare.includes('.')) {

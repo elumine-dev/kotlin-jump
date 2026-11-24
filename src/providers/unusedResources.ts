@@ -82,6 +82,8 @@ export interface ScanInput {
   /** True when the corpus could not be read in full: forces zero findings. */
   truncated?: boolean;
   includeDrawables?: boolean;
+  /** Report a file its own ids alone keep, with the files reading them, instead of skipping it. */
+  reportHeldByIds?: boolean;
   /**
    * KJ-081 : les fichiers de `src/main/assets/`, dans leur PROPRE canal.
    *
@@ -107,6 +109,8 @@ export interface UnusedResource {
   isLibraryModule: boolean;
   /** False for drawables/mipmaps while `includeDrawables` is off. */
   deletable: boolean;
+  /** Only with `reportHeldByIds`: the files reading an id this one declares. Not removable alone. */
+  idReaders?: string[];
 }
 
 /** `<!-- kotlin-jump:ignore unused-resource -->` anywhere in the file. */
@@ -369,7 +373,8 @@ export function findUnusedResources(input: ScanInput): UnusedResource[] {
     // reading two ids of that layout. A reader in a file this entry owns does
     // not count, it goes with the file.
     const lit = [...ownPaths].flatMap(p => [...(idsDeclaredByPath.get(p) ?? [])]);
-    if (lit.some(id => [...(idsRead.get(id) ?? [])].some(p => !ownPaths.has(p)))) continue;
+    const lecteurs = [...new Set(lit.flatMap(id => [...(idsRead.get(id) ?? [])]))].filter(p => !ownPaths.has(p));
+    if (lecteurs.length > 0 && input.reportHeldByIds !== true) continue;
 
     const ignored = input.sources.some(s => ownPaths.has(s.path) && IGNORE_RE.test(s.text));
     if (ignored) continue;
@@ -380,6 +385,7 @@ export function findUnusedResources(input: ScanInput): UnusedResource[] {
       paths: entry.variants.map(v => v.path).sort(),
       isLibraryModule: libraryModules.has(moduleDir),
       deletable: !REVIEW_ONLY_KINDS.has(kind) || includeDrawables,
+      ...(lecteurs.length > 0 ? { idReaders: lecteurs } : {}),
     });
   }
 

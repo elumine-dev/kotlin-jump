@@ -79,7 +79,7 @@ deviendront vertes. Les deux mouvements vont ensemble.
 ## État
 
 Verdict au 2026-11-24, sur `npm run test:gaps` :
-**851 verts, 22 rouges, 91 it.fails, 15 skippés = 979 cas**
+**910 verts, 22 rouges, 95 it.fails, 15 skippés = 1042 cas**
 
 Tableau régénéré depuis le run réel, pas saisi à la main.
 
@@ -148,8 +148,11 @@ Les huit trous du document ont leur fichier, plus G10, première piste ouverte i
 | G65 | `G65.ANameNoSerializerReads.test.ts` | 8 | 0 | 0 |  |
 | G66 | `G66.ANestedSupertypeNobodyFound.test.ts` | 7 | 0 | 0 |  |
 | G68 | `G68.AClassLoadedByABuiltName.test.ts` | 13 | 0 | 0 |  |
-| G69 | `G69.AViewAndItsLayoutHoldingEachOther.test.ts` | 12 | 0 | 0 |  |
+| G69 | `G69.AViewAndItsLayoutHoldingEachOther.test.ts` | 14 | 0 | 0 |  |
 | G70 | `G70.AKotlinSetterHeldByABareName.test.ts` | 5 | 0 | 0 |  |
+| G71 | `G71.AViewHeldByALogSentence.test.ts` | 48 | 0 | 0 |  |
+| G74 | `G74.AnEmptyMethodStillCalled.test.ts` | 6 | 0 | 2 |  |
+| G75 | `G75.AnOverrideHoldingOnlyAComment.test.ts` | 3 | 0 | 2 |  |
 
 ## Ce qui est déjà corrigé
 
@@ -176,6 +179,7 @@ parce que chaque cas attendu-en-échec est devenu vert.
 | G19 | `assets/` gagne une représentation, dans son propre canal | `UnusedResourceProvider.ts`, `ResourceCorpus.ts` | **+3 assets**, 33 Ko, compilé |
 | G69 | l'index de la plateforme dit ce qui est une vue, et la passe juge une vue et son layout ensemble | `unusedSymbols.ts`, `androidApi.ts`, `unusedResources.ts`, `passe.ts` | non mesuré |
 | G70 | entre fichiers Kotlin, le nom nu d'un `getX`/`setX` de contrat ne se cherche que dans le XML | `unusedContracts.ts` | non mesuré |
+| G71 | dans la règle d'injection, un nom écrit comme un mot d'une phrase (un log) ne tient plus la classe | `unusedSymbols.ts` | non mesuré |
 
 **G35 mérite un mot, parce que son chiffre ne s'est pas réalisé tel quel.** Le
 coupe-circuit voyait trois sites, et deux étaient des tables de correspondance : un

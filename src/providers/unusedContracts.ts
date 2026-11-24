@@ -39,7 +39,8 @@ import { signatureOnlySpan } from './deadIslands';
  * - any annotation a framework reads (`@GET`, `@Query`, `@Provides`,
  *   `@JavascriptInterface`...) on a declaration, or on a class involved;
  * - a `getX`/`isX`/`setX` is also reachable as `x` (Kotlin property syntax
- *   over Java, data binding), so that bare name must be absent too;
+ *   over Java, data binding), so that bare name must be absent too, from the
+ *   XML alone when the contract and every implementation are Kotlin;
  * - an implementation whose ancestry leaves the corpus may inherit the name
  *   from a type nobody here can read.
  */
@@ -326,15 +327,21 @@ export function findUnusedContracts(input: ContractScanInput): UnusedContract[] 
   // One harvest for every name at once: one per contract cost 112 s on a
   // 6000-file project.
   const wanted = new Set<string>();
-  for (const { names } of pending) {
+  const wantedInXml = new Set<string>();
+  // Property syntax reaches a Java accessor only: Kotlin spells a Kotlin function by its name.
+  const kotlinOnly = (holders: readonly TypeInfo[]) => holders.every(h => h.file.src.path.endsWith('.kt'));
+  for (const { names, holders } of pending) {
     for (const n of names) {
       wanted.add(n);
       const bare = bareProperty(n);
-      if (bare) wanted.add(bare);
+      if (bare) (kotlinOnly(holders) ? wantedInXml : wanted).add(bare);
       for (const a of accessorNames(n)) wanted.add(a);
     }
   }
   const harvest = wanted.size > 0 ? harvestMentions(input.sources, wanted, input.testSourceSets) : undefined;
+  // What is left of the bare name between Kotlin files: a data-binding read, in XML alone.
+  const bareXml = wantedInXml.size > 0
+    ? harvestMentions(input.sources.filter(s => s.path.endsWith('.xml')), wantedInXml, []).main : undefined;
 
   const out: UnusedContract[] = [];
   const count = (n: string) => (harvest!.main.get(n) ?? 0) + (harvest!.test.get(n) ?? 0);
@@ -352,7 +359,8 @@ export function findUnusedContracts(input: ContractScanInput): UnusedContract[] 
       // Reached under another spelling: a Java accessor, a data-binding name.
       if (isProperty && accessorNames(n).some(a => a !== n && count(a) > 0)) continue;
       const bare = bareProperty(n);
-      if (!isProperty && bare && bare !== n && count(bare) > 0) continue;
+      const bareCount = (b: string) => (kotlinOnly(holders) ? bareXml?.get(b) ?? 0 : count(b));
+      if (!isProperty && bare && bare !== n && bareCount(bare) > 0) continue;
       if (decls.some(({ h, s }) => annotationNames(h.file, s).some(a => !benign(a)))) continue;
       if (decls.some(({ h, s }) => /\b(?:external|native)\b/.test(h.file.clean.slice(h.file.lineStarts[s.line], h.file.lineStarts[s.line] + s.character)))) continue;
 

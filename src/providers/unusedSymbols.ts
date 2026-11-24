@@ -425,6 +425,13 @@ export interface Harvest {
    */
   injectionPostings: Map<string, InjectionPosting[]>;
   /**
+   * name -> the production code files that write it as a word of a sentence,
+   * once per mention. A log line that happens to spell a class holds no
+   * instance of it. Only the injection rule reads this: everywhere else a
+   * string keeps counting, which is what makes the other rules safe.
+   */
+  sentencePostings: Map<string, string[]>;
+  /**
    * What package resolution of duplicated names needs, gathered in the same
    * pass: resolving afterwards re-stripped and re-tokenized every file, and the
    * detector ran 20 percent slower. Only filled for the names asked for.
@@ -474,6 +481,39 @@ function insideStringOnItsLine(text: string, at: number): boolean {
     if (backslashes % 2 === 0) quotes++;
   }
   return quotes % 2 === 1;
+}
+
+/** After one of these a name is a reference, not a word: a query, a keep rule, code quoted in a message. */
+const NEVER_A_SENTENCE_AFTER = new Set([
+  'class', 'interface', 'extends', 'implements', 'new', 'import', 'from', 'into', 'table', 'join', 'update',
+]);
+
+/**
+ * Whether the word at [start, end) is written as a word of a sentence: in a
+ * string, set off by spaces, next to a plain lowercase word. `"Name"` alone, a
+ * qualified name, a template, a query or a keep rule may name the class for
+ * real: none of them is a sentence. On a line that holds `$`, `'` or `"""` the
+ * quote parity cannot be trusted and the answer is no, since a yes can make a cut.
+ */
+function writtenInASentence(text: string, start: number, end: number): boolean {
+  // Every wanted word of the corpus comes through here: the two neighbours first.
+  const before = text.charCodeAt(start - 1);
+  const after = text.charCodeAt(end);
+  if ((before !== 32 && before !== 34) || (after !== 32 && after !== 34)) return false;
+  // `\"Name`: a quoted value inside the string, not prose.
+  if (before === 34 && text.charCodeAt(start - 2) === 92) return false;
+
+  const lineStart = text.lastIndexOf('\n', start - 1) + 1;
+  const newline = text.indexOf('\n', end);
+  const lineEnd = newline < 0 ? text.length : newline;
+  const left = before === 32 ? /(?:^|[^A-Za-z0-9_])([A-Za-z]+) $/.exec(text.slice(lineStart, start))?.[1] ?? '' : '';
+  if (NEVER_A_SENTENCE_AFTER.has(left.toLowerCase())) return false;
+  const plainOnTheRight = after === 32 && /^ [a-z]{2,}(?![A-Za-z0-9_])/.test(text.slice(end, lineEnd));
+  if (!plainOnTheRight && !/^[a-z]{2,}$/.test(left)) return false;
+
+  const line = text.slice(lineStart, lineEnd);
+  if (line.includes('$') || line.includes("'") || line.includes('"""')) return false;
+  return insideStringOnItsLine(text, start);
 }
 
 const WORD_RE = /[A-Za-z_][A-Za-z0-9_]*/g;
@@ -1321,7 +1361,10 @@ export function harvestMentions(
   /** Duplicated names to collect package data for, when resolving F3. */
   duplicateTokens?: ReadonlySet<string>,
 ): Harvest {
-  const harvest: Harvest = { main: new Map(), test: new Map(), aliased: new Set(), importPostings: new Map(), injectionPostings: new Map() };
+  const harvest: Harvest = {
+    main: new Map(), test: new Map(), aliased: new Set(), importPostings: new Map(), injectionPostings: new Map(),
+    sentencePostings: new Map(),
+  };
   const dup: DuplicateMentions | undefined = duplicateTokens && duplicateTokens.size > 0
     ? { packageByPath: new Map(), byToken: new Map(), uncertain: new Set() }
     : undefined;
@@ -1338,6 +1381,8 @@ export function harvestMentions(
     const bag = isTestSourceSet(src.path, testSourceSets) ? harvest.test : harvest.main;
     const isCode = /\.(kt|kts|java)$/.test(src.path);
     const isXml = /\.xml$/.test(src.path);
+    // A script, a rule file or a resource never writes prose about a class.
+    const mayHoldProse = bag === harvest.main && /\.(kt|java)$/.test(src.path);
 
     // H6: for a ServiceLoader entry the SPI name is the file name itself.
     if (/[\\/]META-INF[\\/]services[\\/]/.test(src.path)) {
@@ -1431,6 +1476,10 @@ export function harvestMentions(
       // duplicated names are a subset of the wanted ones.
       if (!wanted.has(m[0])) continue;
       bag.set(m[0], (bag.get(m[0]) ?? 0) + 1);
+      if (mayHoldProse && writtenInASentence(text, m.index, m.index + m[0].length)) {
+        const files = harvest.sentencePostings.get(m[0]);
+        if (files) files.push(src.path); else harvest.sentencePostings.set(m[0], [src.path]);
+      }
       if (!dup || !duplicateTokens!.has(m[0])) continue;
       if (!isCode || insideStringOnItsLine(text, m.index)) { dup.uncertain.add(m[0]); continue; }
       perToken ??= new Map();
@@ -1566,7 +1615,9 @@ function injectionOnlyMentions(
 
   const postings = (harvest.injectionPostings.get(c.name) ?? []).filter(p => p.path !== c.path);
   const inMain = postings.filter(p => !p.isTest).length;
-  if (inMain === 0 || mainElsewhere !== inMain) return undefined;
+  // A sentence spelling the name holds no instance either: what must remain is the declarations.
+  const inSentences = (harvest.sentencePostings.get(c.name) ?? []).filter(p => p !== c.path).length;
+  if (inMain === 0 || mainElsewhere - inSentences !== inMain) return undefined;
 
   const sites: InjectionCut[] = [];
   for (const posting of postings) {

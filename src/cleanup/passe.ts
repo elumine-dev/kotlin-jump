@@ -220,10 +220,12 @@ export function collecterUnePasse(
   // collapses in the overlap pass below.
   const textes = new Map(sources.map(src => [src.path, src.text]));
   // Does one of these files write a word the symbol scan judges a reader by?
+  // Accessors whatever the kind: a function's homonym may be a property, and
+  // its `getX` then counts for both.
   const nommeUnLecteur = (fichiers: readonly string[], lecteurs: readonly string[]): boolean => {
     const mots = new Set(fichiers.flatMap(p => textes.get(p)?.match(/[A-Za-z_][A-Za-z0-9_]*/g) ?? []));
     return collectTopLevelCandidates(sources.filter(s => lecteurs.includes(s.path)), segs).candidates
-      .some(c => mots.has(c.name) || ((c.kind === 'val' || c.kind === 'var') && accessorNames(c.name).some(a => mots.has(a))));
+      .some(c => mots.has(c.name) || accessorNames(c.name).some(a => mots.has(a)));
   };
   const importPerime = (imp:{ path: string; line: number }, nom: string) => {
     const texte = textes.get(imp.path);

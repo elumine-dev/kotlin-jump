@@ -138,6 +138,37 @@ describe('G69, une vue et le layout qui la nomme, rien d autre', () => {
   });
 });
 
+// The pass skips the replay when the layout writes no word the scan judges a
+// reader by. A function sharing its name with a property is also judged by the
+// property's accessors: the layout below writes `getCaption` and nothing else.
+describe('G69, un lecteur tenu par l accesseur de son homonyme', () => {
+  const READER_PATH = `${MAIN}/Captions.kt`;
+  const TWIN_PATH = `${MAIN}/Legend.kt`;
+  const READER = f(READER_PATH, [
+    'package com.x', '', 'import android.view.View', 'import android.widget.TextView', '',
+    'fun caption(v: View): TextView = v.findViewById(R.id.carousel_title)', '',
+  ].join('\n'));
+  const twin = (name: string) => f(TWIN_PATH, ['package com.x', '', `val ${name} = "x"`, ''].join('\n'));
+  const TAGGED = f(LAYOUT_PATH, [
+    '<?xml version="1.0" encoding="utf-8"?>',
+    '<merge xmlns:android="http://schemas.android.com/apk/res/android">',
+    '    <TextView android:id="@+id/carousel_title" android:tag="getCaption" />',
+    '</merge>', '',
+  ].join('\n'));
+
+  it('temoin : sans homonyme, le lecteur et le layout partent dans la meme ronde', async () => {
+    const partis = await supprimes(READER, twin('legend'), TAGGED);
+    expect([...partis.keys()].sort()).toEqual([READER_PATH, TWIN_PATH, LAYOUT_PATH].sort());
+    expect(partis.get(READER_PATH)).toBe(partis.get(LAYOUT_PATH));
+  });
+
+  it('avec un homonyme propriete, le rejeu sans le layout libere le lecteur', async () => {
+    const partis = await supprimes(READER, twin('caption'), TAGGED);
+    expect([...partis.keys()].sort()).toEqual([READER_PATH, TWIN_PATH, LAYOUT_PATH].sort());
+    expect(partis.get(READER_PATH)).toBe(partis.get(LAYOUT_PATH));
+  });
+});
+
 describe('G69, gardes : ce qui reste', () => {
   it('un supertype de la plateforme qui n est pas une vue retient toujours', () => {
     expect(rapportee(view('FrameLayout'), COMPONENT, home())).toBeDefined();

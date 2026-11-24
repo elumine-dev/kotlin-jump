@@ -193,7 +193,7 @@ function run(gitPath: string, cwd: string, args: readonly string[]): Promise<str
   return new Promise((resolve, reject) => {
     execFile(
       gitPath,
-      ['--no-pager', '-c', 'color.ui=never', '-c', 'diff.mnemonicprefix=false', '-c', 'core.quotepath=false', ...args],
+      ['--no-pager', '-c', 'color.ui=never', '-c', 'color.diff=never', '-c', 'diff.mnemonicprefix=false', '-c', 'core.quotepath=false', ...args],
       { cwd, env, timeout: DELAI_MS, maxBuffer: 64 * 1024 * 1024, encoding: 'utf8' },
       (err, stdout) => (err ? reject(err) : resolve(stdout)),
     );
